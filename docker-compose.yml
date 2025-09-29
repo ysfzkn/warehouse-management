@@ -30,8 +30,8 @@ services:
       - "8080:8080"
     environment:
       - SPRING_PROFILES_ACTIVE=docker
-      # PostgreSQL Database Configuration
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://db:5432/warehouse_db
+      # PostgreSQL Database Configuration (Environment variables)
+      - DATABASE_URL=jdbc:postgresql://db:5432/warehouse_db
       - SPRING_DATASOURCE_USERNAME=warehouse_user
       - SPRING_DATASOURCE_PASSWORD=warehouse_pass
       - SPRING_JPA_DATABASE_PLATFORM=org.hibernate.dialect.PostgreSQLDialect

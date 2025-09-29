@@ -460,23 +460,22 @@ Railway'de PostgreSQL kurduğunuzda iki networking seçeneği görürsünüz:
 3. **Aşağıdaki değişkenleri ekleyin:**
 
 ```bash
-# Database Configuration (Private Networking kullanın)
-DATABASE_URL=postgresql://postgres.railway.internal:5432/railway
-SPRING_DATASOURCE_URL=jdbc:postgresql://postgres.railway.internal:5432/railway
-SPRING_DATASOURCE_USERNAME=postgres
-SPRING_DATASOURCE_PASSWORD=[GIVEN-PASSWORD]
-SPRING_JPA_DATABASE_PLATFORM=org.hibernate.dialect.PostgreSQLDialect
-SPRING_JPA_HIBERNATE_DDL_AUTO=update
+# Railway PostgreSQL Configuration
+DATABASE_URL=postgresql://postgres:[PASSWORD]@postgres.railway.internal:5432/railway
+SPRING_PROFILES_ACTIVE=prod
 
-# Application Configuration
-SPRING_PROFILES_ACTIVE=production
+# Optional: Manual configuration (if DATABASE_URL doesn't work)
+# SPRING_DATASOURCE_URL=jdbc:postgresql://postgres.railway.internal:5432/railway
+# SPRING_DATASOURCE_USERNAME=postgres
+# SPRING_DATASOURCE_PASSWORD=[GIVEN-PASSWORD]
 ```
 
 **⚠️ Önemli Notlar:**
 
+- **DATABASE_URL** environment variable'ını kullanın (Railway'in otomatik oluşturduğu)
 - **Private Networking kullanın:** `postgres.railway.internal:5432`
-- **Public Networking kullanmayın:** `yamanote.proxy.rlwy.net:16716` (sadece external erişim için)
-- **Database password'ünü** Railway'in verdiği değerle değiştirin
+- **SPRING_PROFILES_ACTIVE=prod** ile `application-prod.properties` dosyası aktif olur
+- **Password'ü** Railway'in verdiği değerle değiştirin
 
 ### Adım 8: GitHub Workflow ile Otomatik Deployment
 
