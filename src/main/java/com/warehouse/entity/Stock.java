@@ -3,12 +3,20 @@ package com.warehouse.entity;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.NoArgsConstructor;
+import lombok.AllArgsConstructor;
 import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "stocks", uniqueConstraints = {
     @UniqueConstraint(columnNames = {"product_id", "warehouse_id"})
 })
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@EqualsAndHashCode(callSuper = false)
 public class Stock {
 
     @Id
@@ -40,17 +48,12 @@ public class Stock {
     @Column(name = "last_updated", nullable = false)
     private LocalDateTime lastUpdated;
 
-    // Default constructor
-    public Stock() {
-        this.lastUpdated = LocalDateTime.now();
-    }
-
     // Constructor with product, warehouse, and quantity
     public Stock(Product product, Warehouse warehouse, Integer quantity) {
-        this();
         this.product = product;
         this.warehouse = warehouse;
         this.quantity = quantity;
+        this.lastUpdated = LocalDateTime.now();
     }
 
     @PreUpdate
@@ -69,63 +72,6 @@ public class Stock {
 
     public boolean isOutOfStock() {
         return this.quantity == 0;
-    }
-
-    // Getters and Setters
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
-    }
-
-    public Product getProduct() {
-        return product;
-    }
-
-    public void setProduct(Product product) {
-        this.product = product;
-    }
-
-    public Warehouse getWarehouse() {
-        return warehouse;
-    }
-
-    public void setWarehouse(Warehouse warehouse) {
-        this.warehouse = warehouse;
-    }
-
-    public Integer getQuantity() {
-        return quantity;
-    }
-
-    public void setQuantity(Integer quantity) {
-        this.quantity = quantity;
-    }
-
-    public Integer getMinStockLevel() {
-        return minStockLevel;
-    }
-
-    public void setMinStockLevel(Integer minStockLevel) {
-        this.minStockLevel = minStockLevel;
-    }
-
-    public Integer getReservedQuantity() {
-        return reservedQuantity;
-    }
-
-    public void setReservedQuantity(Integer reservedQuantity) {
-        this.reservedQuantity = reservedQuantity;
-    }
-
-    public LocalDateTime getLastUpdated() {
-        return lastUpdated;
-    }
-
-    public void setLastUpdated(LocalDateTime lastUpdated) {
-        this.lastUpdated = lastUpdated;
     }
 
     @Override

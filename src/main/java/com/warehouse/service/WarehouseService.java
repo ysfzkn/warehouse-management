@@ -61,7 +61,7 @@ public class WarehouseService {
         warehouse.setPhone(warehouseDetails.getPhone());
         warehouse.setManager(warehouseDetails.getManager());
         warehouse.setCapacitySqm(warehouseDetails.getCapacitySqm());
-        warehouse.setIsActive(warehouseDetails.getIsActive());
+        warehouse.setActive(warehouseDetails.isActive());
 
         return warehouseRepository.save(warehouse);
     }
@@ -81,7 +81,7 @@ public class WarehouseService {
         Warehouse warehouse = warehouseRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Warehouse not found with id: " + id));
 
-        warehouse.setIsActive(false);
+        warehouse.setActive(false);
         warehouseRepository.save(warehouse);
     }
 
@@ -89,7 +89,7 @@ public class WarehouseService {
         Warehouse warehouse = warehouseRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Warehouse not found with id: " + id));
 
-        warehouse.setIsActive(true);
+        warehouse.setActive(true);
         warehouseRepository.save(warehouse);
     }
 

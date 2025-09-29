@@ -2,7 +2,7 @@
 
 A modern, mobile-friendly warehouse management system designed for white goods companies. This system allows you to manage your warehouse products categorically and numerically, view and update stock status.
 
-![Java](https://img.shields.io/badge/Java-17-orange)
+![Java](https://img.shields.io/badge/Java-21-orange)
 ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.1.5-brightgreen)
 ![React](https://img.shields.io/badge/React-18.2.0-blue)
 ![License](https://img.shields.io/badge/License-MIT-yellow)
@@ -22,7 +22,7 @@ A modern, mobile-friendly warehouse management system designed for white goods c
 ## 📋 Requirements
 
 - **Docker & Docker Compose** (Recommended for PostgreSQL)
-- **Java 17+** (If not using Docker)
+- **Java 21+** (If not using Docker)
 - **Node.js 18+** (If not using Docker)
 - **PostgreSQL 15+** (For production database)
 - **Git**

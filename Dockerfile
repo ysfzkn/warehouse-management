@@ -1,5 +1,5 @@
 # Optimized multi-stage build for Spring Boot application
-FROM openjdk:17-jdk-alpine AS build
+FROM openjdk:21-jdk-alpine AS build
 
 WORKDIR /app
 
@@ -18,7 +18,7 @@ RUN apk add --no-cache maven && \
 RUN mvn clean package -DskipTests -Dmaven.repo.local=/tmp/maven-repo
 
 # Production stage with minimal base image
-FROM openjdk:17-alpine
+FROM openjdk:21-alpine
 
 WORKDIR /app
 

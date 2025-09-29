@@ -117,7 +117,7 @@ public class ProductService {
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Product not found with id: " + id));
 
-        product.setIsActive(false);
+        product.setActive(false);
         productRepository.save(product);
     }
 
@@ -125,7 +125,7 @@ public class ProductService {
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Product not found with id: " + id));
 
-        product.setIsActive(true);
+        product.setActive(true);
         productRepository.save(product);
     }
 
