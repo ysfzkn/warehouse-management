@@ -55,7 +55,7 @@ public class ProductService {
     }
 
     public Product createProduct(Product product) {
-        // Validate category exists
+        
         if (product.getCategory() == null || product.getCategory().getId() == null) {
             throw new RuntimeException("Category is required");
         }
