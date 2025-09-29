@@ -12,9 +12,12 @@ RUN apk add --no-cache maven && \
     mvn clean package -DskipTests
 
 # Production stage
-FROM openjdk:17-jre-alpine
+FROM openjdk:17-alpine
 
 WORKDIR /app
+
+# Install curl for health checks
+RUN apk add --no-cache curl
 
 # Copy the built JAR file from build stage
 COPY --from=build /app/target/warehouse-management-1.0.0.jar app.jar
@@ -30,7 +33,7 @@ EXPOSE 8080
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/actuator/health || exit 1
+  CMD curl -f http://localhost:8080/actuator/health || exit 1
 
 # Run the application
 ENTRYPOINT ["java", "-jar", "app.jar"]

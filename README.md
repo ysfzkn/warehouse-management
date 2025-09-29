@@ -481,7 +481,7 @@ railway up
 # - Frontend'i build eder (React)
 # - PostgreSQL'e bağlar
 # - Public URL'leri verir
-# - Health check yapar
+# - Health check yapar (curl ile)
 ```
 
 ### Adım 9: Deployment'ı Doğrulayın

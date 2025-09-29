@@ -35,6 +35,10 @@ echo "🔨 Building and starting services..."
 echo "📦 Building Maven project first..."
 mvn clean package -DskipTests
 
+echo "🐳 Building Docker images..."
+echo "   - Multi-stage build with OpenJDK 17 Alpine"
+echo "   - Optimized for production deployment"
+
 if docker compose version &> /dev/null; then
     docker compose build --no-cache
     docker compose up -d
