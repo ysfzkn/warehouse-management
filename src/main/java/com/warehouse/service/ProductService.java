@@ -97,7 +97,7 @@ public class ProductService {
         product.setPrice(productDetails.getPrice());
         product.setWeight(productDetails.getWeight());
         product.setDimensions(productDetails.getDimensions());
-        product.setIsActive(productDetails.getIsActive());
+        product.setActive(productDetails.isActive());
 
         return productRepository.save(product);
     }

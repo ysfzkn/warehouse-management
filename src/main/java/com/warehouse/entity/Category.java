@@ -29,7 +29,7 @@ public class Category {
     private LocalDateTime updatedAt;
 
     @Column(name = "is_active", nullable = false)
-    private Boolean isActive = true;
+    private boolean isActive = true;
 
     @OneToMany(mappedBy = "category", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<Product> products;
@@ -99,11 +99,11 @@ public class Category {
         this.updatedAt = updatedAt;
     }
 
-    public Boolean getIsActive() {
+    public boolean isActive() {
         return isActive;
     }
 
-    public void setIsActive(Boolean isActive) {
+    public void setActive(boolean isActive) {
         this.isActive = isActive;
     }
 

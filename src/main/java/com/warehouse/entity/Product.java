@@ -47,7 +47,7 @@ public class Product {
     private Category category;
 
     @Column(name = "is_active", nullable = false)
-    private Boolean isActive = true;
+    private boolean isActive = true;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -143,11 +143,11 @@ public class Product {
         this.category = category;
     }
 
-    public Boolean getIsActive() {
+    public boolean isActive() {
         return isActive;
     }
 
-    public void setIsActive(Boolean isActive) {
+    public void setActive(boolean isActive) {
         this.isActive = isActive;
     }
 
