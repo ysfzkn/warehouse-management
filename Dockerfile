@@ -6,9 +6,13 @@ WORKDIR /app
 # Install only necessary packages
 RUN apk add --no-cache maven
 
-# Copy Maven files first for better layer caching
-COPY pom.xml ./
-COPY src ./src/
+# Copy Maven files
+COPY pom.xml .
+COPY src ./src
+
+# Build the application
+RUN apk add --no-cache maven && \
+    mvn clean package -DskipTests
 
 # Build the application with optimizations
 RUN mvn clean package -DskipTests -Dmaven.repo.local=/tmp/maven-repo
@@ -35,7 +39,7 @@ EXPOSE 8080
 
 # Optimized health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -f --max-time 5 http://localhost:8080/actuator/health || exit 1
+  CMD curl -f http://localhost:8080/actuator/health || exit 1
 
 # Run the application with optimized JVM settings
-ENTRYPOINT ["java", "-XX:+UseContainerSupport", "-XX:MaxRAMPercentage=75.0", "-Djava.security.egd=file:/dev/./urandom", "-jar", "app.jar"]
+ENTRYPOINT ["java", "-jar", "app.jar"]
