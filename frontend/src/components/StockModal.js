@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 
 const StockModal = ({ warehouse, onClose }) => {
@@ -6,13 +6,7 @@ const StockModal = ({ warehouse, onClose }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    if (warehouse) {
-      fetchStocks();
-    }
-  }, [warehouse]);
-
-  const fetchStocks = async () => {
+  const fetchStocks = useCallback(async () => {
     try {
       setLoading(true);
       const response = await axios.get(`/api/stocks/warehouse/${warehouse.id}`);
@@ -23,7 +17,13 @@ const StockModal = ({ warehouse, onClose }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [warehouse]);
+
+  useEffect(() => {
+    if (warehouse) {
+      fetchStocks();
+    }
+  }, [warehouse, fetchStocks]);
 
   const getStockStatus = (stock) => {
     if (stock.quantity === 0) return { status: 'out', label: 'Stok Dışı', class: 'danger' };

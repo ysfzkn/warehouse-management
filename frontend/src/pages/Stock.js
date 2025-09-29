@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import axios from 'axios';
 import StockForm from '../components/StockForm';
 import StockAdjustmentModal from '../components/StockAdjustmentModal';
@@ -14,15 +14,7 @@ const Stock = () => {
   const [selectedStock, setSelectedStock] = useState(null);
   const [filter, setFilter] = useState('all'); // all, low-stock, out-of-stock
 
-  useEffect(() => {
-    fetchAllData();
-  }, []);
-
-  useEffect(() => {
-    filterStocks();
-  }, [stocks, filter]);
-
-  const fetchAllData = async () => {
+  const fetchAllData = useCallback(async () => {
     try {
       setLoading(true);
       const [stocksRes, productsRes, warehousesRes] = await Promise.all([
@@ -40,9 +32,13 @@ const Stock = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const filterStocks = () => {
+  useEffect(() => {
+    fetchAllData();
+  }, [fetchAllData]);
+
+  const filteredStocks = useMemo(() => {
     let filtered = stocks;
 
     switch (filter) {
@@ -57,14 +53,12 @@ const Stock = () => {
     }
 
     // Sort by warehouse name and product name
-    filtered.sort((a, b) => {
+    return [...filtered].sort((a, b) => {
       const warehouseCompare = a.warehouse.name.localeCompare(b.warehouse.name);
       if (warehouseCompare !== 0) return warehouseCompare;
       return a.product.name.localeCompare(b.product.name);
     });
-
-    return filtered;
-  };
+  }, [stocks, filter]);
 
   const handleCreateStock = () => {
     setSelectedStock(null);
@@ -112,7 +106,7 @@ const Stock = () => {
     return { status: 'normal', label: 'Normal', class: 'success' };
   };
 
-  const filteredStocks = filterStocks();
+  // filteredStocks now computed via useMemo above
 
   if (loading) {
     return (

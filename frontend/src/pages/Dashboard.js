@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { Bar, Pie } from 'react-chartjs-2';
 import {
@@ -34,11 +34,16 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    fetchDashboardData();
+  const getTotalQuantityByProduct = useCallback(async (productId) => {
+    try {
+      const response = await axios.get(`/api/stocks/product/${productId}/total-quantity`);
+      return response.data || 0;
+    } catch (error) {
+      return 0;
+    }
   }, []);
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = useCallback(async () => {
     try {
       setLoading(true);
       const [warehousesRes, productsRes, categoriesRes, lowStockRes, outOfStockRes] = await Promise.all([
@@ -77,16 +82,11 @@ const Dashboard = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [getTotalQuantityByProduct]);
 
-  const getTotalQuantityByProduct = async (productId) => {
-    try {
-      const response = await axios.get(`/api/stocks/product/${productId}/total-quantity`);
-      return response.data || 0;
-    } catch (error) {
-      return 0;
-    }
-  };
+  useEffect(() => {
+    fetchDashboardData();
+  }, [fetchDashboardData]);
 
   const barChartData = {
     labels: ['Aktif Depolar', 'Toplam Ürünler', 'Kategoriler', 'Düşük Stok', 'Stok Dışı'],
