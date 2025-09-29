@@ -28,6 +28,9 @@ public class Category {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
+    @Column(name = "is_active", nullable = false)
+    private Boolean isActive = true;
+
     @OneToMany(mappedBy = "category", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<Product> products;
 
@@ -96,8 +99,16 @@ public class Category {
         this.updatedAt = updatedAt;
     }
 
+    public Boolean getIsActive() {
+        return isActive;
+    }
+
+    public void setIsActive(Boolean isActive) {
+        this.isActive = isActive;
+    }
+
     public List<Product> getProducts() {
-        return products;
+        return products != null ? products : new java.util.ArrayList<>();
     }
 
     public void setProducts(List<Product> products) {
