@@ -14,7 +14,7 @@ COPY src ./src/
 RUN mvn clean package -DskipTests -Dmaven.repo.local=/tmp/maven-repo
 
 # Production stage with minimal base image
-FROM openjdk:17-jre-alpine
+FROM openjdk:17-alpine
 
 WORKDIR /app
 
