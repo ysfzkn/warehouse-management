@@ -453,21 +453,28 @@ Railway'de PostgreSQL kurduğunuzda iki networking seçeneği görürsünüz:
 
 ### Adım 7: Environment Variables'ları Ayarlayın
 
-**Railway Dashboard'da (https://railway.app/dashboard):**
+**Railway Dashboard'da şu variables'ları ayarlayın:**
 
-1. **Project** → **Variables** sekmesine gidin
-2. **"Add Variable"** butonuna tıklayın
-3. **Aşağıdaki değişkenleri ekleyin:**
+#### **Gerekli Variables (Mutlaka Setleyin):**
 
 ```bash
-# Railway PostgreSQL Configuration
-DATABASE_URL=postgresql://postgres:[PASSWORD]@postgres.railway.internal:5432/railway
-SPRING_PROFILES_ACTIVE=prod
+# Railway PostgreSQL Configuration (Otomatik Oluşturulur)
+DATABASE_URL=postgresql://postgres:YOUR_PASSWORD@postgres.railway.internal:5432/railway
 
-# Optional: Manual configuration (if DATABASE_URL doesn't work)
+# Spring Profile Configuration
+SPRING_PROFILES_ACTIVE=prod
+```
+
+#### **Opsiyonel Variables (Fallback İçin):**
+
+```bash
+# Manual Database Configuration (DATABASE_URL çalışmazsa)
 # SPRING_DATASOURCE_URL=jdbc:postgresql://postgres.railway.internal:5432/railway
 # SPRING_DATASOURCE_USERNAME=postgres
-# SPRING_DATASOURCE_PASSWORD=[GIVEN-PASSWORD]
+# SPRING_DATASOURCE_PASSWORD=YOUR_PASSWORD
+
+# Server Port (Railway otomatik atar)
+# PORT=auto-assigned-by-railway
 ```
 
 **⚠️ Önemli Notlar:**
@@ -476,6 +483,32 @@ SPRING_PROFILES_ACTIVE=prod
 - **Private Networking kullanın:** `postgres.railway.internal:5432`
 - **SPRING_PROFILES_ACTIVE=prod** ile `application-prod.properties` dosyası aktif olur
 - **Password'ü** Railway'in verdiği değerle değiştirin
+
+**Profile Yapısı:**
+- Environment variable `SPRING_PROFILES_ACTIVE=prod` → `application-prod.properties` kullanır
+- Environment variable setlenmezse → `application-dev.properties` kullanır (H2)
+- `application.properties` - Genel konfigürasyon (default)
+
+**🚨 Sorun Giderme:**
+
+Eğer hala H2 görüyorsanız:
+
+1. **Environment Variables Kontrolü:**
+   ```bash
+   # Railway dashboard'da şu değerler SET olmalı:
+   DATABASE_URL=postgresql://postgres:xxxxx@postgres.railway.internal:5432/railway
+   SPRING_PROFILES_ACTIVE=prod
+   ```
+
+2. **Debug Bilgileri:**
+   - Debug endpoint: `https://your-app.railway.app/api/info`
+   - Bu endpoint hangi konfigürasyonun aktif olduğunu gösterir
+
+3. **Railway Logs:**
+   ```bash
+   railway logs
+   # Database connection loglarını kontrol edin
+   ```
 
 ### Adım 8: GitHub Workflow ile Otomatik Deployment
 
