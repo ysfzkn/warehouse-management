@@ -61,6 +61,11 @@ public class Stock {
         this.lastUpdated = LocalDateTime.now();
     }
 
+    @PrePersist
+    protected void onCreate() {
+        this.lastUpdated = LocalDateTime.now();
+    }
+
     // Business logic methods
     public Integer getAvailableQuantity() {
         return Math.max(0, this.quantity - this.reservedQuantity);
