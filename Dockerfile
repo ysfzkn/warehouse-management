@@ -1,22 +1,24 @@
-# Multi-stage build for Spring Boot application
+# Optimized multi-stage build for Spring Boot application
 FROM openjdk:17-jdk-alpine AS build
 
 WORKDIR /app
 
-# Copy Maven files
-COPY pom.xml .
-COPY src ./src
+# Install only necessary packages
+RUN apk add --no-cache maven
 
-# Build the application
-RUN apk add --no-cache maven && \
-    mvn clean package -DskipTests
+# Copy Maven files first for better layer caching
+COPY pom.xml ./
+COPY src ./src/
 
-# Production stage
-FROM openjdk:17-alpine
+# Build the application with optimizations
+RUN mvn clean package -DskipTests -Dmaven.repo.local=/tmp/maven-repo
+
+# Production stage with minimal base image
+FROM openjdk:17-jre-alpine
 
 WORKDIR /app
 
-# Install curl for health checks
+# Install only curl for health checks (no wget needed)
 RUN apk add --no-cache curl
 
 # Copy the built JAR file from build stage
@@ -31,9 +33,9 @@ USER appuser
 # Expose port
 EXPOSE 8080
 
-# Health check
+# Optimized health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:8080/actuator/health || exit 1
+  CMD curl -f --max-time 5 http://localhost:8080/actuator/health || exit 1
 
-# Run the application
-ENTRYPOINT ["java", "-jar", "app.jar"]
+# Run the application with optimized JVM settings
+ENTRYPOINT ["java", "-XX:+UseContainerSupport", "-XX:MaxRAMPercentage=75.0", "-Djava.security.egd=file:/dev/./urandom", "-jar", "app.jar"]

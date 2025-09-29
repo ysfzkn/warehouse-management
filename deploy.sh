@@ -32,18 +32,19 @@ docker image prune -f || true
 
 # Build and start services
 echo "🔨 Building and starting services..."
-echo "📦 Building Maven project first..."
-mvn clean package -DskipTests
+echo "📦 Building optimized Maven project..."
+mvn clean package -DskipTests -Dmaven.test.skip=true -Dmaven.javadoc.skip=true
 
-echo "🐳 Building Docker images..."
-echo "   - Multi-stage build with OpenJDK 17 Alpine"
+echo "🐳 Building optimized Docker images..."
+echo "   - Multi-stage build with OpenJDK 17 JRE Alpine"
 echo "   - Optimized for production deployment"
+echo "   - Minimal base image for smaller size"
 
 if docker compose version &> /dev/null; then
-    docker compose build --no-cache
+    docker compose build --parallel
     docker compose up -d
 else
-    docker-compose build --no-cache
+    docker-compose build --parallel
     docker-compose up -d
 fi
 

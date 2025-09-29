@@ -56,13 +56,15 @@
             <scope>runtime</scope>
         </dependency>
 
-        <!-- Development Tools -->
+        <!-- Development Tools (excluded for production) -->
+        <!--
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-devtools</artifactId>
             <scope>runtime</scope>
             <optional>true</optional>
         </dependency>
+        -->
 
         <!-- Testing -->
         <dependency>
