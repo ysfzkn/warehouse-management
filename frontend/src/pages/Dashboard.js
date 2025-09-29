@@ -63,6 +63,7 @@ const Dashboard = () => {
       // Calculate total stock value
       let totalStockValue = 0;
       for (const product of products) {
+        if (!product?.id) continue;
         const totalQuantity = await getTotalQuantityByProduct(product.id);
         totalStockValue += product.price * totalQuantity;
       }

@@ -32,6 +32,10 @@ const StockAdjustmentModal = ({ stock, onSuccess, onClose }) => {
     try {
       const quantity = parseInt(adjustment.quantity);
 
+      if (!stock?.id) {
+        throw new Error('Geçersiz stok ID');
+      }
+
       if (adjustment.type === 'add') {
         await axios.put(`/api/stocks/${stock.id}/add`, null, {
           params: { quantity }
