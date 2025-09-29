@@ -107,6 +107,8 @@ Once deployment is successful, you can access these URLs:
 5. **Define** warehouses in the Warehouses section
 6. **Create** stock records in the Stock section
 
+**Note:** The deploy script automatically builds the Maven project before starting Docker containers.
+
 ## 📱 Mobile Usage
 
 The system is mobile-friendly:
@@ -304,17 +306,44 @@ ENV=production ./deploy.sh
 - **Scale up**: AWS RDS or Google Cloud SQL (when you need more power)
 - **Backup**: Always enable automatic backups
 
-## 🚀 Railway Deployment (Detaylı Rehber)
+## 🚀 Railway Deployment (Otomatik GitHub Integration)
 
-### Neden Railway?
+### Neden Railway + GitHub?
 
-Railway'i seçtik çünkü:
-- ✅ **$5 ücretsiz kredi** (küçük beyaz eşya şirketi için yeterli)
+Bu kombinasyonu seçtik çünkü:
+- ✅ **Otomatik deployment** - Her push'ta otomatik deploy
+- ✅ **$5 ücretsiz kredi** (küçük şirket için yeterli)
 - ✅ **Built-in PostgreSQL** (ekstra kurulum gerektirmez)
 - ✅ **Automatic HTTPS** (SSL sertifikası otomatik)
-- ✅ **GitHub integration** (otomatik deployment)
+- ✅ **GitHub integration** (push-to-deploy)
 - ✅ **Professional dashboard** (kolay yönetim)
 - ✅ **Database backup** (otomatik yedekleme)
+
+### ⚡ Otomatik Deployment Kurulumu
+
+**GitHub Actions ile otomatik deployment için:**
+
+1. **Bu repository'yi fork'layın** veya kendi GitHub repo'nuzu oluşturun
+2. **Railway CLI ile bağlanın:**
+   ```bash
+   railway login
+   railway link <github-repo-url>
+   ```
+3. **PostgreSQL ekleyin:**
+   ```bash
+   railway add postgresql
+   ```
+4. **GitHub Secrets ayarlayın:**
+   - Repository Settings → Secrets and variables → Actions
+   - `RAILWAY_TOKEN` secret'i ekleyin (Railway dashboard'dan alınacak)
+5. **Environment variables'ı ayarlayın** (Railway dashboard'da)
+6. **Push yapın** ve otomatik deployment'ı izleyin!
+
+**GitHub Workflow Dosyası:**
+- `.github/workflows/railway-deploy.yml` dosyası otomatik deployment'ı yönetir
+- Her `main` branch push'unda çalışır
+- Java ve Node.js build'lerini yapar
+- Railway'e deploy eder
 
 ### Adım 1: Railway Hesabı Oluşturun
 
@@ -409,6 +438,19 @@ railway add postgresql
 ✓ Set as DATABASE_URL environment variable
 ```
 
+### 🔗 Railway Networking Seçenekleri
+
+Railway'de PostgreSQL kurduğunuzda iki networking seçeneği görürsünüz:
+
+| Networking Type | Hostname | Kullanım | Güvenlik |
+|-----------------|----------|----------|----------|
+| **Public** | `yamanote.proxy.rlwy.net:16716` | External erişim (localhost'tan) | Daha az güvenli |
+| **Private** | `postgres.railway.internal` | Railway içindeki servisler arası | Daha güvenli |
+
+**✅ Doğru Seçim: Private Networking**
+- Backend Railway'de çalışacağı için `postgres.railway.internal:5432` kullanın
+- Public networking sadece external araçlarla bağlanmak için gereklidir
+
 ### Adım 7: Environment Variables'ları Ayarlayın
 
 **Railway Dashboard'da (https://railway.app/dashboard):**
@@ -418,9 +460,9 @@ railway add postgresql
 3. **Aşağıdaki değişkenleri ekleyin:**
 
 ```bash
-# Database Configuration
-DATABASE_URL=postgresql://[GIVEN-URL]
-SPRING_DATASOURCE_URL=jdbc:postgresql://[HOST]:5432/railway
+# Database Configuration (Private Networking kullanın)
+DATABASE_URL=postgresql://postgres.railway.internal:5432/railway
+SPRING_DATASOURCE_URL=jdbc:postgresql://postgres.railway.internal:5432/railway
 SPRING_DATASOURCE_USERNAME=postgres
 SPRING_DATASOURCE_PASSWORD=[GIVEN-PASSWORD]
 SPRING_JPA_DATABASE_PLATFORM=org.hibernate.dialect.PostgreSQLDialect
@@ -430,19 +472,33 @@ SPRING_JPA_HIBERNATE_DDL_AUTO=update
 SPRING_PROFILES_ACTIVE=production
 ```
 
-**Not:** Railway size verdiği gerçek değerleri kullanın.
+**⚠️ Önemli Notlar:**
 
-### Adım 8: Uygulamayı Deploy Edin
+- **Private Networking kullanın:** `postgres.railway.internal:5432`
+- **Public Networking kullanmayın:** `yamanote.proxy.rlwy.net:16716` (sadece external erişim için)
+- **Database password'ünü** Railway'in verdiği değerle değiştirin
+
+### Adım 8: GitHub Workflow ile Otomatik Deployment
+
+**Otomatik deployment için GitHub Actions kullanıyoruz:**
+
+1. **Bu repository'yi GitHub'a push'layın**
+2. **Railway otomatik olarak algılayacak** ve deploy edecek
+3. **Her push'ta yeniden build** ve deploy edecek
+4. **GitHub Actions logs'undan** süreci takip edin
+
+### Alternatif: Manuel Deployment
 
 ```bash
-# Tüm servisleri deploy edin
+# Manuel deploy için
 railway up
 
 # Bu komut şunları yapar:
-# - Backend'i build eder (Java/Spring Boot)
+# - Dockerfile'daki multi-stage build ile backend'i build eder
 # - Frontend'i build eder (React)
 # - PostgreSQL'e bağlar
 # - Public URL'leri verir
+# - Health check yapar
 ```
 
 **Beklenen çıktı:**

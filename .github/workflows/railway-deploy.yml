@@ -1,0 +1,59 @@
+name: Deploy to Railway
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: 'frontend/package-lock.json'
+
+      - name: Build backend
+        run: |
+          cd backend || true
+          mvn clean package -DskipTests
+
+      - name: Build frontend
+        run: |
+          cd frontend
+          npm ci
+          npm run build
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy to Railway
+        if: github.event_name == 'push'
+        run: |
+          railway login --token ${{ secrets.RAILWAY_TOKEN }}
+          railway up --detach
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+      - name: Notify deployment status
+        if: github.event_name == 'push'
+        run: |
+          echo "✅ Deployment completed successfully!"
+          echo "🌐 Frontend: https://warehouse-management.up.railway.app"
+          echo "🔗 API: https://warehouse-management.up.railway.app/api"

@@ -32,6 +32,9 @@ docker image prune -f || true
 
 # Build and start services
 echo "🔨 Building and starting services..."
+echo "📦 Building Maven project first..."
+mvn clean package -DskipTests
+
 if docker compose version &> /dev/null; then
     docker compose build --no-cache
     docker compose up -d
