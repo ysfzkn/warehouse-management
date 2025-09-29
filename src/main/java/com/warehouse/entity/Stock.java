@@ -7,6 +7,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.time.LocalDateTime;
 
 @Entity
@@ -25,11 +26,13 @@ public class Stock {
 
     @NotNull(message = "Product is required")
     @ManyToOne(fetch = FetchType.LAZY)
+    @JsonIgnoreProperties({"stocks"})
     @JoinColumn(name = "product_id", nullable = false)
     private Product product;
 
     @NotNull(message = "Warehouse is required")
     @ManyToOne(fetch = FetchType.LAZY)
+    @JsonIgnoreProperties({"stocks"})
     @JoinColumn(name = "warehouse_id", nullable = false)
     private Warehouse warehouse;
 
