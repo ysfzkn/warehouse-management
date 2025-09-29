@@ -7,6 +7,7 @@ const StockModal = ({ warehouse, onClose }) => {
   const [error, setError] = useState(null);
 
   const fetchStocks = useCallback(async () => {
+    if (!warehouse?.id) return;
     try {
       setLoading(true);
       const response = await axios.get(`/api/stocks/warehouse/${warehouse.id}`);
@@ -17,13 +18,13 @@ const StockModal = ({ warehouse, onClose }) => {
     } finally {
       setLoading(false);
     }
-  }, [warehouse]);
+  }, [warehouse?.id]);
 
   useEffect(() => {
     if (warehouse) {
       fetchStocks();
     }
-  }, [warehouse, fetchStocks]);
+  }, [warehouse?.id, fetchStocks]);
 
   const getStockStatus = (stock) => {
     if (stock.quantity === 0) return { status: 'out', label: 'Stok Dışı', class: 'danger' };
