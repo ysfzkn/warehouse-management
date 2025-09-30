@@ -113,8 +113,8 @@ const Warehouses = () => {
               <div className="card-body">
                 <div className="d-flex justify-content-between align-items-start mb-2">
                   <h5 className="card-title">{warehouse.name}</h5>
-                  <span className={`badge ${warehouse.isActive ? 'bg-success' : 'bg-secondary'}`}>
-                    {warehouse.isActive ? 'Aktif' : 'Pasif'}
+                  <span className={`badge ${warehouse.isActive === false ? 'bg-secondary' : 'bg-success'}`}>
+                    {warehouse.isActive === false ? 'Pasif' : 'Aktif'}
                   </span>
                 </div>
 
@@ -169,11 +169,11 @@ const Warehouses = () => {
                     Düzenle
                   </button>
                   <button
-                    className={`btn btn-sm ${warehouse.isActive ? 'btn-outline-warning' : 'btn-outline-success'}`}
-                    onClick={() => handleToggleActive(warehouse.id, warehouse.isActive)}
+                    className={`btn btn-sm ${(warehouse.isActive === false) ? 'btn-outline-success' : 'btn-outline-warning'}`}
+                    onClick={() => handleToggleActive(warehouse.id, warehouse.isActive === false ? false : true)}
                   >
-                    <i className={`fas ${warehouse.isActive ? 'fa-pause' : 'fa-play'} me-1`}></i>
-                    {warehouse.isActive ? 'Pasifleştir' : 'Aktifleştir'}
+                    <i className={`fas ${(warehouse.isActive === false) ? 'fa-play' : 'fa-pause'} me-1`}></i>
+                    {(warehouse.isActive === false) ? 'Aktifleştir' : 'Pasifleştir'}
                   </button>
                   <button
                     className="btn btn-outline-danger btn-sm"
