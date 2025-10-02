@@ -167,8 +167,8 @@ const Products = () => {
               <div className="card-body">
                 <div className="d-flex justify-content-between align-items-start mb-2">
                   <h5 className="card-title">{product.name}</h5>
-                  <span className={`badge ${product.isActive ? 'bg-success' : 'bg-secondary'}`}>
-                    {product.isActive ? 'Aktif' : 'Pasif'}
+                  <span className={`badge ${product.isActive === false ? 'bg-secondary' : 'bg-success'}`}>
+                    {product.isActive === false ? 'Pasif' : 'Aktif'}
                   </span>
                 </div>
 
@@ -219,11 +219,11 @@ const Products = () => {
                     Düzenle
                   </button>
                   <button
-                    className={`btn btn-sm ${product.isActive ? 'btn-outline-warning' : 'btn-outline-success'}`}
-                    onClick={() => handleToggleActive(product.id, product.isActive)}
+                    className={`btn btn-sm ${(product.isActive === false) ? 'btn-outline-success' : 'btn-outline-warning'}`}
+                    onClick={() => handleToggleActive(product.id, product.isActive === false ? false : true)}
                   >
-                    <i className={`fas ${product.isActive ? 'fa-pause' : 'fa-play'} me-1`}></i>
-                    {product.isActive ? 'Pasifleştir' : 'Aktifleştir'}
+                    <i className={`fas ${(product.isActive === false) ? 'fa-play' : 'fa-pause'} me-1`}></i>
+                    {(product.isActive === false) ? 'Aktifleştir' : 'Pasifleştir'}
                   </button>
                   <button
                     className="btn btn-outline-danger btn-sm"
