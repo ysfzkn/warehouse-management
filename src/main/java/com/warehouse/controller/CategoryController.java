@@ -2,6 +2,8 @@ package com.warehouse.controller;
 
 import com.warehouse.entity.Category;
 import com.warehouse.service.CategoryService;
+import com.warehouse.repository.CategoryRepository;
+import com.warehouse.dto.CategoryDto;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -15,16 +17,31 @@ import java.util.List;
 public class CategoryController {
 
     private final CategoryService categoryService;
+    private final CategoryRepository categoryRepository;
 
     @Autowired
-    public CategoryController(CategoryService categoryService) {
+    public CategoryController(CategoryService categoryService, CategoryRepository categoryRepository) {
         this.categoryService = categoryService;
+        this.categoryRepository = categoryRepository;
     }
 
     @GetMapping
     public ResponseEntity<List<Category>> getAllCategories() {
         List<Category> categories = categoryService.getAllCategories();
         return ResponseEntity.ok(categories);
+    }
+
+    @GetMapping("/with-counts")
+    public ResponseEntity<List<CategoryDto>> getCategoriesWithProductCounts() {
+        var counts = categoryRepository.fetchCategoryProductCounts();
+        var categories = categoryService.getAllCategories();
+        var map = new java.util.HashMap<Long, Long>();
+        counts.forEach(c -> map.put(c.getCategoryId(), c.getProductCount()));
+        var result = new java.util.ArrayList<CategoryDto>();
+        for (var c : categories) {
+            result.add(new CategoryDto(c.getId(), c.getName(), c.getDescription(), c.isActive(), map.getOrDefault(c.getId(), 0L)));
+        }
+        return ResponseEntity.ok(result);
     }
 
     @GetMapping("/active")

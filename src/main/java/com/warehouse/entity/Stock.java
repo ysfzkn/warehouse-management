@@ -26,13 +26,13 @@ public class Stock {
 
     @NotNull(message = "Product is required")
     @ManyToOne(fetch = FetchType.LAZY)
-    @JsonIgnoreProperties({"stocks"})
+    @JsonIgnoreProperties({"stocks", "hibernateLazyInitializer", "handler"})
     @JoinColumn(name = "product_id", nullable = false)
     private Product product;
 
     @NotNull(message = "Warehouse is required")
     @ManyToOne(fetch = FetchType.LAZY)
-    @JsonIgnoreProperties({"stocks"})
+    @JsonIgnoreProperties({"stocks", "hibernateLazyInitializer", "handler"})
     @JoinColumn(name = "warehouse_id", nullable = false)
     private Warehouse warehouse;
 

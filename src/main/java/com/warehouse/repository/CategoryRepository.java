@@ -19,4 +19,12 @@ public interface CategoryRepository extends JpaRepository<Category, Long> {
 
     @Query("SELECT c FROM Category c LEFT JOIN FETCH c.products WHERE c.id = :id")
     Optional<Category> findByIdWithProducts(Long id);
+
+    @Query("SELECT c.id AS categoryId, COUNT(p.id) AS productCount FROM Category c LEFT JOIN Product p ON p.category = c GROUP BY c.id")
+    List<CategoryProductCount> fetchCategoryProductCounts();
+
+    interface CategoryProductCount {
+        Long getCategoryId();
+        Long getProductCount();
+    }
 }
