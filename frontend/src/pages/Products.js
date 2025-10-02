@@ -72,9 +72,9 @@ const Products = () => {
     }
   };
 
-  const handleToggleActive = async (id, isActive) => {
+  const handleToggleActive = async (id, active) => {
     try {
-      if (isActive) {
+      if (active) {
         await axios.put(`/api/products/${id}/deactivate`);
       } else {
         await axios.put(`/api/products/${id}/activate`);
@@ -167,8 +167,8 @@ const Products = () => {
               <div className="card-body">
                 <div className="d-flex justify-content-between align-items-start mb-2">
                   <h5 className="card-title">{product.name}</h5>
-                  <span className={`badge ${product.isActive === false ? 'bg-secondary' : 'bg-success'}`}>
-                    {product.isActive === false ? 'Pasif' : 'Aktif'}
+                  <span className={`badge ${product.active === false ? 'bg-secondary' : 'bg-success'}`}>
+                    {product.active === false ? 'Pasif' : 'Aktif'}
                   </span>
                 </div>
 
@@ -219,11 +219,11 @@ const Products = () => {
                     Düzenle
                   </button>
                   <button
-                    className={`btn btn-sm ${(product.isActive === false) ? 'btn-outline-success' : 'btn-outline-warning'}`}
-                    onClick={() => handleToggleActive(product.id, product.isActive === false ? false : true)}
+                    className={`btn btn-sm ${(product.active === false) ? 'btn-outline-success' : 'btn-outline-warning'}`}
+                    onClick={() => handleToggleActive(product.id, product.active === false ? false : true)}
                   >
-                    <i className={`fas ${(product.isActive === false) ? 'fa-play' : 'fa-pause'} me-1`}></i>
-                    {(product.isActive === false) ? 'Aktifleştir' : 'Pasifleştir'}
+                    <i className={`fas ${(product.active === false) ? 'fa-play' : 'fa-pause'} me-1`}></i>
+                    {(product.active === false) ? 'Aktifleştir' : 'Pasifleştir'}
                   </button>
                   <button
                     className="btn btn-outline-danger btn-sm"
