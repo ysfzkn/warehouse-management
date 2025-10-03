@@ -53,10 +53,6 @@ const Categories = () => {
     fetchCategories();
   };
 
-  const getProductCount = (category) => {
-    return category.products ? category.products.length : 0;
-  };
-
   if (loading) {
     return (
       <div className="text-center">
@@ -101,14 +97,22 @@ const Categories = () => {
                 <div className="d-flex justify-content-between align-items-center mt-3">
                   <span className="fw-bold">
                     <i className="fas fa-box me-1"></i>
-                    Ürün Sayısı: {getProductCount(category)}
+                    Ürün Sayısı: {category.productCount}
                   </span>
                 </div>
 
                 <div className="mt-2">
                   <small className="text-muted">
                     <i className="fas fa-calendar me-1"></i>
-                    Oluşturulma: {new Date(category.createdAt).toLocaleDateString('tr-TR')}
+                    Oluşturulma Tarihi: {new Date(category.createdAt).toLocaleDateString('tr-TR')}
+                  </small>
+                </div>
+              </div>
+              
+              <div className="mt-2">
+                  <small className="text-muted">
+                    <i className="fas fa-calendar me-1"></i>
+                    Güncelleme Tarihi: {new Date(category.createdAt).toLocaleDateString('tr-TR')}
                   </small>
                 </div>
               </div>
@@ -125,13 +129,13 @@ const Categories = () => {
                   <button
                     className="btn btn-outline-danger btn-sm"
                     onClick={() => handleDelete(category.id)}
-                    disabled={getProductCount(category) > 0}
+                    disabled={category.productCount > 0}
                   >
                     <i className="fas fa-trash me-1"></i>
                     Sil
                   </button>
                 </div>
-                {getProductCount(category) > 0 && (
+                {category.productCount > 0 && (
                   <small className="text-muted mt-1 d-block">
                     <i className="fas fa-info-circle me-1"></i>
                     Ürün içeren kategoriler silinemez

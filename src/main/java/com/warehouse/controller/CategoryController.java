@@ -39,7 +39,7 @@ public class CategoryController {
         counts.forEach(c -> map.put(c.getCategoryId(), c.getProductCount()));
         var result = new java.util.ArrayList<CategoryDto>();
         for (var c : categories) {
-            result.add(new CategoryDto(c.getId(), c.getName(), c.getDescription(), c.isActive(), map.getOrDefault(c.getId(), 0L)));
+            result.add(new CategoryDto(c.getId(), c.getName(), c.getDescription(), c.isActive(), map.getOrDefault(c.getId(), 0L), c.getCreatedAt(), c.getUpdatedAt()));
         }
         return ResponseEntity.ok(result);
     }
