@@ -50,9 +50,9 @@ const Warehouses = () => {
     }
   };
 
-  const handleToggleActive = async (id, isActive) => {
+  const handleToggleActive = async (id, active) => {
     try {
-      if (isActive) {
+      if (active) {
         await axios.put(`/api/warehouses/${id}/deactivate`);
       } else {
         await axios.put(`/api/warehouses/${id}/activate`);
@@ -113,8 +113,8 @@ const Warehouses = () => {
               <div className="card-body">
                 <div className="d-flex justify-content-between align-items-start mb-2">
                   <h5 className="card-title">{warehouse.name}</h5>
-                  <span className={`badge ${warehouse.isActive === false ? 'bg-secondary' : 'bg-success'}`}>
-                    {warehouse.isActive === false ? 'Pasif' : 'Aktif'}
+                  <span className={`badge ${warehouse.active === false ? 'bg-secondary' : 'bg-success'}`}>
+                    {warehouse.active === false ? 'Pasif' : 'Aktif'}
                   </span>
                 </div>
 
@@ -169,11 +169,11 @@ const Warehouses = () => {
                     Düzenle
                   </button>
                   <button
-                    className={`btn btn-sm ${(warehouse.isActive === false) ? 'btn-outline-success' : 'btn-outline-warning'}`}
-                    onClick={() => handleToggleActive(warehouse.id, warehouse.isActive === false ? false : true)}
+                    className={`btn btn-sm ${(warehouse.active === false) ? 'btn-outline-success' : 'btn-outline-warning'}`}
+                    onClick={() => handleToggleActive(warehouse.id, warehouse.active === false ? false : true)}
                   >
-                    <i className={`fas ${(warehouse.isActive === false) ? 'fa-play' : 'fa-pause'} me-1`}></i>
-                    {(warehouse.isActive === false) ? 'Aktifleştir' : 'Pasifleştir'}
+                    <i className={`fas ${(warehouse.active === false) ? 'fa-play' : 'fa-pause'} me-1`}></i>
+                    {(warehouse.active === false) ? 'Aktifleştir' : 'Pasifleştir'}
                   </button>
                   <button
                     className="btn btn-outline-danger btn-sm"
