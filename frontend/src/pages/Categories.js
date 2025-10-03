@@ -107,7 +107,13 @@ const Categories = () => {
                     Oluşturulma Tarihi: {new Date(category.createdAt).toLocaleDateString('tr-TR')}
                   </small>
                 </div>
-                <div className="mt-1">ui
+                <div className="mt-1">
+                  <small className="text-muted">
+                    <i className="fas fa-calendar me-1"></i>
+                    Güncelleme Tarihi: {new Date(category.updatedAt).toLocaleDateString('tr-TR')}
+                  </small>
+                </div>
+              </div>
               <div className="card-footer">
                 <div className="btn-group w-100" role="group">
                   <button
