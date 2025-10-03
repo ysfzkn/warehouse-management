@@ -17,7 +17,11 @@ const Categories = () => {
     try {
       setLoading(true);
       const response = await axios.get('/api/categories/with-counts');
-      setCategories(response.data);
+      const normalized = (response.data || []).map((c) => ({
+        ...c,
+        productCount: Number(c.productCount ?? 0),
+      }));
+      setCategories(normalized);
     } catch (error) {
       console.error('Error fetching categories:', error);
       setError('Kategoriler yüklenirken hata oluştu');
