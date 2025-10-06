@@ -40,9 +40,6 @@ const Login = () => {
               alt="Şahinler DTM"
               style={{ maxHeight: 72, width: 'auto' }}
             />
-            <div className="mt-2 fw-semibold text-primary" style={{ letterSpacing: 1 }}>
-              <span className="text-dark">Şahinler</span> DTM
-            </div>
           </div>
 
           <h5 className="mb-3 text-center">
