@@ -14,7 +14,7 @@ public class WarehouseManagementApplication {
     }
 
     @Bean
-    public FilterRegistrationBean<SimpleAuthFilter> simpleAuthFilter(SimpleAuthFilter filter) {
+    public FilterRegistrationBean<SimpleAuthFilter> simpleAuthFilterRegistration(SimpleAuthFilter filter) {
         FilterRegistrationBean<SimpleAuthFilter> reg = new FilterRegistrationBean<>();
         reg.setFilter(filter);
         reg.addUrlPatterns("/api/*");
