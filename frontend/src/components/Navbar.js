@@ -12,8 +12,8 @@ const Navbar = () => {
   return (
     <nav className="navbar navbar-expand-lg navbar-dark bg-primary">
       <div className="container-fluid">
-        <Link className="navbar-brand" to="/">
-          <i className="fas fa-warehouse me-2"></i>
+        <Link className="navbar-brand d-flex align-items-center" to="/">
+          <img src="/sahinler-logo.jpg" onError={(e)=>{e.currentTarget.onerror=null; e.currentTarget.src='/sahinler-logo.png';}} alt="Logo" style={{ height: 28 }} className="me-2" />
           Depo Yönetim Sistemi
         </Link>
 

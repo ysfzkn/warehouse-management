@@ -34,8 +34,8 @@ const Login = () => {
         <div className="card-body p-4 p-md-5">
           <div className="text-center mb-4">
             <img
-              src="/sahinler-logo.png"
-              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+              src="/sahinler-logo.jpg"
+              onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = '/sahinler-logo.png'; }}
               alt="Şahinler DTM"
               style={{ maxHeight: 72, width: 'auto' }}
             />
