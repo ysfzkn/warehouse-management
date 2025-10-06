@@ -68,7 +68,15 @@ const Navbar = () => {
               <i className="fas fa-user me-1"></i>
               {localStorage.getItem('auth_user') || 'Admin'}
             </span>
-            <button className="btn btn-outline-light btn-sm" onClick={() => { localStorage.clear(); navigate('/login'); }}>
+            <button
+              className="btn btn-outline-light btn-sm"
+              onClick={() => {
+                localStorage.removeItem('auth_token');
+                localStorage.removeItem('auth_user');
+                window.dispatchEvent(new Event('auth-changed'));
+                navigate('/login', { replace: true });
+              }}
+            >
               <i className="fas fa-sign-out-alt me-1"></i>
               Çıkış
             </button>
