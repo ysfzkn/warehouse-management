@@ -1,8 +1,9 @@
 import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 const Navbar = () => {
   const location = useLocation();
+  const navigate = useNavigate();
 
   const isActive = (path) => {
     return location.pathname === path ? 'active' : '';
@@ -65,8 +66,12 @@ const Navbar = () => {
           <div className="d-flex">
             <span className="navbar-text me-3">
               <i className="fas fa-user me-1"></i>
-              Admin
+              {localStorage.getItem('auth_user') || 'Admin'}
             </span>
+            <button className="btn btn-outline-light btn-sm" onClick={() => { localStorage.clear(); navigate('/login'); }}>
+              <i className="fas fa-sign-out-alt me-1"></i>
+              Çıkış
+            </button>
           </div>
         </div>
       </div>
