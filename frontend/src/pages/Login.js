@@ -17,6 +17,7 @@ const Login = () => {
       const res = await axios.post('/api/auth/login', { username, password });
       localStorage.setItem('auth_token', res.data.token);
       localStorage.setItem('auth_user', res.data.username);
+      window.dispatchEvent(new Event('auth-changed'));
       navigate('/');
     } catch (err) {
       setError('Kullanıcı adı veya şifre hatalı');
