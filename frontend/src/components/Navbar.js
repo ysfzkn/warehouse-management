@@ -13,7 +13,7 @@ const Navbar = () => {
     <nav className="navbar navbar-expand-lg navbar-dark bg-primary">
       <div className="container-fluid">
         <Link className="navbar-brand d-flex align-items-center" to="/">
-          <img src="/sahinler-logo.jpg" onError={(e)=>{e.currentTarget.onerror=null; e.currentTarget.src='/sahinler-logo.png';}} alt="Logo" style={{ height: 28 }} className="me-2" />
+          <img src="/sahinler-logo.png" onError={(e)=>{e.currentTarget.onerror=null; e.currentTarget.src='/sahinler-logo.png';}} alt="Logo" style={{ height: 28 }} className="me-2" />
           Depo Yönetim Sistemi
         </Link>
 
