@@ -51,6 +51,18 @@ public class Product {
     @Size(max = 50, message = "Dimensions cannot exceed 50 characters")
     private String dimensions;
 
+    @Column(name = "length_cm")
+    private Double lengthCm;
+
+    @Column(name = "width_cm")
+    private Double widthCm;
+
+    @Column(name = "height_cm")
+    private Double heightCm;
+
+    @Column(name = "shipping_rate", precision = 10, scale = 2)
+    private BigDecimal shippingRate; // per desi unit
+
     @NotNull(message = "Category is required")
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "category_id", nullable = false)
@@ -111,6 +123,10 @@ public class Product {
                 ", category=" + (category != null ? category.getName() : "null") +
                 ", brand=" + (brand != null ? brand.getName() : "null") +
                 ", color=" + (color != null ? color.getName() : "null") +
+                ", lengthCm=" + lengthCm +
+                ", widthCm=" + widthCm +
+                ", heightCm=" + heightCm +
+                ", shippingRate=" + shippingRate +
                 ", isActive=" + isActive +
                 '}';
     }

@@ -84,7 +84,13 @@ const Products = () => {
         await axios.delete(`/api/products/${id}`);
         fetchProducts();
       } catch (error) {
-        alert('Ürün silinirken hata oluştu: ' + error.response?.data);
+        const msg = error.response?.data || 'Ürün silinirken hata oluştu';
+        const toast = document.createElement('div');
+        toast.className = 'toast align-items-center text-bg-danger border-0 position-fixed top-0 end-0 m-3 show';
+        toast.setAttribute('role', 'alert');
+        toast.innerHTML = `<div class="d-flex"><div class="toast-body">${msg}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
+        document.body.appendChild(toast);
+        setTimeout(() => { try { document.body.removeChild(toast); } catch {} }, 3500);
       }
     }
   };
@@ -108,7 +114,7 @@ const Products = () => {
     fetchProducts();
   };
 
-  const getTotalStockQuantity = (product) => {
+  const deigetTotalStockQuantity = (product) => {
     return product.stocks ? product.stocks.reduce((total, stock) => total + stock.quantity, 0) : 0;
   };
 
@@ -220,6 +226,22 @@ const Products = () => {
 
                 <p className="card-text">
                   <strong>Fiyat:</strong> ₺{product.price?.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
+                </p>
+                <p className="card-text">
+                  <strong>Desi:</strong> {(() => {
+                    const w = product.widthCm || 0; const l = product.lengthCm || 0; const h = product.heightCm || 0;
+                    const desi = (h * w * l) / 3000;
+                    return desi ? desi.toFixed(2) : '-';
+                  })()}
+                </p>
+                <p className="card-text">
+                  <strong>Kargo Ücreti:</strong> {(() => {
+                    const w = product.widthCm || 0; const l = product.lengthCm || 0; const h = product.heightCm || 0;
+                    const desi = (h * w * l) / 3000;
+                    const rate = product.shippingRate || 0;
+                    const total = desi * rate;
+                    return isNaN(total) || total === 0 ? '-' : `₺${total.toFixed(2)}`;
+                  })()}
                 </p>
 
                 {product.description && (

@@ -10,6 +10,10 @@ const ProductForm = ({ product, categories, onSuccess, onCancel }) => {
     price: '',
     weight: '',
     dimensions: '',
+    lengthCm: '',
+    widthCm: '',
+    heightCm: '',
+    shippingRate: '',
     categoryId: '',
     isActive: true
   });
@@ -27,6 +31,10 @@ const ProductForm = ({ product, categories, onSuccess, onCancel }) => {
         price: product.price || '',
         weight: product.weight || '',
         dimensions: product.dimensions || '',
+        lengthCm: product.lengthCm || '',
+        widthCm: product.widthCm || '',
+        heightCm: product.heightCm || '',
+        shippingRate: product.shippingRate || '',
         categoryId: product.category?.id || '',
         isActive: product.isActive !== false
       });
@@ -91,6 +99,10 @@ const ProductForm = ({ product, categories, onSuccess, onCancel }) => {
         price: parseFloat(formData.price),
         weight: formData.weight ? parseFloat(formData.weight) : null,
         dimensions: formData.dimensions,
+        lengthCm: formData.lengthCm ? parseFloat(formData.lengthCm) : null,
+        widthCm: formData.widthCm ? parseFloat(formData.widthCm) : null,
+        heightCm: formData.heightCm ? parseFloat(formData.heightCm) : null,
+        shippingRate: formData.shippingRate ? parseFloat(formData.shippingRate) : null,
         category: { id: parseInt(formData.categoryId) },
         brand: brandId ? { id: brandId } : null,
         color: colorId ? { id: colorId } : null,
@@ -222,18 +234,44 @@ const ProductForm = ({ product, categories, onSuccess, onCancel }) => {
 
         <div className="col-md-4">
           <div className="mb-3">
-            <label htmlFor="dimensions" className="form-label">
-              Boyutlar
+            <label className="form-label">
+              Boyutlar (cm)
             </label>
-            <input
-              type="text"
-              className="form-control"
-              id="dimensions"
-              name="dimensions"
-              value={formData.dimensions}
-              onChange={handleChange}
-              placeholder="60x60x180 cm"
-            />
+            <div className="input-group">
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                className="form-control"
+                id="widthCm"
+                name="widthCm"
+                value={formData.widthCm}
+                onChange={handleChange}
+                placeholder="En"
+              />
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                className="form-control"
+                id="lengthCm"
+                name="lengthCm"
+                value={formData.lengthCm}
+                onChange={handleChange}
+                placeholder="Boy"
+              />
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                className="form-control"
+                id="heightCm"
+                name="heightCm"
+                value={formData.heightCm}
+                onChange={handleChange}
+                placeholder="Yükseklik"
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -274,6 +312,24 @@ const ProductForm = ({ product, categories, onSuccess, onCancel }) => {
       </div>
 
       <div className="row">
+        <div className="col-md-4">
+          <div className="mb-3">
+            <label htmlFor="shippingRate" className="form-label">
+              Kargo Ücreti (Desi Başına)
+            </label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              className="form-control"
+              id="shippingRate"
+              name="shippingRate"
+              value={formData.shippingRate}
+              onChange={handleChange}
+              placeholder="Örn: 12.50"
+            />
+          </div>
+        </div>
         <div className="col-md-6">
           <SearchableSelect
             label="Renk"

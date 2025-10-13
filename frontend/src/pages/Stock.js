@@ -127,8 +127,9 @@ const Stock = () => {
   };
 
   const getStockStatus = (stock) => {
-    if (stock.quantity === 0) return { status: 'out', label: 'Stok Dışı', class: 'danger' };
-    if (stock.quantity <= stock.minStockLevel) return { status: 'low', label: 'Düşük Stok', class: 'warning' };
+    const available = (stock.quantity || 0) - (stock.reservedQuantity || 0) - (stock.consignedQuantity || 0);
+    if (available <= 0) return { status: 'out', label: 'Stok Dışı', class: 'danger' };
+    if (available <= stock.minStockLevel) return { status: 'low', label: 'Düşük Stok', class: 'warning' };
     return { status: 'normal', label: 'Normal', class: 'success' };
   };
 

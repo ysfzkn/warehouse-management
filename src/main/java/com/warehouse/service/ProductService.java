@@ -142,6 +142,10 @@ public class ProductService {
         product.setPrice(productDetails.getPrice());
         product.setWeight(productDetails.getWeight());
         product.setDimensions(productDetails.getDimensions());
+        product.setLengthCm(productDetails.getLengthCm());
+        product.setWidthCm(productDetails.getWidthCm());
+        product.setHeightCm(productDetails.getHeightCm());
+        product.setShippingRate(productDetails.getShippingRate());
         product.setActive(productDetails.isActive());
 
         return productRepository.save(product);
@@ -152,7 +156,7 @@ public class ProductService {
                 .orElseThrow(() -> new RuntimeException("Product not found with id: " + id));
 
         if (!product.getStocks().isEmpty()) {
-            throw new RuntimeException("Cannot delete product with existing stock");
+            throw new RuntimeException("Stok içeren ürün silinemez");
         }
 
         productRepository.delete(product);

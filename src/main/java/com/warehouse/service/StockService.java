@@ -165,10 +165,14 @@ public class StockService {
             if (stockDetails.getReservedQuantity() < 0) {
                 throw new RuntimeException("Reserved quantity cannot be negative");
             }
-            if (stockDetails.getReservedQuantity() > stock.getQuantity()) {
-                throw new RuntimeException("Reserved quantity cannot exceed total quantity");
-            }
             stock.setReservedQuantity(stockDetails.getReservedQuantity());
+        }
+
+        if (stockDetails.getConsignedQuantity() != null) {
+            if (stockDetails.getConsignedQuantity() < 0) {
+                throw new RuntimeException("Consigned quantity cannot be negative");
+            }
+            stock.setConsignedQuantity(stockDetails.getConsignedQuantity());
         }
 
         return stockRepository.save(stock);
@@ -193,10 +197,6 @@ public class StockService {
 
         Stock stock = stockRepository.findById(stockId)
                 .orElseThrow(() -> new RuntimeException("Stock not found with id: " + stockId));
-
-        if (stock.getQuantity() < quantity) {
-            throw new RuntimeException("Insufficient stock. Available: " + stock.getQuantity() + ", Requested: " + quantity);
-        }
 
         stock.setQuantity(stock.getQuantity() - quantity);
         return stockRepository.save(stock);

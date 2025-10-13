@@ -48,6 +48,10 @@ public class Stock {
     @Column(name = "reserved_quantity")
     private Integer reservedQuantity = 0;
 
+    @Min(value = 0, message = "Consigned quantity cannot be negative")
+    @Column(name = "consigned_quantity")
+    private Integer consignedQuantity = 0; // Emanet miktar
+
     @Column(name = "last_updated", nullable = false)
     private LocalDateTime lastUpdated;
 
@@ -71,7 +75,9 @@ public class Stock {
 
     // Business logic methods
     public Integer getAvailableQuantity() {
-        return Math.max(0, this.quantity - this.reservedQuantity);
+        int consigned = this.consignedQuantity != null ? this.consignedQuantity : 0;
+        int reserved = this.reservedQuantity != null ? this.reservedQuantity : 0;
+        return (this.quantity != null ? this.quantity : 0) - reserved - consigned;
     }
 
     public boolean isLowStock() {
@@ -92,6 +98,7 @@ public class Stock {
                 ", available=" + getAvailableQuantity() +
                 ", minStockLevel=" + minStockLevel +
                 ", reservedQuantity=" + reservedQuantity +
+                ", consignedQuantity=" + consignedQuantity +
                 ", lastUpdated=" + lastUpdated +
                 '}';
     }

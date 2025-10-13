@@ -7,7 +7,8 @@ const StockForm = ({ products, warehouses, onSuccess, onCancel }) => {
     warehouseId: '',
     quantity: '',
     minStockLevel: '',
-    reservedQuantity: '0'
+    reservedQuantity: '0',
+    consignedQuantity: '0'
   });
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
@@ -76,7 +77,8 @@ const StockForm = ({ products, warehouses, onSuccess, onCancel }) => {
         warehouse: { id: parseInt(formData.warehouseId) },
         quantity: parseInt(formData.quantity),
         minStockLevel: parseInt(formData.minStockLevel),
-        reservedQuantity: parseInt(formData.reservedQuantity || 0)
+        reservedQuantity: parseInt(formData.reservedQuantity || 0),
+        consignedQuantity: parseInt(formData.consignedQuantity || 0)
       };
 
       await axios.post('/api/stocks', dataToSend);
@@ -204,6 +206,24 @@ const StockForm = ({ products, warehouses, onSuccess, onCancel }) => {
               id="reservedQuantity"
               name="reservedQuantity"
               value={formData.reservedQuantity}
+              onChange={handleChange}
+              placeholder="0"
+            />
+          </div>
+        </div>
+
+        <div className="col-md-4">
+          <div className="mb-3">
+            <label htmlFor="consignedQuantity" className="form-label">
+              Emanet
+            </label>
+            <input
+              type="number"
+              min="0"
+              className="form-control"
+              id="consignedQuantity"
+              name="consignedQuantity"
+              value={formData.consignedQuantity}
               onChange={handleChange}
               placeholder="0"
             />

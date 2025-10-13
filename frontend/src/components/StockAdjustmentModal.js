@@ -5,7 +5,8 @@ const StockAdjustmentModal = ({ stock, onSuccess, onClose }) => {
   const [adjustment, setAdjustment] = useState({
     type: 'add', // 'add' or 'remove'
     quantity: '',
-    reason: ''
+    reason: '',
+    affectConsigned: false
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -36,14 +37,15 @@ const StockAdjustmentModal = ({ stock, onSuccess, onClose }) => {
         throw new Error('Geçersiz stok ID');
       }
 
-      if (adjustment.type === 'add') {
-        await axios.put(`/api/stocks/${stock.id}/add`, null, {
-          params: { quantity }
-        });
+      if (adjustment.affectConsigned) {
+        const newConsigned = Math.max(0, (stock.consignedQuantity || 0) + (adjustment.type === 'add' ? quantity : -quantity));
+        await axios.put(`/api/stocks/${stock.id}`, { consignedQuantity: newConsigned });
       } else {
-        await axios.put(`/api/stocks/${stock.id}/remove`, null, {
-          params: { quantity }
-        });
+        if (adjustment.type === 'add') {
+          await axios.put(`/api/stocks/${stock.id}/add`, null, { params: { quantity } });
+        } else {
+          await axios.put(`/api/stocks/${stock.id}/remove`, null, { params: { quantity } });
+        }
       }
 
       onSuccess();
@@ -56,8 +58,9 @@ const StockAdjustmentModal = ({ stock, onSuccess, onClose }) => {
   };
 
   const getStockStatus = (stock) => {
-    if (stock.quantity === 0) return { status: 'out', label: 'Stok Dışı', class: 'danger' };
-    if (stock.quantity <= stock.minStockLevel) return { status: 'low', label: 'Düşük Stok', class: 'warning' };
+    const available = (stock.quantity || 0) - (stock.reservedQuantity || 0) - (stock.consignedQuantity || 0);
+    if (available <= 0) return { status: 'out', label: 'Stok Dışı', class: 'danger' };
+    if (available <= stock.minStockLevel) return { status: 'low', label: 'Düşük Stok', class: 'warning' };
     return { status: 'normal', label: 'Normal', class: 'success' };
   };
 
@@ -100,12 +103,22 @@ const StockAdjustmentModal = ({ stock, onSuccess, onClose }) => {
                   <div className="col-sm-4">
                     <strong>Kullanılabilir:</strong><br />
                     <span className={stock.availableQuantity < stock.minStockLevel ? 'text-danger' : 'text-success'}>
-                      {stock.availableQuantity}
+                      {(stock.quantity || 0) - (stock.reservedQuantity || 0) - (stock.consignedQuantity || 0)}
                     </span>
                   </div>
                   <div className="col-sm-4">
                     <strong>Min. Stok:</strong><br />
                     {stock.minStockLevel}
+                  </div>
+                </div>
+                <div className="row mt-2">
+                  <div className="col-sm-4">
+                    <strong>Rezerve:</strong><br />
+                    {stock.reservedQuantity || 0}
+                  </div>
+                  <div className="col-sm-4">
+                    <strong>Emanet:</strong><br />
+                    {stock.consignedQuantity || 0}
                   </div>
                 </div>
               </div>
@@ -175,6 +188,21 @@ const StockAdjustmentModal = ({ stock, onSuccess, onClose }) => {
               </div>
 
               <div className="mb-3">
+              <div className="form-check">
+                <input
+                  className="form-check-input"
+                  type="checkbox"
+                  id="affectConsigned"
+                  checked={adjustment.affectConsigned}
+                  onChange={(e) => setAdjustment(prev => ({ ...prev, affectConsigned: e.target.checked }))}
+                />
+                <label className="form-check-label" htmlFor="affectConsigned">
+                  Emanet miktarı değiştir
+                </label>
+              </div>
+            </div>
+
+            <div className="mb-3">
                 <label htmlFor="reason" className="form-label">
                   Açıklama (İsteğe bağlı)
                 </label>
