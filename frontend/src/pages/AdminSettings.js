@@ -97,8 +97,57 @@ const EditModal = ({ title, fields, item, onClose, onSave, saving, error }) => {
             )}
             {fields.includes('hexCode') && (
               <div className="mb-3">
-                <label className="form-label">Renk Kodu</label>
-                <input className="form-control" placeholder="#FFFFFF" value={form.hexCode} onChange={e => setForm({ ...form, hexCode: e.target.value })} />
+                <label className="form-label d-block">Renk Seçimi</label>
+                <div className="d-flex flex-wrap gap-2 mb-2">
+                  {[
+                    { name: 'Siyah', hex: '#000000' },
+                    { name: 'Beyaz', hex: '#FFFFFF' },
+                    { name: 'Kırmızı', hex: '#FF0000' },
+                    { name: 'Yeşil', hex: '#00FF00' },
+                    { name: 'Mavi', hex: '#0000FF' },
+                    { name: 'Sarı', hex: '#FFFF00' },
+                    { name: 'Turuncu', hex: '#FFA500' },
+                    { name: 'Mor', hex: '#800080' },
+                    { name: 'Pembe', hex: '#FFC0CB' },
+                    { name: 'Kahverengi', hex: '#8B4513' },
+                    { name: 'Gri', hex: '#808080' },
+                    { name: 'Camgöbeği', hex: '#00FFFF' }
+                  ].map((c) => (
+                    <button
+                      type="button"
+                      key={c.hex}
+                      className={`btn btn-light position-relative`}
+                      style={{
+                        border: form.hexCode === c.hex ? '2px solid var(--bs-primary)' : '1px solid #ddd',
+                        padding: 6,
+                        borderRadius: 8
+                      }}
+                      onClick={() => setForm({ ...form, hexCode: c.hex })}
+                      title={c.name}
+                    >
+                      <span
+                        style={{
+                          display: 'inline-block',
+                          width: 24,
+                          height: 24,
+                          borderRadius: 4,
+                          backgroundColor: c.hex,
+                          border: '1px solid rgba(0,0,0,0.15)'
+                        }}
+                      />
+                    </button>
+                  ))}
+                </div>
+                <div className="d-flex align-items-center gap-2">
+                  <input
+                    type="color"
+                    className="form-control form-control-color"
+                    value={/^#[0-9A-Fa-f]{6}$/.test(form.hexCode || '') ? form.hexCode : '#000000'}
+                    title="Özel renk seç"
+                    onChange={(e) => setForm({ ...form, hexCode: e.target.value })}
+                  />
+                  <span className="text-muted small">Seçili: {form.hexCode || '-'}</span>
+                </div>
               </div>
             )}
             {fields.includes('isActive') && (
@@ -127,7 +176,7 @@ const AdminSettings = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [editing, setEditing] = useState(null);
+  const [editing, setEditing] = useState(undefined);
 
   const load = async () => {
     try {
@@ -156,7 +205,7 @@ const AdminSettings = () => {
         if (editing) await axios.put(`/api/colors/${editing.id}`, data);
         else await axios.post('/api/colors', data);
       }
-      setEditing(null);
+      setEditing(undefined);
       await load();
     } catch (e) {
       setError(e.response?.data || 'Hata oluştu');
@@ -196,8 +245,8 @@ const AdminSettings = () => {
           columns={[{ key: 'name', title: 'Ad' }, { key: 'description', title: 'Açıklama' }, { key: 'isActive', title: 'Durum', render: (v) => v ? 'Aktif' : 'Pasif' }]}
           items={brands}
           loading={loading}
-          onCreate={() => setEditing(null) || setError('')}
-          onEdit={(it) => setEditing(it) || setError('')}
+          onCreate={() => { setError(''); setEditing(null); }}
+          onEdit={(it) => { setError(''); setEditing(it); }}
           onDelete={handleDelete}
         />
       )}
@@ -208,13 +257,13 @@ const AdminSettings = () => {
           columns={[{ key: 'name', title: 'Ad' }, { key: 'hexCode', title: 'Renk Kodu', render: (v) => v || '-' }, { key: 'isActive', title: 'Durum', render: (v) => v ? 'Aktif' : 'Pasif' }]}
           items={colors}
           loading={loading}
-          onCreate={() => setEditing(null) || setError('')}
-          onEdit={(it) => setEditing(it) || setError('')}
+          onCreate={() => { setError(''); setEditing(null); }}
+          onEdit={(it) => { setError(''); setEditing(it); }}
           onDelete={handleDelete}
         />
       )}
 
-      {(activeTab === 'brand' || activeTab === 'color') && (editing !== undefined) && (editing === null || editing.id) && (
+      {(activeTab === 'brand' || activeTab === 'color') && editing !== undefined && (
         <EditModal
           title={activeTab === 'brand' ? (editing ? 'Marka Düzenle' : 'Yeni Marka') : (editing ? 'Renk Düzenle' : 'Yeni Renk')}
           fields={activeTab === 'brand' ? ['name', 'description', 'isActive'] : ['name', 'hexCode', 'isActive']}
