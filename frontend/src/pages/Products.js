@@ -114,7 +114,7 @@ const Products = () => {
     fetchProducts();
   };
 
-  const deigetTotalStockQuantity = (product) => {
+  const getTotalStockQuantity = (product) => {
     return product.stocks ? product.stocks.reduce((total, stock) => total + stock.quantity, 0) : 0;
   };
 
