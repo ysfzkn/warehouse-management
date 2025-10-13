@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import SearchableSelect from './SearchableSelect';
 
 const ProductForm = ({ product, categories, onSuccess, onCancel }) => {
   const [formData, setFormData] = useState({
@@ -14,6 +15,8 @@ const ProductForm = ({ product, categories, onSuccess, onCancel }) => {
   });
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
+  const [brandId, setBrandId] = useState(null);
+  const [colorId, setColorId] = useState(null);
 
   useEffect(() => {
     if (product) {
@@ -27,6 +30,8 @@ const ProductForm = ({ product, categories, onSuccess, onCancel }) => {
         categoryId: product.category?.id || '',
         isActive: product.isActive !== false
       });
+      setBrandId(product.brand?.id || null);
+      setColorId(product.color?.id || null);
     }
   }, [product]);
 
@@ -87,6 +92,8 @@ const ProductForm = ({ product, categories, onSuccess, onCancel }) => {
         weight: formData.weight ? parseFloat(formData.weight) : null,
         dimensions: formData.dimensions,
         category: { id: parseInt(formData.categoryId) },
+        brand: brandId ? { id: brandId } : null,
+        color: colorId ? { id: colorId } : null,
         isActive: formData.isActive
       };
 
@@ -255,7 +262,33 @@ const ProductForm = ({ product, categories, onSuccess, onCancel }) => {
             {errors.categoryId && <div className="invalid-feedback">{errors.categoryId}</div>}
           </div>
         </div>
+        <div className="col-md-6">
+          <SearchableSelect
+            label="Marka"
+            value={brandId}
+            onChange={(id) => setBrandId(id)}
+            searchEndpoint="/api/brands/search"
+            placeholder="Marka ara..."
+          />
+        </div>
+      </div>
 
+      <div className="row">
+        <div className="col-md-6">
+          <SearchableSelect
+            label="Renk"
+            value={colorId}
+            onChange={(id) => setColorId(id)}
+            searchEndpoint="/api/colors/search"
+            placeholder="Renk ara..."
+            renderOption={(opt) => (
+              <span>
+                <span className="me-2" style={{ display: 'inline-block', width: 12, height: 12, backgroundColor: opt.hexCode || '#ccc', border: '1px solid #ccc' }}></span>
+                {opt.name}
+              </span>
+            )}
+          />
+        </div>
         <div className="col-md-6">
           <div className="mb-3">
             <div className="form-check mt-4">

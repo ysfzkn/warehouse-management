@@ -70,6 +70,14 @@ public class ProductController {
         return ResponseEntity.ok(products);
     }
 
+    @GetMapping("/filter")
+    public ResponseEntity<List<Product>> filterProducts(
+            @RequestParam(required = false) Long brandId,
+            @RequestParam(required = false) Long colorId) {
+        List<Product> products = productService.filterProductsByBrandAndColor(brandId, colorId);
+        return ResponseEntity.ok(products);
+    }
+
     @PostMapping
     public ResponseEntity<?> createProduct(@Valid @RequestBody Product product) {
         try {

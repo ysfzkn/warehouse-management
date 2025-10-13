@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import ProductForm from '../components/ProductForm';
+import SearchableSelect from '../components/SearchableSelect';
 
 const Products = () => {
   const [products, setProducts] = useState([]);
@@ -11,6 +12,8 @@ const Products = () => {
   const [editingProduct, setEditingProduct] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
+  const [selectedBrand, setSelectedBrand] = useState(null);
+  const [selectedColor, setSelectedColor] = useState(null);
 
   useEffect(() => {
     fetchProducts();
@@ -22,10 +25,24 @@ const Products = () => {
       const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                            product.sku.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesCategory = !selectedCategory || product.category.id.toString() === selectedCategory;
-      return matchesSearch && matchesCategory;
+      const matchesBrand = !selectedBrand || product.brand?.id === selectedBrand;
+      const matchesColor = !selectedColor || product.color?.id === selectedColor;
+      return matchesSearch && matchesCategory && matchesBrand && matchesColor;
     });
     setFilteredProducts(filteredProducts);
   }, [products, searchTerm, selectedCategory]);
+  
+  useEffect(() => {
+    const filteredProducts = products.filter(product => {
+      const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           product.sku.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesCategory = !selectedCategory || product.category.id.toString() === selectedCategory;
+      const matchesBrand = !selectedBrand || product.brand?.id === selectedBrand;
+      const matchesColor = !selectedColor || product.color?.id === selectedColor;
+      return matchesSearch && matchesCategory && matchesBrand && matchesColor;
+    });
+    setFilteredProducts(filteredProducts);
+  }, [selectedBrand, selectedColor]);
 
   const [filteredProducts, setFilteredProducts] = useState([]);
 
@@ -156,6 +173,27 @@ const Products = () => {
               </option>
             ))}
           </select>
+        </div>
+      </div>
+
+      <div className="row mb-4">
+        <div className="col-md-6">
+          <SearchableSelect
+            label="Marka Filtresi"
+            value={selectedBrand}
+            onChange={(id) => setSelectedBrand(id)}
+            searchEndpoint="/api/brands/search"
+            placeholder="Marka ara..."
+          />
+        </div>
+        <div className="col-md-6">
+          <SearchableSelect
+            label="Renk Filtresi"
+            value={selectedColor}
+            onChange={(id) => setSelectedColor(id)}
+            searchEndpoint="/api/colors/search"
+            placeholder="Renk ara..."
+          />
         </div>
       </div>
 

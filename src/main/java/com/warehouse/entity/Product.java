@@ -57,6 +57,16 @@ public class Product {
     @JsonIgnoreProperties({"products", "hibernateLazyInitializer", "handler"})
     private Category category;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "brand_id")
+    @JsonIgnoreProperties({"products", "hibernateLazyInitializer", "handler"})
+    private Brand brand;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "color_id")
+    @JsonIgnoreProperties({"products", "hibernateLazyInitializer", "handler"})
+    private Color color;
+
     @Column(name = "is_active", nullable = false)
     private boolean isActive = true;
 
@@ -99,6 +109,8 @@ public class Product {
                 ", sku='" + sku + '\'' +
                 ", price=" + price +
                 ", category=" + (category != null ? category.getName() : "null") +
+                ", brand=" + (brand != null ? brand.getName() : "null") +
+                ", color=" + (color != null ? color.getName() : "null") +
                 ", isActive=" + isActive +
                 '}';
     }

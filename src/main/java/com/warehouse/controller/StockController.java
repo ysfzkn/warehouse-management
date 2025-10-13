@@ -22,7 +22,12 @@ public class StockController {
     }
 
     @GetMapping
-    public ResponseEntity<List<Stock>> getAllStocks() {
+    public ResponseEntity<List<Stock>> getAllStocks(
+            @RequestParam(required = false) Long brandId,
+            @RequestParam(required = false) Long colorId) {
+        if (brandId != null || colorId != null) {
+            return ResponseEntity.ok(stockService.getAllStocksFiltered(brandId, colorId));
+        }
         List<Stock> stocks = stockService.getAllStocks();
         return ResponseEntity.ok(stocks);
     }

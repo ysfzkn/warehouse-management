@@ -6,6 +6,8 @@ import com.warehouse.entity.Warehouse;
 import com.warehouse.repository.StockRepository;
 import com.warehouse.repository.ProductRepository;
 import com.warehouse.repository.WarehouseRepository;
+import com.warehouse.repository.BrandRepository;
+import com.warehouse.repository.ColorRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,18 +21,38 @@ public class StockService {
     private final StockRepository stockRepository;
     private final ProductRepository productRepository;
     private final WarehouseRepository warehouseRepository;
+    private final BrandRepository brandRepository;
+    private final ColorRepository colorRepository;
 
     @Autowired
     public StockService(StockRepository stockRepository,
                        ProductRepository productRepository,
-                       WarehouseRepository warehouseRepository) {
+                       WarehouseRepository warehouseRepository,
+                       BrandRepository brandRepository,
+                       ColorRepository colorRepository) {
         this.stockRepository = stockRepository;
         this.productRepository = productRepository;
         this.warehouseRepository = warehouseRepository;
+        this.brandRepository = brandRepository;
+        this.colorRepository = colorRepository;
     }
 
     public List<Stock> getAllStocks() {
         return stockRepository.findAll();
+    }
+
+    public List<Stock> getAllStocksFiltered(Long brandId, Long colorId) {
+        var all = stockRepository.findAll();
+        return all.stream().filter(s -> {
+            boolean ok = true;
+            if (brandId != null) {
+                ok = ok && s.getProduct() != null && s.getProduct().getBrand() != null && brandId.equals(s.getProduct().getBrand().getId());
+            }
+            if (colorId != null) {
+                ok = ok && s.getProduct() != null && s.getProduct().getColor() != null && colorId.equals(s.getProduct().getColor().getId());
+            }
+            return ok;
+        }).toList();
     }
 
     public Optional<Stock> getStockById(Long id) {

@@ -2,6 +2,8 @@ package com.warehouse.repository;
 
 import com.warehouse.entity.Product;
 import com.warehouse.entity.Category;
+import com.warehouse.entity.Brand;
+import com.warehouse.entity.Color;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -27,4 +29,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 
     @Query("SELECT p FROM Product p LEFT JOIN FETCH p.stocks WHERE p.id = :id")
     Optional<Product> findByIdWithStocks(Long id);
+
+    @Query("SELECT p FROM Product p WHERE (:brand IS NULL OR p.brand = :brand) AND (:color IS NULL OR p.color = :color) AND p.isActive = true ORDER BY p.name")
+    List<Product> findActiveByBrandAndColor(@Param("brand") Brand brand, @Param("color") Color color);
 }

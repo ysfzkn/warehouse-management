@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import axios from 'axios';
 import StockForm from '../components/StockForm';
 import StockAdjustmentModal from '../components/StockAdjustmentModal';
+import SearchableSelect from '../components/SearchableSelect';
 
 const Stock = () => {
   const [stocks, setStocks] = useState([]);
@@ -13,12 +14,14 @@ const Stock = () => {
   const [showAdjustmentModal, setShowAdjustmentModal] = useState(false);
   const [selectedStock, setSelectedStock] = useState(null);
   const [filter, setFilter] = useState('all'); // all, low-stock, out-of-stock
+  const [brandId, setBrandId] = useState(null);
+  const [colorId, setColorId] = useState(null);
 
   const fetchAllData = useCallback(async () => {
     try {
       setLoading(true);
       const [stocksRes, productsRes, warehousesRes] = await Promise.all([
-        axios.get('/api/stocks'),
+        axios.get('/api/stocks', { params: { brandId, colorId } }),
         axios.get('/api/products'),
         axios.get('/api/warehouses')
       ]);
@@ -32,7 +35,7 @@ const Stock = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [brandId, colorId]);
 
   useEffect(() => {
     fetchAllData();
@@ -59,6 +62,29 @@ const Stock = () => {
       return a.product.name.localeCompare(b.product.name);
     });
   }, [stocks, filter]);
+
+  const FiltersBar = () => (
+    <div className="row mb-3">
+      <div className="col-md-6">
+        <SearchableSelect
+          label="Marka Filtresi"
+          value={brandId}
+          onChange={setBrandId}
+          searchEndpoint="/api/brands/search"
+          placeholder="Marka ara..."
+        />
+      </div>
+      <div className="col-md-6">
+        <SearchableSelect
+          label="Renk Filtresi"
+          value={colorId}
+          onChange={setColorId}
+          searchEndpoint="/api/colors/search"
+          placeholder="Renk ara..."
+        />
+      </div>
+    </div>
+  );
 
   const handleCreateStock = () => {
     setSelectedStock(null);

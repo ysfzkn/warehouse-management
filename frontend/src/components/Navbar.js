@@ -61,6 +61,12 @@ const Navbar = () => {
                 Stok
               </Link>
             </li>
+          <li className="nav-item">
+            <Link className={`nav-link ${isActive('/admin-settings')}`} to="/admin-settings">
+              <i className="fas fa-tools me-1"></i>
+              Yönetici Ayarları
+            </Link>
+          </li>
           </ul>
 
           <div className="d-flex">

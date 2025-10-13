@@ -2,8 +2,12 @@ package com.warehouse.service;
 
 import com.warehouse.entity.Product;
 import com.warehouse.entity.Category;
+import com.warehouse.entity.Brand;
+import com.warehouse.entity.Color;
 import com.warehouse.repository.ProductRepository;
 import com.warehouse.repository.CategoryRepository;
+import com.warehouse.repository.BrandRepository;
+import com.warehouse.repository.ColorRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,11 +20,16 @@ public class ProductService {
 
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
+    private final BrandRepository brandRepository;
+    private final ColorRepository colorRepository;
 
     @Autowired
-    public ProductService(ProductRepository productRepository, CategoryRepository categoryRepository) {
+    public ProductService(ProductRepository productRepository, CategoryRepository categoryRepository,
+                          BrandRepository brandRepository, ColorRepository colorRepository) {
         this.productRepository = productRepository;
         this.categoryRepository = categoryRepository;
+        this.brandRepository = brandRepository;
+        this.colorRepository = colorRepository;
     }
 
     public List<Product> getAllProducts() {
@@ -69,6 +78,22 @@ public class ProductService {
         }
 
         product.setCategory(category);
+
+        if (product.getBrand() != null && product.getBrand().getId() != null) {
+            Brand brand = brandRepository.findById(product.getBrand().getId())
+                    .orElseThrow(() -> new RuntimeException("Brand not found with id: " + product.getBrand().getId()));
+            product.setBrand(brand);
+        } else {
+            product.setBrand(null);
+        }
+
+        if (product.getColor() != null && product.getColor().getId() != null) {
+            Color color = colorRepository.findById(product.getColor().getId())
+                    .orElseThrow(() -> new RuntimeException("Color not found with id: " + product.getColor().getId()));
+            product.setColor(color);
+        } else {
+            product.setColor(null);
+        }
         return productRepository.save(product);
     }
 
@@ -83,6 +108,26 @@ public class ProductService {
                         .orElseThrow(() -> new RuntimeException("Category not found with id: " + productDetails.getCategory().getId()));
                 product.setCategory(category);
             }
+        }
+
+        if (productDetails.getBrand() != null && productDetails.getBrand().getId() != null) {
+            if (product.getBrand() == null || !product.getBrand().getId().equals(productDetails.getBrand().getId())) {
+                Brand brand = brandRepository.findById(productDetails.getBrand().getId())
+                        .orElseThrow(() -> new RuntimeException("Brand not found with id: " + productDetails.getBrand().getId()));
+                product.setBrand(brand);
+            }
+        } else {
+            product.setBrand(null);
+        }
+
+        if (productDetails.getColor() != null && productDetails.getColor().getId() != null) {
+            if (product.getColor() == null || !product.getColor().getId().equals(productDetails.getColor().getId())) {
+                Color color = colorRepository.findById(productDetails.getColor().getId())
+                        .orElseThrow(() -> new RuntimeException("Color not found with id: " + productDetails.getColor().getId()));
+                product.setColor(color);
+            }
+        } else {
+            product.setColor(null);
         }
 
         // Check if the new SKU conflicts with existing products
@@ -131,5 +176,19 @@ public class ProductService {
 
     public boolean existsBySku(String sku) {
         return productRepository.existsBySku(sku);
+    }
+
+    public List<Product> filterProductsByBrandAndColor(Long brandId, Long colorId) {
+        Brand brand = null;
+        Color color = null;
+        if (brandId != null) {
+            brand = brandRepository.findById(brandId)
+                    .orElseThrow(() -> new RuntimeException("Brand not found with id: " + brandId));
+        }
+        if (colorId != null) {
+            color = colorRepository.findById(colorId)
+                    .orElseThrow(() -> new RuntimeException("Color not found with id: " + colorId));
+        }
+        return productRepository.findActiveByBrandAndColor(brand, color);
     }
 }
