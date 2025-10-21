@@ -219,7 +219,6 @@ const StockForm = ({ products, warehouses, onSuccess, onCancel }) => {
             </label>
             <input
               type="number"
-              min="0"
               className="form-control"
               id="consignedQuantity"
               name="consignedQuantity"

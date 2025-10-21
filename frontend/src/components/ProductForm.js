@@ -67,7 +67,7 @@ const ProductForm = ({ product, categories, onSuccess, onCancel }) => {
     }
 
     if (!formData.sku.trim()) {
-      newErrors.sku = 'SKU gereklidir';
+      newErrors.sku = 'Stok kodu gereklidir';
     }
 
     if (!formData.price || parseFloat(formData.price) < 0) {
@@ -159,7 +159,7 @@ const ProductForm = ({ product, categories, onSuccess, onCancel }) => {
         <div className="col-md-6">
           <div className="mb-3">
             <label htmlFor="sku" className="form-label">
-              SKU <span className="text-danger">*</span>
+              Stok Kodu <span className="text-danger">*</span>
             </label>
             <input
               type="text"

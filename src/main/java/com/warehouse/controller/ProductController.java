@@ -78,6 +78,31 @@ public class ProductController {
         return ResponseEntity.ok(products);
     }
 
+    @GetMapping("/{id}/desi")
+    public ResponseEntity<?> getProductDesiAndShipping(@PathVariable Long id) {
+        return productService.getProductById(id)
+                .map(p -> {
+                    double w = p.getWidthCm() != null ? p.getWidthCm() : 0.0;
+                    double l = p.getLengthCm() != null ? p.getLengthCm() : 0.0;
+                    double h = p.getHeightCm() != null ? p.getHeightCm() : 0.0;
+                    double desi = (h * w * l) / 3000.0;
+                    java.math.BigDecimal rate = p.getShippingRate() != null ? p.getShippingRate() : java.math.BigDecimal.ZERO;
+                    java.math.BigDecimal shippingCost = rate.multiply(java.math.BigDecimal.valueOf(desi));
+                    java.util.Map<String, Object> resp = new java.util.HashMap<>();
+                    resp.put("productId", p.getId());
+                    resp.put("name", p.getName());
+                    resp.put("sku", p.getSku());
+                    resp.put("widthCm", w);
+                    resp.put("lengthCm", l);
+                    resp.put("heightCm", h);
+                    resp.put("desi", desi);
+                    resp.put("shippingRate", rate);
+                    resp.put("shippingCost", shippingCost);
+                    return ResponseEntity.ok(resp);
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
+
     @PostMapping
     public ResponseEntity<?> createProduct(@Valid @RequestBody Product product) {
         try {

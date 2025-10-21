@@ -216,9 +216,10 @@ const Stock = () => {
                 <tr>
                   <th>Depo</th>
                   <th>Ürün</th>
-                  <th>SKU</th>
+                  <th>Stok Kodu</th>
                   <th>Miktar</th>
                   <th>Kullanılabilir</th>
+                  <th>Emanet</th>
                   <th>Min. Stok</th>
                   <th>Durum</th>
                   <th>Son Güncelleme</th>
@@ -244,6 +245,7 @@ const Stock = () => {
                           {stock.availableQuantity}
                         </span>
                       </td>
+                      <td>{stock.consignedQuantity || 0}</td>
                       <td>{stock.minStockLevel}</td>
                       <td>
                         <span className={`badge bg-${stockStatus.class}`}>

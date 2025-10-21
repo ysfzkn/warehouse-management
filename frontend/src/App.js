@@ -9,6 +9,7 @@ import Categories from './pages/Categories';
 import Stock from './pages/Stock';
 import Login from './pages/Login';
 import AdminSettings from './pages/AdminSettings';
+import DesiCalculator from './pages/DesiCalculator';
 import './App.css';
 
 function App() {
@@ -35,6 +36,7 @@ function App() {
           <Route path="/categories" element={authed ? <Categories /> : <Navigate to="/login" replace />} />
           <Route path="/stock" element={authed ? <Stock /> : <Navigate to="/login" replace />} />
           <Route path="/admin-settings" element={authed ? <AdminSettings /> : <Navigate to="/login" replace />} />
+          <Route path="/desi" element={authed ? <DesiCalculator /> : <Navigate to="/login" replace />} />
         </Routes>
       </div>
     </div>

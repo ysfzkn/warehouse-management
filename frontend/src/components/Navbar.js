@@ -67,6 +67,12 @@ const Navbar = () => {
               Yönetici Ayarları
             </Link>
           </li>
+          <li className="nav-item">
+            <Link className={`nav-link ${isActive('/desi')}`} to="/desi">
+              <i className="fas fa-calculator me-1"></i>
+              Desi Hesaplama
+            </Link>
+          </li>
           </ul>
 
           <div className="d-flex">

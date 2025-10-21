@@ -50,7 +50,20 @@ const Products = () => {
     try {
       setLoading(true);
       const response = await axios.get('/api/products');
-      setProducts(response.data);
+      const list = response.data || [];
+      // Fetch total stock per product to avoid 0 when stocks are not included in product payload
+      const totals = await Promise.all(
+        list.map(async (p) => {
+          try {
+            const r = await axios.get(`/api/stocks/product/${p.id}/total-quantity`);
+            return { id: p.id, total: typeof r.data === 'number' ? r.data : 0 };
+          } catch {
+            return { id: p.id, total: 0 };
+          }
+        })
+      );
+      const idToTotal = totals.reduce((acc, t) => { acc[t.id] = t.total; return acc; }, {});
+      setProducts(list.map(p => ({ ...p, totalStock: idToTotal[p.id] ?? 0 })));
     } catch (error) {
       console.error('Error fetching products:', error);
       setError('Ürünler yüklenirken hata oluştu');
@@ -160,7 +173,7 @@ const Products = () => {
             <input
               type="text"
               className="form-control"
-              placeholder="Ürün adı veya SKU ara..."
+              placeholder="Ürün adı veya Stok Kodu ara..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -217,7 +230,7 @@ const Products = () => {
                 </div>
 
                 <p className="card-text">
-                  <strong>SKU:</strong> {product.sku}
+                  <strong>Stok Kodu:</strong> {product.sku}
                 </p>
 
                 <p className="card-text">
@@ -256,7 +269,7 @@ const Products = () => {
                   <div className="col-6">
                     <span className="fw-bold">
                       <i className="fas fa-cubes me-1"></i>
-                      Toplam Stok: {getTotalStockQuantity(product)}
+                      Toplam Stok: {product.totalStock ?? getTotalStockQuantity(product)}
                     </span>
                   </div>
                   <div className="col-6">
