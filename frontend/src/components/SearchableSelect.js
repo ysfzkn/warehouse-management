@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 
-const SearchableSelect = ({ label, value, onChange, searchEndpoint, placeholder = 'Ara...', disabled = false, renderOption }) => {
+const SearchableSelect = ({ label, value, onChange, searchEndpoint, placeholder = 'Ara...', disabled = false, renderOption, wrapperClassName = 'mb-3' }) => {
   const [query, setQuery] = useState('');
   const [options, setOptions] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -44,7 +44,7 @@ const SearchableSelect = ({ label, value, onChange, searchEndpoint, placeholder 
   const selectedOption = useMemo(() => options.find(o => o.id === value) || null, [options, value]);
 
   return (
-    <div className="mb-3" ref={containerRef}>
+    <div className={wrapperClassName} ref={containerRef}>
       {label && (
         <label className="form-label">
           {label}

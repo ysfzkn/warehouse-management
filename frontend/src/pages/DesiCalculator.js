@@ -80,7 +80,7 @@ const DesiCalculator = () => {
 
       {activeTab === 'product' && (
         <>
-          <div className="row mb-4">
+          <div className="row mb-4 align-items-end">
             <div className="col-md-8">
               <SearchableSelect
                 label="Ürün Seç"
@@ -88,10 +88,11 @@ const DesiCalculator = () => {
                 onChange={(id) => setSelectedProductId(id)}
                 searchEndpoint="/api/products/search"
                 placeholder="Ürün adı ara..."
+                wrapperClassName="mb-0"
               />
             </div>
-            <div className="col-md-4 d-flex align-items-end">
-              <button className="btn btn-primary w-100" onClick={handleFetch} disabled={!selectedProductId || loading}>
+            <div className="col-md-4">
+              <button className="btn btn-primary w-100" onClick={handleFetch} disabled={!selectedProductId || loading} style={{ height: 38 }}>
                 {loading ? (
                   <>
                     <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
