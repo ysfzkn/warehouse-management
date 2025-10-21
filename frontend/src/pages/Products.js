@@ -229,23 +229,45 @@ const Products = () => {
                   </span>
                 </div>
 
-                <p className="card-text">
-                  <strong>Stok Kodu:</strong> {product.sku}
-                </p>
-
-                <p className="card-text">
-                  <strong>Kategori:</strong> {product.category?.name}
-                </p>
+                <div className="mb-2 d-flex flex-wrap gap-2">
+                  <span className="badge text-bg-light border">
+                    <i className="fas fa-barcode me-1"></i>{product.sku}
+                  </span>
+                  {product.category?.name && (
+                    <span className="badge text-bg-light border">
+                      <i className="fas fa-tag me-1"></i>{product.category?.name}
+                    </span>
+                  )}
+                  {product.brand?.name && (
+                    <span className="badge text-bg-light border">
+                      <i className="fas fa-copyright me-1"></i>{product.brand?.name}
+                    </span>
+                  )}
+                  {product.color?.name && (
+                    <span className="badge text-bg-light border">
+                      <i className="fas fa-palette me-1"></i>{product.color?.name}
+                    </span>
+                  )}
+                </div>
 
                 <p className="card-text">
                   <strong>Fiyat:</strong> ₺{product.price?.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
                 </p>
-                <p className="card-text">
-                  <strong>Desi:</strong> {(() => {
-                    const w = product.widthCm || 0; const l = product.lengthCm || 0; const h = product.heightCm || 0;
-                    const desi = (h * w * l) / 3000;
-                    return desi ? desi.toFixed(2) : '-';
-                  })()}
+                <p className="card-text d-flex align-items-center justify-content-between flex-wrap gap-2">
+                  <span>
+                    <strong>Desi:</strong> {(() => {
+                      const w = product.widthCm || 0; const l = product.lengthCm || 0; const h = product.heightCm || 0;
+                      const desi = (h * w * l) / 3000;
+                      return desi ? desi.toFixed(2) : '-';
+                    })()}
+                  </span>
+                  <button
+                    className="btn btn-sm btn-outline-primary"
+                    onClick={() => window.location.assign(`/desi?productId=${product.id}`)}
+                  >
+                    <i className="fas fa-calculator me-1"></i>
+                    Desi Hesapla
+                  </button>
                 </p>
                 <p className="card-text">
                   <strong>Kargo Ücreti:</strong> {(() => {
