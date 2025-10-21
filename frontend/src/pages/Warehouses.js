@@ -11,6 +11,7 @@ const Warehouses = () => {
   const [editingWarehouse, setEditingWarehouse] = useState(null);
   const [showStockModal, setShowStockModal] = useState(false);
   const [selectedWarehouse, setSelectedWarehouse] = useState(null);
+  const [warehouseTotals, setWarehouseTotals] = useState({});
 
   useEffect(() => {
     fetchWarehouses();
@@ -20,7 +21,22 @@ const Warehouses = () => {
     try {
       setLoading(true);
       const response = await axios.get('/api/warehouses');
-      setWarehouses(response.data);
+      const list = response.data || [];
+      setWarehouses(list);
+      try {
+        const totals = await Promise.all(
+          list.map(async (w) => {
+            try {
+              const r = await axios.get(`/api/stocks/warehouse/${w.id}/total-quantity`);
+              return { id: w.id, total: typeof r.data === 'number' ? r.data : 0 };
+            } catch {
+              return { id: w.id, total: 0 };
+            }
+          })
+        );
+        const map = totals.reduce((acc, t) => { acc[t.id] = t.total; return acc; }, {});
+        setWarehouseTotals(map);
+      } catch {}
     } catch (error) {
       console.error('Error fetching warehouses:', error);
       setError('Depolar yüklenirken hata oluştu');
@@ -147,7 +163,7 @@ const Warehouses = () => {
                 <div className="d-flex justify-content-between align-items-center mt-3">
                   <span className="fw-bold">
                     <i className="fas fa-cubes me-1"></i>
-                    Toplam Stok: {getTotalStockQuantity(warehouse)}
+                    Toplam Stok: {warehouseTotals[warehouse.id] ?? getTotalStockQuantity(warehouse)}
                   </span>
                 </div>
               </div>
