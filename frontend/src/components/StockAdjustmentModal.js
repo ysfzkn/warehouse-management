@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 
 const StockAdjustmentModal = ({ stock, onSuccess, onClose }) => {
@@ -6,8 +6,12 @@ const StockAdjustmentModal = ({ stock, onSuccess, onClose }) => {
     type: 'add', // 'add' or 'remove'
     quantity: '',
     reason: '',
-    affectConsigned: false
+    consignedQuantity: ''
   });
+  
+  useEffect(() => {
+    setAdjustment(prev => ({ ...prev, consignedQuantity: (stock?.consignedQuantity ?? 0).toString() }));
+  }, [stock?.consignedQuantity]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -32,21 +36,29 @@ const StockAdjustmentModal = ({ stock, onSuccess, onClose }) => {
 
     try {
       const quantity = parseInt(adjustment.quantity);
+      const consignedVal = adjustment.consignedQuantity === '' ? null : parseInt(adjustment.consignedQuantity);
 
       if (!stock?.id) {
         throw new Error('Geçersiz stok ID');
       }
 
-      if (adjustment.affectConsigned) {
-        const newConsigned = Math.max(0, (stock.consignedQuantity || 0) + (adjustment.type === 'add' ? quantity : -quantity));
-        await axios.put(`/api/stocks/${stock.id}`, { consignedQuantity: newConsigned });
-      } else {
+      const calls = [];
+      if (!Number.isNaN(quantity) && quantity > 0) {
         if (adjustment.type === 'add') {
-          await axios.put(`/api/stocks/${stock.id}/add`, null, { params: { quantity } });
+          calls.push(axios.put(`/api/stocks/${stock.id}/add`, null, { params: { quantity } }));
         } else {
-          await axios.put(`/api/stocks/${stock.id}/remove`, null, { params: { quantity } });
+          calls.push(axios.put(`/api/stocks/${stock.id}/remove`, null, { params: { quantity } }));
         }
       }
+      if (consignedVal !== null && consignedVal >= 0 && consignedVal !== (stock.consignedQuantity || 0)) {
+        calls.push(axios.put(`/api/stocks/${stock.id}`, { consignedQuantity: consignedVal }));
+      }
+      if (calls.length === 0) {
+        setError('Lütfen miktar girin veya emanet değeri değiştirin');
+        setLoading(false);
+        return;
+      }
+      await Promise.all(calls);
 
       onSuccess();
     } catch (error) {
@@ -187,21 +199,6 @@ const StockAdjustmentModal = ({ stock, onSuccess, onClose }) => {
                 </div>
               </div>
 
-              <div className="mb-3">
-              <div className="form-check">
-                <input
-                  className="form-check-input"
-                  type="checkbox"
-                  id="affectConsigned"
-                  checked={adjustment.affectConsigned}
-                  onChange={(e) => setAdjustment(prev => ({ ...prev, affectConsigned: e.target.checked }))}
-                />
-                <label className="form-check-label" htmlFor="affectConsigned">
-                  Emanet miktarı değiştir
-                </label>
-              </div>
-            </div>
-
             <div className="mb-3">
                 <label htmlFor="reason" className="form-label">
                   Açıklama (İsteğe bağlı)
@@ -214,6 +211,22 @@ const StockAdjustmentModal = ({ stock, onSuccess, onClose }) => {
                   value={adjustment.reason}
                   onChange={handleChange}
                   placeholder="Stok ayarlaması nedeni..."
+                />
+              </div>
+
+              <div className="mb-3">
+                <label htmlFor="consignedQuantity" className="form-label">
+                  Emanet (adet)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  className="form-control"
+                  id="consignedQuantity"
+                  name="consignedQuantity"
+                  value={adjustment.consignedQuantity}
+                  onChange={handleChange}
+                  placeholder="0"
                 />
               </div>
 
@@ -253,3 +266,4 @@ const StockAdjustmentModal = ({ stock, onSuccess, onClose }) => {
 };
 
 export default StockAdjustmentModal;
+
