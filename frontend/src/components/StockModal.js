@@ -96,6 +96,7 @@ const StockModal = ({ warehouse, onClose }) => {
                       <th>Kategori</th>
                       <th>Miktar</th>
                       <th>Kullanılabilir</th>
+                      <th>Emanet</th>
                       <th>Min. Stok</th>
                       <th>Durum</th>
                       <th>Son Güncelleme</th>
@@ -117,6 +118,7 @@ const StockModal = ({ warehouse, onClose }) => {
                               {stock.availableQuantity}
                             </span>
                           </td>
+                          <td>{stock.consignedQuantity || 0}</td>
                           <td>{stock.minStockLevel}</td>
                           <td>
                             <span className={`badge bg-${stockStatus.class}`}>
