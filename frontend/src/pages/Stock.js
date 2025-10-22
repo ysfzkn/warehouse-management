@@ -3,6 +3,7 @@ import axios from 'axios';
 import StockForm from '../components/StockForm';
 import StockAdjustmentModal from '../components/StockAdjustmentModal';
 import SearchableSelect from '../components/SearchableSelect';
+import FilterChips from '../components/FilterChips';
 
 const Stock = () => {
   const [stocks, setStocks] = useState([]);
@@ -16,12 +17,15 @@ const Stock = () => {
   const [filter, setFilter] = useState('all'); // all, low-stock, out-of-stock
   const [brandId, setBrandId] = useState(null);
   const [colorId, setColorId] = useState(null);
+  const [brandOpt, setBrandOpt] = useState(null);
+  const [colorOpt, setColorOpt] = useState(null);
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState(null);
 
   const fetchAllData = useCallback(async () => {
     try {
       setLoading(true);
       const [stocksRes, productsRes, warehousesRes] = await Promise.all([
-        axios.get('/api/stocks', { params: { brandId, colorId } }),
+        axios.get('/api/stocks', { params: { brandId, colorId, warehouseId: selectedWarehouseId || undefined } }),
         axios.get('/api/products'),
         axios.get('/api/warehouses')
       ]);
@@ -35,11 +39,24 @@ const Stock = () => {
     } finally {
       setLoading(false);
     }
-  }, [brandId, colorId]);
+  }, [brandId, colorId, selectedWarehouseId]);
 
   useEffect(() => {
     fetchAllData();
   }, [fetchAllData]);
+
+  // Initialize filters from query params
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const f = params.get('filter');
+    const b = params.get('brandId');
+    const c = params.get('colorId');
+    const w = params.get('warehouseId');
+    if (f === 'low-stock' || f === 'out-of-stock' || f === 'all') setFilter(f);
+    if (b) setBrandId(Number(b));
+    if (c) setColorId(Number(c));
+    if (w) setSelectedWarehouseId(Number(w));
+  }, []);
 
   const filteredStocks = useMemo(() => {
     let filtered = stocks;
@@ -64,26 +81,40 @@ const Stock = () => {
   }, [stocks, filter]);
 
   const FiltersBar = () => (
-    <div className="row mb-3">
-      <div className="col-md-6">
-        <SearchableSelect
-          label="Marka Filtresi"
-          value={brandId}
-          onChange={setBrandId}
-          searchEndpoint="/api/brands/search"
-          placeholder="Marka ara..."
-        />
+    <>
+      <div className="row mb-2">
+        <div className="col-md-6">
+          <SearchableSelect
+            label="Marka Filtresi"
+            value={brandId}
+            onChange={(id, opt) => { setBrandId(id); setBrandOpt(opt || null); }}
+            searchEndpoint="/api/brands/search"
+            placeholder="Marka ara..."
+            allowClear={true}
+            clearText="Temizle"
+          />
+        </div>
+        <div className="col-md-6">
+          <SearchableSelect
+            label="Renk Filtresi"
+            value={colorId}
+            onChange={(id, opt) => { setColorId(id); setColorOpt(opt || null); }}
+            searchEndpoint="/api/colors/search"
+            placeholder="Renk ara..."
+            allowClear={true}
+            clearText="Temizle"
+          />
+        </div>
       </div>
-      <div className="col-md-6">
-        <SearchableSelect
-          label="Renk Filtresi"
-          value={colorId}
-          onChange={setColorId}
-          searchEndpoint="/api/colors/search"
-          placeholder="Renk ara..."
-        />
-      </div>
-    </div>
+      <FilterChips
+        className="mb-3"
+        chips={[
+          brandId ? { icon: 'fas fa-copyright', label: `Marka: ${brandOpt?.name || brandId}`, onClear: () => { setBrandId(null); setBrandOpt(null); } } : null,
+          colorId ? { icon: 'fas fa-palette', label: `Renk: ${colorOpt?.name || colorId}`, onClear: () => { setColorId(null); setColorOpt(null); } } : null,
+        ].filter(Boolean)}
+        onClearAll={() => { setBrandId(null); setColorId(null); setBrandOpt(null); setColorOpt(null); }}
+      />
+    </>
   );
 
   const handleCreateStock = () => {
@@ -125,6 +156,7 @@ const Stock = () => {
   const getWarehouseById = (id) => {
     return warehouses.find(w => w.id === id);
   };
+
 
   const getStockStatus = (stock) => {
     const available = (stock.quantity || 0) - (stock.reservedQuantity || 0) - (stock.consignedQuantity || 0);

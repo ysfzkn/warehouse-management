@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import CategoryForm from '../components/CategoryForm';
+import FilterChips from '../components/FilterChips';
 
 const Categories = () => {
   const [categories, setCategories] = useState([]);
@@ -8,6 +9,7 @@ const Categories = () => {
   const [error, setError] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     fetchCategories();
@@ -57,6 +59,15 @@ const Categories = () => {
     fetchCategories();
   };
 
+  const filteredCategories = useMemo(() => {
+    const q = (searchTerm || '').toLowerCase();
+    if (!q) return categories;
+    return categories.filter(c =>
+      (c.name || '').toLowerCase().includes(q) ||
+      (c.description || '').toLowerCase().includes(q)
+    );
+  }, [categories, searchTerm]);
+
   if (loading) {
     return (
       <div className="text-center">
@@ -85,8 +96,32 @@ const Categories = () => {
         </button>
       </div>
 
+      {/* Filters */}
+      <div className="row mb-3">
+        <div className="col-md-8">
+          <div className="input-group">
+            <span className="input-group-text"><i className="fas fa-search"></i></span>
+            <input
+              type="text"
+              className="form-control"
+              placeholder="Kategori adı veya açıklama ara..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+        </div>
+      </div>
+
+      {searchTerm && (
+        <FilterChips
+          className="mb-3"
+          chips={[{ icon: 'fas fa-search', label: `Arama: "${searchTerm}"`, onClear: () => setSearchTerm('') }]}
+          onClearAll={() => setSearchTerm('')}
+        />
+      )}
+
       <div className="row">
-        {categories.map((category) => (
+        {filteredCategories.map((category) => (
           <div key={category.id} className="col-md-6 col-lg-4 mb-4">
             <div className="card h-100">
               <div className="card-body">

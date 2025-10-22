@@ -41,7 +41,7 @@ public class StockService {
         return stockRepository.findAll();
     }
 
-    public List<Stock> getAllStocksFiltered(Long brandId, Long colorId) {
+    public List<Stock> getAllStocksFiltered(Long brandId, Long colorId, Long warehouseId) {
         var all = stockRepository.findAll();
         return all.stream().filter(s -> {
             boolean ok = true;
@@ -50,6 +50,9 @@ public class StockService {
             }
             if (colorId != null) {
                 ok = ok && s.getProduct() != null && s.getProduct().getColor() != null && colorId.equals(s.getProduct().getColor().getId());
+            }
+            if (warehouseId != null) {
+                ok = ok && s.getWarehouse() != null && warehouseId.equals(s.getWarehouse().getId());
             }
             return ok;
         }).toList();

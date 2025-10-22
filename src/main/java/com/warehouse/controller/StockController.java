@@ -24,9 +24,10 @@ public class StockController {
     @GetMapping
     public ResponseEntity<List<Stock>> getAllStocks(
             @RequestParam(required = false) Long brandId,
-            @RequestParam(required = false) Long colorId) {
-        if (brandId != null || colorId != null) {
-            return ResponseEntity.ok(stockService.getAllStocksFiltered(brandId, colorId));
+            @RequestParam(required = false) Long colorId,
+            @RequestParam(required = false) Long warehouseId) {
+        if (brandId != null || colorId != null || warehouseId != null) {
+            return ResponseEntity.ok(stockService.getAllStocksFiltered(brandId, colorId, warehouseId));
         }
         List<Stock> stocks = stockService.getAllStocks();
         return ResponseEntity.ok(stocks);
@@ -119,7 +120,7 @@ public class StockController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<?> updateStock(@PathVariable Long id, @Valid @RequestBody Stock stock) {
+    public ResponseEntity<?> updateStock(@PathVariable Long id, @RequestBody Stock stock) {
         try {
             Stock updatedStock = stockService.updateStock(id, stock);
             return ResponseEntity.ok(updatedStock);

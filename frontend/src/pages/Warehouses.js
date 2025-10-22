@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import WarehouseForm from '../components/WarehouseForm';
 import StockModal from '../components/StockModal';
+import FilterChips from '../components/FilterChips';
+import SearchableSelect from '../components/SearchableSelect';
 
 const Warehouses = () => {
   const [warehouses, setWarehouses] = useState([]);
@@ -12,6 +14,7 @@ const Warehouses = () => {
   const [showStockModal, setShowStockModal] = useState(false);
   const [selectedWarehouse, setSelectedWarehouse] = useState(null);
   const [warehouseTotals, setWarehouseTotals] = useState({});
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     fetchWarehouses();
@@ -44,6 +47,16 @@ const Warehouses = () => {
       setLoading(false);
     }
   };
+
+  const filteredWarehouses = React.useMemo(() => {
+    const term = (searchTerm || '').toLowerCase();
+    if (!term) return warehouses;
+    return warehouses.filter(w =>
+      (w.name || '').toLowerCase().includes(term) ||
+      (w.location || '').toLowerCase().includes(term) ||
+      (w.manager || '').toLowerCase().includes(term)
+    );
+  }, [warehouses, searchTerm]);
 
   const handleCreate = () => {
     setEditingWarehouse(null);
@@ -122,8 +135,25 @@ const Warehouses = () => {
         </button>
       </div>
 
+      {/* Filters */}
+      <div className="row mb-3">
+        <div className="col-md-8">
+          <div className="input-group">
+            <span className="input-group-text"><i className="fas fa-search"></i></span>
+            <input type="text" className="form-control" placeholder="Depo adı, konum veya yetkili ara..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+          </div>
+        </div>
+      </div>
+      {(searchTerm) && (
+        <FilterChips
+          className="mb-3"
+          chips={[{ icon: 'fas fa-search', label: `Arama: "${searchTerm}"`, onClear: () => setSearchTerm('') }]}
+          onClearAll={() => setSearchTerm('')}
+        />
+      )}
+
       <div className="row">
-        {warehouses.map((warehouse) => (
+        {filteredWarehouses.map((warehouse) => (
           <div key={warehouse.id} className="col-md-6 col-lg-4 mb-4">
             <div className="card h-100">
               <div className="card-body">

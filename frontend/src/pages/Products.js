@@ -14,6 +14,8 @@ const Products = () => {
   const [selectedCategory, setSelectedCategory] = useState('');
   const [selectedBrand, setSelectedBrand] = useState(null);
   const [selectedColor, setSelectedColor] = useState(null);
+  const [selectedBrandOpt, setSelectedBrandOpt] = useState(null);
+  const [selectedColorOpt, setSelectedColorOpt] = useState(null);
 
   useEffect(() => {
     fetchProducts();
@@ -79,6 +81,15 @@ const Products = () => {
     } catch (error) {
       console.error('Error fetching categories:', error);
     }
+  };
+
+  const clearAllFilters = () => {
+    setSearchTerm('');
+    setSelectedCategory('');
+    setSelectedBrand(null);
+    setSelectedColor(null);
+    setSelectedBrandOpt(null);
+    setSelectedColorOpt(null);
   };
 
   const handleCreate = () => {
@@ -200,21 +211,67 @@ const Products = () => {
           <SearchableSelect
             label="Marka Filtresi"
             value={selectedBrand}
-            onChange={(id) => setSelectedBrand(id)}
+            onChange={(id, opt) => { setSelectedBrand(id); setSelectedBrandOpt(opt || null); }}
             searchEndpoint="/api/brands/search"
             placeholder="Marka ara..."
+            allowClear={true}
+            clearText="Temizle"
           />
         </div>
         <div className="col-md-6">
           <SearchableSelect
             label="Renk Filtresi"
             value={selectedColor}
-            onChange={(id) => setSelectedColor(id)}
+            onChange={(id, opt) => { setSelectedColor(id); setSelectedColorOpt(opt || null); }}
             searchEndpoint="/api/colors/search"
             placeholder="Renk ara..."
+            allowClear={true}
+            clearText="Temizle"
           />
         </div>
       </div>
+
+      {/* Active Filters Chips */}
+      {(searchTerm || selectedCategory || selectedBrand || selectedColor) && (
+        <div className="mb-3 d-flex flex-wrap align-items-center gap-2">
+          <span className="text-muted me-1">Aktif filtreler:</span>
+          {searchTerm && (
+            <span className="badge text-bg-light border d-flex align-items-center">
+              <i className="fas fa-search me-1"></i> Arama: "{searchTerm}"
+              <button type="button" className="btn btn-sm btn-link ms-2 p-0" onClick={() => setSearchTerm('')}>
+                <i className="fas fa-times"></i>
+              </button>
+            </span>
+          )}
+          {selectedCategory && (
+            <span className="badge text-bg-light border d-flex align-items-center">
+              <i className="fas fa-tag me-1"></i> Kategori: {categories.find(c => c.id.toString() === selectedCategory)?.name || selectedCategory}
+              <button type="button" className="btn btn-sm btn-link ms-2 p-0" onClick={() => setSelectedCategory('')}>
+                <i className="fas fa-times"></i>
+              </button>
+            </span>
+          )}
+          {selectedBrand && (
+            <span className="badge text-bg-light border d-flex align-items-center">
+              <i className="fas fa-copyright me-1"></i> Marka: {selectedBrandOpt?.name || selectedBrand}
+              <button type="button" className="btn btn-sm btn-link ms-2 p-0" onClick={() => { setSelectedBrand(null); setSelectedBrandOpt(null); }}>
+                <i className="fas fa-times"></i>
+              </button>
+            </span>
+          )}
+          {selectedColor && (
+            <span className="badge text-bg-light border d-flex align-items-center">
+              <i className="fas fa-palette me-1"></i> Renk: {selectedColorOpt?.name || selectedColor}
+              <button type="button" className="btn btn-sm btn-link ms-2 p-0" onClick={() => { setSelectedColor(null); setSelectedColorOpt(null); }}>
+                <i className="fas fa-times"></i>
+              </button>
+            </span>
+          )}
+          <button type="button" className="btn btn-sm btn-outline-secondary ms-1" onClick={clearAllFilters}>
+            Tümünü Temizle
+          </button>
+        </div>
+      )}
 
       {/* Products Grid */}
       <div className="row">

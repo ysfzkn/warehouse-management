@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 
-const SearchableSelect = ({ label, value, onChange, searchEndpoint, placeholder = 'Ara...', disabled = false, renderOption, wrapperClassName = 'mb-3' }) => {
+const SearchableSelect = ({ label, value, onChange, searchEndpoint, placeholder = 'Ara...', disabled = false, renderOption, wrapperClassName = 'mb-3', allowClear = false, clearText = 'Temizle' }) => {
   const [query, setQuery] = useState('');
   const [options, setOptions] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -46,9 +46,21 @@ const SearchableSelect = ({ label, value, onChange, searchEndpoint, placeholder 
   return (
     <div className={wrapperClassName} ref={containerRef}>
       {label && (
-        <label className="form-label">
-          {label}
-        </label>
+        <div className="d-flex justify-content-between align-items-center mb-1">
+          <label className="form-label mb-0">
+            {label}
+          </label>
+          {allowClear && (
+            <button
+              type="button"
+              className="btn btn-sm btn-link p-0"
+              onClick={() => onChange(null, null)}
+              disabled={disabled}
+            >
+              {clearText}
+            </button>
+          )}
+        </div>
       )}
       <div className="position-relative">
         <input
