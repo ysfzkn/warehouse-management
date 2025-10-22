@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import axios from 'axios';
 import StockForm from '../components/StockForm';
 import StockAdjustmentModal from '../components/StockAdjustmentModal';
+import StockTransferModal from '../components/StockTransferModal';
 import SearchableSelect from '../components/SearchableSelect';
 import FilterChips from '../components/FilterChips';
 
@@ -13,7 +14,10 @@ const Stock = () => {
   const [error, setError] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [showAdjustmentModal, setShowAdjustmentModal] = useState(false);
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [showTransferHistory, setShowTransferHistory] = useState(false);
   const [selectedStock, setSelectedStock] = useState(null);
+  const [transfers, setTransfers] = useState([]);
   const [filter, setFilter] = useState('all'); // all, low-stock, out-of-stock
   const [brandId, setBrandId] = useState(null);
   const [colorId, setColorId] = useState(null);
@@ -24,6 +28,7 @@ const Stock = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showReserved, setShowReserved] = useState(false);
   const [showConsigned, setShowConsigned] = useState(false);
+  const [transferStatusFilter, setTransferStatusFilter] = useState('ALL');
 
   const fetchAllData = useCallback(async () => {
     try {
@@ -244,6 +249,57 @@ const Stock = () => {
     fetchAllData();
   };
 
+  const handleStockTransfer = (stock) => {
+    setSelectedStock(stock);
+    setShowTransferModal(true);
+  };
+
+  const handleTransferSuccess = () => {
+    setShowTransferModal(false);
+    setSelectedStock(null);
+    fetchAllData();
+    if (showTransferHistory) {
+      fetchTransfers();
+    }
+  };
+
+  const handleShowTransferHistory = async () => {
+    setShowTransferHistory(!showTransferHistory);
+    if (!showTransferHistory) {
+      await fetchTransfers();
+    }
+  };
+
+  const fetchTransfers = async () => {
+    try {
+      const response = await axios.get('/api/stock-transfers');
+      setTransfers(response.data);
+    } catch (error) {
+      console.error('Error fetching transfers:', error);
+    }
+  };
+
+  const handleTransferStatusChange = async (transferId, action) => {
+    try {
+      await axios.post(`/api/stock-transfers/${transferId}/${action}`);
+      fetchTransfers();
+      fetchAllData();
+    } catch (error) {
+      alert(`Transfer ${action} işlemi sırasında hata: ` + (error.response?.data || error.message));
+    }
+  };
+
+  const handleDeleteTransfer = async (transferId) => {
+    if (window.confirm('Bu transfer kaydını silmek istediğinizden emin misiniz?')) {
+      try {
+        await axios.delete(`/api/stock-transfers/${transferId}`);
+        fetchTransfers();
+      } catch (error) {
+        alert('Transfer silinirken hata: ' + (error.response?.data || error.message));
+      }
+    }
+  };
+
   const getProductById = (id) => {
     return products.find(p => p.id === id);
   };
@@ -284,13 +340,23 @@ const Stock = () => {
     <div>
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h2>Stok Yönetimi</h2>
-        <button className="btn btn-primary" onClick={handleCreateStock}>
-          <i className="fas fa-plus me-2"></i>
-          Yeni Stok Kaydı
-        </button>
+        <div className="btn-group">
+          <button className="btn btn-success" onClick={handleShowTransferHistory}>
+            <i className={`fas fa-${showTransferHistory ? 'cubes' : 'exchange-alt'} me-2`}></i>
+            {showTransferHistory ? 'Stok Listesi' : 'Transfer Geçmişi'}
+          </button>
+          <button className="btn btn-primary" onClick={handleCreateStock}>
+            <i className="fas fa-plus me-2"></i>
+            Yeni Stok Kaydı
+          </button>
+        </div>
       </div>
 
+      {/* Filters Bar - Only show when not in transfer history mode */}
+      {!showTransferHistory && <FiltersBar />}
+
       {/* Filter Tabs */}
+      {!showTransferHistory && (
       <div className="mb-4">
         <div className="btn-group" role="group">
           <input
@@ -333,8 +399,10 @@ const Stock = () => {
           </label>
         </div>
       </div>
+      )}
 
       {/* Stock Table */}
+      {!showTransferHistory && (
       <div className="card">
         <div className="card-body">
           <div className="table-responsive">
@@ -385,6 +453,13 @@ const Stock = () => {
                       <td>
                         <div className="btn-group" role="group">
                           <button
+                            className="btn btn-sm btn-outline-success"
+                            onClick={() => handleStockTransfer(stock)}
+                            title="Transfer Yap"
+                          >
+                            <i className="fas fa-exchange-alt"></i>
+                          </button>
+                          <button
                             className="btn btn-sm btn-outline-primary"
                             onClick={() => handleStockAdjustment(stock)}
                             title="Stok Ayarla"
@@ -426,6 +501,7 @@ const Stock = () => {
           )}
         </div>
       </div>
+      )}
 
       {/* Stock Form Modal */}
       {showForm && (
@@ -460,6 +536,404 @@ const Stock = () => {
           onSuccess={handleAdjustmentSuccess}
           onClose={() => setShowAdjustmentModal(false)}
         />
+      )}
+
+      {/* Stock Transfer Modal */}
+      {showTransferModal && (
+        <StockTransferModal
+          stock={selectedStock}
+          onSuccess={handleTransferSuccess}
+          onClose={() => {
+            setShowTransferModal(false);
+            setSelectedStock(null);
+          }}
+        />
+      )}
+
+      {/* Transfer History Section */}
+      {showTransferHistory && (
+        <div className="mt-4">
+          {/* Statistics Cards */}
+          <div className="row g-3 mb-4">
+            <div className="col-md-3">
+              <div className="card border-warning shadow-sm">
+                <div className="card-body text-center">
+                  <i className="fas fa-clock fa-2x text-warning mb-2"></i>
+                  <h3 className="mb-0">{transfers.filter(t => t.status === 'PENDING').length}</h3>
+                  <p className="text-muted mb-0 small">Beklemede</p>
+                </div>
+              </div>
+            </div>
+            <div className="col-md-3">
+              <div className="card border-info shadow-sm">
+                <div className="card-body text-center">
+                  <i className="fas fa-truck fa-2x text-info mb-2"></i>
+                  <h3 className="mb-0">{transfers.filter(t => t.status === 'IN_TRANSIT').length}</h3>
+                  <p className="text-muted mb-0 small">Yolda</p>
+                </div>
+              </div>
+            </div>
+            <div className="col-md-3">
+              <div className="card border-success shadow-sm">
+                <div className="card-body text-center">
+                  <i className="fas fa-check-circle fa-2x text-success mb-2"></i>
+                  <h3 className="mb-0">{transfers.filter(t => t.status === 'COMPLETED').length}</h3>
+                  <p className="text-muted mb-0 small">Tamamlandı</p>
+                </div>
+              </div>
+            </div>
+            <div className="col-md-3">
+              <div className="card border-danger shadow-sm">
+                <div className="card-body text-center">
+                  <i className="fas fa-times-circle fa-2x text-danger mb-2"></i>
+                  <h3 className="mb-0">{transfers.filter(t => t.status === 'CANCELLED').length}</h3>
+                  <p className="text-muted mb-0 small">İptal Edildi</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Filter Buttons */}
+          <div className="card mb-3">
+            <div className="card-body">
+              <div className="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div className="btn-group" role="group">
+                  <input
+                    type="radio"
+                    className="btn-check"
+                    name="transferStatus"
+                    id="status-all"
+                    value="ALL"
+                    checked={transferStatusFilter === 'ALL'}
+                    onChange={(e) => setTransferStatusFilter(e.target.value)}
+                  />
+                  <label className="btn btn-outline-secondary" htmlFor="status-all">
+                    <i className="fas fa-list me-1"></i>
+                    Tümü ({transfers.length})
+                  </label>
+
+                  <input
+                    type="radio"
+                    className="btn-check"
+                    name="transferStatus"
+                    id="status-pending"
+                    value="PENDING"
+                    checked={transferStatusFilter === 'PENDING'}
+                    onChange={(e) => setTransferStatusFilter(e.target.value)}
+                  />
+                  <label className="btn btn-outline-warning" htmlFor="status-pending">
+                    <i className="fas fa-clock me-1"></i>
+                    Beklemede
+                  </label>
+
+                  <input
+                    type="radio"
+                    className="btn-check"
+                    name="transferStatus"
+                    id="status-transit"
+                    value="IN_TRANSIT"
+                    checked={transferStatusFilter === 'IN_TRANSIT'}
+                    onChange={(e) => setTransferStatusFilter(e.target.value)}
+                  />
+                  <label className="btn btn-outline-info" htmlFor="status-transit">
+                    <i className="fas fa-truck me-1"></i>
+                    Yolda
+                  </label>
+
+                  <input
+                    type="radio"
+                    className="btn-check"
+                    name="transferStatus"
+                    id="status-completed"
+                    value="COMPLETED"
+                    checked={transferStatusFilter === 'COMPLETED'}
+                    onChange={(e) => setTransferStatusFilter(e.target.value)}
+                  />
+                  <label className="btn btn-outline-success" htmlFor="status-completed">
+                    <i className="fas fa-check-circle me-1"></i>
+                    Tamamlandı
+                  </label>
+
+                  <input
+                    type="radio"
+                    className="btn-check"
+                    name="transferStatus"
+                    id="status-cancelled"
+                    value="CANCELLED"
+                    checked={transferStatusFilter === 'CANCELLED'}
+                    onChange={(e) => setTransferStatusFilter(e.target.value)}
+                  />
+                  <label className="btn btn-outline-danger" htmlFor="status-cancelled">
+                    <i className="fas fa-times-circle me-1"></i>
+                    İptal
+                  </label>
+                </div>
+                
+                <div className="text-muted small">
+                  <i className="fas fa-info-circle me-1"></i>
+                  Toplam {transfers.filter(t => transferStatusFilter === 'ALL' || t.status === transferStatusFilter).length} transfer
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="card shadow-sm">
+            <div className="card-header bg-gradient text-white" style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
+              <div className="d-flex justify-content-between align-items-center">
+                <h5 className="mb-0">
+                  <i className="fas fa-history me-2"></i>
+                  Transfer Geçmişi
+                </h5>
+                <span className="badge bg-white text-dark">
+                  {transfers.filter(t => transferStatusFilter === 'ALL' || t.status === transferStatusFilter).length} kayıt
+                </span>
+              </div>
+            </div>
+            <div className="card-body p-0">
+              {transfers.filter(t => transferStatusFilter === 'ALL' || t.status === transferStatusFilter).length === 0 ? (
+                <div className="text-center py-5">
+                  <i className="fas fa-inbox fa-4x text-muted mb-3"></i>
+                  <h5 className="text-muted">
+                    {transferStatusFilter === 'ALL' 
+                      ? 'Henüz transfer kaydı bulunmuyor' 
+                      : `${transferStatusFilter === 'PENDING' ? 'Beklemede' : transferStatusFilter === 'IN_TRANSIT' ? 'Yolda' : transferStatusFilter === 'COMPLETED' ? 'Tamamlanmış' : 'İptal edilmiş'} transfer bulunmuyor`
+                    }
+                  </h5>
+                  <p className="text-muted">
+                    {transferStatusFilter === 'ALL' && 'İlk transferi oluşturmak için stok listesinden "Transfer Yap" butonuna tıklayın.'}
+                  </p>
+                </div>
+              ) : (
+              <div className="table-responsive">
+                <table className="table table-hover mb-0">
+                  <thead className="table-light">
+                    <tr>
+                      <th className="text-center" style={{width: '80px'}}>
+                        <i className="fas fa-hashtag me-1"></i>
+                        No
+                      </th>
+                      <th style={{width: '140px'}}>
+                        <i className="fas fa-calendar me-1"></i>
+                        Tarih
+                      </th>
+                      <th>
+                        <i className="fas fa-box me-1"></i>
+                        Ürün
+                      </th>
+                      <th>
+                        <i className="fas fa-warehouse text-danger me-1"></i>
+                        Kaynak
+                      </th>
+                      <th>
+                        <i className="fas fa-warehouse text-success me-1"></i>
+                        Hedef
+                      </th>
+                      <th className="text-center" style={{width: '80px'}}>
+                        <i className="fas fa-boxes me-1"></i>
+                        Miktar
+                      </th>
+                      <th>
+                        <i className="fas fa-user me-1"></i>
+                        Şoför
+                      </th>
+                      <th style={{width: '100px'}}>
+                        <i className="fas fa-car me-1"></i>
+                        Plaka
+                      </th>
+                      <th className="text-center" style={{width: '120px'}}>
+                        <i className="fas fa-info-circle me-1"></i>
+                        Durum
+                      </th>
+                      <th className="text-center" style={{width: '180px'}}>
+                        <i className="fas fa-cog me-1"></i>
+                        İşlemler
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {transfers.filter(t => transferStatusFilter === 'ALL' || t.status === transferStatusFilter).map((transfer) => {
+                      const statusConfig = {
+                        PENDING: { label: 'Beklemede', class: 'warning', icon: 'clock' },
+                        IN_TRANSIT: { label: 'Yolda', class: 'info', icon: 'truck' },
+                        COMPLETED: { label: 'Tamamlandı', class: 'success', icon: 'check-circle' },
+                        CANCELLED: { label: 'İptal Edildi', class: 'danger', icon: 'times-circle' }
+                      };
+                      const status = statusConfig[transfer.status] || statusConfig.PENDING;
+
+                      return (
+                        <tr key={transfer.id} className="align-middle">
+                          <td className="text-center">
+                            <span className="badge bg-dark fs-6">#{transfer.id}</span>
+                          </td>
+                          <td>
+                            <div className="small">
+                              <div className="fw-bold">
+                                {new Date(transfer.transferDate).toLocaleDateString('tr-TR')}
+                              </div>
+                              <div className="text-muted">
+                                {new Date(transfer.transferDate).toLocaleTimeString('tr-TR', {
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                })}
+                              </div>
+                            </div>
+                          </td>
+                          <td>
+                            <div>
+                              <div className="fw-bold">{transfer.product?.name}</div>
+                              <small className="text-muted">SKU: {transfer.product?.sku}</small>
+                            </div>
+                          </td>
+                          <td>
+                            <div className="d-flex align-items-center">
+                              <div className="bg-danger bg-opacity-10 rounded-circle p-2 me-2">
+                                <i className="fas fa-warehouse text-danger"></i>
+                              </div>
+                              <div className="small">
+                                <div className="fw-bold">{transfer.sourceWarehouse?.name}</div>
+                                <small className="text-muted">{transfer.sourceWarehouse?.location}</small>
+                              </div>
+                            </div>
+                          </td>
+                          <td>
+                            <div className="d-flex align-items-center">
+                              <div className="bg-success bg-opacity-10 rounded-circle p-2 me-2">
+                                <i className="fas fa-warehouse text-success"></i>
+                              </div>
+                              <div className="small">
+                                <div className="fw-bold">{transfer.destinationWarehouse?.name}</div>
+                                <small className="text-muted">{transfer.destinationWarehouse?.location}</small>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="text-center">
+                            <span className="badge bg-primary rounded-pill fs-6">{transfer.quantity}</span>
+                          </td>
+                          <td>
+                            <div className="small">
+                              <div className="fw-bold">{transfer.driverName}</div>
+                              <div className="text-muted">
+                                <i className="fas fa-phone me-1"></i>
+                                {transfer.driverPhone}
+                              </div>
+                            </div>
+                          </td>
+                          <td>
+                            <span className="badge bg-secondary">{transfer.vehiclePlate}</span>
+                          </td>
+                          <td className="text-center">
+                            <span className={`badge bg-${status.class} w-100 py-2`}>
+                              <i className={`fas fa-${status.icon} me-1`}></i>
+                              {status.label}
+                            </span>
+                            {transfer.completedDate && (
+                              <small className="d-block text-success mt-1">
+                                <i className="fas fa-check me-1"></i>
+                                {new Date(transfer.completedDate).toLocaleDateString('tr-TR')}
+                              </small>
+                            )}
+                            {transfer.cancelledDate && (
+                              <small className="d-block text-danger mt-1">
+                                <i className="fas fa-times me-1"></i>
+                                {new Date(transfer.cancelledDate).toLocaleDateString('tr-TR')}
+                              </small>
+                            )}
+                          </td>
+                          <td className="text-center">
+                            <div className="d-flex flex-column gap-1">
+                              {transfer.status === 'PENDING' && (
+                                <>
+                                  <button
+                                    className="btn btn-sm btn-info w-100"
+                                    onClick={() => {
+                                      if (window.confirm('Transfer yola çıkartılacak. Onaylıyor musunuz?')) {
+                                        handleTransferStatusChange(transfer.id, 'start');
+                                      }
+                                    }}
+                                  >
+                                    <i className="fas fa-truck me-1"></i>
+                                    Yola Çıkar
+                                  </button>
+                                  <button
+                                    className="btn btn-sm btn-success w-100"
+                                    onClick={() => {
+                                      if (window.confirm('Transfer direkt tamamlanacak. Onaylıyor musunuz?')) {
+                                        handleTransferStatusChange(transfer.id, 'complete');
+                                      }
+                                    }}
+                                  >
+                                    <i className="fas fa-check me-1"></i>
+                                    Tamamla
+                                  </button>
+                                  <button
+                                    className="btn btn-sm btn-danger w-100"
+                                    onClick={() => {
+                                      if (window.confirm('Transfer iptal edilecek. Emin misiniz?')) {
+                                        handleTransferStatusChange(transfer.id, 'cancel');
+                                      }
+                                    }}
+                                  >
+                                    <i className="fas fa-ban me-1"></i>
+                                    İptal
+                                  </button>
+                                </>
+                              )}
+                              {transfer.status === 'IN_TRANSIT' && (
+                                <>
+                                  <button
+                                    className="btn btn-sm btn-success w-100"
+                                    onClick={() => {
+                                      if (window.confirm('Transfer tamamlanacak ve stok taşınacak. Onaylıyor musunuz?')) {
+                                        handleTransferStatusChange(transfer.id, 'complete');
+                                      }
+                                    }}
+                                  >
+                                    <i className="fas fa-check-double me-1"></i>
+                                    Tamamla
+                                  </button>
+                                  <button
+                                    className="btn btn-sm btn-warning w-100"
+                                    onClick={() => {
+                                      if (window.confirm('Transfer iptal edilecek ve rezervasyon kaldırılacak. Emin misiniz?')) {
+                                        handleTransferStatusChange(transfer.id, 'cancel');
+                                      }
+                                    }}
+                                  >
+                                    <i className="fas fa-ban me-1"></i>
+                                    İptal Et
+                                  </button>
+                                </>
+                              )}
+                              {(transfer.status === 'CANCELLED' || transfer.status === 'PENDING') && (
+                                <button
+                                  className="btn btn-sm btn-outline-danger w-100"
+                                  onClick={() => handleDeleteTransfer(transfer.id)}
+                                >
+                                  <i className="fas fa-trash me-1"></i>
+                                  Sil
+                                </button>
+                              )}
+                              {transfer.notes && (
+                                <button
+                                  className="btn btn-sm btn-outline-secondary w-100"
+                                  onClick={() => alert(`📝 Transfer Notları:\n\n${transfer.notes}`)}
+                                >
+                                  <i className="fas fa-sticky-note me-1"></i>
+                                  Notlar
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
