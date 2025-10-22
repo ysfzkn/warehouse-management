@@ -1,7 +1,9 @@
 package com.warehouse.controller;
 
+import com.warehouse.dto.StockTransferDto;
 import com.warehouse.entity.StockTransfer;
 import com.warehouse.enums.TransferStatus;
+import com.warehouse.mapper.StockTransferMapper;
 import com.warehouse.service.StockTransferService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,17 +19,20 @@ import java.util.List;
 public class StockTransferController {
 
     private final StockTransferService stockTransferService;
+    private final StockTransferMapper transferMapper;
 
     @Autowired
-    public StockTransferController(StockTransferService stockTransferService) {
+    public StockTransferController(StockTransferService stockTransferService, StockTransferMapper transferMapper) {
         this.stockTransferService = stockTransferService;
+        this.transferMapper = transferMapper;
     }
 
     @GetMapping
-    public ResponseEntity<List<StockTransfer>> getAllTransfers() {
+    public ResponseEntity<List<StockTransferDto>> getAllTransfers() {
         try {
             List<StockTransfer> transfers = stockTransferService.getAllTransfers();
-            return ResponseEntity.ok(transfers);
+            List<StockTransferDto> dtos = transferMapper.toDtoList(transfers);
+            return ResponseEntity.ok(dtos);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
@@ -37,6 +42,7 @@ public class StockTransferController {
     public ResponseEntity<?> getTransferById(@PathVariable Long id) {
         try {
             return stockTransferService.getTransferById(id)
+                    .map(transferMapper::toDto)
                     .map(ResponseEntity::ok)
                     .orElse(ResponseEntity.notFound().build());
         } catch (Exception e) {
@@ -49,7 +55,8 @@ public class StockTransferController {
     public ResponseEntity<?> getTransfersByWarehouse(@PathVariable Long warehouseId) {
         try {
             List<StockTransfer> transfers = stockTransferService.getTransfersByWarehouse(warehouseId);
-            return ResponseEntity.ok(transfers);
+            List<StockTransferDto> dtos = transferMapper.toDtoList(transfers);
+            return ResponseEntity.ok(dtos);
         } catch (RuntimeException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
         } catch (Exception e) {
@@ -62,7 +69,8 @@ public class StockTransferController {
     public ResponseEntity<?> getTransfersByProduct(@PathVariable Long productId) {
         try {
             List<StockTransfer> transfers = stockTransferService.getTransfersByProduct(productId);
-            return ResponseEntity.ok(transfers);
+            List<StockTransferDto> dtos = transferMapper.toDtoList(transfers);
+            return ResponseEntity.ok(dtos);
         } catch (RuntimeException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
         } catch (Exception e) {
@@ -76,7 +84,8 @@ public class StockTransferController {
         try {
             TransferStatus transferStatus = TransferStatus.valueOf(status.toUpperCase());
             List<StockTransfer> transfers = stockTransferService.getTransfersByStatus(transferStatus);
-            return ResponseEntity.ok(transfers);
+            List<StockTransferDto> dtos = transferMapper.toDtoList(transfers);
+            return ResponseEntity.ok(dtos);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body("Invalid status. Valid values: PENDING, IN_TRANSIT, COMPLETED, CANCELLED");
@@ -90,7 +99,8 @@ public class StockTransferController {
     public ResponseEntity<?> createTransfer(@Valid @RequestBody StockTransfer transfer) {
         try {
             StockTransfer createdTransfer = stockTransferService.createTransfer(transfer);
-            return ResponseEntity.status(HttpStatus.CREATED).body(createdTransfer);
+            StockTransferDto dto = transferMapper.toDto(createdTransfer);
+            return ResponseEntity.status(HttpStatus.CREATED).body(dto);
         } catch (RuntimeException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
         } catch (Exception e) {
@@ -103,7 +113,8 @@ public class StockTransferController {
     public ResponseEntity<?> startTransfer(@PathVariable Long id) {
         try {
             StockTransfer transfer = stockTransferService.startTransfer(id);
-            return ResponseEntity.ok(transfer);
+            StockTransferDto dto = transferMapper.toDto(transfer);
+            return ResponseEntity.ok(dto);
         } catch (RuntimeException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
         } catch (Exception e) {
@@ -116,7 +127,8 @@ public class StockTransferController {
     public ResponseEntity<?> completeTransfer(@PathVariable Long id) {
         try {
             StockTransfer transfer = stockTransferService.completeTransfer(id);
-            return ResponseEntity.ok(transfer);
+            StockTransferDto dto = transferMapper.toDto(transfer);
+            return ResponseEntity.ok(dto);
         } catch (RuntimeException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
         } catch (Exception e) {
@@ -129,7 +141,8 @@ public class StockTransferController {
     public ResponseEntity<?> cancelTransfer(@PathVariable Long id) {
         try {
             StockTransfer transfer = stockTransferService.cancelTransfer(id);
-            return ResponseEntity.ok(transfer);
+            StockTransferDto dto = transferMapper.toDto(transfer);
+            return ResponseEntity.ok(dto);
         } catch (RuntimeException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
         } catch (Exception e) {
@@ -142,7 +155,8 @@ public class StockTransferController {
     public ResponseEntity<?> updateTransfer(@PathVariable Long id, @Valid @RequestBody StockTransfer transfer) {
         try {
             StockTransfer updatedTransfer = stockTransferService.updateTransfer(id, transfer);
-            return ResponseEntity.ok(updatedTransfer);
+            StockTransferDto dto = transferMapper.toDto(updatedTransfer);
+            return ResponseEntity.ok(dto);
         } catch (RuntimeException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
         } catch (Exception e) {
@@ -164,4 +178,3 @@ public class StockTransferController {
         }
     }
 }
-

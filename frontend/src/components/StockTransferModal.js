@@ -218,9 +218,9 @@ const StockTransferModal = ({ stock, onSuccess, onClose }) => {
                 </div>
               )}
 
-              {/* Step 1: Transfer Details */}
-              {currentStep === 1 && (
-                <div className="animate__animated animate__fadeIn">
+               {/* Step 1: Transfer Details */}
+               {currentStep === 1 && (
+                 <div style={{ animation: 'fadeIn 0.3s ease-in' }}>
                   <h5 className="mb-3 text-primary">
                     <i className="fas fa-boxes me-2"></i>
                     Transfer Detaylarını Belirleyin
@@ -366,9 +366,9 @@ const StockTransferModal = ({ stock, onSuccess, onClose }) => {
                 </div>
               )}
 
-              {/* Step 2: Driver & Vehicle Info */}
-              {currentStep === 2 && (
-                <div className="animate__animated animate__fadeIn">
+               {/* Step 2: Driver & Vehicle Info */}
+               {currentStep === 2 && (
+                 <div style={{ animation: 'fadeIn 0.3s ease-in' }}>
                   <h5 className="mb-3 text-primary">
                     <i className="fas fa-truck me-2"></i>
                     Taşıma Bilgilerini Girin
@@ -497,9 +497,9 @@ const StockTransferModal = ({ stock, onSuccess, onClose }) => {
                 </div>
               )}
 
-              {/* Step 3: Summary & Confirm */}
-              {currentStep === 3 && (
-                <div className="animate__animated animate__fadeIn">
+               {/* Step 3: Summary & Confirm */}
+               {currentStep === 3 && (
+                 <div style={{ animation: 'fadeIn 0.3s ease-in' }}>
                   <h5 className="mb-3 text-primary">
                     <i className="fas fa-check-circle me-2"></i>
                     Transfer Özeti - Onaylayın
