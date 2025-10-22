@@ -58,18 +58,18 @@ const CrudTable = ({ title, columns, items, onCreate, onEdit, onDelete, loading 
 );
 
 const EditModal = ({ title, fields, item, onClose, onSave, saving, error }) => {
-  const [form, setForm] = useState({ name: '', description: '', isActive: true, hexCode: '' });
+  const [form, setForm] = useState({ name: '', description: '', active: true, hexCode: '' });
 
   useEffect(() => {
     if (item) {
       setForm({
         name: item.name || '',
         description: item.description || '',
-        isActive: item.isActive !== false,
+        active: item.active !== false,
         hexCode: item.hexCode || ''
       });
     } else {
-      setForm({ name: '', description: '', isActive: true, hexCode: '' });
+      setForm({ name: '', description: '', active: true, hexCode: '' });
     }
   }, [item]);
 
@@ -150,10 +150,10 @@ const EditModal = ({ title, fields, item, onClose, onSave, saving, error }) => {
                 </div>
               </div>
             )}
-            {fields.includes('isActive') && (
+            {fields.includes('active') && (
               <div className="form-check">
-                <input type="checkbox" className="form-check-input" id="isActive" checked={form.isActive} onChange={e => setForm({ ...form, isActive: e.target.checked })} />
-                <label className="form-check-label" htmlFor="isActive">Aktif</label>
+                <input type="checkbox" className="form-check-input" id="active" checked={form.active} onChange={e => setForm({ ...form, active: e.target.checked })} />
+                <label className="form-check-label" htmlFor="active">Aktif</label>
               </div>
             )}
           </div>
@@ -242,7 +242,7 @@ const AdminSettings = () => {
       {activeTab === 'brand' && (
         <CrudTable
           title="Markalar"
-          columns={[{ key: 'name', title: 'Ad' }, { key: 'description', title: 'Açıklama' }, { key: 'isActive', title: 'Durum', render: (v) => v ? 'Aktif' : 'Pasif' }]}
+          columns={[{ key: 'name', title: 'Ad' }, { key: 'description', title: 'Açıklama' }, { key: 'active', title: 'Durum', render: (v) => v ? 'Aktif' : 'Pasif' }]}
           items={brands}
           loading={loading}
           onCreate={() => { setError(''); setEditing(null); }}
@@ -254,7 +254,7 @@ const AdminSettings = () => {
       {activeTab === 'color' && (
         <CrudTable
           title="Renkler"
-          columns={[{ key: 'name', title: 'Ad' }, { key: 'hexCode', title: 'Renk Kodu', render: (v) => v || '-' }, { key: 'isActive', title: 'Durum', render: (v) => v ? 'Aktif' : 'Pasif' }]}
+          columns={[{ key: 'name', title: 'Ad' }, { key: 'hexCode', title: 'Renk Kodu', render: (v) => v || '-' }, { key: 'active', title: 'Durum', render: (v) => v ? 'Aktif' : 'Pasif' }]}
           items={colors}
           loading={loading}
           onCreate={() => { setError(''); setEditing(null); }}
@@ -266,7 +266,7 @@ const AdminSettings = () => {
       {(activeTab === 'brand' || activeTab === 'color') && editing !== undefined && (
         <EditModal
           title={activeTab === 'brand' ? (editing ? 'Marka Düzenle' : 'Yeni Marka') : (editing ? 'Renk Düzenle' : 'Yeni Renk')}
-          fields={activeTab === 'brand' ? ['name', 'description', 'isActive'] : ['name', 'hexCode', 'isActive']}
+          fields={activeTab === 'brand' ? ['name', 'description', 'active'] : ['name', 'hexCode', 'active']}
           item={editing || undefined}
           onClose={() => setEditing(undefined)}
           onSave={handleSave}

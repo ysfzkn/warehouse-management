@@ -20,7 +20,10 @@ const Stock = () => {
   const [brandOpt, setBrandOpt] = useState(null);
   const [colorOpt, setColorOpt] = useState(null);
   const [selectedWarehouseId, setSelectedWarehouseId] = useState(null);
+  const [selectedWarehouseOpt, setSelectedWarehouseOpt] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [showReserved, setShowReserved] = useState(false);
+  const [showConsigned, setShowConsigned] = useState(false);
 
   const fetchAllData = useCallback(async () => {
     try {
@@ -84,18 +87,26 @@ const Stock = () => {
       );
     }
 
+    // reserved/consigned filters
+    if (showReserved) {
+      filtered = filtered.filter(s => (s.reservedQuantity || 0) > 0);
+    }
+    if (showConsigned) {
+      filtered = filtered.filter(s => (s.consignedQuantity || 0) > 0);
+    }
+
     // Sort by warehouse name and product name
     return [...filtered].sort((a, b) => {
       const warehouseCompare = (a.warehouse?.name || '').localeCompare(b.warehouse?.name || '');
       if (warehouseCompare !== 0) return warehouseCompare;
       return (a.product?.name || '').localeCompare(b.product?.name || '');
     });
-  }, [stocks, filter, searchTerm]);
+  }, [stocks, filter, searchTerm, showReserved, showConsigned]);
 
   const FiltersBar = () => (
     <>
       <div className="row mb-2 align-items-end">
-        <div className="col-md-6">
+        <div className="col-md-3">
           <div className="input-group">
             <span className="input-group-text"><i className="fas fa-search"></i></span>
             <input
@@ -106,6 +117,19 @@ const Stock = () => {
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
+        </div>
+        <div className="col-md-3">
+          <SearchableSelect
+            label="Depo"
+            value={selectedWarehouseId}
+            onChange={(id, opt) => { setSelectedWarehouseId(id); setSelectedWarehouseOpt(opt || null); }}
+            searchEndpoint="/api/warehouses"
+            placeholder="Depo ara..."
+            allowClear={true}
+            clearText="Temizle"
+            wrapperClassName="mb-0"
+            renderOption={(w) => w.name}
+          />
         </div>
         <div className="col-md-3">
           <SearchableSelect
@@ -132,15 +156,58 @@ const Stock = () => {
           />
         </div>
       </div>
+
+      {/* Additional filters */}
+      <div className="row mb-2">
+        <div className="col-md-12">
+          <div className="form-check form-check-inline">
+            <input
+              className="form-check-input"
+              type="checkbox"
+              id="showReserved"
+              checked={showReserved}
+              onChange={(e) => setShowReserved(e.target.checked)}
+            />
+            <label className="form-check-label" htmlFor="showReserved">
+              Sadece Rezerve Olanlar
+            </label>
+          </div>
+          <div className="form-check form-check-inline">
+            <input
+              className="form-check-input"
+              type="checkbox"
+              id="showConsigned"
+              checked={showConsigned}
+              onChange={(e) => setShowConsigned(e.target.checked)}
+            />
+            <label className="form-check-label" htmlFor="showConsigned">
+              Sadece Emanet Olanlar
+            </label>
+          </div>
+        </div>
+      </div>
+
       <FilterChips
         className="mb-3"
         chips={[
           searchTerm ? { icon: 'fas fa-search', label: `Arama: "${searchTerm}"`, onClear: () => setSearchTerm('') } : null,
-          selectedWarehouseId ? { icon: 'fas fa-warehouse', label: `Depo: ${getWarehouseById(selectedWarehouseId)?.name || selectedWarehouseId}`, onClear: () => setSelectedWarehouseId(null) } : null,
+          selectedWarehouseId ? { icon: 'fas fa-warehouse', label: `Depo: ${selectedWarehouseOpt?.name || getWarehouseById(selectedWarehouseId)?.name || selectedWarehouseId}`, onClear: () => { setSelectedWarehouseId(null); setSelectedWarehouseOpt(null); } } : null,
           brandId ? { icon: 'fas fa-copyright', label: `Marka: ${brandOpt?.name || brandId}`, onClear: () => { setBrandId(null); setBrandOpt(null); } } : null,
           colorId ? { icon: 'fas fa-palette', label: `Renk: ${colorOpt?.name || colorId}`, onClear: () => { setColorId(null); setColorOpt(null); } } : null,
+          showReserved ? { icon: 'fas fa-lock', label: 'Rezerve Olanlar', onClear: () => setShowReserved(false) } : null,
+          showConsigned ? { icon: 'fas fa-handshake', label: 'Emanet Olanlar', onClear: () => setShowConsigned(false) } : null,
         ].filter(Boolean)}
-        onClearAll={() => { setSearchTerm(''); setSelectedWarehouseId(null); setBrandId(null); setColorId(null); setBrandOpt(null); setColorOpt(null); }}
+        onClearAll={() => {
+          setSearchTerm('');
+          setSelectedWarehouseId(null);
+          setSelectedWarehouseOpt(null);
+          setBrandId(null);
+          setColorId(null);
+          setBrandOpt(null);
+          setColorOpt(null);
+          setShowReserved(false);
+          setShowConsigned(false);
+        }}
       />
     </>
   );
