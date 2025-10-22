@@ -20,6 +20,7 @@ const Stock = () => {
   const [brandOpt, setBrandOpt] = useState(null);
   const [colorOpt, setColorOpt] = useState(null);
   const [selectedWarehouseId, setSelectedWarehouseId] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const fetchAllData = useCallback(async () => {
     try {
@@ -61,58 +62,85 @@ const Stock = () => {
   const filteredStocks = useMemo(() => {
     let filtered = stocks;
 
+    // status filter
     switch (filter) {
       case 'low-stock':
-        filtered = stocks.filter(stock => stock.quantity <= stock.minStockLevel && stock.quantity > 0);
+        filtered = filtered.filter(stock => stock.quantity <= stock.minStockLevel && stock.quantity > 0);
         break;
       case 'out-of-stock':
-        filtered = stocks.filter(stock => stock.quantity === 0);
+        filtered = filtered.filter(stock => stock.quantity === 0);
         break;
       default:
-        filtered = stocks;
+        break;
+    }
+
+    // text search
+    const q = (searchTerm || '').toLowerCase();
+    if (q) {
+      filtered = filtered.filter(s =>
+        (s.product?.name || '').toLowerCase().includes(q) ||
+        (s.product?.sku || '').toLowerCase().includes(q) ||
+        (s.warehouse?.name || '').toLowerCase().includes(q)
+      );
     }
 
     // Sort by warehouse name and product name
     return [...filtered].sort((a, b) => {
-      const warehouseCompare = a.warehouse.name.localeCompare(b.warehouse.name);
+      const warehouseCompare = (a.warehouse?.name || '').localeCompare(b.warehouse?.name || '');
       if (warehouseCompare !== 0) return warehouseCompare;
-      return a.product.name.localeCompare(b.product.name);
+      return (a.product?.name || '').localeCompare(b.product?.name || '');
     });
-  }, [stocks, filter]);
+  }, [stocks, filter, searchTerm]);
 
   const FiltersBar = () => (
     <>
-      <div className="row mb-2">
+      <div className="row mb-2 align-items-end">
         <div className="col-md-6">
+          <div className="input-group">
+            <span className="input-group-text"><i className="fas fa-search"></i></span>
+            <input
+              type="text"
+              className="form-control"
+              placeholder="Ürün adı, SKU veya depo ara..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+        </div>
+        <div className="col-md-3">
           <SearchableSelect
-            label="Marka Filtresi"
+            label="Marka"
             value={brandId}
             onChange={(id, opt) => { setBrandId(id); setBrandOpt(opt || null); }}
             searchEndpoint="/api/brands/search"
             placeholder="Marka ara..."
             allowClear={true}
             clearText="Temizle"
+            wrapperClassName="mb-0"
           />
         </div>
-        <div className="col-md-6">
+        <div className="col-md-3">
           <SearchableSelect
-            label="Renk Filtresi"
+            label="Renk"
             value={colorId}
             onChange={(id, opt) => { setColorId(id); setColorOpt(opt || null); }}
             searchEndpoint="/api/colors/search"
             placeholder="Renk ara..."
             allowClear={true}
             clearText="Temizle"
+            wrapperClassName="mb-0"
           />
         </div>
       </div>
       <FilterChips
         className="mb-3"
         chips={[
+          searchTerm ? { icon: 'fas fa-search', label: `Arama: "${searchTerm}"`, onClear: () => setSearchTerm('') } : null,
+          selectedWarehouseId ? { icon: 'fas fa-warehouse', label: `Depo: ${getWarehouseById(selectedWarehouseId)?.name || selectedWarehouseId}`, onClear: () => setSelectedWarehouseId(null) } : null,
           brandId ? { icon: 'fas fa-copyright', label: `Marka: ${brandOpt?.name || brandId}`, onClear: () => { setBrandId(null); setBrandOpt(null); } } : null,
           colorId ? { icon: 'fas fa-palette', label: `Renk: ${colorOpt?.name || colorId}`, onClear: () => { setColorId(null); setColorOpt(null); } } : null,
         ].filter(Boolean)}
-        onClearAll={() => { setBrandId(null); setColorId(null); setBrandOpt(null); setColorOpt(null); }}
+        onClearAll={() => { setSearchTerm(''); setSelectedWarehouseId(null); setBrandId(null); setColorId(null); setBrandOpt(null); setColorOpt(null); }}
       />
     </>
   );
