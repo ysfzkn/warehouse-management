@@ -19,16 +19,23 @@ const StockTransferModal = ({ stock, onSuccess, onClose }) => {
   const [warehouses, setWarehouses] = useState([]);
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [loadingData, setLoadingData] = useState(true);
   const [error, setError] = useState(null);
   const [availableStock, setAvailableStock] = useState(null);
   const [validationErrors, setValidationErrors] = useState({});
 
   useEffect(() => {
-    fetchWarehouses();
-    if (!stock) {
-      fetchProducts();
-    }
-  }, [stock]);
+    console.log('StockTransferModal mounted, fetching data...');
+    const fetchData = async () => {
+      setLoadingData(true);
+      await fetchWarehouses();
+      if (!stock) {
+        await fetchProducts();
+      }
+      setLoadingData(false);
+    };
+    fetchData();
+  }, []);
 
   useEffect(() => {
     if (formData.sourceWarehouseId && formData.productId) {
@@ -38,23 +45,79 @@ const StockTransferModal = ({ stock, onSuccess, onClose }) => {
 
   const fetchWarehouses = async () => {
     try {
+      console.log('Fetching warehouses from /api/warehouses...');
       const response = await axios.get('/api/warehouses');
+      console.log('Warehouses API response:', response.data);
+      
+      if (!response.data || !Array.isArray(response.data)) {
+        console.error('Invalid warehouses response format:', response.data);
+        setError('Depo verisi hatalı formatta');
+        setWarehouses([]);
+        return;
+      }
+
+      if (response.data.length === 0) {
+        console.error('No warehouses found in database');
+        setError('Sistemde hiç depo bulunamadı. Lütfen önce Depolar sayfasından depo ekleyin.');
+        setWarehouses([]);
+        return;
+      }
+
+      // Log all warehouses for debugging
+      console.table(response.data.map(w => ({
+        id: w.id,
+        name: w.name,
+        location: w.location,
+        isActive: w.isActive,
+        type: typeof w.isActive
+      })));
+
       // Filter active warehouses - check for both boolean and numeric values
-      const activeWarehouses = response.data.filter(w => w.isActive === true || w.isActive === 1);
-      console.log('Fetched warehouses:', activeWarehouses);
+      const activeWarehouses = response.data.filter(w => {
+        const isActive = w.isActive === true || w.isActive === 1 || w.isActive === '1' || String(w.isActive).toLowerCase() === 'true';
+        console.log(`Warehouse ${w.id} (${w.name}): isActive=${w.isActive} (type: ${typeof w.isActive}), filtered=${isActive}`);
+        return isActive;
+      });
+      
+      console.log(`✅ Total warehouses: ${response.data.length}, Active: ${activeWarehouses.length}`);
+      console.log('Active warehouses:', activeWarehouses);
       setWarehouses(activeWarehouses);
+      
+      if (activeWarehouses.length === 0) {
+        const inactiveCount = response.data.length - activeWarehouses.length;
+        setError(
+          `Sistemde ${response.data.length} depo bulundu ancak hepsi pasif durumda. ` +
+          `Lütfen Depolar sayfasından en az bir depoyu aktif hale getirin.`
+        );
+      }
     } catch (error) {
-      console.error('Error fetching warehouses:', error);
-      setError('Depolar yüklenirken hata oluştu');
+      console.error('❌ Error fetching warehouses:', error);
+      console.error('Error details:', error.response?.data, error.response?.status, error.message);
+      
+      let errorMessage = 'Depolar yüklenirken hata oluştu';
+      if (error.response) {
+        errorMessage += `: ${error.response.status} - ${error.response.data || error.response.statusText}`;
+      } else if (error.request) {
+        errorMessage += ': Backend sunucusuna ulaşılamıyor. Lütfen backend\'in çalıştığından emin olun (http://localhost:8080)';
+      } else {
+        errorMessage += `: ${error.message}`;
+      }
+      
+      setError(errorMessage);
+      setWarehouses([]);
     }
   };
 
   const fetchProducts = async () => {
     try {
+      console.log('Fetching products from /api/products...');
       const response = await axios.get('/api/products');
-      setProducts(response.data);
+      console.log('Products API response:', response.data?.length, 'products');
+      setProducts(response.data || []);
     } catch (error) {
       console.error('Error fetching products:', error);
+      console.error('Error details:', error.response?.data, error.message);
+      setProducts([]);
     }
   };
 
@@ -228,6 +291,17 @@ const StockTransferModal = ({ stock, onSuccess, onClose }) => {
 
           <form onSubmit={handleSubmit}>
             <div className="modal-body" style={{ minHeight: '400px' }}>
+              {loadingData && (
+                <div className="alert alert-info" role="alert">
+                  <div className="d-flex align-items-center">
+                    <div className="spinner-border spinner-border-sm me-2" role="status">
+                      <span className="visually-hidden">Yükleniyor...</span>
+                    </div>
+                    <strong>Depolar ve ürünler yükleniyor...</strong>
+                  </div>
+                </div>
+              )}
+              
               {error && (
                 <div className="alert alert-danger alert-dismissible fade show" role="alert">
                   <i className="fas fa-exclamation-triangle me-2"></i>
@@ -679,6 +753,7 @@ const StockTransferModal = ({ stock, onSuccess, onClose }) => {
                   type="button"
                   className="btn btn-primary"
                   onClick={handleNext}
+                  disabled={loadingData}
                 >
                   İleri
                   <i className="fas fa-arrow-right ms-2"></i>
@@ -687,7 +762,7 @@ const StockTransferModal = ({ stock, onSuccess, onClose }) => {
                 <button
                   type="submit"
                   className="btn btn-success"
-                  disabled={loading || !availableStock || availableStock.availableQuantity === 0}
+                  disabled={loading || loadingData || !availableStock || availableStock.availableQuantity === 0}
                 >
                   {loading ? (
                     <>
