@@ -64,31 +64,39 @@ const StockTransferModal = ({ stock, onSuccess, onClose }) => {
       }
 
       // Log all warehouses for debugging
+      console.log('🏭 RAW API Response:');
       console.table(response.data.map(w => ({
         id: w.id,
         name: w.name,
         location: w.location,
         isActive: w.isActive,
-        type: typeof w.isActive
+        type: typeof w.isActive,
+        raw: JSON.stringify(w.isActive)
       })));
-
-      // Filter active warehouses - check for both boolean and numeric values
-      const activeWarehouses = response.data.filter(w => {
-        const isActive = w.isActive === true || w.isActive === 1 || w.isActive === '1' || String(w.isActive).toLowerCase() === 'true';
-        console.log(`Warehouse ${w.id} (${w.name}): isActive=${w.isActive} (type: ${typeof w.isActive}), filtered=${isActive}`);
-        return isActive;
-      });
       
-      console.log(`✅ Total warehouses: ${response.data.length}, Active: ${activeWarehouses.length}`);
-      console.log('Active warehouses:', activeWarehouses);
+      console.log('🔍 Full warehouse objects:', response.data);
+
+      // TEMPORARY FIX: Show ALL warehouses for now (no filtering)
+      // TODO: Fix isActive filtering logic after testing
+      console.log('⚠️ TEMPORARILY SHOWING ALL WAREHOUSES (active filtering disabled for testing)');
+      
+      const activeWarehouses = response.data; // Show all warehouses temporarily
+      
+      /* ORIGINAL FILTERING (commented out for debugging):
+      const activeWarehouses = response.data.filter(w => {
+        const shouldExclude = w.isActive === false;
+        const shouldInclude = !shouldExclude;
+        console.log(`Warehouse ${w.id} (${w.name}): isActive=${JSON.stringify(w.isActive)}, shouldExclude=${shouldExclude}, INCLUDING=${shouldInclude}`);
+        return shouldInclude;
+      });
+      */
+      
+      console.log(`✅ Total warehouses: ${response.data.length}, Showing: ${activeWarehouses.length}`);
+      console.log('Warehouses to display:', activeWarehouses);
       setWarehouses(activeWarehouses);
       
       if (activeWarehouses.length === 0) {
-        const inactiveCount = response.data.length - activeWarehouses.length;
-        setError(
-          `Sistemde ${response.data.length} depo bulundu ancak hepsi pasif durumda. ` +
-          `Lütfen Depolar sayfasından en az bir depoyu aktif hale getirin.`
-        );
+        setError('Sistemde hiç depo bulunamadı. Lütfen Depolar sayfasından depo ekleyin.');
       }
     } catch (error) {
       console.error('❌ Error fetching warehouses:', error);
