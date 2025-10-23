@@ -39,9 +39,13 @@ const StockTransferModal = ({ stock, onSuccess, onClose }) => {
   const fetchWarehouses = async () => {
     try {
       const response = await axios.get('/api/warehouses');
-      setWarehouses(response.data.filter(w => w.isActive));
+      // Filter active warehouses - check for both boolean and numeric values
+      const activeWarehouses = response.data.filter(w => w.isActive === true || w.isActive === 1);
+      console.log('Fetched warehouses:', activeWarehouses);
+      setWarehouses(activeWarehouses);
     } catch (error) {
       console.error('Error fetching warehouses:', error);
+      setError('Depolar yüklenirken hata oluştu');
     }
   };
 
@@ -74,10 +78,24 @@ const StockTransferModal = ({ stock, onSuccess, onClose }) => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    
+    // If source warehouse changes, clear destination warehouse if it's the same
+    if (name === 'sourceWarehouseId') {
+      setFormData(prev => {
+        const newData = { ...prev, [name]: value };
+        // Clear destination if it matches the new source
+        if (String(prev.destinationWarehouseId) === String(value)) {
+          newData.destinationWarehouseId = '';
+        }
+        return newData;
+      });
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [name]: value
+      }));
+    }
+    
     if (validationErrors[name]) {
       setValidationErrors(prev => ({ ...prev, [name]: '' }));
     }
@@ -89,7 +107,7 @@ const StockTransferModal = ({ stock, onSuccess, onClose }) => {
     if (step === 1) {
       if (!formData.sourceWarehouseId) errors.sourceWarehouseId = 'Kaynak depo zorunludur';
       if (!formData.destinationWarehouseId) errors.destinationWarehouseId = 'Hedef depo zorunludur';
-      if (formData.sourceWarehouseId === formData.destinationWarehouseId) {
+      if (String(formData.sourceWarehouseId) === String(formData.destinationWarehouseId)) {
         errors.destinationWarehouseId = 'Kaynak ve hedef depo farklı olmalıdır';
       }
       if (!formData.productId) errors.productId = 'Ürün seçimi zorunludur';
@@ -239,9 +257,11 @@ const StockTransferModal = ({ stock, onSuccess, onClose }) => {
                         value={formData.sourceWarehouseId}
                         onChange={handleChange}
                         required
-                        disabled={!!stock}
+                        disabled={!!stock || warehouses.length === 0}
                       >
-                        <option value="">-- Kaynak depo seçiniz --</option>
+                        <option value="">
+                          {warehouses.length === 0 ? '-- Depo yükleniyor... --' : '-- Kaynak depo seçiniz --'}
+                        </option>
                         {warehouses.map(warehouse => (
                           <option key={warehouse.id} value={warehouse.id}>
                             📍 {warehouse.name} - {warehouse.location}
@@ -255,6 +275,12 @@ const StockTransferModal = ({ stock, onSuccess, onClose }) => {
                         <small className="text-success d-block mt-1">
                           <i className="fas fa-check-circle me-1"></i>
                           {sourceWarehouse.location}
+                        </small>
+                      )}
+                      {warehouses.length === 0 && !stock && (
+                        <small className="text-danger d-block mt-1">
+                          <i className="fas fa-exclamation-circle me-1"></i>
+                          Aktif depo bulunamadı. Lütfen önce depo ekleyin.
                         </small>
                       )}
                     </div>
@@ -271,10 +297,17 @@ const StockTransferModal = ({ stock, onSuccess, onClose }) => {
                         value={formData.destinationWarehouseId}
                         onChange={handleChange}
                         required
+                        disabled={!formData.sourceWarehouseId || warehouses.length === 0}
                       >
-                        <option value="">-- Hedef depo seçiniz --</option>
+                        <option value="">
+                          {!formData.sourceWarehouseId 
+                            ? '-- Önce kaynak depo seçiniz --' 
+                            : warehouses.length === 0 
+                              ? '-- Depo bulunamadı --'
+                              : '-- Hedef depo seçiniz --'}
+                        </option>
                         {warehouses
-                          .filter(w => w.id !== parseInt(formData.sourceWarehouseId))
+                          .filter(w => String(w.id) !== String(formData.sourceWarehouseId))
                           .map(warehouse => (
                             <option key={warehouse.id} value={warehouse.id}>
                               📍 {warehouse.name} - {warehouse.location}
@@ -288,6 +321,12 @@ const StockTransferModal = ({ stock, onSuccess, onClose }) => {
                         <small className="text-success d-block mt-1">
                           <i className="fas fa-check-circle me-1"></i>
                           {destinationWarehouse.location}
+                        </small>
+                      )}
+                      {warehouses.length === 0 && (
+                        <small className="text-danger d-block mt-1">
+                          <i className="fas fa-exclamation-circle me-1"></i>
+                          Aktif depo bulunamadı. Lütfen önce depo ekleyin.
                         </small>
                       )}
                     </div>
