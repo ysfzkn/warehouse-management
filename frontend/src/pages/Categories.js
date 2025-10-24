@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import CategoryForm from '../components/CategoryForm';
 import FilterChips from '../components/FilterChips';
+import ConfirmModal from '../components/ConfirmModal';
 
 const Categories = () => {
   const [categories, setCategories] = useState([]);
@@ -10,6 +11,7 @@ const Categories = () => {
   const [showForm, setShowForm] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null });
 
   useEffect(() => {
     fetchCategories();
@@ -43,14 +45,29 @@ const Categories = () => {
   };
 
   const handleDelete = async (id) => {
-    if (window.confirm('Bu kategoriyi silmek istediğinizden emin misiniz?')) {
-      try {
-        await axios.delete(`/api/categories/${id}`);
-        fetchCategories();
-      } catch (error) {
-        alert('Kategori silinirken hata oluştu: ' + error.response?.data);
+    setConfirmModal({
+      show: true,
+      title: 'Kategori Silme',
+      message: 'Bu kategoriyi silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.',
+      icon: 'trash',
+      confirmVariant: 'danger',
+      confirmText: 'Sil',
+      onConfirm: async () => {
+        setConfirmModal({ show: false, title: '', message: '', onConfirm: null });
+        try {
+          await axios.delete(`/api/categories/${id}`);
+          fetchCategories();
+        } catch (error) {
+          const msg = error.response?.data || 'Kategori silinirken hata oluştu';
+          const toast = document.createElement('div');
+          toast.className = 'toast align-items-center text-bg-danger border-0 position-fixed top-0 end-0 m-3 show';
+          toast.setAttribute('role', 'alert');
+          toast.innerHTML = `<div class="d-flex"><div class="toast-body">${msg}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
+          document.body.appendChild(toast);
+          setTimeout(() => { try { document.body.removeChild(toast); } catch {} }, 3500);
+        }
       }
-    }
+    });
   };
 
   const handleFormSuccess = () => {
@@ -217,6 +234,18 @@ const Categories = () => {
           </div>
         </div>
       )}
+
+      {/* Confirm Modal */}
+      <ConfirmModal
+        show={confirmModal.show}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        icon={confirmModal.icon}
+        confirmVariant={confirmModal.confirmVariant}
+        confirmText={confirmModal.confirmText}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal({ show: false, title: '', message: '', onConfirm: null })}
+      />
     </div>
   );
 };

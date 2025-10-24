@@ -4,6 +4,7 @@ import WarehouseForm from '../components/WarehouseForm';
 import StockModal from '../components/StockModal';
 import FilterChips from '../components/FilterChips';
 import SearchableSelect from '../components/SearchableSelect';
+import ConfirmModal from '../components/ConfirmModal';
 
 const Warehouses = () => {
   const [warehouses, setWarehouses] = useState([]);
@@ -15,6 +16,7 @@ const Warehouses = () => {
   const [selectedWarehouse, setSelectedWarehouse] = useState(null);
   const [warehouseTotals, setWarehouseTotals] = useState({});
   const [searchTerm, setSearchTerm] = useState('');
+  const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null });
 
   useEffect(() => {
     fetchWarehouses();
@@ -69,14 +71,29 @@ const Warehouses = () => {
   };
 
   const handleDelete = async (id) => {
-    if (window.confirm('Bu depoyu silmek istediğinizden emin misiniz?')) {
-      try {
-        await axios.delete(`/api/warehouses/${id}`);
-        fetchWarehouses();
-      } catch (error) {
-        alert('Depo silinirken hata oluştu: ' + error.response?.data);
+    setConfirmModal({
+      show: true,
+      title: 'Depo Silme',
+      message: 'Bu depoyu silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.',
+      icon: 'trash',
+      confirmVariant: 'danger',
+      confirmText: 'Sil',
+      onConfirm: async () => {
+        setConfirmModal({ show: false, title: '', message: '', onConfirm: null });
+        try {
+          await axios.delete(`/api/warehouses/${id}`);
+          fetchWarehouses();
+        } catch (error) {
+          const msg = error.response?.data || 'Depo silinirken hata oluştu';
+          const toast = document.createElement('div');
+          toast.className = 'toast align-items-center text-bg-danger border-0 position-fixed top-0 end-0 m-3 show';
+          toast.setAttribute('role', 'alert');
+          toast.innerHTML = `<div class="d-flex"><div class="toast-body">${msg}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
+          document.body.appendChild(toast);
+          setTimeout(() => { try { document.body.removeChild(toast); } catch {} }, 3500);
+        }
       }
-    }
+    });
   };
 
   const handleToggleActive = async (id, active) => {
@@ -277,6 +294,18 @@ const Warehouses = () => {
           onClose={() => setShowStockModal(false)}
         />
       )}
+
+      {/* Confirm Modal */}
+      <ConfirmModal
+        show={confirmModal.show}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        icon={confirmModal.icon}
+        confirmVariant={confirmModal.confirmVariant}
+        confirmText={confirmModal.confirmText}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal({ show: false, title: '', message: '', onConfirm: null })}
+      />
     </div>
   );
 };

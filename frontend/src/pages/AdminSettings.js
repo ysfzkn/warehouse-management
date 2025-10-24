@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
+import ConfirmModal from '../components/ConfirmModal';
 
 const CrudTable = ({ title, columns, items, onCreate, onEdit, onDelete, loading }) => (
   <div className="card mb-4">
@@ -177,6 +178,7 @@ const AdminSettings = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [editing, setEditing] = useState(undefined);
+  const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null });
 
   const load = async () => {
     try {
@@ -215,14 +217,31 @@ const AdminSettings = () => {
   };
 
   const handleDelete = async (item) => {
-    if (!window.confirm('Silmek istediğinize emin misiniz?')) return;
-    const url = activeTab === 'brand' ? `/api/brands/${item.id}` : `/api/colors/${item.id}`;
-    try {
-      await axios.delete(url);
-      await load();
-    } catch (e) {
-      alert(e.response?.data || 'Silme hatası');
-    }
+    const itemType = activeTab === 'brand' ? 'Marka' : 'Renk';
+    setConfirmModal({
+      show: true,
+      title: `${itemType} Silme`,
+      message: `"${item.name}" ${itemType.toLowerCase()}ını silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.`,
+      icon: 'trash',
+      confirmVariant: 'danger',
+      confirmText: 'Sil',
+      onConfirm: async () => {
+        setConfirmModal({ show: false, title: '', message: '', onConfirm: null });
+        const url = activeTab === 'brand' ? `/api/brands/${item.id}` : `/api/colors/${item.id}`;
+        try {
+          await axios.delete(url);
+          await load();
+        } catch (e) {
+          const msg = e.response?.data || 'Silme hatası oluştu';
+          const toast = document.createElement('div');
+          toast.className = 'toast align-items-center text-bg-danger border-0 position-fixed top-0 end-0 m-3 show';
+          toast.setAttribute('role', 'alert');
+          toast.innerHTML = `<div class="d-flex"><div class="toast-body">${msg}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
+          document.body.appendChild(toast);
+          setTimeout(() => { try { document.body.removeChild(toast); } catch {} }, 3500);
+        }
+      }
+    });
   };
 
   return (
@@ -274,6 +293,18 @@ const AdminSettings = () => {
           error={error}
         />
       )}
+
+      {/* Confirm Modal */}
+      <ConfirmModal
+        show={confirmModal.show}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        icon={confirmModal.icon}
+        confirmVariant={confirmModal.confirmVariant}
+        confirmText={confirmModal.confirmText}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal({ show: false, title: '', message: '', onConfirm: null })}
+      />
     </div>
   );
 };

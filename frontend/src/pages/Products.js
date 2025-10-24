@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import ProductForm from '../components/ProductForm';
 import SearchableSelect from '../components/SearchableSelect';
+import ConfirmModal from '../components/ConfirmModal';
 
 const Products = () => {
   const [products, setProducts] = useState([]);
@@ -16,6 +17,7 @@ const Products = () => {
   const [selectedColor, setSelectedColor] = useState(null);
   const [selectedBrandOpt, setSelectedBrandOpt] = useState(null);
   const [selectedColorOpt, setSelectedColorOpt] = useState(null);
+  const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null });
 
   useEffect(() => {
     fetchProducts();
@@ -103,20 +105,29 @@ const Products = () => {
   };
 
   const handleDelete = async (id) => {
-    if (window.confirm('Bu ürünü silmek istediğinizden emin misiniz?')) {
-      try {
-        await axios.delete(`/api/products/${id}`);
-        fetchProducts();
-      } catch (error) {
-        const msg = error.response?.data || 'Ürün silinirken hata oluştu';
-        const toast = document.createElement('div');
-        toast.className = 'toast align-items-center text-bg-danger border-0 position-fixed top-0 end-0 m-3 show';
-        toast.setAttribute('role', 'alert');
-        toast.innerHTML = `<div class="d-flex"><div class="toast-body">${msg}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
-        document.body.appendChild(toast);
-        setTimeout(() => { try { document.body.removeChild(toast); } catch {} }, 3500);
+    setConfirmModal({
+      show: true,
+      title: 'Ürün Silme',
+      message: 'Bu ürünü silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.',
+      icon: 'trash',
+      confirmVariant: 'danger',
+      confirmText: 'Sil',
+      onConfirm: async () => {
+        setConfirmModal({ show: false, title: '', message: '', onConfirm: null });
+        try {
+          await axios.delete(`/api/products/${id}`);
+          fetchProducts();
+        } catch (error) {
+          const msg = error.response?.data || 'Ürün silinirken hata oluştu';
+          const toast = document.createElement('div');
+          toast.className = 'toast align-items-center text-bg-danger border-0 position-fixed top-0 end-0 m-3 show';
+          toast.setAttribute('role', 'alert');
+          toast.innerHTML = `<div class="d-flex"><div class="toast-body">${msg}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
+          document.body.appendChild(toast);
+          setTimeout(() => { try { document.body.removeChild(toast); } catch {} }, 3500);
+        }
       }
-    }
+    });
   };
 
   const handleToggleActive = async (id, active) => {
@@ -432,6 +443,18 @@ const Products = () => {
           </div>
         </div>
       )}
+
+      {/* Confirm Modal */}
+      <ConfirmModal
+        show={confirmModal.show}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        icon={confirmModal.icon}
+        confirmVariant={confirmModal.confirmVariant}
+        confirmText={confirmModal.confirmText}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal({ show: false, title: '', message: '', onConfirm: null })}
+      />
     </div>
   );
 };
