@@ -23,6 +23,8 @@ const StockTransferModal = ({ stock, onSuccess, onClose }) => {
   const [error, setError] = useState(null);
   const [availableStock, setAvailableStock] = useState(null);
   const [validationErrors, setValidationErrors] = useState({});
+  const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [createdTransferId, setCreatedTransferId] = useState(null);
 
   useEffect(() => {
     console.log('StockTransferModal mounted, fetching data...');
@@ -230,21 +232,36 @@ const StockTransferModal = ({ stock, onSuccess, onClose }) => {
         transferDate: new Date(formData.transferDate).toISOString()
       };
 
-      await axios.post('/api/stock-transfers', transferData);
-      onSuccess();
+      const response = await axios.post('/api/stock-transfers', transferData);
+      setCreatedTransferId(response.data.id);
+      setSubmitSuccess(true);
+      setCurrentStep(4); // Move to success step
+      setLoading(false);
+      // Don't call onSuccess() immediately - let user see success message
     } catch (error) {
       console.error('Error creating transfer:', error);
       setError(error.response?.data || 'Transfer oluşturulurken hata oluştu');
-    } finally {
       setLoading(false);
     }
+  };
+
+  const handleClose = () => {
+    if (submitSuccess) {
+      onSuccess(); // Refresh data when closing after success
+    }
+    onClose();
   };
 
   const sourceWarehouse = warehouses.find(w => w.id === parseInt(formData.sourceWarehouseId));
   const destinationWarehouse = warehouses.find(w => w.id === parseInt(formData.destinationWarehouseId));
   const selectedProduct = stock?.product || products.find(p => p.id === parseInt(formData.productId));
 
-  const steps = [
+  const steps = submitSuccess ? [
+    { number: 1, title: 'Transfer Detayları', icon: 'fa-boxes' },
+    { number: 2, title: 'Taşıma Bilgileri', icon: 'fa-truck' },
+    { number: 3, title: 'Özet & Onay', icon: 'fa-check-circle' },
+    { number: 4, title: 'Tamamlandı', icon: 'fa-check-double' }
+  ] : [
     { number: 1, title: 'Transfer Detayları', icon: 'fa-boxes' },
     { number: 2, title: 'Taşıma Bilgileri', icon: 'fa-truck' },
     { number: 3, title: 'Özet & Onay', icon: 'fa-check-circle' }
@@ -265,8 +282,8 @@ const StockTransferModal = ({ stock, onSuccess, onClose }) => {
             <button
               type="button"
               className="btn-close btn-close-white"
-              onClick={onClose}
-              disabled={loading}
+              onClick={handleClose}
+              disabled={loading && !submitSuccess}
             ></button>
           </div>
 
@@ -275,7 +292,7 @@ const StockTransferModal = ({ stock, onSuccess, onClose }) => {
             <div className="d-flex justify-content-between align-items-center position-relative mb-3">
               <div className="position-absolute w-100 top-50 start-0" style={{ height: '2px', background: '#e9ecef', zIndex: 0 }}>
                 <div 
-                  className="h-100 bg-primary transition-all" 
+                  className={`h-100 transition-all ${submitSuccess ? 'bg-success' : 'bg-primary'}`}
                   style={{ width: `${((currentStep - 1) / (steps.length - 1)) * 100}%`, transition: 'width 0.3s ease' }}
                 ></div>
               </div>
@@ -283,13 +300,19 @@ const StockTransferModal = ({ stock, onSuccess, onClose }) => {
                 <div key={step.number} className="text-center position-relative" style={{ zIndex: 1, flex: 1 }}>
                   <div 
                     className={`mx-auto rounded-circle d-flex align-items-center justify-content-center ${
-                      currentStep >= step.number ? 'bg-primary text-white' : 'bg-light text-muted'
+                      currentStep >= step.number 
+                        ? (submitSuccess && step.number === 4 ? 'bg-success text-white' : 'bg-primary text-white')
+                        : 'bg-light text-muted'
                     }`}
                     style={{ width: '50px', height: '50px', transition: 'all 0.3s ease', border: '3px solid white' }}
                   >
                     <i className={`fas ${step.icon} fa-lg`}></i>
                   </div>
-                  <div className={`mt-2 small fw-bold ${currentStep >= step.number ? 'text-primary' : 'text-muted'}`}>
+                  <div className={`mt-2 small fw-bold ${
+                    currentStep >= step.number 
+                      ? (submitSuccess && step.number === 4 ? 'text-success' : 'text-primary')
+                      : 'text-muted'
+                  }`}>
                     {step.title}
                   </div>
                 </div>
@@ -619,7 +642,7 @@ const StockTransferModal = ({ stock, onSuccess, onClose }) => {
               )}
 
                {/* Step 3: Summary & Confirm */}
-               {currentStep === 3 && (
+               {currentStep === 3 && !submitSuccess && (
                  <div style={{ animation: 'fadeIn 0.3s ease-in' }}>
                   <h5 className="mb-3 text-primary">
                     <i className="fas fa-check-circle me-2"></i>
@@ -731,59 +754,156 @@ const StockTransferModal = ({ stock, onSuccess, onClose }) => {
                   </div>
                 </div>
               )}
+
+              {/* Step 4: Success */}
+              {currentStep === 4 && submitSuccess && (
+                <div style={{ animation: 'fadeIn 0.3s ease-in' }} className="text-center py-5">
+                  <div className="mb-4">
+                    <div className="mx-auto rounded-circle bg-success bg-opacity-10 d-inline-flex align-items-center justify-content-center" 
+                         style={{ width: '120px', height: '120px' }}>
+                      <i className="fas fa-check-circle text-success" style={{ fontSize: '4rem' }}></i>
+                    </div>
+                  </div>
+                  
+                  <h3 className="text-success mb-3">
+                    <i className="fas fa-check-double me-2"></i>
+                    Transfer Başarıyla Oluşturuldu!
+                  </h3>
+                  
+                  <p className="text-muted mb-4">
+                    Transfer kaydı <strong>#{createdTransferId}</strong> numarası ile sisteme başarıyla kaydedildi.
+                  </p>
+
+                  <div className="row g-3 mb-4">
+                    <div className="col-md-4">
+                      <div className="card border-primary">
+                        <div className="card-body">
+                          <div className="d-flex align-items-center">
+                            <div className="bg-primary bg-opacity-10 rounded-circle p-3 me-3">
+                              <i className="fas fa-warehouse text-primary fa-lg"></i>
+                            </div>
+                            <div className="text-start">
+                              <small className="text-muted d-block">Kaynak</small>
+                              <strong className="text-truncate d-block">{sourceWarehouse?.name}</strong>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="col-md-4">
+                      <div className="card border-success">
+                        <div className="card-body">
+                          <div className="d-flex align-items-center">
+                            <div className="bg-success bg-opacity-10 rounded-circle p-3 me-3">
+                              <i className="fas fa-warehouse text-success fa-lg"></i>
+                            </div>
+                            <div className="text-start">
+                              <small className="text-muted d-block">Hedef</small>
+                              <strong className="text-truncate d-block">{destinationWarehouse?.name}</strong>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="col-md-4">
+                      <div className="card border-info">
+                        <div className="card-body">
+                          <div className="d-flex align-items-center">
+                            <div className="bg-info bg-opacity-10 rounded-circle p-3 me-3">
+                              <i className="fas fa-boxes text-info fa-lg"></i>
+                            </div>
+                            <div className="text-start">
+                              <small className="text-muted d-block">Miktar</small>
+                              <strong className="fs-5">{formData.quantity} Adet</strong>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="alert alert-info d-flex align-items-start">
+                    <i className="fas fa-info-circle fa-2x me-3 mt-1"></i>
+                    <div className="text-start">
+                      <strong>Sonraki Adımlar:</strong>
+                      <ul className="mb-0 mt-2 text-start">
+                        <li>Transfer "Transfer Geçmişi" bölümünden takip edilebilir</li>
+                        <li>Şoför <strong>{formData.driverName}</strong> transferi teslim alabilir</li>
+                        <li>Araç plakası: <strong>{formData.vehiclePlate}</strong></li>
+                        <li>Transfer durumunu güncellemek için "Yola Çıkar" veya "Tamamla" butonlarını kullanabilirsiniz</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="modal-footer bg-light">
-              {currentStep > 1 && (
+              {submitSuccess ? (
+                // Success step buttons
                 <button
                   type="button"
-                  className="btn btn-outline-secondary"
-                  onClick={handlePrevious}
-                  disabled={loading}
+                  className="btn btn-success px-5"
+                  onClick={handleClose}
                 >
-                  <i className="fas fa-arrow-left me-2"></i>
-                  Geri
-                </button>
-              )}
-              
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={onClose}
-                disabled={loading}
-              >
-                <i className="fas fa-times me-2"></i>
-                İptal
-              </button>
-
-              {currentStep < 3 ? (
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={handleNext}
-                  disabled={loadingData}
-                >
-                  İleri
-                  <i className="fas fa-arrow-right ms-2"></i>
+                  <i className="fas fa-check me-2"></i>
+                  Tamam, Kapat
                 </button>
               ) : (
-                <button
-                  type="submit"
-                  className="btn btn-success"
-                  disabled={loading || loadingData || !availableStock || availableStock.availableQuantity === 0}
-                >
-                  {loading ? (
-                    <>
-                      <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                      Transfer Oluşturuluyor...
-                    </>
-                  ) : (
-                    <>
-                      <i className="fas fa-check-double me-2"></i>
-                      Transferi Onayla ve Oluştur
-                    </>
+                // Normal flow buttons
+                <>
+                  {currentStep > 1 && (
+                    <button
+                      type="button"
+                      className="btn btn-outline-secondary"
+                      onClick={handlePrevious}
+                      disabled={loading}
+                    >
+                      <i className="fas fa-arrow-left me-2"></i>
+                      Geri
+                    </button>
                   )}
-                </button>
+                  
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={onClose}
+                    disabled={loading}
+                  >
+                    <i className="fas fa-times me-2"></i>
+                    İptal
+                  </button>
+
+                  {currentStep < 3 ? (
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={handleNext}
+                      disabled={loadingData}
+                    >
+                      İleri
+                      <i className="fas fa-arrow-right ms-2"></i>
+                    </button>
+                  ) : (
+                    <button
+                      type="submit"
+                      className="btn btn-success"
+                      disabled={loading || loadingData || !availableStock || availableStock.availableQuantity === 0}
+                    >
+                      {loading ? (
+                        <>
+                          <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                          Transfer Oluşturuluyor...
+                        </>
+                      ) : (
+                        <>
+                          <i className="fas fa-check-double me-2"></i>
+                          Transferi Onayla ve Oluştur
+                        </>
+                      )}
+                    </button>
+                  )}
+                </>
               )}
             </div>
           </form>
