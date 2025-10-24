@@ -218,6 +218,9 @@ const StockTransferModal = ({ stock, onSuccess, onClose }) => {
     setError(null);
     setLoading(true);
 
+    // Show loading state for at least 1.5 seconds to let user see the summary
+    await new Promise(resolve => setTimeout(resolve, 1500));
+
     try {
       const transferData = {
         sourceWarehouse: { id: parseInt(formData.sourceWarehouseId) },
@@ -234,6 +237,10 @@ const StockTransferModal = ({ stock, onSuccess, onClose }) => {
 
       const response = await axios.post('/api/stock-transfers', transferData);
       setCreatedTransferId(response.data.id);
+      
+      // Wait another moment before transitioning to success (ensure smooth transition)
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
       setSubmitSuccess(true);
       setCurrentStep(4); // Move to success step
       setLoading(false);
@@ -644,10 +651,74 @@ const StockTransferModal = ({ stock, onSuccess, onClose }) => {
                {/* Step 3: Summary & Confirm */}
                {currentStep === 3 && !submitSuccess && (
                  <div style={{ animation: 'fadeIn 0.3s ease-in' }}>
-                  <h5 className="mb-3 text-primary">
-                    <i className="fas fa-check-circle me-2"></i>
-                    Transfer Özeti - Onaylayın
-                  </h5>
+                  {loading ? (
+                    <div className="py-4">
+                      <div className="text-center mb-4">
+                        <div className="spinner-border text-primary mb-3" style={{ width: '3.5rem', height: '3.5rem' }} role="status">
+                          <span className="visually-hidden">Yükleniyor...</span>
+                        </div>
+                        <h4 className="text-primary mb-2">
+                          <i className="fas fa-cog fa-spin me-2"></i>
+                          Transfer Oluşturuluyor...
+                        </h4>
+                        <p className="text-muted mb-3">
+                          Transfer kaydı sisteme ekleniyor, lütfen bekleyin.
+                        </p>
+                        <div className="progress mx-auto" style={{ maxWidth: '500px', height: '8px' }}>
+                          <div className="progress-bar progress-bar-striped progress-bar-animated bg-primary" 
+                               role="progressbar" 
+                               style={{ width: '100%' }}>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Show summary while loading */}
+                      <div className="row g-2 mt-3">
+                        <div className="col-md-4">
+                          <div className="card border-danger h-100">
+                            <div className="card-body text-center py-3">
+                              <i className="fas fa-warehouse text-danger fa-2x mb-2"></i>
+                              <div className="small text-muted">Kaynak</div>
+                              <div className="fw-bold">{sourceWarehouse?.name}</div>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="col-md-4">
+                          <div className="card border-success h-100">
+                            <div className="card-body text-center py-3">
+                              <i className="fas fa-warehouse text-success fa-2x mb-2"></i>
+                              <div className="small text-muted">Hedef</div>
+                              <div className="fw-bold">{destinationWarehouse?.name}</div>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="col-md-4">
+                          <div className="card border-primary h-100">
+                            <div className="card-body text-center py-3">
+                              <i className="fas fa-boxes text-primary fa-2x mb-2"></i>
+                              <div className="small text-muted">Miktar</div>
+                              <div className="fw-bold fs-5">{formData.quantity} Adet</div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="alert alert-primary d-flex align-items-center mb-4">
+                        <div className="flex-shrink-0">
+                          <i className="fas fa-info-circle fa-2x me-3"></i>
+                        </div>
+                        <div>
+                          <h5 className="alert-heading mb-1">
+                            <i className="fas fa-clipboard-check me-2"></i>
+                            Transfer Özeti
+                          </h5>
+                          <p className="mb-0">
+                            Lütfen transfer bilgilerini dikkatlice kontrol edin. Onayladığınızda transfer işlemi başlatılacaktır.
+                          </p>
+                        </div>
+                      </div>
                   
                   <div className="row g-3">
                     <div className="col-md-6">
@@ -752,6 +823,8 @@ const StockTransferModal = ({ stock, onSuccess, onClose }) => {
                       </div>
                     </div>
                   </div>
+                  </>
+                  )}
                 </div>
               )}
 
@@ -877,7 +950,7 @@ const StockTransferModal = ({ stock, onSuccess, onClose }) => {
                   {currentStep < 3 ? (
                     <button
                       type="button"
-                      className="btn btn-primary"
+                      className="btn btn-primary px-4"
                       onClick={handleNext}
                       disabled={loadingData}
                     >
@@ -887,13 +960,13 @@ const StockTransferModal = ({ stock, onSuccess, onClose }) => {
                   ) : (
                     <button
                       type="submit"
-                      className="btn btn-success"
+                      className="btn btn-success btn-lg px-5"
                       disabled={loading || loadingData || !availableStock || availableStock.availableQuantity === 0}
                     >
                       {loading ? (
                         <>
                           <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                          Transfer Oluşturuluyor...
+                          Lütfen Bekleyin...
                         </>
                       ) : (
                         <>
