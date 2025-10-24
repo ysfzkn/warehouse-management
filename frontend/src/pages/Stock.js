@@ -5,6 +5,8 @@ import StockAdjustmentModal from '../components/StockAdjustmentModal';
 import StockTransferModal from '../components/StockTransferModal';
 import SearchableSelect from '../components/SearchableSelect';
 import FilterChips from '../components/FilterChips';
+import ConfirmModal from '../components/ConfirmModal';
+import NotesModal from '../components/NotesModal';
 
 const Stock = () => {
   const [stocks, setStocks] = useState([]);
@@ -29,6 +31,10 @@ const Stock = () => {
   const [showReserved, setShowReserved] = useState(false);
   const [showConsigned, setShowConsigned] = useState(false);
   const [transferStatusFilter, setTransferStatusFilter] = useState('ALL');
+  
+  // Modal states
+  const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null });
+  const [notesModal, setNotesModal] = useState({ show: false, notes: '', transferId: null });
 
   const fetchAllData = useCallback(async () => {
     try {
@@ -228,14 +234,23 @@ const Stock = () => {
   };
 
   const handleDeleteStock = async (id) => {
-    if (window.confirm('Bu stok kaydını silmek istediğinizden emin misiniz?')) {
-      try {
-        await axios.delete(`/api/stocks/${id}`);
-        fetchAllData();
-      } catch (error) {
-        alert('Stok silinirken hata oluştu: ' + error.response?.data);
+    setConfirmModal({
+      show: true,
+      title: 'Stok Kaydını Sil',
+      message: 'Bu stok kaydını silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.',
+      confirmText: 'Evet, Sil',
+      confirmVariant: 'danger',
+      icon: 'trash',
+      onConfirm: async () => {
+        setConfirmModal({ show: false });
+        try {
+          await axios.delete(`/api/stocks/${id}`);
+          fetchAllData();
+        } catch (error) {
+          alert('Stok silinirken hata oluştu: ' + error.response?.data);
+        }
       }
-    }
+    });
   };
 
   const handleFormSuccess = () => {
@@ -290,14 +305,23 @@ const Stock = () => {
   };
 
   const handleDeleteTransfer = async (transferId) => {
-    if (window.confirm('Bu transfer kaydını silmek istediğinizden emin misiniz?')) {
-      try {
-        await axios.delete(`/api/stock-transfers/${transferId}`);
-        fetchTransfers();
-      } catch (error) {
-        alert('Transfer silinirken hata: ' + (error.response?.data || error.message));
+    setConfirmModal({
+      show: true,
+      title: 'Transfer Kaydını Sil',
+      message: 'Bu transfer kaydını silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.',
+      confirmText: 'Evet, Sil',
+      confirmVariant: 'danger',
+      icon: 'trash',
+      onConfirm: async () => {
+        setConfirmModal({ show: false });
+        try {
+          await axios.delete(`/api/stock-transfers/${transferId}`);
+          fetchTransfers();
+        } catch (error) {
+          alert('Transfer silinirken hata: ' + (error.response?.data || error.message));
+        }
       }
-    }
+    });
   };
 
   const getProductById = (id) => {
@@ -878,9 +902,18 @@ const Stock = () => {
                                     className="btn btn-sm btn-info w-100 py-1 px-2"
                                     style={{fontSize: 'clamp(0.7rem, 2vw, 0.8rem)', whiteSpace: 'nowrap'}}
                                     onClick={() => {
-                                      if (window.confirm('Transfer yola çıkartılacak. Onaylıyor musunuz?')) {
-                                        handleTransferStatusChange(transfer.id, 'start');
-                                      }
+                                      setConfirmModal({
+                                        show: true,
+                                        title: 'Transferi Yola Çıkart',
+                                        message: 'Transfer yola çıkartılacak ve stok rezerve edilecek. Onaylıyor musunuz?',
+                                        confirmText: 'Evet, Yola Çıkar',
+                                        confirmVariant: 'info',
+                                        icon: 'truck',
+                                        onConfirm: () => {
+                                          setConfirmModal({ show: false });
+                                          handleTransferStatusChange(transfer.id, 'start');
+                                        }
+                                      });
                                     }}
                                     title="Transfer yola çıkartılacak"
                                   >
@@ -892,9 +925,18 @@ const Stock = () => {
                                     className="btn btn-sm btn-success w-100 py-1 px-2"
                                     style={{fontSize: 'clamp(0.7rem, 2vw, 0.8rem)', whiteSpace: 'nowrap'}}
                                     onClick={() => {
-                                      if (window.confirm('Transfer direkt tamamlanacak. Onaylıyor musunuz?')) {
-                                        handleTransferStatusChange(transfer.id, 'complete');
-                                      }
+                                      setConfirmModal({
+                                        show: true,
+                                        title: 'Transferi Tamamla',
+                                        message: 'Transfer direkt tamamlanacak ve stok kaynak depodan hedef depoya taşınacak. Onaylıyor musunuz?',
+                                        confirmText: 'Evet, Tamamla',
+                                        confirmVariant: 'success',
+                                        icon: 'check-circle',
+                                        onConfirm: () => {
+                                          setConfirmModal({ show: false });
+                                          handleTransferStatusChange(transfer.id, 'complete');
+                                        }
+                                      });
                                     }}
                                     title="Transfer direkt tamamlanacak"
                                   >
@@ -905,9 +947,18 @@ const Stock = () => {
                                     className="btn btn-sm btn-danger w-100 py-1 px-2"
                                     style={{fontSize: 'clamp(0.7rem, 2vw, 0.8rem)', whiteSpace: 'nowrap'}}
                                     onClick={() => {
-                                      if (window.confirm('Transfer iptal edilecek. Emin misiniz?')) {
-                                        handleTransferStatusChange(transfer.id, 'cancel');
-                                      }
+                                      setConfirmModal({
+                                        show: true,
+                                        title: 'Transferi İptal Et',
+                                        message: 'Transfer iptal edilecek. Bu işlem geri alınamaz. Emin misiniz?',
+                                        confirmText: 'Evet, İptal Et',
+                                        confirmVariant: 'danger',
+                                        icon: 'exclamation-triangle',
+                                        onConfirm: () => {
+                                          setConfirmModal({ show: false });
+                                          handleTransferStatusChange(transfer.id, 'cancel');
+                                        }
+                                      });
                                     }}
                                     title="Transferi iptal et"
                                   >
@@ -922,9 +973,18 @@ const Stock = () => {
                                     className="btn btn-sm btn-success w-100 py-1 px-2"
                                     style={{fontSize: 'clamp(0.7rem, 2vw, 0.8rem)', whiteSpace: 'nowrap'}}
                                     onClick={() => {
-                                      if (window.confirm('Transfer tamamlanacak ve stok taşınacak. Onaylıyor musunuz?')) {
-                                        handleTransferStatusChange(transfer.id, 'complete');
-                                      }
+                                      setConfirmModal({
+                                        show: true,
+                                        title: 'Transferi Tamamla',
+                                        message: 'Transfer tamamlanacak ve stok kaynak depodan hedef depoya taşınacak. Rezervasyon kaldırılacak. Onaylıyor musunuz?',
+                                        confirmText: 'Evet, Tamamla',
+                                        confirmVariant: 'success',
+                                        icon: 'check-circle',
+                                        onConfirm: () => {
+                                          setConfirmModal({ show: false });
+                                          handleTransferStatusChange(transfer.id, 'complete');
+                                        }
+                                      });
                                     }}
                                     title="Transferi tamamla ve stok taşı"
                                   >
@@ -935,9 +995,18 @@ const Stock = () => {
                                     className="btn btn-sm btn-warning w-100 py-1 px-2"
                                     style={{fontSize: 'clamp(0.7rem, 2vw, 0.8rem)', whiteSpace: 'nowrap'}}
                                     onClick={() => {
-                                      if (window.confirm('Transfer iptal edilecek ve rezervasyon kaldırılacak. Emin misiniz?')) {
-                                        handleTransferStatusChange(transfer.id, 'cancel');
-                                      }
+                                      setConfirmModal({
+                                        show: true,
+                                        title: 'Transferi İptal Et',
+                                        message: 'Transfer iptal edilecek ve rezerve edilen stok serbest bırakılacak. Bu işlem geri alınamaz. Emin misiniz?',
+                                        confirmText: 'Evet, İptal Et',
+                                        confirmVariant: 'warning',
+                                        icon: 'exclamation-triangle',
+                                        onConfirm: () => {
+                                          setConfirmModal({ show: false });
+                                          handleTransferStatusChange(transfer.id, 'cancel');
+                                        }
+                                      });
                                     }}
                                     title="Transferi iptal et ve rezervasyonu kaldır"
                                   >
@@ -962,7 +1031,11 @@ const Stock = () => {
                                 <button
                                   className="btn btn-sm btn-outline-secondary w-100 py-1 px-2"
                                   style={{fontSize: 'clamp(0.7rem, 2vw, 0.8rem)', whiteSpace: 'nowrap'}}
-                                  onClick={() => alert(`📝 Transfer Notları:\n\n${transfer.notes}`)}
+                                  onClick={() => setNotesModal({ 
+                                    show: true, 
+                                    notes: transfer.notes, 
+                                    transferId: transfer.id 
+                                  })}
                                   title="Notları görüntüle"
                                 >
                                   <i className="fas fa-sticky-note me-1"></i>
@@ -982,6 +1055,27 @@ const Stock = () => {
           </div>
         </div>
       )}
+
+      {/* Confirmation Modal */}
+      <ConfirmModal
+        show={confirmModal.show}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmText={confirmModal.confirmText}
+        cancelText="İptal"
+        confirmVariant={confirmModal.confirmVariant}
+        icon={confirmModal.icon}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal({ show: false })}
+      />
+
+      {/* Notes Modal */}
+      <NotesModal
+        show={notesModal.show}
+        notes={notesModal.notes}
+        transferId={notesModal.transferId}
+        onClose={() => setNotesModal({ show: false, notes: '', transferId: null })}
+      />
     </div>
   );
 };
