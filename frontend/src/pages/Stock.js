@@ -704,49 +704,64 @@ const Stock = () => {
                   </p>
                 </div>
               ) : (
-              <div className="table-responsive">
-                <table className="table table-hover mb-0">
-                  <thead className="table-light">
+              <div className="table-responsive" style={{overflowX: 'auto'}}>
+                <table className="table table-hover mb-0 align-middle" style={{minWidth: '1200px'}}>
+                  {/* Desktop için fixed layout */}
+                  <colgroup className="d-none d-xl-table-column-group">
+                    <col style={{width: '70px'}} />      {/* No */}
+                    <col style={{width: '130px'}} />     {/* Tarih */}
+                    <col style={{width: '180px'}} />     {/* Ürün */}
+                    <col style={{width: '180px'}} />     {/* Kaynak */}
+                    <col style={{width: '180px'}} />     {/* Hedef */}
+                    <col style={{width: '85px'}} />      {/* Miktar */}
+                    <col style={{width: '150px'}} />     {/* Şoför */}
+                    <col style={{width: '110px'}} />     {/* Plaka */}
+                    <col style={{width: '130px'}} />     {/* Durum */}
+                    <col style={{width: '180px'}} />     {/* İşlemler */}
+                  </colgroup>
+                  <thead className="table-light sticky-top" style={{position: 'sticky', top: 0, zIndex: 10}}>
                     <tr>
-                      <th className="text-center" style={{width: '80px'}}>
-                        <i className="fas fa-hashtag me-1"></i>
-                        No
+                      <th className="text-center align-middle" style={{minWidth: '60px'}}>
+                        <i className="fas fa-hashtag d-none d-sm-inline me-1"></i>
+                        <div className="small">No</div>
                       </th>
-                      <th style={{width: '140px'}}>
-                        <i className="fas fa-calendar me-1"></i>
-                        Tarih
+                      <th className="align-middle" style={{minWidth: '120px'}}>
+                        <i className="fas fa-calendar d-none d-sm-inline me-1"></i>
+                        <div className="small">Tarih</div>
                       </th>
-                      <th>
-                        <i className="fas fa-box me-1"></i>
-                        Ürün
+                      <th className="align-middle" style={{minWidth: '150px'}}>
+                        <i className="fas fa-box d-none d-sm-inline me-1"></i>
+                        <div className="small">Ürün</div>
                       </th>
-                      <th>
-                        <i className="fas fa-warehouse text-danger me-1"></i>
-                        Kaynak
+                      <th className="align-middle" style={{minWidth: '150px'}}>
+                        <i className="fas fa-warehouse text-danger d-none d-sm-inline me-1"></i>
+                        <div className="small">Kaynak</div>
                       </th>
-                      <th>
-                        <i className="fas fa-warehouse text-success me-1"></i>
-                        Hedef
+                      <th className="align-middle" style={{minWidth: '150px'}}>
+                        <i className="fas fa-warehouse text-success d-none d-sm-inline me-1"></i>
+                        <div className="small">Hedef</div>
                       </th>
-                      <th className="text-center" style={{width: '80px'}}>
-                        <i className="fas fa-boxes me-1"></i>
-                        Miktar
+                      <th className="text-center align-middle" style={{minWidth: '75px'}}>
+                        <i className="fas fa-boxes d-none d-sm-inline me-1"></i>
+                        <div className="small">Adet</div>
                       </th>
-                      <th>
+                      {/* Şoför kolonu - tablet ve üstünde göster */}
+                      <th className="align-middle d-none d-md-table-cell" style={{minWidth: '140px'}}>
                         <i className="fas fa-user me-1"></i>
-                        Şoför
+                        <div className="small">Şoför</div>
                       </th>
-                      <th style={{width: '100px'}}>
+                      {/* Plaka kolonu - tablet ve üstünde göster */}
+                      <th className="text-center align-middle d-none d-lg-table-cell" style={{minWidth: '100px'}}>
                         <i className="fas fa-car me-1"></i>
-                        Plaka
+                        <div className="small">Plaka</div>
                       </th>
-                      <th className="text-center" style={{width: '120px'}}>
-                        <i className="fas fa-info-circle me-1"></i>
-                        Durum
+                      <th className="text-center align-middle" style={{minWidth: '120px'}}>
+                        <i className="fas fa-info-circle d-none d-sm-inline me-1"></i>
+                        <div className="small">Durum</div>
                       </th>
-                      <th className="text-center" style={{width: '180px'}}>
-                        <i className="fas fa-cog me-1"></i>
-                        İşlemler
+                      <th className="text-center align-middle" style={{minWidth: '160px'}}>
+                        <i className="fas fa-cog d-none d-sm-inline me-1"></i>
+                        <div className="small">İşlemler</div>
                       </th>
                     </tr>
                   </thead>
@@ -761,16 +776,16 @@ const Stock = () => {
                       const status = statusConfig[transfer.status] || statusConfig.PENDING;
 
                       return (
-                        <tr key={transfer.id} className="align-middle">
-                          <td className="text-center">
-                            <span className="badge bg-dark fs-6">#{transfer.id}</span>
+                        <tr key={transfer.id}>
+                          <td className="text-center align-middle">
+                            <span className="badge bg-dark">#{transfer.id}</span>
                           </td>
-                          <td>
+                          <td className="align-middle">
                             <div className="small">
-                              <div className="fw-bold">
+                              <div className="fw-bold text-nowrap">
                                 {new Date(transfer.transferDate).toLocaleDateString('tr-TR')}
                               </div>
-                              <div className="text-muted">
+                              <div className="text-muted text-nowrap">
                                 {new Date(transfer.transferDate).toLocaleTimeString('tr-TR', {
                                   hour: '2-digit',
                                   minute: '2-digit'
@@ -778,100 +793,121 @@ const Stock = () => {
                               </div>
                             </div>
                           </td>
-                          <td>
-                            <div>
-                              <div className="fw-bold">{transfer.product?.name}</div>
-                              <small className="text-muted">SKU: {transfer.product?.sku}</small>
+                          <td className="align-middle">
+                            <div className="text-truncate" title={transfer.product?.name}>
+                              <div className="fw-bold small">{transfer.product?.name}</div>
+                              <small className="text-muted d-block text-truncate">SKU: {transfer.product?.sku}</small>
                             </div>
                           </td>
-                          <td>
+                          <td className="align-middle">
                             <div className="d-flex align-items-center">
-                              <div className="bg-danger bg-opacity-10 rounded-circle p-2 me-2">
-                                <i className="fas fa-warehouse text-danger"></i>
+                              <div className="bg-danger bg-opacity-10 rounded-circle p-1 me-1 me-sm-2 flex-shrink-0 d-none d-sm-flex" style={{width: '30px', height: '30px', alignItems: 'center', justifyContent: 'center'}}>
+                                <i className="fas fa-warehouse text-danger fa-sm"></i>
                               </div>
-                              <div className="small">
-                                <div className="fw-bold">{transfer.sourceWarehouse?.name}</div>
-                                <small className="text-muted">{transfer.sourceWarehouse?.location}</small>
+                              <div className="small overflow-hidden w-100">
+                                <div className="fw-bold text-truncate" title={transfer.sourceWarehouse?.name}>
+                                  <i className="fas fa-warehouse text-danger fa-xs me-1 d-inline d-sm-none"></i>
+                                  {transfer.sourceWarehouse?.name}
+                                </div>
+                                <small className="text-muted d-block text-truncate" title={transfer.sourceWarehouse?.location}>
+                                  {transfer.sourceWarehouse?.location}
+                                </small>
                               </div>
                             </div>
                           </td>
-                          <td>
+                          <td className="align-middle">
                             <div className="d-flex align-items-center">
-                              <div className="bg-success bg-opacity-10 rounded-circle p-2 me-2">
-                                <i className="fas fa-warehouse text-success"></i>
+                              <div className="bg-success bg-opacity-10 rounded-circle p-1 me-1 me-sm-2 flex-shrink-0 d-none d-sm-flex" style={{width: '30px', height: '30px', alignItems: 'center', justifyContent: 'center'}}>
+                                <i className="fas fa-warehouse text-success fa-sm"></i>
                               </div>
-                              <div className="small">
-                                <div className="fw-bold">{transfer.destinationWarehouse?.name}</div>
-                                <small className="text-muted">{transfer.destinationWarehouse?.location}</small>
+                              <div className="small overflow-hidden w-100">
+                                <div className="fw-bold text-truncate" title={transfer.destinationWarehouse?.name}>
+                                  <i className="fas fa-warehouse text-success fa-xs me-1 d-inline d-sm-none"></i>
+                                  {transfer.destinationWarehouse?.name}
+                                </div>
+                                <small className="text-muted d-block text-truncate" title={transfer.destinationWarehouse?.location}>
+                                  {transfer.destinationWarehouse?.location}
+                                </small>
                               </div>
                             </div>
                           </td>
-                          <td className="text-center">
-                            <span className="badge bg-primary rounded-pill fs-6">{transfer.quantity}</span>
+                          <td className="text-center align-middle">
+                            <span className="badge bg-primary rounded-pill">{transfer.quantity}</span>
                           </td>
-                          <td>
-                            <div className="small">
-                              <div className="fw-bold">{transfer.driverName}</div>
-                              <div className="text-muted">
+                          {/* Şoför kolonu - tablet ve üstünde göster */}
+                          <td className="align-middle d-none d-md-table-cell">
+                            <div className="small overflow-hidden">
+                              <div className="fw-bold text-truncate" title={transfer.driverName}>{transfer.driverName}</div>
+                              <div className="text-muted text-truncate" title={transfer.driverPhone}>
                                 <i className="fas fa-phone me-1"></i>
                                 {transfer.driverPhone}
                               </div>
                             </div>
                           </td>
-                          <td>
-                            <span className="badge bg-secondary">{transfer.vehiclePlate}</span>
+                          {/* Plaka kolonu - desktop'ta göster */}
+                          <td className="text-center align-middle d-none d-lg-table-cell">
+                            <span className="badge bg-secondary text-truncate d-block mx-auto" style={{maxWidth: '100%'}} title={transfer.vehiclePlate}>
+                              {transfer.vehiclePlate}
+                            </span>
                           </td>
-                          <td className="text-center">
-                            <span className={`badge bg-${status.class} w-100 py-2`}>
+                          <td className="text-center align-middle">
+                            <span className={`badge bg-${status.class} d-block py-2 mb-1`}>
                               <i className={`fas fa-${status.icon} me-1`}></i>
-                              {status.label}
+                              <span className="small">{status.label}</span>
                             </span>
                             {transfer.completedDate && (
-                              <small className="d-block text-success mt-1">
+                              <small className="d-block text-success">
                                 <i className="fas fa-check me-1"></i>
-                                {new Date(transfer.completedDate).toLocaleDateString('tr-TR')}
+                                {new Date(transfer.completedDate).toLocaleDateString('tr-TR', {day: '2-digit', month: '2-digit'})}
                               </small>
                             )}
                             {transfer.cancelledDate && (
-                              <small className="d-block text-danger mt-1">
+                              <small className="d-block text-danger">
                                 <i className="fas fa-times me-1"></i>
-                                {new Date(transfer.cancelledDate).toLocaleDateString('tr-TR')}
+                                {new Date(transfer.cancelledDate).toLocaleDateString('tr-TR', {day: '2-digit', month: '2-digit'})}
                               </small>
                             )}
                           </td>
-                          <td className="text-center">
+                          <td className="text-center align-middle" style={{padding: '6px'}}>
                             <div className="d-flex flex-column gap-1">
                               {transfer.status === 'PENDING' && (
                                 <>
                                   <button
-                                    className="btn btn-sm btn-info w-100"
+                                    className="btn btn-sm btn-info w-100 py-1 px-2"
+                                    style={{fontSize: 'clamp(0.7rem, 2vw, 0.8rem)', whiteSpace: 'nowrap'}}
                                     onClick={() => {
                                       if (window.confirm('Transfer yola çıkartılacak. Onaylıyor musunuz?')) {
                                         handleTransferStatusChange(transfer.id, 'start');
                                       }
                                     }}
+                                    title="Transfer yola çıkartılacak"
                                   >
                                     <i className="fas fa-truck me-1"></i>
-                                    Yola Çıkar
+                                    <span className="d-none d-sm-inline">Yola Çıkar</span>
+                                    <span className="d-inline d-sm-none">Yola</span>
                                   </button>
                                   <button
-                                    className="btn btn-sm btn-success w-100"
+                                    className="btn btn-sm btn-success w-100 py-1 px-2"
+                                    style={{fontSize: 'clamp(0.7rem, 2vw, 0.8rem)', whiteSpace: 'nowrap'}}
                                     onClick={() => {
                                       if (window.confirm('Transfer direkt tamamlanacak. Onaylıyor musunuz?')) {
                                         handleTransferStatusChange(transfer.id, 'complete');
                                       }
                                     }}
+                                    title="Transfer direkt tamamlanacak"
                                   >
                                     <i className="fas fa-check me-1"></i>
                                     Tamamla
                                   </button>
                                   <button
-                                    className="btn btn-sm btn-danger w-100"
+                                    className="btn btn-sm btn-danger w-100 py-1 px-2"
+                                    style={{fontSize: 'clamp(0.7rem, 2vw, 0.8rem)', whiteSpace: 'nowrap'}}
                                     onClick={() => {
                                       if (window.confirm('Transfer iptal edilecek. Emin misiniz?')) {
                                         handleTransferStatusChange(transfer.id, 'cancel');
                                       }
                                     }}
+                                    title="Transferi iptal et"
                                   >
                                     <i className="fas fa-ban me-1"></i>
                                     İptal
@@ -881,33 +917,40 @@ const Stock = () => {
                               {transfer.status === 'IN_TRANSIT' && (
                                 <>
                                   <button
-                                    className="btn btn-sm btn-success w-100"
+                                    className="btn btn-sm btn-success w-100 py-1 px-2"
+                                    style={{fontSize: 'clamp(0.7rem, 2vw, 0.8rem)', whiteSpace: 'nowrap'}}
                                     onClick={() => {
                                       if (window.confirm('Transfer tamamlanacak ve stok taşınacak. Onaylıyor musunuz?')) {
                                         handleTransferStatusChange(transfer.id, 'complete');
                                       }
                                     }}
+                                    title="Transferi tamamla ve stok taşı"
                                   >
                                     <i className="fas fa-check-double me-1"></i>
                                     Tamamla
                                   </button>
                                   <button
-                                    className="btn btn-sm btn-warning w-100"
+                                    className="btn btn-sm btn-warning w-100 py-1 px-2"
+                                    style={{fontSize: 'clamp(0.7rem, 2vw, 0.8rem)', whiteSpace: 'nowrap'}}
                                     onClick={() => {
                                       if (window.confirm('Transfer iptal edilecek ve rezervasyon kaldırılacak. Emin misiniz?')) {
                                         handleTransferStatusChange(transfer.id, 'cancel');
                                       }
                                     }}
+                                    title="Transferi iptal et ve rezervasyonu kaldır"
                                   >
                                     <i className="fas fa-ban me-1"></i>
-                                    İptal Et
+                                    <span className="d-none d-sm-inline">İptal Et</span>
+                                    <span className="d-inline d-sm-none">İptal</span>
                                   </button>
                                 </>
                               )}
                               {(transfer.status === 'CANCELLED' || transfer.status === 'PENDING') && (
                                 <button
-                                  className="btn btn-sm btn-outline-danger w-100"
+                                  className="btn btn-sm btn-outline-danger w-100 py-1 px-2"
+                                  style={{fontSize: 'clamp(0.7rem, 2vw, 0.8rem)', whiteSpace: 'nowrap'}}
                                   onClick={() => handleDeleteTransfer(transfer.id)}
+                                  title="Transfer kaydını sil"
                                 >
                                   <i className="fas fa-trash me-1"></i>
                                   Sil
@@ -915,8 +958,10 @@ const Stock = () => {
                               )}
                               {transfer.notes && (
                                 <button
-                                  className="btn btn-sm btn-outline-secondary w-100"
+                                  className="btn btn-sm btn-outline-secondary w-100 py-1 px-2"
+                                  style={{fontSize: 'clamp(0.7rem, 2vw, 0.8rem)', whiteSpace: 'nowrap'}}
                                   onClick={() => alert(`📝 Transfer Notları:\n\n${transfer.notes}`)}
+                                  title="Notları görüntüle"
                                 >
                                   <i className="fas fa-sticky-note me-1"></i>
                                   Notlar
