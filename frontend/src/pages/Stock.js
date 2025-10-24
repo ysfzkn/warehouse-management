@@ -856,14 +856,16 @@ const Stock = () => {
                               <span className="small">{status.label}</span>
                             </span>
                             {transfer.completedDate && (
-                              <small className="d-block text-success">
-                                <i className="fas fa-check me-1"></i>
+                              <small className="d-block text-success mt-1" title={`Tamamlanma Tarihi: ${new Date(transfer.completedDate).toLocaleDateString('tr-TR')}`}>
+                                <i className="fas fa-check-circle me-1"></i>
+                                <span className="d-none d-md-inline">Tamamlandı: </span>
                                 {new Date(transfer.completedDate).toLocaleDateString('tr-TR', {day: '2-digit', month: '2-digit'})}
                               </small>
                             )}
                             {transfer.cancelledDate && (
-                              <small className="d-block text-danger">
-                                <i className="fas fa-times me-1"></i>
+                              <small className="d-block text-danger mt-1" title={`İptal Tarihi: ${new Date(transfer.cancelledDate).toLocaleDateString('tr-TR')}`}>
+                                <i className="fas fa-times-circle me-1"></i>
+                                <span className="d-none d-md-inline">İptal: </span>
                                 {new Date(transfer.cancelledDate).toLocaleDateString('tr-TR', {day: '2-digit', month: '2-digit'})}
                               </small>
                             )}
