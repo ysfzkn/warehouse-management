@@ -14,7 +14,7 @@ const ProductForm = ({ product, categories, onSuccess, onCancel }) => {
     widthCm: '',
     heightCm: '',
     shippingRate: '',
-    vatRate: '',
+    vatRate: '20',
     sctRate: '',
     categoryId: '',
     isActive: true
@@ -23,6 +23,26 @@ const ProductForm = ({ product, categories, onSuccess, onCancel }) => {
   const [errors, setErrors] = useState({});
   const [brandId, setBrandId] = useState(null);
   const [colorId, setColorId] = useState(null);
+  
+  // Calculate total price with taxes
+  const calculateTotalPrice = () => {
+    const basePrice = parseFloat(formData.price) || 0;
+    const sctRate = parseFloat(formData.sctRate) || 0;
+    const vatRate = parseFloat(formData.vatRate) || 0;
+    
+    const sctAmount = basePrice * (sctRate / 100);
+    const priceWithSct = basePrice + sctAmount;
+    const vatAmount = priceWithSct * (vatRate / 100);
+    const totalPrice = priceWithSct + vatAmount;
+    
+    return {
+      basePrice,
+      sctAmount,
+      priceWithSct,
+      vatAmount,
+      totalPrice
+    };
+  };
 
   useEffect(() => {
     if (product) {
@@ -222,42 +242,71 @@ const ProductForm = ({ product, categories, onSuccess, onCancel }) => {
         <div className="col-md-3">
           <div className="mb-3">
             <label htmlFor="vatRate" className="form-label">
-              KDV Oranı (%)
+              <i className="fas fa-percentage me-1"></i>KDV Oranı (%)
+              <span 
+                className="ms-1 text-primary" 
+                style={{ cursor: 'help' }}
+                title="Katma Değer Vergisi oranı. Türkiye'de yaygın oranlar: %1, %10, %20"
+              >
+                <i className="fas fa-info-circle"></i>
+              </span>
             </label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              max="100"
-              className="form-control"
-              id="vatRate"
-              name="vatRate"
-              value={formData.vatRate}
-              onChange={handleChange}
-              placeholder="20"
-            />
-            <small className="text-muted">Örn: 20 (KDV %20)</small>
+            <div className="input-group">
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                max="100"
+                className="form-control"
+                id="vatRate"
+                name="vatRate"
+                value={formData.vatRate}
+                onChange={handleChange}
+                placeholder="20"
+              />
+              <span className="input-group-text">%</span>
+            </div>
+            <div className="d-flex gap-1 mt-1">
+              <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setFormData({...formData, vatRate: '1'})}>%1</button>
+              <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setFormData({...formData, vatRate: '10'})}>%10</button>
+              <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setFormData({...formData, vatRate: '20'})}>%20</button>
+              <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setFormData({...formData, vatRate: '0'})}>Muaf</button>
+            </div>
           </div>
         </div>
 
         <div className="col-md-3">
           <div className="mb-3">
             <label htmlFor="sctRate" className="form-label">
-              ÖTV Oranı (%)
+              <i className="fas fa-percentage me-1"></i>ÖTV Oranı (%)
+              <span 
+                className="ms-1 text-primary" 
+                style={{ cursor: 'help' }}
+                title="Özel Tüketim Vergisi. Alkol, tütün, akaryakıt, otomobil gibi ürünlerde uygulanır."
+              >
+                <i className="fas fa-info-circle"></i>
+              </span>
             </label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              max="100"
-              className="form-control"
-              id="sctRate"
-              name="sctRate"
-              value={formData.sctRate}
-              onChange={handleChange}
-              placeholder="10"
-            />
-            <small className="text-muted">Örn: 10 (ÖTV %10)</small>
+            <div className="input-group">
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                max="200"
+                className="form-control"
+                id="sctRate"
+                name="sctRate"
+                value={formData.sctRate}
+                onChange={handleChange}
+                placeholder="0"
+              />
+              <span className="input-group-text">%</span>
+            </div>
+            <div className="d-flex gap-1 mt-1">
+              <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setFormData({...formData, sctRate: '0'})}>Yok</button>
+              <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setFormData({...formData, sctRate: '10'})}>%10</button>
+              <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setFormData({...formData, sctRate: '50'})}>%50</button>
+            </div>
           </div>
         </div>
 
@@ -411,6 +460,57 @@ const ProductForm = ({ product, categories, onSuccess, onCancel }) => {
           </div>
         </div>
       </div>
+
+      {/* Live Price Calculation Preview */}
+      {formData.price && parseFloat(formData.price) > 0 && (
+        <div className="alert alert-info border-start border-primary border-4 mb-3">
+          <h6 className="alert-heading mb-2">
+            <i className="fas fa-calculator me-2"></i>
+            Fiyat Hesaplama Önizlemesi
+          </h6>
+          <div className="row g-2">
+            <div className="col-md-6">
+              <div className="d-flex justify-content-between small">
+                <span className="text-muted">Ana Fiyat:</span>
+                <strong>₺{calculateTotalPrice().basePrice.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</strong>
+              </div>
+              {calculateTotalPrice().sctAmount > 0 && (
+                <>
+                  <div className="d-flex justify-content-between small text-success">
+                    <span>+ ÖTV (%{formData.sctRate}):</span>
+                    <span>₺{calculateTotalPrice().sctAmount.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                  <div className="d-flex justify-content-between small">
+                    <span className="text-muted">ÖTV'li Fiyat:</span>
+                    <span>₺{calculateTotalPrice().priceWithSct.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                </>
+              )}
+              {calculateTotalPrice().vatAmount > 0 && (
+                <div className="d-flex justify-content-between small text-success">
+                  <span>+ KDV (%{formData.vatRate}):</span>
+                  <span>₺{calculateTotalPrice().vatAmount.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</span>
+                </div>
+              )}
+              <hr className="my-1" />
+              <div className="d-flex justify-content-between">
+                <strong className="text-dark">Toplam Fiyat:</strong>
+                <strong className="text-success fs-5">₺{calculateTotalPrice().totalPrice.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</strong>
+              </div>
+            </div>
+            <div className="col-md-6">
+              <small className="text-muted d-block">
+                <i className="fas fa-lightbulb me-1 text-warning"></i>
+                <strong>Hesaplama Formülü:</strong>
+              </small>
+              <small className="text-muted d-block">1. ÖTV Tutarı = Ana Fiyat × ÖTV%</small>
+              <small className="text-muted d-block">2. ÖTV'li Fiyat = Ana Fiyat + ÖTV</small>
+              <small className="text-muted d-block">3. KDV Tutarı = ÖTV'li Fiyat × KDV%</small>
+              <small className="text-muted d-block">4. <strong>Toplam = ÖTV'li Fiyat + KDV</strong></small>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="d-flex justify-content-end gap-2">
         <button
