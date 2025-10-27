@@ -318,9 +318,73 @@ const Products = () => {
                   )}
                 </div>
 
-                <p className="card-text">
-                  <strong>Fiyat:</strong> ₺{product.price?.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
-                </p>
+                {/* Price Breakdown with Taxes */}
+                <div className="card mb-2" style={{ backgroundColor: '#f8f9fa', border: '1px solid #dee2e6' }}>
+                  <div className="card-body p-2">
+                    <div className="d-flex justify-content-between align-items-center mb-1">
+                      <small className="text-muted">
+                        <i className="fas fa-tag me-1"></i>Ana Fiyat:
+                      </small>
+                      <strong className="text-primary">
+                        ₺{product.price?.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
+                      </strong>
+                    </div>
+                    
+                    {product.sctRate && product.sctRate > 0 && (
+                      <>
+                        <div className="d-flex justify-content-between align-items-center mb-1">
+                          <small className="text-muted">
+                            <i className="fas fa-plus-circle me-1"></i>ÖTV (%{product.sctRate}):
+                          </small>
+                          <small className="text-success">
+                            +₺{((product.price * product.sctRate) / 100).toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
+                          </small>
+                        </div>
+                        <div className="d-flex justify-content-between align-items-center mb-1">
+                          <small className="text-muted">ÖTV'li Fiyat:</small>
+                          <small>
+                            ₺{(product.price * (1 + product.sctRate / 100)).toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
+                          </small>
+                        </div>
+                      </>
+                    )}
+                    
+                    {product.vatRate && product.vatRate > 0 && (
+                      <>
+                        <div className="d-flex justify-content-between align-items-center mb-1">
+                          <small className="text-muted">
+                            <i className="fas fa-plus-circle me-1"></i>KDV (%{product.vatRate}):
+                          </small>
+                          <small className="text-success">
+                            +₺{(() => {
+                              const baseForVat = product.price * (1 + (product.sctRate || 0) / 100);
+                              return (baseForVat * product.vatRate / 100).toLocaleString('tr-TR', { minimumFractionDigits: 2 });
+                            })()}
+                          </small>
+                        </div>
+                      </>
+                    )}
+                    
+                    {(product.vatRate > 0 || product.sctRate > 0) && (
+                      <>
+                        <hr className="my-1" />
+                        <div className="d-flex justify-content-between align-items-center">
+                          <strong className="text-dark">
+                            <i className="fas fa-receipt me-1"></i>Toplam Fiyat:
+                          </strong>
+                          <strong className="text-success fs-6">
+                            ₺{(() => {
+                              const sctAmount = product.price * (product.sctRate || 0) / 100;
+                              const priceWithSct = product.price + sctAmount;
+                              const vatAmount = priceWithSct * (product.vatRate || 0) / 100;
+                              return (priceWithSct + vatAmount).toLocaleString('tr-TR', { minimumFractionDigits: 2 });
+                            })()}
+                          </strong>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
                 <p className="card-text d-flex align-items-center justify-content-between flex-wrap gap-2">
                   <span>
                     <strong>Desi:</strong> {(() => {

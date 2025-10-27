@@ -63,6 +63,12 @@ public class Product {
     @Column(name = "shipping_rate", precision = 10, scale = 2)
     private BigDecimal shippingRate; // per desi unit
 
+    @Column(name = "vat_rate", precision = 5, scale = 2)
+    private BigDecimal vatRate; // KDV oranı (%)
+
+    @Column(name = "sct_rate", precision = 5, scale = 2)
+    private BigDecimal sctRate; // ÖTV oranı (%)
+
     @NotNull(message = "Category is required")
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "category_id", nullable = false)
@@ -127,6 +133,8 @@ public class Product {
                 ", widthCm=" + widthCm +
                 ", heightCm=" + heightCm +
                 ", shippingRate=" + shippingRate +
+                ", vatRate=" + vatRate +
+                ", sctRate=" + sctRate +
                 ", isActive=" + isActive +
                 '}';
     }

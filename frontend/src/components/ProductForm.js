@@ -14,6 +14,8 @@ const ProductForm = ({ product, categories, onSuccess, onCancel }) => {
     widthCm: '',
     heightCm: '',
     shippingRate: '',
+    vatRate: '',
+    sctRate: '',
     categoryId: '',
     isActive: true
   });
@@ -35,6 +37,8 @@ const ProductForm = ({ product, categories, onSuccess, onCancel }) => {
         widthCm: product.widthCm || '',
         heightCm: product.heightCm || '',
         shippingRate: product.shippingRate || '',
+        vatRate: product.vatRate || '',
+        sctRate: product.sctRate || '',
         categoryId: product.category?.id || '',
         isActive: product.isActive !== false
       });
@@ -103,6 +107,8 @@ const ProductForm = ({ product, categories, onSuccess, onCancel }) => {
         widthCm: formData.widthCm ? parseFloat(formData.widthCm) : null,
         heightCm: formData.heightCm ? parseFloat(formData.heightCm) : null,
         shippingRate: formData.shippingRate ? parseFloat(formData.shippingRate) : null,
+        vatRate: formData.vatRate ? parseFloat(formData.vatRate) : null,
+        sctRate: formData.sctRate ? parseFloat(formData.sctRate) : null,
         category: { id: parseInt(formData.categoryId) },
         brand: brandId ? { id: brandId } : null,
         color: colorId ? { id: colorId } : null,
@@ -192,7 +198,7 @@ const ProductForm = ({ product, categories, onSuccess, onCancel }) => {
       </div>
 
       <div className="row">
-        <div className="col-md-4">
+        <div className="col-md-3">
           <div className="mb-3">
             <label htmlFor="price" className="form-label">
               Fiyat (₺) <span className="text-danger">*</span>
@@ -213,7 +219,49 @@ const ProductForm = ({ product, categories, onSuccess, onCancel }) => {
           </div>
         </div>
 
-        <div className="col-md-4">
+        <div className="col-md-3">
+          <div className="mb-3">
+            <label htmlFor="vatRate" className="form-label">
+              KDV Oranı (%)
+            </label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              max="100"
+              className="form-control"
+              id="vatRate"
+              name="vatRate"
+              value={formData.vatRate}
+              onChange={handleChange}
+              placeholder="20"
+            />
+            <small className="text-muted">Örn: 20 (KDV %20)</small>
+          </div>
+        </div>
+
+        <div className="col-md-3">
+          <div className="mb-3">
+            <label htmlFor="sctRate" className="form-label">
+              ÖTV Oranı (%)
+            </label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              max="100"
+              className="form-control"
+              id="sctRate"
+              name="sctRate"
+              value={formData.sctRate}
+              onChange={handleChange}
+              placeholder="10"
+            />
+            <small className="text-muted">Örn: 10 (ÖTV %10)</small>
+          </div>
+        </div>
+
+        <div className="col-md-3">
           <div className="mb-3">
             <label htmlFor="weight" className="form-label">
               Ağırlık (kg)
