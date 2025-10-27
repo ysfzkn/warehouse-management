@@ -143,7 +143,16 @@ const Dashboard = () => {
         }
       });
 
-      const activeWarehouses = warehousesData.filter(w => w.isActive).length;
+      // Handle isActive field - could be boolean, 1/0, or "1"/"0"
+      const activeWarehouses = warehousesData.filter(w => {
+        return w.isActive === true || w.isActive === 1 || w.isActive === '1' || w.isActive === 'true';
+      }).length;
+
+      console.log('Warehouse active status check:', {
+        total: warehousesData.length,
+        active: activeWarehouses,
+        sample: warehousesData.slice(0, 3).map(w => ({ name: w.name, isActive: w.isActive, type: typeof w.isActive }))
+      });
 
       setStats({
         totalWarehouses: warehousesData.length,
