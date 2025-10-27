@@ -237,17 +237,26 @@ const StockTransferModal = ({ stock, onSuccess, onClose }) => {
     await new Promise(resolve => setTimeout(resolve, 1500));
 
     try {
-      // Parse the datetime-local value and convert to Turkey timezone aware ISO string
+      // Parse the datetime-local value as Turkey time and convert to ISO
       const parseDateInTurkeyTimezone = (dateTimeString) => {
-        // dateTimeString format: "2024-10-23T14:30"
-        // Parse as if it's in Turkey timezone (GMT+3)
+        // dateTimeString format: "2024-10-23T10:28"
+        // This is already in Turkey local time from the datetime-local input
+        
+        // Split the datetime string
         const [datePart, timePart] = dateTimeString.split('T');
         const [year, month, day] = datePart.split('-');
         const [hours, minutes] = timePart.split(':');
         
-        // Create date in Turkey timezone
-        const turkeyDate = new Date(`${year}-${month}-${day}T${hours}:${minutes}:00+03:00`);
-        return turkeyDate.toISOString();
+        // Since backend timezone is set to Europe/Istanbul (GMT+3),
+        // we send the datetime as-is (without timezone offset)
+        // Backend will interpret this as Turkey local time
+        const isoString = `${year}-${month}-${day}T${hours}:${minutes}:00`;
+        
+        console.log('🕐 Datetime Conversion:');
+        console.log('  Input (Turkey local):', dateTimeString);
+        console.log('  Output (ISO for backend):', isoString);
+        
+        return isoString;
       };
       
       const transferData = {

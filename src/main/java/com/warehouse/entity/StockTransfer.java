@@ -12,6 +12,7 @@ import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 import lombok.ToString;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.warehouse.enums.TransferStatus;
 import java.time.LocalDateTime;
 
@@ -75,12 +76,15 @@ public class StockTransfer {
     @Column(nullable = false, length = 20)
     private TransferStatus status = TransferStatus.PENDING;
 
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss", timezone = "Europe/Istanbul")
     @Column(name = "transfer_date", nullable = false)
     private LocalDateTime transferDate;
 
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss", timezone = "Europe/Istanbul")
     @Column(name = "completed_date")
     private LocalDateTime completedDate;
 
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss", timezone = "Europe/Istanbul")
     @Column(name = "cancelled_date")
     private LocalDateTime cancelledDate;
 
@@ -88,9 +92,11 @@ public class StockTransfer {
     @Column(length = 500)
     private String notes;
 
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss", timezone = "Europe/Istanbul")
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss", timezone = "Europe/Istanbul")
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
