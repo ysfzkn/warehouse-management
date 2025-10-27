@@ -3,6 +3,21 @@ import axios from 'axios';
 
 const StockTransferModal = ({ stock, onSuccess, onClose }) => {
   const [currentStep, setCurrentStep] = useState(1);
+  
+  // Get current date/time in Turkey timezone (GMT+3)
+  const getTurkeyDateTime = () => {
+    const now = new Date();
+    // Convert to Turkey time (GMT+3)
+    const turkeyTime = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Istanbul' }));
+    // Format as datetime-local input value (YYYY-MM-DDTHH:mm)
+    const year = turkeyTime.getFullYear();
+    const month = String(turkeyTime.getMonth() + 1).padStart(2, '0');
+    const day = String(turkeyTime.getDate()).padStart(2, '0');
+    const hours = String(turkeyTime.getHours()).padStart(2, '0');
+    const minutes = String(turkeyTime.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  };
+  
   const [formData, setFormData] = useState({
     sourceWarehouseId: stock?.warehouse?.id || '',
     destinationWarehouseId: '',
@@ -13,7 +28,7 @@ const StockTransferModal = ({ stock, onSuccess, onClose }) => {
     driverPhone: '',
     vehiclePlate: '',
     notes: '',
-    transferDate: new Date().toISOString().slice(0, 16)
+    transferDate: getTurkeyDateTime()
   });
 
   const [warehouses, setWarehouses] = useState([]);
@@ -222,6 +237,19 @@ const StockTransferModal = ({ stock, onSuccess, onClose }) => {
     await new Promise(resolve => setTimeout(resolve, 1500));
 
     try {
+      // Parse the datetime-local value and convert to Turkey timezone aware ISO string
+      const parseDateInTurkeyTimezone = (dateTimeString) => {
+        // dateTimeString format: "2024-10-23T14:30"
+        // Parse as if it's in Turkey timezone (GMT+3)
+        const [datePart, timePart] = dateTimeString.split('T');
+        const [year, month, day] = datePart.split('-');
+        const [hours, minutes] = timePart.split(':');
+        
+        // Create date in Turkey timezone
+        const turkeyDate = new Date(`${year}-${month}-${day}T${hours}:${minutes}:00+03:00`);
+        return turkeyDate.toISOString();
+      };
+      
       const transferData = {
         sourceWarehouse: { id: parseInt(formData.sourceWarehouseId) },
         destinationWarehouse: { id: parseInt(formData.destinationWarehouseId) },
@@ -232,7 +260,7 @@ const StockTransferModal = ({ stock, onSuccess, onClose }) => {
         driverPhone: formData.driverPhone.trim(),
         vehiclePlate: formData.vehiclePlate.trim().toUpperCase(),
         notes: formData.notes.trim(),
-        transferDate: new Date(formData.transferDate).toISOString()
+        transferDate: parseDateInTurkeyTimezone(formData.transferDate)
       };
 
       const response = await axios.post('/api/stock-transfers', transferData);

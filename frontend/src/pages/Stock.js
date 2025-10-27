@@ -8,6 +8,22 @@ import FilterChips from '../components/FilterChips';
 import ConfirmModal from '../components/ConfirmModal';
 import NotesModal from '../components/NotesModal';
 
+// Helper function to format dates in Turkey timezone
+const formatDateInTurkeyTimezone = (isoDateString, options = {}) => {
+  if (!isoDateString) return '-';
+  try {
+    const date = new Date(isoDateString);
+    // Force Turkey timezone display
+    return date.toLocaleString('tr-TR', {
+      timeZone: 'Europe/Istanbul',
+      ...options
+    });
+  } catch (error) {
+    console.error('Date formatting error:', error);
+    return '-';
+  }
+};
+
 const Stock = () => {
   const [stocks, setStocks] = useState([]);
   const [products, setProducts] = useState([]);
@@ -472,7 +488,7 @@ const Stock = () => {
                         </span>
                       </td>
                       <td>
-                        {new Date(stock.lastUpdated).toLocaleDateString('tr-TR')}
+                        {formatDateInTurkeyTimezone(stock.lastUpdated, { year: 'numeric', month: '2-digit', day: '2-digit' })}
                       </td>
                       <td>
                         <div className="btn-group" role="group">
@@ -807,10 +823,10 @@ const Stock = () => {
                           <td className="align-middle">
                             <div className="small">
                               <div className="fw-bold text-nowrap">
-                                {new Date(transfer.transferDate).toLocaleDateString('tr-TR')}
+                                {formatDateInTurkeyTimezone(transfer.transferDate, { year: 'numeric', month: '2-digit', day: '2-digit' })}
                               </div>
                               <div className="text-muted text-nowrap">
-                                {new Date(transfer.transferDate).toLocaleTimeString('tr-TR', {
+                                {formatDateInTurkeyTimezone(transfer.transferDate, {
                                   hour: '2-digit',
                                   minute: '2-digit'
                                 })}
@@ -880,17 +896,17 @@ const Stock = () => {
                               <span className="small">{status.label}</span>
                             </span>
                             {transfer.completedDate && (
-                              <small className="d-block text-success mt-1" title={`Tamamlanma Tarihi: ${new Date(transfer.completedDate).toLocaleDateString('tr-TR')}`}>
+                              <small className="d-block text-success mt-1" title={`Tamamlanma Tarihi: ${formatDateInTurkeyTimezone(transfer.completedDate, { year: 'numeric', month: '2-digit', day: '2-digit' })}`}>
                                 <i className="fas fa-check-circle me-1"></i>
                                 <span className="d-none d-md-inline">Tamamlandı: </span>
-                                {new Date(transfer.completedDate).toLocaleDateString('tr-TR', {day: '2-digit', month: '2-digit'})}
+                                {formatDateInTurkeyTimezone(transfer.completedDate, {day: '2-digit', month: '2-digit'})}
                               </small>
                             )}
                             {transfer.cancelledDate && (
-                              <small className="d-block text-danger mt-1" title={`İptal Tarihi: ${new Date(transfer.cancelledDate).toLocaleDateString('tr-TR')}`}>
+                              <small className="d-block text-danger mt-1" title={`İptal Tarihi: ${formatDateInTurkeyTimezone(transfer.cancelledDate, { year: 'numeric', month: '2-digit', day: '2-digit' })}`}>
                                 <i className="fas fa-times-circle me-1"></i>
                                 <span className="d-none d-md-inline">İptal: </span>
-                                {new Date(transfer.cancelledDate).toLocaleDateString('tr-TR', {day: '2-digit', month: '2-digit'})}
+                                {formatDateInTurkeyTimezone(transfer.cancelledDate, {day: '2-digit', month: '2-digit'})}
                               </small>
                             )}
                           </td>
