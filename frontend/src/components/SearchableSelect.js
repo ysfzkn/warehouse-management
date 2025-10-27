@@ -62,7 +62,7 @@ const SearchableSelect = ({ label, value, onChange, searchEndpoint, placeholder 
           )}
         </div>
       )}
-      <div className="position-relative">
+      <div style={{position: 'relative', zIndex: open ? 1000 : 1}}>
         <input
           type="text"
           className="form-control"
@@ -73,7 +73,18 @@ const SearchableSelect = ({ label, value, onChange, searchEndpoint, placeholder 
           disabled={disabled}
         />
         {open && (
-          <div className="list-group position-absolute w-100 shadow-sm" style={{ zIndex: 1050, maxHeight: 240, overflowY: 'auto' }}>
+          <div 
+            className="list-group position-absolute w-100 shadow-lg border" 
+            style={{ 
+              zIndex: 9999, 
+              maxHeight: 240, 
+              overflowY: 'auto',
+              top: '100%',
+              left: 0,
+              backgroundColor: '#fff',
+              marginTop: '2px'
+            }}
+          >
             {loading && (
               <div className="list-group-item text-center">
                 <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>

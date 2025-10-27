@@ -33,8 +33,8 @@ const Navbar = () => {
           <ul className="navbar-nav me-auto">
             <li className="nav-item">
               <Link className={`nav-link ${isActive('/')}`} to="/">
-                <i className="fas fa-tachometer-alt me-1"></i>
-                Dashboard
+                <i className="fas fa-chart-line me-1"></i>
+                Panel
               </Link>
             </li>
             <li className="nav-item">

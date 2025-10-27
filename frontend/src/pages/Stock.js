@@ -456,6 +456,7 @@ const Stock = () => {
                   <th>Stok Kodu</th>
                   <th>Miktar</th>
                   <th>Kullanılabilir</th>
+                  <th>Rezerve</th>
                   <th>Emanet</th>
                   <th>Min. Stok</th>
                   <th>Durum</th>
@@ -480,6 +481,12 @@ const Stock = () => {
                       <td>
                         <span className={stock.availableQuantity < stock.minStockLevel ? 'text-danger' : 'text-success'}>
                           {stock.availableQuantity}
+                        </span>
+                      </td>
+                      <td>
+                        <span className={stock.reservedQuantity > 0 ? 'text-warning fw-bold' : 'text-muted'}>
+                          <i className="fas fa-lock me-1" style={{fontSize: '0.75rem'}}></i>
+                          {stock.reservedQuantity || 0}
                         </span>
                       </td>
                       <td>{stock.consignedQuantity || 0}</td>
