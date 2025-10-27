@@ -217,10 +217,21 @@ const ProductForm = ({ product, categories, onSuccess, onCancel }) => {
         />
       </div>
 
+      {/* Price and Tax Section */}
+      <div className="row mb-3">
+        <div className="col-12">
+          <h6 className="text-muted mb-3">
+            <i className="fas fa-money-bill-wave me-2"></i>
+            Fiyatlandırma ve Vergiler
+          </h6>
+        </div>
+      </div>
+
       <div className="row">
-        <div className="col-md-3">
-          <div className="mb-3">
+        <div className="col-md-4">
+          <div className="mb-4">
             <label htmlFor="price" className="form-label">
+              <i className="fas fa-tag me-1"></i>
               Fiyat (₺) <span className="text-danger">*</span>
             </label>
             <input
@@ -239,8 +250,8 @@ const ProductForm = ({ product, categories, onSuccess, onCancel }) => {
           </div>
         </div>
 
-        <div className="col-md-3">
-          <div className="mb-3">
+        <div className="col-md-4">
+          <div className="mb-4">
             <label htmlFor="vatRate" className="form-label">
               <i className="fas fa-percentage me-1"></i>KDV Oranı (%)
               <span 
@@ -266,7 +277,7 @@ const ProductForm = ({ product, categories, onSuccess, onCancel }) => {
               />
               <span className="input-group-text">%</span>
             </div>
-            <div className="d-flex gap-1 mt-1">
+            <div className="d-flex gap-1 mt-2">
               <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setFormData({...formData, vatRate: '1'})}>%1</button>
               <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setFormData({...formData, vatRate: '10'})}>%10</button>
               <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setFormData({...formData, vatRate: '20'})}>%20</button>
@@ -275,8 +286,8 @@ const ProductForm = ({ product, categories, onSuccess, onCancel }) => {
           </div>
         </div>
 
-        <div className="col-md-3">
-          <div className="mb-3">
+        <div className="col-md-4">
+          <div className="mb-4">
             <label htmlFor="sctRate" className="form-label">
               <i className="fas fa-percentage me-1"></i>ÖTV Oranı (%)
               <span 
@@ -302,36 +313,30 @@ const ProductForm = ({ product, categories, onSuccess, onCancel }) => {
               />
               <span className="input-group-text">%</span>
             </div>
-            <div className="d-flex gap-1 mt-1">
+            <div className="d-flex gap-1 mt-2">
               <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setFormData({...formData, sctRate: '0'})}>Yok</button>
               <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setFormData({...formData, sctRate: '10'})}>%10</button>
               <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setFormData({...formData, sctRate: '50'})}>%50</button>
             </div>
           </div>
         </div>
+      </div>
 
-        <div className="col-md-3">
-          <div className="mb-3">
-            <label htmlFor="weight" className="form-label">
-              Ağırlık (kg)
-            </label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              className="form-control"
-              id="weight"
-              name="weight"
-              value={formData.weight}
-              onChange={handleChange}
-              placeholder="50.5"
-            />
-          </div>
+      {/* Physical Properties Section */}
+      <div className="row mb-3">
+        <div className="col-12">
+          <h6 className="text-muted mb-3">
+            <i className="fas fa-cube me-2"></i>
+            Fiziksel Özellikler
+          </h6>
         </div>
+      </div>
 
-        <div className="col-md-4">
+      <div className="row">
+        <div className="col-md-6">
           <div className="mb-3">
             <label className="form-label">
+              <i className="fas fa-ruler-combined me-1"></i>
               Boyutlar (cm)
             </label>
             <div className="input-group">
@@ -371,12 +376,43 @@ const ProductForm = ({ product, categories, onSuccess, onCancel }) => {
             </div>
           </div>
         </div>
+
+        <div className="col-md-6">
+          <div className="mb-3">
+            <label htmlFor="weight" className="form-label">
+              <i className="fas fa-weight-hanging me-1"></i>
+              Ağırlık (kg)
+            </label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              className="form-control"
+              id="weight"
+              name="weight"
+              value={formData.weight}
+              onChange={handleChange}
+              placeholder="50.5"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Category and Brand Section */}
+      <div className="row mb-3">
+        <div className="col-12">
+          <h6 className="text-muted mb-3">
+            <i className="fas fa-tags me-2"></i>
+            Kategori ve Özellikler
+          </h6>
+        </div>
       </div>
 
       <div className="row">
-        <div className="col-md-6">
+        <div className="col-md-4">
           <div className="mb-3">
             <label htmlFor="categoryId" className="form-label">
+              <i className="fas fa-folder me-1"></i>
               Kategori <span className="text-danger">*</span>
             </label>
             <select
@@ -397,39 +433,30 @@ const ProductForm = ({ product, categories, onSuccess, onCancel }) => {
             {errors.categoryId && <div className="invalid-feedback">{errors.categoryId}</div>}
           </div>
         </div>
-        <div className="col-md-6">
+        
+        <div className="col-md-4">
           <SearchableSelect
-            label="Marka"
+            label={
+              <span>
+                <i className="fas fa-copyright me-1"></i>
+                Marka
+              </span>
+            }
             value={brandId}
             onChange={(id) => setBrandId(id)}
             searchEndpoint="/api/brands/search"
             placeholder="Marka ara..."
           />
         </div>
-      </div>
 
-      <div className="row">
         <div className="col-md-4">
-          <div className="mb-3">
-            <label htmlFor="shippingRate" className="form-label">
-              Kargo Ücreti (Desi Başına)
-            </label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              className="form-control"
-              id="shippingRate"
-              name="shippingRate"
-              value={formData.shippingRate}
-              onChange={handleChange}
-              placeholder="Örn: 12.50"
-            />
-          </div>
-        </div>
-        <div className="col-md-6">
           <SearchableSelect
-            label="Renk"
+            label={
+              <span>
+                <i className="fas fa-palette me-1"></i>
+                Renk
+              </span>
+            }
             value={colorId}
             onChange={(id) => setColorId(id)}
             searchEndpoint="/api/colors/search"
@@ -442,9 +469,51 @@ const ProductForm = ({ product, categories, onSuccess, onCancel }) => {
             )}
           />
         </div>
+      </div>
+
+      {/* Shipping and Status Section */}
+      <div className="row mb-3">
+        <div className="col-12">
+          <h6 className="text-muted mb-3">
+            <i className="fas fa-shipping-fast me-2"></i>
+            Kargo ve Durum
+          </h6>
+        </div>
+      </div>
+
+      <div className="row">
         <div className="col-md-6">
           <div className="mb-3">
-            <div className="form-check mt-4">
+            <label htmlFor="shippingRate" className="form-label">
+              <i className="fas fa-truck me-1"></i>
+              Kargo Ücreti (Desi Başına)
+            </label>
+            <div className="input-group">
+              <span className="input-group-text">₺</span>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                className="form-control"
+                id="shippingRate"
+                name="shippingRate"
+                value={formData.shippingRate}
+                onChange={handleChange}
+                placeholder="12.50"
+              />
+              <span className="input-group-text">/desi</span>
+            </div>
+            <small className="text-muted">Desi başına kargo ücreti tutarı</small>
+          </div>
+        </div>
+
+        <div className="col-md-6">
+          <div className="mb-3">
+            <label className="form-label d-block">
+              <i className="fas fa-toggle-on me-1"></i>
+              Ürün Durumu
+            </label>
+            <div className="form-check form-switch mt-3">
               <input
                 type="checkbox"
                 className="form-check-input"
@@ -452,9 +521,12 @@ const ProductForm = ({ product, categories, onSuccess, onCancel }) => {
                 name="isActive"
                 checked={formData.isActive}
                 onChange={handleChange}
+                style={{ width: '48px', height: '24px', cursor: 'pointer' }}
               />
-              <label className="form-check-label" htmlFor="isActive">
-                Aktif
+              <label className="form-check-label ms-2" htmlFor="isActive" style={{ cursor: 'pointer' }}>
+                <strong className={formData.isActive ? 'text-success' : 'text-secondary'}>
+                  {formData.isActive ? 'Aktif' : 'Pasif'}
+                </strong>
               </label>
             </div>
           </div>
