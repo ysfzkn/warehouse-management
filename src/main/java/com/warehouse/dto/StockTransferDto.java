@@ -25,6 +25,7 @@ public class StockTransferDto {
     private LocalDateTime completedDate;
     private LocalDateTime cancelledDate;
     private String notes;
+    private String cancellationReason;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 

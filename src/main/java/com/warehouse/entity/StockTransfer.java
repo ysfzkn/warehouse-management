@@ -92,6 +92,10 @@ public class StockTransfer {
     @Column(length = 500)
     private String notes;
 
+    @Size(max = 500, message = "Cancellation reason cannot exceed 500 characters")
+    @Column(name = "cancellation_reason", length = 500)
+    private String cancellationReason;
+
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss", timezone = "Europe/Istanbul")
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

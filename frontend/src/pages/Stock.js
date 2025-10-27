@@ -51,6 +51,7 @@ const Stock = () => {
   // Modal states
   const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null });
   const [notesModal, setNotesModal] = useState({ show: false, notes: '', transferId: null });
+  const [cancellationModal, setCancellationModal] = useState({ show: false, transferId: null, reason: '' });
 
   const fetchAllData = useCallback(async () => {
     try {
@@ -310,9 +311,10 @@ const Stock = () => {
     }
   };
 
-  const handleTransferStatusChange = async (transferId, action) => {
+  const handleTransferStatusChange = async (transferId, action, cancellationReason = null) => {
     try {
-      await axios.post(`/api/stock-transfers/${transferId}/${action}`);
+      const payload = action === 'cancel' && cancellationReason ? { cancellationReason } : {};
+      await axios.post(`/api/stock-transfers/${transferId}/${action}`, payload);
       fetchTransfers();
       fetchAllData();
     } catch (error) {
@@ -963,17 +965,10 @@ const Stock = () => {
                                     className="btn btn-sm btn-danger w-100 py-1 px-2"
                                     style={{fontSize: 'clamp(0.7rem, 2vw, 0.8rem)', whiteSpace: 'nowrap'}}
                                     onClick={() => {
-                                      setConfirmModal({
+                                      setCancellationModal({
                                         show: true,
-                                        title: 'Transferi İptal Et',
-                                        message: 'Transfer iptal edilecek. Bu işlem geri alınamaz. Emin misiniz?',
-                                        confirmText: 'Evet, İptal Et',
-                                        confirmVariant: 'danger',
-                                        icon: 'exclamation-triangle',
-                                        onConfirm: () => {
-                                          setConfirmModal({ show: false });
-                                          handleTransferStatusChange(transfer.id, 'cancel');
-                                        }
+                                        transferId: transfer.id,
+                                        reason: ''
                                       });
                                     }}
                                     title="Transferi iptal et"
@@ -1011,17 +1006,10 @@ const Stock = () => {
                                     className="btn btn-sm btn-warning w-100 py-1 px-2"
                                     style={{fontSize: 'clamp(0.7rem, 2vw, 0.8rem)', whiteSpace: 'nowrap'}}
                                     onClick={() => {
-                                      setConfirmModal({
+                                      setCancellationModal({
                                         show: true,
-                                        title: 'Transferi İptal Et',
-                                        message: 'Transfer iptal edilecek ve rezerve edilen stok serbest bırakılacak. Bu işlem geri alınamaz. Emin misiniz?',
-                                        confirmText: 'Evet, İptal Et',
-                                        confirmVariant: 'warning',
-                                        icon: 'exclamation-triangle',
-                                        onConfirm: () => {
-                                          setConfirmModal({ show: false });
-                                          handleTransferStatusChange(transfer.id, 'cancel');
-                                        }
+                                        transferId: transfer.id,
+                                        reason: ''
                                       });
                                     }}
                                     title="Transferi iptal et ve rezervasyonu kaldır"
@@ -1043,6 +1031,23 @@ const Stock = () => {
                                   Sil
                                 </button>
                               )}
+                              {transfer.status === 'CANCELLED' && transfer.cancellationReason && (
+                                <button
+                                  className="btn btn-sm btn-outline-danger w-100 py-1 px-2"
+                                  style={{fontSize: 'clamp(0.7rem, 2vw, 0.8rem)', whiteSpace: 'nowrap'}}
+                                  onClick={() => setNotesModal({ 
+                                    show: true, 
+                                    notes: transfer.cancellationReason, 
+                                    transferId: transfer.id,
+                                    title: 'İptal Nedeni'
+                                  })}
+                                  title="İptal nedenini görüntüle"
+                                >
+                                  <i className="fas fa-exclamation-circle me-1"></i>
+                                  <span className="d-none d-sm-inline">İptal Nedeni</span>
+                                  <span className="d-inline d-sm-none">Neden</span>
+                                </button>
+                              )}
                               {transfer.notes && (
                                 <button
                                   className="btn btn-sm btn-outline-secondary w-100 py-1 px-2"
@@ -1050,7 +1055,8 @@ const Stock = () => {
                                   onClick={() => setNotesModal({ 
                                     show: true, 
                                     notes: transfer.notes, 
-                                    transferId: transfer.id 
+                                    transferId: transfer.id,
+                                    title: 'Transfer Notları' 
                                   })}
                                   title="Notları görüntüle"
                                 >
@@ -1089,9 +1095,80 @@ const Stock = () => {
       <NotesModal
         show={notesModal.show}
         notes={notesModal.notes}
+        title={notesModal.title}
         transferId={notesModal.transferId}
-        onClose={() => setNotesModal({ show: false, notes: '', transferId: null })}
+        onClose={() => setNotesModal({ show: false, notes: '', transferId: null, title: '' })}
       />
+
+      {/* Cancellation Reason Modal */}
+      {cancellationModal.show && (
+        <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content">
+              <div className="modal-header bg-danger text-white">
+                <h5 className="modal-title">
+                  <i className="fas fa-ban me-2"></i>
+                  Transferi İptal Et
+                </h5>
+                <button
+                  type="button"
+                  className="btn-close btn-close-white"
+                  onClick={() => setCancellationModal({ show: false, transferId: null, reason: '' })}
+                ></button>
+              </div>
+              <div className="modal-body">
+                <div className="alert alert-warning">
+                  <i className="fas fa-exclamation-triangle me-2"></i>
+                  Transfer iptal edilecek. Bu işlem geri alınamaz.
+                </div>
+                <div className="mb-3">
+                  <label htmlFor="cancellationReason" className="form-label">
+                    <i className="fas fa-comment-alt me-1"></i>
+                    İptal Nedeni <span className="text-muted">(Opsiyonel)</span>
+                  </label>
+                  <textarea
+                    id="cancellationReason"
+                    className="form-control"
+                    rows="4"
+                    value={cancellationModal.reason}
+                    onChange={(e) => setCancellationModal({ ...cancellationModal, reason: e.target.value })}
+                    placeholder="İptal nedenini buraya yazabilirsiniz..."
+                    maxLength="500"
+                  />
+                  <small className="text-muted">
+                    {cancellationModal.reason.length}/500 karakter
+                  </small>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setCancellationModal({ show: false, transferId: null, reason: '' })}
+                >
+                  <i className="fas fa-times me-2"></i>
+                  Vazgeç
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-danger"
+                  onClick={() => {
+                    handleTransferStatusChange(
+                      cancellationModal.transferId,
+                      'cancel',
+                      cancellationModal.reason.trim() || null
+                    );
+                    setCancellationModal({ show: false, transferId: null, reason: '' });
+                  }}
+                >
+                  <i className="fas fa-ban me-2"></i>
+                  İptal Et
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

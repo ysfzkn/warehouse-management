@@ -27,6 +27,7 @@ public class StockTransferMapper {
         dto.setCompletedDate(entity.getCompletedDate());
         dto.setCancelledDate(entity.getCancelledDate());
         dto.setNotes(entity.getNotes());
+        dto.setCancellationReason(entity.getCancellationReason());
         dto.setCreatedAt(entity.getCreatedAt());
         dto.setUpdatedAt(entity.getUpdatedAt());
 

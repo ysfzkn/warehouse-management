@@ -195,7 +195,7 @@ public class StockTransferService {
         return stockTransferRepository.save(transfer);
     }
 
-    public StockTransfer cancelTransfer(Long transferId) {
+    public StockTransfer cancelTransfer(Long transferId, String cancellationReason) {
         StockTransfer transfer = stockTransferRepository.findById(transferId)
                 .orElseThrow(() -> new RuntimeException("Transfer not found with id: " + transferId));
 
@@ -216,6 +216,7 @@ public class StockTransferService {
 
         transfer.setStatus(TransferStatus.CANCELLED);
         transfer.setCancelledDate(LocalDateTime.now());
+        transfer.setCancellationReason(cancellationReason);
         return stockTransferRepository.save(transfer);
     }
 

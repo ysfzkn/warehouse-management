@@ -138,9 +138,10 @@ public class StockTransferController {
     }
 
     @PostMapping("/{id}/cancel")
-    public ResponseEntity<?> cancelTransfer(@PathVariable Long id) {
+    public ResponseEntity<?> cancelTransfer(@PathVariable Long id, @RequestBody(required = false) java.util.Map<String, String> payload) {
         try {
-            StockTransfer transfer = stockTransferService.cancelTransfer(id);
+            String cancellationReason = payload != null ? payload.get("cancellationReason") : null;
+            StockTransfer transfer = stockTransferService.cancelTransfer(id, cancellationReason);
             StockTransferDto dto = transferMapper.toDto(transfer);
             return ResponseEntity.ok(dto);
         } catch (RuntimeException e) {
