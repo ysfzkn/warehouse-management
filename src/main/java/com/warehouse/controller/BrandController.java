@@ -44,31 +44,21 @@ public class BrandController {
     }
 
     @PostMapping
-    public ResponseEntity<?> createBrand(@Valid @RequestBody Brand brand) {
-        try {
-            return ResponseEntity.status(HttpStatus.CREATED).body(brandService.createBrand(brand));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+    public ResponseEntity<Brand> createBrand(@Valid @RequestBody Brand brand) {
+        Brand createdBrand = brandService.createBrand(brand);
+        return ResponseEntity.status(HttpStatus.CREATED).body(createdBrand);
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<?> updateBrand(@PathVariable Long id, @Valid @RequestBody Brand brand) {
-        try {
-            return ResponseEntity.ok(brandService.updateBrand(id, brand));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+    public ResponseEntity<Brand> updateBrand(@PathVariable Long id, @Valid @RequestBody Brand brand) {
+        Brand updatedBrand = brandService.updateBrand(id, brand);
+        return ResponseEntity.ok(updatedBrand);
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<?> deleteBrand(@PathVariable Long id) {
-        try {
-            brandService.deleteBrand(id);
-            return ResponseEntity.noContent().build();
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+    public ResponseEntity<Void> deleteBrand(@PathVariable Long id) {
+        brandService.deleteBrand(id);
+        return ResponseEntity.noContent().build();
     }
 }
 

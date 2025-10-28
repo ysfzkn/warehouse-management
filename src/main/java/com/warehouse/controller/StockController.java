@@ -42,22 +42,14 @@ public class StockController {
 
     @GetMapping("/product/{productId}")
     public ResponseEntity<List<Stock>> getStocksByProduct(@PathVariable Long productId) {
-        try {
-            List<Stock> stocks = stockService.getStocksByProduct(productId);
-            return ResponseEntity.ok(stocks);
-        } catch (RuntimeException e) {
-            return ResponseEntity.notFound().build();
-        }
+        List<Stock> stocks = stockService.getStocksByProduct(productId);
+        return ResponseEntity.ok(stocks);
     }
 
     @GetMapping("/warehouse/{warehouseId}")
     public ResponseEntity<List<Stock>> getStocksByWarehouse(@PathVariable Long warehouseId) {
-        try {
-            List<Stock> stocks = stockService.getStocksByWarehouse(warehouseId);
-            return ResponseEntity.ok(stocks);
-        } catch (RuntimeException e) {
-            return ResponseEntity.notFound().build();
-        }
+        List<Stock> stocks = stockService.getStocksByWarehouse(warehouseId);
+        return ResponseEntity.ok(stocks);
     }
 
     @GetMapping("/product/{productId}/warehouse/{warehouseId}")
@@ -81,101 +73,61 @@ public class StockController {
 
     @GetMapping("/warehouse/{warehouseId}/low-stock")
     public ResponseEntity<List<Stock>> getLowStockItemsByWarehouse(@PathVariable Long warehouseId) {
-        try {
-            List<Stock> stocks = stockService.getLowStockItemsByWarehouse(warehouseId);
-            return ResponseEntity.ok(stocks);
-        } catch (RuntimeException e) {
-            return ResponseEntity.notFound().build();
-        }
+        List<Stock> stocks = stockService.getLowStockItemsByWarehouse(warehouseId);
+        return ResponseEntity.ok(stocks);
     }
 
     @GetMapping("/product/{productId}/total-quantity")
     public ResponseEntity<Long> getTotalQuantityByProduct(@PathVariable Long productId) {
-        try {
-            Long total = stockService.getTotalQuantityByProduct(productId);
-            return ResponseEntity.ok(total);
-        } catch (RuntimeException e) {
-            return ResponseEntity.notFound().build();
-        }
+        Long total = stockService.getTotalQuantityByProduct(productId);
+        return ResponseEntity.ok(total);
     }
 
     @GetMapping("/warehouse/{warehouseId}/total-quantity")
     public ResponseEntity<Long> getTotalQuantityByWarehouse(@PathVariable Long warehouseId) {
-        try {
-            Long total = stockService.getTotalQuantityByWarehouse(warehouseId);
-            return ResponseEntity.ok(total);
-        } catch (RuntimeException e) {
-            return ResponseEntity.notFound().build();
-        }
+        Long total = stockService.getTotalQuantityByWarehouse(warehouseId);
+        return ResponseEntity.ok(total);
     }
 
     @PostMapping
-    public ResponseEntity<?> createStock(@Valid @RequestBody Stock stock) {
-        try {
-            Stock createdStock = stockService.createStock(stock);
-            return ResponseEntity.status(HttpStatus.CREATED).body(createdStock);
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+    public ResponseEntity<Stock> createStock(@Valid @RequestBody Stock stock) {
+        Stock createdStock = stockService.createStock(stock);
+        return ResponseEntity.status(HttpStatus.CREATED).body(createdStock);
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<?> updateStock(@PathVariable Long id, @RequestBody Stock stock) {
-        try {
-            Stock updatedStock = stockService.updateStock(id, stock);
-            return ResponseEntity.ok(updatedStock);
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+    public ResponseEntity<Stock> updateStock(@PathVariable Long id, @RequestBody Stock stock) {
+        Stock updatedStock = stockService.updateStock(id, stock);
+        return ResponseEntity.ok(updatedStock);
     }
 
     @PutMapping("/{id}/add")
-    public ResponseEntity<?> addToStock(@PathVariable Long id, @RequestParam Integer quantity) {
-        try {
-            Stock updatedStock = stockService.addToStock(id, quantity);
-            return ResponseEntity.ok(updatedStock);
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+    public ResponseEntity<Stock> addToStock(@PathVariable Long id, @RequestParam Integer quantity) {
+        Stock updatedStock = stockService.addToStock(id, quantity);
+        return ResponseEntity.ok(updatedStock);
     }
 
     @PutMapping("/{id}/remove")
-    public ResponseEntity<?> removeFromStock(@PathVariable Long id, @RequestParam Integer quantity) {
-        try {
-            Stock updatedStock = stockService.removeFromStock(id, quantity);
-            return ResponseEntity.ok(updatedStock);
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+    public ResponseEntity<Stock> removeFromStock(@PathVariable Long id, @RequestParam Integer quantity) {
+        Stock updatedStock = stockService.removeFromStock(id, quantity);
+        return ResponseEntity.ok(updatedStock);
     }
 
     @PutMapping("/{id}/reserve")
-    public ResponseEntity<?> reserveStock(@PathVariable Long id, @RequestParam Integer quantity) {
-        try {
-            Stock updatedStock = stockService.reserveStock(id, quantity);
-            return ResponseEntity.ok(updatedStock);
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+    public ResponseEntity<Stock> reserveStock(@PathVariable Long id, @RequestParam Integer quantity) {
+        Stock updatedStock = stockService.reserveStock(id, quantity);
+        return ResponseEntity.ok(updatedStock);
     }
 
     @PutMapping("/{id}/release")
-    public ResponseEntity<?> releaseStock(@PathVariable Long id, @RequestParam Integer quantity) {
-        try {
-            Stock updatedStock = stockService.releaseStock(id, quantity);
-            return ResponseEntity.ok(updatedStock);
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+    public ResponseEntity<Stock> releaseStock(@PathVariable Long id, @RequestParam Integer quantity) {
+        Stock updatedStock = stockService.releaseStock(id, quantity);
+        return ResponseEntity.ok(updatedStock);
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<?> deleteStock(@PathVariable Long id) {
-        try {
-            stockService.deleteStock(id);
-            return ResponseEntity.noContent().build();
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+    public ResponseEntity<Void> deleteStock(@PathVariable Long id) {
+        stockService.deleteStock(id);
+        return ResponseEntity.noContent().build();
     }
 }

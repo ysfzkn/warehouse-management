@@ -5,11 +5,14 @@ import com.warehouse.entity.Stock;
 import com.warehouse.entity.Product;
 import com.warehouse.entity.Warehouse;
 import com.warehouse.enums.TransferStatus;
+import com.warehouse.exception.ErrorCode;
+import com.warehouse.exception.WarehouseManagementException;
 import com.warehouse.repository.StockTransferRepository;
 import com.warehouse.repository.StockRepository;
 import com.warehouse.repository.ProductRepository;
 import com.warehouse.repository.WarehouseRepository;
-import org.springframework.beans.factory.annotation.Autowired;
+import com.warehouse.util.EntityValidator;
+import com.warehouse.util.ValidationUtil;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,7 +29,6 @@ public class StockTransferService {
     private final ProductRepository productRepository;
     private final WarehouseRepository warehouseRepository;
 
-    @Autowired
     public StockTransferService(StockTransferRepository stockTransferRepository,
                                 StockRepository stockRepository,
                                 ProductRepository productRepository,
@@ -37,183 +39,116 @@ public class StockTransferService {
         this.warehouseRepository = warehouseRepository;
     }
 
+    @Transactional(readOnly = true)
     public List<StockTransfer> getAllTransfers() {
         return stockTransferRepository.findAllOrderByTransferDateDesc();
     }
 
+    @Transactional(readOnly = true)
     public Optional<StockTransfer> getTransferById(Long id) {
         return stockTransferRepository.findById(id);
     }
 
+    @Transactional(readOnly = true)
+    public StockTransfer getTransferByIdOrThrow(Long id) {
+        return stockTransferRepository.findById(id)
+                .orElseThrow(() -> new WarehouseManagementException(ErrorCode.TRANSFER_NOT_FOUND, "ID: " + id));
+    }
+
+    @Transactional(readOnly = true)
     public List<StockTransfer> getTransfersByWarehouse(Long warehouseId) {
-        Warehouse warehouse = warehouseRepository.findById(warehouseId)
-                .orElseThrow(() -> new RuntimeException("Warehouse not found with id: " + warehouseId));
+        Warehouse warehouse = findWarehouseOrThrow(warehouseId);
         return stockTransferRepository.findByWarehouse(warehouse);
     }
 
+    @Transactional(readOnly = true)
     public List<StockTransfer> getTransfersByProduct(Long productId) {
-        Product product = productRepository.findById(productId)
-                .orElseThrow(() -> new RuntimeException("Product not found with id: " + productId));
+        Product product = findProductOrThrow(productId);
         return stockTransferRepository.findByProduct(product);
     }
 
+    @Transactional(readOnly = true)
     public List<StockTransfer> getTransfersByStatus(TransferStatus status) {
         return stockTransferRepository.findByStatus(status);
     }
+
     public StockTransfer createTransfer(StockTransfer transfer) {
-        // Validate warehouses
-        if (transfer.getSourceWarehouse() == null || transfer.getSourceWarehouse().getId() == null) {
-            throw new RuntimeException("Source warehouse is required");
-        }
-        if (transfer.getDestinationWarehouse() == null || transfer.getDestinationWarehouse().getId() == null) {
-            throw new RuntimeException("Destination warehouse is required");
-        }
-
-        Warehouse sourceWarehouse = warehouseRepository.findById(transfer.getSourceWarehouse().getId())
-                .orElseThrow(() -> new RuntimeException("Source warehouse not found"));
-        Warehouse destinationWarehouse = warehouseRepository.findById(transfer.getDestinationWarehouse().getId())
-                .orElseThrow(() -> new RuntimeException("Destination warehouse not found"));
-
-        // Validate warehouses are different
-        if (sourceWarehouse.getId().equals(destinationWarehouse.getId())) {
-            throw new RuntimeException("Source and destination warehouses must be different");
-        }
-
-        // Validate product
-        if (transfer.getProduct() == null || transfer.getProduct().getId() == null) {
-            throw new RuntimeException("Product is required");
-        }
-
-        Product product = productRepository.findById(transfer.getProduct().getId())
-                .orElseThrow(() -> new RuntimeException("Product not found"));
-
-        // Validate quantity
-        if (transfer.getQuantity() == null || transfer.getQuantity() <= 0) {
-            throw new RuntimeException("Quantity must be greater than 0");
-        }
-
-        // Check if source warehouse has enough stock
-        Optional<Stock> sourceStockOpt = stockRepository.findByProductAndWarehouse(product, sourceWarehouse);
-        if (sourceStockOpt.isEmpty()) {
-            throw new RuntimeException("Product not found in source warehouse");
-        }
-
-        Stock sourceStock = sourceStockOpt.get();
-        if (sourceStock.getAvailableQuantity() < transfer.getQuantity()) {
-            throw new RuntimeException(
-                    String.format("Insufficient available stock in source warehouse. Available: %d, Requested: %d",
-                            sourceStock.getAvailableQuantity(), transfer.getQuantity())
-            );
-        }
-
-        // Set validated entities
+        validateTransferCreation(transfer);
+        
+        Warehouse sourceWarehouse = findWarehouseOrThrow(transfer.getSourceWarehouse().getId());
+        Warehouse destinationWarehouse = findWarehouseOrThrow(transfer.getDestinationWarehouse().getId());
+        Product product = findProductOrThrow(transfer.getProduct().getId());
+        
+        EntityValidator.validateWarehousesDifferent(sourceWarehouse, destinationWarehouse);
+        ValidationUtil.requirePositive(transfer.getQuantity(), "Quantity");
+        
+        validateSufficientStock(product, sourceWarehouse, transfer.getQuantity());
+        
         transfer.setSourceWarehouse(sourceWarehouse);
         transfer.setDestinationWarehouse(destinationWarehouse);
         transfer.setProduct(product);
         transfer.setStatus(TransferStatus.PENDING);
-
+        
         return stockTransferRepository.save(transfer);
     }
 
     public StockTransfer startTransfer(Long transferId) {
-        StockTransfer transfer = stockTransferRepository.findById(transferId)
-                .orElseThrow(() -> new RuntimeException("Transfer not found with id: " + transferId));
-
+        StockTransfer transfer = getTransferByIdOrThrow(transferId);
+        
         if (transfer.getStatus() != TransferStatus.PENDING) {
-            throw new RuntimeException("Only PENDING transfers can be started. Current status: " + transfer.getStatus());
+            throw new WarehouseManagementException(ErrorCode.ONLY_PENDING_CAN_BE_STARTED, 
+                "Current status: " + transfer.getStatus());
         }
-
-        // Reserve stock in source warehouse
-        Stock sourceStock = stockRepository.findByProductAndWarehouse(transfer.getProduct(), transfer.getSourceWarehouse())
-                .orElseThrow(() -> new RuntimeException("Source stock not found"));
-
-        if (sourceStock.getAvailableQuantity() < transfer.getQuantity()) {
-            throw new RuntimeException(
-                    String.format("Insufficient available stock. Available: %d, Required: %d",
-                            sourceStock.getAvailableQuantity(), transfer.getQuantity())
-            );
-        }
-
-        // Reserve the stock
-        sourceStock.setReservedQuantity(sourceStock.getReservedQuantity() + transfer.getQuantity());
-        stockRepository.save(sourceStock);
-
+        
+        Stock sourceStock = findSourceStockOrThrow(transfer);
+        validateSufficientAvailableStock(sourceStock, transfer.getQuantity());
+        
+        reserveStockForTransfer(sourceStock, transfer.getQuantity());
+        
         transfer.setStatus(TransferStatus.IN_TRANSIT);
         return stockTransferRepository.save(transfer);
     }
 
     public StockTransfer completeTransfer(Long transferId) {
-        StockTransfer transfer = stockTransferRepository.findById(transferId)
-                .orElseThrow(() -> new RuntimeException("Transfer not found with id: " + transferId));
-
+        StockTransfer transfer = getTransferByIdOrThrow(transferId);
+        
         if (transfer.getStatus() == TransferStatus.COMPLETED) {
-            throw new RuntimeException("Transfer is already completed");
+            throw new WarehouseManagementException(ErrorCode.TRANSFER_ALREADY_COMPLETED);
         }
         if (transfer.getStatus() == TransferStatus.CANCELLED) {
-            throw new RuntimeException("Cannot complete a cancelled transfer");
+            throw new WarehouseManagementException(ErrorCode.CANNOT_CANCEL_COMPLETED);
         }
-
-        Stock sourceStock = stockRepository.findByProductAndWarehouse(transfer.getProduct(), transfer.getSourceWarehouse())
-                .orElseThrow(() -> new RuntimeException("Source stock not found"));
-
+        
+        Stock sourceStock = findSourceStockOrThrow(transfer);
+        
         if (transfer.getStatus() == TransferStatus.PENDING) {
-            if (sourceStock.getAvailableQuantity() < transfer.getQuantity()) {
-                throw new RuntimeException(
-                        String.format("Insufficient available stock. Available: %d, Required: %d",
-                                sourceStock.getAvailableQuantity(), transfer.getQuantity())
-                );
-            }
-            sourceStock.setQuantity(sourceStock.getQuantity() - transfer.getQuantity());
+            deductStockDirectly(sourceStock, transfer.getQuantity());
         } else if (transfer.getStatus() == TransferStatus.IN_TRANSIT) {
-            sourceStock.setQuantity(sourceStock.getQuantity() - transfer.getQuantity());
-            sourceStock.setReservedQuantity(sourceStock.getReservedQuantity() - transfer.getQuantity());
+            deductReservedStock(sourceStock, transfer.getQuantity());
         }
-
-        stockRepository.save(sourceStock);
-
-        Optional<Stock> destinationStockOpt = stockRepository.findByProductAndWarehouse(
-                transfer.getProduct(), transfer.getDestinationWarehouse());
-
-        Stock destinationStock;
-        if (destinationStockOpt.isPresent()) {
-            destinationStock = destinationStockOpt.get();
-            destinationStock.setQuantity(destinationStock.getQuantity() + transfer.getQuantity());
-        } else {
-            destinationStock = new Stock();
-            destinationStock.setProduct(transfer.getProduct());
-            destinationStock.setWarehouse(transfer.getDestinationWarehouse());
-            destinationStock.setQuantity(transfer.getQuantity());
-            destinationStock.setMinStockLevel(0);
-            destinationStock.setReservedQuantity(0);
-            destinationStock.setConsignedQuantity(0);
-        }
-
-        stockRepository.save(destinationStock);
-
+        
+        addStockToDestination(transfer);
+        
         transfer.setStatus(TransferStatus.COMPLETED);
         transfer.setCompletedDate(LocalDateTime.now());
         return stockTransferRepository.save(transfer);
     }
 
     public StockTransfer cancelTransfer(Long transferId, String cancellationReason) {
-        StockTransfer transfer = stockTransferRepository.findById(transferId)
-                .orElseThrow(() -> new RuntimeException("Transfer not found with id: " + transferId));
-
+        StockTransfer transfer = getTransferByIdOrThrow(transferId);
+        
         if (transfer.getStatus() == TransferStatus.COMPLETED) {
-            throw new RuntimeException("Cannot cancel a completed transfer");
+            throw new WarehouseManagementException(ErrorCode.CANNOT_CANCEL_COMPLETED);
         }
         if (transfer.getStatus() == TransferStatus.CANCELLED) {
-            throw new RuntimeException("Transfer is already cancelled");
+            throw new WarehouseManagementException(ErrorCode.TRANSFER_ALREADY_CANCELLED);
         }
-
+        
         if (transfer.getStatus() == TransferStatus.IN_TRANSIT) {
-            Stock sourceStock = stockRepository.findByProductAndWarehouse(transfer.getProduct(), transfer.getSourceWarehouse())
-                    .orElseThrow(() -> new RuntimeException("Source stock not found"));
-
-            sourceStock.setReservedQuantity(sourceStock.getReservedQuantity() - transfer.getQuantity());
-            stockRepository.save(sourceStock);
+            Stock sourceStock = findSourceStockOrThrow(transfer);
+            releaseReservedStock(sourceStock, transfer.getQuantity());
         }
-
+        
         transfer.setStatus(TransferStatus.CANCELLED);
         transfer.setCancelledDate(LocalDateTime.now());
         transfer.setCancellationReason(cancellationReason);
@@ -221,14 +156,115 @@ public class StockTransferService {
     }
 
     public StockTransfer updateTransfer(Long transferId, StockTransfer updatedTransfer) {
-        StockTransfer transfer = stockTransferRepository.findById(transferId)
-                .orElseThrow(() -> new RuntimeException("Transfer not found with id: " + transferId));
-
+        StockTransfer transfer = getTransferByIdOrThrow(transferId);
+        
         if (transfer.getStatus() != TransferStatus.PENDING) {
-            throw new RuntimeException("Only PENDING transfers can be updated");
+            throw new WarehouseManagementException(ErrorCode.ONLY_PENDING_CAN_BE_UPDATED, 
+                "Current status: " + transfer.getStatus());
         }
+        
+        updateTransferFields(transfer, updatedTransfer);
+        
+        return stockTransferRepository.save(transfer);
+    }
 
-        // Update allowed fields
+    public void deleteTransfer(Long transferId) {
+        StockTransfer transfer = getTransferByIdOrThrow(transferId);
+        
+        if (transfer.getStatus() == TransferStatus.IN_TRANSIT) {
+            throw new WarehouseManagementException(ErrorCode.CANNOT_DELETE_IN_TRANSIT);
+        }
+        if (transfer.getStatus() == TransferStatus.COMPLETED) {
+            throw new WarehouseManagementException(ErrorCode.CANNOT_DELETE_COMPLETED);
+        }
+        
+        stockTransferRepository.delete(transfer);
+    }
+
+    private void validateTransferCreation(StockTransfer transfer) {
+        ValidationUtil.requireNonNull(transfer.getSourceWarehouse(), "Source warehouse");
+        ValidationUtil.requireNonNull(transfer.getSourceWarehouse().getId(), "Source warehouse ID");
+        ValidationUtil.requireNonNull(transfer.getDestinationWarehouse(), "Destination warehouse");
+        ValidationUtil.requireNonNull(transfer.getDestinationWarehouse().getId(), "Destination warehouse ID");
+        ValidationUtil.requireNonNull(transfer.getProduct(), "Product");
+        ValidationUtil.requireNonNull(transfer.getProduct().getId(), "Product ID");
+    }
+
+    private void validateSufficientStock(Product product, Warehouse warehouse, Integer quantity) {
+        Optional<Stock> stockOpt = stockRepository.findByProductAndWarehouse(product, warehouse);
+        if (stockOpt.isEmpty()) {
+            throw new WarehouseManagementException(ErrorCode.PRODUCT_NOT_IN_WAREHOUSE, 
+                String.format("Product: %s, Warehouse: %s", product.getName(), warehouse.getName()));
+        }
+        
+        Stock stock = stockOpt.get();
+        if (stock.getAvailableQuantity() < quantity) {
+            throw new WarehouseManagementException(ErrorCode.INSUFFICIENT_STOCK, 
+                String.format("Available: %d, Requested: %d", stock.getAvailableQuantity(), quantity));
+        }
+    }
+
+    private void validateSufficientAvailableStock(Stock stock, Integer quantity) {
+        if (stock.getAvailableQuantity() < quantity) {
+            throw new WarehouseManagementException(ErrorCode.INSUFFICIENT_STOCK, 
+                String.format("Available: %d, Requested: %d", stock.getAvailableQuantity(), quantity));
+        }
+    }
+
+    private Stock findSourceStockOrThrow(StockTransfer transfer) {
+        return stockRepository.findByProductAndWarehouse(transfer.getProduct(), transfer.getSourceWarehouse())
+                .orElseThrow(() -> new WarehouseManagementException(ErrorCode.PRODUCT_NOT_IN_WAREHOUSE, 
+                    "Source warehouse stock not found"));
+    }
+
+    private void reserveStockForTransfer(Stock stock, Integer quantity) {
+        stock.setReservedQuantity(stock.getReservedQuantity() + quantity);
+        stockRepository.save(stock);
+    }
+
+    private void releaseReservedStock(Stock stock, Integer quantity) {
+        stock.setReservedQuantity(stock.getReservedQuantity() - quantity);
+        stockRepository.save(stock);
+    }
+
+    private void deductStockDirectly(Stock stock, Integer quantity) {
+        stock.setQuantity(stock.getQuantity() - quantity);
+        stockRepository.save(stock);
+    }
+
+    private void deductReservedStock(Stock stock, Integer quantity) {
+        stock.setQuantity(stock.getQuantity() - quantity);
+        stock.setReservedQuantity(stock.getReservedQuantity() - quantity);
+        stockRepository.save(stock);
+    }
+
+    private void addStockToDestination(StockTransfer transfer) {
+        Optional<Stock> destinationStockOpt = stockRepository.findByProductAndWarehouse(
+                transfer.getProduct(), transfer.getDestinationWarehouse());
+        
+        Stock destinationStock;
+        if (destinationStockOpt.isPresent()) {
+            destinationStock = destinationStockOpt.get();
+            destinationStock.setQuantity(destinationStock.getQuantity() + transfer.getQuantity());
+        } else {
+            destinationStock = createNewStock(transfer);
+        }
+        
+        stockRepository.save(destinationStock);
+    }
+
+    private Stock createNewStock(StockTransfer transfer) {
+        Stock stock = new Stock();
+        stock.setProduct(transfer.getProduct());
+        stock.setWarehouse(transfer.getDestinationWarehouse());
+        stock.setQuantity(transfer.getQuantity());
+        stock.setMinStockLevel(0);
+        stock.setReservedQuantity(0);
+        stock.setConsignedQuantity(0);
+        return stock;
+    }
+
+    private void updateTransferFields(StockTransfer transfer, StockTransfer updatedTransfer) {
         if (updatedTransfer.getDriverName() != null) {
             transfer.setDriverName(updatedTransfer.getDriverName());
         }
@@ -247,23 +283,15 @@ public class StockTransferService {
         if (updatedTransfer.getTransferDate() != null) {
             transfer.setTransferDate(updatedTransfer.getTransferDate());
         }
-
-        return stockTransferRepository.save(transfer);
     }
 
-    public void deleteTransfer(Long transferId) {
-        StockTransfer transfer = stockTransferRepository.findById(transferId)
-                .orElseThrow(() -> new RuntimeException("Transfer not found with id: " + transferId));
+    private Product findProductOrThrow(Long productId) {
+        return productRepository.findById(productId)
+                .orElseThrow(() -> new WarehouseManagementException(ErrorCode.PRODUCT_NOT_FOUND, "ID: " + productId));
+    }
 
-        if (transfer.getStatus() == TransferStatus.IN_TRANSIT) {
-            throw new RuntimeException("Cannot delete a transfer that is IN_TRANSIT. Cancel it first.");
-        }
-        if (transfer.getStatus() == TransferStatus.COMPLETED) {
-            throw new RuntimeException("Cannot delete a completed transfer");
-        }
-
-        stockTransferRepository.delete(transfer);
+    private Warehouse findWarehouseOrThrow(Long warehouseId) {
+        return warehouseRepository.findById(warehouseId)
+                .orElseThrow(() -> new WarehouseManagementException(ErrorCode.WAREHOUSE_NOT_FOUND, "ID: " + warehouseId));
     }
 }
-
- 

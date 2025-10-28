@@ -1,10 +1,10 @@
 package com.warehouse.filter;
 
+import com.warehouse.config.AuthProperties;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -15,11 +15,11 @@ import java.util.Base64;
 @Component
 public class SimpleAuthFilter extends OncePerRequestFilter {
 
-    @Value("${app.admin.username:admin}")
-    private String adminUsername;
+    private final AuthProperties authProperties;
 
-    @Value("${app.admin.password:admin}")
-    private String adminPassword;
+    public SimpleAuthFilter(AuthProperties authProperties) {
+        this.authProperties = authProperties;
+    }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
@@ -41,7 +41,8 @@ public class SimpleAuthFilter extends OncePerRequestFilter {
                 if (idx > 0) {
                     String u = decoded.substring(0, idx);
                     String p = decoded.substring(idx + 1);
-                    if (adminUsername.equals(u) && adminPassword.equals(p)) {
+                    if (authProperties.getUsername().equals(u) && 
+                        authProperties.getPassword().equals(p)) {
                         filterChain.doFilter(request, response);
                         return;
                     }
