@@ -68,7 +68,7 @@ Application opens at **http://localhost:3000**
 frontend/
 ├── public/
 │   ├── index.html              # HTML template
-│   └── sahinler-logo.png       # App logo
+│   └── company-logo.png       # App logo
 │
 ├── src/
 │   ├── components/             # Reusable components

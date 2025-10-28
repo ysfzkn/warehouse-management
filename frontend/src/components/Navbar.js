@@ -166,8 +166,8 @@ const Navbar = () => {
             style={brandStyle}
           >
             <img 
-              src="/sahinler-logo.png" 
-              onError={(e)=>{e.currentTarget.onerror=null; e.currentTarget.src='/sahinler-logo.png';}} 
+              src="/company-logo.png" 
+              onError={(e)=>{e.currentTarget.onerror=null; e.currentTarget.src='/company-logo.png';}} 
               alt="Logo" 
               style={{ height: 32, marginRight: '0.75rem' }} 
             />

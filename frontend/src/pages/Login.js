@@ -49,8 +49,8 @@ const Login = () => {
             {/* Logo */}
             <div style={styles.logoContainer}>
               <img
-                src="/sahinler-logo.png"
-                onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = '/sahinler-logo.png'; }}
+                src="/company-logo.png"
+                onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = '/company-logo.png'; }}
                 alt="Şahinler DTM"
                 style={styles.logo}
               />
