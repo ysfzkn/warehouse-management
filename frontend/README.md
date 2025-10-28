@@ -418,7 +418,9 @@ MIT License - see [LICENSE](../LICENSE) file for details.
 
 <div align="center">
 
-**Built with ❤️ using React**
+**Developed by Yusuf Ozkan ([@ysfzkn](https://github.com/ysfzkn))**
+
+Built with ❤️ using React
 
 [⬆ Back to Top](#-warehouse-management---frontend)
 

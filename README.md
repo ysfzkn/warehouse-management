@@ -68,7 +68,7 @@ A comprehensive warehouse management system designed for businesses that need ef
 
 ### Option 1: Docker (Recommended)
 
-```bash
+   ```bash
 # Clone the repository
 git clone https://github.com/yourusername/warehouse-management.git
 cd warehouse-management
@@ -85,17 +85,17 @@ docker-compose up -d
 ### Option 2: Manual Setup
 
 **Backend:**
-```bash
-mvn clean install
-mvn spring-boot:run
-```
+   ```bash
+   mvn clean install
+   mvn spring-boot:run
+   ```
 
 **Frontend:**
-```bash
-cd frontend
-npm install
-npm start
-```
+   ```bash
+   cd frontend
+   npm install
+   npm start
+   ```
 
 ---
 
@@ -363,9 +363,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-## 👥 Authors
+## 👥 Author
 
-Developed with ❤️ by the Warehouse Management Team
+Developed by **Yusuf Ozkan** ([@ysfzkn](https://github.com/ysfzkn))
 
 ---
 
