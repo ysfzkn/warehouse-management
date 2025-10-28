@@ -143,15 +143,22 @@ const Dashboard = () => {
         }
       });
 
-      // Handle isActive field - could be boolean, 1/0, or "1"/"0"
+      // Handle active/isActive field - could be boolean, 1/0, or "1"/"0"
       const activeWarehouses = warehousesData.filter(w => {
-        return w.isActive === true || w.isActive === 1 || w.isActive === '1' || w.isActive === 'true';
+        const activeValue = w.active !== undefined ? w.active : w.isActive;
+        return activeValue === true || activeValue === 1 || activeValue === '1' || activeValue === 'true';
       }).length;
 
       console.log('Warehouse active status check:', {
         total: warehousesData.length,
         active: activeWarehouses,
-        sample: warehousesData.slice(0, 3).map(w => ({ name: w.name, isActive: w.isActive, type: typeof w.isActive }))
+        sample: warehousesData.slice(0, 3).map(w => ({ 
+          name: w.name, 
+          active: w.active, 
+          isActive: w.isActive, 
+          activeType: typeof w.active,
+          isActiveType: typeof w.isActive 
+        }))
       });
 
       setStats({
@@ -1003,47 +1010,56 @@ const Dashboard = () => {
       {/* Quick Insights */}
       <div className="row mb-4" style={{position: 'relative', zIndex: 1}}>
         <div className="col-12">
-          <div className="card border-0 shadow-sm bg-gradient" style={{background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'}}>
-            <div className="card-body text-white">
+          <div className="card border-0 shadow-lg" style={{
+            background: 'linear-gradient(135deg, #4e54c8 0%, #8f94fb 100%)',
+            borderRadius: '15px'
+          }}>
+            <div className="card-body text-white p-4">
               <div className="row align-items-center">
                 <div className="col-md-8">
-                  <h5 className="mb-2">
-                    <i className="fas fa-lightbulb me-2"></i>
+                  <h5 className="mb-3 fw-bold">
+                    <i className="fas fa-lightbulb me-2" style={{color: '#ffd700'}}></i>
                     Hızlı İçgörüler
                   </h5>
                   <div className="row g-3">
                     <div className="col-md-4">
-                      <div className="d-flex align-items-center">
-                        <i className="fas fa-exclamation-triangle fa-2x me-3 opacity-75"></i>
-                        <div>
-                          <div className="h4 mb-0 fw-bold">{computedStats.lowStockItems}</div>
-                          <small className="opacity-75">Düşük stoklu ürün var</small>
+                      <div className="p-3 rounded" style={{backgroundColor: 'rgba(255, 255, 255, 0.15)', backdropFilter: 'blur(10px)'}}>
+                        <div className="d-flex align-items-center">
+                          <i className="fas fa-exclamation-triangle fa-2x me-3" style={{color: '#ffd700'}}></i>
+                          <div>
+                            <div className="h4 mb-0 fw-bold">{computedStats.lowStockItems}</div>
+                            <small style={{color: '#f0f0f0'}}>Düşük stoklu ürün var</small>
+                          </div>
                         </div>
                       </div>
                     </div>
                     <div className="col-md-4">
-                      <div className="d-flex align-items-center">
-                        <i className="fas fa-percentage fa-2x me-3 opacity-75"></i>
-                        <div>
-                          <div className="h4 mb-0 fw-bold">
-                            {stats.totalProducts > 0 
-                              ? Math.round((computedStats.totalStockQuantity / stats.totalProducts))
-                              : 0}
+                      <div className="p-3 rounded" style={{backgroundColor: 'rgba(255, 255, 255, 0.15)', backdropFilter: 'blur(10px)'}}>
+                        <div className="d-flex align-items-center">
+                          <i className="fas fa-percentage fa-2x me-3" style={{color: '#4ade80'}}></i>
+                          <div>
+                            <div className="h4 mb-0 fw-bold">
+                              {stats.totalProducts > 0 
+                                ? Math.round((computedStats.totalStockQuantity / stats.totalProducts))
+                                : 0}
+                            </div>
+                            <small style={{color: '#f0f0f0'}}>Ürün başına ort. stok</small>
                           </div>
-                          <small className="opacity-75">Ürün başına ort. stok</small>
                         </div>
                       </div>
                     </div>
                     <div className="col-md-4">
-                      <div className="d-flex align-items-center">
-                        <i className="fas fa-chart-line fa-2x me-3 opacity-75"></i>
-                        <div>
-                          <div className="h4 mb-0 fw-bold">
-                            {computedStats.totalReserved > 0 && computedStats.totalStockQuantity > 0
-                              ? Math.round((computedStats.totalReserved / computedStats.totalStockQuantity) * 100)
-                              : 0}%
+                      <div className="p-3 rounded" style={{backgroundColor: 'rgba(255, 255, 255, 0.15)', backdropFilter: 'blur(10px)'}}>
+                        <div className="d-flex align-items-center">
+                          <i className="fas fa-chart-line fa-2x me-3" style={{color: '#60a5fa'}}></i>
+                          <div>
+                            <div className="h4 mb-0 fw-bold">
+                              {computedStats.totalReserved > 0 && computedStats.totalStockQuantity > 0
+                                ? Math.round((computedStats.totalReserved / computedStats.totalStockQuantity) * 100)
+                                : 0}%
+                            </div>
+                            <small style={{color: '#f0f0f0'}}>Rezerve ürün oranı</small>
                           </div>
-                          <small className="opacity-75">Rezervasyon oranı</small>
                         </div>
                       </div>
                     </div>
@@ -1051,8 +1067,12 @@ const Dashboard = () => {
                 </div>
                 <div className="col-md-4 text-md-end mt-3 mt-md-0">
                   <button 
-                    className="btn btn-light btn-lg"
+                    className="btn btn-light btn-lg fw-bold shadow-sm"
                     onClick={() => navigate('/stock?filter=low-stock')}
+                    style={{
+                      borderRadius: '10px',
+                      padding: '12px 24px'
+                    }}
                   >
                     <i className="fas fa-arrow-right me-2"></i>
                     Düşük Stokları İncele

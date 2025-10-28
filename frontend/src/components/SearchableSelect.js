@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 
 const SearchableSelect = ({ label, value, onChange, searchEndpoint, placeholder = 'Ara...', disabled = false, renderOption, wrapperClassName = 'mb-3', allowClear = false, clearText = 'Temizle' }) => {
@@ -6,7 +6,43 @@ const SearchableSelect = ({ label, value, onChange, searchEndpoint, placeholder 
   const [options, setOptions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
+  const [selectedLabel, setSelectedLabel] = useState('');
   const containerRef = useRef(null);
+
+  // Fetch initial value's label when component mounts with a value
+  useEffect(() => {
+    if (value) {
+      // Check if we already have this option in our list
+      const existing = options.find(o => o.id === value);
+      if (existing) {
+        setSelectedLabel(existing.name || '');
+      } else {
+        // Fetch from API
+        const fetchInitialValue = async () => {
+          try {
+            const endpoint = searchEndpoint.replace('/search', `/${value}`);
+            const res = await axios.get(endpoint);
+            if (res.data) {
+              setSelectedLabel(res.data.name || '');
+              setOptions(prev => {
+                // Add if not already in list
+                if (!prev.find(o => o.id === res.data.id)) {
+                  return [res.data, ...prev];
+                }
+                return prev;
+              });
+            }
+          } catch (e) {
+            console.error('Error fetching initial value:', e);
+          }
+        };
+        fetchInitialValue();
+      }
+    } else {
+      // Value is null, clear label
+      setSelectedLabel('');
+    }
+  }, [value, searchEndpoint]);
 
   useEffect(() => {
     const handler = (e) => {
@@ -41,8 +77,6 @@ const SearchableSelect = ({ label, value, onChange, searchEndpoint, placeholder 
     };
   }, [query, open, searchEndpoint]);
 
-  const selectedOption = useMemo(() => options.find(o => o.id === value) || null, [options, value]);
-
   return (
     <div className={wrapperClassName} ref={containerRef}>
       {label && (
@@ -67,7 +101,7 @@ const SearchableSelect = ({ label, value, onChange, searchEndpoint, placeholder 
           type="text"
           className="form-control"
           placeholder={placeholder}
-          value={open ? query : (selectedOption ? (selectedOption.name || '') : '')}
+          value={open ? query : selectedLabel}
           onChange={(e) => setQuery(e.target.value)}
           onFocus={() => setOpen(true)}
           disabled={disabled}
@@ -101,6 +135,7 @@ const SearchableSelect = ({ label, value, onChange, searchEndpoint, placeholder 
                 className={`list-group-item list-group-item-action ${value === opt.id ? 'active' : ''}`}
                 onClick={() => {
                   onChange(opt.id, opt);
+                  setSelectedLabel(opt.name || '');
                   setOpen(false);
                 }}
               >
