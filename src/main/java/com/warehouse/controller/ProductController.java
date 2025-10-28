@@ -56,12 +56,8 @@ public class ProductController {
 
     @GetMapping("/category/{categoryId}")
     public ResponseEntity<List<Product>> getProductsByCategory(@PathVariable Long categoryId) {
-        try {
-            List<Product> products = productService.getProductsByCategory(categoryId);
-            return ResponseEntity.ok(products);
-        } catch (RuntimeException e) {
-            return ResponseEntity.notFound().build();
-        }
+        List<Product> products = productService.getProductsByCategory(categoryId);
+        return ResponseEntity.ok(products);
     }
 
     @GetMapping("/search")
@@ -104,52 +100,32 @@ public class ProductController {
     }
 
     @PostMapping
-    public ResponseEntity<?> createProduct(@Valid @RequestBody Product product) {
-        try {
-            Product createdProduct = productService.createProduct(product);
-            return ResponseEntity.status(HttpStatus.CREATED).body(createdProduct);
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+    public ResponseEntity<Product> createProduct(@Valid @RequestBody Product product) {
+        Product createdProduct = productService.createProduct(product);
+        return ResponseEntity.status(HttpStatus.CREATED).body(createdProduct);
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<?> updateProduct(@PathVariable Long id, @Valid @RequestBody Product product) {
-        try {
-            Product updatedProduct = productService.updateProduct(id, product);
-            return ResponseEntity.ok(updatedProduct);
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+    public ResponseEntity<Product> updateProduct(@PathVariable Long id, @Valid @RequestBody Product product) {
+        Product updatedProduct = productService.updateProduct(id, product);
+        return ResponseEntity.ok(updatedProduct);
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<?> deleteProduct(@PathVariable Long id) {
-        try {
-            productService.deleteProduct(id);
-            return ResponseEntity.noContent().build();
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+    public ResponseEntity<Void> deleteProduct(@PathVariable Long id) {
+        productService.deleteProduct(id);
+        return ResponseEntity.noContent().build();
     }
 
     @PutMapping("/{id}/deactivate")
-    public ResponseEntity<?> deactivateProduct(@PathVariable Long id) {
-        try {
-            productService.deactivateProduct(id);
-            return ResponseEntity.ok().build();
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+    public ResponseEntity<Void> deactivateProduct(@PathVariable Long id) {
+        productService.deactivateProduct(id);
+        return ResponseEntity.ok().build();
     }
 
     @PutMapping("/{id}/activate")
-    public ResponseEntity<?> activateProduct(@PathVariable Long id) {
-        try {
-            productService.activateProduct(id);
-            return ResponseEntity.ok().build();
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+    public ResponseEntity<Void> activateProduct(@PathVariable Long id) {
+        productService.activateProduct(id);
+        return ResponseEntity.ok().build();
     }
 }

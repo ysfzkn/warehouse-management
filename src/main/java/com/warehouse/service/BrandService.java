@@ -1,8 +1,10 @@
 package com.warehouse.service;
 
 import com.warehouse.entity.Brand;
+import com.warehouse.exception.ErrorCode;
+import com.warehouse.exception.WarehouseManagementException;
 import com.warehouse.repository.BrandRepository;
-import org.springframework.beans.factory.annotation.Autowired;
+import com.warehouse.util.EntityValidator;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
@@ -14,42 +16,44 @@ public class BrandService {
 
     private final BrandRepository brandRepository;
 
-    @Autowired
     public BrandService(BrandRepository brandRepository) {
         this.brandRepository = brandRepository;
     }
 
+    @Transactional(readOnly = true)
     public List<Brand> getAllBrands() {
         return brandRepository.findAll();
     }
 
+    @Transactional(readOnly = true)
     public List<Brand> getAllActiveBrands() {
         return brandRepository.findAllActive();
     }
 
+    @Transactional(readOnly = true)
     public List<Brand> searchActiveBrands(String name) {
         return brandRepository.searchActiveByName(name);
     }
 
+    @Transactional(readOnly = true)
     public Optional<Brand> getBrandById(Long id) {
         return brandRepository.findById(id);
     }
 
+    @Transactional(readOnly = true)
+    public Brand getBrandByIdOrThrow(Long id) {
+        return brandRepository.findById(id)
+                .orElseThrow(() -> new WarehouseManagementException(ErrorCode.BRAND_NOT_FOUND, "ID: " + id));
+    }
+
     public Brand createBrand(Brand brand) {
-        if (brandRepository.existsByName(brand.getName())) {
-            throw new RuntimeException("Brand with name '" + brand.getName() + "' already exists");
-        }
+        checkNameDuplication(brand.getName());
         return brandRepository.save(brand);
     }
 
     public Brand updateBrand(Long id, Brand details) {
-        Brand brand = brandRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Brand not found with id: " + id));
-
-        if (!brand.getName().equals(details.getName()) && brandRepository.existsByName(details.getName())) {
-            throw new RuntimeException("Brand with name '" + details.getName() + "' already exists");
-        }
-
+        Brand brand = getBrandByIdOrThrow(id);
+        checkNameDuplicationOnUpdate(brand, details);
         brand.setName(details.getName());
         brand.setDescription(details.getDescription());
         brand.setActive(details.isActive());
@@ -57,13 +61,25 @@ public class BrandService {
     }
 
     public void deleteBrand(Long id) {
-        Brand brand = brandRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Brand not found with id: " + id));
-
-        if (brand.getProducts() != null && !brand.getProducts().isEmpty()) {
-            throw new RuntimeException("Cannot delete brand with existing products");
-        }
+        Brand brand = getBrandByIdOrThrow(id);
+        EntityValidator.validateEntityHasNoRelations(
+            brand.getProducts() != null && !brand.getProducts().isEmpty(), 
+            "Brand", "products"
+        );
         brandRepository.delete(brand);
+    }
+
+    private void checkNameDuplication(String name) {
+        if (brandRepository.existsByName(name)) {
+            throw new WarehouseManagementException(ErrorCode.BRAND_NAME_ALREADY_EXISTS, "Name: " + name);
+        }
+    }
+
+    private void checkNameDuplicationOnUpdate(Brand brand, Brand details) {
+        if (!brand.getName().equals(details.getName()) && 
+            brandRepository.existsByName(details.getName())) {
+            throw new WarehouseManagementException(ErrorCode.BRAND_NAME_ALREADY_EXISTS, "Name: " + details.getName());
+        }
     }
 }
 

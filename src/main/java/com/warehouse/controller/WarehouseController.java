@@ -48,52 +48,32 @@ public class WarehouseController {
     }
 
     @PostMapping
-    public ResponseEntity<?> createWarehouse(@Valid @RequestBody Warehouse warehouse) {
-        try {
-            Warehouse createdWarehouse = warehouseService.createWarehouse(warehouse);
-            return ResponseEntity.status(HttpStatus.CREATED).body(createdWarehouse);
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+    public ResponseEntity<Warehouse> createWarehouse(@Valid @RequestBody Warehouse warehouse) {
+        Warehouse createdWarehouse = warehouseService.createWarehouse(warehouse);
+        return ResponseEntity.status(HttpStatus.CREATED).body(createdWarehouse);
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<?> updateWarehouse(@PathVariable Long id, @Valid @RequestBody Warehouse warehouse) {
-        try {
-            Warehouse updatedWarehouse = warehouseService.updateWarehouse(id, warehouse);
-            return ResponseEntity.ok(updatedWarehouse);
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+    public ResponseEntity<Warehouse> updateWarehouse(@PathVariable Long id, @Valid @RequestBody Warehouse warehouse) {
+        Warehouse updatedWarehouse = warehouseService.updateWarehouse(id, warehouse);
+        return ResponseEntity.ok(updatedWarehouse);
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<?> deleteWarehouse(@PathVariable Long id) {
-        try {
-            warehouseService.deleteWarehouse(id);
-            return ResponseEntity.noContent().build();
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+    public ResponseEntity<Void> deleteWarehouse(@PathVariable Long id) {
+        warehouseService.deleteWarehouse(id);
+        return ResponseEntity.noContent().build();
     }
 
     @PutMapping("/{id}/deactivate")
-    public ResponseEntity<?> deactivateWarehouse(@PathVariable Long id) {
-        try {
-            warehouseService.deactivateWarehouse(id);
-            return ResponseEntity.ok().build();
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+    public ResponseEntity<Void> deactivateWarehouse(@PathVariable Long id) {
+        warehouseService.deactivateWarehouse(id);
+        return ResponseEntity.ok().build();
     }
 
     @PutMapping("/{id}/activate")
-    public ResponseEntity<?> activateWarehouse(@PathVariable Long id) {
-        try {
-            warehouseService.activateWarehouse(id);
-            return ResponseEntity.ok().build();
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+    public ResponseEntity<Void> activateWarehouse(@PathVariable Long id) {
+        warehouseService.activateWarehouse(id);
+        return ResponseEntity.ok().build();
     }
 }

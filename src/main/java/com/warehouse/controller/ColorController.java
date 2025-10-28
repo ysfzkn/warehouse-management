@@ -44,31 +44,21 @@ public class ColorController {
     }
 
     @PostMapping
-    public ResponseEntity<?> createColor(@Valid @RequestBody Color color) {
-        try {
-            return ResponseEntity.status(HttpStatus.CREATED).body(colorService.createColor(color));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+    public ResponseEntity<Color> createColor(@Valid @RequestBody Color color) {
+        Color createdColor = colorService.createColor(color);
+        return ResponseEntity.status(HttpStatus.CREATED).body(createdColor);
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<?> updateColor(@PathVariable Long id, @Valid @RequestBody Color color) {
-        try {
-            return ResponseEntity.ok(colorService.updateColor(id, color));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+    public ResponseEntity<Color> updateColor(@PathVariable Long id, @Valid @RequestBody Color color) {
+        Color updatedColor = colorService.updateColor(id, color);
+        return ResponseEntity.ok(updatedColor);
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<?> deleteColor(@PathVariable Long id) {
-        try {
-            colorService.deleteColor(id);
-            return ResponseEntity.noContent().build();
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+    public ResponseEntity<Void> deleteColor(@PathVariable Long id) {
+        colorService.deleteColor(id);
+        return ResponseEntity.noContent().build();
     }
 }
 
