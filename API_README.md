@@ -1,197 +1,74 @@
-# Warehouse Management System API Documentation
+# 📖 API Documentation
 
-This documentation provides detailed information about the RESTful API endpoints of the Warehouse Management System.
+Complete REST API documentation for the Warehouse Management System.
 
-Base URL: `http://localhost:8080/api`
-
-## Authentication
-
-Currently, there is no authentication system implemented. All endpoints are public.
-
-## Response Format
-
-All API responses are returned in JSON format:
-
-```json
-{
-  "success": true,
-  "data": { ... },
-  "message": "Operation completed successfully"
-}
-```
-
-In error cases:
-
-```json
-{
-  "success": false,
-  "error": "Error message",
-  "details": "Detailed error information"
-}
-```
-
-## Categories API
-
-Endpoints for category management.
-
-### List All Categories
-
-```http
-GET /api/categories
-```
-
-**Response:**
-```json
-[
-  {
-    "id": 1,
-    "name": "White Goods",
-    "description": "Refrigerator, washing machine, etc.",
-    "createdAt": "2024-01-01T10:00:00",
-    "updatedAt": "2024-01-01T10:00:00",
-    "products": []
-  }
-]
-```
-
-### List Active Categories
-
-```http
-GET /api/categories/active
-```
-
-### Get Category Details
-
-```http
-GET /api/categories/{id}
-```
-
-### List Category with Products
-
-```http
-GET /api/categories/{id}/with-products
-```
-
-### Create New Category
-
-```http
-POST /api/categories
-Content-Type: application/json
-
-{
-  "name": "Electronics",
-  "description": "TV, computer, phone, etc."
-}
-```
-
-**Validation:**
-- `name`: Required, 2-50 characters, unique
-
-### Update Category
-
-```http
-PUT /api/categories/{id}
-Content-Type: application/json
-
-{
-  "name": "New Category Name",
-  "description": "Updated description"
-}
-```
-
-### Delete Category
-
-```http
-DELETE /api/categories/{id}
-```
-
-**Note:** Categories containing products cannot be deleted.
+**Base URL:** `http://localhost:8080/api` (development)  
+**Production:** `https://your-domain.com/api`
 
 ---
 
-## Warehouses API
+## 🔐 Authentication
 
-Endpoints for warehouse management.
-
-### List All Warehouses
+Currently, the API uses Basic Authentication:
 
 ```http
-GET /api/warehouses
+Authorization: Basic YWRtaW46YWRtaW4=
 ```
 
-### List Active Warehouses
+**Default Credentials:**
+- Username: `admin`
+- Password: `admin`
 
-```http
-GET /api/warehouses/active
-```
+> **Note:** Update credentials in production via environment variables `APP_ADMIN_USERNAME` and `APP_ADMIN_PASSWORD`
 
-### Get Warehouse Details
+---
 
-```http
-GET /api/warehouses/{id}
-```
+## 📝 Response Format
 
-### List Warehouse with Stocks
+### Success Response
 
-```http
-GET /api/warehouses/{id}/with-stocks
-```
-
-### Create New Warehouse
-
-```http
-POST /api/warehouses
-Content-Type: application/json
-
+```json
 {
-  "name": "Main Warehouse",
-  "location": "Istanbul, Turkey",
-  "phone": "0212 555 0000",
-  "manager": "Ahmet Yılmaz",
-  "capacitySqm": 1000.5,
-  "isActive": true
+  "id": 1,
+  "name": "Product Name",
+  "sku": "PROD-001",
+  "createdAt": "2024-01-15T10:30:00",
+  "updatedAt": "2024-01-15T10:30:00"
 }
 ```
 
-**Validation:**
-- `name`: Required, 2-100 characters, unique
-- `location`: Required, 5-255 characters
+### Error Response
 
-### Update Warehouse
-
-```http
-PUT /api/warehouses/{id}
-Content-Type: application/json
-
+```json
 {
-  "name": "Updated Warehouse Name",
-  "location": "Ankara, Turkey"
+  "errorCode": "PRODUCT_001",
+  "status": 404,
+  "error": "Not Found",
+  "message": "Product not found - ID: 123",
+  "path": "/api/products/123",
+  "timestamp": "2024-01-15T10:30:00"
 }
 ```
 
-### Delete Warehouse
+### Validation Error
 
-```http
-DELETE /api/warehouses/{id}
-```
-
-### Activate Warehouse
-
-```http
-PUT /api/warehouses/{id}/activate
-```
-
-### Deactivate Warehouse
-
-```http
-PUT /api/warehouses/{id}/deactivate
+```json
+{
+  "status": 400,
+  "error": "Validation Failed",
+  "message": "Input validation failed",
+  "fieldErrors": {
+    "name": "Product name is required",
+    "sku": "SKU must be unique"
+  },
+  "path": "/api/products",
+  "timestamp": "2024-01-15T10:30:00"
+}
 ```
 
 ---
 
-## Products API
-
-Endpoints for product management.
+## 📦 Products API
 
 ### List All Products
 
@@ -199,67 +76,61 @@ Endpoints for product management.
 GET /api/products
 ```
 
-### List Active Products
+**Response:** `200 OK`
 
-```http
-GET /api/products/active
+```json
+[
+  {
+    "id": 1,
+    "name": "Industrial Refrigerator",
+    "sku": "REF-2024-001",
+    "price": 15000.00,
+    "weight": 120.5,
+    "dimensions": "80x80x200 cm",
+    "category": { "id": 1, "name": "White Goods" },
+    "brand": { "id": 2, "name": "Samsung" },
+    "color": { "id": 3, "name": "Silver" },
+    "isActive": true,
+    "createdAt": "2024-01-15T10:00:00",
+    "updatedAt": "2024-01-15T10:00:00"
+  }
+]
 ```
 
-### Get Product Details
+### Get Product by ID
 
 ```http
 GET /api/products/{id}
 ```
 
-### List Product with Stocks
+**Response:** `200 OK` or `404 Not Found`
 
-```http
-GET /api/products/{id}/with-stocks
-```
-
-### Find Product by SKU
-
-```http
-GET /api/products/sku/{sku}
-```
-
-### Get Products by Category
-
-```http
-GET /api/products/category/{categoryId}
-```
-
-### Search Products
-
-```http
-GET /api/products/search?name=refrigerator
-```
-
-### Create New Product
+### Create Product
 
 ```http
 POST /api/products
 Content-Type: application/json
 
 {
-  "name": "Samsung Refrigerator",
-  "description": "A++ energy class",
-  "sku": "REF-001",
+  "name": "Industrial Refrigerator",
+  "sku": "REF-2024-001",
   "price": 15000.00,
-  "weight": 80.5,
-  "dimensions": "60x60x180 cm",
-  "category": {
-    "id": 1
-  },
-  "isActive": true
+  "weight": 120.5,
+  "dimensions": "80x80x200 cm",
+  "description": "Energy-efficient industrial refrigerator",
+  "category": { "id": 1 },
+  "brand": { "id": 2 },
+  "color": { "id": 3 }
 }
 ```
 
-**Validation:**
+**Validation Rules:**
 - `name`: Required, 2-100 characters
 - `sku`: Required, 3-50 characters, unique
 - `price`: Required, must be positive
 - `category`: Required, must exist
+
+**Response:** `201 Created` or `400 Bad Request` or `409 Conflict`
 
 ### Update Product
 
@@ -268,10 +139,12 @@ PUT /api/products/{id}
 Content-Type: application/json
 
 {
-  "name": "Updated Product Name",
+  "name": "Updated Name",
   "price": 17500.00
 }
 ```
+
+**Response:** `200 OK` or `404 Not Found`
 
 ### Delete Product
 
@@ -279,23 +152,100 @@ Content-Type: application/json
 DELETE /api/products/{id}
 ```
 
-### Activate Product
+**Response:** `204 No Content` or `404 Not Found`
+
+### Additional Endpoints
 
 ```http
-PUT /api/products/{id}/activate
-```
-
-### Deactivate Product
-
-```http
-PUT /api/products/{id}/deactivate
+GET  /api/products/active                    # List active products
+GET  /api/products/sku/{sku}                 # Find by SKU
+GET  /api/products/category/{categoryId}     # Filter by category
+GET  /api/products/search?name={keyword}     # Search by name
+PUT  /api/products/{id}/activate             # Activate product
+PUT  /api/products/{id}/deactivate           # Deactivate product
+GET  /api/products?brandId={id}&colorId={id} # Filter by brand/color
 ```
 
 ---
 
-## Stocks API
+## 📁 Categories API
 
-Endpoints for stock management.
+### List All Categories
+
+```http
+GET /api/categories
+```
+
+### Create Category
+
+```http
+POST /api/categories
+Content-Type: application/json
+
+{
+  "name": "Electronics",
+  "description": "Electronic devices and appliances"
+}
+```
+
+**Validation:**
+- `name`: Required, 2-50 characters, unique
+
+### Additional Endpoints
+
+```http
+GET    /api/categories/{id}                    # Get category
+PUT    /api/categories/{id}                    # Update category
+DELETE /api/categories/{id}                    # Delete category (no products)
+GET    /api/categories/{id}/with-products      # Category with products
+GET    /api/categories/with-product-count      # Categories with count
+```
+
+---
+
+## 🏭 Warehouses API
+
+### List All Warehouses
+
+```http
+GET /api/warehouses
+```
+
+### Create Warehouse
+
+```http
+POST /api/warehouses
+Content-Type: application/json
+
+{
+  "name": "Main Warehouse",
+  "location": "New York, USA",
+  "phone": "+1-555-0100",
+  "manager": "John Doe",
+  "capacitySqm": 5000.0,
+  "isActive": true
+}
+```
+
+**Validation:**
+- `name`: Required, 2-100 characters, unique
+- `location`: Required, 5-255 characters
+
+### Additional Endpoints
+
+```http
+GET  /api/warehouses/{id}                # Get warehouse
+PUT  /api/warehouses/{id}                # Update warehouse
+DELETE /api/warehouses/{id}              # Delete warehouse (no stocks)
+GET  /api/warehouses/active              # Active warehouses
+PUT  /api/warehouses/{id}/activate       # Activate warehouse
+PUT  /api/warehouses/{id}/deactivate     # Deactivate warehouse
+GET  /api/warehouses/{id}/with-stocks    # Warehouse with stocks
+```
+
+---
+
+## 📊 Stocks API
 
 ### List All Stocks
 
@@ -303,76 +253,19 @@ Endpoints for stock management.
 GET /api/stocks
 ```
 
-### Get Stock Details
-
-```http
-GET /api/stocks/{id}
-```
-
-### Get Stocks by Product
-
-```http
-GET /api/stocks/product/{productId}
-```
-
-### Get Stocks by Warehouse
-
-```http
-GET /api/stocks/warehouse/{warehouseId}
-```
-
-### Get Stock by Product-Warehouse Combination
-
-```http
-GET /api/stocks/product/{productId}/warehouse/{warehouseId}
-```
-
-### Get Low Stock Products
-
-```http
-GET /api/stocks/low-stock
-```
-
-### Get Out of Stock Products
-
-```http
-GET /api/stocks/out-of-stock
-```
-
-### Get Low Stock by Warehouse
-
-```http
-GET /api/stocks/warehouse/{warehouseId}/low-stock
-```
-
-### Get Total Quantity by Product
-
-```http
-GET /api/stocks/product/{productId}/total-quantity
-```
-
-### Get Total Quantity by Warehouse
-
-```http
-GET /api/stocks/warehouse/{warehouseId}/total-quantity
-```
-
-### Create New Stock Record
+### Create Stock Record
 
 ```http
 POST /api/stocks
 Content-Type: application/json
 
 {
-  "product": {
-    "id": 1
-  },
-  "warehouse": {
-    "id": 1
-  },
+  "product": { "id": 1 },
+  "warehouse": { "id": 1 },
   "quantity": 100,
   "minStockLevel": 10,
-  "reservedQuantity": 0
+  "reservedQuantity": 0,
+  "consignedQuantity": 0
 }
 ```
 
@@ -380,7 +273,7 @@ Content-Type: application/json
 - `product`: Required, must exist
 - `warehouse`: Required, must exist
 - `quantity`: Required, must be >= 0
-- `minStockLevel`: Required, must be >= 0
+- Unique constraint: (product_id, warehouse_id)
 
 ### Update Stock
 
@@ -391,169 +284,309 @@ Content-Type: application/json
 {
   "quantity": 150,
   "minStockLevel": 15,
-  "reservedQuantity": 5
+  "reservedQuantity": 10
 }
 ```
 
-### Add to Stock
+### Stock Operations
 
 ```http
-PUT /api/stocks/{id}/add?quantity=50
+PUT /api/stocks/{id}/add?quantity=50        # Add to stock
+PUT /api/stocks/{id}/remove?quantity=25     # Remove from stock
+PUT /api/stocks/{id}/reserve?quantity=10    # Reserve stock
+PUT /api/stocks/{id}/release?quantity=5     # Release reservation
 ```
 
-### Remove from Stock
+### Additional Endpoints
 
 ```http
-PUT /api/stocks/{id}/remove?quantity=25
-```
-
-### Reserve Stock
-
-```http
-PUT /api/stocks/{id}/reserve?quantity=10
-```
-
-### Release Reservation
-
-```http
-PUT /api/stocks/{id}/release?quantity=5
-```
-
-### Delete Stock Record
-
-```http
-DELETE /api/stocks/{id}
+GET /api/stocks/product/{productId}                              # Stocks by product
+GET /api/stocks/warehouse/{warehouseId}                          # Stocks by warehouse
+GET /api/stocks/product/{pid}/warehouse/{wid}                    # Specific stock
+GET /api/stocks/low-stock                                        # Low stock alerts
+GET /api/stocks/out-of-stock                                     # Out of stock
+GET /api/stocks/warehouse/{warehouseId}/low-stock                # Low stock by warehouse
+GET /api/stocks/product/{productId}/total-quantity               # Total quantity
+GET /api/stocks?brandId={id}&colorId={id}&warehouseId={id}      # Filter stocks
 ```
 
 ---
 
-## Error Handling
+## 🔄 Stock Transfers API
 
-### Common HTTP Status Codes
+### List All Transfers
 
-- `200 OK`: Successful request
-- `201 Created`: Successful creation
-- `204 No Content`: Successful deletion
-- `400 Bad Request`: Invalid request (validation error)
-- `404 Not Found`: Resource not found
-- `409 Conflict`: Conflict (unique constraint violation)
-- `500 Internal Server Error`: Server error
+```http
+GET /api/stock-transfers
+```
 
-### Error Response Examples
+### Create Transfer
 
-**Validation Error:**
-```json
+```http
+POST /api/stock-transfers
+Content-Type: application/json
+
 {
-  "success": false,
-  "error": "Validation failed",
-  "details": {
-    "name": "Product name is required",
-    "sku": "SKU is required"
-  }
+  "sourceWarehouse": { "id": 1 },
+  "destinationWarehouse": { "id": 2 },
+  "product": { "id": 1 },
+  "quantity": 50,
+  "driverName": "Mike Johnson",
+  "driverTcId": "12345678901",
+  "driverPhone": "+1-555-0200",
+  "vehiclePlate": "ABC-1234",
+  "notes": "Urgent transfer"
 }
 ```
 
-**Not Found Error:**
-```json
-{
-  "success": false,
-  "error": "Product not found with id: 999"
-}
+**Validation:**
+- Source and destination warehouses must be different
+- Sufficient stock must be available in source warehouse
+- `quantity`: Required, must be positive
+
+**Transfer Statuses:**
+- `PENDING` - Transfer created, not started
+- `IN_TRANSIT` - Transfer in progress, stock reserved
+- `COMPLETED` - Transfer completed, stock moved
+- `CANCELLED` - Transfer cancelled
+
+### Transfer Operations
+
+```http
+PUT /api/stock-transfers/{id}/start      # Start transfer (PENDING → IN_TRANSIT)
+PUT /api/stock-transfers/{id}/complete   # Complete transfer (→ COMPLETED)
+PUT /api/stock-transfers/{id}/cancel     # Cancel transfer (→ CANCELLED)
+PUT /api/stock-transfers/{id}            # Update transfer (PENDING only)
 ```
 
-**Conflict Error:**
+### Additional Endpoints
+
+```http
+GET /api/stock-transfers/{id}                     # Get transfer
+GET /api/stock-transfers/warehouse/{id}           # Transfers by warehouse
+GET /api/stock-transfers/product/{id}             # Transfers by product
+GET /api/stock-transfers/status/{status}          # Transfers by status
+DELETE /api/stock-transfers/{id}                  # Delete (PENDING/CANCELLED only)
+```
+
+---
+
+## 🏷️ Brands API
+
+```http
+GET    /api/brands              # List all brands
+POST   /api/brands              # Create brand
+GET    /api/brands/{id}         # Get brand
+PUT    /api/brands/{id}         # Update brand
+DELETE /api/brands/{id}         # Delete brand (no products)
+```
+
+**Create Brand:**
 ```json
 {
-  "success": false,
-  "error": "Product with SKU 'REF-001' already exists"
+  "name": "Samsung"
 }
 ```
 
 ---
 
-## Rate Limiting
+## 🎨 Colors API
 
-Currently, there is no rate limiting implementation. Should be added in production environment.
+```http
+GET    /api/colors              # List all colors
+POST   /api/colors              # Create color
+GET    /api/colors/{id}         # Get color
+PUT    /api/colors/{id}         # Update color
+DELETE /api/colors/{id}         # Delete color (no products)
+```
 
-## CORS
-
-The API is configured for Cross-Origin Resource Sharing (CORS):
-
-- `Access-Control-Allow-Origin`: *
-- `Access-Control-Allow-Methods`: GET, POST, PUT, DELETE, OPTIONS
-- `Access-Control-Allow-Headers`: Content-Type, Authorization
-
-## Pagination
-
-Pagination support for large datasets has not been added yet. Can be added when needed.
-
-## Filtering & Sorting
-
-### Query Parameters
-
-Most list endpoints support these query parameters:
-
-- `?page=0&size=20`: Pagination
-- `?sort=name,asc`: Sorting
-- `?name=filter`: Filtering by name
-
-## Versioning
-
-API versioning is not currently implemented with URL paths. May switch to `/api/v1/` format in the future.
+**Create Color:**
+```json
+{
+  "name": "Silver",
+  "hexCode": "#C0C0C0"
+}
+```
 
 ---
 
-## Example Usage
+## ℹ️ System Info API
 
-### JavaScript (Axios) API Calls
+```http
+GET /api/info                   # System information
+GET /actuator/health            # Health check
+```
+
+---
+
+## 📋 Error Codes
+
+### Product Errors
+
+| Code | HTTP Status | Description |
+|------|-------------|-------------|
+| `PRODUCT_001` | 404 | Product not found |
+| `PRODUCT_002` | 409 | SKU already exists |
+
+### Category Errors
+
+| Code | HTTP Status | Description |
+|------|-------------|-------------|
+| `CATEGORY_001` | 404 | Category not found |
+| `CATEGORY_002` | 409 | Category name already exists |
+
+### Warehouse Errors
+
+| Code | HTTP Status | Description |
+|------|-------------|-------------|
+| `WAREHOUSE_001` | 404 | Warehouse not found |
+| `WAREHOUSE_002` | 409 | Warehouse name already exists |
+
+### Stock Errors
+
+| Code | HTTP Status | Description |
+|------|-------------|-------------|
+| `STOCK_001` | 404 | Stock not found |
+| `STOCK_002` | 409 | Stock already exists for this product/warehouse |
+| `STOCK_003` | 400 | Insufficient stock |
+| `STOCK_004` | 400 | Insufficient reserved stock |
+| `STOCK_005` | 400 | Product not found in warehouse |
+
+### Transfer Errors
+
+| Code | HTTP Status | Description |
+|------|-------------|-------------|
+| `TRANSFER_001` | 404 | Transfer not found |
+| `TRANSFER_002` | 400 | Source and destination must be different |
+| `TRANSFER_004` | 400 | Transfer already completed |
+| `TRANSFER_007` | 400 | Cannot delete transfer in transit |
+| `TRANSFER_009` | 400 | Only pending transfers can be updated |
+
+### Validation Errors
+
+| Code | HTTP Status | Description |
+|------|-------------|-------------|
+| `VALIDATION_001` | 400 | Required field missing |
+| `VALIDATION_003` | 400 | Value must be positive |
+| `VALIDATION_004` | 400 | Value cannot be negative |
+
+---
+
+## 🧪 Testing with cURL
+
+### Create Product
+
+```bash
+curl -X POST http://localhost:8080/api/products \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Basic YWRtaW46YWRtaW4=" \
+  -d '{
+    "name": "Test Product",
+    "sku": "TEST-001",
+    "price": 100.00,
+    "category": {"id": 1}
+  }'
+```
+
+### Get All Products
+
+```bash
+curl -X GET http://localhost:8080/api/products \
+  -H "Authorization: Basic YWRtaW46YWRtaW4="
+```
+
+### Create Stock Transfer
+
+```bash
+curl -X POST http://localhost:8080/api/stock-transfers \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Basic YWRtaW46YWRtaW4=" \
+  -d '{
+    "sourceWarehouse": {"id": 1},
+    "destinationWarehouse": {"id": 2},
+    "product": {"id": 1},
+    "quantity": 10
+  }'
+```
+
+---
+
+## 📦 JavaScript/Axios Examples
+
+### Setup
 
 ```javascript
 import axios from 'axios';
 
-// List all products
+const api = axios.create({
+  baseURL: 'http://localhost:8080/api',
+  auth: {
+    username: 'admin',
+    password: 'admin'
+  }
+});
+```
+
+### Get Products
+
+```javascript
 const getProducts = async () => {
   try {
-    const response = await axios.get('/api/products');
+    const response = await api.get('/products');
     console.log(response.data);
   } catch (error) {
-    console.error('Error:', error.response?.data);
+    console.error('Error:', error.response.data);
   }
 };
+```
 
-// Create new product
+### Create Product
+
+```javascript
 const createProduct = async (productData) => {
   try {
-    const response = await axios.post('/api/products', productData);
+    const response = await api.post('/products', productData);
     console.log('Created:', response.data);
   } catch (error) {
-    console.error('Error:', error.response?.data);
-  }
-};
-
-// Update product
-const updateProduct = async (id, productData) => {
-  try {
-    const response = await axios.put(`/api/products/${id}`, productData);
-    console.log('Updated:', response.data);
-  } catch (error) {
-    console.error('Error:', error.response?.data);
+    if (error.response.data.errorCode === 'PRODUCT_002') {
+      console.error('SKU already exists');
+    }
   }
 };
 ```
 
-### cURL API Testing
+---
 
-```bash
-# List all categories
-curl -X GET http://localhost:8080/api/categories
+## 🔒 CORS Configuration
 
-# Create new category
-curl -X POST http://localhost:8080/api/categories \
-  -H "Content-Type: application/json" \
-  -d '{"name": "New Category", "description": "Description"}'
+The API supports CORS for the following:
 
-# Search products
-curl -X GET "http://localhost:8080/api/products/search?name=refrigerator"
-```
+- **Allowed Origins:** `*` (configure for production)
+- **Allowed Methods:** GET, POST, PUT, DELETE, OPTIONS
+- **Allowed Headers:** Content-Type, Authorization
 
-This documentation is prepared for the current state of the API. It will be updated as new features are added.
+---
+
+## 📊 Rate Limiting
+
+Currently, no rate limiting is implemented. Consider adding rate limiting for production:
+
+- Use Spring Cloud Gateway
+- Implement Bucket4j
+- Use API Gateway (AWS, Kong, etc.)
+
+---
+
+## 🚀 Production Considerations
+
+1. **Change default credentials**
+2. **Enable HTTPS only**
+3. **Configure CORS properly**
+4. **Add API rate limiting**
+5. **Enable request logging**
+6. **Use database connection pooling**
+7. **Configure proper error logging**
+
+---
+
+For more information, see the [Main README](README.md) or [Quick Start Guide](QUICK_START.md).

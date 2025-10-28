@@ -1,105 +1,173 @@
-# Warehouse Management System - Frontend
+<div align="center">
 
-React-based, mobile-friendly warehouse management system interface.
+# 🎨 Warehouse Management - Frontend
 
-## 🚀 Features
+**Modern, responsive React application for warehouse management**
 
-- **Modern React 18** - Uses latest React features
-- **Responsive Design** - Compatible with mobile, tablet, and desktop
-- **Bootstrap 5** - Modern and elegant UI components
-- **Chart.js Integration** - Charts for dashboard
-- **Real-time Updates** - Instant data updates
-- **Form Validation** - Client-side validation
-- **Error Handling** - Comprehensive error management
+[![React](https://img.shields.io/badge/React-18.2.0-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://reactjs.org/)
+[![Bootstrap](https://img.shields.io/badge/Bootstrap-5.2.3-7952B3?style=for-the-badge&logo=bootstrap&logoColor=white)](https://getbootstrap.com/)
+[![Chart.js](https://img.shields.io/badge/Chart.js-4.3.0-FF6384?style=for-the-badge&logo=chart.js&logoColor=white)](https://www.chartjs.org/)
 
-## 📋 Requirements
+</div>
 
-- **Node.js 18+**
-- **npm** or **yarn**
-- **Modern web browser**
+---
 
-## 🛠️ Installation
+## 📱 Features
 
-### 1. Install Dependencies
+- ✨ **Modern UI** - Clean, intuitive interface built with Bootstrap 5
+- 📊 **Real-time Dashboard** - Live statistics and interactive charts
+- 📱 **Fully Responsive** - Optimized for mobile, tablet, and desktop
+- 🎯 **Component-Based** - Reusable React components
+- ⚡ **Fast Performance** - Optimized rendering and lazy loading
+- 🔄 **Live Updates** - Real-time data synchronization
+- 🎨 **Professional Design** - Modern UX with attention to detail
+
+---
+
+## 🚀 Quick Start
+
+### Prerequisites
+
+- Node.js 18+ 
+- npm or yarn
+
+### Installation
 
 ```bash
+# Install dependencies
 npm install
-```
 
-### 2. Start Development Server
-
-```bash
+# Start development server
 npm start
-```
 
-The application will open at http://localhost:3000.
-
-### 3. Production Build
-
-```bash
+# Build for production
 npm run build
 ```
 
-Build files will be created in the `build/` folder.
+Application opens at **http://localhost:3000**
+
+---
+
+## 🛠️ Tech Stack
+
+| Technology | Version | Purpose |
+|------------|---------|---------|
+| **React** | 18.2.0 | UI Framework |
+| **React Router** | 6.11.0 | Client-side routing |
+| **Bootstrap** | 5.2.3 | CSS Framework |
+| **React Bootstrap** | 2.7.4 | Bootstrap Components |
+| **Axios** | 1.4.0 | HTTP Client |
+| **Chart.js** | 4.3.0 | Data Visualization |
+| **React Icons** | 4.10.1 | Icon Library |
+
+---
 
 ## 📁 Project Structure
 
 ```
 frontend/
 ├── public/
-│   └── index.html          # Main HTML file
+│   ├── index.html              # HTML template
+│   └── sahinler-logo.png       # App logo
+│
 ├── src/
-│   ├── components/         # Reusable components
-│   │   ├── Navbar.js       # Navigation bar
-│   │   ├── WarehouseForm.js # Warehouse form
-│   │   ├── ProductForm.js   # Product form
-│   │   ├── CategoryForm.js  # Category form
-│   │   ├── StockForm.js     # Stock form
-│   │   ├── StockModal.js    # Stock viewing modal
-│   │   └── StockAdjustmentModal.js # Stock adjustment modal
-│   ├── pages/              # Page components
-│   │   ├── Dashboard.js     # Main dashboard
-│   │   ├── Warehouses.js    # Warehouse management
-│   │   ├── Products.js      # Product management
-│   │   ├── Categories.js    # Category management
-│   │   └── Stock.js         # Stock management
-│   ├── App.js              # Main application component
-│   ├── index.js            # React DOM entry point
-│   ├── App.css             # Main style file
-│   └── index.css           # Global styles
-├── package.json            # Project dependencies and scripts
-├── Dockerfile              # Docker configuration
-└── nginx.conf              # Nginx proxy configuration
+│   ├── components/             # Reusable components
+│   │   ├── Navbar.js           # Navigation bar
+│   │   ├── ProductForm.js      # Product create/edit form
+│   │   ├── StockForm.js        # Stock management form
+│   │   ├── WarehouseForm.js    # Warehouse form
+│   │   ├── CategoryForm.js     # Category form
+│   │   ├── StockModal.js       # Stock details modal
+│   │   ├── StockAdjustmentModal.js  # Stock adjustment
+│   │   ├── StockTransferModal.js    # Transfer between warehouses
+│   │   ├── ConfirmModal.js     # Confirmation dialogs
+│   │   ├── NotesModal.js       # Notes display
+│   │   ├── FilterChips.js      # Active filter chips
+│   │   └── SearchableSelect.js # Searchable dropdown
+│   │
+│   ├── pages/                  # Page components
+│   │   ├── Login.js            # Login page
+│   │   ├── Dashboard.js        # Main dashboard
+│   │   ├── Products.js         # Product management
+│   │   ├── Stock.js            # Stock management
+│   │   ├── Warehouses.js       # Warehouse management
+│   │   ├── Categories.js       # Category management
+│   │   ├── AdminSettings.js    # Admin settings
+│   │   └── DesiCalculator.js   # Desi calculator tool
+│   │
+│   ├── App.js                  # Main app component
+│   ├── config.js               # API configuration
+│   ├── App.css                 # Global styles
+│   └── index.js                # React entry point
+│
+├── package.json                # Dependencies
+├── Dockerfile                  # Docker config
+└── nginx.conf                  # Nginx proxy
 ```
 
-## 🎨 Technologies Used
+---
 
-### Core Technologies
-- **React 18.2.0** - UI framework
-- **React Router DOM 6.11.0** - Page routing
-- **Axios 1.4.0** - HTTP client
-- **Bootstrap 5.2.3** - CSS framework
-- **React Bootstrap 2.7.4** - Bootstrap React components
+## 🎨 Key Components
 
-### Additional Libraries
-- **Chart.js 4.3.0** - Charts and graphs
-- **React Chart.js 2 5.2.0** - Chart.js React wrapper
-- **React Icons 4.10.1** - Icon library
-- **React Scripts 5.0.1** - Build tools
+### Dashboard
+- Overview statistics (products, categories, warehouses, stock)
+- Low stock alerts
+- Interactive charts (Pie, Bar)
+- Quick action buttons
 
-## 🔧 Configuration
+### Product Management
+- Product listing with search
+- Create/Edit/Delete products
+- Category, brand, and color filtering
+- SKU management
+- Product activation/deactivation
+
+### Stock Management
+- Real-time stock levels
+- Multi-warehouse inventory
+- Stock adjustments (add/remove)
+- Stock transfers between warehouses
+- Reserved and consigned quantities
+- Low stock alerts
+
+### Warehouse Management
+- Warehouse CRUD operations
+- Capacity tracking
+- Stock overview per warehouse
+- Warehouse activation/deactivation
+
+### Transfer System
+- Transfer creation between warehouses
+- Transfer status tracking (Pending → In Transit → Completed)
+- Driver and vehicle information
+- Transfer cancellation
+- Transfer history
+
+---
+
+## ⚙️ Configuration
+
+### API Configuration
+
+Edit `src/config.js`:
+
+```javascript
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8080';
+
+export const API_URL = `${API_BASE_URL}/api`;
+```
 
 ### Environment Variables
 
-You can configure the API URL by creating a `.env` file:
+Create `.env` file:
 
 ```env
-REACT_APP_API_URL=http://localhost:8080/api
+REACT_APP_API_URL=http://localhost:8080
 ```
 
-### Proxy Configuration
+### Proxy Setup
 
-Proxy configuration in `package.json`:
+In `package.json`:
 
 ```json
 {
@@ -107,84 +175,45 @@ Proxy configuration in `package.json`:
 }
 ```
 
-This automatically redirects `/api` endpoints to the backend.
-
-## 🚀 Development
-
-### Development Server
-
-```bash
-npm start
-```
-
-- Hot reload enabled
-- Error overlay
-- http://localhost:3000
-
-### Code Quality
-
-```bash
-# Lint code
-npm run lint
-
-# Run tests
-npm test
-
-# Build production
-npm run build
-```
+---
 
 ## 📱 Responsive Design
 
 ### Breakpoints
 
 - **Mobile**: < 576px
-- **Tablet**: 576px - 768px
-- **Desktop**: > 768px
+- **Tablet**: 576px - 768px  
+- **Desktop**: 768px - 992px
+- **Large Desktop**: > 992px
 
-### Mobile Optimizations
+### Mobile Features
 
-- Touch-friendly buttons
-- Responsive tables
+- Touch-optimized buttons
 - Collapsible navigation
-- Optimized form layouts
+- Responsive tables with horizontal scroll
+- Optimized modals for small screens
+- Mobile-first forms
 
-## 🎯 Component Usage
+---
 
-### Navbar
+## 🎯 Component Examples
 
-Main navigation component:
-
-```jsx
-import Navbar from './components/Navbar';
-
-function App() {
-  return (
-    <div>
-      <Navbar />
-      {/* Page content */}
-    </div>
-  );
-}
-```
-
-### Form Components
-
-Form components come with validation and error handling:
+### Using Forms
 
 ```jsx
 import ProductForm from './components/ProductForm';
 
 function ProductsPage() {
   const handleSuccess = () => {
-    // When form is successfully submitted
-    console.log('Product saved');
+    fetchProducts(); // Refresh list
   };
 
   return (
     <ProductForm
       product={editingProduct}
       categories={categories}
+      brands={brands}
+      colors={colors}
       onSuccess={handleSuccess}
       onCancel={() => setShowForm(false)}
     />
@@ -192,232 +221,205 @@ function ProductsPage() {
 }
 ```
 
-### API Integration
-
-API calls with Axios:
+### API Calls
 
 ```jsx
 import axios from 'axios';
+import { API_URL } from './config';
 
 const fetchProducts = async () => {
   try {
-    const response = await axios.get('/api/products');
+    const response = await axios.get(`${API_URL}/products`, {
+      headers: {
+        'Authorization': `Basic ${btoa('admin:admin')}`
+      }
+    });
     setProducts(response.data);
   } catch (error) {
-    console.error('Error loading products:', error);
-    setError('Failed to load products');
+    console.error('Error:', error);
   }
 };
 ```
-
-## 🔍 State Management
-
-Uses React useState and useEffect hooks:
-
-```jsx
-const [products, setProducts] = useState([]);
-const [loading, setLoading] = useState(true);
-const [error, setError] = useState(null);
-
-useEffect(() => {
-  fetchProducts();
-}, []);
-```
-
-## 🎨 Styling
-
-### CSS Modules
-
-Component-based style files:
-
-```css
-/* ProductForm.module.css */
-.formContainer {
-  max-width: 600px;
-  margin: 0 auto;
-}
-
-.error {
-  color: #dc3545;
-  font-size: 0.875rem;
-}
-```
-
-### Bootstrap Utilities
-
-Responsive grid system:
-
-```jsx
-<div className="row">
-  <div className="col-md-6 col-lg-4">
-    {/* Content */}
-  </div>
-</div>
-```
-
-## 📊 Dashboard Components
 
 ### Charts
 
-Chart.js integration:
-
 ```jsx
-import { Bar, Pie } from 'react-chartjs-2';
+import { Pie, Bar } from 'react-chartjs-2';
 
 const chartData = {
-  labels: ['Warehouses', 'Products', 'Categories'],
+  labels: ['In Stock', 'Low Stock', 'Out of Stock'],
   datasets: [{
-    data: [5, 150, 10],
-    backgroundColor: ['#007bff', '#28a745', '#ffc107']
+    data: [120, 30, 5],
+    backgroundColor: ['#28a745', '#ffc107', '#dc3545']
   }]
 };
 
-<Pie data={chartData} />
+<Pie data={chartData} options={chartOptions} />
 ```
 
-## 🔒 Error Handling
+---
 
-Global error handling:
+## 🚀 Development
 
-```jsx
-const handleApiError = (error) => {
-  if (error.response) {
-    // Server response error
-    setError(error.response.data.message);
-  } else if (error.request) {
-    // Network error
-    setError('Network connection error');
-  } else {
-    // Other error
-    setError('Unknown error');
-  }
-};
-```
-
-## 🚀 Deployment
-
-### With Docker
+### Available Scripts
 
 ```bash
-# Build and run
+# Start dev server (http://localhost:3000)
+npm start
+
+# Run tests
+npm test
+
+# Build for production
+npm run build
+
+# Eject config (not recommended)
+npm run eject
+```
+
+### Development Tips
+
+- Hot reload is enabled by default
+- Use React DevTools extension for debugging
+- Check Network tab for API call issues
+- Use `console.log()` for quick debugging
+
+---
+
+## 🏗️ Build & Deployment
+
+### Production Build
+
+```bash
+npm run build
+```
+
+Creates optimized build in `build/` folder:
+- Minified JavaScript
+- Optimized CSS
+- Compressed assets
+- Service worker for caching
+
+### Docker Deployment
+
+```bash
+# Build image
 docker build -t warehouse-frontend .
+
+# Run container
 docker run -p 80:80 warehouse-frontend
 ```
 
 ### Static Hosting
 
-You can upload build files to any static hosting:
+Deploy `build/` folder to:
+- Netlify
+- Vercel
+- AWS S3 + CloudFront
+- GitHub Pages
+- Any static hosting
 
-```bash
-npm run build
-# Upload build/ folder to hosting
+---
+
+## 🎨 Styling
+
+### Bootstrap Classes
+
+```jsx
+<div className="container">
+  <div className="row">
+    <div className="col-md-6 col-lg-4">
+      <div className="card shadow-sm">
+        {/* Content */}
+      </div>
+    </div>
+  </div>
+</div>
 ```
 
-### Nginx Configuration
+### Custom Styles
 
-```nginx
-server {
-    listen 80;
-    root /usr/share/nginx/html;
-    index index.html;
+Global styles in `App.css` and `index.css`
 
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-
-    location /api/ {
-        proxy_pass http://backend:8080;
-    }
-}
-```
+---
 
 ## 🧪 Testing
 
-### Unit Tests
-
 ```bash
+# Run tests
 npm test
-```
 
-### Test Coverage
-
-```bash
+# Run tests with coverage
 npm test -- --coverage
+
+# Run tests in watch mode
+npm test -- --watch
 ```
 
-### E2E Tests
+---
 
-Cypress or Playwright can be added.
+## 🔍 Troubleshooting
 
-## 📝 Code Style
+### Common Issues
 
-### ESLint
-
+**Port already in use:**
 ```bash
-npm run lint
+# Kill process on port 3000
+npx kill-port 3000
+# Or change port
+PORT=3001 npm start
 ```
 
-### Prettier
+**Build errors:**
+```bash
+# Clean install
+rm -rf node_modules package-lock.json
+npm install
+```
 
-Prettier is used for code formatting.
+**API connection errors:**
+- Ensure backend is running on port 8080
+- Check CORS settings
+- Verify Authorization header
+- Check browser console for errors
+
+**Slow performance:**
+- Clear browser cache
+- Check for console errors
+- Optimize images
+- Use React.memo for expensive components
+
+---
 
 ## 🤝 Contributing
 
-1. Create a feature branch
+1. Create feature branch
 2. Make changes
-3. Test them
-4. Open a pull request
+3. Test thoroughly
+4. Submit pull request
+
+See [CONTRIBUTING.md](../CONTRIBUTING.md) for detailed guidelines.
+
+---
 
 ## 📄 License
 
 MIT License - see [LICENSE](../LICENSE) file for details.
 
-## 🆘 Troubleshooting
+---
 
-### Common Issues
+## 🆘 Support
 
-**Build Error:**
-```bash
-rm -rf node_modules package-lock.json
-npm install
-```
+- **Main Docs**: [../README.md](../README.md)
+- **API Docs**: [../API_README.md](../API_README.md)
+- **Quick Start**: [../QUICK_START.md](../QUICK_START.md)
 
-**Port Already in Use:**
-```bash
-npx kill-port 3000
-```
+---
 
-**API Connection Error:**
-- Make sure backend is running
-- Check CORS settings
-- Inspect API calls in Network tab
+<div align="center">
 
-### Debug Mode
+**Built with ❤️ using React**
 
-```jsx
-// Add console logging
-console.log('API Response:', response.data);
+[⬆ Back to Top](#-warehouse-management---frontend)
 
-// Use React DevTools
-// Inspect Network tab
-```
-
-## 📞 Support
-
-If you encounter any issues:
-
-1. Check console errors
-2. Inspect API calls in Network tab
-3. Use Browser DevTools
-4. Open an issue
-
-## 🗺️ Roadmap
-
-- [ ] Dark mode support
-- [ ] Offline PWA support
-- [ ] Advanced filtering
-- [ ] Drag & drop upload
-- [ ] Real-time notifications
-- [ ] Mobile app (React Native)
-- [ ] Advanced charts
-- [ ] Export functionality
+</div>
