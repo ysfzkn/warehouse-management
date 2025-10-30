@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import axios from 'axios';
 import StockForm from '../components/StockForm';
 import StockAdjustmentModal from '../components/StockAdjustmentModal';
@@ -24,6 +24,194 @@ const formatDateInTurkeyTimezone = (isoDateString, options = {}) => {
   }
 };
 
+// Stable filters bar component to prevent input remount/focus loss
+const StockFiltersBar = ({
+  searchTerm,
+  setSearchTerm,
+  selectedWarehouseId,
+  setSelectedWarehouseId,
+  selectedWarehouseOpt,
+  setSelectedWarehouseOpt,
+  brandId,
+  setBrandId,
+  brandOpt,
+  setBrandOpt,
+  colorId,
+  setColorId,
+  colorOpt,
+  setColorOpt,
+  categories,
+  subcategories,
+  setSubcategories,
+  selectedCategory,
+  setSelectedCategory,
+  selectedSubcategory,
+  setSelectedSubcategory,
+  showReserved,
+  setShowReserved,
+  showConsigned,
+  setShowConsigned,
+  getWarehouseById
+}) => {
+  const searchInputRef = useRef(null);
+
+  useEffect(() => {
+    if (searchInputRef.current && document.activeElement !== searchInputRef.current) {
+      searchInputRef.current.focus();
+      const len = searchInputRef.current.value.length;
+      try { searchInputRef.current.setSelectionRange(len, len); } catch {}
+    }
+  }, [searchTerm]);
+
+  return (
+    <>
+      <div className="row mb-2 align-items-end">
+        <div className="col-md-3">
+          <div className="input-group">
+            <span className="input-group-text"><i className="fas fa-search"></i></span>
+            <input
+              ref={searchInputRef}
+              type="text"
+              className="form-control"
+              placeholder="Ürün adı, SKU veya depo ara..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+        </div>
+        <div className="col-md-3">
+          <SearchableSelect
+            label="Depo"
+            value={selectedWarehouseId}
+            onChange={(id, opt) => { setSelectedWarehouseId(id); setSelectedWarehouseOpt(opt || null); }}
+            searchEndpoint="/api/warehouses"
+            placeholder="Depo ara..."
+            allowClear={true}
+            clearText="Temizle"
+            wrapperClassName="mb-0"
+            renderOption={(w) => w.name}
+          />
+        </div>
+        <div className="col-md-3">
+          <SearchableSelect
+            label="Marka"
+            value={brandId}
+            onChange={(id, opt) => { setBrandId(id); setBrandOpt(opt || null); }}
+            searchEndpoint="/api/brands/search"
+            placeholder="Marka ara..."
+            allowClear={true}
+            clearText="Temizle"
+            wrapperClassName="mb-0"
+          />
+        </div>
+        <div className="col-md-3">
+          <SearchableSelect
+            label="Renk"
+            value={colorId}
+            onChange={(id, opt) => { setColorId(id); setColorOpt(opt || null); }}
+            searchEndpoint="/api/colors/search"
+            placeholder="Renk ara..."
+            allowClear={true}
+            clearText="Temizle"
+            wrapperClassName="mb-0"
+          />
+        </div>
+      </div>
+
+      {/* Category filters */}
+      <div className="row mb-2 align-items-end">
+        <div className="col-md-6">
+          <select
+            className="form-select"
+            value={selectedCategory}
+            onChange={(e) => setSelectedCategory(e.target.value)}
+          >
+            <option value="">Tüm Ana Kategoriler</option>
+            {categories.map((category) => (
+              <option key={category.id} value={category.id}>
+                {category.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="col-md-6">
+          <select
+            className="form-select"
+            value={selectedSubcategory}
+            onChange={(e) => setSelectedSubcategory(e.target.value)}
+            disabled={!selectedCategory}
+          >
+            <option value="">Tüm Alt Kategoriler</option>
+            {subcategories.map((subcategory) => (
+              <option key={subcategory.id} value={subcategory.id}>
+                {subcategory.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Additional filters */}
+      <div className="row mb-2">
+        <div className="col-md-12">
+          <div className="form-check form-check-inline">
+            <input
+              className="form-check-input"
+              type="checkbox"
+              id="showReserved"
+              checked={showReserved}
+              onChange={(e) => setShowReserved(e.target.checked)}
+            />
+            <label className="form-check-label" htmlFor="showReserved">
+              Sadece Rezerve Olanlar
+            </label>
+          </div>
+          <div className="form-check form-check-inline">
+            <input
+              className="form-check-input"
+              type="checkbox"
+              id="showConsigned"
+              checked={showConsigned}
+              onChange={(e) => setShowConsigned(e.target.checked)}
+            />
+            <label className="form-check-label" htmlFor="showConsigned">
+              Sadece Emanet Olanlar
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <FilterChips
+        className="mb-3"
+        chips={[
+          searchTerm ? { icon: 'fas fa-search', label: `Arama: "${searchTerm}"`, onClear: () => setSearchTerm('') } : null,
+          selectedWarehouseId ? { icon: 'fas fa-warehouse', label: `Depo: ${selectedWarehouseOpt?.name || getWarehouseById(selectedWarehouseId)?.name || selectedWarehouseId}`, onClear: () => { setSelectedWarehouseId(null); setSelectedWarehouseOpt(null); } } : null,
+          selectedCategory ? { icon: 'fas fa-tag', label: `Ana Kategori: ${categories.find(c => c.id.toString() === selectedCategory)?.name || selectedCategory}`, onClear: () => { setSelectedCategory(''); setSelectedSubcategory(''); setSubcategories([]); } } : null,
+          selectedSubcategory ? { icon: 'fas fa-tags', label: `Alt Kategori: ${subcategories.find(c => c.id.toString() === selectedSubcategory)?.name || selectedSubcategory}`, onClear: () => setSelectedSubcategory('') } : null,
+          brandId ? { icon: 'fas fa-copyright', label: `Marka: ${brandOpt?.name || brandId}`, onClear: () => { setBrandId(null); setBrandOpt(null); } } : null,
+          colorId ? { icon: 'fas fa-palette', label: `Renk: ${colorOpt?.name || colorId}`, onClear: () => { setColorId(null); setColorOpt(null); } } : null,
+          showReserved ? { icon: 'fas fa-lock', label: 'Rezerve Olanlar', onClear: () => setShowReserved(false) } : null,
+          showConsigned ? { icon: 'fas fa-handshake', label: 'Emanet Olanlar', onClear: () => setShowConsigned(false) } : null,
+        ].filter(Boolean)}
+        onClearAll={() => {
+          setSearchTerm('');
+          setSelectedWarehouseId(null);
+          setSelectedWarehouseOpt(null);
+          setSelectedCategory('');
+          setSelectedSubcategory('');
+          setSubcategories([]);
+          setBrandId(null);
+          setColorId(null);
+          setBrandOpt(null);
+          setColorOpt(null);
+          setShowReserved(false);
+          setShowConsigned(false);
+        }}
+      />
+    </>
+  );
+};
+
 const Stock = () => {
   const [stocks, setStocks] = useState([]);
   const [products, setProducts] = useState([]);
@@ -47,6 +235,11 @@ const Stock = () => {
   const [showReserved, setShowReserved] = useState(false);
   const [showConsigned, setShowConsigned] = useState(false);
   const [transferStatusFilter, setTransferStatusFilter] = useState('ALL');
+  // Category filters
+  const [categories, setCategories] = useState([]);
+  const [subcategories, setSubcategories] = useState([]);
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [selectedSubcategory, setSelectedSubcategory] = useState('');
   
   // Modal states
   const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null });
@@ -76,6 +269,35 @@ const Stock = () => {
   useEffect(() => {
     fetchAllData();
   }, [fetchAllData]);
+
+  // Fetch main categories on mount
+  useEffect(() => {
+    const fetchMainCategories = async () => {
+      try {
+        const response = await axios.get('/api/categories/top-level');
+        setCategories(response.data);
+      } catch (error) {
+        // noop
+      }
+    };
+    fetchMainCategories();
+  }, []);
+
+  // Fetch subcategories when a main category is selected
+  useEffect(() => {
+    const fetchSubs = async () => {
+      if (!selectedCategory) { setSubcategories([]); setSelectedSubcategory(''); return; }
+      try {
+        const response = await axios.get(`/api/categories/${selectedCategory}/subcategories`);
+        setSubcategories(response.data);
+        setSelectedSubcategory('');
+      } catch (error) {
+        setSubcategories([]);
+        setSelectedSubcategory('');
+      }
+    };
+    fetchSubs();
+  }, [selectedCategory]);
 
   // Initialize filters from query params
   useEffect(() => {
@@ -115,6 +337,25 @@ const Stock = () => {
       );
     }
 
+    // category filters
+    if (selectedCategory) {
+      filtered = filtered.filter(s => {
+        const prod = products.find(p => p.id === s.product?.id);
+        if (!prod || !prod.category) return false;
+        const categoryIdStr = prod.category?.id != null ? prod.category.id.toString() : '';
+        const parentIdStr = prod.category?.parent?.id != null ? prod.category.parent.id.toString() : '';
+        return categoryIdStr === selectedCategory || parentIdStr === selectedCategory;
+      });
+    }
+    if (selectedSubcategory) {
+      filtered = filtered.filter(s => {
+        const prod = products.find(p => p.id === s.product?.id);
+        if (!prod || !prod.category) return false;
+        const categoryIdStr = prod.category?.id != null ? prod.category.id.toString() : '';
+        return categoryIdStr === selectedSubcategory;
+      });
+    }
+
     // reserved/consigned filters
     if (showReserved) {
       filtered = filtered.filter(s => (s.reservedQuantity || 0) > 0);
@@ -129,7 +370,7 @@ const Stock = () => {
       if (warehouseCompare !== 0) return warehouseCompare;
       return (a.product?.name || '').localeCompare(b.product?.name || '');
     });
-  }, [stocks, filter, searchTerm, showReserved, showConsigned]);
+  }, [stocks, filter, searchTerm, showReserved, showConsigned, selectedCategory, selectedSubcategory, products]);
 
   const FiltersBar = () => (
     <>
@@ -185,6 +426,39 @@ const Stock = () => {
         </div>
       </div>
 
+      {/* Category filters */}
+      <div className="row mb-2 align-items-end">
+        <div className="col-md-6">
+          <select
+            className="form-select"
+            value={selectedCategory}
+            onChange={(e) => setSelectedCategory(e.target.value)}
+          >
+            <option value="">Tüm Ana Kategoriler</option>
+            {categories.map((category) => (
+              <option key={category.id} value={category.id}>
+                {category.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="col-md-6">
+          <select
+            className="form-select"
+            value={selectedSubcategory}
+            onChange={(e) => setSelectedSubcategory(e.target.value)}
+            disabled={!selectedCategory}
+          >
+            <option value="">Tüm Alt Kategoriler</option>
+            {subcategories.map((subcategory) => (
+              <option key={subcategory.id} value={subcategory.id}>
+                {subcategory.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
       {/* Additional filters */}
       <div className="row mb-2">
         <div className="col-md-12">
@@ -220,6 +494,8 @@ const Stock = () => {
         chips={[
           searchTerm ? { icon: 'fas fa-search', label: `Arama: "${searchTerm}"`, onClear: () => setSearchTerm('') } : null,
           selectedWarehouseId ? { icon: 'fas fa-warehouse', label: `Depo: ${selectedWarehouseOpt?.name || getWarehouseById(selectedWarehouseId)?.name || selectedWarehouseId}`, onClear: () => { setSelectedWarehouseId(null); setSelectedWarehouseOpt(null); } } : null,
+          selectedCategory ? { icon: 'fas fa-tag', label: `Ana Kategori: ${categories.find(c => c.id.toString() === selectedCategory)?.name || selectedCategory}`, onClear: () => { setSelectedCategory(''); setSelectedSubcategory(''); setSubcategories([]); } } : null,
+          selectedSubcategory ? { icon: 'fas fa-tags', label: `Alt Kategori: ${subcategories.find(c => c.id.toString() === selectedSubcategory)?.name || selectedSubcategory}`, onClear: () => setSelectedSubcategory('') } : null,
           brandId ? { icon: 'fas fa-copyright', label: `Marka: ${brandOpt?.name || brandId}`, onClear: () => { setBrandId(null); setBrandOpt(null); } } : null,
           colorId ? { icon: 'fas fa-palette', label: `Renk: ${colorOpt?.name || colorId}`, onClear: () => { setColorId(null); setColorOpt(null); } } : null,
           showReserved ? { icon: 'fas fa-lock', label: 'Rezerve Olanlar', onClear: () => setShowReserved(false) } : null,
@@ -229,6 +505,9 @@ const Stock = () => {
           setSearchTerm('');
           setSelectedWarehouseId(null);
           setSelectedWarehouseOpt(null);
+          setSelectedCategory('');
+          setSelectedSubcategory('');
+          setSubcategories([]);
           setBrandId(null);
           setColorId(null);
           setBrandOpt(null);
@@ -395,7 +674,36 @@ const Stock = () => {
       </div>
 
       {/* Filters Bar - Only show when not in transfer history mode */}
-      {!showTransferHistory && <FiltersBar />}
+      {!showTransferHistory && (
+        <StockFiltersBar
+          searchTerm={searchTerm}
+          setSearchTerm={setSearchTerm}
+          selectedWarehouseId={selectedWarehouseId}
+          setSelectedWarehouseId={setSelectedWarehouseId}
+          selectedWarehouseOpt={selectedWarehouseOpt}
+          setSelectedWarehouseOpt={setSelectedWarehouseOpt}
+          brandId={brandId}
+          setBrandId={setBrandId}
+          brandOpt={brandOpt}
+          setBrandOpt={setBrandOpt}
+          colorId={colorId}
+          setColorId={setColorId}
+          colorOpt={colorOpt}
+          setColorOpt={setColorOpt}
+          categories={categories}
+          subcategories={subcategories}
+          setSubcategories={setSubcategories}
+          selectedCategory={selectedCategory}
+          setSelectedCategory={setSelectedCategory}
+          selectedSubcategory={selectedSubcategory}
+          setSelectedSubcategory={setSelectedSubcategory}
+          showReserved={showReserved}
+          setShowReserved={setShowReserved}
+          showConsigned={showConsigned}
+          setShowConsigned={setShowConsigned}
+          getWarehouseById={getWarehouseById}
+        />
+      )}
 
       {/* Filter Tabs */}
       {!showTransferHistory && (
@@ -469,11 +777,20 @@ const Stock = () => {
                   const product = getProductById(stock.product.id);
                   const warehouse = getWarehouseById(stock.warehouse.id);
                   const stockStatus = getStockStatus(stock);
+                  const categoryPath = product?.category ? `${product.category.parentName ? product.category.parentName + ' > ' : ''}${product.category.name}` : null;
 
                   return (
                     <tr key={stock.id}>
                       <td>{warehouse?.name}</td>
-                      <td>{product?.name}</td>
+                      <td>
+                        <div className="fw-semibold">{product?.name}</div>
+                        {categoryPath && (
+                          <small className="text-muted d-block">
+                            <i className="fas fa-tag me-1"></i>
+                            {categoryPath}
+                          </small>
+                        )}
+                      </td>
                       <td>{product?.sku}</td>
                       <td>
                         <span className="fw-bold">{stock.quantity}</span>

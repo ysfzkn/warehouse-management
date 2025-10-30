@@ -15,7 +15,7 @@ const CategoryForm = ({ category, onSuccess, onCancel }) => {
 
   useEffect(() => {
     // Düzenleme modunda kategorileri çek
-    if (category) {
+    if (category && category.parentId) {
       fetchCategories();
     }
   }, [category]);
@@ -90,8 +90,8 @@ const CategoryForm = ({ category, onSuccess, onCancel }) => {
         // Düzenleme modu
         await axios.put(`/api/categories/${category.id}`, dataToSend);
 
-        // Parent değişikliği varsa ayrı güncelle
-        if (formData.parentId !== (category.parentId || '')) {
+        // Parent değişikliği (sadece alt kategoriler için)
+        if (category.parentId && formData.parentId !== category.parentId) {
           await axios.put(`/api/categories/${category.id}/parent?parentId=${formData.parentId || ''}`);
         }
 
@@ -170,8 +170,8 @@ const CategoryForm = ({ category, onSuccess, onCancel }) => {
         />
       </div>
 
-      {/* Parent Category Selection - Only in Edit Mode */}
-      {category && (
+      {/* Parent Category Selection - Only when editing a subcategory */}
+      {category && category.parentId && (
         <div className="mb-3">
           <label htmlFor="parentId" className="form-label">
             Üst Kategori
@@ -192,9 +192,7 @@ const CategoryForm = ({ category, onSuccess, onCancel }) => {
                 </option>
               ))}
           </select>
-          <small className="text-muted">
-            Bu kategorinin üst kategorisini değiştirebilirsiniz. Ana kategori yapmak için boş bırakın.
-          </small>
+          <small className="text-muted">Bu kategorinin üst kategorisini değiştirebilirsiniz.</small>
         </div>
       )}
 

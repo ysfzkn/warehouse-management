@@ -41,8 +41,10 @@ const Products = () => {
     const filteredProducts = products.filter(product => {
       const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                            product.sku.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesCategory = !selectedCategory || product.category.id.toString() === selectedCategory;
-      const matchesSubcategory = !selectedSubcategory || product.category.id.toString() === selectedSubcategory;
+      const categoryIdStr = product.category?.id != null ? product.category.id.toString() : '';
+      const parentIdStr = product.category?.parent?.id != null ? product.category.parent.id.toString() : '';
+      const matchesCategory = !selectedCategory || categoryIdStr === selectedCategory || parentIdStr === selectedCategory;
+      const matchesSubcategory = !selectedSubcategory || categoryIdStr === selectedSubcategory;
       const matchesBrand = !selectedBrand || product.brand?.id === selectedBrand;
       const matchesColor = !selectedColor || product.color?.id === selectedColor;
       return matchesSearch && matchesCategory && matchesSubcategory && matchesBrand && matchesColor;
@@ -379,7 +381,7 @@ const Products = () => {
                         </strong>
                       </div>
                       
-                      {product.sctRate && product.sctRate > 0 && (
+                      {Number(product.sctRate) > 0 && (
                         <>
                           <div className="d-flex justify-content-between align-items-center mb-1">
                             <small className="text-muted">
@@ -398,7 +400,7 @@ const Products = () => {
                         </>
                       )}
                       
-                      {product.vatRate && product.vatRate > 0 && (
+                      {Number(product.vatRate) > 0 && (
                         <>
                           <div className="d-flex justify-content-between align-items-center mb-1">
                             <small className="text-muted">

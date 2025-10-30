@@ -28,10 +28,13 @@ const Categories = () => {
         response.data.map(async (category) => {
           try {
             const subResponse = await axios.get(`/api/categories/${category.id}/subcategories`);
+            const ownCount = Number(category.productCount ?? 0);
+            const subTotalCount = (subResponse.data || []).reduce((sum, s) => sum + Number(s.productCount || 0), 0);
             return {
               ...category,
               subcategories: subResponse.data,
-              productCount: Number(category.productCount ?? 0),
+              productCount: ownCount,
+              totalProductCount: ownCount + subTotalCount,
               totalSubcategories: subResponse.data.length
             };
           } catch (error) {
@@ -40,6 +43,7 @@ const Categories = () => {
               ...category,
               subcategories: [],
               productCount: Number(category.productCount ?? 0),
+              totalProductCount: Number(category.productCount ?? 0),
               totalSubcategories: 0
             };
           }
@@ -182,10 +186,10 @@ const Categories = () => {
         />
       )}
 
-      <div className="row">
+      <div className="row align-items-start">
         {filteredCategories.map((category) => (
           <div key={category.id} className="col-md-6 col-lg-4 mb-4">
-            <div className="card h-100">
+            <div className="card">
               <div className="card-body">
                 <div className="d-flex justify-content-between align-items-start mb-2">
                   <div
@@ -229,7 +233,7 @@ const Categories = () => {
                   <div className="d-flex gap-3">
                     <span className="fw-bold text-primary">
                       <i className="fas fa-box me-1"></i>
-                      {category.productCount} Ürün
+                      {(category.totalProductCount ?? category.productCount)} Ürün
                     </span>
                     {category.totalSubcategories > 0 && (
                       <span className="fw-bold text-info">
@@ -267,7 +271,7 @@ const Categories = () => {
                   <button
                     className="btn btn-outline-danger btn-sm"
                     onClick={() => handleDelete(category.id)}
-                    disabled={category.productCount > 0 || category.totalSubcategories > 0}
+                    disabled={(category.totalProductCount ?? category.productCount) > 0 || category.totalSubcategories > 0}
                   >
                     <i className="fas fa-trash me-1"></i>
                     Sil
