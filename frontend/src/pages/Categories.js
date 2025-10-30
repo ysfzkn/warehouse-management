@@ -1,17 +1,20 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import axios from 'axios';
 import CategoryForm from '../components/CategoryForm';
 import FilterChips from '../components/FilterChips';
 import ConfirmModal from '../components/ConfirmModal';
 
 const Categories = () => {
-  const [categories, setCategories] = useState([]);
+  const [mainCategories, setMainCategories] = useState([]);
+  const [expandedCategories, setExpandedCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null });
+  const [showSubcategoryModal, setShowSubcategoryModal] = useState(false);
+  const [selectedParentCategory, setSelectedParentCategory] = useState(null);
 
   useEffect(() => {
     fetchCategories();
@@ -20,12 +23,29 @@ const Categories = () => {
   const fetchCategories = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('/api/categories/with-counts');
-      const normalized = (response.data || []).map((c) => ({
-        ...c,
-        productCount: Number(c.productCount ?? 0),
-      }));
-      setCategories(normalized);
+      const response = await axios.get('/api/categories/top-level');
+      const categoriesWithSubInfo = await Promise.all(
+        response.data.map(async (category) => {
+          try {
+            const subResponse = await axios.get(`/api/categories/${category.id}/subcategories`);
+            return {
+              ...category,
+              subcategories: subResponse.data,
+              productCount: Number(category.productCount ?? 0),
+              totalSubcategories: subResponse.data.length
+            };
+          } catch (error) {
+            console.error(`Error fetching subcategories for ${category.name}:`, error);
+            return {
+              ...category,
+              subcategories: [],
+              productCount: Number(category.productCount ?? 0),
+              totalSubcategories: 0
+            };
+          }
+        })
+      );
+      setMainCategories(categoriesWithSubInfo);
     } catch (error) {
       console.error('Error fetching categories:', error);
       setError('Kategoriler yüklenirken hata oluştu');
@@ -33,6 +53,19 @@ const Categories = () => {
       setLoading(false);
     }
   };
+
+  const toggleCategoryExpansion = useCallback((categoryId) => {
+    const id = Number(categoryId);
+    setExpandedCategories(prev => {
+      const isExpanded = prev.includes(id);
+      if (isExpanded) {
+        return prev.filter(expandedId => expandedId !== id);
+      } else {
+        return [...prev, id];
+      }
+    });
+  }, []);
+
 
   const handleCreate = () => {
     setEditingCategory(null);
@@ -76,14 +109,26 @@ const Categories = () => {
     fetchCategories();
   };
 
+  const handleAddSubcategory = (parentCategory) => {
+    setSelectedParentCategory(parentCategory);
+    setShowSubcategoryModal(true);
+  };
+
+  const handleSubcategorySuccess = () => {
+    setShowSubcategoryModal(false);
+    setSelectedParentCategory(null);
+    fetchCategories();
+  };
+
   const filteredCategories = useMemo(() => {
     const q = (searchTerm || '').toLowerCase();
-    if (!q) return categories;
-    return categories.filter(c =>
+    if (!q) return mainCategories;
+    return mainCategories.filter(c =>
       (c.name || '').toLowerCase().includes(q) ||
-      (c.description || '').toLowerCase().includes(q)
+      (c.description || '').toLowerCase().includes(q) ||
+      c.subcategories.some(sub => (sub.name || '').toLowerCase().includes(q))
     );
-  }, [categories, searchTerm]);
+  }, [mainCategories, searchTerm]);
 
   if (loading) {
     return (
@@ -142,34 +187,67 @@ const Categories = () => {
           <div key={category.id} className="col-md-6 col-lg-4 mb-4">
             <div className="card h-100">
               <div className="card-body">
-                <h5 className="card-title">{category.name}</h5>
-
-                {category.description && (
-                  <p className="card-text text-muted">
-                    {category.description}
-                  </p>
-                )}
+                <div className="d-flex justify-content-between align-items-start mb-2">
+                  <div
+                    className="flex-grow-1"
+                    style={{ cursor: category.totalSubcategories > 0 ? 'pointer' : 'default' }}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (category.totalSubcategories > 0) {
+                        toggleCategoryExpansion(category.id);
+                      }
+                    }}
+                  >
+                    <div className="d-flex align-items-center justify-content-between">
+                      <div className="d-flex align-items-center">
+                        <h5 className="card-title mb-0">{category.name}</h5>
+                        {category.totalSubcategories > 0 && (
+                          <small className="text-primary ms-2">
+                            ({category.totalSubcategories} alt kategori)
+                          </small>
+                        )}
+                      </div>
+                      {category.totalSubcategories > 0 && (
+                        <div className="d-flex align-items-center">
+                          <small className="text-muted me-2">
+                            {expandedCategories.includes(Number(category.id)) ? 'Gizle' : 'Göster'}
+                          </small>
+                          <i className={`fas fa-chevron-${expandedCategories.includes(Number(category.id)) ? 'down' : 'right'} text-primary`}></i>
+                        </div>
+                      )}
+                    </div>
+                    {category.description && (
+                      <p className="card-text text-muted small mt-1">
+                        {category.description}
+                      </p>
+                    )}
+                  </div>
+                </div>
 
                 <div className="d-flex justify-content-between align-items-center mt-3">
-                  <span className="fw-bold">
-                    <i className="fas fa-box me-1"></i>
-                    Ürün Sayısı: {category.productCount}
-                  </span>
+                  <div className="d-flex gap-3">
+                    <span className="fw-bold text-primary">
+                      <i className="fas fa-box me-1"></i>
+                      {category.productCount} Ürün
+                    </span>
+                    {category.totalSubcategories > 0 && (
+                      <span className="fw-bold text-info">
+                        <i className="fas fa-sitemap me-1"></i>
+                        {category.totalSubcategories} Alt
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 <div className="mt-2">
                   <small className="text-muted">
                     <i className="fas fa-calendar me-1"></i>
-                    Oluşturulma Tarihi: {new Date(category.createdAt).toLocaleDateString('tr-TR')}
-                  </small>
-                </div>
-                <div className="mt-1">
-                  <small className="text-muted">
-                    <i className="fas fa-calendar me-1"></i>
-                    Güncelleme Tarihi: {new Date(category.updatedAt).toLocaleDateString('tr-TR')}
+                    {new Date(category.createdAt).toLocaleDateString('tr-TR')}
                   </small>
                 </div>
               </div>
+
               <div className="card-footer">
                 <div className="btn-group w-100" role="group">
                   <button
@@ -180,27 +258,68 @@ const Categories = () => {
                     Düzenle
                   </button>
                   <button
+                    className="btn btn-outline-primary btn-sm"
+                    onClick={() => handleAddSubcategory(category)}
+                  >
+                    <i className="fas fa-plus me-1"></i>
+                    Alt Kategori
+                  </button>
+                  <button
                     className="btn btn-outline-danger btn-sm"
                     onClick={() => handleDelete(category.id)}
-                    disabled={category.productCount > 0}
+                    disabled={category.productCount > 0 || category.totalSubcategories > 0}
                   >
                     <i className="fas fa-trash me-1"></i>
                     Sil
                   </button>
                 </div>
-                {category.productCount > 0 && (
-                  <small className="text-muted mt-1 d-block">
-                    <i className="fas fa-info-circle me-1"></i>
-                    Ürün içeren kategoriler silinemez
-                  </small>
-                )}
               </div>
+
+              {/* Alt Kategoriler - Expand edildiğinde göster */}
+              {expandedCategories.includes(Number(category.id)) && category.subcategories && category.subcategories.length > 0 && (
+
+                <div className="card-footer bg-light border-top">
+                  <div className="small mb-2 fw-bold text-primary">
+                    <i className="fas fa-sitemap me-1"></i>
+                    Alt Kategoriler:
+                  </div>
+                  {category.subcategories.map((subcategory) => (
+                    <div key={subcategory.id} className="d-flex justify-content-between align-items-center py-1 border-bottom">
+                      <div className="flex-grow-1">
+                        <small className="fw-bold">{subcategory.name}</small>
+                        <br />
+                        <small className="text-muted">
+                          <i className="fas fa-box me-1"></i>
+                          {subcategory.productCount || 0} ürün
+                        </small>
+                      </div>
+                      <div className="btn-group btn-group-sm">
+                        <button
+                          className="btn btn-outline-secondary btn-sm"
+                          onClick={() => handleEdit(subcategory)}
+                          title="Düzenle"
+                        >
+                          <i className="fas fa-edit"></i>
+                        </button>
+                        <button
+                          className="btn btn-outline-danger btn-sm"
+                          onClick={() => handleDelete(subcategory.id)}
+                          disabled={(subcategory.productCount || 0) > 0}
+                          title={(subcategory.productCount || 0) > 0 ? "Ürün içeren kategoriler silinemez" : "Sil"}
+                        >
+                          <i className="fas fa-trash"></i>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         ))}
       </div>
 
-      {categories.length === 0 && (
+      {mainCategories.length === 0 && (
         <div className="text-center py-5">
           <i className="fas fa-tags fa-3x text-muted mb-3"></i>
           <h4 className="text-muted">Henüz kategori bulunmuyor</h4>
@@ -235,6 +354,19 @@ const Categories = () => {
         </div>
       )}
 
+      {/* Subcategory Modal */}
+      {showSubcategoryModal && selectedParentCategory && (
+        <SubcategoryModal
+          parentCategoryId={selectedParentCategory.id}
+          parentCategoryName={selectedParentCategory.name}
+          onSuccess={handleSubcategorySuccess}
+          onCancel={() => {
+            setShowSubcategoryModal(false);
+            setSelectedParentCategory(null);
+          }}
+        />
+      )}
+
       {/* Confirm Modal */}
       <ConfirmModal
         show={confirmModal.show}
@@ -246,6 +378,138 @@ const Categories = () => {
         onConfirm={confirmModal.onConfirm}
         onCancel={() => setConfirmModal({ show: false, title: '', message: '', onConfirm: null })}
       />
+    </div>
+  );
+};
+
+const SubcategoryModal = ({ parentCategoryId, parentCategoryName, onSuccess, onCancel }) => {
+  const [subcategories, setSubcategories] = useState([{ name: '', description: '' }]);
+  const [loading, setLoading] = useState(false);
+
+  const handleSubcategoryChange = (index, field, value) => {
+    const updated = [...subcategories];
+    updated[index][field] = value;
+    setSubcategories(updated);
+  };
+
+  const addSubcategory = () => {
+    setSubcategories([...subcategories, { name: '', description: '' }]);
+  };
+
+  const removeSubcategory = (index) => {
+    if (subcategories.length > 1) {
+      setSubcategories(subcategories.filter((_, i) => i !== index));
+    }
+  };
+
+  const handleSubmit = async () => {
+    const validSubcategories = subcategories.filter(sub => sub.name.trim());
+    if (validSubcategories.length === 0) {
+      onCancel();
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await axios.post('/api/categories/batch', validSubcategories, {
+        params: { parentId: parentCategoryId }
+      });
+      onSuccess();
+    } catch (error) {
+      console.error('Error creating subcategories:', error);
+      alert('Alt kategoriler oluşturulurken hata oluştu');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+      <div className="modal-dialog modal-lg">
+        <div className="modal-content">
+          <div className="modal-header">
+            <h5 className="modal-title">
+              "{parentCategoryName}" kategorisine alt kategoriler ekle
+            </h5>
+            <button
+              type="button"
+              className="btn-close"
+              onClick={onCancel}
+            ></button>
+          </div>
+          <div className="modal-body">
+            <p>Bu ana kategoriye alt kategoriler eklemek için aşağıdaki formu doldurun.</p>
+
+            {subcategories.map((subcategory, index) => (
+              <div key={index} className="row mb-3">
+                <div className="col-md-5">
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="Alt kategori adı"
+                    value={subcategory.name}
+                    onChange={(e) => handleSubcategoryChange(index, 'name', e.target.value)}
+                  />
+                </div>
+                <div className="col-md-5">
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="Açıklama (opsiyonel)"
+                    value={subcategory.description}
+                    onChange={(e) => handleSubcategoryChange(index, 'description', e.target.value)}
+                  />
+                </div>
+                <div className="col-md-2">
+                  {subcategories.length > 1 && (
+                    <button
+                      type="button"
+                      className="btn btn-outline-danger btn-sm"
+                      onClick={() => removeSubcategory(index)}
+                    >
+                      <i className="fas fa-trash"></i>
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            <button
+              type="button"
+              className="btn btn-outline-primary btn-sm mb-3"
+              onClick={addSubcategory}
+            >
+              <i className="fas fa-plus me-1"></i>
+              Alt Kategori Ekle
+            </button>
+          </div>
+          <div className="modal-footer">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={onCancel}
+              disabled={loading}
+            >
+              İptal
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={handleSubmit}
+              disabled={loading}
+            >
+              {loading ? (
+                <>
+                  <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                  Kaydediliyor...
+                </>
+              ) : (
+                'Alt Kategorileri Kaydet'
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

@@ -32,9 +32,20 @@ public final class EntityValidator {
 
     public static void validateEntityHasNoRelations(boolean hasRelations, String entityName, String relationType) {
         if (hasRelations) {
-            ErrorCode errorCode = relationType.equals("stocks") 
-                ? ErrorCode.CANNOT_DELETE_WITH_STOCKS 
-                : ErrorCode.CANNOT_DELETE_WITH_PRODUCTS;
+            ErrorCode errorCode;
+            switch (relationType) {
+                case "stocks":
+                    errorCode = ErrorCode.CANNOT_DELETE_WITH_STOCKS;
+                    break;
+                case "products":
+                    errorCode = ErrorCode.CANNOT_DELETE_WITH_PRODUCTS;
+                    break;
+                case "subcategories":
+                    errorCode = ErrorCode.CANNOT_DELETE_WITH_SUBCATEGORIES;
+                    break;
+                default:
+                    errorCode = ErrorCode.CANNOT_DELETE_WITH_PRODUCTS;
+            }
             throw new WarehouseManagementException(errorCode, entityName + " has existing " + relationType);
         }
     }

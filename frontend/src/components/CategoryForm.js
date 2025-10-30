@@ -4,19 +4,43 @@ import axios from 'axios';
 const CategoryForm = ({ category, onSuccess, onCancel }) => {
   const [formData, setFormData] = useState({
     name: '',
-    description: ''
+    description: '',
+    parentId: ''
   });
+  const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
+  const [showSubcategoryModal, setShowSubcategoryModal] = useState(false);
+  const [createdCategoryId, setCreatedCategoryId] = useState(null);
+
+  useEffect(() => {
+    // Düzenleme modunda kategorileri çek
+    if (category) {
+      fetchCategories();
+    }
+  }, [category]);
 
   useEffect(() => {
     if (category) {
       setFormData({
         name: category.name || '',
-        description: category.description || ''
+        description: category.description || '',
+        parentId: category.parentId || ''
       });
+    } else {
+      // Yeni kategori oluşturma modunda parentId'yi boş bırak
+      setFormData(prev => ({ ...prev, parentId: '' }));
     }
   }, [category]);
+
+  const fetchCategories = async () => {
+    try {
+      const response = await axios.get('/api/categories/top-level');
+      setCategories(response.data);
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+    }
+  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -63,12 +87,21 @@ const CategoryForm = ({ category, onSuccess, onCancel }) => {
       };
 
       if (category) {
+        // Düzenleme modu
         await axios.put(`/api/categories/${category.id}`, dataToSend);
-      } else {
-        await axios.post('/api/categories', dataToSend);
-      }
 
-      onSuccess();
+        // Parent değişikliği varsa ayrı güncelle
+        if (formData.parentId !== (category.parentId || '')) {
+          await axios.put(`/api/categories/${category.id}/parent?parentId=${formData.parentId || ''}`);
+        }
+
+        onSuccess();
+      } else {
+        // Yeni kategori oluşturma - sadece ana kategori
+        const response = await axios.post('/api/categories', dataToSend);
+        setCreatedCategoryId(response.data.id);
+        setShowSubcategoryModal(true);
+      }
     } catch (error) {
       console.error('Error saving category:', error);
       if (error.response?.data) {
@@ -80,6 +113,22 @@ const CategoryForm = ({ category, onSuccess, onCancel }) => {
       setLoading(false);
     }
   };
+
+  if (showSubcategoryModal) {
+    return (
+      <SubcategoryModal
+        parentCategoryId={createdCategoryId}
+        onSuccess={() => {
+          setShowSubcategoryModal(false);
+          onSuccess();
+        }}
+        onSkip={() => {
+          setShowSubcategoryModal(false);
+          onSuccess();
+        }}
+      />
+    );
+  }
 
   return (
     <form onSubmit={handleSubmit}>
@@ -121,6 +170,34 @@ const CategoryForm = ({ category, onSuccess, onCancel }) => {
         />
       </div>
 
+      {/* Parent Category Selection - Only in Edit Mode */}
+      {category && (
+        <div className="mb-3">
+          <label htmlFor="parentId" className="form-label">
+            Üst Kategori
+          </label>
+          <select
+            className="form-select"
+            id="parentId"
+            name="parentId"
+            value={formData.parentId}
+            onChange={handleChange}
+          >
+            <option value="">Ana Kategori (Üst kategori yok)</option>
+            {categories
+              .filter(cat => cat.id !== category.id) // Kendisini parent olarak seçemesin
+              .map((cat) => (
+                <option key={cat.id} value={cat.id}>
+                  {cat.name}
+                </option>
+              ))}
+          </select>
+          <small className="text-muted">
+            Bu kategorinin üst kategorisini değiştirebilirsiniz. Ana kategori yapmak için boş bırakın.
+          </small>
+        </div>
+      )}
+
       <div className="d-flex justify-content-end gap-2">
         <button
           type="button"
@@ -149,6 +226,136 @@ const CategoryForm = ({ category, onSuccess, onCancel }) => {
         </button>
       </div>
     </form>
+  );
+};
+
+const SubcategoryModal = ({ parentCategoryId, onSuccess, onSkip }) => {
+  const [subcategories, setSubcategories] = useState([{ name: '', description: '' }]);
+  const [loading, setLoading] = useState(false);
+
+  const handleSubcategoryChange = (index, field, value) => {
+    const updated = [...subcategories];
+    updated[index][field] = value;
+    setSubcategories(updated);
+  };
+
+  const addSubcategory = () => {
+    setSubcategories([...subcategories, { name: '', description: '' }]);
+  };
+
+  const removeSubcategory = (index) => {
+    if (subcategories.length > 1) {
+      setSubcategories(subcategories.filter((_, i) => i !== index));
+    }
+  };
+
+  const handleSubmit = async () => {
+    const validSubcategories = subcategories.filter(sub => sub.name.trim());
+    if (validSubcategories.length === 0) {
+      onSkip();
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await axios.post('/api/categories/batch', validSubcategories, {
+        params: { parentId: parentCategoryId }
+      });
+      onSuccess();
+    } catch (error) {
+      console.error('Error creating subcategories:', error);
+      alert('Alt kategoriler oluşturulurken hata oluştu');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+      <div className="modal-dialog modal-lg">
+        <div className="modal-content">
+          <div className="modal-header">
+            <h5 className="modal-title">Alt Kategoriler Ekle</h5>
+            <button
+              type="button"
+              className="btn-close"
+              onClick={onSkip}
+            ></button>
+          </div>
+          <div className="modal-body">
+            <p>Bu ana kategoriye alt kategoriler eklemek ister misiniz?</p>
+
+            {subcategories.map((subcategory, index) => (
+              <div key={index} className="row mb-3">
+                <div className="col-md-5">
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="Alt kategori adı"
+                    value={subcategory.name}
+                    onChange={(e) => handleSubcategoryChange(index, 'name', e.target.value)}
+                  />
+                </div>
+                <div className="col-md-5">
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="Açıklama (opsiyonel)"
+                    value={subcategory.description}
+                    onChange={(e) => handleSubcategoryChange(index, 'description', e.target.value)}
+                  />
+                </div>
+                <div className="col-md-2">
+                  {subcategories.length > 1 && (
+                    <button
+                      type="button"
+                      className="btn btn-outline-danger btn-sm"
+                      onClick={() => removeSubcategory(index)}
+                    >
+                      <i className="fas fa-trash"></i>
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            <button
+              type="button"
+              className="btn btn-outline-primary btn-sm mb-3"
+              onClick={addSubcategory}
+            >
+              <i className="fas fa-plus me-1"></i>
+              Alt Kategori Ekle
+            </button>
+          </div>
+          <div className="modal-footer">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={onSkip}
+              disabled={loading}
+            >
+              Atla
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={handleSubmit}
+              disabled={loading}
+            >
+              {loading ? (
+                <>
+                  <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                  Kaydediliyor...
+                </>
+              ) : (
+                'Alt Kategorileri Kaydet'
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 };
 

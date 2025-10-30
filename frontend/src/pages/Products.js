@@ -13,6 +13,8 @@ const Products = () => {
   const [editingProduct, setEditingProduct] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
+  const [selectedSubcategory, setSelectedSubcategory] = useState('');
+  const [subcategories, setSubcategories] = useState([]);
   const [selectedBrand, setSelectedBrand] = useState(null);
   const [selectedColor, setSelectedColor] = useState(null);
   const [selectedBrandOpt, setSelectedBrandOpt] = useState(null);
@@ -22,32 +24,31 @@ const Products = () => {
 
   useEffect(() => {
     fetchProducts();
-    fetchCategories();
+    fetchMainCategories();
   }, []);
+
+  useEffect(() => {
+    if (selectedCategory) {
+      fetchSubcategories(selectedCategory);
+      setSelectedSubcategory(''); // Ana kategori değiştiğinde alt kategoriyi sıfırla
+    } else {
+      setSubcategories([]);
+      setSelectedSubcategory('');
+    }
+  }, [selectedCategory]);
 
   useEffect(() => {
     const filteredProducts = products.filter(product => {
       const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                            product.sku.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesCategory = !selectedCategory || product.category.id.toString() === selectedCategory;
+      const matchesSubcategory = !selectedSubcategory || product.category.id.toString() === selectedSubcategory;
       const matchesBrand = !selectedBrand || product.brand?.id === selectedBrand;
       const matchesColor = !selectedColor || product.color?.id === selectedColor;
-      return matchesSearch && matchesCategory && matchesBrand && matchesColor;
+      return matchesSearch && matchesCategory && matchesSubcategory && matchesBrand && matchesColor;
     });
     setFilteredProducts(filteredProducts);
-  }, [products, searchTerm, selectedCategory]);
-  
-  useEffect(() => {
-    const filteredProducts = products.filter(product => {
-      const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           product.sku.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesCategory = !selectedCategory || product.category.id.toString() === selectedCategory;
-      const matchesBrand = !selectedBrand || product.brand?.id === selectedBrand;
-      const matchesColor = !selectedColor || product.color?.id === selectedColor;
-      return matchesSearch && matchesCategory && matchesBrand && matchesColor;
-    });
-    setFilteredProducts(filteredProducts);
-  }, [selectedBrand, selectedColor]);
+  }, [products, searchTerm, selectedCategory, selectedSubcategory, selectedBrand, selectedColor]);
 
   const [filteredProducts, setFilteredProducts] = useState([]);
 
@@ -77,18 +78,28 @@ const Products = () => {
     }
   };
 
-  const fetchCategories = async () => {
+  const fetchMainCategories = async () => {
     try {
-      const response = await axios.get('/api/categories');
+      const response = await axios.get('/api/categories/top-level');
       setCategories(response.data);
     } catch (error) {
-      console.error('Error fetching categories:', error);
+      console.error('Error fetching main categories:', error);
+    }
+  };
+
+  const fetchSubcategories = async (parentId) => {
+    try {
+      const response = await axios.get(`/api/categories/${parentId}/subcategories`);
+      setSubcategories(response.data);
+    } catch (error) {
+      console.error('Error fetching subcategories:', error);
     }
   };
 
   const clearAllFilters = () => {
     setSearchTerm('');
     setSelectedCategory('');
+    setSelectedSubcategory('');
     setSelectedBrand(null);
     setSelectedColor(null);
     setSelectedBrandOpt(null);
@@ -198,7 +209,7 @@ const Products = () => {
 
       {/* Filters */}
       <div className="row mb-4">
-        <div className="col-md-6">
+        <div className="col-md-4">
           <div className="input-group">
             <span className="input-group-text">
               <i className="fas fa-search"></i>
@@ -212,16 +223,31 @@ const Products = () => {
             />
           </div>
         </div>
-        <div className="col-md-6">
+        <div className="col-md-4">
           <select
             className="form-select"
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
           >
-            <option value="">Tüm Kategoriler</option>
+            <option value="">Tüm Ana Kategoriler</option>
             {categories.map((category) => (
               <option key={category.id} value={category.id}>
                 {category.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="col-md-4">
+          <select
+            className="form-select"
+            value={selectedSubcategory}
+            onChange={(e) => setSelectedSubcategory(e.target.value)}
+            disabled={!selectedCategory}
+          >
+            <option value="">Tüm Alt Kategoriler</option>
+            {subcategories.map((subcategory) => (
+              <option key={subcategory.id} value={subcategory.id}>
+                {subcategory.name}
               </option>
             ))}
           </select>
@@ -254,7 +280,7 @@ const Products = () => {
       </div>
 
       {/* Active Filters Chips */}
-      {(searchTerm || selectedCategory || selectedBrand || selectedColor) && (
+      {(searchTerm || selectedCategory || selectedSubcategory || selectedBrand || selectedColor) && (
         <div className="mb-3 d-flex flex-wrap align-items-center gap-2">
           <span className="text-muted me-1">Aktif filtreler:</span>
           {searchTerm && (
@@ -267,8 +293,16 @@ const Products = () => {
           )}
           {selectedCategory && (
             <span className="badge text-bg-light border d-flex align-items-center">
-              <i className="fas fa-tag me-1"></i> Kategori: {categories.find(c => c.id.toString() === selectedCategory)?.name || selectedCategory}
+              <i className="fas fa-tag me-1"></i> Ana Kategori: {categories.find(c => c.id.toString() === selectedCategory)?.name || selectedCategory}
               <button type="button" className="btn btn-sm btn-link ms-2 p-0" onClick={() => setSelectedCategory('')}>
+                <i className="fas fa-times"></i>
+              </button>
+            </span>
+          )}
+          {selectedSubcategory && (
+            <span className="badge text-bg-light border d-flex align-items-center">
+              <i className="fas fa-tags me-1"></i> Alt Kategori: {subcategories.find(c => c.id.toString() === selectedSubcategory)?.name || selectedSubcategory}
+              <button type="button" className="btn btn-sm btn-link ms-2 p-0" onClick={() => setSelectedSubcategory('')}>
                 <i className="fas fa-times"></i>
               </button>
             </span>
@@ -314,7 +348,9 @@ const Products = () => {
                   </span>
                   {product.category?.name && (
                     <span className="badge text-bg-light border">
-                      <i className="fas fa-tag me-1"></i>{product.category?.name}
+                      <i className="fas fa-tag me-1"></i>
+                      {product.category.parentName ? `${product.category.parentName} > ` : ''}
+                      {product.category.name}
                     </span>
                   )}
                   {product.brand?.name && (
@@ -544,7 +580,6 @@ const Products = () => {
               <div className="modal-body">
                 <ProductForm
                   product={editingProduct}
-                  categories={categories}
                   onSuccess={handleFormSuccess}
                   onCancel={() => setShowForm(false)}
                 />

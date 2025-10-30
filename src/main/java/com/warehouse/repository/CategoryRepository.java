@@ -20,7 +20,13 @@ public interface CategoryRepository extends JpaRepository<Category, Long> {
     @Query("SELECT c FROM Category c LEFT JOIN FETCH c.products WHERE c.id = :id")
     Optional<Category> findByIdWithProducts(Long id);
 
-    @Query("SELECT c.id AS categoryId, COUNT(p.id) AS productCount FROM Category c LEFT JOIN c.products p GROUP BY c.id")
+    @Query("SELECT c FROM Category c WHERE c.parent IS NULL ORDER BY c.name")
+    List<Category> findTopLevelCategories();
+
+    @Query("SELECT c FROM Category c LEFT JOIN FETCH c.children WHERE c.parent IS NULL ORDER BY c.name")
+    List<Category> findAllWithChildren();
+
+    @Query("SELECT p.category.id AS categoryId, COUNT(p.id) AS productCount FROM Product p WHERE p.category IS NOT NULL GROUP BY p.category.id")
     List<CategoryProductCount> fetchCategoryProductCounts();
 
     interface CategoryProductCount {

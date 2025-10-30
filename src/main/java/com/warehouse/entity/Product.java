@@ -72,7 +72,7 @@ public class Product {
     @NotNull(message = "Category is required")
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "category_id", nullable = false)
-    @JsonIgnoreProperties({"products", "hibernateLazyInitializer", "handler"})
+    @JsonIgnoreProperties({"products", "children", "hibernateLazyInitializer", "handler"})
     private Category category;
 
     @ManyToOne(fetch = FetchType.LAZY)

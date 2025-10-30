@@ -46,6 +46,8 @@ public enum ErrorCode {
     // Relationship Errors (400)
     CANNOT_DELETE_WITH_STOCKS("RELATION_001", "Cannot delete entity with existing stocks", HttpStatus.BAD_REQUEST),
     CANNOT_DELETE_WITH_PRODUCTS("RELATION_002", "Cannot delete entity with existing products", HttpStatus.BAD_REQUEST),
+    CANNOT_DELETE_WITH_SUBCATEGORIES("RELATION_003", "Cannot delete entity with existing subcategories", HttpStatus.BAD_REQUEST),
+    CATEGORY_INVALID_PARENT("CATEGORY_003", "Invalid parent category", HttpStatus.BAD_REQUEST),
     
     // General Errors (500)
     INTERNAL_SERVER_ERROR("SYSTEM_001", "An unexpected error occurred", HttpStatus.INTERNAL_SERVER_ERROR);

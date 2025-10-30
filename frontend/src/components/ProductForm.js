@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import SearchableSelect from './SearchableSelect';
 
-const ProductForm = ({ product, categories, onSuccess, onCancel }) => {
+const ProductForm = ({ product, onSuccess, onCancel }) => {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -17,10 +17,13 @@ const ProductForm = ({ product, categories, onSuccess, onCancel }) => {
     vatRate: '20',
     sctRate: '',
     categoryId: '',
+    subcategoryId: '',
     isActive: true
   });
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
+  const [mainCategories, setMainCategories] = useState([]);
+  const [subcategories, setSubcategories] = useState([]);
   const [brandId, setBrandId] = useState(null);
   const [colorId, setColorId] = useState(null);
   
@@ -45,7 +48,23 @@ const ProductForm = ({ product, categories, onSuccess, onCancel }) => {
   };
 
   useEffect(() => {
+    fetchMainCategories();
+  }, []);
+
+  useEffect(() => {
+    if (formData.categoryId) {
+      fetchSubcategories(formData.categoryId);
+    } else {
+      setSubcategories([]);
+    }
+  }, [formData.categoryId]);
+
+  useEffect(() => {
     if (product) {
+      const categoryId = product.category?.id || '';
+      const subcategoryId = product.category?.parent ? product.category.id : '';
+      const mainCategoryId = product.category?.parent ? product.category.parent.id : categoryId;
+
       setFormData({
         name: product.name || '',
         description: product.description || '',
@@ -59,7 +78,8 @@ const ProductForm = ({ product, categories, onSuccess, onCancel }) => {
         shippingRate: product.shippingRate || '',
         vatRate: product.vatRate || '',
         sctRate: product.sctRate || '',
-        categoryId: product.category?.id || '',
+        categoryId: mainCategoryId,
+        subcategoryId: subcategoryId,
         isActive: product.isActive !== false
       });
       setBrandId(product.brand?.id || null);
@@ -67,12 +87,40 @@ const ProductForm = ({ product, categories, onSuccess, onCancel }) => {
     }
   }, [product]);
 
+  const fetchMainCategories = async () => {
+    try {
+      const response = await axios.get('/api/categories/top-level');
+      setMainCategories(response.data);
+    } catch (error) {
+      console.error('Error fetching main categories:', error);
+    }
+  };
+
+  const fetchSubcategories = async (parentId) => {
+    try {
+      const response = await axios.get(`/api/categories/${parentId}/subcategories`);
+      setSubcategories(response.data);
+    } catch (error) {
+      console.error('Error fetching subcategories:', error);
+    }
+  };
+
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value
-    }));
+
+    if (name === 'categoryId') {
+      // Ana kategori değiştiğinde alt kategoriyi sıfırla
+      setFormData(prev => ({
+        ...prev,
+        [name]: value,
+        subcategoryId: '' // Alt kategoriyi sıfırla
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [name]: type === 'checkbox' ? checked : value
+      }));
+    }
 
     // Clear error when user starts typing
     if (errors[name]) {
@@ -129,7 +177,7 @@ const ProductForm = ({ product, categories, onSuccess, onCancel }) => {
         shippingRate: formData.shippingRate ? parseFloat(formData.shippingRate) : null,
         vatRate: formData.vatRate ? parseFloat(formData.vatRate) : null,
         sctRate: formData.sctRate ? parseFloat(formData.sctRate) : null,
-        category: { id: parseInt(formData.categoryId) },
+        category: { id: parseInt(formData.subcategoryId || formData.categoryId) },
         brand: brandId ? { id: brandId } : null,
         color: colorId ? { id: colorId } : null,
         isActive: formData.isActive
@@ -413,7 +461,7 @@ const ProductForm = ({ product, categories, onSuccess, onCancel }) => {
           <div className="mb-3">
             <label htmlFor="categoryId" className="form-label">
               <i className="fas fa-folder me-1"></i>
-              Kategori <span className="text-danger">*</span>
+              Ana Kategori <span className="text-danger">*</span>
             </label>
             <select
               className={`form-select ${errors.categoryId ? 'is-invalid' : ''}`}
@@ -423,14 +471,41 @@ const ProductForm = ({ product, categories, onSuccess, onCancel }) => {
               onChange={handleChange}
               required
             >
-              <option value="">Kategori seçin</option>
-              {categories.map((category) => (
+              <option value="">Ana kategori seçin</option>
+              {mainCategories.map((category) => (
                 <option key={category.id} value={category.id}>
                   {category.name}
                 </option>
               ))}
             </select>
             {errors.categoryId && <div className="invalid-feedback">{errors.categoryId}</div>}
+          </div>
+        </div>
+
+        <div className="col-md-4">
+          <div className="mb-3">
+            <label htmlFor="subcategoryId" className="form-label">
+              <i className="fas fa-folder-open me-1"></i>
+              Alt Kategori (Opsiyonel)
+            </label>
+            <select
+              className="form-select"
+              id="subcategoryId"
+              name="subcategoryId"
+              value={formData.subcategoryId}
+              onChange={handleChange}
+              disabled={!formData.categoryId}
+            >
+              <option value="">Alt kategori seçin (opsiyonel)</option>
+              {subcategories.map((subcategory) => (
+                <option key={subcategory.id} value={subcategory.id}>
+                  {subcategory.name}
+                </option>
+              ))}
+            </select>
+            {!formData.categoryId && (
+              <small className="text-muted">Önce ana kategori seçin</small>
+            )}
           </div>
         </div>
         

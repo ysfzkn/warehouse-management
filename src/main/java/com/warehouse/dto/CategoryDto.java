@@ -1,6 +1,7 @@
 package com.warehouse.dto;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -15,6 +16,9 @@ public class CategoryDto {
     private String description;
     private boolean isActive;
     private Long productCount;
+    private Long parentId;
+    private String parentName;
+    private List<CategoryDto> children;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

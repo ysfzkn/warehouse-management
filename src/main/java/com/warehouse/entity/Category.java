@@ -8,6 +8,8 @@ import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -39,6 +41,20 @@ public class Category {
 
     @Column(name = "is_active", nullable = false)
     private boolean isActive = true;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "parent_id")
+    @JsonIgnoreProperties({"children", "products", "hibernateLazyInitializer", "handler"})
+    private Category parent;
+
+    @OneToMany(mappedBy = "parent", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
+    @JsonIgnoreProperties({"parent", "products", "hibernateLazyInitializer", "handler"})
+    private List<Category> children = new java.util.ArrayList<>();
+
+    @JsonProperty("parentName")
+    public String getParentName() {
+        return parent != null ? parent.getName() : null;
+    }
 
     @OneToMany(mappedBy = "category", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @JsonIgnore
@@ -76,6 +92,7 @@ public class Category {
                 "id=" + id +
                 ", name='" + name + '\'' +
                 ", description='" + description + '\'' +
+                ", parent=" + (parent != null ? parent.getName() : "null") +
                 ", createdAt=" + createdAt +
                 ", updatedAt=" + updatedAt +
                 '}';
