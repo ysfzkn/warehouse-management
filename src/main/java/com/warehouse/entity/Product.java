@@ -40,9 +40,8 @@ public class Product {
     @Column(nullable = false, unique = true)
     private String sku;
 
-    @NotNull(message = "Price is required")
     @PositiveOrZero(message = "Price must be positive or zero")
-    @Column(nullable = false, precision = 10, scale = 2)
+    @Column(nullable = true, precision = 10, scale = 2)
     private BigDecimal price;
 
     @PositiveOrZero(message = "Weight must be positive or zero")

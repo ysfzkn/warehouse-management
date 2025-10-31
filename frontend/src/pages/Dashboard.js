@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
-import { Bar, Pie, Doughnut, Line } from 'react-chartjs-2';
+import { Bar, Pie } from 'react-chartjs-2';
 import SearchableSelect from '../components/SearchableSelect';
 import FilterChips from '../components/FilterChips';
 import { useNavigate } from 'react-router-dom';
@@ -50,7 +50,6 @@ const Dashboard = () => {
   const [allStocks, setAllStocks] = useState([]);
   const [lowStocks, setLowStocks] = useState([]);
   const [outStocks, setOutStocks] = useState([]);
-  const [warehouses, setWarehouses] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedWarehouseId, setSelectedWarehouseId] = useState(null);
   const [selectedWarehouseOpt, setSelectedWarehouseOpt] = useState(null);
@@ -59,15 +58,6 @@ const Dashboard = () => {
   const [brandOpt, setBrandOpt] = useState(null);
   const [colorOpt, setColorOpt] = useState(null);
   const [warehouseStats, setWarehouseStats] = useState([]);
-
-  const getTotalQuantityByProduct = useCallback(async (productId) => {
-    try {
-      const response = await axios.get(`/api/stocks/product/${productId}/total-quantity`);
-      return response.data || 0;
-    } catch (error) {
-      return 0;
-    }
-  }, []);
 
   const fetchDashboardData = useCallback(async () => {
     try {
@@ -92,7 +82,6 @@ const Dashboard = () => {
       const brands = brandsRes.data || [];
       const colors = colorsRes.data || [];
       
-      setWarehouses(warehousesData);
       setLowStocks(lowStockItems);
       setOutStocks(outOfStockItems);
       setAllStocks(allStocksData);
@@ -560,7 +549,7 @@ const Dashboard = () => {
                 <input 
                   type="text" 
                   className="form-control" 
-                  placeholder="Ürün adı, SKU, depo adı veya lokasyon bilgisi ile arama yapın..." 
+                  placeholder="Ürün adı, Stok Kodu, depo adı veya lokasyon bilgisi ile arama yapın..." 
                   value={searchTerm} 
                   onChange={(e) => setSearchTerm(e.target.value)} 
                 />

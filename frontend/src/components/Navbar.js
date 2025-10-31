@@ -222,10 +222,9 @@ const Navbar = () => {
               
               {role === 'ADMIN' && (
               <li className="nav-item dropdown">
-                <a 
-                  className="nav-link nav-link-custom dropdown-toggle text-white" 
-                  href="#" 
-                  role="button" 
+                <button 
+                  className="nav-link nav-link-custom dropdown-toggle text-white border-0 bg-transparent w-100 text-start" 
+                  type="button"
                   data-bs-toggle="dropdown" 
                   style={{
                     ...navLinkStyle(null),
@@ -236,7 +235,7 @@ const Navbar = () => {
                 >
                   <i className="fas fa-warehouse me-2"></i>
                   Envanter
-                </a>
+                </button>
                 <ul className="dropdown-menu border-0 shadow-lg" style={{borderRadius: '12px', marginTop: '0.5rem'}}>
                   <li>
                     <Link className="dropdown-item" to="/warehouses">
@@ -254,6 +253,13 @@ const Navbar = () => {
                     <Link className="dropdown-item" to="/categories">
                       <i className="fas fa-tags me-2 text-warning"></i>
                       Kategoriler
+                    </Link>
+                  </li>
+                  <li><hr className="dropdown-divider" /></li>
+                  <li>
+                    <Link className="dropdown-item" to="/stock-imports">
+                      <i className="fas fa-file-excel me-2 text-success"></i>
+                      Excel Stok Aktarım Geçmişi
                     </Link>
                   </li>
                 </ul>
@@ -276,10 +282,9 @@ const Navbar = () => {
               
               {role === 'ADMIN' && (
               <li className="nav-item dropdown">
-                <a 
-                  className="nav-link nav-link-custom dropdown-toggle text-white" 
-                  href="#" 
-                  role="button" 
+                <button 
+                  className="nav-link nav-link-custom dropdown-toggle text-white border-0 bg-transparent w-100 text-start" 
+                  type="button"
                   data-bs-toggle="dropdown" 
                   style={{
                     ...navLinkStyle(null),
@@ -290,7 +295,7 @@ const Navbar = () => {
                 >
                   <i className="fas fa-cog me-2"></i>
                   Araçlar
-                </a>
+                </button>
                 <ul className="dropdown-menu border-0 shadow-lg" style={{borderRadius: '12px', marginTop: '0.5rem'}}>
                   <li>
                     <Link className="dropdown-item" to="/desi">

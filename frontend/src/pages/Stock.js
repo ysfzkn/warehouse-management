@@ -74,7 +74,7 @@ const StockFiltersBar = ({
               ref={searchInputRef}
               type="text"
               className="form-control"
-              placeholder="Ürün adı, SKU veya depo ara..."
+            placeholder="Ürün adı, Stok Kodu veya depo ara..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -249,6 +249,11 @@ const Stock = () => {
   const [cancellationModal, setCancellationModal] = useState({ show: false, transferId: null, reason: '' });
   const [auditModal, setAuditModal] = useState({ show: false, entityType: null, entityId: null });
   const [pendingStockId, setPendingStockId] = useState(null);
+  const [showExcelModal, setShowExcelModal] = useState(false);
+  const [excelUploading, setExcelUploading] = useState(false);
+  const [excelFile, setExcelFile] = useState(null);
+  const [excelWarehouseId, setExcelWarehouseId] = useState(null);
+  const [excelResult, setExcelResult] = useState(null);
 
   const fetchAllData = useCallback(async () => {
     try {
@@ -541,6 +546,28 @@ const Stock = () => {
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h2>Stok Yönetimi</h2>
         <div className="btn-group">
+          <button className="btn btn-outline-success" onClick={async () => {
+            try {
+              const res = await axios.get('/api/stock-imports/template', { responseType: 'blob' });
+              const url = window.URL.createObjectURL(new Blob([res.data]));
+              const link = document.createElement('a');
+              link.href = url;
+              link.setAttribute('download', 'stok_sablon.xlsx');
+              document.body.appendChild(link);
+              link.click();
+              link.remove();
+              window.URL.revokeObjectURL(url);
+            } catch (e) {
+              setError('Excel şablonu indirilirken hata oluştu');
+            }
+          }}>
+            <i className="fas fa-download me-2"></i>
+            Excel Şablonunu İndir
+          </button>
+          <button className="btn btn-outline-primary" onClick={() => { setExcelResult(null); setExcelFile(null); setExcelWarehouseId(null); setShowExcelModal(true); }}>
+            <i className="fas fa-file-import me-2"></i>
+            Excel'den Yükle
+          </button>
           <button className="btn btn-success" onClick={handleShowTransferHistory}>
             <i className={`fas fa-${showTransferHistory ? 'cubes' : 'exchange-alt'} me-2`}></i>
             {showTransferHistory ? 'Stok Listesi' : 'Transfer Geçmişi'}
@@ -630,6 +657,77 @@ const Stock = () => {
       </div>
       )}
 
+      {showExcelModal && (
+        <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <div className="modal-dialog">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">Excel'den Stok Yükle</h5>
+                <button type="button" className="btn-close" onClick={() => setShowExcelModal(false)}></button>
+              </div>
+              <div className="modal-body">
+                <div className="mb-3">
+                  <label className="form-label">Depo Seç</label>
+                  <select className="form-select" value={excelWarehouseId || ''} onChange={(e) => setExcelWarehouseId(e.target.value ? parseInt(e.target.value) : null)}>
+                    <option value="">Depo seçiniz...</option>
+                    {warehouses.map(w => (
+                      <option key={w.id} value={w.id}>{w.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="mb-3">
+                  <label className="form-label">Excel Dosyası (.xlsx)</label>
+                  <input type="file" accept=".xlsx" className="form-control" onChange={(e) => setExcelFile(e.target.files && e.target.files[0] ? e.target.files[0] : null)} />
+                </div>
+                {excelResult && (
+                  <div className={`alert alert-${(excelResult.status === 'SUCCESS' || excelResult.status === 'BAŞARILI') ? 'success' : ((excelResult.status === 'FAILED' || excelResult.status === 'BAŞARISIZ') ? 'danger' : 'warning')}`}>
+                    <div className="fw-bold mb-1">{(excelResult.status === 'SUCCESS' || excelResult.status === 'BAŞARILI') ? 'Aktarım başarılı' : ((excelResult.status === 'FAILED' || excelResult.status === 'BAŞARISIZ') ? 'Aktarım başarısız' : 'Kısmen başarılı')}</div>
+                    <div>Satır: {excelResult.totalRows ?? '-'}</div>
+                    <div>Ürün (Yeni): {(excelResult.createdProducts ?? 0)}</div>
+                    <div>Stok (Yeni/Güncellenen): {(excelResult.createdStocks ?? 0)} / {(excelResult.updatedStocks ?? 0)}</div>
+                    {excelResult.errorMessage && (<div className="mt-2 text-danger small">Hata: {excelResult.errorMessage}</div>)}
+                  </div>
+                )}
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={() => setShowExcelModal(false)} disabled={excelUploading}>Kapat</button>
+                <button type="button" className="btn btn-primary" disabled={!excelWarehouseId || !excelFile || excelUploading} onClick={async () => {
+                  try {
+                    setExcelUploading(true);
+                    setExcelResult(null);
+                    const form = new FormData();
+                    form.append('warehouseId', String(excelWarehouseId));
+                    form.append('file', excelFile);
+                    const res = await axios.post('/api/stock-imports/upload', form, { headers: { 'Content-Type': 'multipart/form-data' } });
+                    setExcelResult(res.data);
+                    // Başarılı yükleme sonrası tüm verileri yenile
+                    if (res.data && (res.data.status === 'BAŞARILI' || res.data.status === 'SUCCESS' || res.data.status === 'KISMEN' || res.data.status === 'PARTIAL')) {
+                      await fetchAllData();
+                    }
+                  } catch (e) {
+                    const data = e?.response?.data;
+                    setExcelResult({ status: 'FAILED', errorMessage: typeof data === 'string' ? data : (data?.message || 'Yükleme hatası') });
+                  } finally {
+                    setExcelUploading(false);
+                  }
+                }}>
+                  {excelUploading ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                      Yükleniyor...
+                    </>
+                  ) : (
+                    <>
+                      <i className="fas fa-upload me-2"></i>
+                      Yükle
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Stock Table */}
       {!showTransferHistory && (
       <div className="card">
@@ -1050,7 +1148,7 @@ const Stock = () => {
                           <td className="align-middle">
                             <div className="text-truncate" title={transfer.product?.name}>
                               <div className="fw-bold small">{transfer.product?.name}</div>
-                              <small className="text-muted d-block text-truncate">SKU: {transfer.product?.sku}</small>
+                              <small className="text-muted d-block text-truncate">Stok Kodu: {transfer.product?.sku}</small>
                             </div>
                           </td>
                           <td className="align-middle">

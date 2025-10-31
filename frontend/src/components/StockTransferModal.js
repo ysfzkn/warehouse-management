@@ -825,7 +825,7 @@ useEffect(() => {
                               <p className="mb-2">{selectedProduct?.name}</p>
                             </div>
                             <div className="col-md-3">
-                              <strong>SKU:</strong>
+                              <strong>Stok Kodu:</strong>
                               <p className="mb-2">{selectedProduct?.sku}</p>
                             </div>
                             <div className="col-md-3">

@@ -24,7 +24,7 @@ const StockModal = ({ warehouse, onClose }) => {
     if (warehouse) {
       fetchStocks();
     }
-  }, [warehouse?.id, fetchStocks]);
+  }, [warehouse, fetchStocks]);
 
   const getStockStatus = (stock) => {
     if (stock.quantity === 0) return { status: 'out', label: 'Stok Dışı', class: 'danger' };
@@ -92,7 +92,7 @@ const StockModal = ({ warehouse, onClose }) => {
                   <thead>
                     <tr>
                       <th>Ürün</th>
-                      <th>SKU</th>
+                      <th>Stok Kodu</th>
                       <th>Kategori</th>
                       <th>Miktar</th>
                       <th>Kullanılabilir</th>
