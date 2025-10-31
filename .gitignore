@@ -76,3 +76,6 @@ dist/
 # Backup files
 *.backup
 *.bak
+
+# Uploads (do not commit uploaded Excel files)
+uploads/
