@@ -10,6 +10,7 @@ import Stock from './pages/Stock';
 import Login from './pages/Login';
 import AdminSettings from './pages/AdminSettings';
 import DesiCalculator from './pages/DesiCalculator';
+import AdminAuditDetails from './pages/AdminAuditDetails';
 import './App.css';
 
 function App() {
@@ -41,6 +42,7 @@ function App() {
           <Route path="/stock" element={authed && (role === 'ADMIN' || role === 'STANDARD') ? <Stock /> : <Navigate to="/login" replace />} />
           <Route path="/admin-settings" element={authed && role === 'ADMIN' ? <AdminSettings /> : <Navigate to={authed ? '/stock' : '/login'} replace />} />
           <Route path="/desi" element={authed && role === 'ADMIN' ? <DesiCalculator /> : <Navigate to={authed ? '/stock' : '/login'} replace />} />
+          <Route path="/admin/audit/:entityType/:entityId" element={authed && role === 'ADMIN' ? <AdminAuditDetails /> : <Navigate to={authed ? '/stock' : '/login'} replace />} />
         </Routes>
       </div>
     </div>

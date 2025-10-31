@@ -126,7 +126,7 @@ public class StockService {
         Stock saved = stockRepository.save(stock);
         String username = com.warehouse.util.CurrentUser.usernameOrSystem();
         auditService.log(com.warehouse.enums.AuditAction.STOCK_CREATE, "Stock", saved.getId(), username,
-                String.format("Product=%s, Warehouse=%s, Quantity=%d", product.getName(), warehouse.getName(), saved.getQuantity()));
+                String.format("Stok oluşturma: Depo=%s, Ürün=%s, Miktar=%d", warehouse.getName(), product.getName(), saved.getQuantity()));
         notificationService.create("Stok oluşturuldu",
                 String.format("%s kullanıcısı %s/%s için %d adet stok oluşturdu.", username,
                         warehouse.getName(), product.getName(), saved.getQuantity()),
@@ -141,12 +141,19 @@ public class StockService {
         updateMinStockLevel(stock, stockDetails.getMinStockLevel());
         updateReservedQuantity(stock, stockDetails.getReservedQuantity());
         updateConsignedQuantity(stock, stockDetails.getConsignedQuantity());
+        // Ensure available is not negative
+        int available = (stock.getQuantity() != null ? stock.getQuantity() : 0)
+                - (stock.getReservedQuantity() != null ? stock.getReservedQuantity() : 0)
+                - (stock.getConsignedQuantity() != null ? stock.getConsignedQuantity() : 0);
+        if (available < 0) {
+            throw new WarehouseManagementException(ErrorCode.INSUFFICIENT_STOCK);
+        }
         
         Stock saved = stockRepository.save(stock);
         String username = com.warehouse.util.CurrentUser.usernameOrSystem();
         auditService.log(com.warehouse.enums.AuditAction.STOCK_UPDATE, "Stock", saved.getId(), username,
-                String.format("Updated quantities for Product=%s, Warehouse=%s", 
-                        saved.getProduct().getName(), saved.getWarehouse().getName()));
+                String.format("Stok güncelleme: Depo=%s, Ürün=%s", 
+                        saved.getWarehouse().getName(), saved.getProduct().getName()));
         notificationService.create("Stok güncellendi",
                 String.format("%s kullanıcısı %s/%s stok kaydını güncelledi.", username,
                         saved.getWarehouse().getName(), saved.getProduct().getName()),
@@ -161,8 +168,8 @@ public class StockService {
         Stock saved = stockRepository.save(stock);
         String username = com.warehouse.util.CurrentUser.usernameOrSystem();
         auditService.log(com.warehouse.enums.AuditAction.STOCK_ADD, "Stock", saved.getId(), username,
-                String.format("Added %d to Product=%s, Warehouse=%s (New=%d)", quantity,
-                        saved.getProduct().getName(), saved.getWarehouse().getName(), saved.getQuantity()));
+                String.format("Stok artırma: +%d adet → Yeni=%d | Depo=%s, Ürün=%s", quantity, saved.getQuantity(),
+                        saved.getWarehouse().getName(), saved.getProduct().getName()));
         notificationService.create("Stok artırıldı",
                 String.format("%s kullanıcısı %s/%s stokuna %d adet ekledi (Yeni: %d).", username,
                         saved.getWarehouse().getName(), saved.getProduct().getName(), quantity, saved.getQuantity()),
@@ -173,12 +180,16 @@ public class StockService {
     public Stock removeFromStock(Long stockId, Integer quantity) {
         ValidationUtil.requirePositive(quantity, "Quantity to remove");
         Stock stock = getStockByIdOrThrow(stockId);
+        int available = stock.getAvailableQuantity();
+        if (available < quantity) {
+            throw new WarehouseManagementException(ErrorCode.INSUFFICIENT_STOCK);
+        }
         stock.setQuantity(stock.getQuantity() - quantity);
         Stock saved = stockRepository.save(stock);
         String username = com.warehouse.util.CurrentUser.usernameOrSystem();
         auditService.log(com.warehouse.enums.AuditAction.STOCK_REMOVE, "Stock", saved.getId(), username,
-                String.format("Removed %d from Product=%s, Warehouse=%s (New=%d)", quantity,
-                        saved.getProduct().getName(), saved.getWarehouse().getName(), saved.getQuantity()));
+                String.format("Stok azaltma: -%d adet → Yeni=%d | Depo=%s, Ürün=%s", quantity, saved.getQuantity(),
+                        saved.getWarehouse().getName(), saved.getProduct().getName()));
         notificationService.create("Stok azaltıldı",
                 String.format("%s kullanıcısı %s/%s stokundan %d adet düşürdü (Yeni: %d).", username,
                         saved.getWarehouse().getName(), saved.getProduct().getName(), quantity, saved.getQuantity()),
@@ -191,8 +202,8 @@ public class StockService {
         stockRepository.delete(stock);
         String username = com.warehouse.util.CurrentUser.usernameOrSystem();
         auditService.log(com.warehouse.enums.AuditAction.STOCK_DELETE, "Stock", id, username,
-                String.format("Deleted stock Product=%s, Warehouse=%s", 
-                        stock.getProduct().getName(), stock.getWarehouse().getName()));
+                String.format("Stok silme: Depo=%s, Ürün=%s", 
+                        stock.getWarehouse().getName(), stock.getProduct().getName()));
         notificationService.create("Stok silindi",
                 String.format("%s kullanıcısı %s/%s stok kaydını sildi.", username,
                         stock.getWarehouse().getName(), stock.getProduct().getName()),
@@ -213,8 +224,8 @@ public class StockService {
         Stock saved = stockRepository.save(stock);
         String username = com.warehouse.util.CurrentUser.usernameOrSystem();
         auditService.log(com.warehouse.enums.AuditAction.STOCK_RESERVE, "Stock", saved.getId(), username,
-                String.format("Reserved %d of Product=%s, Warehouse=%s (Reserved=%d)", quantity,
-                        saved.getProduct().getName(), saved.getWarehouse().getName(), saved.getReservedQuantity()));
+                String.format("Rezervasyon: %d adet ayrıldı (Toplam Ayrılan=%d) | Depo=%s, Ürün=%s", quantity,
+                        saved.getReservedQuantity(), saved.getWarehouse().getName(), saved.getProduct().getName()));
         notificationService.create("Stok rezerve edildi",
                 String.format("%s kullanıcısı %s/%s stokundan %d adet rezerve etti.", username,
                         saved.getWarehouse().getName(), saved.getProduct().getName(), quantity),
@@ -234,8 +245,8 @@ public class StockService {
         Stock saved = stockRepository.save(stock);
         String username = com.warehouse.util.CurrentUser.usernameOrSystem();
         auditService.log(com.warehouse.enums.AuditAction.STOCK_RELEASE, "Stock", saved.getId(), username,
-                String.format("Released %d of Product=%s, Warehouse=%s (Reserved=%d)", quantity,
-                        saved.getProduct().getName(), saved.getWarehouse().getName(), saved.getReservedQuantity()));
+                String.format("Rezervasyon çözümü: %d adet iade edildi (Kalan Ayrılan=%d) | Depo=%s, Ürün=%s", quantity,
+                        saved.getReservedQuantity(), saved.getWarehouse().getName(), saved.getProduct().getName()));
         notificationService.create("Rezervasyon kaldırıldı",
                 String.format("%s kullanıcısı %s/%s stokundaki rezervasyondan %d adet düşürdü.", username,
                         saved.getWarehouse().getName(), saved.getProduct().getName(), quantity),

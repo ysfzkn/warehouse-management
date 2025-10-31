@@ -98,7 +98,7 @@ public class StockTransferService {
         StockTransfer saved = stockTransferRepository.save(transfer);
         String username = com.warehouse.util.CurrentUser.usernameOrSystem();
         auditService.log(com.warehouse.enums.AuditAction.TRANSFER_CREATE, "StockTransfer", saved.getId(), username,
-                String.format("%s -> %s, Product=%s, Qty=%d", 
+                String.format("Transfer oluşturma: %s → %s | Ürün=%s | Adet=%d", 
                         sourceWarehouse.getName(), destinationWarehouse.getName(), product.getName(), saved.getQuantity()));
         notificationService.create("Transfer oluşturuldu",
                 String.format("%s kullanıcısı %s -> %s için %s ürününden %d adet transfer oluşturdu.", username,
@@ -123,11 +123,11 @@ public class StockTransferService {
         StockTransfer saved = stockTransferRepository.save(transfer);
         String username = com.warehouse.util.CurrentUser.usernameOrSystem();
         auditService.log(com.warehouse.enums.AuditAction.TRANSFER_START, "StockTransfer", saved.getId(), username,
-                String.format("Started: %s -> %s, Product=%s, Qty=%d", 
+                String.format("Transfer başlatma: %s → %s | Ürün=%s | Adet=%d (Stok rezerve edildi)", 
                         saved.getSourceWarehouse().getName(), saved.getDestinationWarehouse().getName(),
                         saved.getProduct().getName(), saved.getQuantity()));
-        notificationService.create("Transfer başlatıldı",
-                String.format("%s kullanıcısı #%d transferini başlattı.", username, saved.getId()),
+        notificationService.create("Transfer yola çıkarıldı",
+                String.format("%s kullanıcısı #%d transferini yola çıkardı.", username, saved.getId()),
                 "StockTransfer", saved.getId());
         return saved;
     }
@@ -157,7 +157,7 @@ public class StockTransferService {
         StockTransfer saved = stockTransferRepository.save(transfer);
         String username = com.warehouse.util.CurrentUser.usernameOrSystem();
         auditService.log(com.warehouse.enums.AuditAction.TRANSFER_COMPLETE, "StockTransfer", saved.getId(), username,
-                String.format("Completed: %s -> %s, Product=%s, Qty=%d",
+                String.format("Transfer tamamlama: %s → %s | Ürün=%s | Adet=%d",
                         saved.getSourceWarehouse().getName(), saved.getDestinationWarehouse().getName(),
                         saved.getProduct().getName(), saved.getQuantity()));
         notificationService.create("Transfer tamamlandı",
@@ -187,7 +187,7 @@ public class StockTransferService {
         StockTransfer saved = stockTransferRepository.save(transfer);
         String username = com.warehouse.util.CurrentUser.usernameOrSystem();
         auditService.log(com.warehouse.enums.AuditAction.TRANSFER_CANCEL, "StockTransfer", saved.getId(), username,
-                String.format("Cancelled: reason=%s", cancellationReason));
+                String.format("Transfer iptali: Sebep=%s", cancellationReason));
         notificationService.create("Transfer iptal edildi",
                 String.format("%s kullanıcısı #%d transferini iptal etti. Sebep: %s", username, saved.getId(), cancellationReason),
                 "StockTransfer", saved.getId());
@@ -206,7 +206,7 @@ public class StockTransferService {
         StockTransfer saved = stockTransferRepository.save(transfer);
         String username = com.warehouse.util.CurrentUser.usernameOrSystem();
         auditService.log(com.warehouse.enums.AuditAction.TRANSFER_UPDATE, "StockTransfer", saved.getId(), username,
-                "Transfer bilgileri güncellendi");
+                "Transfer güncelleme");
         notificationService.create("Transfer güncellendi",
                 String.format("%s kullanıcısı #%d transfer bilgilerini güncelledi.", username, saved.getId()),
                 "StockTransfer", saved.getId());
@@ -226,7 +226,7 @@ public class StockTransferService {
         stockTransferRepository.delete(transfer);
         String username = com.warehouse.util.CurrentUser.usernameOrSystem();
         auditService.log(com.warehouse.enums.AuditAction.TRANSFER_DELETE, "StockTransfer", transferId, username,
-                "Transfer kaydı silindi");
+                "Transfer silme");
         notificationService.create("Transfer silindi",
                 String.format("%s kullanıcısı #%d transfer kaydını sildi.", username, transferId),
                 "StockTransfer", transferId);

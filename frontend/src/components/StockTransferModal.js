@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 
 const StockTransferModal = ({ stock, onSuccess, onClose }) => {
@@ -41,7 +41,26 @@ const StockTransferModal = ({ stock, onSuccess, onClose }) => {
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [createdTransferId, setCreatedTransferId] = useState(null);
 
-  useEffect(() => {
+  // Fetch available quantity for selected source warehouse and product
+  const fetchAvailableStock = useCallback(async () => {
+    try {
+      const response = await axios.get('/api/stocks', {
+        params: {
+          warehouseId: formData.sourceWarehouseId
+        }
+      });
+      const stockItem = response.data.find(
+        s => s.product.id === parseInt(formData.productId) &&
+             s.warehouse.id === parseInt(formData.sourceWarehouseId)
+      );
+      setAvailableStock(stockItem || null);
+    } catch (error) {
+      console.error('Error fetching stock:', error);
+      setAvailableStock(null);
+    }
+  }, [formData.sourceWarehouseId, formData.productId]);
+
+useEffect(() => {
     console.log('StockTransferModal mounted, fetching data...');
     const fetchData = async () => {
       setLoadingData(true);
@@ -52,13 +71,13 @@ const StockTransferModal = ({ stock, onSuccess, onClose }) => {
       setLoadingData(false);
     };
     fetchData();
-  }, []);
+}, [stock]);
 
   useEffect(() => {
     if (formData.sourceWarehouseId && formData.productId) {
       fetchAvailableStock();
     }
-  }, [formData.sourceWarehouseId, formData.productId]);
+  }, [formData.sourceWarehouseId, formData.productId, fetchAvailableStock]);
 
   const fetchWarehouses = async () => {
     try {
@@ -146,23 +165,7 @@ const StockTransferModal = ({ stock, onSuccess, onClose }) => {
     }
   };
 
-  const fetchAvailableStock = async () => {
-    try {
-      const response = await axios.get('/api/stocks', {
-        params: {
-          warehouseId: formData.sourceWarehouseId
-        }
-      });
-      const stockItem = response.data.find(
-        s => s.product.id === parseInt(formData.productId) && 
-             s.warehouse.id === parseInt(formData.sourceWarehouseId)
-      );
-      setAvailableStock(stockItem || null);
-    } catch (error) {
-      console.error('Error fetching stock:', error);
-      setAvailableStock(null);
-    }
-  };
+  
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -186,6 +189,18 @@ const StockTransferModal = ({ stock, onSuccess, onClose }) => {
     
     if (validationErrors[name]) {
       setValidationErrors(prev => ({ ...prev, [name]: '' }));
+    }
+
+    // Live validation for quantity against availableStock
+    if (name === 'quantity') {
+      const qty = parseInt(value || '0', 10);
+      if (!Number.isFinite(qty) || qty <= 0) {
+        setValidationErrors(prev => ({ ...prev, quantity: 'Geçerli bir miktar giriniz' }));
+      } else if (availableStock && qty > (availableStock.availableQuantity || 0)) {
+        setValidationErrors(prev => ({ ...prev, quantity: `Maksimum ${availableStock.availableQuantity} adet transfer edilebilir` }));
+      } else if (validationErrors.quantity) {
+        setValidationErrors(prev => ({ ...prev, quantity: '' }));
+      }
     }
   };
 
@@ -520,7 +535,7 @@ const StockTransferModal = ({ stock, onSuccess, onClose }) => {
                       </label>
                       <input
                         type="number"
-                        className={`form-control form-control-lg ${validationErrors.quantity ? 'is-invalid' : formData.quantity > 0 ? 'is-valid' : ''}`}
+                        className={`form-control form-control-lg ${validationErrors.quantity ? 'is-invalid' : ((formData.quantity) && ((!availableStock) || ((parseInt(formData.quantity, 10) > 0) && (parseInt(formData.quantity, 10) <= ((availableStock?.availableQuantity) || 0))))) ? 'is-valid' : ''}`}
                         name="quantity"
                         value={formData.quantity}
                         onChange={handleChange}
@@ -528,6 +543,13 @@ const StockTransferModal = ({ stock, onSuccess, onClose }) => {
                         max={availableStock?.availableQuantity || undefined}
                         required
                         placeholder="0"
+                        inputMode="numeric"
+                        onKeyDown={(e) => {
+                          if (["e", "E", "+", "-", ",", "."].includes(e.key)) {
+                            e.preventDefault();
+                          }
+                        }}
+                        onWheel={(e) => e.currentTarget.blur()}
                       />
                       {validationErrors.quantity && (
                         <div className="invalid-feedback">{validationErrors.quantity}</div>

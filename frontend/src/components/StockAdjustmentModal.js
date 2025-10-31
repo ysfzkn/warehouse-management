@@ -21,6 +21,16 @@ const StockAdjustmentModal = ({ stock, onSuccess, onClose }) => {
       ...prev,
       [name]: value
     }));
+
+    // Live validation for quantity
+    if (name === 'quantity') {
+      const qty = parseInt(value || '0', 10);
+      if (!Number.isFinite(qty) || qty <= 0) {
+        setError('Geçerli bir miktar giriniz');
+      } else if (error === 'Geçerli bir miktar giriniz') {
+        setError(null);
+      }
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -63,7 +73,8 @@ const StockAdjustmentModal = ({ stock, onSuccess, onClose }) => {
       onSuccess();
     } catch (error) {
       console.error('Error adjusting stock:', error);
-      setError(error.response?.data || 'Stok ayarlanırken hata oluştu');
+      const msg = error.response?.data?.message || error.response?.data || 'Stok ayarlanırken hata oluştu';
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -187,14 +198,24 @@ const StockAdjustmentModal = ({ stock, onSuccess, onClose }) => {
                     <input
                       type="number"
                       min="1"
-                      className="form-control"
+                      className={`form-control ${(!adjustment.quantity || parseInt(adjustment.quantity, 10) <= 0) ? 'is-invalid' : ''}`}
                       id="quantity"
                       name="quantity"
                       value={adjustment.quantity}
                       onChange={handleChange}
                       placeholder="10"
                       required
+                      inputMode="numeric"
+                      onKeyDown={(e) => {
+                        if (["e", "E", "+", "-", ",", "."].includes(e.key)) {
+                          e.preventDefault();
+                        }
+                      }}
+                      onWheel={(e) => e.currentTarget.blur()}
                     />
+                    {(!adjustment.quantity || parseInt(adjustment.quantity, 10) <= 0) && (
+                      <div className="invalid-feedback d-block">Geçerli bir miktar giriniz</div>
+                    )}
                   </div>
                 </div>
               </div>

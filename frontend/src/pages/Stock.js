@@ -7,6 +7,7 @@ import SearchableSelect from '../components/SearchableSelect';
 import FilterChips from '../components/FilterChips';
 import ConfirmModal from '../components/ConfirmModal';
 import NotesModal from '../components/NotesModal';
+import AuditTimelineModal from '../components/AuditTimelineModal';
 
 // Helper function to format dates in Turkey timezone
 const formatDateInTurkeyTimezone = (isoDateString, options = {}) => {
@@ -213,6 +214,7 @@ const StockFiltersBar = ({
 };
 
 const Stock = () => {
+  const role = (typeof window !== 'undefined' && localStorage.getItem('auth_role')) || 'ADMIN';
   const [stocks, setStocks] = useState([]);
   const [products, setProducts] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
@@ -245,6 +247,8 @@ const Stock = () => {
   const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null });
   const [notesModal, setNotesModal] = useState({ show: false, notes: '', transferId: null });
   const [cancellationModal, setCancellationModal] = useState({ show: false, transferId: null, reason: '' });
+  const [auditModal, setAuditModal] = useState({ show: false, entityType: null, entityId: null });
+  const [pendingStockId, setPendingStockId] = useState(null);
 
   const fetchAllData = useCallback(async () => {
     try {
@@ -312,19 +316,7 @@ const Stock = () => {
     if (b) setBrandId(Number(b));
     if (c) setColorId(Number(c));
     if (w) setSelectedWarehouseId(Number(w));
-    // Lazy open context-specific UI
-    if (stockIdParam) {
-      // Try to preselect this stock into adjustment modal
-      const idNum = Number(stockIdParam);
-      // ensure data loaded first
-      setTimeout(() => {
-        const s = stocks.find(s => s.id === idNum);
-        if (s) {
-          setSelectedStock(s);
-          setShowAdjustmentModal(true);
-        }
-      }, 300);
-    }
+    if (stockIdParam) setPendingStockId(Number(stockIdParam));
     if (transferIdParam) {
       // Open transfer history and highlight by filtering to ALL
       setShowTransferHistory(true);
@@ -332,6 +324,17 @@ const Stock = () => {
       setTimeout(() => { fetchTransfers(); }, 0);
     }
   }, []);
+
+  // Open stock adjustment modal when stocks loaded and pendingStockId exists
+  useEffect(() => {
+    if (!pendingStockId || !Array.isArray(stocks) || stocks.length === 0) return;
+    const s = stocks.find(x => x.id === pendingStockId);
+    if (s) {
+      setSelectedStock(s);
+      setShowAdjustmentModal(true);
+      setPendingStockId(null);
+    }
+  }, [stocks, pendingStockId]);
 
   const filteredStocks = useMemo(() => {
     let filtered = stocks;
@@ -393,152 +396,6 @@ const Stock = () => {
     });
   }, [stocks, filter, searchTerm, showReserved, showConsigned, selectedCategory, selectedSubcategory, products]);
 
-  const FiltersBar = () => (
-    <>
-      <div className="row mb-2 align-items-end">
-        <div className="col-md-3">
-          <div className="input-group">
-            <span className="input-group-text"><i className="fas fa-search"></i></span>
-            <input
-              type="text"
-              className="form-control"
-              placeholder="Ürün adı, SKU veya depo ara..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
-        </div>
-        <div className="col-md-3">
-          <SearchableSelect
-            label="Depo"
-            value={selectedWarehouseId}
-            onChange={(id, opt) => { setSelectedWarehouseId(id); setSelectedWarehouseOpt(opt || null); }}
-            searchEndpoint="/api/warehouses"
-            placeholder="Depo ara..."
-            allowClear={true}
-            clearText="Temizle"
-            wrapperClassName="mb-0"
-            renderOption={(w) => w.name}
-          />
-        </div>
-        <div className="col-md-3">
-          <SearchableSelect
-            label="Marka"
-            value={brandId}
-            onChange={(id, opt) => { setBrandId(id); setBrandOpt(opt || null); }}
-            searchEndpoint="/api/brands/search"
-            placeholder="Marka ara..."
-            allowClear={true}
-            clearText="Temizle"
-            wrapperClassName="mb-0"
-          />
-        </div>
-        <div className="col-md-3">
-          <SearchableSelect
-            label="Renk"
-            value={colorId}
-            onChange={(id, opt) => { setColorId(id); setColorOpt(opt || null); }}
-            searchEndpoint="/api/colors/search"
-            placeholder="Renk ara..."
-            allowClear={true}
-            clearText="Temizle"
-            wrapperClassName="mb-0"
-          />
-        </div>
-      </div>
-
-      {/* Category filters */}
-      <div className="row mb-2 align-items-end">
-        <div className="col-md-6">
-          <select
-            className="form-select"
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-          >
-            <option value="">Tüm Ana Kategoriler</option>
-            {categories.map((category) => (
-              <option key={category.id} value={category.id}>
-                {category.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="col-md-6">
-          <select
-            className="form-select"
-            value={selectedSubcategory}
-            onChange={(e) => setSelectedSubcategory(e.target.value)}
-            disabled={!selectedCategory}
-          >
-            <option value="">Tüm Alt Kategoriler</option>
-            {subcategories.map((subcategory) => (
-              <option key={subcategory.id} value={subcategory.id}>
-                {subcategory.name}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {/* Additional filters */}
-      <div className="row mb-2">
-        <div className="col-md-12">
-          <div className="form-check form-check-inline">
-            <input
-              className="form-check-input"
-              type="checkbox"
-              id="showReserved"
-              checked={showReserved}
-              onChange={(e) => setShowReserved(e.target.checked)}
-            />
-            <label className="form-check-label" htmlFor="showReserved">
-              Sadece Rezerve Olanlar
-            </label>
-          </div>
-          <div className="form-check form-check-inline">
-            <input
-              className="form-check-input"
-              type="checkbox"
-              id="showConsigned"
-              checked={showConsigned}
-              onChange={(e) => setShowConsigned(e.target.checked)}
-            />
-            <label className="form-check-label" htmlFor="showConsigned">
-              Sadece Emanet Olanlar
-            </label>
-          </div>
-        </div>
-      </div>
-
-      <FilterChips
-        className="mb-3"
-        chips={[
-          searchTerm ? { icon: 'fas fa-search', label: `Arama: "${searchTerm}"`, onClear: () => setSearchTerm('') } : null,
-          selectedWarehouseId ? { icon: 'fas fa-warehouse', label: `Depo: ${selectedWarehouseOpt?.name || getWarehouseById(selectedWarehouseId)?.name || selectedWarehouseId}`, onClear: () => { setSelectedWarehouseId(null); setSelectedWarehouseOpt(null); } } : null,
-          selectedCategory ? { icon: 'fas fa-tag', label: `Ana Kategori: ${categories.find(c => c.id.toString() === selectedCategory)?.name || selectedCategory}`, onClear: () => { setSelectedCategory(''); setSelectedSubcategory(''); setSubcategories([]); } } : null,
-          selectedSubcategory ? { icon: 'fas fa-tags', label: `Alt Kategori: ${subcategories.find(c => c.id.toString() === selectedSubcategory)?.name || selectedSubcategory}`, onClear: () => setSelectedSubcategory('') } : null,
-          brandId ? { icon: 'fas fa-copyright', label: `Marka: ${brandOpt?.name || brandId}`, onClear: () => { setBrandId(null); setBrandOpt(null); } } : null,
-          colorId ? { icon: 'fas fa-palette', label: `Renk: ${colorOpt?.name || colorId}`, onClear: () => { setColorId(null); setColorOpt(null); } } : null,
-          showReserved ? { icon: 'fas fa-lock', label: 'Rezerve Olanlar', onClear: () => setShowReserved(false) } : null,
-          showConsigned ? { icon: 'fas fa-handshake', label: 'Emanet Olanlar', onClear: () => setShowConsigned(false) } : null,
-        ].filter(Boolean)}
-        onClearAll={() => {
-          setSearchTerm('');
-          setSelectedWarehouseId(null);
-          setSelectedWarehouseOpt(null);
-          setSelectedCategory('');
-          setSelectedSubcategory('');
-          setSubcategories([]);
-          setBrandId(null);
-          setColorId(null);
-          setBrandOpt(null);
-          setColorOpt(null);
-          setShowReserved(false);
-          setShowConsigned(false);
-        }}
-      />
-    </>
-  );
 
   const handleCreateStock = () => {
     setSelectedStock(null);
@@ -618,7 +475,8 @@ const Stock = () => {
       fetchTransfers();
       fetchAllData();
     } catch (error) {
-      alert(`Transfer ${action} işlemi sırasında hata: ` + (error.response?.data || error.message));
+      const msg = error.response?.data?.message || error.response?.data || error.message;
+      alert(`Transfer ${action} işlemi sırasında hata: ${msg}`);
     }
   };
 
@@ -860,6 +718,15 @@ const Stock = () => {
                           >
                             <i className="fas fa-trash"></i>
                           </button>
+                          {role === 'ADMIN' && (
+                            <button
+                              className="btn btn-sm btn-outline-secondary"
+                              onClick={() => setAuditModal({ show: true, entityType: 'Stock', entityId: stock.id })}
+                              title="Hareket Geçmişi"
+                            >
+                              <i className="fas fa-history"></i>
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -1409,6 +1276,17 @@ const Stock = () => {
                                   Notlar
                                 </button>
                               )}
+                              {role === 'ADMIN' && (
+                                <button
+                                  className="btn btn-sm btn-outline-secondary w-100 py-1 px-2"
+                                  style={{fontSize: 'clamp(0.7rem, 2vw, 0.8rem)', whiteSpace: 'nowrap'}}
+                                  onClick={() => setAuditModal({ show: true, entityType: 'StockTransfer', entityId: transfer.id })}
+                                  title="Hareket Geçmişi"
+                                >
+                                  <i className="fas fa-history me-1"></i>
+                                  Hareketler
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -1513,6 +1391,15 @@ const Stock = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Audit Timeline Modal */}
+      {auditModal.show && (
+        <AuditTimelineModal
+          entityType={auditModal.entityType}
+          entityId={auditModal.entityId}
+          onClose={() => setAuditModal({ show: false, entityType: null, entityId: null })}
+        />
       )}
     </div>
   );

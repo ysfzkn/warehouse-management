@@ -28,7 +28,7 @@ public enum ErrorCode {
     VALUE_CANNOT_BE_NEGATIVE("VALIDATION_004", "Değer negatif olamaz", HttpStatus.BAD_REQUEST),
     
     // Stok Hataları (400)
-    INSUFFICIENT_STOCK("STOCK_003", "Yetersiz stok bulunmaktadır", HttpStatus.BAD_REQUEST),
+    INSUFFICIENT_STOCK("STOCK_003", "Yetersiz stok: çıkarılmak istenen miktar kullanılabilir miktardan fazladır", HttpStatus.BAD_REQUEST),
     INSUFFICIENT_RESERVED_STOCK("STOCK_004", "Ayrılan miktardan fazla iade edilemez", HttpStatus.BAD_REQUEST),
     PRODUCT_NOT_IN_WAREHOUSE("STOCK_005", "Ürün bu depoda bulunamadı", HttpStatus.BAD_REQUEST),
     
