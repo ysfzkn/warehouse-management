@@ -1,0 +1,379 @@
+package com.warehouse.service.impl;
+
+import com.warehouse.dto.BulkPriceUpdateRequest;
+import com.warehouse.entity.Product;
+import com.warehouse.entity.Category;
+import com.warehouse.entity.Brand;
+import com.warehouse.entity.Color;
+import com.warehouse.exception.ErrorCode;
+import com.warehouse.exception.WarehouseManagementException;
+import com.warehouse.repository.ProductRepository;
+import com.warehouse.repository.CategoryRepository;
+import com.warehouse.repository.BrandRepository;
+import com.warehouse.repository.ColorRepository;
+import com.warehouse.service.ProductService;
+import com.warehouse.util.EntityValidator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.List;
+import java.util.Optional;
+
+/**
+ * Implementation of ProductService for managing products.
+ */
+@Service
+@Transactional
+public class ProductServiceImpl implements ProductService {
+
+    private static final Logger logger = LoggerFactory.getLogger(ProductServiceImpl.class);
+
+    private final ProductRepository productRepository;
+    private final CategoryRepository categoryRepository;
+    private final BrandRepository brandRepository;
+    private final ColorRepository colorRepository;
+
+    public ProductServiceImpl(ProductRepository productRepository,
+                             CategoryRepository categoryRepository,
+                             BrandRepository brandRepository,
+                             ColorRepository colorRepository) {
+        this.productRepository = productRepository;
+        this.categoryRepository = categoryRepository;
+        this.brandRepository = brandRepository;
+        this.colorRepository = colorRepository;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Product> getAllProducts() {
+        logger.debug("Fetching all products");
+        return productRepository.findAll();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Product> getAllActiveProducts() {
+        logger.debug("Fetching all active products");
+        return productRepository.findAllActive();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<Product> getProductById(Long id) {
+        logger.debug("Fetching product by id: {}", id);
+        return productRepository.findById(id);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Product getProductByIdOrThrow(Long id) {
+        logger.debug("Fetching product by id or throw: {}", id);
+        return productRepository.findById(id)
+                .orElseThrow(() -> {
+                    logger.warn("Product not found with id: {}", id);
+                    return new WarehouseManagementException(ErrorCode.PRODUCT_NOT_FOUND, "ID: " + id);
+                });
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<Product> getProductByIdWithStocks(Long id) {
+        logger.debug("Fetching product with stocks by id: {}", id);
+        return productRepository.findByIdWithStocks(id);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<Product> getProductBySku(String sku) {
+        logger.debug("Fetching product by SKU: {}", sku);
+        return productRepository.findBySku(sku);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Product> getProductsByCategory(Long categoryId) {
+        logger.debug("Fetching products by category id: {}", categoryId);
+        Category category = categoryRepository.findById(categoryId)
+                .orElseThrow(() -> {
+                    logger.warn("Category not found with id: {}", categoryId);
+                    return new WarehouseManagementException(ErrorCode.CATEGORY_NOT_FOUND, "ID: " + categoryId);
+                });
+        return productRepository.findByCategoryAndActive(category);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Product> searchProductsByName(String name) {
+        logger.debug("Searching products by name: {}", name);
+        return productRepository.findByNameContainingIgnoreCaseAndActive(name);
+    }
+
+    @Override
+    public Product createProduct(Product product) {
+        logger.info("Creating new product: {}", product.getName());
+        EntityValidator.validateProductForCreation(product);
+
+        Category category = categoryRepository.findById(product.getCategory().getId())
+                .orElseThrow(() -> {
+                    logger.warn("Category not found with id: {}", product.getCategory().getId());
+                    return new WarehouseManagementException(ErrorCode.CATEGORY_NOT_FOUND, "ID: " + product.getCategory().getId());
+                });
+
+        validateSkuUniqueness(product.getSku());
+
+        product.setCategory(category);
+        setBrandIfPresent(product);
+        setColorIfPresent(product);
+
+        Product saved = productRepository.save(product);
+        logger.info("Product created successfully with id: {}", saved.getId());
+        return saved;
+    }
+
+    @Override
+    public Product updateProduct(Long id, Product productDetails) {
+        logger.info("Updating product with id: {}", id);
+        Product product = getProductByIdOrThrow(id);
+
+        updateCategory(product, productDetails);
+        updateBrand(product, productDetails);
+        updateColor(product, productDetails);
+        validateSkuUniquenessOnUpdate(product, productDetails);
+        updateProductFields(product, productDetails);
+
+        Product saved = productRepository.save(product);
+        logger.info("Product updated successfully with id: {}", saved.getId());
+        return saved;
+    }
+
+    @Override
+    public void deleteProduct(Long id) {
+        logger.info("Deleting product with id: {}", id);
+        Product product = getProductByIdOrThrow(id);
+        EntityValidator.validateEntityHasNoRelations(
+            !product.getStocks().isEmpty(), "Product", "stocks"
+        );
+        productRepository.delete(product);
+        logger.info("Product deleted successfully with id: {}", id);
+    }
+
+    @Override
+    public void deactivateProduct(Long id) {
+        logger.info("Deactivating product with id: {}", id);
+        updateProductStatus(id, false);
+    }
+
+    @Override
+    public void activateProduct(Long id) {
+        logger.info("Activating product with id: {}", id);
+        updateProductStatus(id, true);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean existsBySku(String sku) {
+        return productRepository.existsBySku(sku);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Product> filterProductsByBrandAndColor(Long brandId, Long colorId) {
+        logger.debug("Filtering products by brand id: {} and color id: {}", brandId, colorId);
+        Brand brand = findBrandIfPresent(brandId);
+        Color color = findColorIfPresent(colorId);
+        return productRepository.findActiveByBrandAndColor(brand, color);
+    }
+
+    @Override
+    public int bulkAdjustPrices(BulkPriceUpdateRequest request) {
+        logger.info("Starting bulk price adjustment");
+        validateBulkRequest(request);
+        List<Product> targets = productRepository.findByOptionalFilters(
+                request.getCategoryId(), request.getBrandId(), request.getColorId(), request.isOnlyActive()
+        );
+        if (targets.isEmpty()) {
+            logger.warn("No products found matching bulk price update criteria");
+            return 0;
+        }
+
+        boolean isIncrease = "INCREASE".equalsIgnoreCase(request.getDirection());
+        boolean isPercentage = "PERCENTAGE".equalsIgnoreCase(request.getMode());
+        BigDecimal value = request.getValue();
+
+        int updatedCount = 0;
+        for (Product product : targets) {
+            BigDecimal current = product.getPrice() != null ? product.getPrice() : BigDecimal.ZERO;
+            BigDecimal updated = calculateNewPrice(current, value, isIncrease, isPercentage);
+            product.setPrice(updated.setScale(2, RoundingMode.HALF_UP));
+            updatedCount++;
+        }
+
+        productRepository.saveAll(targets);
+        logger.info("Bulk price adjustment completed. Updated {} products", updatedCount);
+        return updatedCount;
+    }
+
+    private void validateSkuUniqueness(String sku) {
+        if (productRepository.existsBySku(sku)) {
+            logger.warn("SKU already exists: {}", sku);
+            throw new WarehouseManagementException(ErrorCode.PRODUCT_SKU_ALREADY_EXISTS, "SKU: " + sku);
+        }
+    }
+
+    private void validateSkuUniquenessOnUpdate(Product product, Product productDetails) {
+        if (!product.getSku().equals(productDetails.getSku()) &&
+            productRepository.existsBySku(productDetails.getSku())) {
+            logger.warn("SKU already exists for update: {}", productDetails.getSku());
+            throw new WarehouseManagementException(ErrorCode.PRODUCT_SKU_ALREADY_EXISTS, "SKU: " + productDetails.getSku());
+        }
+    }
+
+    private void setBrandIfPresent(Product product) {
+        if (product.getBrand() != null && product.getBrand().getId() != null) {
+            Brand brand = brandRepository.findById(product.getBrand().getId())
+                    .orElseThrow(() -> {
+                        logger.warn("Brand not found with id: {}", product.getBrand().getId());
+                        return new WarehouseManagementException(ErrorCode.BRAND_NOT_FOUND, "ID: " + product.getBrand().getId());
+                    });
+            product.setBrand(brand);
+        } else {
+            product.setBrand(null);
+        }
+    }
+
+    private void setColorIfPresent(Product product) {
+        if (product.getColor() != null && product.getColor().getId() != null) {
+            Color color = colorRepository.findById(product.getColor().getId())
+                    .orElseThrow(() -> {
+                        logger.warn("Color not found with id: {}", product.getColor().getId());
+                        return new WarehouseManagementException(ErrorCode.COLOR_NOT_FOUND, "ID: " + product.getColor().getId());
+                    });
+            product.setColor(color);
+        } else {
+            product.setColor(null);
+        }
+    }
+
+    private void updateCategory(Product product, Product productDetails) {
+        if (productDetails.getCategory() != null &&
+            productDetails.getCategory().getId() != null &&
+            !product.getCategory().getId().equals(productDetails.getCategory().getId())) {
+            Category category = categoryRepository.findById(productDetails.getCategory().getId())
+                    .orElseThrow(() -> {
+                        logger.warn("Category not found with id: {}", productDetails.getCategory().getId());
+                        return new WarehouseManagementException(ErrorCode.CATEGORY_NOT_FOUND, "ID: " + productDetails.getCategory().getId());
+                    });
+            product.setCategory(category);
+        }
+    }
+
+    private void updateBrand(Product product, Product productDetails) {
+        if (productDetails.getBrand() != null && productDetails.getBrand().getId() != null) {
+            if (product.getBrand() == null || !product.getBrand().getId().equals(productDetails.getBrand().getId())) {
+                Brand brand = brandRepository.findById(productDetails.getBrand().getId())
+                        .orElseThrow(() -> {
+                            logger.warn("Brand not found with id: {}", productDetails.getBrand().getId());
+                            return new WarehouseManagementException(ErrorCode.BRAND_NOT_FOUND, "ID: " + productDetails.getBrand().getId());
+                        });
+                product.setBrand(brand);
+            }
+        } else {
+            product.setBrand(null);
+        }
+    }
+
+    private void updateColor(Product product, Product productDetails) {
+        if (productDetails.getColor() != null && productDetails.getColor().getId() != null) {
+            if (product.getColor() == null || !product.getColor().getId().equals(productDetails.getColor().getId())) {
+                Color color = colorRepository.findById(productDetails.getColor().getId())
+                        .orElseThrow(() -> {
+                            logger.warn("Color not found with id: {}", productDetails.getColor().getId());
+                            return new WarehouseManagementException(ErrorCode.COLOR_NOT_FOUND, "ID: " + productDetails.getColor().getId());
+                        });
+                product.setColor(color);
+            }
+        } else {
+            product.setColor(null);
+        }
+    }
+
+    private void updateProductFields(Product product, Product productDetails) {
+        product.setName(productDetails.getName());
+        product.setDescription(productDetails.getDescription());
+        product.setSku(productDetails.getSku());
+        product.setPrice(productDetails.getPrice());
+        product.setWeight(productDetails.getWeight());
+        product.setDimensions(productDetails.getDimensions());
+        product.setLengthCm(productDetails.getLengthCm());
+        product.setWidthCm(productDetails.getWidthCm());
+        product.setHeightCm(productDetails.getHeightCm());
+        product.setShippingRate(productDetails.getShippingRate());
+        product.setVatRate(productDetails.getVatRate());
+        product.setSctRate(productDetails.getSctRate());
+        product.setActive(productDetails.isActive());
+    }
+
+    private void updateProductStatus(Long id, boolean isActive) {
+        Product product = getProductByIdOrThrow(id);
+        product.setActive(isActive);
+        productRepository.save(product);
+        logger.debug("Product status updated. Id: {}, Active: {}", id, isActive);
+    }
+
+    private Brand findBrandIfPresent(Long brandId) {
+        if (brandId != null) {
+            return brandRepository.findById(brandId)
+                    .orElseThrow(() -> {
+                        logger.warn("Brand not found with id: {}", brandId);
+                        return new WarehouseManagementException(ErrorCode.BRAND_NOT_FOUND, "ID: " + brandId);
+                    });
+        }
+        return null;
+    }
+
+    private Color findColorIfPresent(Long colorId) {
+        if (colorId != null) {
+            return colorRepository.findById(colorId)
+                    .orElseThrow(() -> {
+                        logger.warn("Color not found with id: {}", colorId);
+                        return new WarehouseManagementException(ErrorCode.COLOR_NOT_FOUND, "ID: " + colorId);
+                    });
+        }
+        return null;
+    }
+
+    private BigDecimal calculateNewPrice(BigDecimal current, BigDecimal value, boolean isIncrease, boolean isPercentage) {
+        if (isPercentage) {
+            BigDecimal factor = value.divide(BigDecimal.valueOf(100), 6, RoundingMode.HALF_UP);
+            BigDecimal multiplier = isIncrease ? BigDecimal.ONE.add(factor) : BigDecimal.ONE.subtract(factor);
+            return current.multiply(multiplier);
+        } else {
+            BigDecimal delta = value;
+            BigDecimal result = isIncrease ? current.add(delta) : current.subtract(delta);
+            return result.compareTo(BigDecimal.ZERO) < 0 ? BigDecimal.ZERO : result;
+        }
+    }
+
+    private void validateBulkRequest(BulkPriceUpdateRequest request) {
+        if (request.getMode() == null || request.getValue() == null || request.getDirection() == null) {
+            throw new WarehouseManagementException(ErrorCode.REQUIRED_FIELD_MISSING, "Mode, value and direction are required");
+        }
+        if (!"PERCENTAGE".equalsIgnoreCase(request.getMode()) && !"AMOUNT".equalsIgnoreCase(request.getMode())) {
+            throw new WarehouseManagementException(ErrorCode.INVALID_VALUE, "Invalid mode");
+        }
+        if (!"INCREASE".equalsIgnoreCase(request.getDirection()) && !"DECREASE".equalsIgnoreCase(request.getDirection())) {
+            throw new WarehouseManagementException(ErrorCode.INVALID_VALUE, "Invalid direction");
+        }
+        if (request.getValue().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new WarehouseManagementException(ErrorCode.VALUE_MUST_BE_POSITIVE, "Value must be positive");
+        }
+        if ("PERCENTAGE".equalsIgnoreCase(request.getMode()) && request.getValue().compareTo(BigDecimal.valueOf(1000)) > 0) {
+            throw new WarehouseManagementException(ErrorCode.INVALID_VALUE, "Percentage is unrealistically high");
+        }
+    }
+}
+

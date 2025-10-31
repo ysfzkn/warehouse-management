@@ -53,7 +53,6 @@ public class StockImportController {
     @GetMapping
     public ResponseEntity<List<StockImportHistory>> list() {
         List<StockImportHistory> list = historyRepository.findAll();
-        // Normalize status to Turkish for legacy records
         for (StockImportHistory h : list) {
             if (h.getStatus() == null) continue;
             String s = h.getStatus().toUpperCase();
@@ -67,7 +66,7 @@ public class StockImportController {
     @GetMapping("/{id}/file")
     public ResponseEntity<Resource> downloadFile(@PathVariable Long id) throws IOException {
         StockImportHistory history = historyRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Kayıt bulunamadı: " + id));
+                .orElseThrow(() -> new IllegalArgumentException("Record not found: " + id));
         Path path = Path.of("uploads/stock-imports").resolve(history.getStoredFilename());
         if (!Files.exists(path)) {
             return ResponseEntity.notFound().build();

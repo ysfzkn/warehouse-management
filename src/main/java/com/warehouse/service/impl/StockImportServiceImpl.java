@@ -1,0 +1,456 @@
+package com.warehouse.service.impl;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.warehouse.dto.FailedRowInfo;
+import com.warehouse.entity.*;
+import com.warehouse.repository.*;
+import com.warehouse.service.StockImportService;
+import org.apache.poi.ss.usermodel.CellStyle;
+import org.apache.poi.ss.usermodel.HorizontalAlignment;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.BorderStyle;
+import org.apache.poi.xssf.usermodel.XSSFFont;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.math.BigDecimal;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+
+/**
+ * Implementation of StockImportService for managing stock imports from Excel files.
+ */
+@Service
+@Transactional
+public class StockImportServiceImpl implements StockImportService {
+
+    private static final Logger logger = LoggerFactory.getLogger(StockImportServiceImpl.class);
+    private static final String STORAGE_DIR = "uploads/stock-imports";
+    private static final String TEMPLATE_SHEET_NAME = "Stock Template";
+
+    private final ProductRepository productRepository;
+    private final CategoryRepository categoryRepository;
+    private final WarehouseRepository warehouseRepository;
+    private final StockRepository stockRepository;
+    private final StockImportHistoryRepository historyRepository;
+
+    public StockImportServiceImpl(ProductRepository productRepository,
+                                  CategoryRepository categoryRepository,
+                                  WarehouseRepository warehouseRepository,
+                                  StockRepository stockRepository,
+                                  StockImportHistoryRepository historyRepository) {
+        this.productRepository = productRepository;
+        this.categoryRepository = categoryRepository;
+        this.warehouseRepository = warehouseRepository;
+        this.stockRepository = stockRepository;
+        this.historyRepository = historyRepository;
+    }
+
+    @Override
+    public XSSFWorkbook generateTemplate() {
+        logger.debug("Generating stock import template");
+        XSSFWorkbook workbook = new XSSFWorkbook();
+        Sheet sheet = workbook.createSheet(TEMPLATE_SHEET_NAME);
+
+        CellStyle headerStyle = createHeaderStyle(workbook);
+
+        Row header = sheet.createRow(0);
+        String[] headers = {
+            "Product Name (required)",
+            "Stock Code (required)",
+            "Category Name (required)",
+            "Quantity (required)",
+            "Consigned (optional)",
+            "Price (optional)",
+            "Minimum Stock (optional)",
+            "Reserved (optional)"
+        };
+
+        for (int i = 0; i < headers.length; i++) {
+            header.createCell(i).setCellValue(headers[i]);
+            header.getCell(i).setCellStyle(headerStyle);
+        }
+
+        for (int i = 0; i < headers.length; i++) {
+            sheet.autoSizeColumn(i);
+        }
+
+        logger.debug("Template generated successfully");
+        return workbook;
+    }
+
+    @Override
+    public StockImportHistory importStocks(Long warehouseId, MultipartFile file) throws IOException {
+        logger.info("Starting stock import for warehouse id: {}", warehouseId);
+        Warehouse warehouse = warehouseRepository.findById(warehouseId)
+                .orElseThrow(() -> {
+                    logger.error("Warehouse not found with id: {}", warehouseId);
+                    return new IllegalArgumentException("Warehouse not found: " + warehouseId);
+                });
+
+        Path targetFile = storeFile(file);
+        StockImportHistory history = createImportHistory(file, warehouse);
+
+        try {
+            ImportResult result = processExcelFile(targetFile, warehouse);
+            updateHistoryWithResult(history, result);
+            logger.info("Stock import completed. Status: {}, Processed: {}/{}, Failed: {}", 
+                    history.getStatus(), result.getProcessedRows(), result.getTotalRows(), result.getFailedRows().size());
+        } catch (Exception ex) {
+            logger.error("Error during stock import for warehouse id: {}", warehouseId, ex);
+            history.setStatus("FAILED");
+            history.setErrorMessage(ex.getMessage());
+            historyRepository.save(history);
+            throw ex;
+        } finally {
+            historyRepository.save(history);
+        }
+
+        return history;
+    }
+
+    private CellStyle createHeaderStyle(XSSFWorkbook workbook) {
+        XSSFFont boldFont = workbook.createFont();
+        boldFont.setBold(true);
+        CellStyle headerStyle = workbook.createCellStyle();
+        headerStyle.setFont(boldFont);
+        headerStyle.setAlignment(HorizontalAlignment.CENTER);
+        headerStyle.setBorderTop(BorderStyle.THIN);
+        headerStyle.setBorderBottom(BorderStyle.THIN);
+        headerStyle.setBorderLeft(BorderStyle.THIN);
+        headerStyle.setBorderRight(BorderStyle.THIN);
+        return headerStyle;
+    }
+
+    private Path storeFile(MultipartFile file) throws IOException {
+        Path dir = Path.of(STORAGE_DIR);
+        Files.createDirectories(dir);
+        String storedFilename = System.currentTimeMillis() + "_" + sanitizeFilename(file.getOriginalFilename());
+        Path target = dir.resolve(storedFilename);
+        try (InputStream is = file.getInputStream()) {
+            Files.copy(is, target, StandardCopyOption.REPLACE_EXISTING);
+        }
+        logger.debug("File stored: {}", target);
+        return target;
+    }
+
+    private StockImportHistory createImportHistory(MultipartFile file, Warehouse warehouse) {
+        StockImportHistory history = new StockImportHistory();
+        history.setOriginalFilename(file.getOriginalFilename());
+        String storedFilename = System.currentTimeMillis() + "_" + sanitizeFilename(file.getOriginalFilename());
+        history.setStoredFilename(storedFilename);
+        history.setContentType(file.getContentType() != null ? 
+                file.getContentType() : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        history.setWarehouse(warehouse);
+        history.setStatus("PROCESSING");
+        return historyRepository.save(history);
+    }
+
+    private ImportResult processExcelFile(Path filePath, Warehouse warehouse) throws IOException {
+        ImportResult result = new ImportResult();
+        ObjectMapper objectMapper = new ObjectMapper();
+
+        try (InputStream is = Files.newInputStream(filePath);
+             XSSFWorkbook workbook = new XSSFWorkbook(is)) {
+
+            Sheet sheet = workbook.getSheetAt(0);
+            logger.debug("Processing Excel file with {} rows", sheet.getLastRowNum());
+
+            for (int i = 1; i <= sheet.getLastRowNum(); i++) {
+                Row row = sheet.getRow(i);
+                if (row == null) continue;
+
+                int excelRowNumber = i + 1;
+                RowData rowData = extractRowData(row, excelRowNumber);
+
+                if (isRowEmpty(rowData)) {
+                    continue;
+                }
+
+                result.incrementTotalRows();
+
+                try {
+                    if (hasMissingRequiredFields(rowData)) {
+                        String reason = buildMissingFieldsReason(rowData);
+                        result.addFailedRow(new FailedRowInfo(excelRowNumber, 
+                                rowData.getName(), rowData.getSku(), reason));
+                        continue;
+                    }
+
+                    processRow(rowData, warehouse, result);
+
+                } catch (Exception ex) {
+                    logger.warn("Error processing row {}: {}", excelRowNumber, ex.getMessage());
+                    String errorMsg = ex.getMessage() != null && !ex.getMessage().isEmpty() 
+                            ? ex.getMessage() : ex.getClass().getSimpleName();
+                    result.addFailedRow(new FailedRowInfo(excelRowNumber, 
+                            rowData.getName(), rowData.getSku(), "Error: " + errorMsg));
+                }
+            }
+
+            result.setFailedRowsJson(objectMapper.writeValueAsString(result.getFailedRows()));
+        }
+
+        return result;
+    }
+
+    private RowData extractRowData(Row row, int rowNumber) {
+        return new RowData(
+            rowNumber,
+            getStringValue(row, 0),
+            getStringValue(row, 1),
+            getStringValue(row, 2),
+            getStringValue(row, 3),
+            getStringValue(row, 4),
+            getStringValue(row, 5),
+            getStringValue(row, 6),
+            getStringValue(row, 7)
+        );
+    }
+
+    private String getStringValue(Row row, int index) {
+        if (row.getCell(index) == null) return null;
+        org.apache.poi.ss.usermodel.Cell cell = row.getCell(index);
+        org.apache.poi.ss.usermodel.CellType cellType = cell.getCellType();
+        
+        if (cellType == org.apache.poi.ss.usermodel.CellType.STRING) {
+            return cell.getStringCellValue();
+        } else if (cellType == org.apache.poi.ss.usermodel.CellType.NUMERIC) {
+            double numericValue = cell.getNumericCellValue();
+            if (numericValue == Math.floor(numericValue)) {
+                return String.valueOf((long) numericValue);
+            }
+            return String.valueOf(numericValue);
+        } else if (cellType == org.apache.poi.ss.usermodel.CellType.BOOLEAN) {
+            return String.valueOf(cell.getBooleanCellValue());
+        } else {
+            org.apache.poi.ss.usermodel.DataFormatter formatter = new org.apache.poi.ss.usermodel.DataFormatter();
+            return formatter.formatCellValue(cell);
+        }
+    }
+
+    private boolean isRowEmpty(RowData rowData) {
+        return isBlank(rowData.getName()) && isBlank(rowData.getSku()) 
+                && isBlank(rowData.getCategoryName()) && isBlank(rowData.getQuantity());
+    }
+
+    private boolean hasMissingRequiredFields(RowData rowData) {
+        return isBlank(rowData.getName()) || isBlank(rowData.getSku()) 
+                || isBlank(rowData.getCategoryName()) || isBlank(rowData.getQuantity());
+    }
+
+    private String buildMissingFieldsReason(RowData rowData) {
+        List<String> missingFields = new ArrayList<>();
+        if (isBlank(rowData.getName())) missingFields.add("Product Name");
+        if (isBlank(rowData.getSku())) missingFields.add("Stock Code");
+        if (isBlank(rowData.getCategoryName())) missingFields.add("Category Name");
+        if (isBlank(rowData.getQuantity())) missingFields.add("Quantity");
+        return "Missing required fields: " + String.join(", ", missingFields);
+    }
+
+    private void processRow(RowData rowData, Warehouse warehouse, ImportResult result) {
+        BigDecimal price = parsePrice(rowData.getPrice());
+        int quantity = parseIntSafe(rowData.getQuantity(), 0);
+        int minStock = parseIntSafe(rowData.getMinStock(), 0);
+        int reserved = parseIntSafe(rowData.getReserved(), 0);
+        int consigned = parseIntSafe(rowData.getConsigned(), 0);
+
+        Category category = findOrCreateCategory(rowData.getCategoryName(), result);
+        Product product = findOrCreateProduct(rowData, price, category, result);
+        findOrUpdateStock(product, warehouse, quantity, minStock, reserved, consigned, result);
+
+        result.incrementProcessedRows();
+    }
+
+    private BigDecimal parsePrice(String priceStr) {
+        if (isBlank(priceStr)) {
+            return null;
+        }
+        try {
+            BigDecimal price = new BigDecimal(priceStr.trim().replace(",", "."));
+            return price.compareTo(BigDecimal.ZERO) < 0 ? BigDecimal.ZERO : price;
+        } catch (Exception ex) {
+            logger.debug("Failed to parse price: {}", priceStr);
+            return null;
+        }
+    }
+
+    private Category findOrCreateCategory(String categoryName, ImportResult result) {
+        return categoryRepository.findByName(categoryName.trim())
+                .orElseGet(() -> {
+                    Category category = new Category();
+                    category.setName(categoryName.trim());
+                    category.setActive(true);
+                    Category saved = categoryRepository.save(category);
+                    result.incrementCreatedCategories();
+                    logger.debug("Created new category: {}", categoryName);
+                    return saved;
+                });
+    }
+
+    private Product findOrCreateProduct(RowData rowData, BigDecimal price, Category category, ImportResult result) {
+        String skuTrimmed = rowData.getSku().trim();
+        Optional<Product> existingProduct = productRepository.findBySku(skuTrimmed);
+        
+        if (existingProduct.isPresent()) {
+            return existingProduct.get();
+        }
+
+        Product product = new Product();
+        product.setName(rowData.getName().trim());
+        product.setSku(skuTrimmed);
+        product.setPrice(price);
+        product.setCategory(category);
+        product.setActive(true);
+        product.setCreatedAt(LocalDateTime.now());
+        product.setUpdatedAt(LocalDateTime.now());
+        Product saved = productRepository.save(product);
+        result.incrementCreatedProducts();
+        logger.debug("Created new product: {}", saved.getName());
+        return saved;
+    }
+
+    private void findOrUpdateStock(Product product, Warehouse warehouse, int quantity, 
+                                    int minStock, int reserved, int consigned, ImportResult result) {
+        Optional<Stock> existingStock = stockRepository.findByProductAndWarehouse(product, warehouse);
+        
+        if (existingStock.isPresent()) {
+            Stock stock = existingStock.get();
+            stock.setQuantity(quantity);
+            stock.setMinStockLevel(minStock);
+            stock.setReservedQuantity(reserved);
+            stock.setConsignedQuantity(consigned);
+            stock.setLastUpdated(LocalDateTime.now());
+            stockRepository.save(stock);
+            result.incrementUpdatedStocks();
+        } else {
+            Stock stock = new Stock();
+            stock.setProduct(product);
+            stock.setWarehouse(warehouse);
+            stock.setQuantity(quantity);
+            stock.setMinStockLevel(minStock);
+            stock.setReservedQuantity(reserved);
+            stock.setConsignedQuantity(consigned);
+            stock.setLastUpdated(LocalDateTime.now());
+            stockRepository.save(stock);
+            result.incrementCreatedStocks();
+        }
+    }
+
+    private void updateHistoryWithResult(StockImportHistory history, ImportResult result) {
+        history.setTotalRows(result.getTotalRows());
+        history.setCreatedProducts(result.getCreatedProducts());
+        history.setUpdatedProducts(0);
+        history.setCreatedStocks(result.getCreatedStocks());
+        history.setUpdatedStocks(result.getUpdatedStocks());
+        history.setCreatedCategories(result.getCreatedCategories());
+
+        if (result.getProcessedRows() == 0) {
+            history.setStatus("FAILED");
+            history.setErrorMessage("No rows were processed");
+        } else if (result.getProcessedRows() < result.getTotalRows()) {
+            history.setStatus("PARTIAL");
+            history.setErrorMessage(String.format("%d rows were skipped (missing required fields or errors)", 
+                    result.getTotalRows() - result.getProcessedRows()));
+        } else {
+            history.setStatus("SUCCESS");
+        }
+
+        if (!result.getFailedRows().isEmpty()) {
+            history.setFailedRows(result.getFailedRowsJson());
+        }
+    }
+
+    private String sanitizeFilename(String filename) {
+        if (filename == null) return "file.xlsx";
+        return filename.replaceAll("[^a-zA-Z0-9._-]", "_");
+    }
+
+    private boolean isBlank(String s) {
+        return s == null || s.trim().isEmpty();
+    }
+
+    private int parseIntSafe(String s, int defaultValue) {
+        try {
+            if (s == null) return defaultValue;
+            String cleaned = s.trim().replace(".", "").replace(",", ".");
+            return (int) Math.round(Double.parseDouble(cleaned));
+        } catch (Exception ex) {
+            logger.debug("Failed to parse integer: {}", s);
+            return defaultValue;
+        }
+    }
+
+    private static class RowData {
+        private final String name;
+        private final String sku;
+        private final String categoryName;
+        private final String quantity;
+        private final String consigned;
+        private final String price;
+        private final String minStock;
+        private final String reserved;
+
+        RowData(int rowNumber, String name, String sku, String categoryName, String quantity,
+                String consigned, String price, String minStock, String reserved) {
+            this.name = name;
+            this.sku = sku;
+            this.categoryName = categoryName;
+            this.quantity = quantity;
+            this.consigned = consigned;
+            this.price = price;
+            this.minStock = minStock;
+            this.reserved = reserved;
+        }
+        String getName() { return name; }
+        String getSku() { return sku; }
+        String getCategoryName() { return categoryName; }
+        String getQuantity() { return quantity; }
+        String getConsigned() { return consigned; }
+        String getPrice() { return price; }
+        String getMinStock() { return minStock; }
+        String getReserved() { return reserved; }
+    }
+
+    private static class ImportResult {
+        private int totalRows = 0;
+        private int processedRows = 0;
+        private int createdProducts = 0;
+        private int createdCategories = 0;
+        private int createdStocks = 0;
+        private int updatedStocks = 0;
+        private final List<FailedRowInfo> failedRows = new ArrayList<>();
+        private String failedRowsJson;
+
+        void incrementTotalRows() { totalRows++; }
+        void incrementProcessedRows() { processedRows++; }
+        void incrementCreatedProducts() { createdProducts++; }
+        void incrementCreatedCategories() { createdCategories++; }
+        void incrementCreatedStocks() { createdStocks++; }
+        void incrementUpdatedStocks() { updatedStocks++; }
+        void addFailedRow(FailedRowInfo row) { failedRows.add(row); }
+
+        int getTotalRows() { return totalRows; }
+        int getProcessedRows() { return processedRows; }
+        int getCreatedProducts() { return createdProducts; }
+        int getCreatedCategories() { return createdCategories; }
+        int getCreatedStocks() { return createdStocks; }
+        int getUpdatedStocks() { return updatedStocks; }
+        List<FailedRowInfo> getFailedRows() { return failedRows; }
+        String getFailedRowsJson() { return failedRowsJson; }
+        void setFailedRowsJson(String json) { this.failedRowsJson = json; }
+    }
+}
+
