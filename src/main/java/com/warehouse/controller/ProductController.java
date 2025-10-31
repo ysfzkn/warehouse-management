@@ -1,6 +1,7 @@
 package com.warehouse.controller;
 
 import com.warehouse.entity.Product;
+import com.warehouse.dto.BulkPriceUpdateRequest;
 import com.warehouse.service.ProductService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -109,6 +110,14 @@ public class ProductController {
     public ResponseEntity<Product> updateProduct(@PathVariable Long id, @Valid @RequestBody Product product) {
         Product updatedProduct = productService.updateProduct(id, product);
         return ResponseEntity.ok(updatedProduct);
+    }
+
+    @PutMapping("/bulk-price")
+    public ResponseEntity<java.util.Map<String, Object>> bulkUpdatePrices(@RequestBody BulkPriceUpdateRequest request) {
+        int affected = productService.bulkAdjustPrices(request);
+        java.util.Map<String, Object> resp = new java.util.HashMap<>();
+        resp.put("affected", affected);
+        return ResponseEntity.ok(resp);
     }
 
     @DeleteMapping("/{id}")

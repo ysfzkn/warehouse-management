@@ -1,6 +1,7 @@
 package com.warehouse.service;
 
 import com.warehouse.entity.Product;
+import com.warehouse.dto.BulkPriceUpdateRequest;
 import com.warehouse.entity.Category;
 import com.warehouse.entity.Brand;
 import com.warehouse.entity.Color;
@@ -13,6 +14,8 @@ import com.warehouse.repository.ColorRepository;
 import com.warehouse.util.EntityValidator;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 import java.util.Optional;
 
@@ -236,5 +239,55 @@ public class ProductService {
                     .orElseThrow(() -> new WarehouseManagementException(ErrorCode.COLOR_NOT_FOUND, "ID: " + colorId));
         }
         return null;
+    }
+
+    public int bulkAdjustPrices(BulkPriceUpdateRequest request) {
+        validateBulkRequest(request);
+        List<Product> targets = productRepository.findByOptionalFilters(
+                request.getCategoryId(), request.getBrandId(), request.getColorId(), request.isOnlyActive()
+        );
+        if (targets.isEmpty()) {
+            return 0;
+        }
+        boolean isIncrease = "INCREASE".equalsIgnoreCase(request.getDirection());
+        boolean isPercentage = "PERCENTAGE".equalsIgnoreCase(request.getMode());
+        BigDecimal value = request.getValue();
+
+        for (Product p : targets) {
+            BigDecimal current = p.getPrice() != null ? p.getPrice() : BigDecimal.ZERO;
+            BigDecimal updated;
+            if (isPercentage) {
+                BigDecimal factor = value.divide(BigDecimal.valueOf(100), 6, RoundingMode.HALF_UP);
+                BigDecimal multiplier = isIncrease ? BigDecimal.ONE.add(factor) : BigDecimal.ONE.subtract(factor);
+                updated = current.multiply(multiplier);
+            } else {
+                BigDecimal delta = value;
+                updated = isIncrease ? current.add(delta) : current.subtract(delta);
+            }
+            if (updated.compareTo(BigDecimal.ZERO) < 0) {
+                updated = BigDecimal.ZERO;
+            }
+            p.setPrice(updated.setScale(2, RoundingMode.HALF_UP));
+        }
+        productRepository.saveAll(targets);
+        return targets.size();
+    }
+
+    private void validateBulkRequest(BulkPriceUpdateRequest request) {
+        if (request.getMode() == null || request.getValue() == null || request.getDirection() == null) {
+            throw new WarehouseManagementException(ErrorCode.REQUIRED_FIELD_MISSING, "Mode, value and direction are required");
+        }
+        if (!"PERCENTAGE".equalsIgnoreCase(request.getMode()) && !"AMOUNT".equalsIgnoreCase(request.getMode())) {
+            throw new WarehouseManagementException(ErrorCode.INVALID_VALUE, "Invalid mode");
+        }
+        if (!"INCREASE".equalsIgnoreCase(request.getDirection()) && !"DECREASE".equalsIgnoreCase(request.getDirection())) {
+            throw new WarehouseManagementException(ErrorCode.INVALID_VALUE, "Invalid direction");
+        }
+        if (request.getValue().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new WarehouseManagementException(ErrorCode.VALUE_MUST_BE_POSITIVE, "Value must be positive");
+        }
+        if ("PERCENTAGE".equalsIgnoreCase(request.getMode()) && request.getValue().compareTo(BigDecimal.valueOf(1000)) > 0) {
+            throw new WarehouseManagementException(ErrorCode.INVALID_VALUE, "Percentage is unrealistically high");
+        }
     }
 }

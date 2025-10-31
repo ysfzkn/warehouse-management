@@ -21,6 +21,11 @@ const Products = () => {
   const [selectedColorOpt, setSelectedColorOpt] = useState(null);
   const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null });
   const [showDetailedPrice, setShowDetailedPrice] = useState(true);
+  const [showBulkModal, setShowBulkModal] = useState(false);
+  const [bulkMode, setBulkMode] = useState('PERCENTAGE');
+  const [bulkDirection, setBulkDirection] = useState('INCREASE');
+  const [bulkValue, setBulkValue] = useState('');
+  const [bulkOnlyActive, setBulkOnlyActive] = useState(true);
 
   useEffect(() => {
     fetchProducts();
@@ -194,6 +199,14 @@ const Products = () => {
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h2>Ürünler</h2>
         <div className="d-flex gap-2">
+          <button 
+            className="btn btn-outline-secondary btn-sm"
+            onClick={() => setShowBulkModal(true)}
+            title="Toplu Fiyat Güncelle"
+          >
+            <i className="fas fa-percent me-2"></i>
+            Toplu Fiyat
+          </button>
           <button 
             className={`btn btn-sm ${showDetailedPrice ? 'btn-primary' : 'btn-outline-primary'}`}
             onClick={() => setShowDetailedPrice(!showDetailedPrice)}
@@ -602,6 +615,98 @@ const Products = () => {
         onConfirm={confirmModal.onConfirm}
         onCancel={() => setConfirmModal({ show: false, title: '', message: '', onConfirm: null })}
       />
+
+      {/* Bulk Price Modal */}
+      {showBulkModal && (
+        <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <div className="modal-dialog">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">Toplu Fiyat Güncelle</h5>
+                <button type="button" className="btn-close" onClick={() => setShowBulkModal(false)}></button>
+              </div>
+              <div className="modal-body">
+                <div className="alert alert-info">
+                  Bu işlem mevcut filtrelere göre uygulanır. Etkilenecek ürün: <strong>{filteredProducts.length}</strong>
+                </div>
+                <div className="row g-3">
+                  <div className="col-12">
+                    <label className="form-label">İşlem Türü</label>
+                    <div className="input-group">
+                      <select className="form-select" value={bulkMode} onChange={(e) => setBulkMode(e.target.value)}>
+                        <option value="PERCENTAGE">Yüzde</option>
+                        <option value="AMOUNT">Tutar</option>
+                      </select>
+                      <select className="form-select" value={bulkDirection} onChange={(e) => setBulkDirection(e.target.value)}>
+                        <option value="INCREASE">Arttır</option>
+                        <option value="DECREASE">Azalt</option>
+                      </select>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        className="form-control"
+                        placeholder={bulkMode === 'PERCENTAGE' ? 'Örn: 10 ( % )' : 'Örn: 50.00 (₺)'}
+                        value={bulkValue}
+                        onChange={(e) => setBulkValue(e.target.value)}
+                      />
+                      {bulkMode === 'PERCENTAGE' && (
+                        <span className="input-group-text">%</span>
+                      )}
+                    </div>
+                    <div className="form-text">Negatif değer girilmez; azaltma için yönü seçin.</div>
+                  </div>
+                  <div className="col-12 form-check">
+                    <input className="form-check-input" type="checkbox" id="bulkOnlyActive" checked={bulkOnlyActive} onChange={(e) => setBulkOnlyActive(e.target.checked)} />
+                    <label className="form-check-label" htmlFor="bulkOnlyActive">Sadece aktif ürünler</label>
+                  </div>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={() => setShowBulkModal(false)}>İptal</button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={async () => {
+                    const val = parseFloat(bulkValue);
+                    if (!bulkValue || isNaN(val) || val <= 0) {
+                      alert('Lütfen geçerli bir değer girin');
+                      return;
+                    }
+                    try {
+                      const request = {
+                        mode: bulkMode,
+                        direction: bulkDirection,
+                        value: val,
+                        onlyActive: bulkOnlyActive,
+                        categoryId: selectedSubcategory ? Number(selectedSubcategory) : null,
+                        brandId: selectedBrand || null,
+                        colorId: selectedColor || null
+                      };
+                      const res = await axios.put('/api/products/bulk-price', request);
+                      const affected = res.data?.affected ?? 0;
+                      const toast = document.createElement('div');
+                      toast.className = 'toast align-items-center text-bg-success border-0 position-fixed top-0 end-0 m-3 show';
+                      toast.setAttribute('role', 'alert');
+                      toast.innerHTML = `<div class="d-flex"><div class="toast-body">${affected} ürün güncellendi</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
+                      document.body.appendChild(toast);
+                      setTimeout(() => { try { document.body.removeChild(toast); } catch {} }, 3000);
+                      setShowBulkModal(false);
+                      setBulkValue('');
+                      await fetchProducts();
+                    } catch (error) {
+                      const msg = error.response?.data?.message || error.response?.data || 'Güncelleme sırasında hata oluştu';
+                      alert(msg);
+                    }
+                  }}
+                >
+                  Uygula
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

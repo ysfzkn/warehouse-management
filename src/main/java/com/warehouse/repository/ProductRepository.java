@@ -32,4 +32,10 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 
     @Query("SELECT p FROM Product p WHERE (:brand IS NULL OR p.brand = :brand) AND (:color IS NULL OR p.color = :color) AND p.isActive = true ORDER BY p.name")
     List<Product> findActiveByBrandAndColor(@Param("brand") Brand brand, @Param("color") Color color);
+
+    @Query("SELECT p FROM Product p WHERE (:categoryId IS NULL OR p.category.id = :categoryId) AND (:brandId IS NULL OR p.brand.id = :brandId) AND (:colorId IS NULL OR p.color.id = :colorId) AND (:onlyActive = false OR p.isActive = true)")
+    List<Product> findByOptionalFilters(@Param("categoryId") Long categoryId,
+                                        @Param("brandId") Long brandId,
+                                        @Param("colorId") Long colorId,
+                                        @Param("onlyActive") boolean onlyActive);
 }
