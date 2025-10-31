@@ -1,10 +1,7 @@
 package com.warehouse;
 
-import com.warehouse.filter.SimpleAuthFilter;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.boot.web.servlet.FilterRegistrationBean;
-import org.springframework.context.annotation.Bean;
 import jakarta.annotation.PostConstruct;
 import java.util.TimeZone;
 
@@ -21,13 +18,6 @@ public class WarehouseManagementApplication {
         SpringApplication.run(WarehouseManagementApplication.class, args);
     }
 
-    @Bean
-    public FilterRegistrationBean<SimpleAuthFilter> simpleAuthFilterRegistration(SimpleAuthFilter filter) {
-        FilterRegistrationBean<SimpleAuthFilter> reg = new FilterRegistrationBean<>();
-        reg.setFilter(filter);
-        reg.addUrlPatterns("/api/*");
-        reg.setOrder(1);
-        return reg;
-    }
+    
 
 }

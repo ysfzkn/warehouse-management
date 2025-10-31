@@ -1,0 +1,19 @@
+package com.warehouse.enums;
+
+public enum AuditAction {
+    STOCK_CREATE,
+    STOCK_UPDATE,
+    STOCK_ADD,
+    STOCK_REMOVE,
+    STOCK_DELETE,
+    STOCK_RESERVE,
+    STOCK_RELEASE,
+    TRANSFER_CREATE,
+    TRANSFER_START,
+    TRANSFER_COMPLETE,
+    TRANSFER_CANCEL,
+    TRANSFER_UPDATE,
+    TRANSFER_DELETE
+}
+
+

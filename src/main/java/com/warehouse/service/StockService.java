@@ -22,13 +22,19 @@ public class StockService {
     private final StockRepository stockRepository;
     private final ProductRepository productRepository;
     private final WarehouseRepository warehouseRepository;
+    private final AuditService auditService;
+    private final NotificationService notificationService;
 
     public StockService(StockRepository stockRepository,
                        ProductRepository productRepository,
-                       WarehouseRepository warehouseRepository) {
+                       WarehouseRepository warehouseRepository,
+                       AuditService auditService,
+                       NotificationService notificationService) {
         this.stockRepository = stockRepository;
         this.productRepository = productRepository;
         this.warehouseRepository = warehouseRepository;
+        this.auditService = auditService;
+        this.notificationService = notificationService;
     }
 
     @Transactional(readOnly = true)
@@ -117,7 +123,14 @@ public class StockService {
         stock.setProduct(product);
         stock.setWarehouse(warehouse);
         
-        return stockRepository.save(stock);
+        Stock saved = stockRepository.save(stock);
+        String username = com.warehouse.util.CurrentUser.usernameOrSystem();
+        auditService.log(com.warehouse.enums.AuditAction.STOCK_CREATE, "Stock", saved.getId(), username,
+                String.format("Product=%s, Warehouse=%s, Quantity=%d", product.getName(), warehouse.getName(), saved.getQuantity()));
+        notificationService.create("Stok oluşturuldu",
+                String.format("%s kullanıcısı %s/%s için %d adet stok oluşturdu.", username,
+                        warehouse.getName(), product.getName(), saved.getQuantity()));
+        return saved;
     }
 
     public Stock updateStock(Long id, Stock stockDetails) {
@@ -128,26 +141,57 @@ public class StockService {
         updateReservedQuantity(stock, stockDetails.getReservedQuantity());
         updateConsignedQuantity(stock, stockDetails.getConsignedQuantity());
         
-        return stockRepository.save(stock);
+        Stock saved = stockRepository.save(stock);
+        String username = com.warehouse.util.CurrentUser.usernameOrSystem();
+        auditService.log(com.warehouse.enums.AuditAction.STOCK_UPDATE, "Stock", saved.getId(), username,
+                String.format("Updated quantities for Product=%s, Warehouse=%s", 
+                        saved.getProduct().getName(), saved.getWarehouse().getName()));
+        notificationService.create("Stok güncellendi",
+                String.format("%s kullanıcısı %s/%s stok kaydını güncelledi.", username,
+                        saved.getWarehouse().getName(), saved.getProduct().getName()));
+        return saved;
     }
 
     public Stock addToStock(Long stockId, Integer quantity) {
         ValidationUtil.requirePositive(quantity, "Quantity to add");
         Stock stock = getStockByIdOrThrow(stockId);
         stock.setQuantity(stock.getQuantity() + quantity);
-        return stockRepository.save(stock);
+        Stock saved = stockRepository.save(stock);
+        String username = com.warehouse.util.CurrentUser.usernameOrSystem();
+        auditService.log(com.warehouse.enums.AuditAction.STOCK_ADD, "Stock", saved.getId(), username,
+                String.format("Added %d to Product=%s, Warehouse=%s (New=%d)", quantity,
+                        saved.getProduct().getName(), saved.getWarehouse().getName(), saved.getQuantity()));
+        notificationService.create("Stok artırıldı",
+                String.format("%s kullanıcısı %s/%s stokuna %d adet ekledi (Yeni: %d).", username,
+                        saved.getWarehouse().getName(), saved.getProduct().getName(), quantity, saved.getQuantity()));
+        return saved;
     }
 
     public Stock removeFromStock(Long stockId, Integer quantity) {
         ValidationUtil.requirePositive(quantity, "Quantity to remove");
         Stock stock = getStockByIdOrThrow(stockId);
         stock.setQuantity(stock.getQuantity() - quantity);
-        return stockRepository.save(stock);
+        Stock saved = stockRepository.save(stock);
+        String username = com.warehouse.util.CurrentUser.usernameOrSystem();
+        auditService.log(com.warehouse.enums.AuditAction.STOCK_REMOVE, "Stock", saved.getId(), username,
+                String.format("Removed %d from Product=%s, Warehouse=%s (New=%d)", quantity,
+                        saved.getProduct().getName(), saved.getWarehouse().getName(), saved.getQuantity()));
+        notificationService.create("Stok azaltıldı",
+                String.format("%s kullanıcısı %s/%s stokundan %d adet düşürdü (Yeni: %d).", username,
+                        saved.getWarehouse().getName(), saved.getProduct().getName(), quantity, saved.getQuantity()));
+        return saved;
     }
 
     public void deleteStock(Long id) {
         Stock stock = getStockByIdOrThrow(id);
         stockRepository.delete(stock);
+        String username = com.warehouse.util.CurrentUser.usernameOrSystem();
+        auditService.log(com.warehouse.enums.AuditAction.STOCK_DELETE, "Stock", id, username,
+                String.format("Deleted stock Product=%s, Warehouse=%s", 
+                        stock.getProduct().getName(), stock.getWarehouse().getName()));
+        notificationService.create("Stok silindi",
+                String.format("%s kullanıcısı %s/%s stok kaydını sildi.", username,
+                        stock.getWarehouse().getName(), stock.getProduct().getName()));
     }
 
     public Stock reserveStock(Long stockId, Integer quantity) {
@@ -161,7 +205,15 @@ public class StockService {
         }
         
         stock.setReservedQuantity(stock.getReservedQuantity() + quantity);
-        return stockRepository.save(stock);
+        Stock saved = stockRepository.save(stock);
+        String username = com.warehouse.util.CurrentUser.usernameOrSystem();
+        auditService.log(com.warehouse.enums.AuditAction.STOCK_RESERVE, "Stock", saved.getId(), username,
+                String.format("Reserved %d of Product=%s, Warehouse=%s (Reserved=%d)", quantity,
+                        saved.getProduct().getName(), saved.getWarehouse().getName(), saved.getReservedQuantity()));
+        notificationService.create("Stok rezerve edildi",
+                String.format("%s kullanıcısı %s/%s stokundan %d adet rezerve etti.", username,
+                        saved.getWarehouse().getName(), saved.getProduct().getName(), quantity));
+        return saved;
     }
 
     public Stock releaseStock(Long stockId, Integer quantity) {
@@ -174,7 +226,15 @@ public class StockService {
         }
         
         stock.setReservedQuantity(stock.getReservedQuantity() - quantity);
-        return stockRepository.save(stock);
+        Stock saved = stockRepository.save(stock);
+        String username = com.warehouse.util.CurrentUser.usernameOrSystem();
+        auditService.log(com.warehouse.enums.AuditAction.STOCK_RELEASE, "Stock", saved.getId(), username,
+                String.format("Released %d of Product=%s, Warehouse=%s (Reserved=%d)", quantity,
+                        saved.getProduct().getName(), saved.getWarehouse().getName(), saved.getReservedQuantity()));
+        notificationService.create("Rezervasyon kaldırıldı",
+                String.format("%s kullanıcısı %s/%s stokundaki rezervasyondan %d adet düşürdü.", username,
+                        saved.getWarehouse().getName(), saved.getProduct().getName(), quantity));
+        return saved;
     }
 
     private Product findProductOrThrow(Long productId) {

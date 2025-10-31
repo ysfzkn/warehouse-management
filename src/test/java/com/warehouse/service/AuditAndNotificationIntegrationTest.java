@@ -1,0 +1,96 @@
+package com.warehouse.service;
+
+import com.warehouse.entity.*;
+import com.warehouse.enums.TransferStatus;
+import com.warehouse.repository.*;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+@SpringBootTest
+@Transactional
+class AuditAndNotificationIntegrationTest {
+
+    @Autowired private ProductRepository productRepository;
+    @Autowired private WarehouseRepository warehouseRepository;
+    @Autowired private StockRepository stockRepository;
+    @Autowired private AuditLogRepository auditLogRepository;
+    @Autowired private NotificationRepository notificationRepository;
+    @Autowired private StockService stockService;
+    @Autowired private StockTransferService stockTransferService;
+
+    private Product product;
+    private Warehouse wh1;
+    private Warehouse wh2;
+
+    @BeforeEach
+    void init() {
+        notificationRepository.deleteAll();
+        auditLogRepository.deleteAll();
+        stockRepository.deleteAll();
+        productRepository.deleteAll();
+        warehouseRepository.deleteAll();
+
+        product = new Product();
+        product.setName("Test Product");
+        productRepository.save(product);
+
+        wh1 = new Warehouse();
+        wh1.setName("WH-1");
+        warehouseRepository.save(wh1);
+
+        wh2 = new Warehouse();
+        wh2.setName("WH-2");
+        warehouseRepository.save(wh2);
+    }
+
+    @Test
+    void stockCreateAndAddShouldProduceAuditAndNotification() {
+        Stock s = new Stock();
+        s.setProduct(product);
+        s.setWarehouse(wh1);
+        s.setQuantity(10);
+        Stock created = stockService.createStock(s);
+        stockService.addToStock(created.getId(), 5);
+
+        assertThat(auditLogRepository.findTop100ByOrderByCreatedAtDesc()).isNotEmpty();
+        assertThat(notificationRepository.findTop20ByOrderByCreatedAtDesc()).isNotEmpty();
+    }
+
+    @Test
+    void transferFlowShouldProduceAuditAndNotification() {
+        // prepare source stock
+        Stock s = new Stock();
+        s.setProduct(product);
+        s.setWarehouse(wh1);
+        s.setQuantity(50);
+        stockRepository.save(s);
+
+        StockTransfer t = new StockTransfer();
+        t.setProduct(product);
+        t.setSourceWarehouse(wh1);
+        t.setDestinationWarehouse(wh2);
+        t.setQuantity(10);
+
+        t = stockTransferService.createTransfer(t);
+        assertThat(t.getStatus()).isEqualTo(TransferStatus.PENDING);
+
+        t = stockTransferService.startTransfer(t.getId());
+        assertThat(t.getStatus()).isEqualTo(TransferStatus.IN_TRANSIT);
+
+        t = stockTransferService.completeTransfer(t.getId());
+        assertThat(t.getStatus()).isEqualTo(TransferStatus.COMPLETED);
+
+        List<Notification> notifs = notificationRepository.findTop20ByOrderByCreatedAtDesc();
+        assertThat(notifs).isNotEmpty();
+        assertThat(auditLogRepository.findTop100ByOrderByCreatedAtDesc()).isNotEmpty();
+    }
+}
+
+

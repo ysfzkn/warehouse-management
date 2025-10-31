@@ -6,7 +6,11 @@ const Navbar = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [lowStockCount, setLowStockCount] = useState(0);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [notifications, setNotifications] = useState([]);
+  const [showNotif, setShowNotif] = useState(false);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
+  const role = (typeof window !== 'undefined' && localStorage.getItem('auth_role')) || 'ADMIN';
 
   useEffect(() => {
     // Fetch low stock count for notification badge
@@ -18,10 +22,24 @@ const Navbar = () => {
         // Silently fail
       }
     };
+    const fetchNotifications = async () => {
+      try {
+        const [unreadRes, recentRes] = await Promise.all([
+          axios.get('/api/notifications/unread'),
+          axios.get('/api/notifications/recent')
+        ]);
+        setUnreadCount(unreadRes.data?.length || 0);
+        setNotifications(recentRes.data || []);
+      } catch (e) {
+        // ignore
+      }
+    };
     fetchLowStock();
+    fetchNotifications();
     // Refresh every 5 minutes
-    const interval = setInterval(fetchLowStock, 300000);
-    return () => clearInterval(interval);
+    const interval1 = setInterval(fetchLowStock, 300000);
+    const interval2 = setInterval(fetchNotifications, 15000);
+    return () => { clearInterval(interval1); clearInterval(interval2); };
   }, []);
 
   const isActive = (path) => {
@@ -31,6 +49,7 @@ const Navbar = () => {
   const handleLogout = () => {
     localStorage.removeItem('auth_token');
     localStorage.removeItem('auth_user');
+    localStorage.removeItem('auth_role');
     window.dispatchEvent(new Event('auth-changed'));
     navigate('/login', { replace: true });
   };
@@ -190,17 +209,20 @@ const Navbar = () => {
 
           <div className="collapse navbar-collapse" id="navbarNav">
             <ul className="navbar-nav me-auto mb-2 mb-lg-0">
-              <li className="nav-item">
-                <Link 
-                  className="nav-link nav-link-custom text-white" 
-                  to="/" 
-                  style={navLinkStyle('/')}
-                >
-                  <i className="fas fa-chart-line me-2"></i>
-                  Panel
-                </Link>
-              </li>
+              {role === 'ADMIN' && (
+                <li className="nav-item">
+                  <Link 
+                    className="nav-link nav-link-custom text-white" 
+                    to="/" 
+                    style={navLinkStyle('/')}
+                  >
+                    <i className="fas fa-chart-line me-2"></i>
+                    Panel
+                  </Link>
+                </li>
+              )}
               
+              {role === 'ADMIN' && (
               <li className="nav-item dropdown">
                 <a 
                   className="nav-link nav-link-custom dropdown-toggle text-white" 
@@ -238,6 +260,7 @@ const Navbar = () => {
                   </li>
                 </ul>
               </li>
+              )}
               
               <li className="nav-item">
                 <Link 
@@ -253,6 +276,7 @@ const Navbar = () => {
                 </Link>
               </li>
               
+              {role === 'ADMIN' && (
               <li className="nav-item dropdown">
                 <a 
                   className="nav-link nav-link-custom dropdown-toggle text-white" 
@@ -285,9 +309,63 @@ const Navbar = () => {
                   </li>
                 </ul>
               </li>
+              )}
             </ul>
 
             <div className="d-flex align-items-center position-relative">
+              {role === 'ADMIN' && (
+                <div className="position-relative me-3">
+                  <button
+                    className="btn btn-link text-white position-relative"
+                    onClick={() => setShowNotif(!showNotif)}
+                    style={{textDecoration: 'none'}}
+                  >
+                    <i className="fas fa-bell fa-lg"></i>
+                    {unreadCount > 0 && (
+                      <span className="notification-badge" style={{right: -4}}>{unreadCount}</span>
+                    )}
+                  </button>
+                  {showNotif && (
+                    <div className="user-dropdown" style={{minWidth: 360}}>
+                      <div className="p-3 border-bottom d-flex justify-content-between align-items-center">
+                        <div className="fw-bold">Bildirimler</div>
+                        <small className="text-muted">Son 20</small>
+                      </div>
+                      <div style={{maxHeight: 360, overflowY: 'auto'}}>
+                        {notifications.length === 0 && (
+                          <div className="p-3 text-muted">Bildirim yok.</div>
+                        )}
+                        {notifications.map(n => (
+                          <div key={n.id} className="dropdown-item-custom" style={{alignItems: 'flex-start'}}>
+                            <div className="me-2 mt-1" style={{color: n.read ? '#9ca3af' : '#10b981'}}>
+                              <i className={`fas ${n.read ? 'fa-circle' : 'fa-dot-circle'}`}></i>
+                            </div>
+                            <div>
+                              <div className="fw-semibold">{n.title}</div>
+                              <div className="text-muted" style={{fontSize: '0.85rem'}}>{n.message}</div>
+                            </div>
+                            {!n.read && (
+                              <button
+                                className="btn btn-sm btn-outline-primary ms-auto"
+                                onClick={async () => {
+                                  try {
+                                    await axios.post(`/api/notifications/${n.id}/read`);
+                                    setNotifications(prev => prev.map(x => x.id === n.id ? {...x, read: true} : x));
+                                    setUnreadCount(c => Math.max(0, c - 1));
+                                  } catch (e) {}
+                                }}
+                                style={{marginLeft: 'auto'}}
+                              >
+                                Okundu
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
               <div 
                 className="text-white d-flex align-items-center"
                 style={userBadgeStyle}
@@ -315,7 +393,7 @@ const Navbar = () => {
                 <div className="user-dropdown">
                   <div className="p-3 border-bottom">
                     <div className="fw-bold text-dark">{localStorage.getItem('auth_user') || 'Admin'}</div>
-                    <small className="text-muted">Yönetici</small>
+                    <small className="text-muted">{role === 'ADMIN' ? 'Yönetici' : 'Standart'}</small>
                   </div>
                   <div className="dropdown-item-custom text-danger" onClick={handleLogout}>
                     <i className="fas fa-sign-out-alt me-2"></i>

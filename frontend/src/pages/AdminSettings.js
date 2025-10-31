@@ -170,10 +170,60 @@ const EditModal = ({ title, fields, item, onClose, onSave, saving, error }) => {
   );
 };
 
+const UserModal = ({ user, onClose, onSave, saving, error }) => {
+  const [form, setForm] = useState({ username: '', password: '', role: 'STANDARD' });
+
+  useEffect(() => {
+    if (user) {
+      setForm({ username: user.username || '', password: '', role: user.role || 'STANDARD' });
+    } else {
+      setForm({ username: '', password: '', role: 'STANDARD' });
+    }
+  }, [user]);
+
+  return (
+    <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+      <div className="modal-dialog">
+        <div className="modal-content">
+          <div className="modal-header">
+            <h5 className="modal-title">{user ? 'Kullanıcı Düzenle' : 'Yeni Kullanıcı'}</h5>
+            <button type="button" className="btn-close" onClick={onClose}></button>
+          </div>
+          <div className="modal-body">
+            {error && <div className="alert alert-danger">{error}</div>}
+            <div className="mb-3">
+              <label className="form-label">Kullanıcı Adı</label>
+              <input className="form-control" value={form.username} onChange={e => setForm({ ...form, username: e.target.value })} disabled={!!user} />
+            </div>
+            <div className="mb-3">
+              <label className="form-label">Parola {user && <small className="text-muted">(değiştirmek istemiyorsanız boş bırakın)</small>}</label>
+              <input type="password" className="form-control" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} />
+            </div>
+            <div className="mb-3">
+              <label className="form-label">Yetki</label>
+              <select className="form-select" value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}>
+                <option value="ADMIN">Admin</option>
+                <option value="STANDARD">Standart</option>
+              </select>
+            </div>
+          </div>
+          <div className="modal-footer">
+            <button className="btn btn-secondary" onClick={onClose} disabled={saving}>İptal</button>
+            <button className="btn btn-primary" onClick={() => onSave(form)} disabled={saving}>
+              {saving ? <span className="spinner-border spinner-border-sm" /> : 'Kaydet'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const AdminSettings = () => {
   const [activeTab, setActiveTab] = useState('brand');
   const [brands, setBrands] = useState([]);
   const [colors, setColors] = useState([]);
+  const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -183,12 +233,14 @@ const AdminSettings = () => {
   const load = async () => {
     try {
       setLoading(true);
-      const [b, c] = await Promise.all([
-        axios.get('/api/brands'),
-        axios.get('/api/colors')
+      const [b, c, u] = await Promise.all([
+        axios.get('/api/brands').catch(() => ({ data: [] })),
+        axios.get('/api/colors').catch(() => ({ data: [] })),
+        axios.get('/api/users').catch(() => ({ data: [] }))
       ]);
       setBrands(b.data || []);
       setColors(c.data || []);
+      setUsers(u.data || []);
     } finally {
       setLoading(false);
     }
@@ -244,6 +296,32 @@ const AdminSettings = () => {
     });
   };
 
+  const handleDeleteUser = async (user) => {
+    setConfirmModal({
+      show: true,
+      title: 'Kullanıcı Silme',
+      message: `"${user.username}" kullanıcısını silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.`,
+      icon: 'trash',
+      confirmVariant: 'danger',
+      confirmText: 'Sil',
+      onConfirm: async () => {
+        setConfirmModal({ show: false, title: '', message: '', onConfirm: null });
+        try {
+          await axios.delete(`/api/users/${user.id}`);
+          await load();
+        } catch (e) {
+          const msg = e.response?.data || 'Silme hatası oluştu';
+          const toast = document.createElement('div');
+          toast.className = 'toast align-items-center text-bg-danger border-0 position-fixed top-0 end-0 m-3 show';
+          toast.setAttribute('role', 'alert');
+          toast.innerHTML = `<div class="d-flex"><div class="toast-body">${msg}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
+          document.body.appendChild(toast);
+          setTimeout(() => { try { document.body.removeChild(toast); } catch {} }, 3500);
+        }
+      }
+    });
+  };
+
   return (
     <div>
       <div className="d-flex align-items-center justify-content-between mb-4">
@@ -254,6 +332,9 @@ const AdminSettings = () => {
           </li>
           <li className="nav-item ms-2">
             <button className={`nav-link ${activeTab === 'color' ? 'active' : ''}`} onClick={() => setActiveTab('color')}>Renk</button>
+          </li>
+          <li className="nav-item ms-2">
+            <button className={`nav-link ${activeTab === 'users' ? 'active' : ''}`} onClick={() => setActiveTab('users')}>Kullanıcılar</button>
           </li>
         </ul>
       </div>
@@ -282,6 +363,54 @@ const AdminSettings = () => {
         />
       )}
 
+      {activeTab === 'users' && (
+        <div className="card mb-4">
+          <div className="card-header d-flex justify-content-between align-items-center">
+            <h5 className="mb-0">Kullanıcılar</h5>
+            <button className="btn btn-primary" onClick={() => { setError(''); setEditing({ __create: true }); }}>
+              <i className="fas fa-user-plus me-2"></i>Yeni Kullanıcı
+            </button>
+          </div>
+          <div className="card-body p-0">
+            <div className="table-responsive">
+              <table className="table table-hover align-middle mb-0">
+                <thead>
+                  <tr>
+                    <th>Kullanıcı Adı</th>
+                    <th>Yetki</th>
+                    <th style={{ width: 160 }}>İşlemler</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loading && (
+                    <tr><td colSpan={3} className="text-center py-4"><span className="spinner-border"></span></td></tr>
+                  )}
+                  {!loading && users.length === 0 && (
+                    <tr><td colSpan={3} className="text-center py-4 text-muted">Kayıt bulunamadı</td></tr>
+                  )}
+                  {!loading && users.map(u => (
+                    <tr key={u.id}>
+                      <td>{u.username}</td>
+                      <td>{u.role}</td>
+                      <td>
+                        <div className="btn-group btn-group-sm">
+                          <button className="btn btn-outline-secondary" onClick={() => { setError(''); setEditing(u); }}>
+                            <i className="fas fa-edit"></i>
+                          </button>
+                          <button className="btn btn-outline-danger" onClick={() => handleDeleteUser(u)}>
+                            <i className="fas fa-trash"></i>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
       {(activeTab === 'brand' || activeTab === 'color') && editing !== undefined && (
         <EditModal
           title={activeTab === 'brand' ? (editing ? 'Marka Düzenle' : 'Yeni Marka') : (editing ? 'Renk Düzenle' : 'Yeni Renk')}
@@ -291,6 +420,37 @@ const AdminSettings = () => {
           onSave={handleSave}
           saving={saving}
           error={error}
+        />
+      )}
+
+      {activeTab === 'users' && editing !== undefined && (
+        <UserModal
+          user={editing.__create ? null : editing}
+          onClose={() => setEditing(undefined)}
+          saving={saving}
+          error={error}
+          onSave={async (form) => {
+            try {
+              setSaving(true);
+              setError('');
+              if (editing.__create) {
+                await axios.post('/api/users', { username: form.username, password: form.password, role: form.role });
+              } else {
+                if (form.role && form.role !== editing.role) {
+                  await axios.put(`/api/users/${editing.id}/role`, { role: form.role });
+                }
+                if (form.password) {
+                  await axios.put(`/api/users/${editing.id}/password`, { password: form.password });
+                }
+              }
+              setEditing(undefined);
+              await load();
+            } catch (e) {
+              setError(e.response?.data || 'Hata oluştu');
+            } finally {
+              setSaving(false);
+            }
+          }}
         />
       )}
 
