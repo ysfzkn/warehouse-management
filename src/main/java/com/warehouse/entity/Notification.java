@@ -32,6 +32,13 @@ public class Notification {
     @Column(name = "target_user_id")
     private Long targetUserId;
 
+    // Deep link metadata
+    @Column(name = "entity_type", length = 60)
+    private String entityType; // e.g. "Stock" or "StockTransfer"
+
+    @Column(name = "entity_id")
+    private Long entityId;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 

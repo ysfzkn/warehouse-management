@@ -24,12 +24,10 @@ const Navbar = () => {
     };
     const fetchNotifications = async () => {
       try {
-        const [unreadRes, recentRes] = await Promise.all([
-          axios.get('/api/notifications/unread'),
-          axios.get('/api/notifications/recent')
-        ]);
-        setUnreadCount(unreadRes.data?.length || 0);
-        setNotifications(recentRes.data || []);
+        const listRes = await axios.get('/api/notifications', { params: { size: 500, page: 0 } });
+        const list = Array.isArray(listRes.data) ? listRes.data : [];
+        setNotifications(list);
+        setUnreadCount(list.filter(n => !n.read).length);
       } catch (e) {
         // ignore
       }
@@ -329,9 +327,9 @@ const Navbar = () => {
                     <div className="user-dropdown" style={{minWidth: 360}}>
                       <div className="p-3 border-bottom d-flex justify-content-between align-items-center">
                         <div className="fw-bold">Bildirimler</div>
-                        <small className="text-muted">Son 20</small>
+                        <small className="text-muted">Toplam {notifications.length}</small>
                       </div>
-                      <div style={{maxHeight: 360, overflowY: 'auto'}}>
+                      <div style={{maxHeight: 420, overflowY: 'auto'}}>
                         {notifications.length === 0 && (
                           <div className="p-3 text-muted">Bildirim yok.</div>
                         )}
@@ -344,21 +342,42 @@ const Navbar = () => {
                               <div className="fw-semibold">{n.title}</div>
                               <div className="text-muted" style={{fontSize: '0.85rem'}}>{n.message}</div>
                             </div>
-                            {!n.read && (
-                              <button
-                                className="btn btn-sm btn-outline-primary ms-auto"
-                                onClick={async () => {
-                                  try {
-                                    await axios.post(`/api/notifications/${n.id}/read`);
+                            <div className="ms-auto d-flex gap-2">
+                              {n.entityType && n.entityId && (
+                                <button
+                                  className="btn btn-sm btn-primary"
+                                  onClick={async () => {
+                                    const params = new URLSearchParams();
+                                    if (n.entityType === 'Stock') {
+                                      params.set('stockId', n.entityId);
+                                    } else if (n.entityType === 'StockTransfer') {
+                                      params.set('transferId', n.entityId);
+                                    }
+                                    navigate(`/stock?${params.toString()}`);
+                                    setShowNotif(false);
+                                    try { await axios.post(`/api/notifications/${n.id}/read`); } catch {}
                                     setNotifications(prev => prev.map(x => x.id === n.id ? {...x, read: true} : x));
                                     setUnreadCount(c => Math.max(0, c - 1));
-                                  } catch (e) {}
-                                }}
-                                style={{marginLeft: 'auto'}}
-                              >
-                                Okundu
-                              </button>
-                            )}
+                                  }}
+                                >
+                                  Görüntüle
+                                </button>
+                              )}
+                              {!n.read && (
+                                <button
+                                  className="btn btn-sm btn-outline-primary"
+                                  onClick={async () => {
+                                    try {
+                                      await axios.post(`/api/notifications/${n.id}/read`);
+                                      setNotifications(prev => prev.map(x => x.id === n.id ? {...x, read: true} : x));
+                                      setUnreadCount(c => Math.max(0, c - 1));
+                                    } catch (e) {}
+                                  }}
+                                >
+                                  Okundu
+                                </button>
+                              )}
+                            </div>
                           </div>
                         ))}
                       </div>

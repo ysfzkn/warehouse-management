@@ -129,7 +129,8 @@ public class StockService {
                 String.format("Product=%s, Warehouse=%s, Quantity=%d", product.getName(), warehouse.getName(), saved.getQuantity()));
         notificationService.create("Stok oluşturuldu",
                 String.format("%s kullanıcısı %s/%s için %d adet stok oluşturdu.", username,
-                        warehouse.getName(), product.getName(), saved.getQuantity()));
+                        warehouse.getName(), product.getName(), saved.getQuantity()),
+                "Stock", saved.getId());
         return saved;
     }
 
@@ -148,7 +149,8 @@ public class StockService {
                         saved.getProduct().getName(), saved.getWarehouse().getName()));
         notificationService.create("Stok güncellendi",
                 String.format("%s kullanıcısı %s/%s stok kaydını güncelledi.", username,
-                        saved.getWarehouse().getName(), saved.getProduct().getName()));
+                        saved.getWarehouse().getName(), saved.getProduct().getName()),
+                "Stock", saved.getId());
         return saved;
     }
 
@@ -163,7 +165,8 @@ public class StockService {
                         saved.getProduct().getName(), saved.getWarehouse().getName(), saved.getQuantity()));
         notificationService.create("Stok artırıldı",
                 String.format("%s kullanıcısı %s/%s stokuna %d adet ekledi (Yeni: %d).", username,
-                        saved.getWarehouse().getName(), saved.getProduct().getName(), quantity, saved.getQuantity()));
+                        saved.getWarehouse().getName(), saved.getProduct().getName(), quantity, saved.getQuantity()),
+                "Stock", saved.getId());
         return saved;
     }
 
@@ -178,7 +181,8 @@ public class StockService {
                         saved.getProduct().getName(), saved.getWarehouse().getName(), saved.getQuantity()));
         notificationService.create("Stok azaltıldı",
                 String.format("%s kullanıcısı %s/%s stokundan %d adet düşürdü (Yeni: %d).", username,
-                        saved.getWarehouse().getName(), saved.getProduct().getName(), quantity, saved.getQuantity()));
+                        saved.getWarehouse().getName(), saved.getProduct().getName(), quantity, saved.getQuantity()),
+                "Stock", saved.getId());
         return saved;
     }
 
@@ -191,7 +195,8 @@ public class StockService {
                         stock.getProduct().getName(), stock.getWarehouse().getName()));
         notificationService.create("Stok silindi",
                 String.format("%s kullanıcısı %s/%s stok kaydını sildi.", username,
-                        stock.getWarehouse().getName(), stock.getProduct().getName()));
+                        stock.getWarehouse().getName(), stock.getProduct().getName()),
+                "Stock", id);
     }
 
     public Stock reserveStock(Long stockId, Integer quantity) {
@@ -212,7 +217,8 @@ public class StockService {
                         saved.getProduct().getName(), saved.getWarehouse().getName(), saved.getReservedQuantity()));
         notificationService.create("Stok rezerve edildi",
                 String.format("%s kullanıcısı %s/%s stokundan %d adet rezerve etti.", username,
-                        saved.getWarehouse().getName(), saved.getProduct().getName(), quantity));
+                        saved.getWarehouse().getName(), saved.getProduct().getName(), quantity),
+                "Stock", saved.getId());
         return saved;
     }
 
@@ -221,8 +227,7 @@ public class StockService {
         Stock stock = getStockByIdOrThrow(stockId);
         
         if (stock.getReservedQuantity() < quantity) {
-            throw new WarehouseManagementException(ErrorCode.INSUFFICIENT_RESERVED_STOCK,
-                String.format("Reserved: %d, Requested: %d", stock.getReservedQuantity(), quantity));
+            throw new WarehouseManagementException(ErrorCode.INSUFFICIENT_RESERVED_STOCK);
         }
         
         stock.setReservedQuantity(stock.getReservedQuantity() - quantity);
@@ -233,25 +238,29 @@ public class StockService {
                         saved.getProduct().getName(), saved.getWarehouse().getName(), saved.getReservedQuantity()));
         notificationService.create("Rezervasyon kaldırıldı",
                 String.format("%s kullanıcısı %s/%s stokundaki rezervasyondan %d adet düşürdü.", username,
-                        saved.getWarehouse().getName(), saved.getProduct().getName(), quantity));
+                        saved.getWarehouse().getName(), saved.getProduct().getName(), quantity),
+                "Stock", saved.getId());
         return saved;
     }
 
     private Product findProductOrThrow(Long productId) {
         return productRepository.findById(productId)
-                .orElseThrow(() -> new WarehouseManagementException(ErrorCode.PRODUCT_NOT_FOUND, "ID: " + productId));
+                .orElseThrow(() -> new WarehouseManagementException(ErrorCode.PRODUCT_NOT_FOUND));
     }
 
     private Warehouse findWarehouseOrThrow(Long warehouseId) {
         return warehouseRepository.findById(warehouseId)
-                .orElseThrow(() -> new WarehouseManagementException(ErrorCode.WAREHOUSE_NOT_FOUND, "ID: " + warehouseId));
+                .orElseThrow(() -> new WarehouseManagementException(ErrorCode.WAREHOUSE_NOT_FOUND));
     }
 
     private void checkStockDuplication(Product product, Warehouse warehouse) {
         Optional<Stock> existingStock = stockRepository.findByProductAndWarehouse(product, warehouse);
         if (existingStock.isPresent()) {
-            throw new WarehouseManagementException(ErrorCode.STOCK_ALREADY_EXISTS,
-                String.format("Product: %s, Warehouse: %s", product.getName(), warehouse.getName()));
+            String friendly = String.format(
+                "Stok kaydı zaten mevcut. %s ürününe ait %s deposunda stok kaydı bulunuyor. Lütfen Stok Yönetimi ekranından mevcut kaydı düzenleyiniz.",
+                product.getName(), warehouse.getName()
+            );
+            throw new WarehouseManagementException(ErrorCode.STOCK_ALREADY_EXISTS, friendly);
         }
     }
 

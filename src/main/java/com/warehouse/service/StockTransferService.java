@@ -58,7 +58,7 @@ public class StockTransferService {
     @Transactional(readOnly = true)
     public StockTransfer getTransferByIdOrThrow(Long id) {
         return stockTransferRepository.findById(id)
-                .orElseThrow(() -> new WarehouseManagementException(ErrorCode.TRANSFER_NOT_FOUND, "ID: " + id));
+                .orElseThrow(() -> new WarehouseManagementException(ErrorCode.TRANSFER_NOT_FOUND));
     }
 
     @Transactional(readOnly = true)
@@ -102,7 +102,8 @@ public class StockTransferService {
                         sourceWarehouse.getName(), destinationWarehouse.getName(), product.getName(), saved.getQuantity()));
         notificationService.create("Transfer oluşturuldu",
                 String.format("%s kullanıcısı %s -> %s için %s ürününden %d adet transfer oluşturdu.", username,
-                        sourceWarehouse.getName(), destinationWarehouse.getName(), product.getName(), saved.getQuantity()));
+                        sourceWarehouse.getName(), destinationWarehouse.getName(), product.getName(), saved.getQuantity()),
+                "StockTransfer", saved.getId());
         return saved;
     }
 
@@ -110,8 +111,7 @@ public class StockTransferService {
         StockTransfer transfer = getTransferByIdOrThrow(transferId);
         
         if (transfer.getStatus() != TransferStatus.PENDING) {
-            throw new WarehouseManagementException(ErrorCode.ONLY_PENDING_CAN_BE_STARTED, 
-                "Current status: " + transfer.getStatus());
+            throw new WarehouseManagementException(ErrorCode.ONLY_PENDING_CAN_BE_STARTED);
         }
         
         Stock sourceStock = findSourceStockOrThrow(transfer);
@@ -127,7 +127,8 @@ public class StockTransferService {
                         saved.getSourceWarehouse().getName(), saved.getDestinationWarehouse().getName(),
                         saved.getProduct().getName(), saved.getQuantity()));
         notificationService.create("Transfer başlatıldı",
-                String.format("%s kullanıcısı #%d transferini başlattı.", username, saved.getId()));
+                String.format("%s kullanıcısı #%d transferini başlattı.", username, saved.getId()),
+                "StockTransfer", saved.getId());
         return saved;
     }
 
@@ -160,7 +161,8 @@ public class StockTransferService {
                         saved.getSourceWarehouse().getName(), saved.getDestinationWarehouse().getName(),
                         saved.getProduct().getName(), saved.getQuantity()));
         notificationService.create("Transfer tamamlandı",
-                String.format("%s kullanıcısı #%d transferini tamamladı.", username, saved.getId()));
+                String.format("%s kullanıcısı #%d transferini tamamladı.", username, saved.getId()),
+                "StockTransfer", saved.getId());
         return saved;
     }
 
@@ -187,7 +189,8 @@ public class StockTransferService {
         auditService.log(com.warehouse.enums.AuditAction.TRANSFER_CANCEL, "StockTransfer", saved.getId(), username,
                 String.format("Cancelled: reason=%s", cancellationReason));
         notificationService.create("Transfer iptal edildi",
-                String.format("%s kullanıcısı #%d transferini iptal etti. Sebep: %s", username, saved.getId(), cancellationReason));
+                String.format("%s kullanıcısı #%d transferini iptal etti. Sebep: %s", username, saved.getId(), cancellationReason),
+                "StockTransfer", saved.getId());
         return saved;
     }
 
@@ -195,8 +198,7 @@ public class StockTransferService {
         StockTransfer transfer = getTransferByIdOrThrow(transferId);
         
         if (transfer.getStatus() != TransferStatus.PENDING) {
-            throw new WarehouseManagementException(ErrorCode.ONLY_PENDING_CAN_BE_UPDATED, 
-                "Current status: " + transfer.getStatus());
+            throw new WarehouseManagementException(ErrorCode.ONLY_PENDING_CAN_BE_UPDATED);
         }
         
         updateTransferFields(transfer, updatedTransfer);
@@ -206,7 +208,8 @@ public class StockTransferService {
         auditService.log(com.warehouse.enums.AuditAction.TRANSFER_UPDATE, "StockTransfer", saved.getId(), username,
                 "Transfer bilgileri güncellendi");
         notificationService.create("Transfer güncellendi",
-                String.format("%s kullanıcısı #%d transfer bilgilerini güncelledi.", username, saved.getId()));
+                String.format("%s kullanıcısı #%d transfer bilgilerini güncelledi.", username, saved.getId()),
+                "StockTransfer", saved.getId());
         return saved;
     }
 
@@ -225,43 +228,40 @@ public class StockTransferService {
         auditService.log(com.warehouse.enums.AuditAction.TRANSFER_DELETE, "StockTransfer", transferId, username,
                 "Transfer kaydı silindi");
         notificationService.create("Transfer silindi",
-                String.format("%s kullanıcısı #%d transfer kaydını sildi.", username, transferId));
+                String.format("%s kullanıcısı #%d transfer kaydını sildi.", username, transferId),
+                "StockTransfer", transferId);
     }
 
     private void validateTransferCreation(StockTransfer transfer) {
-        ValidationUtil.requireNonNull(transfer.getSourceWarehouse(), "Source warehouse");
-        ValidationUtil.requireNonNull(transfer.getSourceWarehouse().getId(), "Source warehouse ID");
-        ValidationUtil.requireNonNull(transfer.getDestinationWarehouse(), "Destination warehouse");
-        ValidationUtil.requireNonNull(transfer.getDestinationWarehouse().getId(), "Destination warehouse ID");
-        ValidationUtil.requireNonNull(transfer.getProduct(), "Product");
-        ValidationUtil.requireNonNull(transfer.getProduct().getId(), "Product ID");
+        ValidationUtil.requireNonNull(transfer.getSourceWarehouse(), "Kaynak depo");
+        ValidationUtil.requireNonNull(transfer.getSourceWarehouse().getId(), "Kaynak depo ID");
+        ValidationUtil.requireNonNull(transfer.getDestinationWarehouse(), "Hedef depo");
+        ValidationUtil.requireNonNull(transfer.getDestinationWarehouse().getId(), "Hedef depo ID");
+        ValidationUtil.requireNonNull(transfer.getProduct(), "Ürün");
+        ValidationUtil.requireNonNull(transfer.getProduct().getId(), "Ürün ID");
     }
 
     private void validateSufficientStock(Product product, Warehouse warehouse, Integer quantity) {
         Optional<Stock> stockOpt = stockRepository.findByProductAndWarehouse(product, warehouse);
         if (stockOpt.isEmpty()) {
-            throw new WarehouseManagementException(ErrorCode.PRODUCT_NOT_IN_WAREHOUSE, 
-                String.format("Product: %s, Warehouse: %s", product.getName(), warehouse.getName()));
+            throw new WarehouseManagementException(ErrorCode.PRODUCT_NOT_IN_WAREHOUSE);
         }
         
         Stock stock = stockOpt.get();
         if (stock.getAvailableQuantity() < quantity) {
-            throw new WarehouseManagementException(ErrorCode.INSUFFICIENT_STOCK, 
-                String.format("Available: %d, Requested: %d", stock.getAvailableQuantity(), quantity));
+            throw new WarehouseManagementException(ErrorCode.INSUFFICIENT_STOCK);
         }
     }
 
     private void validateSufficientAvailableStock(Stock stock, Integer quantity) {
         if (stock.getAvailableQuantity() < quantity) {
-            throw new WarehouseManagementException(ErrorCode.INSUFFICIENT_STOCK, 
-                String.format("Available: %d, Requested: %d", stock.getAvailableQuantity(), quantity));
+            throw new WarehouseManagementException(ErrorCode.INSUFFICIENT_STOCK);
         }
     }
 
     private Stock findSourceStockOrThrow(StockTransfer transfer) {
         return stockRepository.findByProductAndWarehouse(transfer.getProduct(), transfer.getSourceWarehouse())
-                .orElseThrow(() -> new WarehouseManagementException(ErrorCode.PRODUCT_NOT_IN_WAREHOUSE, 
-                    "Source warehouse stock not found"));
+                .orElseThrow(() -> new WarehouseManagementException(ErrorCode.PRODUCT_NOT_IN_WAREHOUSE));
     }
 
     private void reserveStockForTransfer(Stock stock, Integer quantity) {
@@ -334,11 +334,11 @@ public class StockTransferService {
 
     private Product findProductOrThrow(Long productId) {
         return productRepository.findById(productId)
-                .orElseThrow(() -> new WarehouseManagementException(ErrorCode.PRODUCT_NOT_FOUND, "ID: " + productId));
+                .orElseThrow(() -> new WarehouseManagementException(ErrorCode.PRODUCT_NOT_FOUND));
     }
 
     private Warehouse findWarehouseOrThrow(Long warehouseId) {
         return warehouseRepository.findById(warehouseId)
-                .orElseThrow(() -> new WarehouseManagementException(ErrorCode.WAREHOUSE_NOT_FOUND, "ID: " + warehouseId));
+                .orElseThrow(() -> new WarehouseManagementException(ErrorCode.WAREHOUSE_NOT_FOUND));
     }
 }

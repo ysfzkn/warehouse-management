@@ -306,10 +306,31 @@ const Stock = () => {
     const b = params.get('brandId');
     const c = params.get('colorId');
     const w = params.get('warehouseId');
+    const stockIdParam = params.get('stockId');
+    const transferIdParam = params.get('transferId');
     if (f === 'low-stock' || f === 'out-of-stock' || f === 'all') setFilter(f);
     if (b) setBrandId(Number(b));
     if (c) setColorId(Number(c));
     if (w) setSelectedWarehouseId(Number(w));
+    // Lazy open context-specific UI
+    if (stockIdParam) {
+      // Try to preselect this stock into adjustment modal
+      const idNum = Number(stockIdParam);
+      // ensure data loaded first
+      setTimeout(() => {
+        const s = stocks.find(s => s.id === idNum);
+        if (s) {
+          setSelectedStock(s);
+          setShowAdjustmentModal(true);
+        }
+      }, 300);
+    }
+    if (transferIdParam) {
+      // Open transfer history and highlight by filtering to ALL
+      setShowTransferHistory(true);
+      // No direct single transfer view page exists; focus by opening history
+      setTimeout(() => { fetchTransfers(); }, 0);
+    }
   }, []);
 
   const filteredStocks = useMemo(() => {

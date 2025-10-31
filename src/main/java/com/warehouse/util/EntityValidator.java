@@ -13,15 +13,15 @@ public final class EntityValidator {
     }
 
     public static void validateProductForCreation(Product product) {
-        ValidationUtil.requireNonNull(product.getCategory(), "Category");
-        ValidationUtil.requireNonNull(product.getCategory().getId(), "Category ID");
+        ValidationUtil.requireNonNull(product.getCategory(), "Kategori");
+        ValidationUtil.requireNonNull(product.getCategory().getId(), "Kategori ID");
     }
 
     public static void validateStockForCreation(Stock stock) {
-        ValidationUtil.requireNonNull(stock.getProduct(), "Product");
-        ValidationUtil.requireNonNull(stock.getProduct().getId(), "Product ID");
-        ValidationUtil.requireNonNull(stock.getWarehouse(), "Warehouse");
-        ValidationUtil.requireNonNull(stock.getWarehouse().getId(), "Warehouse ID");
+        ValidationUtil.requireNonNull(stock.getProduct(), "Ürün");
+        ValidationUtil.requireNonNull(stock.getProduct().getId(), "Ürün ID");
+        ValidationUtil.requireNonNull(stock.getWarehouse(), "Depo");
+        ValidationUtil.requireNonNull(stock.getWarehouse().getId(), "Depo ID");
     }
 
     public static void validateWarehousesDifferent(Warehouse source, Warehouse destination) {
@@ -46,7 +46,7 @@ public final class EntityValidator {
                 default:
                     errorCode = ErrorCode.CANNOT_DELETE_WITH_PRODUCTS;
             }
-            throw new WarehouseManagementException(errorCode, entityName + " has existing " + relationType);
+            throw new WarehouseManagementException(errorCode);
         }
     }
 }
