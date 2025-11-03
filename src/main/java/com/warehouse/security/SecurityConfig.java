@@ -1,5 +1,7 @@
 package com.warehouse.security;
 
+import com.warehouse.constants.ApiPaths;
+
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -28,19 +30,21 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/**", "/actuator/**", "/api/info", "/error").permitAll()
+                        .requestMatchers(ApiPaths.AUTH, ApiPaths.ACTUATOR, ApiPaths.INFO, ApiPaths.ERROR).permitAll()
+                        // SSE stream available to authenticated roles
+                        .requestMatchers(ApiPaths.STREAM).hasAnyRole("ADMIN", "STANDARD")
                         // Stock management and transfers fully available to ADMIN and STANDARD
-                        .requestMatchers("/api/stocks/**", "/api/stock-transfers/**").hasAnyRole("ADMIN", "STANDARD")
+                        .requestMatchers(ApiPaths.STOCKS, ApiPaths.STOCK_TRANSFERS).hasAnyRole("ADMIN", "STANDARD")
                         // Read-only supporting data for stock page
                         .requestMatchers(org.springframework.http.HttpMethod.GET,
-                                "/api/products/**",
-                                "/api/warehouses/**",
-                                "/api/categories/**",
-                                "/api/brands/**",
-                                "/api/colors/**"
+                                ApiPaths.PRODUCTS,
+                                ApiPaths.WAREHOUSES,
+                                ApiPaths.CATEGORIES,
+                                ApiPaths.BRANDS,
+                                ApiPaths.COLORS
                         ).hasAnyRole("ADMIN", "STANDARD")
                         // Everything else admin-only
-                        .requestMatchers("/api/**").hasRole("ADMIN")
+                        .requestMatchers(ApiPaths.ANY_API).hasRole("ADMIN")
                         .anyRequest().permitAll()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

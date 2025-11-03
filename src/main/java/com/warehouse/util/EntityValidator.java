@@ -5,6 +5,7 @@ import com.warehouse.entity.Stock;
 import com.warehouse.entity.Warehouse;
 import com.warehouse.exception.ErrorCode;
 import com.warehouse.exception.WarehouseManagementException;
+import com.warehouse.constants.ErrorMessages;
 
 /**
  * Utility class for entity validation operations.
@@ -12,7 +13,7 @@ import com.warehouse.exception.WarehouseManagementException;
 public final class EntityValidator {
 
     private EntityValidator() {
-        throw new UnsupportedOperationException("Utility class cannot be instantiated");
+        throw new UnsupportedOperationException(ErrorMessages.UTIL_CLASS_INSTANTIATION);
     }
 
     /**

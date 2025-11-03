@@ -32,7 +32,7 @@ public class UserController {
     public User createUser(@RequestBody Map<String, String> body) {
         String username = body.getOrDefault("username", "");
         String password = body.getOrDefault("password", "");
-        String role = body.getOrDefault("role", "STANDARD");
+        String role = body.getOrDefault("role", UserRole.STANDARD.name());
         return userService.createUser(username, password, UserRole.valueOf(role));
     }
 

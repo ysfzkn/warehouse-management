@@ -47,7 +47,7 @@ public class UserServiceImpl implements UserService {
         logger.info("Creating new user: {}", username);
         if (userRepository.existsByUsername(username)) {
             logger.warn("Username already exists: {}", username);
-            throw new IllegalArgumentException("Username already exists");
+            throw new IllegalArgumentException(com.warehouse.constants.BusinessMessages.USERNAME_ALREADY_EXISTS);
         }
         User user = new User();
         user.setUsername(username);
@@ -65,7 +65,7 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> {
                     logger.warn("User not found with id: {}", userId);
-                    return new IllegalArgumentException("User not found");
+                    return new IllegalArgumentException(com.warehouse.constants.BusinessMessages.USER_NOT_FOUND);
                 });
         user.setRole(role);
         userRepository.save(user);
@@ -78,7 +78,7 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> {
                     logger.warn("User not found with id: {}", userId);
-                    return new IllegalArgumentException("User not found");
+                    return new IllegalArgumentException(com.warehouse.constants.BusinessMessages.USER_NOT_FOUND);
                 });
         user.setPasswordHash(passwordEncoder.encode(newRawPassword));
         userRepository.save(user);

@@ -24,6 +24,9 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
     @Query("SELECT s FROM Stock s WHERE s.quantity <= s.minStockLevel")
     List<Stock> findLowStockItems();
 
+    @Query("SELECT COUNT(s) FROM Stock s WHERE s.quantity <= s.minStockLevel")
+    long countLowStockItems();
+
     @Query("SELECT s FROM Stock s WHERE s.quantity = 0")
     List<Stock> findOutOfStockItems();
 

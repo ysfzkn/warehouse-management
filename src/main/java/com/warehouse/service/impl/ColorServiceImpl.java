@@ -6,6 +6,8 @@ import com.warehouse.exception.WarehouseManagementException;
 import com.warehouse.repository.ColorRepository;
 import com.warehouse.service.ColorService;
 import com.warehouse.util.EntityValidator;
+import com.warehouse.constants.BusinessMessages;
+import com.warehouse.constants.EntityNames;
 import com.warehouse.util.NameUniquenessValidator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -65,7 +67,7 @@ public class ColorServiceImpl implements ColorService {
         return colorRepository.findById(id)
                 .orElseThrow(() -> {
                     logger.warn("Color not found with id: {}", id);
-                    return new WarehouseManagementException(ErrorCode.COLOR_NOT_FOUND, "ID: " + id);
+                    return new WarehouseManagementException(ErrorCode.COLOR_NOT_FOUND, BusinessMessages.ID_PREFIX + id);
                 });
     }
 
@@ -97,7 +99,7 @@ public class ColorServiceImpl implements ColorService {
         Color color = getColorByIdOrThrow(id);
         EntityValidator.validateEntityHasNoRelations(
             color.getProducts() != null && !color.getProducts().isEmpty(),
-            "Color", "products"
+            EntityNames.COLOR, EntityNames.RELATION_PRODUCTS
         );
         colorRepository.delete(color);
         logger.info("Color deleted successfully with id: {}", id);

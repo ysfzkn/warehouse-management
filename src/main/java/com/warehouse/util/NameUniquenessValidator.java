@@ -4,6 +4,7 @@ import com.warehouse.exception.ErrorCode;
 import com.warehouse.exception.WarehouseManagementException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.warehouse.constants.ValidatorMessages;
 
 import java.util.function.Function;
 
@@ -15,7 +16,7 @@ public final class NameUniquenessValidator {
     private static final Logger logger = LoggerFactory.getLogger(NameUniquenessValidator.class);
 
     private NameUniquenessValidator() {
-        throw new UnsupportedOperationException("Utility class cannot be instantiated");
+        throw new UnsupportedOperationException(ValidatorMessages.UTIL_CLASS_INSTANTIATION);
     }
 
     /**
@@ -31,8 +32,8 @@ public final class NameUniquenessValidator {
                                              ErrorCode errorCode,
                                              String entityType) {
         if (nameExistsFunction.apply(name)) {
-            logger.warn("{} name already exists: {}", entityType, name);
-            throw new WarehouseManagementException(errorCode, "Name: " + name);
+            logger.warn(String.format(ValidatorMessages.NAME_ALREADY_EXISTS_LOG, entityType, name));
+            throw new WarehouseManagementException(errorCode, ValidatorMessages.NAME_FIELD_PREFIX + name);
         }
     }
 
@@ -51,8 +52,8 @@ public final class NameUniquenessValidator {
                                                       ErrorCode errorCode,
                                                       String entityType) {
         if (!currentName.equals(newName) && nameExistsFunction.apply(newName)) {
-            logger.warn("{} name already exists for update: {}", entityType, newName);
-            throw new WarehouseManagementException(errorCode, "Name: " + newName);
+            logger.warn(String.format(ValidatorMessages.NAME_ALREADY_EXISTS_UPDATE_LOG, entityType, newName));
+            throw new WarehouseManagementException(errorCode, ValidatorMessages.NAME_FIELD_PREFIX + newName);
         }
     }
 }

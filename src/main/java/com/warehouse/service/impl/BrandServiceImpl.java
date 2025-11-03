@@ -6,6 +6,8 @@ import com.warehouse.exception.WarehouseManagementException;
 import com.warehouse.repository.BrandRepository;
 import com.warehouse.service.BrandService;
 import com.warehouse.util.EntityValidator;
+import com.warehouse.constants.BusinessMessages;
+import com.warehouse.constants.EntityNames;
 import com.warehouse.util.NameUniquenessValidator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -65,7 +67,7 @@ public class BrandServiceImpl implements BrandService {
         return brandRepository.findById(id)
                 .orElseThrow(() -> {
                     logger.warn("Brand not found with id: {}", id);
-                    return new WarehouseManagementException(ErrorCode.BRAND_NOT_FOUND, "ID: " + id);
+                    return new WarehouseManagementException(ErrorCode.BRAND_NOT_FOUND, BusinessMessages.ID_PREFIX + id);
                 });
     }
 
@@ -97,7 +99,7 @@ public class BrandServiceImpl implements BrandService {
         Brand brand = getBrandByIdOrThrow(id);
         EntityValidator.validateEntityHasNoRelations(
             brand.getProducts() != null && !brand.getProducts().isEmpty(),
-            "Brand", "products"
+            EntityNames.BRAND, EntityNames.RELATION_PRODUCTS
         );
         brandRepository.delete(brand);
         logger.info("Brand deleted successfully with id: {}", id);

@@ -19,6 +19,71 @@ axios.interceptors.request.use((config) => {
 axios.interceptors.response.use(
   (response) => response,
   (error) => {
+    // Handle session expiration and global error translations
+    if (error && error.response) {
+      // Session expired or unauthorized
+      const status = error.response.status;
+      const reqUrl = error?.config?.url ?? '';
+      const isAuthEndpoint = reqUrl.includes('/auth/login');
+      const isNotifications = reqUrl.includes('/api/notifications');
+      if ((status === 401 || status === 403) && !isAuthEndpoint && !isNotifications) {
+        if (!window.__sessionExpiredHandling) {
+          window.__sessionExpiredHandling = true;
+
+          // Create a lightweight popup modal
+          const modalId = 'session-expired-modal';
+          if (!document.getElementById(modalId)) {
+            const wrapper = document.createElement('div');
+            wrapper.id = modalId;
+            wrapper.innerHTML = `
+              <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5); z-index: 2000;">
+                <div class="modal-dialog modal-dialog-centered">
+                  <div class="modal-content shadow-lg border-0">
+                    <div class="modal-header border-0 pb-0">
+                      <div class="w-100 text-center pt-3">
+                        <div class="text-info mb-3">
+                          <i class="fas fa-info-circle fa-3x"></i>
+                        </div>
+                        <h5 class="modal-title fw-bold">Oturum Süresi Doldu</h5>
+                      </div>
+                    </div>
+                    <div class="modal-body text-center px-4 py-3">
+                      <p class="text-muted mb-0">Güvenliğiniz için tekrar giriş yapmanız gerekiyor.</p>
+                    </div>
+                    <div class="modal-footer border-0 justify-content-center gap-2 pb-4">
+                      <button type="button" id="session-expired-ok" class="btn btn-primary px-4">
+                        <i class="fas fa-sign-in-alt me-2"></i>
+                        Giriş Ekranına Git
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>`;
+            document.body.appendChild(wrapper);
+
+            const cleanup = () => {
+              try { document.body.removeChild(wrapper); } catch {}
+              window.__sessionExpiredHandling = false;
+            };
+
+            const onOk = () => {
+              // Clear auth and redirect to login
+              try {
+                localStorage.removeItem('auth_token');
+                localStorage.removeItem('auth_user');
+                localStorage.removeItem('auth_role');
+                window.dispatchEvent(new Event('auth-changed'));
+              } catch {}
+              cleanup();
+              // Force navigation to login
+              window.location.replace('/login');
+            };
+
+            document.getElementById('session-expired-ok')?.addEventListener('click', onOk);
+          }
+        }
+      }
+    }
     if (error && error.response) {
       const data = error.response.data;
       const message = typeof data === 'string' ? data : (data?.message || '');

@@ -7,10 +7,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import com.warehouse.service.SsePushService;
 
 /**
  * Implementation of NotificationService for managing notifications.
@@ -22,9 +24,11 @@ public class NotificationServiceImpl implements NotificationService {
     private static final Logger logger = LoggerFactory.getLogger(NotificationServiceImpl.class);
 
     private final NotificationRepository notificationRepository;
+    private final SsePushService ssePushService;
 
-    public NotificationServiceImpl(NotificationRepository notificationRepository) {
+    public NotificationServiceImpl(NotificationRepository notificationRepository, SsePushService ssePushService) {
         this.notificationRepository = notificationRepository;
+        this.ssePushService = ssePushService;
     }
 
     @Override
@@ -35,6 +39,12 @@ public class NotificationServiceImpl implements NotificationService {
         notification.setMessage(message);
         Notification saved = notificationRepository.save(notification);
         logger.debug("Notification created with id: {}", saved.getId());
+        try {
+            ssePushService.broadcastCounts();
+            logger.debug("SSE counts broadcasted after notification create. notifId={}", saved.getId());
+        } catch (Exception e) {
+            logger.warn("SSE broadcast failed after notification create. notifId={}", saved.getId(), e);
+        }
         return saved;
     }
 
@@ -48,6 +58,12 @@ public class NotificationServiceImpl implements NotificationService {
         notification.setEntityId(entityId);
         Notification saved = notificationRepository.save(notification);
         logger.debug("Notification created with id: {}", saved.getId());
+        try {
+            ssePushService.broadcastCounts();
+            logger.debug("SSE counts broadcasted after notification create. notifId={}", saved.getId());
+        } catch (Exception e) {
+            logger.warn("SSE broadcast failed after notification create. notifId={}", saved.getId(), e);
+        }
         return saved;
     }
 
@@ -57,6 +73,12 @@ public class NotificationServiceImpl implements NotificationService {
         notificationRepository.findById(id).ifPresent(notification -> {
             notification.setRead(true);
             notificationRepository.save(notification);
+            try {
+                ssePushService.broadcastCounts();
+                logger.debug("SSE counts broadcasted after notification markRead. notifId={}", id);
+            } catch (Exception e) {
+                logger.warn("SSE broadcast failed after notification markRead. notifId={}", id, e);
+            }
             logger.debug("Notification marked as read: {}", id);
         });
     }
@@ -80,6 +102,17 @@ public class NotificationServiceImpl implements NotificationService {
     public Page<Notification> page(Pageable pageable) {
         logger.debug("Fetching notifications page");
         return notificationRepository.findAllByOrderByCreatedAtDesc(pageable);
+    }
+
+    /**
+     * Returns unread count using a lightweight repository count query.
+     * Cached briefly to reduce database load during bursts.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    @Cacheable(value = "counts", key = "'unread'", unless = "#result == null")
+    public long unreadCount() {
+        return notificationRepository.countByReadFalse();
     }
 }
 

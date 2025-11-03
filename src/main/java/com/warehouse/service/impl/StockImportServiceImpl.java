@@ -1,7 +1,6 @@
 package com.warehouse.service.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.warehouse.dto.FailedRowInfo;
 import com.warehouse.entity.*;
 import com.warehouse.repository.*;
 import com.warehouse.service.StockImportService;
@@ -14,6 +13,7 @@ import org.apache.poi.xssf.usermodel.XSSFFont;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.warehouse.constants.ImportMessages;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -37,8 +37,8 @@ import java.util.Optional;
 public class StockImportServiceImpl implements StockImportService {
 
     private static final Logger logger = LoggerFactory.getLogger(StockImportServiceImpl.class);
-    private static final String STORAGE_DIR = "uploads/stock-imports";
-    private static final String TEMPLATE_SHEET_NAME = "Stock Template";
+    private static final String STORAGE_DIR = ImportMessages.STORAGE_DIR;
+    private static final String TEMPLATE_SHEET_NAME = ImportMessages.TEMPLATE_SHEET_NAME;
 
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
@@ -92,7 +92,7 @@ public class StockImportServiceImpl implements StockImportService {
     }
 
     @Override
-    public StockImportHistory importStocks(Long warehouseId, MultipartFile file) throws IOException {
+    public com.warehouse.entity.StockImportHistory importStocks(Long warehouseId, MultipartFile file) throws IOException {
         logger.info("Starting stock import for warehouse id: {}", warehouseId);
         Warehouse warehouse = warehouseRepository.findById(warehouseId)
                 .orElseThrow(() -> {
@@ -101,7 +101,7 @@ public class StockImportServiceImpl implements StockImportService {
                 });
 
         Path targetFile = storeFile(file);
-        StockImportHistory history = createImportHistory(file, warehouse);
+        com.warehouse.entity.StockImportHistory history = createImportHistory(file, warehouse);
 
         try {
             ImportResult result = processExcelFile(targetFile, warehouse);
@@ -110,7 +110,7 @@ public class StockImportServiceImpl implements StockImportService {
                     history.getStatus(), result.getProcessedRows(), result.getTotalRows(), result.getFailedRows().size());
         } catch (Exception ex) {
             logger.error("Error during stock import for warehouse id: {}", warehouseId, ex);
-            history.setStatus("FAILED");
+            history.setStatus(ImportMessages.STATUS_FAILED);
             history.setErrorMessage(ex.getMessage());
             historyRepository.save(history);
             throw ex;
@@ -146,15 +146,15 @@ public class StockImportServiceImpl implements StockImportService {
         return target;
     }
 
-    private StockImportHistory createImportHistory(MultipartFile file, Warehouse warehouse) {
-        StockImportHistory history = new StockImportHistory();
+    private com.warehouse.entity.StockImportHistory createImportHistory(MultipartFile file, Warehouse warehouse) {
+        com.warehouse.entity.StockImportHistory history = new com.warehouse.entity.StockImportHistory();
         history.setOriginalFilename(file.getOriginalFilename());
         String storedFilename = System.currentTimeMillis() + "_" + sanitizeFilename(file.getOriginalFilename());
         history.setStoredFilename(storedFilename);
         history.setContentType(file.getContentType() != null ? 
-                file.getContentType() : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+                file.getContentType() : ImportMessages.CONTENT_TYPE_XLSX);
         history.setWarehouse(warehouse);
-        history.setStatus("PROCESSING");
+        history.setStatus(ImportMessages.STATUS_PROCESSING);
         return historyRepository.save(history);
     }
 
@@ -184,7 +184,7 @@ public class StockImportServiceImpl implements StockImportService {
                 try {
                     if (hasMissingRequiredFields(rowData)) {
                         String reason = buildMissingFieldsReason(rowData);
-                        result.addFailedRow(new FailedRowInfo(excelRowNumber, 
+                        result.addFailedRow(new com.warehouse.dto.FailedRowInfo(excelRowNumber, 
                                 rowData.getName(), rowData.getSku(), reason));
                         continue;
                     }
@@ -195,8 +195,8 @@ public class StockImportServiceImpl implements StockImportService {
                     logger.warn("Error processing row {}: {}", excelRowNumber, ex.getMessage());
                     String errorMsg = ex.getMessage() != null && !ex.getMessage().isEmpty() 
                             ? ex.getMessage() : ex.getClass().getSimpleName();
-                    result.addFailedRow(new FailedRowInfo(excelRowNumber, 
-                            rowData.getName(), rowData.getSku(), "Error: " + errorMsg));
+                    result.addFailedRow(new com.warehouse.dto.FailedRowInfo(excelRowNumber, 
+                            rowData.getName(), rowData.getSku(), ImportMessages.ERROR_PREFIX + errorMsg));
                 }
             }
 
@@ -257,7 +257,7 @@ public class StockImportServiceImpl implements StockImportService {
         if (isBlank(rowData.getSku())) missingFields.add("Stock Code");
         if (isBlank(rowData.getCategoryName())) missingFields.add("Category Name");
         if (isBlank(rowData.getQuantity())) missingFields.add("Quantity");
-        return "Missing required fields: " + String.join(", ", missingFields);
+        return ImportMessages.MISSING_REQUIRED_PREFIX + String.join(", ", missingFields);
     }
 
     private void processRow(RowData rowData, Warehouse warehouse, ImportResult result) {
@@ -349,7 +349,7 @@ public class StockImportServiceImpl implements StockImportService {
         }
     }
 
-    private void updateHistoryWithResult(StockImportHistory history, ImportResult result) {
+    private void updateHistoryWithResult(com.warehouse.entity.StockImportHistory history, ImportResult result) {
         history.setTotalRows(result.getTotalRows());
         history.setCreatedProducts(result.getCreatedProducts());
         history.setUpdatedProducts(0);
@@ -358,14 +358,14 @@ public class StockImportServiceImpl implements StockImportService {
         history.setCreatedCategories(result.getCreatedCategories());
 
         if (result.getProcessedRows() == 0) {
-            history.setStatus("FAILED");
-            history.setErrorMessage("No rows were processed");
+            history.setStatus(ImportMessages.STATUS_FAILED);
+            history.setErrorMessage(ImportMessages.NO_ROWS_PROCESSED);
         } else if (result.getProcessedRows() < result.getTotalRows()) {
-            history.setStatus("PARTIAL");
-            history.setErrorMessage(String.format("%d rows were skipped (missing required fields or errors)", 
+            history.setStatus(ImportMessages.STATUS_PARTIAL);
+            history.setErrorMessage(String.format(ImportMessages.SKIPPED_ROWS_TEMPLATE, 
                     result.getTotalRows() - result.getProcessedRows()));
         } else {
-            history.setStatus("SUCCESS");
+            history.setStatus(ImportMessages.STATUS_SUCCESS);
         }
 
         if (!result.getFailedRows().isEmpty()) {
@@ -431,7 +431,7 @@ public class StockImportServiceImpl implements StockImportService {
         private int createdCategories = 0;
         private int createdStocks = 0;
         private int updatedStocks = 0;
-        private final List<FailedRowInfo> failedRows = new ArrayList<>();
+        private final List<com.warehouse.dto.FailedRowInfo> failedRows = new ArrayList<>();
         private String failedRowsJson;
 
         void incrementTotalRows() { totalRows++; }
@@ -440,7 +440,7 @@ public class StockImportServiceImpl implements StockImportService {
         void incrementCreatedCategories() { createdCategories++; }
         void incrementCreatedStocks() { createdStocks++; }
         void incrementUpdatedStocks() { updatedStocks++; }
-        void addFailedRow(FailedRowInfo row) { failedRows.add(row); }
+        void addFailedRow(com.warehouse.dto.FailedRowInfo row) { failedRows.add(row); }
 
         int getTotalRows() { return totalRows; }
         int getProcessedRows() { return processedRows; }
@@ -448,7 +448,7 @@ public class StockImportServiceImpl implements StockImportService {
         int getCreatedCategories() { return createdCategories; }
         int getCreatedStocks() { return createdStocks; }
         int getUpdatedStocks() { return updatedStocks; }
-        List<FailedRowInfo> getFailedRows() { return failedRows; }
+        List<com.warehouse.dto.FailedRowInfo> getFailedRows() { return failedRows; }
         String getFailedRowsJson() { return failedRowsJson; }
         void setFailedRowsJson(String json) { this.failedRowsJson = json; }
     }

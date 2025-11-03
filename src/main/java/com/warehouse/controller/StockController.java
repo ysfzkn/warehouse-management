@@ -1,12 +1,17 @@
 package com.warehouse.controller;
 
 import com.warehouse.entity.Stock;
+import com.warehouse.dto.StockDto;
 import com.warehouse.service.StockService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.transaction.annotation.Transactional;
+import com.warehouse.service.SsePushService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.util.List;
 
 @RestController
@@ -15,66 +20,76 @@ import java.util.List;
 public class StockController {
 
     private final StockService stockService;
+    private final SsePushService ssePushService;
+    private static final Logger logger = LoggerFactory.getLogger(StockController.class);
 
     @Autowired
-    public StockController(StockService stockService) {
+    public StockController(StockService stockService, SsePushService ssePushService) {
         this.stockService = stockService;
+        this.ssePushService = ssePushService;
     }
 
     @GetMapping
-    public ResponseEntity<List<Stock>> getAllStocks(
+    @Transactional(readOnly = true)
+    public ResponseEntity<List<StockDto>> getAllStocks(
             @RequestParam(required = false) Long brandId,
             @RequestParam(required = false) Long colorId,
             @RequestParam(required = false) Long warehouseId) {
-        if (brandId != null || colorId != null || warehouseId != null) {
-            return ResponseEntity.ok(stockService.getAllStocksFiltered(brandId, colorId, warehouseId));
-        }
-        List<Stock> stocks = stockService.getAllStocks();
-        return ResponseEntity.ok(stocks);
+        List<Stock> stocks = (brandId != null || colorId != null || warehouseId != null)
+                ? stockService.getAllStocksFiltered(brandId, colorId, warehouseId)
+                : stockService.getAllStocks();
+        return ResponseEntity.ok(stocks.stream().map(this::toDto).toList());
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Stock> getStockById(@PathVariable Long id) {
+    @Transactional(readOnly = true)
+    public ResponseEntity<StockDto> getStockById(@PathVariable Long id) {
         return stockService.getStockById(id)
-                .map(stock -> ResponseEntity.ok(stock))
+                .map(stock -> ResponseEntity.ok(toDto(stock)))
                 .orElse(ResponseEntity.notFound().build());
     }
 
     @GetMapping("/product/{productId}")
-    public ResponseEntity<List<Stock>> getStocksByProduct(@PathVariable Long productId) {
+    @Transactional(readOnly = true)
+    public ResponseEntity<List<StockDto>> getStocksByProduct(@PathVariable Long productId) {
         List<Stock> stocks = stockService.getStocksByProduct(productId);
-        return ResponseEntity.ok(stocks);
+        return ResponseEntity.ok(stocks.stream().map(this::toDto).toList());
     }
 
     @GetMapping("/warehouse/{warehouseId}")
-    public ResponseEntity<List<Stock>> getStocksByWarehouse(@PathVariable Long warehouseId) {
+    @Transactional(readOnly = true)
+    public ResponseEntity<List<StockDto>> getStocksByWarehouse(@PathVariable Long warehouseId) {
         List<Stock> stocks = stockService.getStocksByWarehouse(warehouseId);
-        return ResponseEntity.ok(stocks);
+        return ResponseEntity.ok(stocks.stream().map(this::toDto).toList());
     }
 
     @GetMapping("/product/{productId}/warehouse/{warehouseId}")
-    public ResponseEntity<Stock> getStockByProductAndWarehouse(@PathVariable Long productId, @PathVariable Long warehouseId) {
+    @Transactional(readOnly = true)
+    public ResponseEntity<StockDto> getStockByProductAndWarehouse(@PathVariable Long productId, @PathVariable Long warehouseId) {
         return stockService.getStockByProductAndWarehouse(productId, warehouseId)
-                .map(stock -> ResponseEntity.ok(stock))
+                .map(stock -> ResponseEntity.ok(toDto(stock)))
                 .orElse(ResponseEntity.notFound().build());
     }
 
     @GetMapping("/low-stock")
-    public ResponseEntity<List<Stock>> getLowStockItems() {
+    @Transactional(readOnly = true)
+    public ResponseEntity<List<StockDto>> getLowStockItems() {
         List<Stock> stocks = stockService.getLowStockItems();
-        return ResponseEntity.ok(stocks);
+        return ResponseEntity.ok(stocks.stream().map(this::toDto).toList());
     }
 
     @GetMapping("/out-of-stock")
-    public ResponseEntity<List<Stock>> getOutOfStockItems() {
+    @Transactional(readOnly = true)
+    public ResponseEntity<List<StockDto>> getOutOfStockItems() {
         List<Stock> stocks = stockService.getOutOfStockItems();
-        return ResponseEntity.ok(stocks);
+        return ResponseEntity.ok(stocks.stream().map(this::toDto).toList());
     }
 
     @GetMapping("/warehouse/{warehouseId}/low-stock")
-    public ResponseEntity<List<Stock>> getLowStockItemsByWarehouse(@PathVariable Long warehouseId) {
+    @Transactional(readOnly = true)
+    public ResponseEntity<List<StockDto>> getLowStockItemsByWarehouse(@PathVariable Long warehouseId) {
         List<Stock> stocks = stockService.getLowStockItemsByWarehouse(warehouseId);
-        return ResponseEntity.ok(stocks);
+        return ResponseEntity.ok(stocks.stream().map(this::toDto).toList());
     }
 
     @GetMapping("/product/{productId}/total-quantity")
@@ -92,42 +107,109 @@ public class StockController {
     @PostMapping
     public ResponseEntity<Stock> createStock(@Valid @RequestBody Stock stock) {
         Stock createdStock = stockService.createStock(stock);
+        try {
+            ssePushService.broadcastCounts();
+            logger.debug("SSE counts broadcasted after createStock. stockId={}", createdStock.getId());
+        } catch (Exception e) {
+            logger.warn("SSE broadcast failed after createStock. stockId={}", createdStock.getId(), e);
+        }
         return ResponseEntity.status(HttpStatus.CREATED).body(createdStock);
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<Stock> updateStock(@PathVariable Long id, @RequestBody Stock stock) {
         Stock updatedStock = stockService.updateStock(id, stock);
+        try {
+            ssePushService.broadcastCounts();
+            logger.debug("SSE counts broadcasted after updateStock. stockId={}", updatedStock.getId());
+        } catch (Exception e) {
+            logger.warn("SSE broadcast failed after updateStock. stockId={}", updatedStock.getId(), e);
+        }
         return ResponseEntity.ok(updatedStock);
     }
 
     @PutMapping("/{id}/add")
     public ResponseEntity<Stock> addToStock(@PathVariable Long id, @RequestParam Integer quantity) {
         Stock updatedStock = stockService.addToStock(id, quantity);
+        try {
+            ssePushService.broadcastCounts();
+            logger.debug("SSE counts broadcasted after addToStock. stockId={}, quantity={} ", id, quantity);
+        } catch (Exception e) {
+            logger.warn("SSE broadcast failed after addToStock. stockId={}, quantity={} ", id, quantity, e);
+        }
         return ResponseEntity.ok(updatedStock);
     }
 
     @PutMapping("/{id}/remove")
     public ResponseEntity<Stock> removeFromStock(@PathVariable Long id, @RequestParam Integer quantity) {
         Stock updatedStock = stockService.removeFromStock(id, quantity);
+        try {
+            ssePushService.broadcastCounts();
+            logger.debug("SSE counts broadcasted after removeFromStock. stockId={}, quantity={} ", id, quantity);
+        } catch (Exception e) {
+            logger.warn("SSE broadcast failed after removeFromStock. stockId={}, quantity={} ", id, quantity, e);
+        }
         return ResponseEntity.ok(updatedStock);
     }
 
     @PutMapping("/{id}/reserve")
     public ResponseEntity<Stock> reserveStock(@PathVariable Long id, @RequestParam Integer quantity) {
         Stock updatedStock = stockService.reserveStock(id, quantity);
+        try {
+            ssePushService.broadcastCounts();
+            logger.debug("SSE counts broadcasted after reserveStock. stockId={}, quantity={} ", id, quantity);
+        } catch (Exception e) {
+            logger.warn("SSE broadcast failed after reserveStock. stockId={}, quantity={} ", id, quantity, e);
+        }
         return ResponseEntity.ok(updatedStock);
     }
 
     @PutMapping("/{id}/release")
     public ResponseEntity<Stock> releaseStock(@PathVariable Long id, @RequestParam Integer quantity) {
         Stock updatedStock = stockService.releaseStock(id, quantity);
+        try {
+            ssePushService.broadcastCounts();
+            logger.debug("SSE counts broadcasted after releaseStock. stockId={}, quantity={} ", id, quantity);
+        } catch (Exception e) {
+            logger.warn("SSE broadcast failed after releaseStock. stockId={}, quantity={} ", id, quantity, e);
+        }
         return ResponseEntity.ok(updatedStock);
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteStock(@PathVariable Long id) {
         stockService.deleteStock(id);
+        try {
+            ssePushService.broadcastCounts();
+            logger.debug("SSE counts broadcasted after deleteStock. stockId={}", id);
+        } catch (Exception e) {
+            logger.warn("SSE broadcast failed after deleteStock. stockId={}", id, e);
+        }
         return ResponseEntity.noContent().build();
+    }
+
+    private StockDto toDto(Stock s) {
+        StockDto dto = new StockDto();
+        dto.id = s.getId();
+        dto.quantity = s.getQuantity();
+        dto.reservedQuantity = s.getReservedQuantity();
+        dto.consignedQuantity = s.getConsignedQuantity();
+        dto.minStockLevel = s.getMinStockLevel();
+        dto.availableQuantity = s.getAvailableQuantity();
+        if (s.getProduct() != null) {
+            StockDto.ProductDto p = new StockDto.ProductDto();
+            p.id = s.getProduct().getId();
+            p.name = s.getProduct().getName();
+            p.sku = s.getProduct().getSku();
+            dto.product = p;
+        }
+        if (s.getWarehouse() != null) {
+            StockDto.WarehouseDto w = new StockDto.WarehouseDto();
+            w.id = s.getWarehouse().getId();
+            w.name = s.getWarehouse().getName();
+            w.location = s.getWarehouse().getLocation();
+            dto.warehouse = w;
+        }
+        return dto;
     }
 }

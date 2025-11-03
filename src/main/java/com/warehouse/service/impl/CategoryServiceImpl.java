@@ -7,6 +7,8 @@ import com.warehouse.exception.WarehouseManagementException;
 import com.warehouse.repository.CategoryRepository;
 import com.warehouse.service.CategoryService;
 import com.warehouse.util.EntityValidator;
+import com.warehouse.constants.BusinessMessages;
+import com.warehouse.constants.EntityNames;
 import com.warehouse.util.NameUniquenessValidator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -62,7 +64,7 @@ public class CategoryServiceImpl implements CategoryService {
         return categoryRepository.findById(id)
                 .orElseThrow(() -> {
                     logger.warn("Category not found with id: {}", id);
-                    return new WarehouseManagementException(ErrorCode.CATEGORY_NOT_FOUND, "ID: " + id);
+                    return new WarehouseManagementException(ErrorCode.CATEGORY_NOT_FOUND, BusinessMessages.ID_PREFIX + id);
                 });
     }
 
@@ -106,10 +108,10 @@ public class CategoryServiceImpl implements CategoryService {
         logger.info("Deleting category with id: {}", id);
         Category category = getCategoryByIdOrThrow(id);
         EntityValidator.validateEntityHasNoRelations(
-            !category.getProducts().isEmpty(), "Category", "products"
+            !category.getProducts().isEmpty(), EntityNames.CATEGORY, EntityNames.RELATION_PRODUCTS
         );
         EntityValidator.validateEntityHasNoRelations(
-            !category.getChildren().isEmpty(), "Category", "subcategories"
+            !category.getChildren().isEmpty(), EntityNames.CATEGORY, EntityNames.RELATION_SUBCATEGORIES
         );
         categoryRepository.delete(category);
         logger.info("Category deleted successfully with id: {}", id);
@@ -145,12 +147,12 @@ public class CategoryServiceImpl implements CategoryService {
         if (parentId != null) {
             if (id.equals(parentId)) {
                 logger.warn("Attempted to set category as its own parent. Category id: {}", id);
-                throw new WarehouseManagementException(ErrorCode.CATEGORY_INVALID_PARENT, "Category cannot be its own parent");
+                throw new WarehouseManagementException(ErrorCode.CATEGORY_INVALID_PARENT, BusinessMessages.CATEGORY_CANNOT_BE_ITS_OWN_PARENT);
             }
             Category parent = getCategoryByIdOrThrow(parentId);
             if (isDescendant(parent, category)) {
                 logger.warn("Attempted to set descendant as parent. Category id: {}, Parent id: {}", id, parentId);
-                throw new WarehouseManagementException(ErrorCode.CATEGORY_INVALID_PARENT, "Cannot set a descendant as parent");
+                throw new WarehouseManagementException(ErrorCode.CATEGORY_INVALID_PARENT, BusinessMessages.CATEGORY_DESCENDANT_CANNOT_BE_PARENT);
             }
             category.setParent(parent);
         } else {

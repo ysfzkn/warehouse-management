@@ -22,4 +22,9 @@ public interface NotificationService {
     List<Notification> recent();
 
     Page<Notification> page(Pageable pageable);
+
+    /**
+     * Returns the total number of unread notifications.
+     */
+    long unreadCount();
 }

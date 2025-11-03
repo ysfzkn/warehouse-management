@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import axios from 'axios';
 import StockForm from '../components/StockForm';
 import StockAdjustmentModal from '../components/StockAdjustmentModal';
@@ -214,6 +215,7 @@ const StockFiltersBar = ({
 };
 
 const Stock = () => {
+  const location = useLocation();
   const role = (typeof window !== 'undefined' && localStorage.getItem('auth_role')) || 'ADMIN';
   const [stocks, setStocks] = useState([]);
   const [products, setProducts] = useState([]);
@@ -237,6 +239,12 @@ const Stock = () => {
   const [showReserved, setShowReserved] = useState(false);
   const [showConsigned, setShowConsigned] = useState(false);
   const [transferStatusFilter, setTransferStatusFilter] = useState('ALL');
+  // Transfer filters
+  const [transferProductName, setTransferProductName] = useState('');
+  const [transferSku, setTransferSku] = useState('');
+  const [transferDriver, setTransferDriver] = useState('');
+  const [transferSourceWarehouseId, setTransferSourceWarehouseId] = useState(null);
+  const [transferDestinationWarehouseId, setTransferDestinationWarehouseId] = useState(null);
   // Category filters
   const [categories, setCategories] = useState([]);
   const [subcategories, setSubcategories] = useState([]);
@@ -309,14 +317,17 @@ const Stock = () => {
   }, [selectedCategory]);
 
   // Initialize filters from query params
+  // React to query string changes (navigation within app)
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams(location.search);
     const f = params.get('filter');
     const b = params.get('brandId');
     const c = params.get('colorId');
     const w = params.get('warehouseId');
     const stockIdParam = params.get('stockId');
     const transferIdParam = params.get('transferId');
+    const auditStockIdParam = params.get('auditStockId');
+    const auditTransferIdParam = params.get('auditTransferId');
     if (f === 'low-stock' || f === 'out-of-stock' || f === 'all') setFilter(f);
     if (b) setBrandId(Number(b));
     if (c) setColorId(Number(c));
@@ -328,6 +339,30 @@ const Stock = () => {
       // No direct single transfer view page exists; focus by opening history
       setTimeout(() => { fetchTransfers(); }, 0);
     }
+    if (auditStockIdParam) {
+      const idNum = Number(auditStockIdParam);
+      if (!Number.isNaN(idNum)) {
+        setAuditModal({ show: true, entityType: 'Stock', entityId: idNum });
+      }
+    }
+    if (auditTransferIdParam) {
+      const idNum = Number(auditTransferIdParam);
+      if (!Number.isNaN(idNum)) {
+        setAuditModal({ show: true, entityType: 'StockTransfer', entityId: idNum });
+      }
+    }
+  }, [location.search]);
+
+  // Listen to global event to open audit directly from Navbar without navigation
+  useEffect(() => {
+    const handler = (e) => {
+      const detail = e?.detail || {};
+      if (detail.entityType && detail.entityId) {
+        setAuditModal({ show: true, entityType: detail.entityType, entityId: Number(detail.entityId) });
+      }
+    };
+    window.addEventListener('open-audit', handler);
+    return () => window.removeEventListener('open-audit', handler);
   }, []);
 
   // Open stock adjustment modal when stocks loaded and pendingStockId exists
@@ -522,6 +557,36 @@ const Stock = () => {
   };
 
   // filteredStocks now computed via useMemo above
+  const filteredTransfers = useMemo(() => {
+    let list = Array.isArray(transfers) ? transfers : [];
+    // Status filter
+    if (transferStatusFilter !== 'ALL') {
+      list = list.filter(t => t.status === transferStatusFilter);
+    }
+    // Product name filter
+    const nameQ = (transferProductName || '').toLowerCase();
+    if (nameQ) {
+      list = list.filter(t => (t.product?.name || '').toLowerCase().includes(nameQ));
+    }
+    // SKU filter
+    const skuQ = (transferSku || '').toLowerCase();
+    if (skuQ) {
+      list = list.filter(t => (t.product?.sku || '').toLowerCase().includes(skuQ));
+    }
+    // Driver filter
+    const driverQ = (transferDriver || '').toLowerCase();
+    if (driverQ) {
+      list = list.filter(t => (t.driverName || '').toLowerCase().includes(driverQ));
+    }
+    // Source/Destination warehouse filter
+    if (transferSourceWarehouseId != null) {
+      list = list.filter(t => Number(t.sourceWarehouse?.id) === Number(transferSourceWarehouseId));
+    }
+    if (transferDestinationWarehouseId != null) {
+      list = list.filter(t => Number(t.destinationWarehouse?.id) === Number(transferDestinationWarehouseId));
+    }
+    return list;
+  }, [transfers, transferStatusFilter, transferProductName, transferSku, transferDriver, transferSourceWarehouseId, transferDestinationWarehouseId]);
 
   if (loading) {
     return (
@@ -1026,6 +1091,89 @@ const Stock = () => {
                   Toplam {transfers.filter(t => transferStatusFilter === 'ALL' || t.status === transferStatusFilter).length} transfer
                 </div>
               </div>
+
+              {/* Advanced transfer filters */}
+              <div className="row g-2 mt-3">
+                <div className="col-md-4">
+                  <div className="input-group">
+                    <span className="input-group-text"><i className="fas fa-box"></i></span>
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="Ürün adı ara..."
+                      value={transferProductName}
+                      onChange={(e) => setTransferProductName(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="col-md-4">
+                  <div className="input-group">
+                    <span className="input-group-text"><i className="fas fa-barcode"></i></span>
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="Stok kodu (SKU) ara..."
+                      value={transferSku}
+                      onChange={(e) => setTransferSku(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="col-md-4">
+                  <div className="input-group">
+                    <span className="input-group-text"><i className="fas fa-id-card"></i></span>
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="Şoför adı ara..."
+                      value={transferDriver}
+                      onChange={(e) => setTransferDriver(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="row g-2 mt-2">
+                <div className="col-md-6">
+                  <SearchableSelect
+                    value={transferSourceWarehouseId}
+                    onChange={(id) => setTransferSourceWarehouseId(id != null ? Number(id) : null)}
+                    searchEndpoint="/api/warehouses"
+                    placeholder="Kaynak depo ara..."
+                    allowClear={true}
+                    clearText="Temizle"
+                    wrapperClassName="mb-0"
+                    renderOption={(w) => w.name}
+                  />
+                </div>
+                <div className="col-md-6">
+                  <SearchableSelect
+                    value={transferDestinationWarehouseId}
+                    onChange={(id) => setTransferDestinationWarehouseId(id != null ? Number(id) : null)}
+                    searchEndpoint="/api/warehouses"
+                    placeholder="Hedef depo ara..."
+                    allowClear={true}
+                    clearText="Temizle"
+                    wrapperClassName="mb-0"
+                    renderOption={(w) => w.name}
+                  />
+                </div>
+              </div>
+              <div className="col-md-12 d-flex flex-wrap gap-2 mt-1">
+                {(transferProductName || transferSku || transferDriver || transferSourceWarehouseId || transferDestinationWarehouseId) && (
+                  <button
+                    className="btn btn-sm btn-outline-secondary"
+                    onClick={() => {
+                      setTransferProductName('');
+                      setTransferSku('');
+                      setTransferDriver('');
+                      setTransferSourceWarehouseId(null);
+                      setTransferDestinationWarehouseId(null);
+                    }}
+                  >
+                    <i className="fas fa-times me-1"></i>
+                    Transfer filtrelerini temizle
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
@@ -1042,7 +1190,10 @@ const Stock = () => {
               </div>
             </div>
             <div className="card-body p-0">
-              {transfers.filter(t => transferStatusFilter === 'ALL' || t.status === transferStatusFilter).length === 0 ? (
+              {(() => {
+                const filteredCount = filteredTransfers.length;
+                return filteredCount === 0;
+              })() ? (
                 <div className="text-center py-5">
                   <i className="fas fa-inbox fa-4x text-muted mb-3"></i>
                   <h5 className="text-muted">
@@ -1118,7 +1269,7 @@ const Stock = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {transfers.filter(t => transferStatusFilter === 'ALL' || t.status === transferStatusFilter).map((transfer) => {
+                    {filteredTransfers.map((transfer) => {
                       const statusConfig = {
                         PENDING: { label: 'Beklemede', class: 'warning', icon: 'clock' },
                         IN_TRANSIT: { label: 'Yolda', class: 'info', icon: 'truck' },

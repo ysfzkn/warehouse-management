@@ -30,6 +30,11 @@ public interface StockService {
 
     List<Stock> getLowStockItemsByWarehouse(Long warehouseId);
 
+    /**
+     * Returns the total number of low stock items using an efficient count query.
+     */
+    long countLowStockItems();
+
     Long getTotalQuantityByProduct(Long productId);
 
     Long getTotalQuantityByWarehouse(Long warehouseId);

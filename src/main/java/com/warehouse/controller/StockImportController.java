@@ -11,6 +11,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import com.warehouse.constants.ImportMessages;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.ByteArrayInputStream;
@@ -37,7 +38,7 @@ public class StockImportController {
             InputStreamResource resource = new InputStreamResource(bais);
             return ResponseEntity.ok()
                     .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=stok_sablon.xlsx")
-                    .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                    .contentType(MediaType.parseMediaType(ImportMessages.CONTENT_TYPE_XLSX))
                     .contentLength(baos.size())
                     .body(resource);
         }
@@ -56,9 +57,9 @@ public class StockImportController {
         for (StockImportHistory h : list) {
             if (h.getStatus() == null) continue;
             String s = h.getStatus().toUpperCase();
-            if ("SUCCESS".equals(s)) h.setStatus("BAŞARILI");
-            else if ("FAILED".equals(s)) h.setStatus("BAŞARISIZ");
-            else if ("PARTIAL".equals(s)) h.setStatus("KISMEN");
+            if (ImportMessages.STATUS_SUCCESS.equals(s)) h.setStatus(ImportMessages.STATUS_TR_SUCCESS);
+            else if (ImportMessages.STATUS_FAILED.equals(s)) h.setStatus(ImportMessages.STATUS_TR_FAILED);
+            else if (ImportMessages.STATUS_PARTIAL.equals(s)) h.setStatus(ImportMessages.STATUS_TR_PARTIAL);
         }
         return ResponseEntity.ok(list);
     }
@@ -67,7 +68,7 @@ public class StockImportController {
     public ResponseEntity<Resource> downloadFile(@PathVariable Long id) throws IOException {
         StockImportHistory history = historyRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Record not found: " + id));
-        Path path = Path.of("uploads/stock-imports").resolve(history.getStoredFilename());
+        Path path = Path.of(ImportMessages.STORAGE_DIR).resolve(history.getStoredFilename());
         if (!Files.exists(path)) {
             return ResponseEntity.notFound().build();
         }

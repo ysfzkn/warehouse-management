@@ -16,6 +16,11 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
     List<Notification> findByTargetUserIdOrTargetUserIdIsNullOrderByCreatedAtDesc(Long targetUserId);
 
     Page<Notification> findAllByOrderByCreatedAtDesc(Pageable pageable);
+
+    /**
+     * Returns the total number of unread notifications.
+     */
+    long countByReadFalse();
 }
 
 

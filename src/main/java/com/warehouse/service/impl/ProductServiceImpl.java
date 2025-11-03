@@ -13,6 +13,8 @@ import com.warehouse.repository.BrandRepository;
 import com.warehouse.repository.ColorRepository;
 import com.warehouse.service.ProductService;
 import com.warehouse.util.EntityValidator;
+import com.warehouse.constants.BusinessMessages;
+import com.warehouse.constants.EntityNames;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -75,7 +77,7 @@ public class ProductServiceImpl implements ProductService {
         return productRepository.findById(id)
                 .orElseThrow(() -> {
                     logger.warn("Product not found with id: {}", id);
-                    return new WarehouseManagementException(ErrorCode.PRODUCT_NOT_FOUND, "ID: " + id);
+                    return new WarehouseManagementException(ErrorCode.PRODUCT_NOT_FOUND, BusinessMessages.ID_PREFIX + id);
                 });
     }
 
@@ -100,7 +102,7 @@ public class ProductServiceImpl implements ProductService {
         Category category = categoryRepository.findById(categoryId)
                 .orElseThrow(() -> {
                     logger.warn("Category not found with id: {}", categoryId);
-                    return new WarehouseManagementException(ErrorCode.CATEGORY_NOT_FOUND, "ID: " + categoryId);
+                    return new WarehouseManagementException(ErrorCode.CATEGORY_NOT_FOUND, BusinessMessages.ID_PREFIX + categoryId);
                 });
         return productRepository.findByCategoryAndActive(category);
     }
@@ -120,7 +122,7 @@ public class ProductServiceImpl implements ProductService {
         Category category = categoryRepository.findById(product.getCategory().getId())
                 .orElseThrow(() -> {
                     logger.warn("Category not found with id: {}", product.getCategory().getId());
-                    return new WarehouseManagementException(ErrorCode.CATEGORY_NOT_FOUND, "ID: " + product.getCategory().getId());
+                    return new WarehouseManagementException(ErrorCode.CATEGORY_NOT_FOUND, BusinessMessages.ID_PREFIX + product.getCategory().getId());
                 });
 
         validateSkuUniqueness(product.getSku());
@@ -155,7 +157,7 @@ public class ProductServiceImpl implements ProductService {
         logger.info("Deleting product with id: {}", id);
         Product product = getProductByIdOrThrow(id);
         EntityValidator.validateEntityHasNoRelations(
-            !product.getStocks().isEmpty(), "Product", "stocks"
+            !product.getStocks().isEmpty(), EntityNames.PRODUCT, EntityNames.RELATION_STOCKS
         );
         productRepository.delete(product);
         logger.info("Product deleted successfully with id: {}", id);
@@ -196,7 +198,7 @@ public class ProductServiceImpl implements ProductService {
                 request.getCategoryId(), request.getBrandId(), request.getColorId(), request.isOnlyActive()
         );
         if (targets.isEmpty()) {
-            logger.warn("No products found matching bulk price update criteria");
+            logger.warn(BusinessMessages.NO_PRODUCTS_FOR_BULK);
             return 0;
         }
 
@@ -220,7 +222,7 @@ public class ProductServiceImpl implements ProductService {
     private void validateSkuUniqueness(String sku) {
         if (productRepository.existsBySku(sku)) {
             logger.warn("SKU already exists: {}", sku);
-            throw new WarehouseManagementException(ErrorCode.PRODUCT_SKU_ALREADY_EXISTS, "SKU: " + sku);
+            throw new WarehouseManagementException(ErrorCode.PRODUCT_SKU_ALREADY_EXISTS, BusinessMessages.SKU_PREFIX + sku);
         }
     }
 
@@ -228,7 +230,7 @@ public class ProductServiceImpl implements ProductService {
         if (!product.getSku().equals(productDetails.getSku()) &&
             productRepository.existsBySku(productDetails.getSku())) {
             logger.warn("SKU already exists for update: {}", productDetails.getSku());
-            throw new WarehouseManagementException(ErrorCode.PRODUCT_SKU_ALREADY_EXISTS, "SKU: " + productDetails.getSku());
+            throw new WarehouseManagementException(ErrorCode.PRODUCT_SKU_ALREADY_EXISTS, BusinessMessages.SKU_PREFIX + productDetails.getSku());
         }
     }
 
@@ -237,7 +239,7 @@ public class ProductServiceImpl implements ProductService {
             Brand brand = brandRepository.findById(product.getBrand().getId())
                     .orElseThrow(() -> {
                         logger.warn("Brand not found with id: {}", product.getBrand().getId());
-                        return new WarehouseManagementException(ErrorCode.BRAND_NOT_FOUND, "ID: " + product.getBrand().getId());
+                        return new WarehouseManagementException(ErrorCode.BRAND_NOT_FOUND, BusinessMessages.ID_PREFIX + product.getBrand().getId());
                     });
             product.setBrand(brand);
         } else {
@@ -250,7 +252,7 @@ public class ProductServiceImpl implements ProductService {
             Color color = colorRepository.findById(product.getColor().getId())
                     .orElseThrow(() -> {
                         logger.warn("Color not found with id: {}", product.getColor().getId());
-                        return new WarehouseManagementException(ErrorCode.COLOR_NOT_FOUND, "ID: " + product.getColor().getId());
+                        return new WarehouseManagementException(ErrorCode.COLOR_NOT_FOUND, BusinessMessages.ID_PREFIX + product.getColor().getId());
                     });
             product.setColor(color);
         } else {
@@ -265,7 +267,7 @@ public class ProductServiceImpl implements ProductService {
             Category category = categoryRepository.findById(productDetails.getCategory().getId())
                     .orElseThrow(() -> {
                         logger.warn("Category not found with id: {}", productDetails.getCategory().getId());
-                        return new WarehouseManagementException(ErrorCode.CATEGORY_NOT_FOUND, "ID: " + productDetails.getCategory().getId());
+                        return new WarehouseManagementException(ErrorCode.CATEGORY_NOT_FOUND, BusinessMessages.ID_PREFIX + productDetails.getCategory().getId());
                     });
             product.setCategory(category);
         }
@@ -277,7 +279,7 @@ public class ProductServiceImpl implements ProductService {
                 Brand brand = brandRepository.findById(productDetails.getBrand().getId())
                         .orElseThrow(() -> {
                             logger.warn("Brand not found with id: {}", productDetails.getBrand().getId());
-                            return new WarehouseManagementException(ErrorCode.BRAND_NOT_FOUND, "ID: " + productDetails.getBrand().getId());
+                            return new WarehouseManagementException(ErrorCode.BRAND_NOT_FOUND, BusinessMessages.ID_PREFIX + productDetails.getBrand().getId());
                         });
                 product.setBrand(brand);
             }
@@ -292,7 +294,7 @@ public class ProductServiceImpl implements ProductService {
                 Color color = colorRepository.findById(productDetails.getColor().getId())
                         .orElseThrow(() -> {
                             logger.warn("Color not found with id: {}", productDetails.getColor().getId());
-                            return new WarehouseManagementException(ErrorCode.COLOR_NOT_FOUND, "ID: " + productDetails.getColor().getId());
+                            return new WarehouseManagementException(ErrorCode.COLOR_NOT_FOUND, BusinessMessages.ID_PREFIX + productDetails.getColor().getId());
                         });
                 product.setColor(color);
             }
@@ -360,19 +362,19 @@ public class ProductServiceImpl implements ProductService {
 
     private void validateBulkRequest(BulkPriceUpdateRequest request) {
         if (request.getMode() == null || request.getValue() == null || request.getDirection() == null) {
-            throw new WarehouseManagementException(ErrorCode.REQUIRED_FIELD_MISSING, "Mode, value and direction are required");
+            throw new WarehouseManagementException(ErrorCode.REQUIRED_FIELD_MISSING, BusinessMessages.REQUIRED_MODE_VALUE_DIRECTION);
         }
         if (!"PERCENTAGE".equalsIgnoreCase(request.getMode()) && !"AMOUNT".equalsIgnoreCase(request.getMode())) {
-            throw new WarehouseManagementException(ErrorCode.INVALID_VALUE, "Invalid mode");
+            throw new WarehouseManagementException(ErrorCode.INVALID_VALUE, BusinessMessages.INVALID_MODE);
         }
         if (!"INCREASE".equalsIgnoreCase(request.getDirection()) && !"DECREASE".equalsIgnoreCase(request.getDirection())) {
-            throw new WarehouseManagementException(ErrorCode.INVALID_VALUE, "Invalid direction");
+            throw new WarehouseManagementException(ErrorCode.INVALID_VALUE, BusinessMessages.INVALID_DIRECTION);
         }
         if (request.getValue().compareTo(BigDecimal.ZERO) <= 0) {
-            throw new WarehouseManagementException(ErrorCode.VALUE_MUST_BE_POSITIVE, "Value must be positive");
+            throw new WarehouseManagementException(ErrorCode.VALUE_MUST_BE_POSITIVE, BusinessMessages.VALUE_MUST_BE_POSITIVE);
         }
         if ("PERCENTAGE".equalsIgnoreCase(request.getMode()) && request.getValue().compareTo(BigDecimal.valueOf(1000)) > 0) {
-            throw new WarehouseManagementException(ErrorCode.INVALID_VALUE, "Percentage is unrealistically high");
+            throw new WarehouseManagementException(ErrorCode.INVALID_VALUE, BusinessMessages.PERCENTAGE_TOO_HIGH);
         }
     }
 }

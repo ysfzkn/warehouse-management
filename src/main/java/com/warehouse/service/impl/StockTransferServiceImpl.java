@@ -20,6 +20,8 @@ import com.warehouse.util.EntityValidator;
 import com.warehouse.util.ValidationUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.warehouse.constants.NotificationMessages;
+import com.warehouse.enums.DomainEntityType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -126,13 +128,13 @@ public class StockTransferServiceImpl implements StockTransferService {
 
         StockTransfer saved = stockTransferRepository.save(transfer);
         String username = CurrentUser.usernameOrSystem();
-        auditService.log(AuditAction.TRANSFER_CREATE, "StockTransfer", saved.getId(), username,
-                String.format("Transfer created: %s → %s | Product=%s | Quantity=%d",
+        auditService.log(AuditAction.TRANSFER_CREATE, DomainEntityType.StockTransfer.name(), saved.getId(), username,
+                String.format("Transfer oluşturuldu: %s → %s | Ürün=%s | Miktar=%d",
                         sourceWarehouse.getName(), destinationWarehouse.getName(), product.getName(), saved.getQuantity()));
-        notificationService.create("Transfer created",
-                String.format("User %s created transfer %s -> %s for product %s with quantity %d.", username,
+        notificationService.create(NotificationMessages.TRANSFER_CREATED_TITLE,
+                String.format("Kullanıcı %s, %s -> %s yönünde %s ürünü için %d adet transfer oluşturdu.", username,
                         sourceWarehouse.getName(), destinationWarehouse.getName(), product.getName(), saved.getQuantity()),
-                "StockTransfer", saved.getId());
+                DomainEntityType.Stock.name(), saved.getId());
         logger.info("Transfer created successfully with id: {}", saved.getId());
         return saved;
     }
@@ -155,13 +157,13 @@ public class StockTransferServiceImpl implements StockTransferService {
         transfer.setStatus(TransferStatus.IN_TRANSIT);
         StockTransfer saved = stockTransferRepository.save(transfer);
         String username = CurrentUser.usernameOrSystem();
-        auditService.log(AuditAction.TRANSFER_START, "StockTransfer", saved.getId(), username,
-                String.format("Transfer started: %s → %s | Product=%s | Quantity=%d (Stock reserved)",
+        auditService.log(AuditAction.TRANSFER_START, DomainEntityType.StockTransfer.name(), saved.getId(), username,
+                String.format("Transfer yola çıkarıldı: %s → %s | Ürün=%s | Miktar=%d (Stok rezerve edildi)",
                         saved.getSourceWarehouse().getName(), saved.getDestinationWarehouse().getName(),
                         saved.getProduct().getName(), saved.getQuantity()));
-        notificationService.create("Transfer started",
-                String.format("User %s started transfer #%d.", username, saved.getId()),
-                "StockTransfer", saved.getId());
+        notificationService.create(NotificationMessages.TRANSFER_STARTED_TITLE,
+                String.format("Kullanıcı %s, #%d numaralı transferi yola çıkardı.", username, saved.getId()),
+                DomainEntityType.Stock.name(), saved.getId());
         logger.info("Transfer started successfully with id: {}", saved.getId());
         return saved;
     }
@@ -194,13 +196,13 @@ public class StockTransferServiceImpl implements StockTransferService {
         transfer.setCompletedDate(LocalDateTime.now());
         StockTransfer saved = stockTransferRepository.save(transfer);
         String username = CurrentUser.usernameOrSystem();
-        auditService.log(AuditAction.TRANSFER_COMPLETE, "StockTransfer", saved.getId(), username,
-                String.format("Transfer completed: %s → %s | Product=%s | Quantity=%d",
+        auditService.log(AuditAction.TRANSFER_COMPLETE, DomainEntityType.StockTransfer.name(), saved.getId(), username,
+                String.format("Transfer tamamlandı: %s → %s | Ürün=%s | Miktar=%d",
                         saved.getSourceWarehouse().getName(), saved.getDestinationWarehouse().getName(),
                         saved.getProduct().getName(), saved.getQuantity()));
-        notificationService.create("Transfer completed",
-                String.format("User %s completed transfer #%d.", username, saved.getId()),
-                "StockTransfer", saved.getId());
+        notificationService.create(NotificationMessages.TRANSFER_COMPLETED_TITLE,
+                String.format("Kullanıcı %s, #%d numaralı transferi tamamladı.", username, saved.getId()),
+                DomainEntityType.Stock.name(), saved.getId());
         logger.info("Transfer completed successfully with id: {}", saved.getId());
         return saved;
     }
@@ -229,11 +231,11 @@ public class StockTransferServiceImpl implements StockTransferService {
         transfer.setCancellationReason(cancellationReason);
         StockTransfer saved = stockTransferRepository.save(transfer);
         String username = CurrentUser.usernameOrSystem();
-        auditService.log(AuditAction.TRANSFER_CANCEL, "StockTransfer", saved.getId(), username,
-                String.format("Transfer cancelled: Reason=%s", cancellationReason));
-        notificationService.create("Transfer cancelled",
-                String.format("User %s cancelled transfer #%d. Reason: %s", username, saved.getId(), cancellationReason),
-                "StockTransfer", saved.getId());
+        auditService.log(AuditAction.TRANSFER_CANCEL, DomainEntityType.StockTransfer.name(), saved.getId(), username,
+                String.format("Transfer iptal edildi: Sebep=%s", cancellationReason));
+        notificationService.create(NotificationMessages.TRANSFER_CANCELLED_TITLE,
+                String.format("Kullanıcı %s, #%d numaralı transferi iptal etti. Sebep: %s", username, saved.getId(), cancellationReason),
+                DomainEntityType.Stock.name(), saved.getId());
         logger.info("Transfer cancelled successfully with id: {}", saved.getId());
         return saved;
     }
@@ -252,11 +254,11 @@ public class StockTransferServiceImpl implements StockTransferService {
 
         StockTransfer saved = stockTransferRepository.save(transfer);
         String username = CurrentUser.usernameOrSystem();
-        auditService.log(AuditAction.TRANSFER_UPDATE, "StockTransfer", saved.getId(), username,
-                "Transfer updated");
-        notificationService.create("Transfer updated",
-                String.format("User %s updated transfer #%d.", username, saved.getId()),
-                "StockTransfer", saved.getId());
+        auditService.log(AuditAction.TRANSFER_UPDATE, DomainEntityType.StockTransfer.name(), saved.getId(), username,
+                "Transfer güncellendi");
+        notificationService.create(NotificationMessages.TRANSFER_UPDATED_TITLE,
+                String.format("Kullanıcı %s, #%d numaralı transferi güncelledi.", username, saved.getId()),
+                DomainEntityType.Stock.name(), saved.getId());
         logger.info("Transfer updated successfully with id: {}", saved.getId());
         return saved;
     }
@@ -277,11 +279,11 @@ public class StockTransferServiceImpl implements StockTransferService {
 
         stockTransferRepository.delete(transfer);
         String username = CurrentUser.usernameOrSystem();
-        auditService.log(AuditAction.TRANSFER_DELETE, "StockTransfer", transferId, username,
-                "Transfer deleted");
-        notificationService.create("Transfer deleted",
-                String.format("User %s deleted transfer #%d.", username, transferId),
-                "StockTransfer", transferId);
+        auditService.log(AuditAction.TRANSFER_DELETE, DomainEntityType.StockTransfer.name(), transferId, username,
+                "Transfer silindi");
+        notificationService.create(NotificationMessages.TRANSFER_DELETED_TITLE,
+                String.format("Kullanıcı %s, #%d numaralı transferi sildi.", username, transferId),
+                DomainEntityType.Stock.name(), transferId);
         logger.info("Transfer deleted successfully with id: {}", transferId);
     }
 

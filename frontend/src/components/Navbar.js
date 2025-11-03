@@ -13,32 +13,45 @@ const Navbar = () => {
   const role = (typeof window !== 'undefined' && localStorage.getItem('auth_role')) || 'ADMIN';
 
   useEffect(() => {
-    // Fetch low stock count for notification badge
-    const fetchLowStock = async () => {
+    // Initial snapshot via REST to hydrate dropdown list for admins; counts via SSE
+    (async () => {
       try {
-        const response = await axios.get('/api/stocks/low-stock');
-        setLowStockCount(response.data?.length || 0);
-      } catch (error) {
-        // Silently fail
-      }
-    };
-    const fetchNotifications = async () => {
+        if (role === 'ADMIN') {
+          const listRes = await axios.get('/api/notifications', { params: { size: 200, page: 0 } });
+          const list = Array.isArray(listRes.data) ? listRes.data : [];
+          setNotifications(list);
+          setUnreadCount(list.filter(n => !n.read).length);
+        } else {
+          setNotifications([]);
+          setUnreadCount(0);
+        }
+      } catch {}
       try {
-        const listRes = await axios.get('/api/notifications', { params: { size: 500, page: 0 } });
-        const list = Array.isArray(listRes.data) ? listRes.data : [];
-        setNotifications(list);
-        setUnreadCount(list.filter(n => !n.read).length);
-      } catch (e) {
-        // ignore
-      }
+        const lowRes = await axios.get('/api/stocks/low-stock');
+        setLowStockCount(Array.isArray(lowRes.data) ? lowRes.data.length : 0);
+      } catch {}
+    })();
+
+    // SSE subscription for live counts
+    const token = localStorage.getItem('auth_token');
+    if (!token) return;
+    const es = new EventSource(`/api/stream?token=${encodeURIComponent(token)}`);
+    const onMessage = (ev) => {
+      try {
+        const data = typeof ev.data === 'string' ? JSON.parse(ev.data) : ev.data;
+        if (typeof data.unread === 'number') setUnreadCount(data.unread);
+        if (typeof data.lowStock === 'number') setLowStockCount(data.lowStock);
+      } catch {}
     };
-    fetchLowStock();
-    fetchNotifications();
-    // Refresh every 5 minutes
-    const interval1 = setInterval(fetchLowStock, 300000);
-    const interval2 = setInterval(fetchNotifications, 15000);
-    return () => { clearInterval(interval1); clearInterval(interval2); };
-  }, []);
+    es.addEventListener('snapshot', onMessage);
+    es.addEventListener('update', onMessage);
+    es.onerror = () => {
+      // Let the browser attempt reconnects automatically
+    };
+    return () => {
+      try { es.close(); } catch {}
+    };
+  }, [role]);
 
   const isActive = (path) => {
     return location.pathname === path;
@@ -352,13 +365,31 @@ const Navbar = () => {
                                 <button
                                   className="btn btn-sm btn-primary"
                                   onClick={async () => {
-                                    const params = new URLSearchParams();
-                                    if (n.entityType === 'Stock') {
-                                      params.set('stockId', n.entityId);
-                                    } else if (n.entityType === 'StockTransfer') {
-                                      params.set('transferId', n.entityId);
+                                    const title = (n.title || '').toLowerCase();
+                                    const isTransfer = n.entityType === 'StockTransfer' || title.includes('transfer');
+                                    if (isTransfer) {
+                                      // For transfer notifications, open transfer audit timeline
+                                      if (location.pathname === '/stock') {
+                                        try {
+                                          window.dispatchEvent(new CustomEvent('open-audit', { detail: { entityType: 'StockTransfer', entityId: Number(n.entityId) } }));
+                                        } catch {}
+                                      } else {
+                                        const params = new URLSearchParams();
+                                        params.set('auditTransferId', n.entityId);
+                                        navigate(`/stock?${params.toString()}`);
+                                      }
+                                    } else {
+                                      // Stock: open stock audit timeline
+                                      if (location.pathname === '/stock') {
+                                        try {
+                                          window.dispatchEvent(new CustomEvent('open-audit', { detail: { entityType: 'Stock', entityId: Number(n.entityId) } }));
+                                        } catch {}
+                                      } else {
+                                        const params = new URLSearchParams();
+                                        params.set('auditStockId', n.entityId);
+                                        navigate(`/stock?${params.toString()}`);
+                                      }
                                     }
-                                    navigate(`/stock?${params.toString()}`);
                                     setShowNotif(false);
                                     try { await axios.post(`/api/notifications/${n.id}/read`); } catch {}
                                     setNotifications(prev => prev.map(x => x.id === n.id ? {...x, read: true} : x));

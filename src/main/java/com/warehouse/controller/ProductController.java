@@ -2,12 +2,14 @@ package com.warehouse.controller;
 
 import com.warehouse.entity.Product;
 import com.warehouse.dto.BulkPriceUpdateRequest;
+import com.warehouse.dto.ProductDto;
 import com.warehouse.service.ProductService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 @RestController
@@ -23,60 +25,68 @@ public class ProductController {
     }
 
     @GetMapping
-    public ResponseEntity<List<Product>> getAllProducts() {
+    @Transactional(readOnly = true)
+    public ResponseEntity<List<ProductDto>> getAllProducts() {
         List<Product> products = productService.getAllProducts();
-        return ResponseEntity.ok(products);
+        return ResponseEntity.ok(products.stream().map(this::toDto).toList());
     }
 
     @GetMapping("/active")
-    public ResponseEntity<List<Product>> getAllActiveProducts() {
+    @Transactional(readOnly = true)
+    public ResponseEntity<List<ProductDto>> getAllActiveProducts() {
         List<Product> products = productService.getAllActiveProducts();
-        return ResponseEntity.ok(products);
+        return ResponseEntity.ok(products.stream().map(this::toDto).toList());
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Product> getProductById(@PathVariable Long id) {
+    @Transactional(readOnly = true)
+    public ResponseEntity<ProductDto> getProductById(@PathVariable Long id) {
         return productService.getProductById(id)
-                .map(product -> ResponseEntity.ok(product))
+                .map(product -> ResponseEntity.ok(toDto(product)))
                 .orElse(ResponseEntity.notFound().build());
     }
 
     @GetMapping("/{id}/with-stocks")
-    public ResponseEntity<Product> getProductByIdWithStocks(@PathVariable Long id) {
+    @Transactional(readOnly = true)
+    public ResponseEntity<ProductDto> getProductByIdWithStocks(@PathVariable Long id) {
         return productService.getProductByIdWithStocks(id)
-                .map(product -> ResponseEntity.ok(product))
+                .map(product -> ResponseEntity.ok(toDto(product)))
                 .orElse(ResponseEntity.notFound().build());
     }
 
     @GetMapping("/sku/{sku}")
-    public ResponseEntity<Product> getProductBySku(@PathVariable String sku) {
+    @Transactional(readOnly = true)
+    public ResponseEntity<ProductDto> getProductBySku(@PathVariable String sku) {
         return productService.getProductBySku(sku)
-                .map(product -> ResponseEntity.ok(product))
+                .map(product -> ResponseEntity.ok(toDto(product)))
                 .orElse(ResponseEntity.notFound().build());
     }
 
     @GetMapping("/category/{categoryId}")
-    public ResponseEntity<List<Product>> getProductsByCategory(@PathVariable Long categoryId) {
+    @Transactional(readOnly = true)
+    public ResponseEntity<List<ProductDto>> getProductsByCategory(@PathVariable Long categoryId) {
         List<Product> products = productService.getProductsByCategory(categoryId);
-        return ResponseEntity.ok(products);
+        return ResponseEntity.ok(products.stream().map(this::toDto).toList());
     }
 
     @GetMapping("/search")
-    public ResponseEntity<List<Product>> searchProducts(@RequestParam String name) {
+    @Transactional(readOnly = true)
+    public ResponseEntity<List<ProductDto>> searchProducts(@RequestParam String name) {
         List<Product> products = productService.searchProductsByName(name);
-        return ResponseEntity.ok(products);
+        return ResponseEntity.ok(products.stream().map(this::toDto).toList());
     }
 
     @GetMapping("/filter")
-    public ResponseEntity<List<Product>> filterProducts(
+    @Transactional(readOnly = true)
+    public ResponseEntity<List<ProductDto>> filterProducts(
             @RequestParam(required = false) Long brandId,
             @RequestParam(required = false) Long colorId) {
         List<Product> products = productService.filterProductsByBrandAndColor(brandId, colorId);
-        return ResponseEntity.ok(products);
+        return ResponseEntity.ok(products.stream().map(this::toDto).toList());
     }
 
     @GetMapping("/{id}/desi")
-    public ResponseEntity<?> getProductDesiAndShipping(@PathVariable Long id) {
+    public ResponseEntity<?> getProductDesi(@PathVariable Long id) {
         return productService.getProductById(id)
                 .map(p -> {
                     double w = p.getWidthCm() != null ? p.getWidthCm() : 0.0;
@@ -113,7 +123,7 @@ public class ProductController {
     }
 
     @PutMapping("/bulk-price")
-    public ResponseEntity<java.util.Map<String, Object>> bulkUpdatePrices(@RequestBody BulkPriceUpdateRequest request) {
+    public ResponseEntity<?> bulkPrice(@Valid @RequestBody BulkPriceUpdateRequest request) {
         int affected = productService.bulkAdjustPrices(request);
         java.util.Map<String, Object> resp = new java.util.HashMap<>();
         resp.put("affected", affected);
@@ -136,5 +146,28 @@ public class ProductController {
     public ResponseEntity<Void> activateProduct(@PathVariable Long id) {
         productService.activateProduct(id);
         return ResponseEntity.ok().build();
+    }
+
+    private ProductDto toDto(Product p) {
+        ProductDto dto = new ProductDto();
+        dto.id = p.getId();
+        dto.name = p.getName();
+        dto.sku = p.getSku();
+        dto.description = p.getDescription();
+        dto.price = p.getPrice();
+        dto.active = p.isActive();
+        if (p.getCategory() != null) {
+            dto.categoryId = p.getCategory().getId();
+            dto.categoryName = p.getCategory().getName();
+        }
+        if (p.getBrand() != null) {
+            dto.brandId = p.getBrand().getId();
+            dto.brandName = p.getBrand().getName();
+        }
+        if (p.getColor() != null) {
+            dto.colorId = p.getColor().getId();
+            dto.colorName = p.getColor().getName();
+        }
+        return dto;
     }
 }

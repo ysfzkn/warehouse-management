@@ -6,6 +6,8 @@ import com.warehouse.exception.WarehouseManagementException;
 import com.warehouse.repository.WarehouseRepository;
 import com.warehouse.service.WarehouseService;
 import com.warehouse.util.EntityValidator;
+import com.warehouse.constants.BusinessMessages;
+import com.warehouse.constants.EntityNames;
 import com.warehouse.util.NameUniquenessValidator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -58,7 +60,7 @@ public class WarehouseServiceImpl implements WarehouseService {
         return warehouseRepository.findById(id)
                 .orElseThrow(() -> {
                     logger.warn("Warehouse not found with id: {}", id);
-                    return new WarehouseManagementException(ErrorCode.WAREHOUSE_NOT_FOUND, "ID: " + id);
+                    return new WarehouseManagementException(ErrorCode.WAREHOUSE_NOT_FOUND, BusinessMessages.ID_PREFIX + id);
                 });
     }
 
@@ -101,7 +103,7 @@ public class WarehouseServiceImpl implements WarehouseService {
         logger.info("Deleting warehouse with id: {}", id);
         Warehouse warehouse = getWarehouseByIdOrThrow(id);
         EntityValidator.validateEntityHasNoRelations(
-            !warehouse.getStocks().isEmpty(), "Warehouse", "stocks"
+            !warehouse.getStocks().isEmpty(), EntityNames.WAREHOUSE, EntityNames.RELATION_STOCKS
         );
         warehouseRepository.delete(warehouse);
         logger.info("Warehouse deleted successfully with id: {}", id);

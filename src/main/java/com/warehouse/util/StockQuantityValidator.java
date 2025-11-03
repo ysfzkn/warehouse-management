@@ -3,6 +3,7 @@ package com.warehouse.util;
 import com.warehouse.entity.Stock;
 import com.warehouse.exception.ErrorCode;
 import com.warehouse.exception.WarehouseManagementException;
+import com.warehouse.constants.ErrorMessages;
 
 /**
  * Utility class for stock quantity validation operations.
@@ -10,7 +11,7 @@ import com.warehouse.exception.WarehouseManagementException;
 public final class StockQuantityValidator {
 
     private StockQuantityValidator() {
-        throw new UnsupportedOperationException("Utility class cannot be instantiated");
+        throw new UnsupportedOperationException(ErrorMessages.UTIL_CLASS_INSTANTIATION);
     }
 
     /**
@@ -24,7 +25,7 @@ public final class StockQuantityValidator {
         Integer availableQuantity = stock.getAvailableQuantity();
         if (availableQuantity < requestedQuantity) {
             throw new WarehouseManagementException(ErrorCode.INSUFFICIENT_STOCK,
-                String.format("Available: %d, Requested: %d", availableQuantity, requestedQuantity));
+                String.format(ErrorMessages.INSUFFICIENT_STOCK_DETAIL, availableQuantity, requestedQuantity));
         }
     }
 

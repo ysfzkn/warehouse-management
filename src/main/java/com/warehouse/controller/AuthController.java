@@ -42,7 +42,7 @@ public class AuthController {
                     resp.put("role", user.getRole().name());
                     return ResponseEntity.ok(resp);
                 })
-                .orElse(ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid credentials"));
+                .orElse(ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(com.warehouse.constants.BusinessMessages.INVALID_CREDENTIALS));
     }
 }
 

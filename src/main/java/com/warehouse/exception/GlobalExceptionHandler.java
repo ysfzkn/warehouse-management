@@ -9,12 +9,16 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.Map;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    private static final Logger logger = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     @ExceptionHandler(WarehouseManagementException.class)
     public ResponseEntity<ErrorResponse> handleWarehouseManagementException(
@@ -38,7 +42,8 @@ public class GlobalExceptionHandler {
                 message,
                 request.getRequestURI()
         );
-        
+        // Log domain exception with context
+        logger.warn("Domain error: code={}, path={}, message={}", errorCode.getCode(), request.getRequestURI(), message);
         return new ResponseEntity<>(errorResponse, errorCode.getHttpStatus());
     }
 
@@ -60,7 +65,7 @@ public class GlobalExceptionHandler {
                 fieldErrors,
                 request.getRequestURI()
         );
-        
+        logger.warn("Validation error at path={} details={}", request.getRequestURI(), fieldErrors);
         return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
     }
 
@@ -75,7 +80,8 @@ public class GlobalExceptionHandler {
                 "Beklenmeyen bir hata oluştu.",
                 request.getRequestURI()
         );
-        
+        // Log full stack trace for investigation
+        logger.error("Unhandled exception at path={} : {}", request.getRequestURI(), ex.getMessage(), ex);
         return new ResponseEntity<>(errorResponse, HttpStatus.INTERNAL_SERVER_ERROR);
     }
 }

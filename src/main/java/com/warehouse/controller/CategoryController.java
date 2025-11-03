@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 @RestController
@@ -26,9 +27,10 @@ public class CategoryController {
     }
 
     @GetMapping
-    public ResponseEntity<List<Category>> getAllCategories() {
+    @Transactional(readOnly = true)
+    public ResponseEntity<List<CategoryDto>> getAllCategories() {
         List<Category> categories = categoryService.getAllCategories();
-        return ResponseEntity.ok(categories);
+        return ResponseEntity.ok(categories.stream().map(this::toDtoShallow).toList());
     }
 
     @GetMapping("/with-counts")
@@ -123,22 +125,29 @@ public class CategoryController {
     }
 
     @GetMapping("/active")
-    public ResponseEntity<List<Category>> getAllActiveCategories() {
+    @Transactional(readOnly = true)
+    public ResponseEntity<List<CategoryDto>> getAllActiveCategories() {
         List<Category> categories = categoryService.getAllActiveCategories();
-        return ResponseEntity.ok(categories);
+        return ResponseEntity.ok(categories.stream().map(this::toDtoShallow).toList());
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Category> getCategoryById(@PathVariable Long id) {
+    @Transactional(readOnly = true)
+    public ResponseEntity<CategoryDto> getCategoryById(@PathVariable Long id) {
         return categoryService.getCategoryById(id)
-                .map(category -> ResponseEntity.ok(category))
+                .map(category -> ResponseEntity.ok(toDtoShallow(category)))
                 .orElse(ResponseEntity.notFound().build());
     }
 
     @GetMapping("/{id}/with-products")
-    public ResponseEntity<Category> getCategoryByIdWithProducts(@PathVariable Long id) {
+    @Transactional(readOnly = true)
+    public ResponseEntity<CategoryDto> getCategoryByIdWithProducts(@PathVariable Long id) {
         return categoryService.getCategoryByIdWithProducts(id)
-                .map(category -> ResponseEntity.ok(category))
+                .map(category -> {
+                    var dto = toDtoShallow(category);
+                    dto.setProductCount((long) (category.getProducts() != null ? category.getProducts().size() : 0));
+                    return ResponseEntity.ok(dto);
+                })
                 .orElse(ResponseEntity.notFound().build());
     }
 
@@ -172,5 +181,20 @@ public class CategoryController {
     public ResponseEntity<Void> deleteCategory(@PathVariable Long id) {
         categoryService.deleteCategory(id);
         return ResponseEntity.noContent().build();
+    }
+
+    private CategoryDto toDtoShallow(Category c) {
+        var dto = new CategoryDto();
+        dto.setId(c.getId());
+        dto.setName(c.getName());
+        dto.setDescription(c.getDescription());
+        dto.setActive(c.isActive());
+        dto.setParentId(c.getParent() != null ? c.getParent().getId() : null);
+        dto.setParentName(c.getParent() != null ? c.getParent().getName() : null);
+        dto.setChildren(new java.util.ArrayList<>());
+        dto.setProductCount(0L);
+        dto.setCreatedAt(c.getCreatedAt());
+        dto.setUpdatedAt(c.getUpdatedAt());
+        return dto;
     }
 }

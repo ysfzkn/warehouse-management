@@ -2,6 +2,7 @@ package com.warehouse.util;
 
 import com.warehouse.exception.ErrorCode;
 import com.warehouse.exception.WarehouseManagementException;
+import com.warehouse.constants.ErrorMessages;
 
 import java.math.BigDecimal;
 
@@ -11,7 +12,7 @@ import java.math.BigDecimal;
 public final class ValidationUtil {
 
     private ValidationUtil() {
-        throw new UnsupportedOperationException("Utility class cannot be instantiated");
+        throw new UnsupportedOperationException(ErrorMessages.UTIL_CLASS_INSTANTIATION);
     }
 
     /**
