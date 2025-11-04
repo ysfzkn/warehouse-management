@@ -36,11 +36,23 @@ const Navbar = () => {
     const token = localStorage.getItem('auth_token');
     if (!token) return;
     const es = new EventSource(`/api/stream?token=${encodeURIComponent(token)}`);
-    const onMessage = (ev) => {
+    const onMessage = async (ev) => {
       try {
         const data = typeof ev.data === 'string' ? JSON.parse(ev.data) : ev.data;
-        if (typeof data.unread === 'number') setUnreadCount(data.unread);
-        if (typeof data.lowStock === 'number') setLowStockCount(data.lowStock);
+        const nextUnread = typeof data.unread === 'number' ? data.unread : null;
+        const nextLow = typeof data.lowStock === 'number' ? data.lowStock : null;
+        if (nextUnread != null && nextUnread !== unreadCount) {
+          setUnreadCount(nextUnread);
+          // Refresh notifications list to reflect new items without full page refresh
+          if (role === 'ADMIN') {
+            try {
+              const listRes = await axios.get('/api/notifications', { params: { size: 200, page: 0 } });
+              const list = Array.isArray(listRes.data) ? listRes.data : [];
+              setNotifications(list);
+            } catch {}
+          }
+        }
+        if (nextLow != null) setLowStockCount(nextLow);
       } catch {}
     };
     es.addEventListener('snapshot', onMessage);
@@ -51,7 +63,7 @@ const Navbar = () => {
     return () => {
       try { es.close(); } catch {}
     };
-  }, [role]);
+  }, [role, unreadCount]);
 
   const isActive = (path) => {
     return location.pathname === path;

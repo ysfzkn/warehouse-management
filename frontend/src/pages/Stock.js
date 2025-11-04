@@ -250,6 +250,9 @@ const Stock = () => {
   const [subcategories, setSubcategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('');
   const [selectedSubcategory, setSelectedSubcategory] = useState('');
+  // Stock list sorting
+  const [stockSortBy, setStockSortBy] = useState('default'); // 'default' | 'lastUpdated'
+  const [stockSortDir, setStockSortDir] = useState('desc'); // 'asc' | 'desc'
   
   // Modal states
   const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null });
@@ -376,13 +379,19 @@ const Stock = () => {
     }
   }, [stocks, pendingStockId]);
 
+  const getEffectiveMin = useCallback((stock) => {
+    const val = Number(stock?.minStockLevel);
+    if (!Number.isFinite(val) || val <= 0) return 10;
+    return val;
+  }, []);
+
   const filteredStocks = useMemo(() => {
     let filtered = stocks;
 
     // status filter
     switch (filter) {
       case 'low-stock':
-        filtered = filtered.filter(stock => stock.quantity <= stock.minStockLevel && stock.quantity > 0);
+        filtered = filtered.filter(stock => stock.quantity <= getEffectiveMin(stock) && stock.quantity > 0);
         break;
       case 'out-of-stock':
         filtered = filtered.filter(stock => stock.quantity === 0);
@@ -428,13 +437,26 @@ const Stock = () => {
       filtered = filtered.filter(s => (s.consignedQuantity || 0) > 0);
     }
 
-    // Sort by warehouse name and product name
-    return [...filtered].sort((a, b) => {
-      const warehouseCompare = (a.warehouse?.name || '').localeCompare(b.warehouse?.name || '');
-      if (warehouseCompare !== 0) return warehouseCompare;
-      return (a.product?.name || '').localeCompare(b.product?.name || '');
-    });
-  }, [stocks, filter, searchTerm, showReserved, showConsigned, selectedCategory, selectedSubcategory, products]);
+    // Sorting
+    const sorted = [...filtered];
+    if (stockSortBy === 'lastUpdated') {
+      const dir = stockSortDir === 'asc' ? 1 : -1;
+      sorted.sort((a, b) => {
+        const da = a.lastUpdated ? new Date(a.lastUpdated).getTime() : 0;
+        const db = b.lastUpdated ? new Date(b.lastUpdated).getTime() : 0;
+        if (da === db) return 0;
+        return da < db ? -1 * dir : 1 * dir;
+      });
+    } else {
+      // Default: by warehouse then product
+      sorted.sort((a, b) => {
+        const warehouseCompare = (a.warehouse?.name || '').localeCompare(b.warehouse?.name || '');
+        if (warehouseCompare !== 0) return warehouseCompare;
+        return (a.product?.name || '').localeCompare(b.product?.name || '');
+      });
+    }
+    return sorted;
+  }, [stocks, filter, searchTerm, showReserved, showConsigned, selectedCategory, selectedSubcategory, products, stockSortBy, stockSortDir, getEffectiveMin]);
 
 
   const handleCreateStock = () => {
@@ -461,7 +483,8 @@ const Stock = () => {
           await axios.delete(`/api/stocks/${id}`);
           fetchAllData();
         } catch (error) {
-          alert('Stok silinirken hata oluştu: ' + error.response?.data);
+          const msg = error?.response?.data?.message || 'Beklenmeyen bir durum oluştu';
+          alert('Stok silinirken hata oluştu: ' + msg);
         }
       }
     });
@@ -515,7 +538,7 @@ const Stock = () => {
       fetchTransfers();
       fetchAllData();
     } catch (error) {
-      const msg = error.response?.data?.message || error.response?.data || error.message;
+      const msg = error?.response?.data?.message || 'Beklenmeyen bir durum oluştu';
       alert(`Transfer ${action} işlemi sırasında hata: ${msg}`);
     }
   };
@@ -552,7 +575,7 @@ const Stock = () => {
   const getStockStatus = (stock) => {
     const available = (stock.quantity || 0) - (stock.reservedQuantity || 0) - (stock.consignedQuantity || 0);
     if (available <= 0) return { status: 'out', label: 'Stok Dışı', class: 'danger' };
-    if (available <= stock.minStockLevel) return { status: 'low', label: 'Düşük Stok', class: 'warning' };
+    if (available <= getEffectiveMin(stock)) return { status: 'low', label: 'Düşük Stok', class: 'warning' };
     return { status: 'normal', label: 'Normal', class: 'success' };
   };
 
@@ -703,7 +726,7 @@ const Stock = () => {
             onChange={(e) => setFilter(e.target.value)}
           />
           <label className="btn btn-outline-warning" htmlFor="low-stock">
-            Düşük Stok ({stocks.filter(s => s.quantity <= s.minStockLevel && s.quantity > 0).length})
+            Düşük Stok ({stocks.filter(s => s.quantity <= getEffectiveMin(s) && s.quantity > 0).length})
           </label>
 
           <input
@@ -810,7 +833,27 @@ const Stock = () => {
                   <th>Emanet</th>
                   <th>Min. Stok</th>
                   <th>Durum</th>
-                  <th>Son Güncelleme</th>
+                  <th>
+                    <button
+                      type="button"
+                      className="btn btn-link p-0 text-decoration-none"
+                      onClick={() => {
+                        if (stockSortBy === 'lastUpdated') {
+                          setStockSortDir(stockSortDir === 'asc' ? 'desc' : 'asc');
+                        } else {
+                          setStockSortBy('lastUpdated');
+                          setStockSortDir('desc');
+                        }
+                      }}
+                      title={`Son Güncelleme göre sırala (${stockSortBy === 'lastUpdated' ? (stockSortDir === 'asc' ? 'Artan' : 'Azalan') : 'Kapalı'})`}
+                    >
+                      Son Güncelleme
+                      <i
+                        className={`fas ms-1 ${stockSortBy === 'lastUpdated' ? (stockSortDir === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'}`}
+                        aria-hidden="true"
+                      ></i>
+                    </button>
+                  </th>
                   <th>İşlemler</th>
                 </tr>
               </thead>
@@ -838,7 +881,7 @@ const Stock = () => {
                         <span className="fw-bold">{stock.quantity}</span>
                       </td>
                       <td>
-                        <span className={stock.availableQuantity < stock.minStockLevel ? 'text-danger' : 'text-success'}>
+                        <span className={stock.availableQuantity < getEffectiveMin(stock) ? 'text-danger' : 'text-success'}>
                           {stock.availableQuantity}
                         </span>
                       </td>
@@ -856,7 +899,12 @@ const Stock = () => {
                         </span>
                       </td>
                       <td>
-                        {formatDateInTurkeyTimezone(stock.lastUpdated, { year: 'numeric', month: '2-digit', day: '2-digit' })}
+                        <div className="text-nowrap text-center">
+                          {formatDateInTurkeyTimezone(stock.lastUpdated, { year: 'numeric', month: '2-digit', day: '2-digit' })}
+                        </div>
+                        <small className="text-muted text-nowrap d-block text-center">
+                          {formatDateInTurkeyTimezone(stock.lastUpdated, { hour: '2-digit', minute: '2-digit' })}
+                        </small>
                       </td>
                       <td>
                         <div className="btn-group" role="group">

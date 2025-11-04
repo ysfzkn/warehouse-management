@@ -3,6 +3,7 @@ package com.warehouse.controller;
 import com.warehouse.entity.StockImportHistory;
 import com.warehouse.repository.StockImportHistoryRepository;
 import com.warehouse.service.StockImportService;
+import com.warehouse.dto.StockImportHistoryDto;
 import lombok.RequiredArgsConstructor;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.core.io.InputStreamResource;
@@ -45,32 +46,64 @@ public class StockImportController {
     }
 
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<StockImportHistory> upload(@RequestParam("warehouseId") Long warehouseId,
+    public ResponseEntity<StockImportHistoryDto> upload(@RequestParam("warehouseId") Long warehouseId,
                                                      @RequestParam("file") MultipartFile file) throws IOException {
         StockImportHistory history = stockImportService.importStocks(warehouseId, file);
-        return ResponseEntity.ok(history);
+        return ResponseEntity.ok(toDto(history));
     }
 
     @GetMapping
-    public ResponseEntity<List<StockImportHistory>> list() {
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public ResponseEntity<List<StockImportHistoryDto>> list() {
         List<StockImportHistory> list = historyRepository.findAll();
-        for (StockImportHistory h : list) {
-            if (h.getStatus() == null) continue;
-            String s = h.getStatus().toUpperCase();
-            if (ImportMessages.STATUS_SUCCESS.equals(s)) h.setStatus(ImportMessages.STATUS_TR_SUCCESS);
-            else if (ImportMessages.STATUS_FAILED.equals(s)) h.setStatus(ImportMessages.STATUS_TR_FAILED);
-            else if (ImportMessages.STATUS_PARTIAL.equals(s)) h.setStatus(ImportMessages.STATUS_TR_PARTIAL);
+        var result = list.stream().map(h -> {
+            // Translate status safely on a copy (DTO)
+            return toDto(h);
+        }).toList();
+        // Apply status TR mapping in DTOs
+        for (var dto : result) {
+            if (dto.status == null) continue;
+            String s = dto.status.toUpperCase();
+            if (ImportMessages.STATUS_SUCCESS.equals(s)) dto.status = ImportMessages.STATUS_TR_SUCCESS;
+            else if (ImportMessages.STATUS_FAILED.equals(s)) dto.status = ImportMessages.STATUS_TR_FAILED;
+            else if (ImportMessages.STATUS_PARTIAL.equals(s)) dto.status = ImportMessages.STATUS_TR_PARTIAL;
         }
-        return ResponseEntity.ok(list);
+        return ResponseEntity.ok(result);
     }
 
     @GetMapping("/{id}/file")
     public ResponseEntity<Resource> downloadFile(@PathVariable Long id) throws IOException {
         StockImportHistory history = historyRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Record not found: " + id));
-        Path path = Path.of(ImportMessages.STORAGE_DIR).resolve(history.getStoredFilename());
+        Path storageDir = Path.of(ImportMessages.STORAGE_DIR);
+        Path path = storageDir.resolve(history.getStoredFilename());
         if (!Files.exists(path)) {
-            return ResponseEntity.notFound().build();
+            // Fallback: try to find by original filename suffix (for older inconsistent records)
+            String sanitizedOriginal = history.getOriginalFilename() != null
+                    ? history.getOriginalFilename().replaceAll("[^a-zA-Z0-9._-]", "_")
+                    : null;
+            if (sanitizedOriginal != null && Files.isDirectory(storageDir)) {
+                try (var stream = Files.list(storageDir)) {
+                    var match = stream
+                            .filter(Files::isRegularFile)
+                            .filter(p -> p.getFileName().toString().endsWith(sanitizedOriginal))
+                            .sorted((p1, p2) -> {
+                                try {
+                                    return Files.getLastModifiedTime(p2).compareTo(Files.getLastModifiedTime(p1));
+                                } catch (IOException e) {
+                                    return 0;
+                                }
+                            })
+                            .findFirst();
+                    if (match.isPresent()) {
+                        path = match.get();
+                    } else {
+                        return ResponseEntity.notFound().build();
+                    }
+                }
+            } else {
+                return ResponseEntity.notFound().build();
+            }
         }
         InputStreamResource resource = new InputStreamResource(Files.newInputStream(path));
         return ResponseEntity.ok()
@@ -78,6 +111,31 @@ public class StockImportController {
                 .contentType(MediaType.parseMediaType(history.getContentType()))
                 .contentLength(Files.size(path))
                 .body(resource);
+    }
+
+    private StockImportHistoryDto toDto(StockImportHistory h) {
+        StockImportHistoryDto dto = new StockImportHistoryDto();
+        dto.id = h.getId();
+        dto.originalFilename = h.getOriginalFilename();
+        dto.storedFilename = h.getStoredFilename();
+        dto.contentType = h.getContentType();
+        dto.totalRows = h.getTotalRows();
+        dto.createdProducts = h.getCreatedProducts();
+        dto.updatedProducts = h.getUpdatedProducts();
+        dto.createdStocks = h.getCreatedStocks();
+        dto.updatedStocks = h.getUpdatedStocks();
+        dto.status = h.getStatus();
+        dto.createdAt = h.getCreatedAt();
+        if (h.getWarehouse() != null) {
+            dto.warehouseId = h.getWarehouse().getId();
+            // Avoid lazy property access if detached
+            try {
+                dto.warehouseName = h.getWarehouse().getName();
+            } catch (Exception ignored) {
+                dto.warehouseName = null;
+            }
+        }
+        return dto;
     }
 }
 

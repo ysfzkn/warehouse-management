@@ -3,6 +3,10 @@ package com.warehouse.service.impl;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.warehouse.entity.*;
 import com.warehouse.repository.*;
+import com.warehouse.service.AuditService;
+import com.warehouse.service.NotificationService;
+import com.warehouse.enums.AuditAction;
+import com.warehouse.enums.DomainEntityType;
 import com.warehouse.service.StockImportService;
 import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.HorizontalAlignment;
@@ -17,6 +21,8 @@ import com.warehouse.constants.ImportMessages;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -45,17 +51,23 @@ public class StockImportServiceImpl implements StockImportService {
     private final WarehouseRepository warehouseRepository;
     private final StockRepository stockRepository;
     private final StockImportHistoryRepository historyRepository;
+    private final AuditService auditService;
+    private final NotificationService notificationService;
 
     public StockImportServiceImpl(ProductRepository productRepository,
                                   CategoryRepository categoryRepository,
                                   WarehouseRepository warehouseRepository,
                                   StockRepository stockRepository,
-                                  StockImportHistoryRepository historyRepository) {
+                                  StockImportHistoryRepository historyRepository,
+                                  AuditService auditService,
+                                  NotificationService notificationService) {
         this.productRepository = productRepository;
         this.categoryRepository = categoryRepository;
         this.warehouseRepository = warehouseRepository;
         this.stockRepository = stockRepository;
         this.historyRepository = historyRepository;
+        this.auditService = auditService;
+        this.notificationService = notificationService;
     }
 
     @Override
@@ -100,8 +112,9 @@ public class StockImportServiceImpl implements StockImportService {
                     return new IllegalArgumentException("Warehouse not found: " + warehouseId);
                 });
 
-        Path targetFile = storeFile(file);
-        com.warehouse.entity.StockImportHistory history = createImportHistory(file, warehouse);
+        String storedFilename = System.currentTimeMillis() + "_" + sanitizeFilename(file.getOriginalFilename());
+        Path targetFile = storeFile(file, storedFilename);
+        com.warehouse.entity.StockImportHistory history = createImportHistory(file, warehouse, storedFilename);
 
         try {
             ImportResult result = processExcelFile(targetFile, warehouse);
@@ -134,10 +147,9 @@ public class StockImportServiceImpl implements StockImportService {
         return headerStyle;
     }
 
-    private Path storeFile(MultipartFile file) throws IOException {
+    private Path storeFile(MultipartFile file, String storedFilename) throws IOException {
         Path dir = Path.of(STORAGE_DIR);
         Files.createDirectories(dir);
-        String storedFilename = System.currentTimeMillis() + "_" + sanitizeFilename(file.getOriginalFilename());
         Path target = dir.resolve(storedFilename);
         try (InputStream is = file.getInputStream()) {
             Files.copy(is, target, StandardCopyOption.REPLACE_EXISTING);
@@ -146,10 +158,9 @@ public class StockImportServiceImpl implements StockImportService {
         return target;
     }
 
-    private com.warehouse.entity.StockImportHistory createImportHistory(MultipartFile file, Warehouse warehouse) {
+    private com.warehouse.entity.StockImportHistory createImportHistory(MultipartFile file, Warehouse warehouse, String storedFilename) {
         com.warehouse.entity.StockImportHistory history = new com.warehouse.entity.StockImportHistory();
         history.setOriginalFilename(file.getOriginalFilename());
-        String storedFilename = System.currentTimeMillis() + "_" + sanitizeFilename(file.getOriginalFilename());
         history.setStoredFilename(storedFilename);
         history.setContentType(file.getContentType() != null ? 
                 file.getContentType() : ImportMessages.CONTENT_TYPE_XLSX);
@@ -328,6 +339,7 @@ public class StockImportServiceImpl implements StockImportService {
         
         if (existingStock.isPresent()) {
             Stock stock = existingStock.get();
+            int oldQty = stock.getQuantity() != null ? stock.getQuantity() : 0;
             stock.setQuantity(quantity);
             stock.setMinStockLevel(minStock);
             stock.setReservedQuantity(reserved);
@@ -335,6 +347,28 @@ public class StockImportServiceImpl implements StockImportService {
             stock.setLastUpdated(LocalDateTime.now());
             stockRepository.save(stock);
             result.incrementUpdatedStocks();
+
+            int delta = quantity - oldQty;
+            if (delta > 0) {
+                String username = getCurrentUsername();
+                // Audit: stok artırma
+                auditService.log(
+                        AuditAction.STOCK_ADD,
+                        DomainEntityType.Stock.name(),
+                        stock.getId(),
+                        username,
+                        String.format("Stok artırıldı: Depo=%s, Ürün=%s, Artış=%d, Yeni Miktar=%d",
+                                warehouse.getName(), product.getName(), delta, quantity)
+                );
+                // Notification
+                notificationService.create(
+                        com.warehouse.constants.NotificationMessages.STOCK_INCREASED_TITLE,
+                        String.format("Kullanıcı %s, %s/%s için %d adet stok artırdı.",
+                                username, warehouse.getName(), product.getName(), delta),
+                        DomainEntityType.Stock.name(),
+                        stock.getId()
+                );
+            }
         } else {
             Stock stock = new Stock();
             stock.setProduct(product);
@@ -346,6 +380,25 @@ public class StockImportServiceImpl implements StockImportService {
             stock.setLastUpdated(LocalDateTime.now());
             stockRepository.save(stock);
             result.incrementCreatedStocks();
+
+            String username = getCurrentUsername();
+            // Audit: stok oluşturma
+            auditService.log(
+                    AuditAction.STOCK_CREATE,
+                    DomainEntityType.Stock.name(),
+                    stock.getId(),
+                    username,
+                    String.format("Stok oluşturuldu: Depo=%s, Ürün=%s, Miktar=%d",
+                            warehouse.getName(), product.getName(), quantity)
+            );
+            // Notification
+            notificationService.create(
+                    com.warehouse.constants.NotificationMessages.STOCK_CREATED_TITLE,
+                    String.format("Kullanıcı %s, %s/%s için %d adet stok oluşturdu.",
+                            username, warehouse.getName(), product.getName(), quantity),
+                    DomainEntityType.Stock.name(),
+                    stock.getId()
+            );
         }
     }
 
@@ -391,6 +444,16 @@ public class StockImportServiceImpl implements StockImportService {
             logger.debug("Failed to parse integer: {}", s);
             return defaultValue;
         }
+    }
+
+    private String getCurrentUsername() {
+        try {
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            if (auth != null && auth.getName() != null) {
+                return auth.getName();
+            }
+        } catch (Exception ignored) {}
+        return "system";
     }
 
     private static class RowData {

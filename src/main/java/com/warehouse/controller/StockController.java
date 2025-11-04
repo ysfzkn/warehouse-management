@@ -105,7 +105,7 @@ public class StockController {
     }
 
     @PostMapping
-    public ResponseEntity<Stock> createStock(@Valid @RequestBody Stock stock) {
+    public ResponseEntity<StockDto> createStock(@Valid @RequestBody Stock stock) {
         Stock createdStock = stockService.createStock(stock);
         try {
             ssePushService.broadcastCounts();
@@ -113,11 +113,11 @@ public class StockController {
         } catch (Exception e) {
             logger.warn("SSE broadcast failed after createStock. stockId={}", createdStock.getId(), e);
         }
-        return ResponseEntity.status(HttpStatus.CREATED).body(createdStock);
+        return ResponseEntity.status(HttpStatus.CREATED).body(toDtoLean(createdStock));
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Stock> updateStock(@PathVariable Long id, @RequestBody Stock stock) {
+    public ResponseEntity<StockDto> updateStock(@PathVariable Long id, @RequestBody Stock stock) {
         Stock updatedStock = stockService.updateStock(id, stock);
         try {
             ssePushService.broadcastCounts();
@@ -125,11 +125,11 @@ public class StockController {
         } catch (Exception e) {
             logger.warn("SSE broadcast failed after updateStock. stockId={}", updatedStock.getId(), e);
         }
-        return ResponseEntity.ok(updatedStock);
+        return ResponseEntity.ok(toDtoLean(updatedStock));
     }
 
     @PutMapping("/{id}/add")
-    public ResponseEntity<Stock> addToStock(@PathVariable Long id, @RequestParam Integer quantity) {
+    public ResponseEntity<StockDto> addToStock(@PathVariable Long id, @RequestParam Integer quantity) {
         Stock updatedStock = stockService.addToStock(id, quantity);
         try {
             ssePushService.broadcastCounts();
@@ -137,11 +137,11 @@ public class StockController {
         } catch (Exception e) {
             logger.warn("SSE broadcast failed after addToStock. stockId={}, quantity={} ", id, quantity, e);
         }
-        return ResponseEntity.ok(updatedStock);
+        return ResponseEntity.ok(toDtoLean(updatedStock));
     }
 
     @PutMapping("/{id}/remove")
-    public ResponseEntity<Stock> removeFromStock(@PathVariable Long id, @RequestParam Integer quantity) {
+    public ResponseEntity<StockDto> removeFromStock(@PathVariable Long id, @RequestParam Integer quantity) {
         Stock updatedStock = stockService.removeFromStock(id, quantity);
         try {
             ssePushService.broadcastCounts();
@@ -149,11 +149,11 @@ public class StockController {
         } catch (Exception e) {
             logger.warn("SSE broadcast failed after removeFromStock. stockId={}, quantity={} ", id, quantity, e);
         }
-        return ResponseEntity.ok(updatedStock);
+        return ResponseEntity.ok(toDtoLean(updatedStock));
     }
 
     @PutMapping("/{id}/reserve")
-    public ResponseEntity<Stock> reserveStock(@PathVariable Long id, @RequestParam Integer quantity) {
+    public ResponseEntity<StockDto> reserveStock(@PathVariable Long id, @RequestParam Integer quantity) {
         Stock updatedStock = stockService.reserveStock(id, quantity);
         try {
             ssePushService.broadcastCounts();
@@ -161,11 +161,11 @@ public class StockController {
         } catch (Exception e) {
             logger.warn("SSE broadcast failed after reserveStock. stockId={}, quantity={} ", id, quantity, e);
         }
-        return ResponseEntity.ok(updatedStock);
+        return ResponseEntity.ok(toDtoLean(updatedStock));
     }
 
     @PutMapping("/{id}/release")
-    public ResponseEntity<Stock> releaseStock(@PathVariable Long id, @RequestParam Integer quantity) {
+    public ResponseEntity<StockDto> releaseStock(@PathVariable Long id, @RequestParam Integer quantity) {
         Stock updatedStock = stockService.releaseStock(id, quantity);
         try {
             ssePushService.broadcastCounts();
@@ -173,7 +173,7 @@ public class StockController {
         } catch (Exception e) {
             logger.warn("SSE broadcast failed after releaseStock. stockId={}, quantity={} ", id, quantity, e);
         }
-        return ResponseEntity.ok(updatedStock);
+        return ResponseEntity.ok(toDtoLean(updatedStock));
     }
 
     @DeleteMapping("/{id}")
@@ -196,6 +196,7 @@ public class StockController {
         dto.consignedQuantity = s.getConsignedQuantity();
         dto.minStockLevel = s.getMinStockLevel();
         dto.availableQuantity = s.getAvailableQuantity();
+        dto.lastUpdated = s.getLastUpdated();
         if (s.getProduct() != null) {
             StockDto.ProductDto p = new StockDto.ProductDto();
             p.id = s.getProduct().getId();
@@ -208,6 +209,28 @@ public class StockController {
             w.id = s.getWarehouse().getId();
             w.name = s.getWarehouse().getName();
             w.location = s.getWarehouse().getLocation();
+            dto.warehouse = w;
+        }
+        return dto;
+    }
+
+    private StockDto toDtoLean(Stock s) {
+        StockDto dto = new StockDto();
+        dto.id = s.getId();
+        dto.quantity = s.getQuantity();
+        dto.reservedQuantity = s.getReservedQuantity();
+        dto.consignedQuantity = s.getConsignedQuantity();
+        dto.minStockLevel = s.getMinStockLevel();
+        dto.availableQuantity = s.getAvailableQuantity();
+        dto.lastUpdated = s.getLastUpdated();
+        if (s.getProduct() != null) {
+            StockDto.ProductDto p = new StockDto.ProductDto();
+            p.id = s.getProduct().getId();
+            dto.product = p;
+        }
+        if (s.getWarehouse() != null) {
+            StockDto.WarehouseDto w = new StockDto.WarehouseDto();
+            w.id = s.getWarehouse().getId();
             dto.warehouse = w;
         }
         return dto;

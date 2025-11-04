@@ -8,6 +8,7 @@ public class StockDto {
     public Integer consignedQuantity;
     public Integer minStockLevel;
     public Integer availableQuantity;
+    public java.time.LocalDateTime lastUpdated;
     public ProductDto product;
     public WarehouseDto warehouse;
 

@@ -21,16 +21,16 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
     @Query("SELECT s FROM Stock s WHERE s.warehouse = :warehouse ORDER BY s.product.name")
     List<Stock> findByWarehouse(@Param("warehouse") Warehouse warehouse);
 
-    @Query("SELECT s FROM Stock s WHERE s.quantity <= s.minStockLevel")
+    @Query("SELECT s FROM Stock s WHERE s.quantity <= (CASE WHEN s.minStockLevel IS NULL OR s.minStockLevel = 0 THEN 10 ELSE s.minStockLevel END)")
     List<Stock> findLowStockItems();
 
-    @Query("SELECT COUNT(s) FROM Stock s WHERE s.quantity <= s.minStockLevel")
+    @Query("SELECT COUNT(s) FROM Stock s WHERE s.quantity <= (CASE WHEN s.minStockLevel IS NULL OR s.minStockLevel = 0 THEN 10 ELSE s.minStockLevel END)")
     long countLowStockItems();
 
     @Query("SELECT s FROM Stock s WHERE s.quantity = 0")
     List<Stock> findOutOfStockItems();
 
-    @Query("SELECT s FROM Stock s WHERE s.warehouse = :warehouse AND s.quantity <= s.minStockLevel")
+    @Query("SELECT s FROM Stock s WHERE s.warehouse = :warehouse AND s.quantity <= (CASE WHEN s.minStockLevel IS NULL OR s.minStockLevel = 0 THEN 10 ELSE s.minStockLevel END)")
     List<Stock> findLowStockItemsByWarehouse(@Param("warehouse") Warehouse warehouse);
 
     @Query("SELECT SUM(s.quantity) FROM Stock s WHERE s.product = :product")

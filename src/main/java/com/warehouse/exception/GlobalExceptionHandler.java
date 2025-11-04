@@ -72,7 +72,12 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGenericException(
             Exception ex, HttpServletRequest request) {
-        
+        // Avoid writing JSON on SSE endpoint which uses text/event-stream
+        String uri = request.getRequestURI();
+        if (uri != null && uri.startsWith("/api/stream")) {
+            logger.error("Unhandled exception on SSE stream at path={} : {}", uri, ex.getMessage(), ex);
+            return new ResponseEntity<>(null, HttpStatus.INTERNAL_SERVER_ERROR);
+        }
         ErrorResponse errorResponse = new ErrorResponse(
                 ErrorCode.INTERNAL_SERVER_ERROR.getCode(),
                 HttpStatus.INTERNAL_SERVER_ERROR.value(),
