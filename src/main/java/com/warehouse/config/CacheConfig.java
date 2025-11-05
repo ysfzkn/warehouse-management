@@ -21,11 +21,15 @@ public class CacheConfig {
     @Bean
     public CacheManager cacheManager(
             @Value("${app.cache.counts.ttl-seconds:5}") long ttlSeconds,
-            @Value("${app.cache.counts.max-size:100}") long maxSize) {
-        CaffeineCacheManager manager = new CaffeineCacheManager("counts");
+            @Value("${app.cache.counts.max-size:100}") long maxSize,
+            @Value("${app.cache.refdata.ttl-seconds:60}") long refTtlSeconds,
+            @Value("${app.cache.refdata.max-size:1000}") long refMaxSize) {
+        CaffeineCacheManager manager = new CaffeineCacheManager("counts", "refdata");
+        // Spring's single CaffeineCacheManager uses the same builder for all caches; build a generous config
+        // suitable for both small, frequent counts and small reference lists
         manager.setCaffeine(Caffeine.newBuilder()
-                .expireAfterWrite(ttlSeconds, TimeUnit.SECONDS)
-                .maximumSize(maxSize));
+                .expireAfterWrite(Math.max(ttlSeconds, refTtlSeconds), TimeUnit.SECONDS)
+                .maximumSize(Math.max(maxSize, refMaxSize)));
         return manager;
     }
 }

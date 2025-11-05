@@ -65,12 +65,7 @@ public class StockServiceImpl implements StockService {
     @Transactional(readOnly = true)
     public List<Stock> getAllStocksFiltered(Long brandId, Long colorId, Long warehouseId) {
         logger.debug("Fetching filtered stocks - brandId: {}, colorId: {}, warehouseId: {}", brandId, colorId, warehouseId);
-        List<Stock> stocks = stockRepository.findAll();
-        return stocks.stream()
-                .filter(stock -> matchesBrandFilter(stock, brandId))
-                .filter(stock -> matchesColorFilter(stock, colorId))
-                .filter(stock -> matchesWarehouseFilter(stock, warehouseId))
-                .toList();
+        return stockRepository.findAllFiltered(brandId, colorId, warehouseId);
     }
 
     @Override
@@ -355,25 +350,7 @@ public class StockServiceImpl implements StockService {
         }
     }
 
-    private boolean matchesBrandFilter(Stock stock, Long brandId) {
-        return brandId == null ||
-               (stock.getProduct() != null &&
-                stock.getProduct().getBrand() != null &&
-                brandId.equals(stock.getProduct().getBrand().getId()));
-    }
-
-    private boolean matchesColorFilter(Stock stock, Long colorId) {
-        return colorId == null ||
-               (stock.getProduct() != null &&
-                stock.getProduct().getColor() != null &&
-                colorId.equals(stock.getProduct().getColor().getId()));
-    }
-
-    private boolean matchesWarehouseFilter(Stock stock, Long warehouseId) {
-        return warehouseId == null ||
-               (stock.getWarehouse() != null &&
-                warehouseId.equals(stock.getWarehouse().getId()));
-    }
+    // In-memory matchers removed; filtering is handled by the repository query now
 
     private void updateStockQuantity(Stock stock, Integer quantity) {
         if (quantity != null) {

@@ -16,7 +16,16 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 @Entity
-@Table(name = "products")
+@Table(
+    name = "products",
+    indexes = {
+        @Index(name = "idx_products_name", columnList = "name"),
+        @Index(name = "idx_products_is_active", columnList = "is_active"),
+        @Index(name = "idx_products_category_id", columnList = "category_id"),
+        @Index(name = "idx_products_brand_id", columnList = "brand_id"),
+        @Index(name = "idx_products_color_id", columnList = "color_id")
+    }
+)
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

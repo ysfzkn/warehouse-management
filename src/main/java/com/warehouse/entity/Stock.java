@@ -11,9 +11,18 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "stocks", uniqueConstraints = {
-    @UniqueConstraint(columnNames = {"product_id", "warehouse_id"})
-})
+@Table(
+    name = "stocks",
+    uniqueConstraints = {
+        @UniqueConstraint(columnNames = {"product_id", "warehouse_id"})
+    },
+    indexes = {
+        @Index(name = "idx_stocks_product_id", columnList = "product_id"),
+        @Index(name = "idx_stocks_warehouse_id", columnList = "warehouse_id"),
+        @Index(name = "idx_stocks_last_updated", columnList = "last_updated"),
+        @Index(name = "idx_stocks_quantity", columnList = "quantity")
+    }
+)
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

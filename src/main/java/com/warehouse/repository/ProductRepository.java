@@ -24,7 +24,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     @Query("SELECT p FROM Product p WHERE p.category = :category AND p.isActive = true ORDER BY p.name")
     List<Product> findByCategoryAndActive(@Param("category") Category category);
 
-    @Query("SELECT p FROM Product p WHERE LOWER(p.name) LIKE LOWER(CONCAT('%', :name, '%')) AND p.isActive = true")
+    @Query("SELECT p FROM Product p WHERE LOWER(p.name) LIKE LOWER(CONCAT('%', :name, '%')) AND p.isActive = true ORDER BY p.name")
     List<Product> findByNameContainingIgnoreCaseAndActive(@Param("name") String name);
 
     @Query("SELECT p FROM Product p LEFT JOIN FETCH p.stocks WHERE p.id = :id")
