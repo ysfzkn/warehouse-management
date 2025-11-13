@@ -15,6 +15,7 @@ public final class ApiPaths {
     public static final String STREAM = API_BASE + "/stream";
     public static final String STOCKS = API_BASE + "/stocks/**";
     public static final String STOCK_TRANSFERS = API_BASE + "/stock-transfers/**";
+    public static final String STOCK_IMPORTS = API_BASE + "/stock-imports/**";
     public static final String PRODUCTS = API_BASE + "/products/**";
     public static final String WAREHOUSES = API_BASE + "/warehouses/**";
     public static final String CATEGORIES = API_BASE + "/categories/**";

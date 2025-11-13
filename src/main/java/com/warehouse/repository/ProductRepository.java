@@ -30,6 +30,14 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     @Query("SELECT p FROM Product p LEFT JOIN FETCH p.stocks WHERE p.id = :id")
     Optional<Product> findByIdWithStocks(Long id);
 
+    @Query("SELECT p FROM Product p " +
+           "LEFT JOIN FETCH p.category c " +
+           "LEFT JOIN FETCH c.parent " +
+           "LEFT JOIN FETCH p.brand " +
+           "LEFT JOIN FETCH p.color " +
+           "WHERE p.id = :id")
+    Optional<Product> findByIdWithRelations(@Param("id") Long id);
+
     @Query("SELECT p FROM Product p WHERE (:brand IS NULL OR p.brand = :brand) AND (:color IS NULL OR p.color = :color) AND p.isActive = true ORDER BY p.name")
     List<Product> findActiveByBrandAndColor(@Param("brand") Brand brand, @Param("color") Color color);
 

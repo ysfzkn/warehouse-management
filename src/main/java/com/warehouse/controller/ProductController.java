@@ -111,15 +111,15 @@ public class ProductController {
     }
 
     @PostMapping
-    public ResponseEntity<Product> createProduct(@Valid @RequestBody Product product) {
+    public ResponseEntity<ProductDto> createProduct(@Valid @RequestBody Product product) {
         Product createdProduct = productService.createProduct(product);
-        return ResponseEntity.status(HttpStatus.CREATED).body(createdProduct);
+        return ResponseEntity.status(HttpStatus.CREATED).body(toDto(createdProduct));
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Product> updateProduct(@PathVariable Long id, @Valid @RequestBody Product product) {
+    public ResponseEntity<ProductDto> updateProduct(@PathVariable Long id, @Valid @RequestBody Product product) {
         Product updatedProduct = productService.updateProduct(id, product);
-        return ResponseEntity.ok(updatedProduct);
+        return ResponseEntity.ok(toDto(updatedProduct));
     }
 
     @PutMapping("/bulk-price")
@@ -156,17 +156,49 @@ public class ProductController {
         dto.description = p.getDescription();
         dto.price = p.getPrice();
         dto.active = p.isActive();
+        dto.weight = p.getWeight();
+        dto.dimensions = p.getDimensions();
+        dto.lengthCm = p.getLengthCm();
+        dto.widthCm = p.getWidthCm();
+        dto.heightCm = p.getHeightCm();
+        dto.shippingRate = p.getShippingRate();
+        dto.vatRate = p.getVatRate();
+        dto.sctRate = p.getSctRate();
+        dto.createdAt = p.getCreatedAt();
+        dto.updatedAt = p.getUpdatedAt();
         if (p.getCategory() != null) {
             dto.categoryId = p.getCategory().getId();
             dto.categoryName = p.getCategory().getName();
+            dto.categoryParentId = p.getCategory().getParent() != null ? p.getCategory().getParent().getId() : null;
+            dto.categoryParentName = p.getCategory().getParent() != null ? p.getCategory().getParent().getName() : null;
+
+            ProductDto.CategoryInfo categoryInfo = new ProductDto.CategoryInfo();
+            categoryInfo.id = p.getCategory().getId();
+            categoryInfo.name = p.getCategory().getName();
+            if (p.getCategory().getParent() != null) {
+                ProductDto.ParentInfo parentInfo = new ProductDto.ParentInfo();
+                parentInfo.id = p.getCategory().getParent().getId();
+                parentInfo.name = p.getCategory().getParent().getName();
+                categoryInfo.parent = parentInfo;
+            }
+            dto.category = categoryInfo;
         }
         if (p.getBrand() != null) {
             dto.brandId = p.getBrand().getId();
             dto.brandName = p.getBrand().getName();
+            ProductDto.BrandInfo brandInfo = new ProductDto.BrandInfo();
+            brandInfo.id = p.getBrand().getId();
+            brandInfo.name = p.getBrand().getName();
+            dto.brand = brandInfo;
         }
         if (p.getColor() != null) {
             dto.colorId = p.getColor().getId();
             dto.colorName = p.getColor().getName();
+            ProductDto.ColorInfo colorInfo = new ProductDto.ColorInfo();
+            colorInfo.id = p.getColor().getId();
+            colorInfo.name = p.getColor().getName();
+            colorInfo.hexCode = p.getColor().getHexCode();
+            dto.color = colorInfo;
         }
         return dto;
     }

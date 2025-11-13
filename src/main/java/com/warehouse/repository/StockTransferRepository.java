@@ -88,5 +88,12 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, Lo
            "WHERE st.destinationWarehouse = :destinationWarehouse AND st.status = :status")
     List<StockTransfer> findByDestinationWarehouseAndStatus(@Param("destinationWarehouse") Warehouse destinationWarehouse, 
                                                              @Param("status") TransferStatus status);
+
+    @Query("SELECT st FROM StockTransfer st " +
+           "LEFT JOIN FETCH st.sourceWarehouse " +
+           "LEFT JOIN FETCH st.destinationWarehouse " +
+           "LEFT JOIN FETCH st.product " +
+           "WHERE st.id = :id")
+    java.util.Optional<StockTransfer> findByIdWithRelations(@Param("id") Long id);
 }
 

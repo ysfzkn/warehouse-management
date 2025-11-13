@@ -70,14 +70,14 @@ public class StockTransferServiceImpl implements StockTransferService {
     @Transactional(readOnly = true)
     public Optional<StockTransfer> getTransferById(Long id) {
         logger.debug("Fetching transfer by id: {}", id);
-        return stockTransferRepository.findById(id);
+        return stockTransferRepository.findByIdWithRelations(id);
     }
 
     @Override
     @Transactional(readOnly = true)
     public StockTransfer getTransferByIdOrThrow(Long id) {
         logger.debug("Fetching transfer by id or throw: {}", id);
-        return stockTransferRepository.findById(id)
+        return stockTransferRepository.findByIdWithRelations(id)
                 .orElseThrow(() -> {
                     logger.warn("Transfer not found with id: {}", id);
                     return new WarehouseManagementException(ErrorCode.TRANSFER_NOT_FOUND);
@@ -136,7 +136,10 @@ public class StockTransferServiceImpl implements StockTransferService {
                         sourceWarehouse.getName(), destinationWarehouse.getName(), product.getName(), saved.getQuantity()),
                 DomainEntityType.Stock.name(), saved.getId());
         logger.info("Transfer created successfully with id: {}", saved.getId());
-        return saved;
+        
+        // Fetch with relations again to avoid LazyInitializationException in mapper
+        return stockTransferRepository.findByIdWithRelations(saved.getId())
+                .orElse(saved);
     }
 
     @Override
@@ -165,7 +168,10 @@ public class StockTransferServiceImpl implements StockTransferService {
                 String.format("Kullanıcı %s, #%d numaralı transferi yola çıkardı.", username, saved.getId()),
                 DomainEntityType.Stock.name(), saved.getId());
         logger.info("Transfer started successfully with id: {}", saved.getId());
-        return saved;
+        
+        // Fetch with relations again to avoid LazyInitializationException in mapper
+        return stockTransferRepository.findByIdWithRelations(saved.getId())
+                .orElse(saved);
     }
 
     @Override
@@ -204,7 +210,10 @@ public class StockTransferServiceImpl implements StockTransferService {
                 String.format("Kullanıcı %s, #%d numaralı transferi tamamladı.", username, saved.getId()),
                 DomainEntityType.Stock.name(), saved.getId());
         logger.info("Transfer completed successfully with id: {}", saved.getId());
-        return saved;
+        
+        // Fetch with relations again to avoid LazyInitializationException in mapper
+        return stockTransferRepository.findByIdWithRelations(saved.getId())
+                .orElse(saved);
     }
 
     @Override
@@ -237,7 +246,10 @@ public class StockTransferServiceImpl implements StockTransferService {
                 String.format("Kullanıcı %s, #%d numaralı transferi iptal etti. Sebep: %s", username, saved.getId(), cancellationReason),
                 DomainEntityType.Stock.name(), saved.getId());
         logger.info("Transfer cancelled successfully with id: {}", saved.getId());
-        return saved;
+        
+        // Fetch with relations again to avoid LazyInitializationException in mapper
+        return stockTransferRepository.findByIdWithRelations(saved.getId())
+                .orElse(saved);
     }
 
     @Override
@@ -260,7 +272,10 @@ public class StockTransferServiceImpl implements StockTransferService {
                 String.format("Kullanıcı %s, #%d numaralı transferi güncelledi.", username, saved.getId()),
                 DomainEntityType.Stock.name(), saved.getId());
         logger.info("Transfer updated successfully with id: {}", saved.getId());
-        return saved;
+        
+        // Fetch with relations again to avoid LazyInitializationException in mapper
+        return stockTransferRepository.findByIdWithRelations(saved.getId())
+                .orElse(saved);
     }
 
     @Override
@@ -331,7 +346,9 @@ public class StockTransferServiceImpl implements StockTransferService {
     }
 
     private void releaseReservedStock(Stock stock, Integer quantity) {
-        stock.setReservedQuantity(stock.getReservedQuantity() - quantity);
+        int currentReserved = stock.getReservedQuantity() != null ? stock.getReservedQuantity() : 0;
+        int newReserved = Math.max(0, currentReserved - quantity); // Ensure non-negative
+        stock.setReservedQuantity(newReserved);
         stockRepository.save(stock);
     }
 

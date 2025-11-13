@@ -5,7 +5,7 @@ const ConfirmModal = ({ show, onConfirm, onCancel, title, message, confirmText =
 
   const iconColors = {
     'question-circle': 'text-primary',
-    'exclamation-triangle': 'text-warning',
+    'exclamation-triangle': 'text-danger',
     'trash': 'text-danger',
     'check-circle': 'text-success',
     'info-circle': 'text-info'
@@ -32,14 +32,16 @@ const ConfirmModal = ({ show, onConfirm, onCancel, title, message, confirmText =
             <p className="text-muted mb-0">{message}</p>
           </div>
           <div className="modal-footer border-0 justify-content-center gap-2 pb-4">
-            <button
-              type="button"
-              className="btn btn-outline-secondary px-4"
-              onClick={onCancel}
-            >
-              <i className="fas fa-times me-2"></i>
-              {cancelText}
-            </button>
+            {cancelText && (
+              <button
+                type="button"
+                className="btn btn-outline-secondary px-4"
+                onClick={onCancel}
+              >
+                <i className="fas fa-times me-2"></i>
+                {cancelText}
+              </button>
+            )}
             <button
               type="button"
               className={`btn btn-${confirmVariant} px-4`}

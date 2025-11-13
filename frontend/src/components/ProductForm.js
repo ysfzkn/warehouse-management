@@ -60,30 +60,54 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
   }, [formData.categoryId]);
 
   useEffect(() => {
-    if (product) {
-      const categoryId = product.category?.id || '';
-      const subcategoryId = product.category?.parent ? product.category.id : '';
-      const mainCategoryId = product.category?.parent ? product.category.parent.id : categoryId;
+    if (!product) {
+      return;
+    }
 
-      setFormData({
-        name: product.name || '',
-        description: product.description || '',
-        sku: product.sku || '',
-        price: product.price || '',
-        weight: product.weight || '',
-        dimensions: product.dimensions || '',
-        lengthCm: product.lengthCm || '',
-        widthCm: product.widthCm || '',
-        heightCm: product.heightCm || '',
-        shippingRate: product.shippingRate || '',
-        vatRate: product.vatRate || '',
-        sctRate: product.sctRate || '',
-        categoryId: mainCategoryId,
-        subcategoryId: subcategoryId,
-        isActive: product.isActive !== false
-      });
-      setBrandId(product.brand?.id || null);
-      setColorId(product.color?.id || null);
+    const leafCategoryIdRaw = product.category?.id
+      ?? (product.categoryId != null ? Number(product.categoryId) : null);
+    const parentCategoryIdRaw = product.category?.parent?.id
+      ?? (product.categoryParentId != null ? Number(product.categoryParentId) : null);
+
+    const hasParent = parentCategoryIdRaw != null;
+    const mainCategoryIdNumeric = hasParent ? parentCategoryIdRaw : leafCategoryIdRaw;
+    const subcategoryIdNumeric = hasParent ? leafCategoryIdRaw : null;
+
+    setFormData(prev => ({
+      ...prev,
+      name: product.name || '',
+      description: product.description || '',
+      sku: product.sku || '',
+      price: product.price || '',
+      weight: product.weight || '',
+      dimensions: product.dimensions || '',
+      lengthCm: product.lengthCm || '',
+      widthCm: product.widthCm || '',
+      heightCm: product.heightCm || '',
+      shippingRate: product.shippingRate || '',
+      vatRate: product.vatRate || '',
+      sctRate: product.sctRate || '',
+      categoryId: mainCategoryIdNumeric != null ? String(mainCategoryIdNumeric) : '',
+      subcategoryId: subcategoryIdNumeric != null ? String(subcategoryIdNumeric) : '',
+      isActive: product.isActive !== false
+    }));
+    const resolvedBrandId = product.brand?.id
+      ?? (product.brandId != null ? Number(product.brandId) : null);
+    const resolvedColorId = product.color?.id
+      ?? (product.colorId != null ? Number(product.colorId) : null);
+
+    setBrandId(resolvedBrandId);
+    setColorId(resolvedColorId);
+
+    if (mainCategoryIdNumeric != null) {
+      (async () => {
+        const subs = await fetchSubcategories(mainCategoryIdNumeric);
+        if (subcategoryIdNumeric != null && Array.isArray(subs) && subs.some(s => String(s.id) === String(subcategoryIdNumeric))) {
+          setFormData(prev => ({ ...prev, subcategoryId: String(subcategoryIdNumeric) }));
+        }
+      })();
+    } else {
+      setSubcategories([]);
     }
   }, [product]);
 
@@ -100,8 +124,10 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
     try {
       const response = await axios.get(`/api/categories/${parentId}/subcategories`);
       setSubcategories(response.data);
+      return response.data;
     } catch (error) {
       console.error('Error fetching subcategories:', error);
+      return [];
     }
   };
 
@@ -192,11 +218,12 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
       onSuccess();
     } catch (error) {
       console.error('Error saving product:', error);
-      if (error.response?.data) {
-        setErrors({ general: error.response.data });
-      } else {
-        setErrors({ general: 'Ürün kaydedilirken hata oluştu' });
-      }
+      const errorData = error?.response?.data;
+      const friendlyMessage = errorData?.message
+        || errorData?.error
+        || (typeof errorData === 'string' ? errorData : null)
+        || 'Ürün kaydedilirken beklenmeyen bir hata oluştu. Lütfen tekrar deneyin.';
+      setErrors({ general: friendlyMessage });
     } finally {
       setLoading(false);
     }
@@ -473,7 +500,7 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
             >
               <option value="">Ana kategori seçin</option>
               {mainCategories.map((category) => (
-                <option key={category.id} value={category.id}>
+                <option key={category.id} value={String(category.id)}>
                   {category.name}
                 </option>
               ))}
@@ -498,7 +525,7 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
             >
               <option value="">Alt kategori seçin (opsiyonel)</option>
               {subcategories.map((subcategory) => (
-                <option key={subcategory.id} value={subcategory.id}>
+                <option key={subcategory.id} value={String(subcategory.id)}>
                   {subcategory.name}
                 </option>
               ))}

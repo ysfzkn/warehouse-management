@@ -3,6 +3,9 @@ package com.warehouse.exception;
 import com.warehouse.dto.ErrorResponse;
 import com.warehouse.dto.ValidationErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.ConstraintViolationException;
+import org.hibernate.LazyInitializationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
@@ -14,6 +17,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -67,6 +71,49 @@ public class GlobalExceptionHandler {
         );
         logger.warn("Validation error at path={} details={}", request.getRequestURI(), fieldErrors);
         return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ErrorResponse> handleConstraintViolationException(
+            ConstraintViolationException ex, HttpServletRequest request) {
+        
+        String errorMessage = ex.getConstraintViolations().stream()
+                .map(ConstraintViolation::getMessage)
+                .collect(Collectors.joining(", "));
+        
+        // Türkçe mesajları daha anlaşılır hale getir
+        if (errorMessage.contains("Reserved quantity cannot be negative")) {
+            errorMessage = "Rezerve miktarı negatif olamaz. Transfer iptal edilirken rezerve miktarı yetersiz olduğu için bu hata oluştu.";
+        } else if (errorMessage.contains("cannot be negative")) {
+            errorMessage = "Miktar negatif olamaz: " + errorMessage;
+        }
+
+        ErrorResponse errorResponse = new ErrorResponse(
+                ErrorCode.VALUE_CANNOT_BE_NEGATIVE.getCode(),
+                HttpStatus.BAD_REQUEST.value(),
+                HttpStatus.BAD_REQUEST.name(),
+                errorMessage,
+                request.getRequestURI()
+        );
+        logger.warn("Constraint violation at path={} message={}", request.getRequestURI(), errorMessage);
+        return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(LazyInitializationException.class)
+    public ResponseEntity<ErrorResponse> handleLazyInitializationException(
+            LazyInitializationException ex, HttpServletRequest request) {
+        
+        logger.error("LazyInitializationException at path={} - This indicates a transaction management issue. " +
+                "Ensure all entity relationships are eagerly fetched when needed.", request.getRequestURI(), ex);
+        
+        ErrorResponse errorResponse = new ErrorResponse(
+                ErrorCode.INTERNAL_SERVER_ERROR.getCode(),
+                HttpStatus.INTERNAL_SERVER_ERROR.value(),
+                HttpStatus.INTERNAL_SERVER_ERROR.name(),
+                "Veri yükleme hatası oluştu. Lütfen sayfayı yenileyip tekrar deneyin.",
+                request.getRequestURI()
+        );
+        return new ResponseEntity<>(errorResponse, HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
     @ExceptionHandler(Exception.class)

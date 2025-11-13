@@ -90,6 +90,13 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional(readOnly = true)
+    public Optional<Product> getProductByIdWithRelations(Long id) {
+        logger.debug("Fetching product with relations by id: {}", id);
+        return productRepository.findByIdWithRelations(id);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Optional<Product> getProductBySku(String sku) {
         logger.debug("Fetching product by SKU: {}", sku);
         return productRepository.findBySku(sku);
@@ -133,7 +140,7 @@ public class ProductServiceImpl implements ProductService {
 
         Product saved = productRepository.save(product);
         logger.info("Product created successfully with id: {}", saved.getId());
-        return saved;
+        return productRepository.findByIdWithRelations(saved.getId()).orElse(saved);
     }
 
     @Override
@@ -149,7 +156,7 @@ public class ProductServiceImpl implements ProductService {
 
         Product saved = productRepository.save(product);
         logger.info("Product updated successfully with id: {}", saved.getId());
-        return saved;
+        return productRepository.findByIdWithRelations(saved.getId()).orElse(saved);
     }
 
     @Override

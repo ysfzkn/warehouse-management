@@ -20,6 +20,7 @@ const Products = () => {
   const [selectedBrandOpt, setSelectedBrandOpt] = useState(null);
   const [selectedColorOpt, setSelectedColorOpt] = useState(null);
   const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null });
+  const [errorModal, setErrorModal] = useState({ show: false, title: '', message: '' });
   const [showDetailedPrice, setShowDetailedPrice] = useState(true);
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [bulkMode, setBulkMode] = useState('PERCENTAGE');
@@ -158,7 +159,13 @@ const Products = () => {
       }
       fetchProducts();
     } catch (error) {
-      alert('Durum değiştirilirken hata oluştu: ' + error.response?.data);
+      const errorData = error?.response?.data;
+      const message = errorData?.message || errorData?.error || (typeof errorData === 'string' ? errorData : 'Durum değiştirilirken beklenmeyen bir hata oluştu.');
+      setErrorModal({
+        show: true,
+        title: 'Durum Güncelleme Hatası',
+        message
+      });
     }
   };
 
@@ -616,6 +623,18 @@ const Products = () => {
         onCancel={() => setConfirmModal({ show: false, title: '', message: '', onConfirm: null })}
       />
 
+      <ConfirmModal
+        show={errorModal.show}
+        title={errorModal.title || 'Hata'}
+        message={errorModal.message}
+        icon="exclamation-triangle"
+        confirmVariant="danger"
+        confirmText="Tamam"
+        cancelText={null}
+        onConfirm={() => setErrorModal({ show: false, title: '', message: '' })}
+        onCancel={() => setErrorModal({ show: false, title: '', message: '' })}
+      />
+
       {/* Bulk Price Modal */}
       {showBulkModal && (
         <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
@@ -670,7 +689,11 @@ const Products = () => {
                   onClick={async () => {
                     const val = parseFloat(bulkValue);
                     if (!bulkValue || isNaN(val) || val <= 0) {
-                      alert('Lütfen geçerli bir değer girin');
+                      setErrorModal({
+                        show: true,
+                        title: 'Geçersiz Değer',
+                        message: 'Lütfen geçerli bir değer girin.'
+                      });
                       return;
                     }
                     try {
@@ -695,8 +718,13 @@ const Products = () => {
                       setBulkValue('');
                       await fetchProducts();
                     } catch (error) {
-                      const msg = error.response?.data?.message || error.response?.data || 'Güncelleme sırasında hata oluştu';
-                      alert(msg);
+                      const errorData = error?.response?.data;
+                      const message = errorData?.message || errorData?.error || (typeof errorData === 'string' ? errorData : 'Toplu fiyat güncellemesi sırasında beklenmeyen bir hata oluştu.');
+                      setErrorModal({
+                        show: true,
+                        title: 'Toplu Fiyat Güncelleme Hatası',
+                        message
+                      });
                     }
                   }}
                 >

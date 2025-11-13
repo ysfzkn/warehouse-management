@@ -256,6 +256,7 @@ const Stock = () => {
   
   // Modal states
   const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null });
+  const [errorModal, setErrorModal] = useState({ show: false, title: '', message: '' });
   const [notesModal, setNotesModal] = useState({ show: false, notes: '', transferId: null });
   const [cancellationModal, setCancellationModal] = useState({ show: false, transferId: null, reason: '' });
   const [auditModal, setAuditModal] = useState({ show: false, entityType: null, entityId: null });
@@ -483,8 +484,13 @@ const Stock = () => {
           await axios.delete(`/api/stocks/${id}`);
           fetchAllData();
         } catch (error) {
-          const msg = error?.response?.data?.message || 'Beklenmeyen bir durum oluştu';
-          alert('Stok silinirken hata oluştu: ' + msg);
+          const errorData = error?.response?.data;
+          const msg = errorData?.message || errorData?.error || 'Beklenmeyen bir durum oluştu';
+          setErrorModal({
+            show: true,
+            title: 'Stok Silme Hatası',
+            message: `Stok silinirken hata oluştu: ${msg}`
+          });
         }
       }
     });
@@ -538,8 +544,31 @@ const Stock = () => {
       fetchTransfers();
       fetchAllData();
     } catch (error) {
-      const msg = error?.response?.data?.message || 'Beklenmeyen bir durum oluştu';
-      alert(`Transfer ${action} işlemi sırasında hata: ${msg}`);
+      const errorData = error?.response?.data;
+      let errorMessage = 'Beklenmeyen bir durum oluştu';
+      
+      if (errorData) {
+        if (errorData.message) {
+          errorMessage = errorData.message;
+        } else if (errorData.error) {
+          errorMessage = errorData.error;
+        } else if (typeof errorData === 'string') {
+          errorMessage = errorData;
+        }
+      }
+      
+      const actionNames = {
+        'cancel': 'iptal',
+        'start': 'başlatma',
+        'complete': 'tamamlama'
+      };
+      const actionName = actionNames[action] || action;
+      
+      setErrorModal({
+        show: true,
+        title: 'Transfer İşlemi Hatası',
+        message: `Transfer ${actionName} işlemi sırasında hata oluştu: ${errorMessage}`
+      });
     }
   };
 
@@ -557,7 +586,13 @@ const Stock = () => {
           await axios.delete(`/api/stock-transfers/${transferId}`);
           fetchTransfers();
         } catch (error) {
-          alert('Transfer silinirken hata: ' + (error.response?.data || error.message));
+          const errorData = error?.response?.data;
+          const msg = errorData?.message || errorData?.error || error.message || 'Beklenmeyen bir durum oluştu';
+          setErrorModal({
+            show: true,
+            title: 'Transfer Silme Hatası',
+            message: `Transfer silinirken hata oluştu: ${msg}`
+          });
         }
       }
     });
@@ -1609,6 +1644,19 @@ const Stock = () => {
         icon={confirmModal.icon}
         onConfirm={confirmModal.onConfirm}
         onCancel={() => setConfirmModal({ show: false })}
+      />
+
+      {/* Error Modal */}
+      <ConfirmModal
+        show={errorModal.show}
+        title={errorModal.title}
+        message={errorModal.message}
+        confirmText="Tamam"
+        cancelText={null}
+        confirmVariant="danger"
+        icon="exclamation-triangle"
+        onConfirm={() => setErrorModal({ show: false, title: '', message: '' })}
+        onCancel={() => setErrorModal({ show: false, title: '', message: '' })}
       />
 
       {/* Notes Modal */}

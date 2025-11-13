@@ -80,14 +80,14 @@ public class StockImportServiceImpl implements StockImportService {
 
         Row header = sheet.createRow(0);
         String[] headers = {
-            "Product Name (required)",
-            "Stock Code (required)",
-            "Category Name (required)",
-            "Quantity (required)",
-            "Consigned (optional)",
-            "Price (optional)",
-            "Minimum Stock (optional)",
-            "Reserved (optional)"
+            "Ürün Adı (zorunlu)",
+            "Stok Kodu (zorunlu)",
+            "Kategori Adı (zorunlu)",
+            "Miktar (zorunlu)",
+            "Emanet (opsiyonel)",
+            "Fiyat (opsiyonel)",
+            "Minimum Stok (opsiyonel)",
+            "Rezerve (opsiyonel)"
         };
 
         for (int i = 0; i < headers.length; i++) {
@@ -264,10 +264,10 @@ public class StockImportServiceImpl implements StockImportService {
 
     private String buildMissingFieldsReason(RowData rowData) {
         List<String> missingFields = new ArrayList<>();
-        if (isBlank(rowData.getName())) missingFields.add("Product Name");
-        if (isBlank(rowData.getSku())) missingFields.add("Stock Code");
-        if (isBlank(rowData.getCategoryName())) missingFields.add("Category Name");
-        if (isBlank(rowData.getQuantity())) missingFields.add("Quantity");
+        if (isBlank(rowData.getName())) missingFields.add("Ürün Adı");
+        if (isBlank(rowData.getSku())) missingFields.add("Stok Kodu");
+        if (isBlank(rowData.getCategoryName())) missingFields.add("Kategori Adı");
+        if (isBlank(rowData.getQuantity())) missingFields.add("Miktar");
         return ImportMessages.MISSING_REQUIRED_PREFIX + String.join(", ", missingFields);
     }
 

@@ -21,6 +21,8 @@ public interface ProductService {
 
     Optional<Product> getProductByIdWithStocks(Long id);
 
+    Optional<Product> getProductByIdWithRelations(Long id);
+
     Optional<Product> getProductBySku(String sku);
 
     List<Product> getProductsByCategory(Long categoryId);

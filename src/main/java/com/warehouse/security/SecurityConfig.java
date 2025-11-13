@@ -35,6 +35,9 @@ public class SecurityConfig {
                         .requestMatchers(ApiPaths.STREAM).hasAnyRole("ADMIN", "STANDARD")
                         // Stock management and transfers fully available to ADMIN and STANDARD
                         .requestMatchers(ApiPaths.STOCKS, ApiPaths.STOCK_TRANSFERS).hasAnyRole("ADMIN", "STANDARD")
+                        // Excel template download and upload available to ADMIN and STANDARD
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/stock-imports/template").hasAnyRole("ADMIN", "STANDARD")
+                        .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/stock-imports/upload").hasAnyRole("ADMIN", "STANDARD")
                         // Read-only supporting data for stock page
                         .requestMatchers(org.springframework.http.HttpMethod.GET,
                                 ApiPaths.PRODUCTS,

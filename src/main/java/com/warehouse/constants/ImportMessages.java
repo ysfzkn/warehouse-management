@@ -8,7 +8,7 @@ public final class ImportMessages {
     private ImportMessages() {}
 
     public static final String STORAGE_DIR = "uploads/stock-imports";
-    public static final String TEMPLATE_SHEET_NAME = "Stock Template";
+    public static final String TEMPLATE_SHEET_NAME = "Stok Şablonu";
 
     public static final String CONTENT_TYPE_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
@@ -20,10 +20,10 @@ public final class ImportMessages {
     public static final String STATUS_TR_FAILED = "BAŞARISIZ";
     public static final String STATUS_TR_PARTIAL = "KISMEN";
 
-    public static final String MISSING_REQUIRED_PREFIX = "Missing required fields: ";
-    public static final String NO_ROWS_PROCESSED = "No rows were processed";
-    public static final String SKIPPED_ROWS_TEMPLATE = "%d rows were skipped (missing required fields or errors)";
-    public static final String ERROR_PREFIX = "Error: ";
+    public static final String MISSING_REQUIRED_PREFIX = "Eksik zorunlu alanlar: ";
+    public static final String NO_ROWS_PROCESSED = "İşlenen satır bulunamadı";
+    public static final String SKIPPED_ROWS_TEMPLATE = "%d satır atlandı (eksik zorunlu alanlar veya hatalar)";
+    public static final String ERROR_PREFIX = "Hata: ";
 }
 
 
