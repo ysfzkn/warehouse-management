@@ -2,8 +2,10 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useLocation } from 'react-router-dom';
 import axios from 'axios';
 import StockForm from '../components/StockForm';
-import StockAdjustmentModal from '../components/StockAdjustmentModal';
+import QuickStockAdjustModal from '../components/QuickStockAdjustModal';
+import StockSettingsModal from '../components/StockSettingsModal';
 import StockTransferModal from '../components/StockTransferModal';
+import StockRequestApprovalModal from '../components/StockRequestApprovalModal';
 import SearchableSelect from '../components/SearchableSelect';
 import FilterChips from '../components/FilterChips';
 import ConfirmModal from '../components/ConfirmModal';
@@ -223,7 +225,8 @@ const Stock = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showForm, setShowForm] = useState(false);
-  const [showAdjustmentModal, setShowAdjustmentModal] = useState(false);
+  const [quickAdjustModal, setQuickAdjustModal] = useState({ show: false, stock: null, type: null });
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [showTransferHistory, setShowTransferHistory] = useState(false);
   const [selectedStock, setSelectedStock] = useState(null);
@@ -266,26 +269,39 @@ const Stock = () => {
   const [excelFile, setExcelFile] = useState(null);
   const [excelWarehouseId, setExcelWarehouseId] = useState(null);
   const [excelResult, setExcelResult] = useState(null);
+  const [showApprovalModal, setShowApprovalModal] = useState(false);
+  const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
 
   const fetchAllData = useCallback(async () => {
     try {
       setLoading(true);
-      const [stocksRes, productsRes, warehousesRes] = await Promise.all([
+      const calls = [
         axios.get('/api/stocks', { params: { brandId, colorId, warehouseId: selectedWarehouseId || undefined } }),
         axios.get('/api/products'),
         axios.get('/api/warehouses')
-      ]);
+      ];
+      
+      // Fetch pending requests count for admins
+      if (role === 'ADMIN') {
+        calls.push(axios.get('/api/stock-requests/pending/count'));
+      }
 
-      setStocks(stocksRes.data);
-      setProducts(productsRes.data);
-      setWarehouses(warehousesRes.data);
+      const results = await Promise.all(calls);
+
+      setStocks(results[0].data);
+      setProducts(results[1].data);
+      setWarehouses(results[2].data);
+      
+      if (role === 'ADMIN' && results[3]) {
+        setPendingRequestsCount(results[3].data.count || 0);
+      }
     } catch (error) {
       console.error('Error fetching data:', error);
       setError('Veriler yüklenirken hata oluştu');
     } finally {
       setLoading(false);
     }
-  }, [brandId, colorId, selectedWarehouseId]);
+  }, [brandId, colorId, selectedWarehouseId, role]);
 
   useEffect(() => {
     fetchAllData();
@@ -369,13 +385,34 @@ const Stock = () => {
     return () => window.removeEventListener('open-audit', handler);
   }, []);
 
-  // Open stock adjustment modal when stocks loaded and pendingStockId exists
+  // Listen to global event to open stock approval modal from Navbar
+  useEffect(() => {
+    const handler = () => {
+      setShowApprovalModal(true);
+    };
+    window.addEventListener('open-stock-approval', handler);
+    return () => window.removeEventListener('open-stock-approval', handler);
+  }, []);
+
+  // Check URL parameter to open approval modal
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get('openApproval') === 'true') {
+      setShowApprovalModal(true);
+      // Clean up URL parameter
+      params.delete('openApproval');
+      const newSearch = params.toString();
+      const newUrl = newSearch ? `${location.pathname}?${newSearch}` : location.pathname;
+      window.history.replaceState({}, '', newUrl);
+    }
+  }, [location.search]);
+
+  // Open quick adjustment modal when stocks loaded and pendingStockId exists
   useEffect(() => {
     if (!pendingStockId || !Array.isArray(stocks) || stocks.length === 0) return;
     const s = stocks.find(x => x.id === pendingStockId);
     if (s) {
-      setSelectedStock(s);
-      setShowAdjustmentModal(true);
+      setQuickAdjustModal({ show: true, stock: s, type: 'add' });
       setPendingStockId(null);
     }
   }, [stocks, pendingStockId]);
@@ -465,9 +502,17 @@ const Stock = () => {
     setShowForm(true);
   };
 
-  const handleStockAdjustment = (stock) => {
+  const handleQuickAdd = (stock) => {
+    setQuickAdjustModal({ show: true, stock, type: 'add' });
+  };
+
+  const handleQuickRemove = (stock) => {
+    setQuickAdjustModal({ show: true, stock, type: 'remove' });
+  };
+
+  const handleStockSettings = (stock) => {
     setSelectedStock(stock);
-    setShowAdjustmentModal(true);
+    setShowSettingsModal(true);
   };
 
   const handleDeleteStock = async (id) => {
@@ -501,8 +546,13 @@ const Stock = () => {
     fetchAllData();
   };
 
-  const handleAdjustmentSuccess = () => {
-    setShowAdjustmentModal(false);
+  const handleQuickAdjustSuccess = () => {
+    setQuickAdjustModal({ show: false, stock: null, type: null });
+    fetchAllData();
+  };
+
+  const handleSettingsSuccess = () => {
+    setShowSettingsModal(false);
     setSelectedStock(null);
     fetchAllData();
   };
@@ -667,38 +717,72 @@ const Stock = () => {
   return (
     <div>
       <div className="d-flex justify-content-between align-items-center mb-4">
-        <h2>Stok Yönetimi</h2>
-        <div className="btn-group">
-          <button className="btn btn-outline-success" onClick={async () => {
-            try {
-              const res = await axios.get('/api/stock-imports/template', { responseType: 'blob' });
-              const url = window.URL.createObjectURL(new Blob([res.data]));
-              const link = document.createElement('a');
-              link.href = url;
-              link.setAttribute('download', 'stok_sablon.xlsx');
-              document.body.appendChild(link);
-              link.click();
-              link.remove();
-              window.URL.revokeObjectURL(url);
-            } catch (e) {
-              setError('Excel şablonu indirilirken hata oluştu');
-            }
-          }}>
-            <i className="fas fa-download me-2"></i>
-            Excel Şablonunu İndir
-          </button>
-          <button className="btn btn-outline-primary" onClick={() => { setExcelResult(null); setExcelFile(null); setExcelWarehouseId(null); setShowExcelModal(true); }}>
-            <i className="fas fa-file-import me-2"></i>
-            Excel'den Yükle
-          </button>
-          <button className="btn btn-success" onClick={handleShowTransferHistory}>
-            <i className={`fas fa-${showTransferHistory ? 'cubes' : 'exchange-alt'} me-2`}></i>
-            {showTransferHistory ? 'Stok Listesi' : 'Transfer Geçmişi'}
-          </button>
-          <button className="btn btn-primary" onClick={handleCreateStock}>
-            <i className="fas fa-plus me-2"></i>
-            Yeni Stok Kaydı
-          </button>
+        <h2>
+          <i className="fas fa-boxes me-2"></i>
+          Stok Yönetimi
+        </h2>
+        <div className="btn-group flex-wrap" role="group">
+          {role === 'ADMIN' && (
+            <>
+              <button className="btn btn-outline-success" onClick={async () => {
+                try {
+                  const res = await axios.get('/api/stock-imports/template', { responseType: 'blob' });
+                  const url = window.URL.createObjectURL(new Blob([res.data]));
+                  const link = document.createElement('a');
+                  link.href = url;
+                  link.setAttribute('download', 'stok_sablon.xlsx');
+                  document.body.appendChild(link);
+                  link.click();
+                  link.remove();
+                  window.URL.revokeObjectURL(url);
+                } catch (e) {
+                  setError('Excel şablonu indirilirken hata oluştu');
+                }
+              }}>
+                <i className="fas fa-download me-2"></i>
+                Excel Şablonunu İndir
+              </button>
+              <button className="btn btn-outline-primary" onClick={() => { setExcelResult(null); setExcelFile(null); setExcelWarehouseId(null); setShowExcelModal(true); }}>
+                <i className="fas fa-file-import me-2"></i>
+                Excel'den Yükle
+              </button>
+              <button 
+                className="btn btn-warning position-relative" 
+                onClick={() => setShowApprovalModal(true)}
+                title="Stok talep onayları"
+                style={{ zIndex: 1 }}
+              >
+                <i className="fas fa-tasks me-2"></i>
+                Onay Bekleyenler
+                {pendingRequestsCount > 0 && (
+                  <span 
+                    className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+                    style={{ zIndex: 10 }}
+                  >
+                    {pendingRequestsCount}
+                    <span className="visually-hidden">bekleyen talepler</span>
+                  </span>
+                )}
+              </button>
+              <button className="btn btn-success" onClick={handleShowTransferHistory}>
+                <i className={`fas fa-${showTransferHistory ? 'cubes' : 'exchange-alt'} me-2`}></i>
+                {showTransferHistory ? 'Stok Listesi' : 'Transfer Geçmişi'}
+              </button>
+              <button className="btn btn-primary" onClick={handleCreateStock}>
+                <i className="fas fa-plus me-2"></i>
+                Yeni Stok Kaydı
+              </button>
+            </>
+          )}
+          {(role === 'STOCK_IN' || role === 'STOCK_OUT') && (
+            <div className="alert alert-info mb-0 py-2 px-3 d-flex align-items-center">
+              <i className="fas fa-info-circle me-2"></i>
+              <span>
+                {role === 'STOCK_IN' && 'Stok ekleme talepleri oluşturabilirsiniz'}
+                {role === 'STOCK_OUT' && 'Stok çıkarma talepleri oluşturabilirsiniz'}
+              </span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -943,35 +1027,62 @@ const Stock = () => {
                       </td>
                       <td>
                         <div className="btn-group" role="group">
-                          <button
-                            className="btn btn-sm btn-outline-success"
-                            onClick={() => handleStockTransfer(stock)}
-                            title="Transfer Yap"
-                          >
-                            <i className="fas fa-exchange-alt"></i>
-                          </button>
+                          {/* Quick Add Button - for ADMIN and STOCK_IN */}
+                          {(role === 'ADMIN' || role === 'STOCK_IN') && (
+                            <button
+                              className="btn btn-sm btn-success"
+                              onClick={() => handleQuickAdd(stock)}
+                              title="Hızlı Stok Ekle"
+                            >
+                              <i className="fas fa-plus"></i>
+                            </button>
+                          )}
+                          
+                          {/* Quick Remove Button - for ADMIN and STOCK_OUT */}
+                          {(role === 'ADMIN' || role === 'STOCK_OUT') && (
+                            <button
+                              className="btn btn-sm btn-danger"
+                              onClick={() => handleQuickRemove(stock)}
+                              title="Hızlı Stok Çıkar"
+                            >
+                              <i className="fas fa-minus"></i>
+                            </button>
+                          )}
+                          
+                          {/* Settings Button - for viewing (all), editing (ADMIN only) */}
                           <button
                             className="btn btn-sm btn-outline-primary"
-                            onClick={() => handleStockAdjustment(stock)}
-                            title="Stok Ayarla"
+                            onClick={() => handleStockSettings(stock)}
+                            title={role === 'ADMIN' ? 'Ayarlar (Emanet, Min Stok)' : 'Stok Detayları'}
                           >
-                            <i className="fas fa-edit"></i>
+                            <i className="fas fa-cog"></i>
                           </button>
-                          <button
-                            className="btn btn-sm btn-outline-danger"
-                            onClick={() => handleDeleteStock(stock.id)}
-                            title="Stok Kaydını Sil"
-                          >
-                            <i className="fas fa-trash"></i>
-                          </button>
+                          
+                          {/* Transfer Button - ADMIN only */}
                           {role === 'ADMIN' && (
-                            <button
-                              className="btn btn-sm btn-outline-secondary"
-                              onClick={() => setAuditModal({ show: true, entityType: 'Stock', entityId: stock.id })}
-                              title="Hareket Geçmişi"
-                            >
-                              <i className="fas fa-history"></i>
-                            </button>
+                            <>
+                              <button
+                                className="btn btn-sm btn-outline-success"
+                                onClick={() => handleStockTransfer(stock)}
+                                title="Transfer Yap"
+                              >
+                                <i className="fas fa-exchange-alt"></i>
+                              </button>
+                              <button
+                                className="btn btn-sm btn-outline-danger"
+                                onClick={() => handleDeleteStock(stock.id)}
+                                title="Stok Kaydını Sil"
+                              >
+                                <i className="fas fa-trash"></i>
+                              </button>
+                              <button
+                                className="btn btn-sm btn-outline-secondary"
+                                onClick={() => setAuditModal({ show: true, entityType: 'Stock', entityId: stock.id })}
+                                title="Hareket Geçmişi"
+                              >
+                                <i className="fas fa-history"></i>
+                              </button>
+                            </>
                           )}
                         </div>
                       </td>
@@ -1029,12 +1140,25 @@ const Stock = () => {
         </div>
       )}
 
-      {/* Stock Adjustment Modal */}
-      {showAdjustmentModal && selectedStock && (
-        <StockAdjustmentModal
+      {/* Quick Stock Adjustment Modal */}
+      {quickAdjustModal.show && quickAdjustModal.stock && (
+        <QuickStockAdjustModal
+          stock={quickAdjustModal.stock}
+          type={quickAdjustModal.type}
+          onSuccess={handleQuickAdjustSuccess}
+          onClose={() => setQuickAdjustModal({ show: false, stock: null, type: null })}
+        />
+      )}
+
+      {/* Stock Settings Modal */}
+      {showSettingsModal && selectedStock && (
+        <StockSettingsModal
           stock={selectedStock}
-          onSuccess={handleAdjustmentSuccess}
-          onClose={() => setShowAdjustmentModal(false)}
+          onSuccess={handleSettingsSuccess}
+          onClose={() => {
+            setShowSettingsModal(false);
+            setSelectedStock(null);
+          }}
         />
       )}
 
@@ -1744,6 +1868,16 @@ const Stock = () => {
           entityType={auditModal.entityType}
           entityId={auditModal.entityId}
           onClose={() => setAuditModal({ show: false, entityType: null, entityId: null })}
+        />
+      )}
+
+      {/* Stock Request Approval Modal */}
+      {showApprovalModal && (
+        <StockRequestApprovalModal
+          onClose={() => setShowApprovalModal(false)}
+          onApprove={() => {
+            fetchAllData();
+          }}
         />
       )}
     </div>

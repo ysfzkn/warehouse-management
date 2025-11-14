@@ -21,6 +21,11 @@ public final class NotificationMessages {
     public static final String TRANSFER_CANCELLED_TITLE = "Transfer iptal edildi";
     public static final String TRANSFER_UPDATED_TITLE = "Transfer güncellendi";
     public static final String TRANSFER_DELETED_TITLE = "Transfer silindi";
+
+    // Stock request notifications
+    public static final String STOCK_REQUEST_CREATED_TITLE = "Yeni Stok Talebi";
+    public static final String STOCK_REQUEST_APPROVED_TITLE = "Stok Talebi Onaylandı";
+    public static final String STOCK_REQUEST_REJECTED_TITLE = "Stok Talebi Reddedildi";
 }
 
 

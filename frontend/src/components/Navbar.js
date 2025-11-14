@@ -379,7 +379,18 @@ const Navbar = () => {
                                   onClick={async () => {
                                     const title = (n.title || '').toLowerCase();
                                     const isTransfer = n.entityType === 'StockTransfer' || title.includes('transfer');
-                                    if (isTransfer) {
+                                    const isStockRequest = n.entityType === 'StockRequest';
+                                    
+                                    if (isStockRequest) {
+                                      // For stock request notifications, open approval modal
+                                      if (location.pathname === '/stock') {
+                                        try {
+                                          window.dispatchEvent(new CustomEvent('open-stock-approval'));
+                                        } catch {}
+                                      } else {
+                                        navigate('/stock?openApproval=true');
+                                      }
+                                    } else if (isTransfer) {
                                       // For transfer notifications, open transfer audit timeline
                                       if (location.pathname === '/stock') {
                                         try {
@@ -460,7 +471,11 @@ const Navbar = () => {
                 <div className="user-dropdown">
                   <div className="p-3 border-bottom">
                     <div className="fw-bold text-dark">{localStorage.getItem('auth_user') || 'Admin'}</div>
-                    <small className="text-muted">{role === 'ADMIN' ? 'Yönetici' : 'Standart'}</small>
+                    <small className="text-muted">
+                      {role === 'ADMIN' && 'Yönetici'}
+                      {role === 'STOCK_IN' && 'Stok Giriş Sorumlusu'}
+                      {role === 'STOCK_OUT' && 'Stok Çıkış Sorumlusu'}
+                    </small>
                   </div>
                   <div className="dropdown-item-custom text-danger" onClick={handleLogout}>
                     <i className="fas fa-sign-out-alt me-2"></i>

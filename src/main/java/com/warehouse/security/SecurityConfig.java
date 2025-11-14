@@ -32,12 +32,23 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(ApiPaths.AUTH, ApiPaths.ACTUATOR, ApiPaths.INFO, ApiPaths.ERROR).permitAll()
                         // SSE stream available to authenticated roles
-                        .requestMatchers(ApiPaths.STREAM).hasAnyRole("ADMIN", "STANDARD")
-                        // Stock management and transfers fully available to ADMIN and STANDARD
-                        .requestMatchers(ApiPaths.STOCKS, ApiPaths.STOCK_TRANSFERS).hasAnyRole("ADMIN", "STANDARD")
-                        // Excel template download and upload available to ADMIN and STANDARD
-                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/stock-imports/template").hasAnyRole("ADMIN", "STANDARD")
-                        .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/stock-imports/upload").hasAnyRole("ADMIN", "STANDARD")
+                        .requestMatchers(ApiPaths.STREAM).hasAnyRole("ADMIN", "STOCK_IN", "STOCK_OUT")
+                        // Stock viewing available to all authenticated users
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, ApiPaths.STOCKS).hasAnyRole("ADMIN", "STOCK_IN", "STOCK_OUT")
+                        // Stock add operation - ADMIN and STOCK_IN
+                        .requestMatchers(org.springframework.http.HttpMethod.PUT, "/api/stocks/*/add").hasAnyRole("ADMIN", "STOCK_IN")
+                        // Stock remove operation - ADMIN and STOCK_OUT
+                        .requestMatchers(org.springframework.http.HttpMethod.PUT, "/api/stocks/*/remove").hasAnyRole("ADMIN", "STOCK_OUT")
+                        // Other stock operations - ADMIN only
+                        .requestMatchers(org.springframework.http.HttpMethod.PUT, ApiPaths.STOCKS).hasRole("ADMIN")
+                        .requestMatchers(org.springframework.http.HttpMethod.POST, ApiPaths.STOCKS).hasRole("ADMIN")
+                        .requestMatchers(org.springframework.http.HttpMethod.DELETE, ApiPaths.STOCKS).hasRole("ADMIN")
+                        // Stock requests - create/view for STOCK_IN and STOCK_OUT users
+                        .requestMatchers("/api/stock-requests/**").hasAnyRole("ADMIN", "STOCK_IN", "STOCK_OUT")
+                        // Stock transfers fully available to ADMIN only
+                        .requestMatchers(ApiPaths.STOCK_TRANSFERS).hasRole("ADMIN")
+                        // Excel operations only for ADMIN
+                        .requestMatchers("/api/stock-imports/**").hasRole("ADMIN")
                         // Read-only supporting data for stock page
                         .requestMatchers(org.springframework.http.HttpMethod.GET,
                                 ApiPaths.PRODUCTS,
@@ -45,7 +56,7 @@ public class SecurityConfig {
                                 ApiPaths.CATEGORIES,
                                 ApiPaths.BRANDS,
                                 ApiPaths.COLORS
-                        ).hasAnyRole("ADMIN", "STANDARD")
+                        ).hasAnyRole("ADMIN", "STOCK_IN", "STOCK_OUT")
                         // Everything else admin-only
                         .requestMatchers(ApiPaths.ANY_API).hasRole("ADMIN")
                         .anyRequest().permitAll()

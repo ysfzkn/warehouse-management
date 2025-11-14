@@ -171,13 +171,13 @@ const EditModal = ({ title, fields, item, onClose, onSave, saving, error }) => {
 };
 
 const UserModal = ({ user, onClose, onSave, saving, error }) => {
-  const [form, setForm] = useState({ username: '', password: '', role: 'STANDARD' });
+  const [form, setForm] = useState({ username: '', password: '', role: 'STOCK_IN' });
 
   useEffect(() => {
     if (user) {
-      setForm({ username: user.username || '', password: '', role: user.role || 'STANDARD' });
+      setForm({ username: user.username || '', password: '', role: user.role || 'STOCK_IN' });
     } else {
-      setForm({ username: '', password: '', role: 'STANDARD' });
+      setForm({ username: '', password: '', role: 'STOCK_IN' });
     }
   }, [user]);
 
@@ -202,9 +202,15 @@ const UserModal = ({ user, onClose, onSave, saving, error }) => {
             <div className="mb-3">
               <label className="form-label">Yetki</label>
               <select className="form-select" value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}>
-                <option value="ADMIN">Admin</option>
-                <option value="STANDARD">Standart</option>
+                <option value="ADMIN">Yönetici (Tam Yetki)</option>
+                <option value="STOCK_IN">Stok Giriş Sorumlusu</option>
+                <option value="STOCK_OUT">Stok Çıkış Sorumlusu</option>
               </select>
+              <small className="text-muted d-block mt-1">
+                {form.role === 'ADMIN' && '✓ Tüm işlemleri yapabilir, Excel ile stok yükleyebilir'}
+                {form.role === 'STOCK_IN' && '✓ Sadece stok ekleme talebi oluşturabilir (Yönetici onayı gerekir)'}
+                {form.role === 'STOCK_OUT' && '✓ Sadece stok çıkarma talebi oluşturabilir (Yönetici onayı gerekir)'}
+              </small>
             </div>
           </div>
           <div className="modal-footer">
@@ -391,7 +397,11 @@ const AdminSettings = () => {
                   {!loading && users.map(u => (
                     <tr key={u.id}>
                       <td>{u.username}</td>
-                      <td>{u.role}</td>
+                      <td>
+                        <span className={`badge ${u.role === 'ADMIN' ? 'bg-danger' : u.role === 'STOCK_IN' ? 'bg-success' : 'bg-warning'}`}>
+                          {u.role === 'ADMIN' ? 'Yönetici' : u.role === 'STOCK_IN' ? 'Stok Giriş' : 'Stok Çıkış'}
+                        </span>
+                      </td>
                       <td>
                         <div className="btn-group btn-group-sm">
                           <button className="btn btn-outline-secondary" onClick={() => { setError(''); setEditing(u); }}>

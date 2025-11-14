@@ -40,7 +40,7 @@ function App() {
           <Route path="/warehouses" element={authed && role === 'ADMIN' ? <Warehouses /> : <Navigate to={authed ? '/stock' : '/login'} replace />} />
           <Route path="/products" element={authed && role === 'ADMIN' ? <Products /> : <Navigate to={authed ? '/stock' : '/login'} replace />} />
           <Route path="/categories" element={authed && role === 'ADMIN' ? <Categories /> : <Navigate to={authed ? '/stock' : '/login'} replace />} />
-          <Route path="/stock" element={authed && (role === 'ADMIN' || role === 'STANDARD') ? <Stock /> : <Navigate to="/login" replace />} />
+          <Route path="/stock" element={authed && (role === 'ADMIN' || role === 'STOCK_IN' || role === 'STOCK_OUT') ? <Stock /> : <Navigate to="/login" replace />} />
           <Route path="/stock-imports" element={authed && role === 'ADMIN' ? <StockImportHistory /> : <Navigate to={authed ? '/stock' : '/login'} replace />} />
           <Route path="/admin-settings" element={authed && role === 'ADMIN' ? <AdminSettings /> : <Navigate to={authed ? '/stock' : '/login'} replace />} />
           <Route path="/desi" element={authed && role === 'ADMIN' ? <DesiCalculator /> : <Navigate to={authed ? '/stock' : '/login'} replace />} />
