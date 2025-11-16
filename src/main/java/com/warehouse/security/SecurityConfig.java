@@ -45,8 +45,8 @@ public class SecurityConfig {
                         .requestMatchers(org.springframework.http.HttpMethod.DELETE, ApiPaths.STOCKS).hasRole("ADMIN")
                         // Stock requests - create/view for STOCK_IN and STOCK_OUT users
                         .requestMatchers("/api/stock-requests/**").hasAnyRole("ADMIN", "STOCK_IN", "STOCK_OUT")
-                        // Stock transfers fully available to ADMIN only
-                        .requestMatchers(ApiPaths.STOCK_TRANSFERS).hasRole("ADMIN")
+                        // Stock transfers available to all authenticated warehouse roles
+                        .requestMatchers(ApiPaths.STOCK_TRANSFERS).hasAnyRole("ADMIN", "STOCK_IN", "STOCK_OUT")
                         // Excel operations only for ADMIN
                         .requestMatchers("/api/stock-imports/**").hasRole("ADMIN")
                         // Read-only supporting data for stock page

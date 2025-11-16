@@ -6,6 +6,7 @@ import com.warehouse.entity.Product;
 import com.warehouse.entity.Warehouse;
 import com.warehouse.enums.AuditAction;
 import com.warehouse.enums.TransferStatus;
+import com.warehouse.enums.TransferType;
 import com.warehouse.exception.ErrorCode;
 import com.warehouse.exception.WarehouseManagementException;
 import com.warehouse.repository.StockTransferRepository;
@@ -22,6 +23,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.warehouse.constants.NotificationMessages;
 import com.warehouse.enums.DomainEntityType;
+import com.warehouse.enums.RoleName;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -110,13 +112,18 @@ public class StockTransferServiceImpl implements StockTransferService {
     @Override
     public StockTransfer createTransfer(StockTransfer transfer) {
         logger.info("Creating new transfer");
-        validateTransferCreation(transfer);
+        TransferType transferType = validateTransferCreation(transfer);
 
         Warehouse sourceWarehouse = findWarehouseOrThrow(transfer.getSourceWarehouse().getId());
-        Warehouse destinationWarehouse = findWarehouseOrThrow(transfer.getDestinationWarehouse().getId());
+        Warehouse destinationWarehouse = null;
+        if (transferType == TransferType.WAREHOUSE) {
+            destinationWarehouse = findWarehouseOrThrow(transfer.getDestinationWarehouse().getId());
+            EntityValidator.validateWarehousesDifferent(sourceWarehouse, destinationWarehouse);
+        } else if (transfer.getDestinationWarehouse() != null && transfer.getDestinationWarehouse().getId() != null) {
+            destinationWarehouse = findWarehouseOrThrow(transfer.getDestinationWarehouse().getId());
+        }
         Product product = findProductOrThrow(transfer.getProduct().getId());
 
-        EntityValidator.validateWarehousesDifferent(sourceWarehouse, destinationWarehouse);
         ValidationUtil.requirePositive(transfer.getQuantity(), "Quantity");
 
         validateSufficientStock(product, sourceWarehouse, transfer.getQuantity());
@@ -124,17 +131,19 @@ public class StockTransferServiceImpl implements StockTransferService {
         transfer.setSourceWarehouse(sourceWarehouse);
         transfer.setDestinationWarehouse(destinationWarehouse);
         transfer.setProduct(product);
+        transfer.setTransferType(transferType);
         transfer.setStatus(TransferStatus.PENDING);
 
         StockTransfer saved = stockTransferRepository.save(transfer);
         String username = CurrentUser.usernameOrSystem();
         auditService.log(AuditAction.TRANSFER_CREATE, DomainEntityType.StockTransfer.name(), saved.getId(), username,
-                String.format("Transfer oluşturuldu: %s → %s | Ürün=%s | Miktar=%d",
-                        sourceWarehouse.getName(), destinationWarehouse.getName(), product.getName(), saved.getQuantity()));
+                String.format("Transfer oluşturuldu: %s | Ürün=%s | Miktar=%d",
+                        describeRoute(saved), product.getName(), saved.getQuantity()));
         notificationService.create(NotificationMessages.TRANSFER_CREATED_TITLE,
-                String.format("Kullanıcı %s, %s -> %s yönünde %s ürünü için %d adet transfer oluşturdu.", username,
-                        sourceWarehouse.getName(), destinationWarehouse.getName(), product.getName(), saved.getQuantity()),
+                String.format("Kullanıcı %s, %s yönünde %s ürünü için %d adet transfer oluşturdu.", username,
+                        describeRoute(saved), product.getName(), saved.getQuantity()),
                 DomainEntityType.Stock.name(), saved.getId());
+        notifyAdminIfNonAdmin(saved, "oluşturdu");
         logger.info("Transfer created successfully with id: {}", saved.getId());
         
         // Fetch with relations again to avoid LazyInitializationException in mapper
@@ -161,12 +170,12 @@ public class StockTransferServiceImpl implements StockTransferService {
         StockTransfer saved = stockTransferRepository.save(transfer);
         String username = CurrentUser.usernameOrSystem();
         auditService.log(AuditAction.TRANSFER_START, DomainEntityType.StockTransfer.name(), saved.getId(), username,
-                String.format("Transfer yola çıkarıldı: %s → %s | Ürün=%s | Miktar=%d (Stok rezerve edildi)",
-                        saved.getSourceWarehouse().getName(), saved.getDestinationWarehouse().getName(),
-                        saved.getProduct().getName(), saved.getQuantity()));
+                String.format("Transfer yola çıkarıldı: %s | Ürün=%s | Miktar=%d (Stok rezerve edildi)",
+                        describeRoute(saved), saved.getProduct().getName(), saved.getQuantity()));
         notificationService.create(NotificationMessages.TRANSFER_STARTED_TITLE,
                 String.format("Kullanıcı %s, #%d numaralı transferi yola çıkardı.", username, saved.getId()),
                 DomainEntityType.Stock.name(), saved.getId());
+        notifyAdminIfNonAdmin(saved, "yola çıkardı");
         logger.info("Transfer started successfully with id: {}", saved.getId());
         
         // Fetch with relations again to avoid LazyInitializationException in mapper
@@ -175,7 +184,7 @@ public class StockTransferServiceImpl implements StockTransferService {
     }
 
     @Override
-    public StockTransfer completeTransfer(Long transferId) {
+    public StockTransfer completeTransfer(Long transferId, String completionNote) {
         logger.info("Completing transfer with id: {}", transferId);
         StockTransfer transfer = getTransferByIdOrThrow(transferId);
 
@@ -196,19 +205,26 @@ public class StockTransferServiceImpl implements StockTransferService {
             deductReservedStock(sourceStock, transfer.getQuantity());
         }
 
-        addStockToDestination(transfer);
+        if (isWarehouseTransfer(transfer)) {
+            addStockToDestination(transfer);
+        }
 
         transfer.setStatus(TransferStatus.COMPLETED);
         transfer.setCompletedDate(LocalDateTime.now());
+        if (completionNote != null && !completionNote.trim().isEmpty()) {
+            transfer.setCompletionNote(completionNote.trim());
+        } else if (transfer.getTransferType() == TransferType.CUSTOMER_DELIVERY) {
+            transfer.setCompletionNote(null);
+        }
         StockTransfer saved = stockTransferRepository.save(transfer);
         String username = CurrentUser.usernameOrSystem();
         auditService.log(AuditAction.TRANSFER_COMPLETE, DomainEntityType.StockTransfer.name(), saved.getId(), username,
-                String.format("Transfer tamamlandı: %s → %s | Ürün=%s | Miktar=%d",
-                        saved.getSourceWarehouse().getName(), saved.getDestinationWarehouse().getName(),
-                        saved.getProduct().getName(), saved.getQuantity()));
+                String.format("Transfer tamamlandı: %s | Ürün=%s | Miktar=%d",
+                        describeRoute(saved), saved.getProduct().getName(), saved.getQuantity()));
         notificationService.create(NotificationMessages.TRANSFER_COMPLETED_TITLE,
                 String.format("Kullanıcı %s, #%d numaralı transferi tamamladı.", username, saved.getId()),
                 DomainEntityType.Stock.name(), saved.getId());
+        notifyAdminIfNonAdmin(saved, "tamamladı");
         logger.info("Transfer completed successfully with id: {}", saved.getId());
         
         // Fetch with relations again to avoid LazyInitializationException in mapper
@@ -302,13 +318,64 @@ public class StockTransferServiceImpl implements StockTransferService {
         logger.info("Transfer deleted successfully with id: {}", transferId);
     }
 
-    private void validateTransferCreation(StockTransfer transfer) {
+    private TransferType validateTransferCreation(StockTransfer transfer) {
         ValidationUtil.requireNonNull(transfer.getSourceWarehouse(), "Source warehouse");
         ValidationUtil.requireNonNull(transfer.getSourceWarehouse().getId(), "Source warehouse ID");
-        ValidationUtil.requireNonNull(transfer.getDestinationWarehouse(), "Destination warehouse");
-        ValidationUtil.requireNonNull(transfer.getDestinationWarehouse().getId(), "Destination warehouse ID");
         ValidationUtil.requireNonNull(transfer.getProduct(), "Product");
         ValidationUtil.requireNonNull(transfer.getProduct().getId(), "Product ID");
+
+        TransferType transferType = transfer.getTransferType() != null
+                ? transfer.getTransferType()
+                : TransferType.WAREHOUSE;
+        transfer.setTransferType(transferType);
+
+        if (transferType == TransferType.WAREHOUSE) {
+            ValidationUtil.requireNonNull(transfer.getDestinationWarehouse(), "Destination warehouse");
+            ValidationUtil.requireNonNull(transfer.getDestinationWarehouse().getId(), "Destination warehouse ID");
+        } else {
+            ValidationUtil.requireNotBlank(transfer.getCustomerFullName(), "Customer full name");
+            ValidationUtil.requireNotBlank(transfer.getCustomerPhone(), "Customer phone");
+            ValidationUtil.requireNotBlank(transfer.getCustomerAddress(), "Customer address");
+        }
+        return transferType;
+    }
+
+    private boolean isWarehouseTransfer(StockTransfer transfer) {
+        return transfer.getTransferType() == null || transfer.getTransferType() == TransferType.WAREHOUSE;
+    }
+
+    private String describeRoute(StockTransfer transfer) {
+        String sourceName = transfer.getSourceWarehouse() != null ? transfer.getSourceWarehouse().getName() : "Bilinmiyor";
+        if (isWarehouseTransfer(transfer) && transfer.getDestinationWarehouse() != null) {
+            return String.format("%s -> %s", sourceName, transfer.getDestinationWarehouse().getName());
+        }
+        String customer = transfer.getCustomerFullName();
+        if (customer == null || customer.trim().isEmpty()) {
+            customer = "Müşteri";
+        }
+        return String.format("%s -> Müşteri (%s)", sourceName, customer);
+    }
+
+    private void notifyAdminIfNonAdmin(StockTransfer transfer, String actionVerb) {
+        if (isCurrentUserAdmin()) {
+            return;
+        }
+        String username = CurrentUser.usernameOrSystem();
+        String verb = actionVerb != null ? actionVerb : "işledi";
+        notificationService.create(
+                NotificationMessages.TRANSFER_ADMIN_ALERT_TITLE,
+                String.format("Kullanıcı %s, #%d numaralı (%s) %s transferini %s.",
+                        username,
+                        transfer.getId(),
+                        describeRoute(transfer),
+                        transfer.getTransferType() == TransferType.CUSTOMER_DELIVERY ? "müşteri sevkiyat" : "depo",
+                        verb),
+                DomainEntityType.StockTransfer.name(),
+                transfer.getId());
+    }
+
+    private boolean isCurrentUserAdmin() {
+        return RoleName.ADMIN.name().equalsIgnoreCase(CurrentUser.getRole());
     }
 
     private void validateSufficientStock(Product product, Warehouse warehouse, Integer quantity) {
@@ -364,6 +431,10 @@ public class StockTransferServiceImpl implements StockTransferService {
     }
 
     private void addStockToDestination(StockTransfer transfer) {
+        if (transfer.getDestinationWarehouse() == null) {
+            logger.warn("Destination warehouse missing while adding stock for transfer {}", transfer.getId());
+            return;
+        }
         Optional<Stock> destinationStockOpt = stockRepository.findByProductAndWarehouse(
                 transfer.getProduct(), transfer.getDestinationWarehouse());
 
@@ -404,6 +475,15 @@ public class StockTransferServiceImpl implements StockTransferService {
         }
         if (updatedTransfer.getNotes() != null) {
             transfer.setNotes(updatedTransfer.getNotes());
+        }
+        if (updatedTransfer.getCustomerFullName() != null) {
+            transfer.setCustomerFullName(updatedTransfer.getCustomerFullName());
+        }
+        if (updatedTransfer.getCustomerPhone() != null) {
+            transfer.setCustomerPhone(updatedTransfer.getCustomerPhone());
+        }
+        if (updatedTransfer.getCustomerAddress() != null) {
+            transfer.setCustomerAddress(updatedTransfer.getCustomerAddress());
         }
         if (updatedTransfer.getTransferDate() != null) {
             transfer.setTransferDate(updatedTransfer.getTransferDate());

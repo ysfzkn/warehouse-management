@@ -12,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/stock-transfers")
@@ -79,8 +80,10 @@ public class StockTransferController {
     }
 
     @PostMapping("/{id}/complete")
-    public ResponseEntity<StockTransferDto> completeTransfer(@PathVariable Long id) {
-        StockTransfer transfer = stockTransferService.completeTransfer(id);
+    public ResponseEntity<StockTransferDto> completeTransfer(@PathVariable Long id,
+                                                             @RequestBody(required = false) Map<String, String> payload) {
+        String completionNote = payload != null ? payload.get("completionNote") : null;
+        StockTransfer transfer = stockTransferService.completeTransfer(id, completionNote);
         StockTransferDto dto = transferMapper.toDto(transfer);
         return ResponseEntity.ok(dto);
     }

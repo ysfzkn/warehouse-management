@@ -27,7 +27,7 @@ public interface StockTransferService {
 
     StockTransfer startTransfer(Long transferId);
 
-    StockTransfer completeTransfer(Long transferId);
+    StockTransfer completeTransfer(Long transferId, String completionNote);
 
     StockTransfer cancelTransfer(Long transferId, String cancellationReason);
 

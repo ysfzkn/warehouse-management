@@ -1,6 +1,7 @@
 package com.warehouse.dto;
 
 import com.warehouse.enums.TransferStatus;
+import com.warehouse.enums.TransferType;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
@@ -21,11 +22,16 @@ public class StockTransferDto {
     private String driverPhone;
     private String vehiclePlate;
     private TransferStatus status;
+    private TransferType transferType;
     private LocalDateTime transferDate;
     private LocalDateTime completedDate;
     private LocalDateTime cancelledDate;
     private String notes;
     private String cancellationReason;
+    private String customerFullName;
+    private String customerPhone;
+    private String customerAddress;
+    private String completionNote;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 

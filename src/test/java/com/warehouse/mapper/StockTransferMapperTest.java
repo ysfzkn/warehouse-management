@@ -5,6 +5,7 @@ import com.warehouse.entity.Product;
 import com.warehouse.entity.StockTransfer;
 import com.warehouse.entity.Warehouse;
 import com.warehouse.enums.TransferStatus;
+import com.warehouse.enums.TransferType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -54,6 +55,11 @@ class StockTransferMapperTest {
         stockTransfer.setStatus(TransferStatus.PENDING);
         stockTransfer.setTransferDate(LocalDateTime.now());
         stockTransfer.setNotes("Test transfer");
+        stockTransfer.setTransferType(TransferType.CUSTOMER_DELIVERY);
+        stockTransfer.setCustomerFullName("Müşteri Test");
+        stockTransfer.setCustomerPhone("05550001122");
+        stockTransfer.setCustomerAddress("Test adres 123");
+        stockTransfer.setCompletionNote("Teslim edildi");
     }
 
     @Test
@@ -68,6 +74,11 @@ class StockTransferMapperTest {
         assertEquals("+905551234567", result.getDriverPhone());
         assertEquals("34ABC123", result.getVehiclePlate());
         assertEquals(TransferStatus.PENDING, result.getStatus());
+        assertEquals(TransferType.CUSTOMER_DELIVERY, result.getTransferType());
+        assertEquals("Müşteri Test", result.getCustomerFullName());
+        assertEquals("05550001122", result.getCustomerPhone());
+        assertEquals("Test adres 123", result.getCustomerAddress());
+        assertEquals("Teslim edildi", result.getCompletionNote());
         assertEquals("Test transfer", result.getNotes());
     }
 
@@ -112,6 +123,7 @@ class StockTransferMapperTest {
         transfer2.setProduct(product);
         transfer2.setQuantity(30);
         transfer2.setStatus(TransferStatus.COMPLETED);
+        transfer2.setTransferType(TransferType.WAREHOUSE);
 
         List<StockTransfer> transfers = Arrays.asList(stockTransfer, transfer2);
         List<StockTransferDto> result = mapper.toDtoList(transfers);

@@ -8,3 +8,4 @@ public enum StockRequestType {
     REMOVE   // Stok çıkarma talebi
 }
 
+

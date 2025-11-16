@@ -14,6 +14,7 @@ import lombok.ToString;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.warehouse.enums.TransferStatus;
+import com.warehouse.enums.TransferType;
 import java.time.LocalDateTime;
 
 @Entity
@@ -35,10 +36,9 @@ public class StockTransfer {
     @JoinColumn(name = "source_warehouse_id", nullable = false)
     private Warehouse sourceWarehouse;
 
-    @NotNull(message = "Destination warehouse is required")
     @ManyToOne(fetch = FetchType.LAZY)
     @JsonIgnoreProperties({"stocks", "hibernateLazyInitializer", "handler"})
-    @JoinColumn(name = "destination_warehouse_id", nullable = false)
+    @JoinColumn(name = "destination_warehouse_id")
     private Warehouse destinationWarehouse;
 
     @NotNull(message = "Product is required")
@@ -76,6 +76,22 @@ public class StockTransfer {
     @Column(nullable = false, length = 20)
     private TransferStatus status = TransferStatus.PENDING;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "transfer_type", nullable = false, length = 40)
+    private TransferType transferType = TransferType.WAREHOUSE;
+
+    @Size(max = 150, message = "Customer full name cannot exceed 150 characters")
+    @Column(name = "customer_full_name", length = 150)
+    private String customerFullName;
+
+    @Size(max = 20, message = "Customer phone cannot exceed 20 characters")
+    @Column(name = "customer_phone", length = 20)
+    private String customerPhone;
+
+    @Size(max = 500, message = "Customer address cannot exceed 500 characters")
+    @Column(name = "customer_address", length = 500)
+    private String customerAddress;
+
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss", timezone = "Europe/Istanbul")
     @Column(name = "transfer_date", nullable = false)
     private LocalDateTime transferDate;
@@ -95,6 +111,10 @@ public class StockTransfer {
     @Size(max = 500, message = "Cancellation reason cannot exceed 500 characters")
     @Column(name = "cancellation_reason", length = 500)
     private String cancellationReason;
+
+    @Size(max = 500, message = "Completion note cannot exceed 500 characters")
+    @Column(name = "completion_note", length = 500)
+    private String completionNote;
 
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss", timezone = "Europe/Istanbul")
     @Column(name = "created_at", nullable = false, updatable = false)

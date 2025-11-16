@@ -28,7 +28,11 @@ const StockTransferModal = ({ stock, onSuccess, onClose }) => {
     driverPhone: '',
     vehiclePlate: '',
     notes: '',
-    transferDate: getTurkeyDateTime()
+    transferDate: getTurkeyDateTime(),
+    transferType: 'WAREHOUSE',
+    customerFullName: '',
+    customerPhone: '',
+    customerAddress: ''
   });
 
   const [warehouses, setWarehouses] = useState([]);
@@ -40,6 +44,10 @@ const StockTransferModal = ({ stock, onSuccess, onClose }) => {
   const [validationErrors, setValidationErrors] = useState({});
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [createdTransferId, setCreatedTransferId] = useState(null);
+  const transferTypeOptions = [
+    { key: 'WAREHOUSE', label: 'Depo Transferi', icon: 'fa-warehouse', accent: 'primary', hint: 'Şubeler arası stok taşıma' },
+    { key: 'CUSTOMER_DELIVERY', label: 'Müşteri Sevkiyatı', icon: 'fa-shipping-fast', accent: 'info', hint: 'Depodan müşteriye sevk' }
+  ];
 
   // Fetch available quantity for selected source warehouse and product
   const fetchAvailableStock = useCallback(async () => {
@@ -204,14 +212,38 @@ useEffect(() => {
     }
   };
 
+  const handleTransferTypeChange = (type) => {
+    if (formData.transferType === type) return;
+    setFormData(prev => ({
+      ...prev,
+      transferType: type,
+      destinationWarehouseId: type === 'CUSTOMER_DELIVERY' ? '' : prev.destinationWarehouseId,
+      customerFullName: type === 'CUSTOMER_DELIVERY' ? prev.customerFullName : '',
+      customerPhone: type === 'CUSTOMER_DELIVERY' ? prev.customerPhone : '',
+      customerAddress: type === 'CUSTOMER_DELIVERY' ? prev.customerAddress : ''
+    }));
+    setValidationErrors({});
+    setCurrentStep(1);
+  };
+
   const validateStep = (step) => {
     const errors = {};
+    const isCustomerTransfer = formData.transferType === 'CUSTOMER_DELIVERY';
 
     if (step === 1) {
       if (!formData.sourceWarehouseId) errors.sourceWarehouseId = 'Kaynak depo zorunludur';
-      if (!formData.destinationWarehouseId) errors.destinationWarehouseId = 'Hedef depo zorunludur';
-      if (String(formData.sourceWarehouseId) === String(formData.destinationWarehouseId)) {
-        errors.destinationWarehouseId = 'Kaynak ve hedef depo farklı olmalıdır';
+      if (!isCustomerTransfer) {
+        if (!formData.destinationWarehouseId) errors.destinationWarehouseId = 'Hedef depo zorunludur';
+        if (String(formData.sourceWarehouseId) === String(formData.destinationWarehouseId)) {
+          errors.destinationWarehouseId = 'Kaynak ve hedef depo farklı olmalıdır';
+        }
+      } else {
+        if (!formData.customerFullName.trim()) errors.customerFullName = 'Müşteri adı zorunludur';
+        if (!formData.customerPhone.trim()) errors.customerPhone = 'Müşteri telefonu zorunludur';
+        if (!formData.customerAddress.trim()) errors.customerAddress = 'Adres zorunludur';
+        if (formData.customerPhone && formData.customerPhone.trim().length < 10) {
+          errors.customerPhone = 'Telefon numarası en az 10 haneli olmalıdır';
+        }
       }
       if (!formData.productId) errors.productId = 'Ürün seçimi zorunludur';
       if (!formData.quantity || formData.quantity <= 0) errors.quantity = 'Geçerli bir miktar giriniz';
@@ -276,7 +308,6 @@ useEffect(() => {
       
       const transferData = {
         sourceWarehouse: { id: parseInt(formData.sourceWarehouseId) },
-        destinationWarehouse: { id: parseInt(formData.destinationWarehouseId) },
         product: { id: parseInt(formData.productId) },
         quantity: parseInt(formData.quantity),
         driverName: formData.driverName.trim(),
@@ -284,8 +315,21 @@ useEffect(() => {
         driverPhone: formData.driverPhone.trim(),
         vehiclePlate: formData.vehiclePlate.trim().toUpperCase(),
         notes: formData.notes.trim(),
-        transferDate: parseDateInTurkeyTimezone(formData.transferDate)
+        transferDate: parseDateInTurkeyTimezone(formData.transferDate),
+        transferType: formData.transferType
       };
+
+      if (formData.transferType === 'WAREHOUSE' && formData.destinationWarehouseId) {
+        transferData.destinationWarehouse = { id: parseInt(formData.destinationWarehouseId) };
+      } else {
+        transferData.destinationWarehouse = null;
+      }
+
+      if (formData.transferType === 'CUSTOMER_DELIVERY') {
+        transferData.customerFullName = formData.customerFullName.trim();
+        transferData.customerPhone = formData.customerPhone.trim();
+        transferData.customerAddress = formData.customerAddress.trim();
+      }
 
       const response = await axios.post('/api/stock-transfers', transferData);
       setCreatedTransferId(response.data.id);
@@ -311,8 +355,11 @@ useEffect(() => {
     onClose();
   };
 
+  const isCustomerTransfer = formData.transferType === 'CUSTOMER_DELIVERY';
   const sourceWarehouse = warehouses.find(w => w.id === parseInt(formData.sourceWarehouseId));
-  const destinationWarehouse = warehouses.find(w => w.id === parseInt(formData.destinationWarehouseId));
+  const destinationWarehouse = !isCustomerTransfer
+    ? warehouses.find(w => w.id === parseInt(formData.destinationWarehouseId))
+    : null;
   const selectedProduct = stock?.product || products.find(p => p.id === parseInt(formData.productId));
 
   const steps = submitSuccess ? [
@@ -407,6 +454,24 @@ useEffect(() => {
                     <i className="fas fa-boxes me-2"></i>
                     Transfer Detaylarını Belirleyin
                   </h5>
+                  <div className="btn-group w-100 mb-4" role="group" aria-label="Transfer türü seçimi">
+                    {transferTypeOptions.map(option => (
+                      <button
+                        type="button"
+                        key={option.key}
+                        className={`btn ${formData.transferType === option.key ? `btn-${option.accent}` : 'btn-outline-secondary'}`}
+                        onClick={() => handleTransferTypeChange(option.key)}
+                      >
+                        <div className="d-flex flex-column">
+                          <span className="fw-bold">
+                            <i className={`fas ${option.icon} me-2`}></i>
+                            {option.label}
+                          </span>
+                          <small className="text-muted">{option.hint}</small>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
                   
                   <div className="row g-3">
                     <div className="col-md-6">
@@ -449,51 +514,119 @@ useEffect(() => {
                       )}
                     </div>
 
-                    <div className="col-md-6">
-                      <label className="form-label fw-bold">
-                        <i className="fas fa-warehouse text-success me-1"></i>
-                        Hedef Depo *
-                        <i className="fas fa-info-circle ms-1 text-muted" title="Stokun gönderileceği depo"></i>
-                      </label>
-                      <select
-                        className={`form-select form-select-lg ${validationErrors.destinationWarehouseId ? 'is-invalid' : formData.destinationWarehouseId ? 'is-valid' : ''}`}
-                        name="destinationWarehouseId"
-                        value={formData.destinationWarehouseId}
-                        onChange={handleChange}
-                        required
-                        disabled={!formData.sourceWarehouseId || warehouses.length === 0}
-                      >
-                        <option value="">
-                          {!formData.sourceWarehouseId 
-                            ? '-- Önce kaynak depo seçiniz --' 
-                            : warehouses.length === 0 
-                              ? '-- Depo bulunamadı --'
-                              : '-- Hedef depo seçiniz --'}
-                        </option>
-                        {warehouses
-                          .filter(w => String(w.id) !== String(formData.sourceWarehouseId))
-                          .map(warehouse => (
-                            <option key={warehouse.id} value={warehouse.id}>
-                              📍 {warehouse.name} - {warehouse.location}
-                            </option>
-                          ))}
-                      </select>
-                      {validationErrors.destinationWarehouseId && (
-                        <div className="invalid-feedback">{validationErrors.destinationWarehouseId}</div>
-                      )}
-                      {destinationWarehouse && !validationErrors.destinationWarehouseId && (
-                        <small className="text-success d-block mt-1">
-                          <i className="fas fa-check-circle me-1"></i>
-                          {destinationWarehouse.location}
-                        </small>
-                      )}
-                      {warehouses.length === 0 && (
-                        <small className="text-danger d-block mt-1">
-                          <i className="fas fa-exclamation-circle me-1"></i>
-                          Aktif depo bulunamadı. Lütfen önce depo ekleyin.
-                        </small>
-                      )}
-                    </div>
+                    {!isCustomerTransfer ? (
+                      <div className="col-md-6">
+                        <label className="form-label fw-bold">
+                          <i className="fas fa-warehouse text-success me-1"></i>
+                          Hedef Depo *
+                          <i className="fas fa-info-circle ms-1 text-muted" title="Stokun gönderileceği depo"></i>
+                        </label>
+                        <select
+                          className={`form-select form-select-lg ${validationErrors.destinationWarehouseId ? 'is-invalid' : formData.destinationWarehouseId ? 'is-valid' : ''}`}
+                          name="destinationWarehouseId"
+                          value={formData.destinationWarehouseId}
+                          onChange={handleChange}
+                          required={!isCustomerTransfer}
+                          disabled={!formData.sourceWarehouseId || warehouses.length === 0}
+                        >
+                          <option value="">
+                            {!formData.sourceWarehouseId 
+                              ? '-- Önce kaynak depo seçiniz --' 
+                              : warehouses.length === 0 
+                                ? '-- Depo bulunamadı --'
+                                : '-- Hedef depo seçiniz --'}
+                          </option>
+                          {warehouses
+                            .filter(w => String(w.id) !== String(formData.sourceWarehouseId))
+                            .map(warehouse => (
+                              <option key={warehouse.id} value={warehouse.id}>
+                                📍 {warehouse.name} - {warehouse.location}
+                              </option>
+                            ))}
+                        </select>
+                        {validationErrors.destinationWarehouseId && (
+                          <div className="invalid-feedback">{validationErrors.destinationWarehouseId}</div>
+                        )}
+                        {destinationWarehouse && !validationErrors.destinationWarehouseId && (
+                          <small className="text-success d-block mt-1">
+                            <i className="fas fa-check-circle me-1"></i>
+                            {destinationWarehouse.location}
+                          </small>
+                        )}
+                        {warehouses.length === 0 && (
+                          <small className="text-danger d-block mt-1">
+                            <i className="fas fa-exclamation-circle me-1"></i>
+                            Aktif depo bulunamadı. Lütfen önce depo ekleyin.
+                          </small>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="col-md-6">
+                        <label className="form-label fw-bold">
+                          <i className="fas fa-user-tag text-info me-1"></i>
+                          Müşteri Adı Soyadı *
+                        </label>
+                        <input
+                          type="text"
+                          className={`form-control form-control-lg ${validationErrors.customerFullName ? 'is-invalid' : formData.customerFullName ? 'is-valid' : ''}`}
+                          name="customerFullName"
+                          value={formData.customerFullName}
+                          onChange={handleChange}
+                          placeholder="Örn: Ayşe Koç"
+                          maxLength="150"
+                          required={isCustomerTransfer}
+                        />
+                        {validationErrors.customerFullName && (
+                          <div className="invalid-feedback">{validationErrors.customerFullName}</div>
+                        )}
+                      </div>
+                    )}
+
+                    {isCustomerTransfer && (
+                      <>
+                        <div className="col-md-6">
+                          <label className="form-label fw-bold">
+                            <i className="fas fa-phone-alt text-info me-1"></i>
+                            Müşteri Telefonu *
+                          </label>
+                          <input
+                            type="tel"
+                            className={`form-control form-control-lg ${validationErrors.customerPhone ? 'is-invalid' : formData.customerPhone ? 'is-valid' : ''}`}
+                            name="customerPhone"
+                            value={formData.customerPhone}
+                            onChange={handleChange}
+                            placeholder="+90 5XX XXX XX XX"
+                            maxLength="20"
+                            required={isCustomerTransfer}
+                          />
+                          {validationErrors.customerPhone && (
+                            <div className="invalid-feedback">{validationErrors.customerPhone}</div>
+                          )}
+                        </div>
+                        <div className="col-12">
+                          <label className="form-label fw-bold">
+                            <i className="fas fa-map-marker-alt text-info me-1"></i>
+                            Teslimat Adresi *
+                          </label>
+                          <textarea
+                            className={`form-control ${validationErrors.customerAddress ? 'is-invalid' : formData.customerAddress ? 'is-valid' : ''}`}
+                            name="customerAddress"
+                            value={formData.customerAddress}
+                            onChange={handleChange}
+                            rows="3"
+                            placeholder="Mahalle, cadde, numara, il / ilçe..."
+                            maxLength="500"
+                            required={isCustomerTransfer}
+                          ></textarea>
+                          <div className="d-flex justify-content-between">
+                            {validationErrors.customerAddress && (
+                              <div className="invalid-feedback d-block">{validationErrors.customerAddress}</div>
+                            )}
+                            <small className="text-muted ms-auto">{formData.customerAddress.length}/500</small>
+                          </div>
+                        </div>
+                      </>
+                    )}
 
                     <div className="col-md-8">
                       <label className="form-label fw-bold">
@@ -567,8 +700,18 @@ useEffect(() => {
                       <div className="alert alert-info d-flex align-items-start">
                         <i className="fas fa-lightbulb fa-2x me-3 mt-1"></i>
                         <div>
-                          <strong>İpucu:</strong> Transfer işlemi, kaynak depodaki stoğu azaltıp hedef depodaki stoğu artıracaktır.
-                          Stok, transfer yolda iken rezerve edilir.
+                          <strong>İpucu:</strong>{' '}
+                          {isCustomerTransfer ? (
+                            <>
+                              Müşteri sevkiyatlarında stok yalnızca kaynak depodan düşer ve teslimat bilgileri kayıt altına alınır.
+                              Şoför ve müşteri iletişim bilgilerini doğru girdiğinizden emin olun.
+                            </>
+                          ) : (
+                            <>
+                              Transfer işlemi, kaynak depodaki stoğu azaltıp hedef depodaki stoğu artıracaktır.
+                              Stok, transfer yolda iken rezerve edilir.
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -797,17 +940,33 @@ useEffect(() => {
                     </div>
 
                     <div className="col-md-6">
-                      <div className="card h-100 border-success">
-                        <div className="card-header bg-success text-white">
-                          <i className="fas fa-warehouse me-2"></i>
-                          Hedef Depo
+                      <div className={`card h-100 border-${isCustomerTransfer ? 'info' : 'success'}`}>
+                        <div className={`card-header text-white bg-${isCustomerTransfer ? 'info' : 'success'}`}>
+                          <i className={`fas ${isCustomerTransfer ? 'fa-user-tag' : 'fa-warehouse'} me-2`}></i>
+                          {isCustomerTransfer ? 'Müşteri Bilgileri' : 'Hedef Depo'}
                         </div>
                         <div className="card-body">
-                          <h6 className="fw-bold">{destinationWarehouse?.name}</h6>
-                          <p className="mb-0 text-muted small">
-                            <i className="fas fa-map-marker-alt me-1"></i>
-                            {destinationWarehouse?.location}
-                          </p>
+                          {isCustomerTransfer ? (
+                            <>
+                              <h6 className="fw-bold">{formData.customerFullName}</h6>
+                              <p className="mb-1 text-muted small">
+                                <i className="fas fa-phone me-1"></i>
+                                {formData.customerPhone}
+                              </p>
+                              <p className="mb-0 text-muted small">
+                                <i className="fas fa-map-marker-alt me-1"></i>
+                                {formData.customerAddress}
+                              </p>
+                            </>
+                          ) : (
+                            <>
+                              <h6 className="fw-bold">{destinationWarehouse?.name}</h6>
+                              <p className="mb-0 text-muted small">
+                                <i className="fas fa-map-marker-alt me-1"></i>
+                                {destinationWarehouse?.location}
+                              </p>
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -927,11 +1086,16 @@ useEffect(() => {
                         <div className="card-body">
                           <div className="d-flex align-items-center">
                             <div className="bg-success bg-opacity-10 rounded-circle p-3 me-3">
-                              <i className="fas fa-warehouse text-success fa-lg"></i>
+                              <i className={`fas ${isCustomerTransfer ? 'fa-user-tag' : 'fa-warehouse'} text-success fa-lg`}></i>
                             </div>
                             <div className="text-start">
-                              <small className="text-muted d-block">Hedef</small>
-                              <strong className="text-truncate d-block">{destinationWarehouse?.name}</strong>
+                              <small className="text-muted d-block">{isCustomerTransfer ? 'Müşteri' : 'Hedef'}</small>
+                              <strong className="text-truncate d-block">
+                                {isCustomerTransfer ? formData.customerFullName : destinationWarehouse?.name}
+                              </strong>
+                              {isCustomerTransfer && (
+                                <small className="text-muted d-block text-truncate">{formData.customerPhone}</small>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -963,6 +1127,9 @@ useEffect(() => {
                         <li>Şoför <strong>{formData.driverName}</strong> transferi teslim alabilir</li>
                         <li>Araç plakası: <strong>{formData.vehiclePlate}</strong></li>
                         <li>Transfer durumunu güncellemek için "Yola Çıkar" veya "Tamamla" butonlarını kullanabilirsiniz</li>
+                        {isCustomerTransfer && (
+                          <li>Müşteri: <strong>{formData.customerFullName}</strong> ({formData.customerPhone})</li>
+                        )}
                       </ul>
                     </div>
                   </div>

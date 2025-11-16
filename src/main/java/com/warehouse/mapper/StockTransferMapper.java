@@ -23,11 +23,16 @@ public class StockTransferMapper {
         dto.setDriverPhone(entity.getDriverPhone());
         dto.setVehiclePlate(entity.getVehiclePlate());
         dto.setStatus(entity.getStatus());
+        dto.setTransferType(entity.getTransferType());
         dto.setTransferDate(entity.getTransferDate());
         dto.setCompletedDate(entity.getCompletedDate());
         dto.setCancelledDate(entity.getCancelledDate());
         dto.setNotes(entity.getNotes());
         dto.setCancellationReason(entity.getCancellationReason());
+        dto.setCustomerFullName(entity.getCustomerFullName());
+        dto.setCustomerPhone(entity.getCustomerPhone());
+        dto.setCustomerAddress(entity.getCustomerAddress());
+        dto.setCompletionNote(entity.getCompletionNote());
         dto.setCreatedAt(entity.getCreatedAt());
         dto.setUpdatedAt(entity.getUpdatedAt());
 

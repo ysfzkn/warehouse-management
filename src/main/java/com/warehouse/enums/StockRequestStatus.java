@@ -9,3 +9,4 @@ public enum StockRequestStatus {
     REJECTED    // Reddedildi
 }
 
+

@@ -2,6 +2,7 @@ package com.warehouse.service;
 
 import com.warehouse.entity.*;
 import com.warehouse.enums.TransferStatus;
+import com.warehouse.enums.TransferType;
 import com.warehouse.repository.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -77,6 +78,11 @@ class AuditAndNotificationIntegrationTest {
         t.setSourceWarehouse(wh1);
         t.setDestinationWarehouse(wh2);
         t.setQuantity(10);
+        t.setDriverName("Test Driver");
+        t.setDriverTcId("12345678901");
+        t.setDriverPhone("05555555555");
+        t.setVehiclePlate("34TEST34");
+        t.setTransferType(TransferType.WAREHOUSE);
 
         t = stockTransferService.createTransfer(t);
         assertThat(t.getStatus()).isEqualTo(TransferStatus.PENDING);
@@ -84,7 +90,7 @@ class AuditAndNotificationIntegrationTest {
         t = stockTransferService.startTransfer(t.getId());
         assertThat(t.getStatus()).isEqualTo(TransferStatus.IN_TRANSIT);
 
-        t = stockTransferService.completeTransfer(t.getId());
+        t = stockTransferService.completeTransfer(t.getId(), null);
         assertThat(t.getStatus()).isEqualTo(TransferStatus.COMPLETED);
 
         List<Notification> notifs = notificationRepository.findTop20ByOrderByCreatedAtDesc();

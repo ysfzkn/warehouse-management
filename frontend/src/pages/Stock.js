@@ -248,6 +248,7 @@ const Stock = () => {
   const [transferDriver, setTransferDriver] = useState('');
   const [transferSourceWarehouseId, setTransferSourceWarehouseId] = useState(null);
   const [transferDestinationWarehouseId, setTransferDestinationWarehouseId] = useState(null);
+  const [transferTypeFilter, setTransferTypeFilter] = useState('ALL');
   // Category filters
   const [categories, setCategories] = useState([]);
   const [subcategories, setSubcategories] = useState([]);
@@ -260,8 +261,9 @@ const Stock = () => {
   // Modal states
   const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null });
   const [errorModal, setErrorModal] = useState({ show: false, title: '', message: '' });
-  const [notesModal, setNotesModal] = useState({ show: false, notes: '', transferId: null });
+  const [notesModal, setNotesModal] = useState({ show: false, notes: '', transferId: null, title: '' });
   const [cancellationModal, setCancellationModal] = useState({ show: false, transferId: null, reason: '' });
+  const [completionModal, setCompletionModal] = useState({ show: false, transferId: null, note: '', message: '', transfer: null });
   const [auditModal, setAuditModal] = useState({ show: false, entityType: null, entityId: null });
   const [pendingStockId, setPendingStockId] = useState(null);
   const [showExcelModal, setShowExcelModal] = useState(false);
@@ -587,10 +589,10 @@ const Stock = () => {
     }
   };
 
-  const handleTransferStatusChange = async (transferId, action, cancellationReason = null) => {
+  const handleTransferStatusChange = async (transferId, action, payload = undefined) => {
     try {
-      const payload = action === 'cancel' && cancellationReason ? { cancellationReason } : {};
-      await axios.post(`/api/stock-transfers/${transferId}/${action}`, payload);
+      const body = payload && Object.keys(payload).length > 0 ? payload : undefined;
+      await axios.post(`/api/stock-transfers/${transferId}/${action}`, body);
       fetchTransfers();
       fetchAllData();
     } catch (error) {
@@ -648,6 +650,32 @@ const Stock = () => {
     });
   };
 
+  const openCompletionFlow = (transfer, message) => {
+    if ((transfer.transferType || 'WAREHOUSE') === 'CUSTOMER_DELIVERY') {
+      setCompletionModal({
+        show: true,
+        transferId: transfer.id,
+        note: '',
+        message,
+        transfer
+      });
+      return;
+    }
+
+    setConfirmModal({
+      show: true,
+      title: 'Transferi Tamamla',
+      message,
+      confirmText: 'Evet, Tamamla',
+      confirmVariant: 'success',
+      icon: 'check-circle',
+      onConfirm: () => {
+        setConfirmModal({ show: false });
+        handleTransferStatusChange(transfer.id, 'complete');
+      }
+    });
+  };
+
   const getProductById = (id) => {
     return products.find(p => p.id === id);
   };
@@ -670,6 +698,9 @@ const Stock = () => {
     // Status filter
     if (transferStatusFilter !== 'ALL') {
       list = list.filter(t => t.status === transferStatusFilter);
+    }
+    if (transferTypeFilter !== 'ALL') {
+      list = list.filter(t => (t.transferType || 'WAREHOUSE') === transferTypeFilter);
     }
     // Product name filter
     const nameQ = (transferProductName || '').toLowerCase();
@@ -694,7 +725,10 @@ const Stock = () => {
       list = list.filter(t => Number(t.destinationWarehouse?.id) === Number(transferDestinationWarehouseId));
     }
     return list;
-  }, [transfers, transferStatusFilter, transferProductName, transferSku, transferDriver, transferSourceWarehouseId, transferDestinationWarehouseId]);
+  }, [transfers, transferStatusFilter, transferTypeFilter, transferProductName, transferSku, transferDriver, transferSourceWarehouseId, transferDestinationWarehouseId]);
+
+  const warehouseTransferCount = transfers.filter(t => (t.transferType || 'WAREHOUSE') === 'WAREHOUSE').length;
+  const customerTransferCount = transfers.filter(t => t.transferType === 'CUSTOMER_DELIVERY').length;
 
   if (loading) {
     return (
@@ -1217,6 +1251,17 @@ const Stock = () => {
             </div>
           </div>
 
+          <div className="d-flex flex-wrap gap-2 mb-3">
+            <span className="badge rounded-pill bg-primary bg-opacity-10 text-primary py-2 px-3">
+              <i className="fas fa-warehouse me-1"></i>
+              Depo Transferi: {warehouseTransferCount}
+            </span>
+            <span className="badge rounded-pill bg-info bg-opacity-10 text-info py-2 px-3">
+              <i className="fas fa-shipping-fast me-1"></i>
+              Müşteri Sevkiyatı: {customerTransferCount}
+            </span>
+          </div>
+
           {/* Filter Buttons */}
           <div className="card mb-3">
             <div className="card-body">
@@ -1295,9 +1340,55 @@ const Stock = () => {
                 
                 <div className="text-muted small">
                   <i className="fas fa-info-circle me-1"></i>
-                  Toplam {transfers.filter(t => transferStatusFilter === 'ALL' || t.status === transferStatusFilter).length} transfer
+                Toplam {filteredTransfers.length} transfer
                 </div>
               </div>
+
+            <div className="d-flex flex-wrap gap-2 mt-3">
+              <div className="btn-group btn-group-sm" role="group" aria-label="Transfer tipi filtresi">
+                <input
+                  type="radio"
+                  className="btn-check"
+                  name="transferType"
+                  id="type-all"
+                  value="ALL"
+                  checked={transferTypeFilter === 'ALL'}
+                  onChange={(e) => setTransferTypeFilter(e.target.value)}
+                />
+                <label className="btn btn-outline-secondary" htmlFor="type-all">
+                  <i className="fas fa-stream me-1"></i>
+                  Tüm Tipler
+                </label>
+
+                <input
+                  type="radio"
+                  className="btn-check"
+                  name="transferType"
+                  id="type-warehouse"
+                  value="WAREHOUSE"
+                  checked={transferTypeFilter === 'WAREHOUSE'}
+                  onChange={(e) => setTransferTypeFilter(e.target.value)}
+                />
+                <label className="btn btn-outline-primary" htmlFor="type-warehouse">
+                  <i className="fas fa-warehouse me-1"></i>
+                  Depo
+                </label>
+
+                <input
+                  type="radio"
+                  className="btn-check"
+                  name="transferType"
+                  id="type-customer"
+                  value="CUSTOMER_DELIVERY"
+                  checked={transferTypeFilter === 'CUSTOMER_DELIVERY'}
+                  onChange={(e) => setTransferTypeFilter(e.target.value)}
+                />
+                <label className="btn btn-outline-info" htmlFor="type-customer">
+                  <i className="fas fa-shipping-fast me-1"></i>
+                  Müşteri
+                </label>
+              </div>
+            </div>
 
               {/* Advanced transfer filters */}
               <div className="row g-2 mt-3">
@@ -1488,7 +1579,17 @@ const Stock = () => {
                       return (
                         <tr key={transfer.id}>
                           <td className="text-center align-middle">
-                            <span className="badge bg-dark">#{transfer.id}</span>
+                            <span className="badge bg-dark d-block">#{transfer.id}</span>
+                            <span
+                              className={`badge d-block mt-1 ${
+                                (transfer.transferType || 'WAREHOUSE') === 'CUSTOMER_DELIVERY'
+                                  ? 'bg-info text-dark'
+                                  : 'bg-secondary'
+                              }`}
+                              title={(transfer.transferType || 'WAREHOUSE') === 'CUSTOMER_DELIVERY' ? 'Müşteri Sevkiyatı' : 'Depo Transferi'}
+                            >
+                              {(transfer.transferType || 'WAREHOUSE') === 'CUSTOMER_DELIVERY' ? 'Müşteri' : 'Depo'}
+                            </span>
                           </td>
                           <td className="align-middle">
                             <div className="small">
@@ -1527,17 +1628,43 @@ const Stock = () => {
                           </td>
                           <td className="align-middle">
                             <div className="d-flex align-items-center">
-                              <div className="bg-success bg-opacity-10 rounded-circle p-1 me-1 me-sm-2 flex-shrink-0 d-none d-sm-flex" style={{width: '30px', height: '30px', alignItems: 'center', justifyContent: 'center'}}>
-                                <i className="fas fa-warehouse text-success fa-sm"></i>
+                              <div
+                                className={`bg-${(transfer.transferType || 'WAREHOUSE') === 'CUSTOMER_DELIVERY' ? 'info' : 'success'} bg-opacity-10 rounded-circle p-1 me-1 me-sm-2 flex-shrink-0 d-none d-sm-flex`}
+                                style={{width: '30px', height: '30px', alignItems: 'center', justifyContent: 'center'}}
+                              >
+                                <i
+                                  className={`fas ${
+                                    (transfer.transferType || 'WAREHOUSE') === 'CUSTOMER_DELIVERY' ? 'fa-user-tag text-info' : 'fa-warehouse text-success'
+                                  } fa-sm`}
+                                ></i>
                               </div>
                               <div className="small overflow-hidden w-100">
-                                <div className="fw-bold text-truncate" title={transfer.destinationWarehouse?.name}>
-                                  <i className="fas fa-warehouse text-success fa-xs me-1 d-inline d-sm-none"></i>
-                                  {transfer.destinationWarehouse?.name}
-                                </div>
-                                <small className="text-muted d-block text-truncate" title={transfer.destinationWarehouse?.location}>
-                                  {transfer.destinationWarehouse?.location}
-                                </small>
+                                {(transfer.transferType || 'WAREHOUSE') === 'CUSTOMER_DELIVERY' ? (
+                                  <>
+                                    <div className="fw-bold text-truncate" title={transfer.customerFullName}>
+                                      <i className="fas fa-user-tag text-info fa-xs me-1 d-inline d-sm-none"></i>
+                                      {transfer.customerFullName}
+                                    </div>
+                                    <small className="text-muted d-block text-truncate" title={transfer.customerPhone}>
+                                      <i className="fas fa-phone me-1"></i>
+                                      {transfer.customerPhone || '-'}
+                                    </small>
+                                    <small className="text-muted d-block text-truncate" title={transfer.customerAddress}>
+                                      <i className="fas fa-map-marker-alt me-1"></i>
+                                      {transfer.customerAddress || '-'}
+                                    </small>
+                                  </>
+                                ) : (
+                                  <>
+                                    <div className="fw-bold text-truncate" title={transfer.destinationWarehouse?.name}>
+                                      <i className="fas fa-warehouse text-success fa-xs me-1 d-inline d-sm-none"></i>
+                                      {transfer.destinationWarehouse?.name}
+                                    </div>
+                                    <small className="text-muted d-block text-truncate" title={transfer.destinationWarehouse?.location}>
+                                      {transfer.destinationWarehouse?.location}
+                                    </small>
+                                  </>
+                                )}
                               </div>
                             </div>
                           </td>
@@ -1610,20 +1737,12 @@ const Stock = () => {
                                   <button
                                     className="btn btn-sm btn-success w-100 py-1 px-2"
                                     style={{fontSize: 'clamp(0.7rem, 2vw, 0.8rem)', whiteSpace: 'nowrap'}}
-                                    onClick={() => {
-                                      setConfirmModal({
-                                        show: true,
-                                        title: 'Transferi Tamamla',
-                                        message: 'Transfer direkt tamamlanacak ve stok kaynak depodan hedef depoya taşınacak. Onaylıyor musunuz?',
-                                        confirmText: 'Evet, Tamamla',
-                                        confirmVariant: 'success',
-                                        icon: 'check-circle',
-                                        onConfirm: () => {
-                                          setConfirmModal({ show: false });
-                                          handleTransferStatusChange(transfer.id, 'complete');
-                                        }
-                                      });
-                                    }}
+                                    onClick={() =>
+                                      openCompletionFlow(
+                                        transfer,
+                                        'Transfer direkt tamamlanacak ve stok kaynak depodan düşülecek. Onaylıyor musunuz?'
+                                      )
+                                    }
                                     title="Transfer direkt tamamlanacak"
                                   >
                                     <i className="fas fa-check me-1"></i>
@@ -1651,20 +1770,12 @@ const Stock = () => {
                                   <button
                                     className="btn btn-sm btn-success w-100 py-1 px-2"
                                     style={{fontSize: 'clamp(0.7rem, 2vw, 0.8rem)', whiteSpace: 'nowrap'}}
-                                    onClick={() => {
-                                      setConfirmModal({
-                                        show: true,
-                                        title: 'Transferi Tamamla',
-                                        message: 'Transfer tamamlanacak ve stok kaynak depodan hedef depoya taşınacak. Rezervasyon kaldırılacak. Onaylıyor musunuz?',
-                                        confirmText: 'Evet, Tamamla',
-                                        confirmVariant: 'success',
-                                        icon: 'check-circle',
-                                        onConfirm: () => {
-                                          setConfirmModal({ show: false });
-                                          handleTransferStatusChange(transfer.id, 'complete');
-                                        }
-                                      });
-                                    }}
+                                    onClick={() =>
+                                      openCompletionFlow(
+                                        transfer,
+                                        'Transfer tamamlanacak ve stok rezervasyonu kapatılacak. Onaylıyor musunuz?'
+                                      )
+                                    }
                                     title="Transferi tamamla ve stok taşı"
                                   >
                                     <i className="fas fa-check-double me-1"></i>
@@ -1730,6 +1841,22 @@ const Stock = () => {
                                 >
                                   <i className="fas fa-sticky-note me-1"></i>
                                   Notlar
+                                </button>
+                              )}
+                              {transfer.completionNote && (
+                                <button
+                                  className="btn btn-sm btn-outline-success w-100 py-1 px-2"
+                                  style={{fontSize: 'clamp(0.7rem, 2vw, 0.8rem)', whiteSpace: 'nowrap'}}
+                                  onClick={() => setNotesModal({
+                                    show: true,
+                                    notes: transfer.completionNote,
+                                    transferId: transfer.id,
+                                    title: 'Tamamlama Notu'
+                                  })}
+                                  title="Tamamlama notunu görüntüle"
+                                >
+                                  <i className="fas fa-clipboard-check me-1"></i>
+                                  Tamamlama
                                 </button>
                               )}
                               {role === 'ADMIN' && (
@@ -1848,13 +1975,100 @@ const Stock = () => {
                     handleTransferStatusChange(
                       cancellationModal.transferId,
                       'cancel',
-                      cancellationModal.reason.trim() || null
+                      cancellationModal.reason.trim()
+                        ? { cancellationReason: cancellationModal.reason.trim() }
+                        : undefined
                     );
                     setCancellationModal({ show: false, transferId: null, reason: '' });
                   }}
                 >
                   <i className="fas fa-ban me-2"></i>
                   İptal Et
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {completionModal.show && (
+        <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content">
+              <div className="modal-header bg-success text-white">
+                <h5 className="modal-title">
+                  <i className="fas fa-clipboard-check me-2"></i>
+                  Tamamlama Notu
+                </h5>
+                <button
+                  type="button"
+                  className="btn-close btn-close-white"
+                  onClick={() => setCompletionModal({ show: false, transferId: null, note: '', message: '', transfer: null })}
+                ></button>
+              </div>
+              <div className="modal-body">
+                <div className="alert alert-info">
+                  <i className="fas fa-info-circle me-2"></i>
+                  {completionModal.message || 'Sevk tamamlanmadan önce teslimat durumunu ve varsa özel notları ekleyebilirsiniz.'}
+                </div>
+                {completionModal.transfer?.transferType === 'CUSTOMER_DELIVERY' && (
+                  <div className="mb-3">
+                    <div className="fw-bold">
+                      <i className="fas fa-user-tag me-2 text-info"></i>
+                      {completionModal.transfer.customerFullName}
+                    </div>
+                    <small className="text-muted d-block">
+                      <i className="fas fa-phone me-1"></i>
+                      {completionModal.transfer.customerPhone}
+                    </small>
+                    <small className="text-muted d-block">
+                      <i className="fas fa-map-marker-alt me-1"></i>
+                      {completionModal.transfer.customerAddress}
+                    </small>
+                  </div>
+                )}
+                <div className="mb-3">
+                  <label htmlFor="completionNote" className="form-label">
+                    <i className="fas fa-comment-alt me-1"></i>
+                    Tamamlama Notu <span className="text-muted">(Opsiyonel)</span>
+                  </label>
+                  <textarea
+                    id="completionNote"
+                    className="form-control"
+                    rows="4"
+                    value={completionModal.note}
+                    onChange={(e) => setCompletionModal({ ...completionModal, note: e.target.value })}
+                    placeholder="Teslim alan kişi, adres detayları veya önemli gözlemler..."
+                    maxLength="500"
+                  />
+                  <small className="text-muted">{completionModal.note.length}/500 karakter</small>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setCompletionModal({ show: false, transferId: null, note: '', message: '', transfer: null })}
+                >
+                  <i className="fas fa-times me-2"></i>
+                  Vazgeç
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-success"
+                  onClick={() => {
+                    handleTransferStatusChange(
+                      completionModal.transferId,
+                      'complete',
+                      completionModal.note.trim()
+                        ? { completionNote: completionModal.note.trim() }
+                        : undefined
+                    );
+                    setCompletionModal({ show: false, transferId: null, note: '', message: '', transfer: null });
+                  }}
+                >
+                  <i className="fas fa-check me-2"></i>
+                  Kaydet ve Tamamla
                 </button>
               </div>
             </div>

@@ -268,3 +268,4 @@ const StockSettingsModal = ({ stock, onSuccess, onClose }) => {
 
 export default StockSettingsModal;
 
+
