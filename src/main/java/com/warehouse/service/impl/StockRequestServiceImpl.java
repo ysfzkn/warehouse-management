@@ -111,6 +111,19 @@ public class StockRequestServiceImpl implements StockRequestService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public List<StockRequestDto> getRequestsForCurrentUser(StockRequestStatus status) {
+        String username = CurrentUser.usernameOrSystem();
+        logger.debug("Fetching stock requests for user: {} status: {}", username, status);
+        List<StockRequest> requests = status != null
+                ? stockRequestRepository.findAllDetailsByRequestedByAndStatus(username, status)
+                : stockRequestRepository.findAllDetailsByRequestedBy(username);
+        return requests.stream()
+                .map(this::toDto)
+                .collect(Collectors.toList());
+    }
+
+    @Override
     public long getPendingRequestsCount() {
         return stockRequestRepository.countByStatus(StockRequestStatus.PENDING);
     }
@@ -226,6 +239,26 @@ public class StockRequestServiceImpl implements StockRequestService {
         dto.setCurrentStockQuantity(request.getStock().getQuantity());
         dto.setAvailableQuantity(request.getStock().getAvailableQuantity());
         return dto;
+    }
+
+    @Override
+    @Transactional
+    public void deleteOwnPendingRequest(Long requestId) {
+        StockRequest request = getRequestById(requestId);
+        String username = CurrentUser.usernameOrSystem();
+        String role = CurrentUser.getRole();
+        boolean isAdmin = role != null && role.equalsIgnoreCase("ADMIN");
+
+        if (!isAdmin && (request.getRequestedBy() == null || !request.getRequestedBy().equalsIgnoreCase(username))) {
+            throw new WarehouseManagementException(ErrorCode.UNAUTHORIZED_ACTION);
+        }
+
+        if (request.getStatus() != StockRequestStatus.PENDING) {
+            throw new WarehouseManagementException(ErrorCode.ONLY_PENDING_REQUESTS_CAN_BE_DELETED);
+        }
+
+        stockRequestRepository.delete(request);
+        logger.info("Stock request {} deleted by {}", requestId, username);
     }
 }
 

@@ -65,6 +65,13 @@ public class StockTransferController {
         return ResponseEntity.ok(dtos);
     }
 
+    @GetMapping("/current-user")
+    public ResponseEntity<List<StockTransferDto>> getCurrentUserTransfers() {
+        List<StockTransfer> transfers = stockTransferService.getTransfersForCurrentUser();
+        List<StockTransferDto> dtos = transferMapper.toDtoList(transfers);
+        return ResponseEntity.ok(dtos);
+    }
+
     @PostMapping
     public ResponseEntity<StockTransferDto> createTransfer(@Valid @RequestBody StockTransfer transfer) {
         StockTransfer createdTransfer = stockTransferService.createTransfer(transfer);

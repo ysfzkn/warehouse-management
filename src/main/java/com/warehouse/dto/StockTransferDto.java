@@ -32,6 +32,7 @@ public class StockTransferDto {
     private String customerPhone;
     private String customerAddress;
     private String completionNote;
+    private String createdBy;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 

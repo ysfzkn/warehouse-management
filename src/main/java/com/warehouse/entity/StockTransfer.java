@@ -112,6 +112,10 @@ public class StockTransfer {
     @Column(name = "cancellation_reason", length = 500)
     private String cancellationReason;
 
+    @Size(max = 100, message = "Created by cannot exceed 100 characters")
+    @Column(name = "created_by", length = 100)
+    private String createdBy;
+
     @Size(max = 500, message = "Completion note cannot exceed 500 characters")
     @Column(name = "completion_note", length = 500)
     private String completionNote;

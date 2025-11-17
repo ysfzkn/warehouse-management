@@ -33,6 +33,7 @@ public class StockTransferMapper {
         dto.setCustomerPhone(entity.getCustomerPhone());
         dto.setCustomerAddress(entity.getCustomerAddress());
         dto.setCompletionNote(entity.getCompletionNote());
+        dto.setCreatedBy(entity.getCreatedBy());
         dto.setCreatedAt(entity.getCreatedAt());
         dto.setUpdatedAt(entity.getUpdatedAt());
 

@@ -1,8 +1,8 @@
 package com.warehouse.repository;
 
+import com.warehouse.entity.Product;
 import com.warehouse.entity.StockTransfer;
 import com.warehouse.entity.Warehouse;
-import com.warehouse.entity.Product;
 import com.warehouse.enums.TransferStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -78,7 +78,7 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, Lo
            "LEFT JOIN FETCH st.destinationWarehouse " +
            "LEFT JOIN FETCH st.product " +
            "WHERE st.sourceWarehouse = :sourceWarehouse AND st.status = :status")
-    List<StockTransfer> findBySourceWarehouseAndStatus(@Param("sourceWarehouse") Warehouse sourceWarehouse, 
+    List<StockTransfer> findBySourceWarehouseAndStatus(@Param("sourceWarehouse") Warehouse sourceWarehouse,
                                                         @Param("status") TransferStatus status);
 
     @Query("SELECT st FROM StockTransfer st " +
@@ -86,7 +86,7 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, Lo
            "LEFT JOIN FETCH st.destinationWarehouse " +
            "LEFT JOIN FETCH st.product " +
            "WHERE st.destinationWarehouse = :destinationWarehouse AND st.status = :status")
-    List<StockTransfer> findByDestinationWarehouseAndStatus(@Param("destinationWarehouse") Warehouse destinationWarehouse, 
+    List<StockTransfer> findByDestinationWarehouseAndStatus(@Param("destinationWarehouse") Warehouse destinationWarehouse,
                                                              @Param("status") TransferStatus status);
 
     @Query("SELECT st FROM StockTransfer st " +
@@ -95,5 +95,12 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, Lo
            "LEFT JOIN FETCH st.product " +
            "WHERE st.id = :id")
     java.util.Optional<StockTransfer> findByIdWithRelations(@Param("id") Long id);
-}
 
+    @Query("SELECT st FROM StockTransfer st " +
+           "LEFT JOIN FETCH st.sourceWarehouse " +
+           "LEFT JOIN FETCH st.destinationWarehouse " +
+           "LEFT JOIN FETCH st.product " +
+           "WHERE st.createdBy = :createdBy " +
+           "ORDER BY st.transferDate DESC")
+    List<StockTransfer> findAllByCreatedByOrderByTransferDateDesc(@Param("createdBy") String createdBy);
+}

@@ -1,5 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import {
+  extractPhoneDigits,
+  formatPhoneForSubmit,
+  formatPhoneInputValue,
+  isPhoneComplete,
+  PHONE_PLACEHOLDER
+} from '../utils/phone';
 
 const WarehouseForm = ({ warehouse, onSuccess, onCancel }) => {
   const [formData, setFormData] = useState({
@@ -18,7 +25,7 @@ const WarehouseForm = ({ warehouse, onSuccess, onCancel }) => {
       setFormData({
         name: warehouse.name || '',
         location: warehouse.location || '',
-        phone: warehouse.phone || '',
+        phone: extractPhoneDigits(warehouse.phone || ''),
         manager: warehouse.manager || '',
         capacitySqm: warehouse.capacitySqm || '',
         isActive: warehouse.isActive !== false
@@ -28,6 +35,19 @@ const WarehouseForm = ({ warehouse, onSuccess, onCancel }) => {
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
+
+     if (name === 'phone') {
+      const digits = extractPhoneDigits(value);
+      setFormData(prev => ({
+        ...prev,
+        phone: digits
+      }));
+      if (errors.phone) {
+        setErrors(prev => ({ ...prev, phone: '' }));
+      }
+      return;
+    }
+
     setFormData(prev => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : value
@@ -53,6 +73,10 @@ const WarehouseForm = ({ warehouse, onSuccess, onCancel }) => {
       newErrors.location = 'Konum gereklidir';
     }
 
+    if (formData.phone && !isPhoneComplete(formData.phone)) {
+      newErrors.phone = 'Telefon numarası 10 haneli olmalıdır';
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -69,7 +93,8 @@ const WarehouseForm = ({ warehouse, onSuccess, onCancel }) => {
     try {
       const dataToSend = {
         ...formData,
-        capacitySqm: formData.capacitySqm ? parseFloat(formData.capacitySqm) : null
+        capacitySqm: formData.capacitySqm ? parseFloat(formData.capacitySqm) : null,
+        phone: formData.phone ? formatPhoneForSubmit(formData.phone) : null
       };
 
       if (warehouse) {
@@ -162,15 +187,24 @@ const WarehouseForm = ({ warehouse, onSuccess, onCancel }) => {
             <label htmlFor="phone" className="form-label">
               Telefon
             </label>
-            <input
-              type="tel"
-              className="form-control"
-              id="phone"
-              name="phone"
-              value={formData.phone}
-              onChange={handleChange}
-              placeholder="0212 555 0000"
-            />
+            <div className="input-group phone-input-group">
+              <span className="input-group-text">+90</span>
+              <input
+                type="tel"
+                className={`form-control ${errors.phone ? 'is-invalid' : (formData.phone ? (isPhoneComplete(formData.phone) ? 'is-valid' : '') : '')}`}
+                id="phone"
+                name="phone"
+                value={formatPhoneInputValue(formData.phone)}
+                onChange={handleChange}
+                placeholder={PHONE_PLACEHOLDER}
+                maxLength="13"
+                inputMode="numeric"
+              />
+            </div>
+            {errors.phone && <div className="invalid-feedback d-block">{errors.phone}</div>}
+            {!errors.phone && formData.phone && !isPhoneComplete(formData.phone) && (
+              <small className="text-muted">Telefon 10 haneli olmalıdır</small>
+            )}
           </div>
         </div>
       </div>

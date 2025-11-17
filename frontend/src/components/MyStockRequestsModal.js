@@ -1,0 +1,298 @@
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import axios from 'axios';
+import NotesModal from './NotesModal';
+
+const statusConfig = {
+  PENDING: { label: 'Beklemede', className: 'warning', icon: 'fa-clock' },
+  APPROVED: { label: 'Onaylandı', className: 'success', icon: 'fa-check' },
+  REJECTED: { label: 'Reddedildi', className: 'danger', icon: 'fa-times' }
+};
+
+const filterOptions = [
+  { key: 'PENDING', label: 'Beklemede', variant: 'warning' },
+  { key: 'APPROVED', label: 'Onaylanan', variant: 'success' },
+  { key: 'REJECTED', label: 'Reddedilen', variant: 'danger' },
+  { key: 'ALL', label: 'Tümü', variant: 'secondary' }
+];
+
+const formatDate = (value) => {
+  if (!value) return '-';
+  return new Date(value).toLocaleString('tr-TR', {
+    timeZone: 'Europe/Istanbul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+};
+
+const MyStockRequestsModal = ({ onClose }) => {
+  const [allRequests, setAllRequests] = useState([]);
+  const [filter, setFilter] = useState('PENDING');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
+  const [notesModal, setNotesModal] = useState({ show: false, title: '', notes: '', requestId: null });
+
+  const fetchRequests = useCallback(async () => {
+    try {
+      setLoading(true);
+      const response = await axios.get('/api/stock-requests/current-user');
+      setAllRequests(Array.isArray(response.data) ? response.data : []);
+      setError(null);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Talepler alınırken hata oluştu');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchRequests();
+  }, [fetchRequests]);
+
+  const handleDelete = async (requestId) => {
+    if (!window.confirm(`#${requestId} numaralı talebi silmek istediğinize emin misiniz?`)) {
+      return;
+    }
+    try {
+      setDeletingId(requestId);
+      await axios.delete(`/api/stock-requests/${requestId}`);
+      await fetchRequests();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Talep silinirken hata oluştu');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const stats = useMemo(() => ({
+    pending: allRequests.filter(r => r.status === 'PENDING').length,
+    approved: allRequests.filter(r => r.status === 'APPROVED').length,
+    rejected: allRequests.filter(r => r.status === 'REJECTED').length
+  }), [allRequests]);
+
+  const requests = useMemo(() => {
+    if (filter === 'ALL') {
+      return allRequests;
+    }
+    return allRequests.filter(r => r.status === filter);
+  }, [allRequests, filter]);
+
+  return (
+    <>
+      <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+        <div className="modal-dialog modal-xl modal-dialog-scrollable">
+          <div className="modal-content">
+            <div className="modal-header bg-info text-white">
+              <h5 className="modal-title">
+                <i className="fas fa-list me-2"></i>
+                Taleplerim
+              </h5>
+              <button type="button" className="btn-close btn-close-white" onClick={onClose}></button>
+            </div>
+
+            <div className="modal-body p-0">
+              <div className="row g-3 p-3 bg-light border-bottom">
+                <div className="col-md-4">
+                  <div className="card border-warning shadow-sm h-100">
+                    <div className="card-body text-center">
+                      <i className="fas fa-clock fa-2x text-warning mb-2"></i>
+                      <h3 className="mb-0">{stats.pending}</h3>
+                      <p className="text-muted mb-0 small">Bekleyen Talepler</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="col-md-4">
+                  <div className="card border-success shadow-sm h-100">
+                    <div className="card-body text-center">
+                      <i className="fas fa-check-circle fa-2x text-success mb-2"></i>
+                      <h3 className="mb-0">{stats.approved}</h3>
+                      <p className="text-muted mb-0 small">Onaylananlar</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="col-md-4">
+                  <div className="card border-danger shadow-sm h-100">
+                    <div className="card-body text-center">
+                      <i className="fas fa-times-circle fa-2x text-danger mb-2"></i>
+                      <h3 className="mb-0">{stats.rejected}</h3>
+                      <p className="text-muted mb-0 small">Reddedilenler</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-3 border-bottom bg-white">
+                <div className="btn-group flex-wrap w-100" role="group">
+                  {filterOptions.map(option => (
+                    <React.Fragment key={option.key}>
+                      <input
+                        type="radio"
+                        className="btn-check"
+                        name="myRequestFilter"
+                        id={`my-req-${option.key}`}
+                        value={option.key}
+                        checked={filter === option.key}
+                        onChange={(e) => setFilter(e.target.value)}
+                      />
+                      <label className={`btn btn-outline-${option.variant}`} htmlFor={`my-req-${option.key}`}>
+                        {option.label}
+                      </label>
+                    </React.Fragment>
+                  ))}
+                </div>
+              </div>
+
+              <div className="table-responsive" style={{ minHeight: '300px' }}>
+                {loading ? (
+                  <div className="text-center py-5">
+                    <div className="spinner-border text-info" role="status">
+                      <span className="visually-hidden">Yükleniyor...</span>
+                    </div>
+                  </div>
+                ) : error ? (
+                  <div className="alert alert-danger m-3">
+                    <i className="fas fa-exclamation-triangle me-2"></i>
+                    {error}
+                  </div>
+                ) : requests.length === 0 ? (
+                  <div className="text-center py-5">
+                    <i className="fas fa-inbox fa-3x text-muted mb-3"></i>
+                    <p className="text-muted mb-0">
+                      {filter === 'PENDING' ? 'Bekleyen talebiniz bulunmuyor' : 'Bu filtrede kayıt bulunamadı'}
+                    </p>
+                  </div>
+                ) : (
+                  <table className="table table-hover align-middle mb-0">
+                    <thead className="table-light">
+                      <tr>
+                        <th style={{ width: '70px' }}>ID</th>
+                        <th>Ürün</th>
+                        <th>Depo</th>
+                        <th className="text-center">İşlem</th>
+                        <th className="text-center">Miktar</th>
+                        <th className="text-center">Durum</th>
+                        <th style={{ width: '160px' }}>Tarih</th>
+                        <th className="text-center" style={{ width: '160px' }}>İşlemler</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {requests.map(request => {
+                        const status = statusConfig[request.status] || statusConfig.PENDING;
+                        const canDelete = request.status === 'PENDING';
+                        return (
+                          <tr key={request.id}>
+                            <td>
+                              <span className="badge bg-dark">#{request.id}</span>
+                            </td>
+                            <td>
+                              <div className="fw-bold">{request.productName}</div>
+                              <small className="text-muted">SKU: {request.productSku}</small>
+                            </td>
+                            <td>{request.warehouseName}</td>
+                            <td className="text-center">
+                              <span className={`badge ${request.type === 'ADD' ? 'bg-success' : 'bg-danger'}`}>
+                                <i className={`fas fa-${request.type === 'ADD' ? 'plus' : 'minus'} me-1`}></i>
+                                {request.type === 'ADD' ? 'Ekleme' : 'Çıkarma'}
+                              </span>
+                            </td>
+                            <td className="text-center">
+                              <span className="badge bg-primary">{request.quantity}</span>
+                            </td>
+                            <td className="text-center">
+                              <span className={`badge bg-${status.className}`}>
+                                <i className={`fas ${status.icon} me-1`}></i>
+                                {status.label}
+                              </span>
+                            </td>
+                            <td>
+                              <small className="text-muted d-block">{formatDate(request.requestedAt)}</small>
+                              {request.reviewedAt && (
+                                <small className="text-muted d-block">
+                                  Güncelleme: {formatDate(request.reviewedAt)}
+                                </small>
+                              )}
+                            </td>
+                            <td className="text-center">
+                              <div className="d-flex gap-1 justify-content-center">
+                                {request.notes && (
+                                  <button
+                                    className="btn btn-sm btn-outline-secondary"
+                                    title="Notları Gör"
+                                    onClick={() => setNotesModal({
+                                      show: true,
+                                      title: 'Talep Notları',
+                                      notes: request.notes,
+                                      requestId: request.id
+                                    })}
+                                  >
+                                    <i className="fas fa-sticky-note"></i>
+                                  </button>
+                                )}
+                                {request.status === 'REJECTED' && request.rejectionReason && (
+                                  <button
+                                    className="btn btn-sm btn-outline-danger"
+                                    title="Ret Nedenini Gör"
+                                    onClick={() => setNotesModal({
+                                      show: true,
+                                      title: 'Reddetme Nedeni',
+                                      notes: request.rejectionReason,
+                                      requestId: request.id
+                                    })}
+                                  >
+                                    <i className="fas fa-comment-slash"></i>
+                                  </button>
+                                )}
+                                {canDelete && (
+                                  <button
+                                    className="btn btn-sm btn-outline-danger"
+                                    onClick={() => handleDelete(request.id)}
+                                    disabled={deletingId === request.id}
+                                    title="Talebi Sil"
+                                  >
+                                    {deletingId === request.id ? (
+                                      <span className="spinner-border spinner-border-sm"></span>
+                                    ) : (
+                                      <i className="fas fa-trash"></i>
+                                    )}
+                                  </button>
+                                )}
+                                {!request.notes && request.status !== 'REJECTED' && !canDelete && (
+                                  <span className="text-muted small">-</span>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+
+            <div className="modal-footer bg-light">
+              <button type="button" className="btn btn-secondary" onClick={onClose}>
+                <i className="fas fa-times me-2"></i>
+                Kapat
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <NotesModal
+        show={notesModal.show}
+        title={notesModal.title}
+        notes={notesModal.notes}
+        transferId={notesModal.requestId}
+        onClose={() => setNotesModal({ show: false, title: '', notes: '', requestId: null })}
+      />
+    </>
+  );
+};
+
+export default MyStockRequestsModal;
+

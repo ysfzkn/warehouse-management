@@ -1,8 +1,17 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
+import {
+  extractPhoneDigits,
+  isPhoneComplete,
+  formatPhoneForSubmit,
+  formatPhoneForDisplay,
+  formatPhoneInputValue,
+  PHONE_PLACEHOLDER
+} from '../utils/phone';
 
-const StockTransferModal = ({ stock, onSuccess, onClose }) => {
+const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery = false }) => {
   const [currentStep, setCurrentStep] = useState(1);
+  const initialTransferType = lockToCustomerDelivery ? 'CUSTOMER_DELIVERY' : 'WAREHOUSE';
   
   // Get current date/time in Turkey timezone (GMT+3)
   const getTurkeyDateTime = () => {
@@ -29,7 +38,7 @@ const StockTransferModal = ({ stock, onSuccess, onClose }) => {
     vehiclePlate: '',
     notes: '',
     transferDate: getTurkeyDateTime(),
-    transferType: 'WAREHOUSE',
+    transferType: initialTransferType,
     customerFullName: '',
     customerPhone: '',
     customerAddress: ''
@@ -48,6 +57,38 @@ const StockTransferModal = ({ stock, onSuccess, onClose }) => {
     { key: 'WAREHOUSE', label: 'Depo Transferi', icon: 'fa-warehouse', accent: 'primary', hint: 'Şubeler arası stok taşıma' },
     { key: 'CUSTOMER_DELIVERY', label: 'Müşteri Sevkiyatı', icon: 'fa-shipping-fast', accent: 'info', hint: 'Depodan müşteriye sevk' }
   ];
+
+  const getPhoneValidationClass = (value, error) => {
+    if (error) return 'is-invalid';
+    if (isPhoneComplete(value)) return 'is-valid';
+    return '';
+  };
+
+  const handlePhoneInput = (field, rawValue) => {
+    const digits = extractPhoneDigits(rawValue);
+    setFormData(prev => ({
+      ...prev,
+      [field]: digits
+    }));
+    if (validationErrors[field]) {
+      setValidationErrors(prev => ({ ...prev, [field]: '' }));
+    }
+  };
+
+  useEffect(() => {
+    if (lockToCustomerDelivery) {
+      setFormData(prev => {
+        if (prev.transferType === 'CUSTOMER_DELIVERY') {
+          return prev;
+        }
+        return {
+          ...prev,
+          transferType: 'CUSTOMER_DELIVERY'
+        };
+      });
+      setCurrentStep(1);
+    }
+  }, [lockToCustomerDelivery]);
 
   // Fetch available quantity for selected source warehouse and product
   const fetchAvailableStock = useCallback(async () => {
@@ -177,6 +218,11 @@ useEffect(() => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+
+    if (name === 'driverPhone' || name === 'customerPhone') {
+      handlePhoneInput(name, value);
+      return;
+    }
     
     // If source warehouse changes, clear destination warehouse if it's the same
     if (name === 'sourceWarehouseId') {
@@ -213,6 +259,9 @@ useEffect(() => {
   };
 
   const handleTransferTypeChange = (type) => {
+    if (lockToCustomerDelivery && type !== 'CUSTOMER_DELIVERY') {
+      return;
+    }
     if (formData.transferType === type) return;
     setFormData(prev => ({
       ...prev,
@@ -239,11 +288,10 @@ useEffect(() => {
         }
       } else {
         if (!formData.customerFullName.trim()) errors.customerFullName = 'Müşteri adı zorunludur';
-        if (!formData.customerPhone.trim()) errors.customerPhone = 'Müşteri telefonu zorunludur';
-        if (!formData.customerAddress.trim()) errors.customerAddress = 'Adres zorunludur';
-        if (formData.customerPhone && formData.customerPhone.trim().length < 10) {
-          errors.customerPhone = 'Telefon numarası en az 10 haneli olmalıdır';
+        if (!isPhoneComplete(formData.customerPhone)) {
+          errors.customerPhone = 'Telefon numarası 10 haneli olmalıdır';
         }
+        if (!formData.customerAddress.trim()) errors.customerAddress = 'Adres zorunludur';
       }
       if (!formData.productId) errors.productId = 'Ürün seçimi zorunludur';
       if (!formData.quantity || formData.quantity <= 0) errors.quantity = 'Geçerli bir miktar giriniz';
@@ -254,7 +302,7 @@ useEffect(() => {
       if (!formData.driverName.trim()) errors.driverName = 'Şoför adı zorunludur';
       if (formData.driverName.trim().length < 3) errors.driverName = 'Şoför adı en az 3 karakter olmalıdır';
       if (!/^[0-9]{11}$/.test(formData.driverTcId)) errors.driverTcId = 'TC Kimlik No 11 haneli olmalıdır';
-      if (!formData.driverPhone.trim()) errors.driverPhone = 'Telefon numarası zorunludur';
+      if (!isPhoneComplete(formData.driverPhone)) errors.driverPhone = 'Telefon numarası 10 haneli olmalıdır';
       if (!formData.vehiclePlate.trim()) errors.vehiclePlate = 'Araç plakası zorunludur';
     }
 
@@ -312,7 +360,7 @@ useEffect(() => {
         quantity: parseInt(formData.quantity),
         driverName: formData.driverName.trim(),
         driverTcId: formData.driverTcId.trim(),
-        driverPhone: formData.driverPhone.trim(),
+        driverPhone: formatPhoneForSubmit(formData.driverPhone),
         vehiclePlate: formData.vehiclePlate.trim().toUpperCase(),
         notes: formData.notes.trim(),
         transferDate: parseDateInTurkeyTimezone(formData.transferDate),
@@ -327,7 +375,7 @@ useEffect(() => {
 
       if (formData.transferType === 'CUSTOMER_DELIVERY') {
         transferData.customerFullName = formData.customerFullName.trim();
-        transferData.customerPhone = formData.customerPhone.trim();
+        transferData.customerPhone = formatPhoneForSubmit(formData.customerPhone);
         transferData.customerAddress = formData.customerAddress.trim();
       }
 
@@ -356,11 +404,14 @@ useEffect(() => {
   };
 
   const isCustomerTransfer = formData.transferType === 'CUSTOMER_DELIVERY';
+  const canChangeTransferType = !lockToCustomerDelivery;
   const sourceWarehouse = warehouses.find(w => w.id === parseInt(formData.sourceWarehouseId));
   const destinationWarehouse = !isCustomerTransfer
     ? warehouses.find(w => w.id === parseInt(formData.destinationWarehouseId))
     : null;
   const selectedProduct = stock?.product || products.find(p => p.id === parseInt(formData.productId));
+  const formattedDriverPhone = formatPhoneForDisplay(formData.driverPhone);
+  const formattedCustomerPhone = formatPhoneForDisplay(formData.customerPhone);
 
   const steps = submitSuccess ? [
     { number: 1, title: 'Transfer Detayları', icon: 'fa-boxes' },
@@ -454,24 +505,38 @@ useEffect(() => {
                     <i className="fas fa-boxes me-2"></i>
                     Transfer Detaylarını Belirleyin
                   </h5>
-                  <div className="btn-group w-100 mb-4" role="group" aria-label="Transfer türü seçimi">
-                    {transferTypeOptions.map(option => (
-                      <button
-                        type="button"
-                        key={option.key}
-                        className={`btn ${formData.transferType === option.key ? `btn-${option.accent}` : 'btn-outline-secondary'}`}
-                        onClick={() => handleTransferTypeChange(option.key)}
-                      >
-                        <div className="d-flex flex-column">
-                          <span className="fw-bold">
-                            <i className={`fas ${option.icon} me-2`}></i>
-                            {option.label}
-                          </span>
-                          <small className="text-muted">{option.hint}</small>
+                  <div className="row g-3 mb-4">
+                    {transferTypeOptions.map(option => {
+                      const isActive = formData.transferType === option.key;
+                      const disabled = lockToCustomerDelivery && option.key !== 'CUSTOMER_DELIVERY';
+                      return (
+                        <div className="col-md-6" key={option.key}>
+                          <button
+                            type="button"
+                            className={`transfer-type-toggle w-100 ${isActive ? 'active' : ''}`}
+                            onClick={() => handleTransferTypeChange(option.key)}
+                            disabled={disabled}
+                          >
+                            <div className="d-flex align-items-center">
+                              <div className={`transfer-type-icon me-3 ${isActive ? 'active' : ''}`}>
+                                <i className={`fas ${option.icon}`}></i>
+                              </div>
+                              <div>
+                                <div className="fw-bold transfer-type-title">{option.label}</div>
+                                <small className="transfer-type-hint">{option.hint}</small>
+                              </div>
+                            </div>
+                          </button>
                         </div>
-                      </button>
-                    ))}
+                      );
+                    })}
                   </div>
+                  {!canChangeTransferType && (
+                    <div className="alert alert-info py-2 mb-3">
+                      <i className="fas fa-info-circle me-2"></i>
+                      Rolünüz gereği sadece müşteri sevkiyat transferi oluşturabilirsiniz.
+                    </div>
+                  )}
                   
                   <div className="row g-3">
                     <div className="col-md-6">
@@ -561,71 +626,104 @@ useEffect(() => {
                         )}
                       </div>
                     ) : (
-                      <div className="col-md-6">
-                        <label className="form-label fw-bold">
-                          <i className="fas fa-user-tag text-info me-1"></i>
-                          Müşteri Adı Soyadı *
-                        </label>
-                        <input
-                          type="text"
-                          className={`form-control form-control-lg ${validationErrors.customerFullName ? 'is-invalid' : formData.customerFullName ? 'is-valid' : ''}`}
-                          name="customerFullName"
-                          value={formData.customerFullName}
-                          onChange={handleChange}
-                          placeholder="Örn: Ayşe Koç"
-                          maxLength="150"
-                          required={isCustomerTransfer}
-                        />
-                        {validationErrors.customerFullName && (
-                          <div className="invalid-feedback">{validationErrors.customerFullName}</div>
-                        )}
-                      </div>
-                    )}
-
-                    {isCustomerTransfer && (
-                      <>
-                        <div className="col-md-6">
-                          <label className="form-label fw-bold">
-                            <i className="fas fa-phone-alt text-info me-1"></i>
-                            Müşteri Telefonu *
-                          </label>
-                          <input
-                            type="tel"
-                            className={`form-control form-control-lg ${validationErrors.customerPhone ? 'is-invalid' : formData.customerPhone ? 'is-valid' : ''}`}
-                            name="customerPhone"
-                            value={formData.customerPhone}
-                            onChange={handleChange}
-                            placeholder="+90 5XX XXX XX XX"
-                            maxLength="20"
-                            required={isCustomerTransfer}
-                          />
-                          {validationErrors.customerPhone && (
-                            <div className="invalid-feedback">{validationErrors.customerPhone}</div>
-                          )}
-                        </div>
-                        <div className="col-12">
-                          <label className="form-label fw-bold">
-                            <i className="fas fa-map-marker-alt text-info me-1"></i>
-                            Teslimat Adresi *
-                          </label>
-                          <textarea
-                            className={`form-control ${validationErrors.customerAddress ? 'is-invalid' : formData.customerAddress ? 'is-valid' : ''}`}
-                            name="customerAddress"
-                            value={formData.customerAddress}
-                            onChange={handleChange}
-                            rows="3"
-                            placeholder="Mahalle, cadde, numara, il / ilçe..."
-                            maxLength="500"
-                            required={isCustomerTransfer}
-                          ></textarea>
-                          <div className="d-flex justify-content-between">
-                            {validationErrors.customerAddress && (
-                              <div className="invalid-feedback d-block">{validationErrors.customerAddress}</div>
-                            )}
-                            <small className="text-muted ms-auto">{formData.customerAddress.length}/500</small>
+                      <div className="col-12">
+                        <div className="card border-info shadow-sm">
+                          <div className="card-header bg-info text-white d-flex align-items-center">
+                            <i className="fas fa-shipping-fast me-2"></i>
+                            <div>
+                              <strong>Müşteri İletişim Bilgileri</strong>
+                              <div className="small opacity-75">Teslimat adresi ve iletişim detaylarını eksiksiz doldurun</div>
+                            </div>
+                          </div>
+                          <div className="card-body">
+                            <div className="row g-3">
+                              <div className="col-md-6">
+                                <label className="form-label fw-bold">
+                                  <i className="fas fa-user-tag text-info me-1"></i>
+                                  Müşteri Adı Soyadı *
+                                </label>
+                                <input
+                                  type="text"
+                                  className={`form-control form-control-lg ${validationErrors.customerFullName ? 'is-invalid' : formData.customerFullName ? 'is-valid' : ''}`}
+                                  name="customerFullName"
+                                  value={formData.customerFullName}
+                                  onChange={handleChange}
+                                  placeholder="Örn: Ayşe Koç"
+                                  maxLength="150"
+                                  required
+                                  aria-describedby="customerNameHelp"
+                                />
+                                {validationErrors.customerFullName ? (
+                                  <div className="invalid-feedback">{validationErrors.customerFullName}</div>
+                                ) : (
+                                  <small id="customerNameHelp" className="text-muted">
+                                    Fatura veya sevk irsaliyesinde yer alan tam isim
+                                  </small>
+                                )}
+                              </div>
+                              <div className="col-md-6">
+                                <label className="form-label fw-bold">
+                                  <i className="fas fa-phone-alt text-info me-1"></i>
+                                  Müşteri Telefonu *
+                                </label>
+                                <div className="input-group input-group-lg phone-input-group">
+                                  <span className="input-group-text">+90</span>
+                                  <input
+                                    type="tel"
+                                    className={`form-control ${getPhoneValidationClass(formData.customerPhone, validationErrors.customerPhone)}`}
+                                    name="customerPhone"
+                                    value={formatPhoneInputValue(formData.customerPhone)}
+                                    onChange={(e) => handlePhoneInput('customerPhone', e.target.value)}
+                                    placeholder={PHONE_PLACEHOLDER}
+                                    maxLength="13"
+                                    inputMode="numeric"
+                                  />
+                                </div>
+                                {validationErrors.customerPhone ? (
+                                  <div className="invalid-feedback d-block">{validationErrors.customerPhone}</div>
+                                ) : (
+                                  <small className="text-muted">Teslimat sırasında aranacak aktif numara</small>
+                                )}
+                              </div>
+                              <div className="col-12">
+                                <label className="form-label fw-bold">
+                                  <i className="fas fa-map-marker-alt text-info me-1"></i>
+                                  Teslimat Adresi *
+                                </label>
+                                <textarea
+                                  className={`form-control ${validationErrors.customerAddress ? 'is-invalid' : formData.customerAddress ? 'is-valid' : ''}`}
+                                  name="customerAddress"
+                                  value={formData.customerAddress}
+                                  onChange={handleChange}
+                                  rows="4"
+                                  placeholder="Mahalle, cadde, bina, daire, il / ilçe..."
+                                  maxLength="500"
+                                  required
+                                  aria-describedby="customerAddressHelp"
+                                ></textarea>
+                                <div className="d-flex justify-content-between mt-1">
+                                  {validationErrors.customerAddress ? (
+                                    <div className="invalid-feedback d-block">{validationErrors.customerAddress}</div>
+                                  ) : (
+                                    <small id="customerAddressHelp" className="text-muted">
+                                      Navigasyonun kolay bulabilmesi için il/ilçe ve referans noktalarını ekleyin
+                                    </small>
+                                  )}
+                                  <small className="text-muted">{formData.customerAddress.length}/500</small>
+                                </div>
+                              </div>
+                              <div className="col-12">
+                                <div className="alert alert-light border d-flex align-items-start mb-0">
+                                  <i className="fas fa-lightbulb text-warning fa-lg me-3 mt-1"></i>
+                                  <div>
+                                    <strong>İpucu:</strong> Teslim alacak kişinin adını, güvenlik kodu veya site giriş talimatı gibi bilgileri notlar alanında paylaşabilirsiniz.
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
                           </div>
                         </div>
-                      </>
+                      </div>
                     )}
 
                     <div className="col-md-8">
@@ -778,17 +876,20 @@ useEffect(() => {
                         <i className="fas fa-phone me-1"></i>
                         Şoför Telefonu *
                       </label>
-                      <input
-                        type="tel"
-                        className={`form-control form-control-lg ${validationErrors.driverPhone ? 'is-invalid' : formData.driverPhone.trim().length >= 10 ? 'is-valid' : ''}`}
-                        name="driverPhone"
-                        value={formData.driverPhone}
-                        onChange={handleChange}
-                        required
-                        placeholder="0555 555 55 55"
-                        minLength="10"
-                        maxLength="20"
-                      />
+                      <div className="input-group input-group-lg phone-input-group">
+                        <span className="input-group-text">+90</span>
+                        <input
+                          type="tel"
+                          className={`form-control ${getPhoneValidationClass(formData.driverPhone, validationErrors.driverPhone)}`}
+                          name="driverPhone"
+                          value={formatPhoneInputValue(formData.driverPhone)}
+                          onChange={(e) => handlePhoneInput('driverPhone', e.target.value)}
+                          required
+                          placeholder={PHONE_PLACEHOLDER}
+                          maxLength="13"
+                          inputMode="numeric"
+                        />
+                      </div>
                       {validationErrors.driverPhone && (
                         <div className="invalid-feedback">{validationErrors.driverPhone}</div>
                       )}
@@ -951,7 +1052,7 @@ useEffect(() => {
                               <h6 className="fw-bold">{formData.customerFullName}</h6>
                               <p className="mb-1 text-muted small">
                                 <i className="fas fa-phone me-1"></i>
-                                {formData.customerPhone}
+                                {formattedCustomerPhone || '-'}
                               </p>
                               <p className="mb-0 text-muted small">
                                 <i className="fas fa-map-marker-alt me-1"></i>
@@ -1016,7 +1117,7 @@ useEffect(() => {
                             </div>
                             <div className="col-md-6 mb-2">
                               <i className="fas fa-phone me-2 text-muted"></i>
-                              <strong>Telefon:</strong> {formData.driverPhone}
+                              <strong>Telefon:</strong> {formattedDriverPhone || '-'}
                             </div>
                             <div className="col-md-6 mb-2">
                               <i className="fas fa-car me-2 text-muted"></i>
@@ -1094,7 +1195,7 @@ useEffect(() => {
                                 {isCustomerTransfer ? formData.customerFullName : destinationWarehouse?.name}
                               </strong>
                               {isCustomerTransfer && (
-                                <small className="text-muted d-block text-truncate">{formData.customerPhone}</small>
+                                <small className="text-muted d-block text-truncate">{formattedCustomerPhone}</small>
                               )}
                             </div>
                           </div>
@@ -1128,7 +1229,7 @@ useEffect(() => {
                         <li>Araç plakası: <strong>{formData.vehiclePlate}</strong></li>
                         <li>Transfer durumunu güncellemek için "Yola Çıkar" veya "Tamamla" butonlarını kullanabilirsiniz</li>
                         {isCustomerTransfer && (
-                          <li>Müşteri: <strong>{formData.customerFullName}</strong> ({formData.customerPhone})</li>
+                          <li>Müşteri: <strong>{formData.customerFullName}</strong> ({formattedCustomerPhone || '-'})</li>
                         )}
                       </ul>
                     </div>

@@ -13,3 +13,74 @@
     padding-right: 5px;
   }
 }
+
+.transfer-type-toggle {
+  border: 1px solid #dee2e6;
+  border-radius: 16px;
+  padding: 18px 20px;
+  background: #fff;
+  color: #212529;
+  text-align: left;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 10px rgba(33, 37, 41, 0.04);
+}
+
+.transfer-type-toggle:hover,
+.transfer-type-toggle:focus {
+  border-color: #6c5ce7;
+  box-shadow: 0 6px 16px rgba(108, 92, 231, 0.15);
+}
+
+.transfer-type-toggle.active {
+  background: linear-gradient(135deg, #6c5ce7 0%, #8e2de2 100%);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 10px 25px rgba(108, 92, 231, 0.35);
+}
+
+.transfer-type-toggle .transfer-type-title {
+  font-size: 1rem;
+  color: inherit;
+}
+
+.transfer-type-toggle .transfer-type-hint {
+  color: #6c757d;
+}
+
+.transfer-type-toggle.active .transfer-type-hint {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.transfer-type-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: rgba(108, 92, 231, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  color: #6c5ce7;
+  transition: all 0.2s ease;
+}
+
+.transfer-type-icon.active {
+  background: rgba(255, 255, 255, 0.25);
+  color: #fff;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+
+.phone-input-group .input-group-text {
+  background-color: #f8f9fa;
+  font-weight: 600;
+  color: #6c5ce7;
+}
+
+.phone-input-group input {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+
+.phone-input-group input::placeholder {
+  color: #adb5bd;
+}

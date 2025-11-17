@@ -11,6 +11,7 @@ import FilterChips from '../components/FilterChips';
 import ConfirmModal from '../components/ConfirmModal';
 import NotesModal from '../components/NotesModal';
 import AuditTimelineModal from '../components/AuditTimelineModal';
+import MyStockRequestsModal from '../components/MyStockRequestsModal';
 
 // Helper function to format dates in Turkey timezone
 const formatDateInTurkeyTimezone = (isoDateString, options = {}) => {
@@ -219,6 +220,8 @@ const StockFiltersBar = ({
 const Stock = () => {
   const location = useLocation();
   const role = (typeof window !== 'undefined' && localStorage.getItem('auth_role')) || 'ADMIN';
+  const isAdmin = role === 'ADMIN';
+  const canTransfer = isAdmin || role === 'STOCK_IN' || role === 'STOCK_OUT';
   const [stocks, setStocks] = useState([]);
   const [products, setProducts] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
@@ -272,6 +275,8 @@ const Stock = () => {
   const [excelWarehouseId, setExcelWarehouseId] = useState(null);
   const [excelResult, setExcelResult] = useState(null);
   const [showApprovalModal, setShowApprovalModal] = useState(false);
+  const [showMyRequestsModal, setShowMyRequestsModal] = useState(false);
+  const [lockCustomerTransfer, setLockCustomerTransfer] = useState(false);
   const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
 
   const fetchAllData = useCallback(async () => {
@@ -559,14 +564,16 @@ const Stock = () => {
     fetchAllData();
   };
 
-  const handleStockTransfer = (stock) => {
+  const handleStockTransfer = (stock, lockToCustomer = false) => {
     setSelectedStock(stock);
+    setLockCustomerTransfer(lockToCustomer);
     setShowTransferModal(true);
   };
 
   const handleTransferSuccess = () => {
     setShowTransferModal(false);
     setSelectedStock(null);
+    setLockCustomerTransfer(false);
     fetchAllData();
     if (showTransferHistory) {
       fetchTransfers();
@@ -582,7 +589,8 @@ const Stock = () => {
 
   const fetchTransfers = async () => {
     try {
-      const response = await axios.get('/api/stock-transfers');
+      const endpoint = isAdmin ? '/api/stock-transfers' : '/api/stock-transfers/current-user';
+      const response = await axios.get(endpoint);
       setTransfers(response.data);
     } catch (error) {
       console.error('Error fetching transfers:', error);
@@ -755,9 +763,9 @@ const Stock = () => {
           <i className="fas fa-boxes me-2"></i>
           Stok Yönetimi
         </h2>
-        <div className="btn-group flex-wrap" role="group">
-          {role === 'ADMIN' && (
-            <>
+        <div className="d-flex flex-column flex-lg-row align-items-lg-center gap-2 w-100 justify-content-lg-end">
+          {isAdmin ? (
+            <div className="d-flex flex-wrap gap-2 justify-content-lg-end w-100">
               <button className="btn btn-outline-success" onClick={async () => {
                 try {
                   const res = await axios.get('/api/stock-imports/template', { responseType: 'blob' });
@@ -798,23 +806,37 @@ const Stock = () => {
                   </span>
                 )}
               </button>
-              <button className="btn btn-success" onClick={handleShowTransferHistory}>
-                <i className={`fas fa-${showTransferHistory ? 'cubes' : 'exchange-alt'} me-2`}></i>
-                {showTransferHistory ? 'Stok Listesi' : 'Transfer Geçmişi'}
-              </button>
               <button className="btn btn-primary" onClick={handleCreateStock}>
                 <i className="fas fa-plus me-2"></i>
                 Yeni Stok Kaydı
               </button>
-            </>
-          )}
-          {(role === 'STOCK_IN' || role === 'STOCK_OUT') && (
-            <div className="alert alert-info mb-0 py-2 px-3 d-flex align-items-center">
-              <i className="fas fa-info-circle me-2"></i>
-              <span>
-                {role === 'STOCK_IN' && 'Stok ekleme talepleri oluşturabilirsiniz'}
-                {role === 'STOCK_OUT' && 'Stok çıkarma talepleri oluşturabilirsiniz'}
-              </span>
+              <button className="btn btn-success" onClick={handleShowTransferHistory}>
+                <i className={`fas fa-${showTransferHistory ? 'cubes' : 'exchange-alt'} me-2`}></i>
+                {showTransferHistory ? 'Stok Listesi' : 'Transfer Geçmişi'}
+              </button>
+            </div>
+          ) : (
+            <div className="d-flex flex-column flex-lg-row align-items-lg-center gap-2 w-100">
+              <div className="alert alert-info mb-0 py-2 px-3 flex-grow-1">
+                <i className="fas fa-info-circle me-2"></i>
+                <span>
+                  {role === 'STOCK_IN' && 'Stok ekleme talepleri oluşturabilir, müşteri sevkiyat transferlerinizi görüntüleyebilirsiniz.'}
+                  {role === 'STOCK_OUT' && 'Stok çıkarma talepleri oluşturabilir, müşteri sevkiyat transferlerinizi görüntüleyebilirsiniz.'}
+                </span>
+              </div>
+              <div className="d-flex flex-wrap gap-2 justify-content-lg-end">
+                <button className="btn btn-success" onClick={handleShowTransferHistory}>
+                  <i className={`fas fa-${showTransferHistory ? 'cubes' : 'exchange-alt'} me-2`}></i>
+                  {showTransferHistory ? 'Stok Listesi' : 'Transferlerim'}
+                </button>
+                <button
+                  className="btn btn-outline-primary"
+                  onClick={() => setShowMyRequestsModal(true)}
+                >
+                  <i className="fas fa-clipboard-list me-2"></i>
+                  Taleplerim
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -1092,16 +1114,17 @@ const Stock = () => {
                             <i className="fas fa-cog"></i>
                           </button>
                           
-                          {/* Transfer Button - ADMIN only */}
-                          {role === 'ADMIN' && (
-                            <>
+                          {canTransfer && (
                               <button
                                 className="btn btn-sm btn-outline-success"
-                                onClick={() => handleStockTransfer(stock)}
+                              onClick={() => handleStockTransfer(stock, role !== 'ADMIN')}
                                 title="Transfer Yap"
                               >
                                 <i className="fas fa-exchange-alt"></i>
                               </button>
+                          )}
+                          {role === 'ADMIN' && (
+                            <>
                               <button
                                 className="btn btn-sm btn-outline-danger"
                                 onClick={() => handleDeleteStock(stock.id)}
@@ -1204,7 +1227,9 @@ const Stock = () => {
           onClose={() => {
             setShowTransferModal(false);
             setSelectedStock(null);
+            setLockCustomerTransfer(false);
           }}
+          lockToCustomerDelivery={lockCustomerTransfer}
         />
       )}
 
@@ -1387,8 +1412,8 @@ const Stock = () => {
                   <i className="fas fa-shipping-fast me-1"></i>
                   Müşteri
                 </label>
+                </div>
               </div>
-            </div>
 
               {/* Advanced transfer filters */}
               <div className="row g-2 mt-3">
@@ -1608,6 +1633,12 @@ const Stock = () => {
                             <div className="text-truncate" title={transfer.product?.name}>
                               <div className="fw-bold small">{transfer.product?.name}</div>
                               <small className="text-muted d-block text-truncate">Stok Kodu: {transfer.product?.sku}</small>
+                              {transfer.createdBy && (
+                                <small className="text-muted d-block">
+                                  <i className="fas fa-user me-1"></i>
+                                  {transfer.createdBy}
+                                </small>
+                              )}
                             </div>
                           </td>
                           <td className="align-middle">
@@ -2092,6 +2123,11 @@ const Stock = () => {
           onApprove={() => {
             fetchAllData();
           }}
+        />
+      )}
+      {showMyRequestsModal && (
+        <MyStockRequestsModal
+          onClose={() => setShowMyRequestsModal(false)}
         />
       )}
     </div>

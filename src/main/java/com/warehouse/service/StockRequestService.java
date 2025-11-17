@@ -28,6 +28,11 @@ public interface StockRequestService {
     List<StockRequestDto> getRequestsByStatus(StockRequestStatus status);
 
     /**
+     * Get requests created by current user (non-admin)
+     */
+    List<StockRequestDto> getRequestsForCurrentUser(StockRequestStatus status);
+
+    /**
      * Get pending requests count
      */
     long getPendingRequestsCount();
@@ -51,6 +56,11 @@ public interface StockRequestService {
      * Convert entity to DTO
      */
     StockRequestDto toDto(StockRequest request);
+
+    /**
+     * Delete own pending request
+     */
+    void deleteOwnPendingRequest(Long requestId);
 }
 
 

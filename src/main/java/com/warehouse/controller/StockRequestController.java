@@ -54,6 +54,17 @@ public class StockRequestController {
     }
 
     /**
+     * Get current user's requests (non-admin)
+     */
+    @GetMapping("/current-user")
+    @PreAuthorize("hasAnyRole('ADMIN', 'STOCK_IN', 'STOCK_OUT')")
+    public ResponseEntity<List<StockRequestDto>> getMyRequests(
+            @RequestParam(required = false) StockRequestStatus status) {
+        List<StockRequestDto> requests = stockRequestService.getRequestsForCurrentUser(status);
+        return ResponseEntity.ok(requests);
+    }
+
+    /**
      * Get pending requests count
      */
     @GetMapping("/pending/count")
@@ -83,6 +94,16 @@ public class StockRequestController {
         String reason = body != null ? body.get("rejectionReason") : null;
         stockRequestService.rejectRequest(id, reason);
         return ResponseEntity.ok().build();
+    }
+
+    /**
+     * Delete own pending request
+     */
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'STOCK_IN', 'STOCK_OUT')")
+    public ResponseEntity<Void> deleteOwnRequest(@PathVariable Long id) {
+        stockRequestService.deleteOwnPendingRequest(id);
+        return ResponseEntity.noContent().build();
     }
 }
 

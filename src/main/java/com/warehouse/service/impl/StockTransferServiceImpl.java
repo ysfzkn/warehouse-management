@@ -110,6 +110,14 @@ public class StockTransferServiceImpl implements StockTransferService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public List<StockTransfer> getTransfersForCurrentUser() {
+        String username = CurrentUser.usernameOrSystem();
+        logger.debug("Fetching transfers for user: {}", username);
+        return stockTransferRepository.findAllByCreatedByOrderByTransferDateDesc(username);
+    }
+
+    @Override
     public StockTransfer createTransfer(StockTransfer transfer) {
         logger.info("Creating new transfer");
         TransferType transferType = validateTransferCreation(transfer);
@@ -132,17 +140,21 @@ public class StockTransferServiceImpl implements StockTransferService {
         transfer.setDestinationWarehouse(destinationWarehouse);
         transfer.setProduct(product);
         transfer.setTransferType(transferType);
+        String username = CurrentUser.usernameOrSystem();
+        transfer.setCreatedBy(username);
         transfer.setStatus(TransferStatus.PENDING);
+        boolean isAdminUser = isCurrentUserAdmin();
 
         StockTransfer saved = stockTransferRepository.save(transfer);
-        String username = CurrentUser.usernameOrSystem();
         auditService.log(AuditAction.TRANSFER_CREATE, DomainEntityType.StockTransfer.name(), saved.getId(), username,
                 String.format("Transfer oluşturuldu: %s | Ürün=%s | Miktar=%d",
                         describeRoute(saved), product.getName(), saved.getQuantity()));
-        notificationService.create(NotificationMessages.TRANSFER_CREATED_TITLE,
-                String.format("Kullanıcı %s, %s yönünde %s ürünü için %d adet transfer oluşturdu.", username,
-                        describeRoute(saved), product.getName(), saved.getQuantity()),
-                DomainEntityType.Stock.name(), saved.getId());
+        if (isAdminUser) {
+            notificationService.create(NotificationMessages.TRANSFER_CREATED_TITLE,
+                    String.format("Kullanıcı %s, %s yönünde %s ürünü için %d adet transfer oluşturdu.", username,
+                            describeRoute(saved), product.getName(), saved.getQuantity()),
+                    DomainEntityType.Stock.name(), saved.getId());
+        }
         notifyAdminIfNonAdmin(saved, "oluşturdu");
         logger.info("Transfer created successfully with id: {}", saved.getId());
         
@@ -169,12 +181,15 @@ public class StockTransferServiceImpl implements StockTransferService {
         transfer.setStatus(TransferStatus.IN_TRANSIT);
         StockTransfer saved = stockTransferRepository.save(transfer);
         String username = CurrentUser.usernameOrSystem();
+        boolean isAdminUser = isCurrentUserAdmin();
         auditService.log(AuditAction.TRANSFER_START, DomainEntityType.StockTransfer.name(), saved.getId(), username,
                 String.format("Transfer yola çıkarıldı: %s | Ürün=%s | Miktar=%d (Stok rezerve edildi)",
                         describeRoute(saved), saved.getProduct().getName(), saved.getQuantity()));
-        notificationService.create(NotificationMessages.TRANSFER_STARTED_TITLE,
-                String.format("Kullanıcı %s, #%d numaralı transferi yola çıkardı.", username, saved.getId()),
-                DomainEntityType.Stock.name(), saved.getId());
+        if (isAdminUser) {
+            notificationService.create(NotificationMessages.TRANSFER_STARTED_TITLE,
+                    String.format("Kullanıcı %s, #%d numaralı transferi yola çıkardı.", username, saved.getId()),
+                    DomainEntityType.Stock.name(), saved.getId());
+        }
         notifyAdminIfNonAdmin(saved, "yola çıkardı");
         logger.info("Transfer started successfully with id: {}", saved.getId());
         
@@ -218,12 +233,15 @@ public class StockTransferServiceImpl implements StockTransferService {
         }
         StockTransfer saved = stockTransferRepository.save(transfer);
         String username = CurrentUser.usernameOrSystem();
+        boolean isAdminUser = isCurrentUserAdmin();
         auditService.log(AuditAction.TRANSFER_COMPLETE, DomainEntityType.StockTransfer.name(), saved.getId(), username,
                 String.format("Transfer tamamlandı: %s | Ürün=%s | Miktar=%d",
                         describeRoute(saved), saved.getProduct().getName(), saved.getQuantity()));
-        notificationService.create(NotificationMessages.TRANSFER_COMPLETED_TITLE,
-                String.format("Kullanıcı %s, #%d numaralı transferi tamamladı.", username, saved.getId()),
-                DomainEntityType.Stock.name(), saved.getId());
+        if (isAdminUser) {
+            notificationService.create(NotificationMessages.TRANSFER_COMPLETED_TITLE,
+                    String.format("Kullanıcı %s, #%d numaralı transferi tamamladı.", username, saved.getId()),
+                    DomainEntityType.Stock.name(), saved.getId());
+        }
         notifyAdminIfNonAdmin(saved, "tamamladı");
         logger.info("Transfer completed successfully with id: {}", saved.getId());
         
@@ -256,11 +274,14 @@ public class StockTransferServiceImpl implements StockTransferService {
         transfer.setCancellationReason(cancellationReason);
         StockTransfer saved = stockTransferRepository.save(transfer);
         String username = CurrentUser.usernameOrSystem();
+        boolean isAdminUser = isCurrentUserAdmin();
         auditService.log(AuditAction.TRANSFER_CANCEL, DomainEntityType.StockTransfer.name(), saved.getId(), username,
                 String.format("Transfer iptal edildi: Sebep=%s", cancellationReason));
-        notificationService.create(NotificationMessages.TRANSFER_CANCELLED_TITLE,
-                String.format("Kullanıcı %s, #%d numaralı transferi iptal etti. Sebep: %s", username, saved.getId(), cancellationReason),
-                DomainEntityType.Stock.name(), saved.getId());
+        if (isAdminUser) {
+            notificationService.create(NotificationMessages.TRANSFER_CANCELLED_TITLE,
+                    String.format("Kullanıcı %s, #%d numaralı transferi iptal etti. Sebep: %s", username, saved.getId(), cancellationReason),
+                    DomainEntityType.Stock.name(), saved.getId());
+        }
         logger.info("Transfer cancelled successfully with id: {}", saved.getId());
         
         // Fetch with relations again to avoid LazyInitializationException in mapper

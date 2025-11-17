@@ -23,6 +23,8 @@ public interface StockTransferService {
 
     List<StockTransfer> getTransfersByStatus(TransferStatus status);
 
+    List<StockTransfer> getTransfersForCurrentUser();
+
     StockTransfer createTransfer(StockTransfer transfer);
 
     StockTransfer startTransfer(Long transferId);
