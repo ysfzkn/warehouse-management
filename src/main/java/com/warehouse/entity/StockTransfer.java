@@ -16,6 +16,8 @@ import com.fasterxml.jackson.annotation.JsonFormat;
 import com.warehouse.enums.TransferStatus;
 import com.warehouse.enums.TransferType;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "stock_transfers")
@@ -23,7 +25,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @EqualsAndHashCode(callSuper = false)
-@ToString(exclude = {"sourceWarehouse", "destinationWarehouse", "product"})
+@ToString(exclude = {"sourceWarehouse", "destinationWarehouse", "product", "items"})
 public class StockTransfer {
 
     @Id
@@ -41,16 +43,18 @@ public class StockTransfer {
     @JoinColumn(name = "destination_warehouse_id")
     private Warehouse destinationWarehouse;
 
-    @NotNull(message = "Product is required")
     @ManyToOne(fetch = FetchType.LAZY)
     @JsonIgnoreProperties({"stocks", "hibernateLazyInitializer", "handler"})
-    @JoinColumn(name = "product_id", nullable = false)
+    @JoinColumn(name = "product_id")
     private Product product;
 
-    @NotNull(message = "Quantity is required")
     @Min(value = 1, message = "Quantity must be at least 1")
     @Column(nullable = false)
     private Integer quantity;
+
+    @OneToMany(mappedBy = "transfer", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonIgnoreProperties({"transfer", "hibernateLazyInitializer", "handler"})
+    private List<StockTransferItem> items = new ArrayList<>();
 
     @NotBlank(message = "Driver name is required")
     @Size(min = 3, max = 100, message = "Driver name must be between 3 and 100 characters")
@@ -140,6 +144,23 @@ public class StockTransfer {
     @PreUpdate
     protected void onUpdate() {
         this.updatedAt = LocalDateTime.now();
+    }
+
+    public void setItems(List<StockTransferItem> items) {
+        this.items.clear();
+        if (items != null) {
+            for (StockTransferItem item : items) {
+                addItem(item);
+            }
+        }
+    }
+
+    public void addItem(StockTransferItem item) {
+        if (item == null) {
+            return;
+        }
+        item.setTransfer(this);
+        this.items.add(item);
     }
 }
 

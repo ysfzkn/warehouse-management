@@ -2,6 +2,7 @@ package com.warehouse.service.impl;
 
 import com.warehouse.entity.Stock;
 import com.warehouse.entity.StockTransfer;
+import com.warehouse.entity.StockTransferItem;
 import com.warehouse.entity.Product;
 import com.warehouse.entity.Warehouse;
 import com.warehouse.enums.AuditAction;
@@ -28,8 +29,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
  * Implementation of StockTransferService for managing stock transfers.
@@ -120,9 +125,10 @@ public class StockTransferServiceImpl implements StockTransferService {
     @Override
     public StockTransfer createTransfer(StockTransfer transfer) {
         logger.info("Creating new transfer");
-        TransferType transferType = validateTransferCreation(transfer);
-
         Warehouse sourceWarehouse = findWarehouseOrThrow(transfer.getSourceWarehouse().getId());
+        List<StockTransferItem> normalizedItems = resolveTransferItems(transfer);
+        TransferType transferType = validateTransferCreation(transfer, normalizedItems);
+
         Warehouse destinationWarehouse = null;
         if (transferType == TransferType.WAREHOUSE) {
             destinationWarehouse = findWarehouseOrThrow(transfer.getDestinationWarehouse().getId());
@@ -130,15 +136,14 @@ public class StockTransferServiceImpl implements StockTransferService {
         } else if (transfer.getDestinationWarehouse() != null && transfer.getDestinationWarehouse().getId() != null) {
             destinationWarehouse = findWarehouseOrThrow(transfer.getDestinationWarehouse().getId());
         }
-        Product product = findProductOrThrow(transfer.getProduct().getId());
 
-        ValidationUtil.requirePositive(transfer.getQuantity(), "Quantity");
-
-        validateSufficientStock(product, sourceWarehouse, transfer.getQuantity());
+        validateSufficientStockForItems(sourceWarehouse, normalizedItems);
 
         transfer.setSourceWarehouse(sourceWarehouse);
         transfer.setDestinationWarehouse(destinationWarehouse);
-        transfer.setProduct(product);
+        transfer.setItems(normalizedItems);
+        transfer.setQuantity(calculateTotalQuantity(normalizedItems));
+        transfer.setProduct(normalizedItems.size() == 1 ? normalizedItems.get(0).getProduct() : null);
         transfer.setTransferType(transferType);
         String username = CurrentUser.usernameOrSystem();
         transfer.setCreatedBy(username);
@@ -147,12 +152,12 @@ public class StockTransferServiceImpl implements StockTransferService {
 
         StockTransfer saved = stockTransferRepository.save(transfer);
         auditService.log(AuditAction.TRANSFER_CREATE, DomainEntityType.StockTransfer.name(), saved.getId(), username,
-                String.format("Transfer oluşturuldu: %s | Ürün=%s | Miktar=%d",
-                        describeRoute(saved), product.getName(), saved.getQuantity()));
+                String.format("Transfer oluşturuldu: %s | Ürünler=%s",
+                        describeRoute(saved), describeItems(saved)));
         if (isAdminUser) {
             notificationService.create(NotificationMessages.TRANSFER_CREATED_TITLE,
-                    String.format("Kullanıcı %s, %s yönünde %s ürünü için %d adet transfer oluşturdu.", username,
-                            describeRoute(saved), product.getName(), saved.getQuantity()),
+                    String.format("Kullanıcı %s, %s yönünde %s transferi oluşturdu. Ürünler: %s", username,
+                            describeRoute(saved), transferType == TransferType.CUSTOMER_DELIVERY ? "müşteri sevkiyatı" : "depo", describeItems(saved)),
                     DomainEntityType.Stock.name(), saved.getId());
         }
         notifyAdminIfNonAdmin(saved, "oluşturdu");
@@ -173,21 +178,24 @@ public class StockTransferServiceImpl implements StockTransferService {
             throw new WarehouseManagementException(ErrorCode.ONLY_PENDING_CAN_BE_STARTED);
         }
 
-        Stock sourceStock = findSourceStockOrThrow(transfer);
-        validateSufficientAvailableStock(sourceStock, transfer.getQuantity());
-
-        reserveStockForTransfer(sourceStock, transfer.getQuantity());
+        List<StockTransferItem> items = getTransferItemsOrFallback(transfer);
+        Map<Long, Stock> sourceStocks = loadSourceStocks(transfer.getSourceWarehouse(), items);
+        for (StockTransferItem item : items) {
+            Stock sourceStock = sourceStocks.get(item.getProduct().getId());
+            validateSufficientAvailableStock(sourceStock, item.getQuantity());
+            reserveStockForTransfer(sourceStock, item.getQuantity());
+        }
 
         transfer.setStatus(TransferStatus.IN_TRANSIT);
         StockTransfer saved = stockTransferRepository.save(transfer);
         String username = CurrentUser.usernameOrSystem();
         boolean isAdminUser = isCurrentUserAdmin();
         auditService.log(AuditAction.TRANSFER_START, DomainEntityType.StockTransfer.name(), saved.getId(), username,
-                String.format("Transfer yola çıkarıldı: %s | Ürün=%s | Miktar=%d (Stok rezerve edildi)",
-                        describeRoute(saved), saved.getProduct().getName(), saved.getQuantity()));
+                String.format("Transfer yola çıkarıldı: %s | Ürünler=%s (Stok rezerve edildi)",
+                        describeRoute(saved), describeItems(saved)));
         if (isAdminUser) {
             notificationService.create(NotificationMessages.TRANSFER_STARTED_TITLE,
-                    String.format("Kullanıcı %s, #%d numaralı transferi yola çıkardı.", username, saved.getId()),
+                    String.format("Kullanıcı %s, #%d numaralı transferi yola çıkardı. Ürünler: %s", username, saved.getId(), describeItems(saved)),
                     DomainEntityType.Stock.name(), saved.getId());
         }
         notifyAdminIfNonAdmin(saved, "yola çıkardı");
@@ -212,16 +220,23 @@ public class StockTransferServiceImpl implements StockTransferService {
             throw new WarehouseManagementException(ErrorCode.CANNOT_CANCEL_COMPLETED);
         }
 
-        Stock sourceStock = findSourceStockOrThrow(transfer);
+        List<StockTransferItem> items = getTransferItemsOrFallback(transfer);
+        Map<Long, Stock> sourceStocks = loadSourceStocks(transfer.getSourceWarehouse(), items);
 
         if (transfer.getStatus() == TransferStatus.PENDING) {
-            deductStockDirectly(sourceStock, transfer.getQuantity());
+            for (StockTransferItem item : items) {
+                Stock sourceStock = sourceStocks.get(item.getProduct().getId());
+                deductStockDirectly(sourceStock, item.getQuantity());
+            }
         } else if (transfer.getStatus() == TransferStatus.IN_TRANSIT) {
-            deductReservedStock(sourceStock, transfer.getQuantity());
+            for (StockTransferItem item : items) {
+                Stock sourceStock = sourceStocks.get(item.getProduct().getId());
+                deductReservedStock(sourceStock, item.getQuantity());
+            }
         }
 
         if (isWarehouseTransfer(transfer)) {
-            addStockToDestination(transfer);
+            addStockToDestination(transfer, items);
         }
 
         transfer.setStatus(TransferStatus.COMPLETED);
@@ -235,11 +250,11 @@ public class StockTransferServiceImpl implements StockTransferService {
         String username = CurrentUser.usernameOrSystem();
         boolean isAdminUser = isCurrentUserAdmin();
         auditService.log(AuditAction.TRANSFER_COMPLETE, DomainEntityType.StockTransfer.name(), saved.getId(), username,
-                String.format("Transfer tamamlandı: %s | Ürün=%s | Miktar=%d",
-                        describeRoute(saved), saved.getProduct().getName(), saved.getQuantity()));
+                String.format("Transfer tamamlandı: %s | Ürünler=%s",
+                        describeRoute(saved), describeItems(saved)));
         if (isAdminUser) {
             notificationService.create(NotificationMessages.TRANSFER_COMPLETED_TITLE,
-                    String.format("Kullanıcı %s, #%d numaralı transferi tamamladı.", username, saved.getId()),
+                    String.format("Kullanıcı %s, #%d numaralı transferi tamamladı. Ürünler: %s", username, saved.getId(), describeItems(saved)),
                     DomainEntityType.Stock.name(), saved.getId());
         }
         notifyAdminIfNonAdmin(saved, "tamamladı");
@@ -265,8 +280,12 @@ public class StockTransferServiceImpl implements StockTransferService {
         }
 
         if (transfer.getStatus() == TransferStatus.IN_TRANSIT) {
-            Stock sourceStock = findSourceStockOrThrow(transfer);
-            releaseReservedStock(sourceStock, transfer.getQuantity());
+            List<StockTransferItem> items = getTransferItemsOrFallback(transfer);
+            Map<Long, Stock> sourceStocks = loadSourceStocks(transfer.getSourceWarehouse(), items);
+            for (StockTransferItem item : items) {
+                Stock sourceStock = sourceStocks.get(item.getProduct().getId());
+                releaseReservedStock(sourceStock, item.getQuantity());
+            }
         }
 
         transfer.setStatus(TransferStatus.CANCELLED);
@@ -339,11 +358,10 @@ public class StockTransferServiceImpl implements StockTransferService {
         logger.info("Transfer deleted successfully with id: {}", transferId);
     }
 
-    private TransferType validateTransferCreation(StockTransfer transfer) {
+    private TransferType validateTransferCreation(StockTransfer transfer, List<StockTransferItem> items) {
         ValidationUtil.requireNonNull(transfer.getSourceWarehouse(), "Source warehouse");
         ValidationUtil.requireNonNull(transfer.getSourceWarehouse().getId(), "Source warehouse ID");
-        ValidationUtil.requireNonNull(transfer.getProduct(), "Product");
-        ValidationUtil.requireNonNull(transfer.getProduct().getId(), "Product ID");
+        ValidationUtil.requireNonEmpty(items, "Transfer items");
 
         TransferType transferType = transfer.getTransferType() != null
                 ? transfer.getTransferType()
@@ -420,10 +438,10 @@ public class StockTransferServiceImpl implements StockTransferService {
         }
     }
 
-    private Stock findSourceStockOrThrow(StockTransfer transfer) {
-        return stockRepository.findByProductAndWarehouse(transfer.getProduct(), transfer.getSourceWarehouse())
+    private Stock findSourceStockOrThrow(Warehouse warehouse, Product product) {
+        return stockRepository.findByProductAndWarehouse(product, warehouse)
                 .orElseThrow(() -> {
-                    logger.warn("Source stock not found for transfer id: {}", transfer.getId());
+                    logger.warn("Source stock not found for warehouse {} and product {}", warehouse.getId(), product.getId());
                     return new WarehouseManagementException(ErrorCode.PRODUCT_NOT_IN_WAREHOUSE);
                 });
     }
@@ -451,30 +469,34 @@ public class StockTransferServiceImpl implements StockTransferService {
         stockRepository.save(stock);
     }
 
-    private void addStockToDestination(StockTransfer transfer) {
+    private void addStockToDestination(StockTransfer transfer, List<StockTransferItem> items) {
         if (transfer.getDestinationWarehouse() == null) {
             logger.warn("Destination warehouse missing while adding stock for transfer {}", transfer.getId());
             return;
         }
-        Optional<Stock> destinationStockOpt = stockRepository.findByProductAndWarehouse(
-                transfer.getProduct(), transfer.getDestinationWarehouse());
 
-        Stock destinationStock;
-        if (destinationStockOpt.isPresent()) {
-            destinationStock = destinationStockOpt.get();
-            destinationStock.setQuantity(destinationStock.getQuantity() + transfer.getQuantity());
-        } else {
-            destinationStock = createNewStock(transfer);
+        for (StockTransferItem item : items) {
+            Product product = item.getProduct();
+            Optional<Stock> destinationStockOpt = stockRepository.findByProductAndWarehouse(
+                    product, transfer.getDestinationWarehouse());
+
+            Stock destinationStock;
+            if (destinationStockOpt.isPresent()) {
+                destinationStock = destinationStockOpt.get();
+                destinationStock.setQuantity(destinationStock.getQuantity() + item.getQuantity());
+            } else {
+                destinationStock = createNewStock(product, transfer.getDestinationWarehouse(), item.getQuantity());
+            }
+
+            stockRepository.save(destinationStock);
         }
-
-        stockRepository.save(destinationStock);
     }
 
-    private Stock createNewStock(StockTransfer transfer) {
+    private Stock createNewStock(Product product, Warehouse warehouse, Integer quantity) {
         Stock stock = new Stock();
-        stock.setProduct(transfer.getProduct());
-        stock.setWarehouse(transfer.getDestinationWarehouse());
-        stock.setQuantity(transfer.getQuantity());
+        stock.setProduct(product);
+        stock.setWarehouse(warehouse);
+        stock.setQuantity(quantity);
         stock.setMinStockLevel(0);
         stock.setReservedQuantity(0);
         stock.setConsignedQuantity(0);
@@ -509,6 +531,105 @@ public class StockTransferServiceImpl implements StockTransferService {
         if (updatedTransfer.getTransferDate() != null) {
             transfer.setTransferDate(updatedTransfer.getTransferDate());
         }
+    }
+
+    private List<StockTransferItem> resolveTransferItems(StockTransfer transfer) {
+        List<StockTransferItem> resolved = new ArrayList<>();
+        if (transfer.getItems() != null && !transfer.getItems().isEmpty()) {
+            for (StockTransferItem item : transfer.getItems()) {
+                ValidationUtil.requireNonNull(item.getProduct(), "Product");
+                ValidationUtil.requireNonNull(item.getProduct().getId(), "Product ID");
+                ValidationUtil.requirePositive(item.getQuantity(), "Quantity");
+
+                Product product = findProductOrThrow(item.getProduct().getId());
+                StockTransferItem normalized = new StockTransferItem();
+                normalized.setTransfer(transfer);
+                normalized.setProduct(product);
+                normalized.setQuantity(item.getQuantity());
+                resolved.add(normalized);
+            }
+        } else {
+            ValidationUtil.requireNonNull(transfer.getProduct(), "Product");
+            ValidationUtil.requireNonNull(transfer.getProduct().getId(), "Product ID");
+            ValidationUtil.requirePositive(transfer.getQuantity(), "Quantity");
+            Product product = findProductOrThrow(transfer.getProduct().getId());
+            StockTransferItem fallback = new StockTransferItem();
+            fallback.setTransfer(transfer);
+            fallback.setProduct(product);
+            fallback.setQuantity(transfer.getQuantity());
+            resolved.add(fallback);
+        }
+
+        return mergeItemsByProduct(resolved);
+    }
+
+    private List<StockTransferItem> mergeItemsByProduct(List<StockTransferItem> items) {
+        Map<Long, StockTransferItem> merged = new HashMap<>();
+        for (StockTransferItem item : items) {
+            Long productId = item.getProduct().getId();
+            if (merged.containsKey(productId)) {
+                StockTransferItem existing = merged.get(productId);
+                existing.setQuantity(existing.getQuantity() + item.getQuantity());
+            } else {
+                merged.put(productId, item);
+            }
+        }
+        return new ArrayList<>(merged.values());
+    }
+
+    private List<StockTransferItem> getTransferItemsOrFallback(StockTransfer transfer) {
+        if (transfer.getItems() != null && !transfer.getItems().isEmpty()) {
+            return transfer.getItems();
+        }
+        if (transfer.getProduct() == null) {
+            return new ArrayList<>();
+        }
+        StockTransferItem item = new StockTransferItem();
+        item.setTransfer(transfer);
+        item.setProduct(transfer.getProduct());
+        item.setQuantity(transfer.getQuantity());
+        List<StockTransferItem> fallback = new ArrayList<>();
+        fallback.add(item);
+        return fallback;
+    }
+
+    private int calculateTotalQuantity(List<StockTransferItem> items) {
+        return items.stream()
+                .map(StockTransferItem::getQuantity)
+                .filter(q -> q != null && q > 0)
+                .mapToInt(Integer::intValue)
+                .sum();
+    }
+
+    private String describeItems(StockTransfer transfer) {
+        return describeItems(getTransferItemsOrFallback(transfer));
+    }
+
+    private String describeItems(List<StockTransferItem> items) {
+        if (items == null || items.isEmpty()) {
+            return "Ürün bulunmuyor";
+        }
+        return items.stream()
+                .map(item -> {
+                    String productName = item.getProduct() != null ? item.getProduct().getName() : "Ürün";
+                    return String.format("%d x %s", item.getQuantity(), productName);
+                })
+                .collect(Collectors.joining(", "));
+    }
+
+    private void validateSufficientStockForItems(Warehouse warehouse, List<StockTransferItem> items) {
+        for (StockTransferItem item : items) {
+            validateSufficientStock(item.getProduct(), warehouse, item.getQuantity());
+        }
+    }
+
+    private Map<Long, Stock> loadSourceStocks(Warehouse warehouse, List<StockTransferItem> items) {
+        Map<Long, Stock> stocks = new HashMap<>();
+        for (StockTransferItem item : items) {
+            Long productId = item.getProduct().getId();
+            stocks.computeIfAbsent(productId, id -> findSourceStockOrThrow(warehouse, item.getProduct()));
+        }
+        return stocks;
     }
 
     private Product findProductOrThrow(Long productId) {

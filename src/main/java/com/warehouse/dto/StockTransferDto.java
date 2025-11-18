@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 @NoArgsConstructor
@@ -35,6 +36,9 @@ public class StockTransferDto {
     private String createdBy;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private Integer totalQuantity;
+    private Integer uniqueProductCount;
+    private List<TransferItemDto> items;
 
     @Data
     @NoArgsConstructor
@@ -52,6 +56,15 @@ public class StockTransferDto {
         private Long id;
         private String name;
         private String sku;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class TransferItemDto {
+        private Long id;
+        private SimpleProductDto product;
+        private Integer quantity;
     }
 }
 

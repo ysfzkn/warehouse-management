@@ -30,8 +30,6 @@ const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery 
   const [formData, setFormData] = useState({
     sourceWarehouseId: stock?.warehouse?.id || '',
     destinationWarehouseId: '',
-    productId: stock?.product?.id || '',
-    quantity: '',
     driverName: '',
     driverTcId: '',
     driverPhone: '',
@@ -46,10 +44,13 @@ const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery 
 
   const [warehouses, setWarehouses] = useState([]);
   const [products, setProducts] = useState([]);
+  const [warehouseStocks, setWarehouseStocks] = useState([]);
+  const [stockLoading, setStockLoading] = useState(false);
+  const [transferItems, setTransferItems] = useState([]);
+  const [itemForm, setItemForm] = useState({ productId: stock?.product?.id || '', quantity: '' });
   const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
   const [error, setError] = useState(null);
-  const [availableStock, setAvailableStock] = useState(null);
   const [validationErrors, setValidationErrors] = useState({});
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [createdTransferId, setCreatedTransferId] = useState(null);
@@ -90,24 +91,52 @@ const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery 
     }
   }, [lockToCustomerDelivery]);
 
-  // Fetch available quantity for selected source warehouse and product
-  const fetchAvailableStock = useCallback(async () => {
-    try {
-      const response = await axios.get('/api/stocks', {
-        params: {
-          warehouseId: formData.sourceWarehouseId
-        }
-      });
-      const stockItem = response.data.find(
-        s => s.product.id === parseInt(formData.productId) &&
-             s.warehouse.id === parseInt(formData.sourceWarehouseId)
-      );
-      setAvailableStock(stockItem || null);
-    } catch (error) {
-      console.error('Error fetching stock:', error);
-      setAvailableStock(null);
+  const calculateAvailableQuantity = (stockRecord) => {
+    if (!stockRecord) return 0;
+    if (typeof stockRecord.availableQuantity === 'number') {
+      return stockRecord.availableQuantity;
     }
-  }, [formData.sourceWarehouseId, formData.productId]);
+    const reserved = stockRecord.reservedQuantity || 0;
+    const consigned = stockRecord.consignedQuantity || 0;
+    return Math.max(0, (stockRecord.quantity || 0) - reserved - consigned);
+  };
+
+  const syncItemsWithStocks = useCallback((stocks) => {
+    setTransferItems(prev =>
+      prev.map(item => {
+        const stockMatch = stocks.find(s => s.product?.id === item.productId);
+        const available = calculateAvailableQuantity(stockMatch);
+        return {
+          ...item,
+          availableQuantity: available,
+          quantity: Math.min(item.quantity, available || item.quantity)
+        };
+      })
+    );
+  }, []);
+
+  const fetchWarehouseStocks = useCallback(async (warehouseId) => {
+    if (!warehouseId) {
+      setWarehouseStocks([]);
+      setTransferItems([]);
+      return;
+    }
+    try {
+      setStockLoading(true);
+      const response = await axios.get('/api/stocks', {
+        params: { warehouseId }
+      });
+      const stocks = Array.isArray(response.data) ? response.data : [];
+      setWarehouseStocks(stocks);
+      syncItemsWithStocks(stocks);
+    } catch (err) {
+      console.error('Error fetching warehouse stocks:', err);
+      setWarehouseStocks([]);
+      setTransferItems([]);
+    } finally {
+      setStockLoading(false);
+    }
+  }, [syncItemsWithStocks]);
 
 useEffect(() => {
     console.log('StockTransferModal mounted, fetching data...');
@@ -123,10 +152,30 @@ useEffect(() => {
 }, [stock]);
 
   useEffect(() => {
-    if (formData.sourceWarehouseId && formData.productId) {
-      fetchAvailableStock();
+    if (stock?.product?.id && stock?.warehouse?.id) {
+      setFormData(prev => ({
+        ...prev,
+        sourceWarehouseId: stock.warehouse.id
+      }));
+      setTransferItems([{
+        productId: stock.product.id,
+        productName: stock.product.name,
+        sku: stock.product.sku,
+        quantity: 1,
+        availableQuantity: calculateAvailableQuantity(stock)
+      }]);
+      setItemForm(prev => ({ ...prev, productId: stock.product.id }));
     }
-  }, [formData.sourceWarehouseId, formData.productId, fetchAvailableStock]);
+  }, [stock]);
+
+  useEffect(() => {
+    if (formData.sourceWarehouseId) {
+      fetchWarehouseStocks(formData.sourceWarehouseId);
+    } else {
+      setWarehouseStocks([]);
+      setTransferItems([]);
+    }
+  }, [formData.sourceWarehouseId, fetchWarehouseStocks]);
 
   const fetchWarehouses = async () => {
     try {
@@ -214,6 +263,125 @@ useEffect(() => {
     }
   };
 
+  const getProductDetails = useCallback((productId) => {
+    const numericId = parseInt(productId);
+    const stockRecord = warehouseStocks.find(s => s.product?.id === numericId);
+    if (stockRecord) {
+      return {
+        name: stockRecord.product?.name,
+        sku: stockRecord.product?.sku
+      };
+    }
+    if (stock?.product?.id === numericId) {
+      return {
+        name: stock.product.name,
+        sku: stock.product.sku
+      };
+    }
+    const fallback = products.find(p => p.id === numericId);
+    if (fallback) {
+      return { name: fallback.name, sku: fallback.sku };
+    }
+    return { name: 'Ürün', sku: '' };
+  }, [warehouseStocks, stock, products]);
+
+  const getAvailableForProduct = useCallback((productId) => {
+    const numericId = parseInt(productId);
+    const stockRecord = warehouseStocks.find(s => s.product?.id === numericId);
+    if (stockRecord) {
+      return calculateAvailableQuantity(stockRecord);
+    }
+    if (stock?.product?.id === numericId && stock?.warehouse?.id === parseInt(formData.sourceWarehouseId)) {
+      return calculateAvailableQuantity(stock);
+    }
+    return 0;
+  }, [warehouseStocks, stock, formData.sourceWarehouseId]);
+
+  const handleItemFormChange = (field, value) => {
+    setItemForm(prev => ({ ...prev, [field]: value }));
+    if (validationErrors[field]) {
+      setValidationErrors(prev => ({ ...prev, [field]: '' }));
+    }
+    if (validationErrors.transferItems) {
+      setValidationErrors(prev => ({ ...prev, transferItems: '' }));
+    }
+  };
+
+  const handleAddItem = () => {
+    const productId = itemForm.productId;
+    const quantity = parseInt(itemForm.quantity, 10);
+    const errors = {};
+
+    if (!productId) {
+      errors.itemProductId = 'Ürün seçiniz';
+    }
+    if (!quantity || quantity <= 0) {
+      errors.itemQuantity = 'Geçerli bir miktar giriniz';
+    }
+
+    if (productId) {
+      const available = getAvailableForProduct(productId);
+      const existing = transferItems.find(item => item.productId === parseInt(productId));
+      const alreadySelected = existing ? existing.quantity : 0;
+      if (available <= 0) {
+        errors.itemProductId = 'Bu üründe stok bulunmuyor';
+      } else if (quantity && quantity + alreadySelected > available) {
+        errors.itemQuantity = `Maksimum ${available - alreadySelected} adet eklenebilir`;
+      }
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setValidationErrors(prev => ({ ...prev, ...errors }));
+      return;
+    }
+
+    const numericId = parseInt(productId);
+    const available = getAvailableForProduct(productId);
+    const details = getProductDetails(productId);
+
+    setTransferItems(prev => {
+      const exists = prev.find(item => item.productId === numericId);
+      if (exists) {
+        return prev.map(item => item.productId === numericId
+          ? { ...item, quantity: item.quantity + quantity, availableQuantity: available }
+          : item
+        );
+      }
+      return [
+        ...prev,
+        {
+          productId: numericId,
+          productName: details.name,
+          sku: details.sku,
+          quantity,
+          availableQuantity: available
+        }
+      ];
+    });
+    setItemForm({ productId: '', quantity: '' });
+    setValidationErrors(prev => ({ ...prev, itemProductId: '', itemQuantity: '' }));
+  };
+
+  const handleRemoveItem = (productId) => {
+    setTransferItems(prev => prev.filter(item => item.productId !== productId));
+  };
+
+  const handleItemQuantityUpdate = (productId, value) => {
+    const numericValue = parseInt(value, 10);
+    setTransferItems(prev =>
+      prev.map(item => {
+        if (item.productId !== productId) {
+          return item;
+        }
+        const available = item.availableQuantity ?? getAvailableForProduct(productId);
+        const safeValue = Math.min(Math.max(isNaN(numericValue) ? 0 : numericValue, 0), available);
+        return { ...item, quantity: safeValue };
+      })
+    );
+    if (validationErrors.transferItems) {
+      setValidationErrors(prev => ({ ...prev, transferItems: '' }));
+    }
+  };
   
 
   const handleChange = (e) => {
@@ -234,6 +402,8 @@ useEffect(() => {
         }
         return newData;
       });
+      setTransferItems([]);
+      setItemForm({ productId: '', quantity: '' });
     } else {
       setFormData(prev => ({
         ...prev,
@@ -243,18 +413,6 @@ useEffect(() => {
     
     if (validationErrors[name]) {
       setValidationErrors(prev => ({ ...prev, [name]: '' }));
-    }
-
-    // Live validation for quantity against availableStock
-    if (name === 'quantity') {
-      const qty = parseInt(value || '0', 10);
-      if (!Number.isFinite(qty) || qty <= 0) {
-        setValidationErrors(prev => ({ ...prev, quantity: 'Geçerli bir miktar giriniz' }));
-      } else if (availableStock && qty > (availableStock.availableQuantity || 0)) {
-        setValidationErrors(prev => ({ ...prev, quantity: `Maksimum ${availableStock.availableQuantity} adet transfer edilebilir` }));
-      } else if (validationErrors.quantity) {
-        setValidationErrors(prev => ({ ...prev, quantity: '' }));
-      }
     }
   };
 
@@ -293,10 +451,18 @@ useEffect(() => {
         }
         if (!formData.customerAddress.trim()) errors.customerAddress = 'Adres zorunludur';
       }
-      if (!formData.productId) errors.productId = 'Ürün seçimi zorunludur';
-      if (!formData.quantity || formData.quantity <= 0) errors.quantity = 'Geçerli bir miktar giriniz';
-      if (availableStock && formData.quantity > availableStock.availableQuantity) {
-        errors.quantity = `Maksimum ${availableStock.availableQuantity} adet transfer edilebilir`;
+      if (transferItems.length === 0) {
+        errors.transferItems = 'En az bir ürün eklemelisiniz';
+      } else {
+        transferItems.forEach(item => {
+          if (!item.quantity || item.quantity <= 0) {
+            errors.transferItems = 'Her ürün için geçerli miktar giriniz';
+          }
+          const available = item.availableQuantity ?? getAvailableForProduct(item.productId);
+          if (available && item.quantity > available) {
+            errors.transferItems = 'Ürün miktarları mevcut stoktan fazla olamaz';
+          }
+        });
       }
     } else if (step === 2) {
       if (!formData.driverName.trim()) errors.driverName = 'Şoför adı zorunludur';
@@ -355,23 +521,22 @@ useEffect(() => {
       };
       
       const transferData = {
-        sourceWarehouse: { id: parseInt(formData.sourceWarehouseId) },
-        product: { id: parseInt(formData.productId) },
-        quantity: parseInt(formData.quantity),
+        sourceWarehouseId: parseInt(formData.sourceWarehouseId),
+        destinationWarehouseId: formData.transferType === 'WAREHOUSE' && formData.destinationWarehouseId
+          ? parseInt(formData.destinationWarehouseId)
+          : null,
         driverName: formData.driverName.trim(),
         driverTcId: formData.driverTcId.trim(),
         driverPhone: formatPhoneForSubmit(formData.driverPhone),
         vehiclePlate: formData.vehiclePlate.trim().toUpperCase(),
         notes: formData.notes.trim(),
         transferDate: parseDateInTurkeyTimezone(formData.transferDate),
-        transferType: formData.transferType
+        transferType: formData.transferType,
+        items: transferItems.map(item => ({
+          productId: item.productId,
+          quantity: item.quantity
+        }))
       };
-
-      if (formData.transferType === 'WAREHOUSE' && formData.destinationWarehouseId) {
-        transferData.destinationWarehouse = { id: parseInt(formData.destinationWarehouseId) };
-      } else {
-        transferData.destinationWarehouse = null;
-      }
 
       if (formData.transferType === 'CUSTOMER_DELIVERY') {
         transferData.customerFullName = formData.customerFullName.trim();
@@ -409,9 +574,9 @@ useEffect(() => {
   const destinationWarehouse = !isCustomerTransfer
     ? warehouses.find(w => w.id === parseInt(formData.destinationWarehouseId))
     : null;
-  const selectedProduct = stock?.product || products.find(p => p.id === parseInt(formData.productId));
   const formattedDriverPhone = formatPhoneForDisplay(formData.driverPhone);
   const formattedCustomerPhone = formatPhoneForDisplay(formData.customerPhone);
+  const totalTransferQuantity = transferItems.reduce((sum, item) => sum + (item.quantity || 0), 0);
 
   const steps = submitSuccess ? [
     { number: 1, title: 'Transfer Detayları', icon: 'fa-boxes' },
@@ -726,75 +891,161 @@ useEffect(() => {
                       </div>
                     )}
 
-                    <div className="col-md-8">
-                      <label className="form-label fw-bold">
-                        <i className="fas fa-box text-primary me-1"></i>
-                        Ürün *
-                      </label>
-                      {stock ? (
-                        <input
-                          type="text"
-                          className="form-control form-control-lg is-valid"
-                          value={`${stock.product.name} (${stock.product.sku})`}
-                          disabled
-                        />
-                      ) : (
-                        <select
-                          className={`form-select form-select-lg ${validationErrors.productId ? 'is-invalid' : formData.productId ? 'is-valid' : ''}`}
-                          name="productId"
-                          value={formData.productId}
-                          onChange={handleChange}
-                          required
-                        >
-                          <option value="">-- Ürün seçiniz --</option>
-                          {products.map(product => (
-                            <option key={product.id} value={product.id}>
-                              📦 {product.name} - {product.sku}
-                            </option>
-                          ))}
-                        </select>
-                      )}
-                      {validationErrors.productId && (
-                        <div className="invalid-feedback">{validationErrors.productId}</div>
-                      )}
-                    </div>
-
-                    <div className="col-md-4">
-                      <label className="form-label fw-bold">
-                        <i className="fas fa-sort-numeric-up text-info me-1"></i>
-                        Transfer Miktarı *
-                      </label>
-                      <input
-                        type="number"
-                        className={`form-control form-control-lg ${validationErrors.quantity ? 'is-invalid' : ((formData.quantity) && ((!availableStock) || ((parseInt(formData.quantity, 10) > 0) && (parseInt(formData.quantity, 10) <= ((availableStock?.availableQuantity) || 0))))) ? 'is-valid' : ''}`}
-                        name="quantity"
-                        value={formData.quantity}
-                        onChange={handleChange}
-                        min="1"
-                        max={availableStock?.availableQuantity || undefined}
-                        required
-                        placeholder="0"
-                        inputMode="numeric"
-                        onKeyDown={(e) => {
-                          if (["e", "E", "+", "-", ",", "."].includes(e.key)) {
-                            e.preventDefault();
-                          }
-                        }}
-                        onWheel={(e) => e.currentTarget.blur()}
-                      />
-                      {validationErrors.quantity && (
-                        <div className="invalid-feedback">{validationErrors.quantity}</div>
-                      )}
-                      {availableStock && !validationErrors.quantity && (
-                        <small className={`d-block mt-1 ${availableStock.availableQuantity > 0 ? 'text-success' : 'text-danger'}`}>
-                          <i className={`fas fa-${availableStock.availableQuantity > 0 ? 'check-circle' : 'exclamation-circle'} me-1`}></i>
-                          <strong>Kullanılabilir: {availableStock.availableQuantity}</strong> adet
-                          <span className="text-muted"> (Toplam: {availableStock.quantity})</span>
-                        </small>
-                      )}
-                    </div>
-
                     <div className="col-12">
+                      <div className="card border-primary shadow-sm">
+                        <div className="card-header bg-primary bg-gradient text-white d-flex align-items-center">
+                          <i className="fas fa-boxes-stacked me-2"></i>
+                          <div>
+                            <strong>Ürün ve Miktar Seçimi</strong>
+                            <div className="small opacity-75">Kaynak depodaki stoklardan birden fazla ürün ekleyin</div>
+                          </div>
+                        </div>
+                        <div className="card-body">
+                          {!formData.sourceWarehouseId ? (
+                            <div className="alert alert-light border mb-0">
+                              <i className="fas fa-info-circle me-2 text-primary"></i>
+                              Önce kaynak depoyu seçerek stok listesini yükleyin.
+                            </div>
+                          ) : (
+                            <>
+                              <div className="row g-3 align-items-end">
+                                <div className="col-md-7">
+                                  <label className="form-label fw-bold">
+                                    <i className="fas fa-box text-primary me-1"></i>
+                                    Depo Stokları
+                                  </label>
+                                  <select
+                                    className={`form-select form-select-lg ${validationErrors.itemProductId ? 'is-invalid' : ''}`}
+                                    value={itemForm.productId}
+                                    onChange={(e) => handleItemFormChange('productId', e.target.value)}
+                                    disabled={stockLoading || !warehouseStocks.length}
+                                  >
+                                    <option value="">
+                                      {stockLoading ? 'Stoklar yükleniyor...' : '-- Ürün seçiniz --'}
+                                    </option>
+                                    {warehouseStocks.map(stockItem => (
+                                      <option key={stockItem.product.id} value={stockItem.product.id}>
+                                        {stockItem.product.name} ({stockItem.product.sku}) · Mevcut: {calculateAvailableQuantity(stockItem)}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  {validationErrors.itemProductId && (
+                                    <div className="invalid-feedback d-block">{validationErrors.itemProductId}</div>
+                                  )}
+                                </div>
+                                <div className="col-md-3">
+                                  <label className="form-label fw-bold">
+                                    <i className="fas fa-sort-numeric-up text-info me-1"></i>
+                                    Eklenilecek Miktar
+                                  </label>
+                                  <input
+                                    type="number"
+                                    className={`form-control form-control-lg ${validationErrors.itemQuantity ? 'is-invalid' : ''}`}
+                                    value={itemForm.quantity}
+                                    min="1"
+                                    onChange={(e) => handleItemFormChange('quantity', e.target.value)}
+                                    placeholder="0"
+                                    disabled={!formData.sourceWarehouseId}
+                                  />
+                                  {validationErrors.itemQuantity && (
+                                    <div className="invalid-feedback">{validationErrors.itemQuantity}</div>
+                                  )}
+                                </div>
+                                <div className="col-md-2">
+                                  <button
+                                    type="button"
+                                    className="btn btn-primary btn-lg w-100"
+                                    onClick={handleAddItem}
+                                    disabled={!formData.sourceWarehouseId || stockLoading}
+                                  >
+                                    <i className="fas fa-plus me-1"></i>
+                                    Ekle
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div className="mt-4">
+                                {transferItems.length === 0 ? (
+                                  <div className="alert alert-light border mb-0 d-flex align-items-center">
+                                    <i className="fas fa-box-open text-muted fa-2x me-3"></i>
+                                    <div>
+                                      <strong>Henüz ürün eklemediniz.</strong>
+                                      <div className="text-muted small">Stok listesinden ürün seçip "Ekle" butonuna basın.</div>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <div className="table-responsive">
+                                      <table className="table table-sm align-middle">
+                                        <thead className="table-light">
+                                          <tr>
+                                            <th>Ürün</th>
+                                            <th>SKU</th>
+                                            <th className="text-center">Mevcut</th>
+                                            <th className="text-center">Miktar</th>
+                                            <th className="text-center">İşlem</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody>
+                                          {transferItems.map(item => (
+                                            <tr key={item.productId}>
+                                              <td>{item.productName}</td>
+                                              <td><span className="badge bg-light text-dark">{item.sku}</span></td>
+                                              <td className="text-center">
+                                                <span className={`badge ${item.availableQuantity > 0 ? 'bg-success' : 'bg-danger'} bg-opacity-10 text-${item.availableQuantity > 0 ? 'success' : 'danger'}`}>
+                                                  {item.availableQuantity ?? 0}
+                                                </span>
+                                              </td>
+                                              <td className="text-center" style={{ maxWidth: '120px' }}>
+                                                <input
+                                                  type="number"
+                                                  className="form-control form-control-sm text-center"
+                                                  value={item.quantity}
+                                                  min="0"
+                                                  max={item.availableQuantity || undefined}
+                                                  onChange={(e) => handleItemQuantityUpdate(item.productId, e.target.value)}
+                                                />
+                                              </td>
+                                              <td className="text-center">
+                                                <button
+                                                  type="button"
+                                                  className="btn btn-link text-danger btn-sm"
+                                                  onClick={() => handleRemoveItem(item.productId)}
+                                                >
+                                                  <i className="fas fa-trash-alt"></i>
+                                                </button>
+                                              </td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                    <div className="d-flex justify-content-between flex-wrap gap-2 mt-2">
+                                      <span className="badge bg-light text-dark">
+                                        <i className="fas fa-layer-group me-1"></i>
+                                        {transferItems.length} farklı ürün
+                                      </span>
+                                      <span className="badge bg-primary">
+                                        <i className="fas fa-boxes me-1"></i>
+                                        Toplam {totalTransferQuantity} adet
+                                      </span>
+                                    </div>
+                                  </>
+                                )}
+                                {validationErrors.transferItems && (
+                                  <div className="text-danger mt-2">
+                                    <i className="fas fa-exclamation-circle me-1"></i>
+                                    {validationErrors.transferItems}
+                                  </div>
+                                )}
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="col-12 mt-3">
                       <div className="alert alert-info d-flex align-items-start">
                         <i className="fas fa-lightbulb fa-2x me-3 mt-1"></i>
                         <div>
@@ -1000,7 +1251,7 @@ useEffect(() => {
                             <div className="card-body text-center py-3">
                               <i className="fas fa-boxes text-primary fa-2x mb-2"></i>
                               <div className="small text-muted">Miktar</div>
-                              <div className="fw-bold fs-5">{formData.quantity} Adet</div>
+                          <div className="fw-bold fs-5">{totalTransferQuantity} Adet</div>
                             </div>
                           </div>
                         </div>
@@ -1079,22 +1330,38 @@ useEffect(() => {
                           Ürün Detayları
                         </div>
                         <div className="card-body">
-                          <div className="row">
-                            <div className="col-md-6">
-                              <strong>Ürün Adı:</strong>
-                              <p className="mb-2">{selectedProduct?.name}</p>
+                          {transferItems.length === 0 ? (
+                            <div className="text-muted">
+                              <i className="fas fa-box-open me-2"></i>
+                              Ürün seçimi yapılmadı.
                             </div>
-                            <div className="col-md-3">
-                              <strong>Stok Kodu:</strong>
-                              <p className="mb-2">{selectedProduct?.sku}</p>
+                          ) : (
+                            <div className="table-responsive">
+                              <table className="table table-sm align-middle mb-0">
+                                <thead className="table-light">
+                                  <tr>
+                                    <th>Ürün</th>
+                                    <th>SKU</th>
+                                    <th className="text-center">Miktar</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {transferItems.map(item => (
+                                    <tr key={item.productId}>
+                                      <td>{item.productName}</td>
+                                      <td><span className="badge bg-light text-dark">{item.sku}</span></td>
+                                      <td className="text-center">
+                                        <span className="badge bg-primary">{item.quantity}</span>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                              <div className="text-end mt-2">
+                                <strong>Toplam: {totalTransferQuantity} adet</strong>
+                              </div>
                             </div>
-                            <div className="col-md-3">
-                              <strong>Miktar:</strong>
-                              <p className="mb-2">
-                                <span className="badge bg-primary fs-5">{formData.quantity} adet</span>
-                              </p>
-                            </div>
-                          </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1211,7 +1478,7 @@ useEffect(() => {
                             </div>
                             <div className="text-start">
                               <small className="text-muted d-block">Miktar</small>
-                              <strong className="fs-5">{formData.quantity} Adet</strong>
+                              <strong className="fs-5">{totalTransferQuantity} Adet</strong>
                             </div>
                           </div>
                         </div>
@@ -1288,7 +1555,7 @@ useEffect(() => {
                     <button
                       type="submit"
                       className="btn btn-success btn-lg px-5"
-                      disabled={loading || loadingData || !availableStock || availableStock.availableQuantity === 0}
+                      disabled={loading || loadingData || totalTransferQuantity === 0}
                     >
                       {loading ? (
                         <>

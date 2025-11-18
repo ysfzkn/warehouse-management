@@ -5,6 +5,7 @@ import com.warehouse.exception.WarehouseManagementException;
 import com.warehouse.constants.ErrorMessages;
 
 import java.math.BigDecimal;
+import java.util.Collection;
 
 /**
  * Utility class for common validation operations.
@@ -90,6 +91,18 @@ public final class ValidationUtil {
      */
     public static void requireNotBlank(String value, String fieldName) {
         if (value == null || value.trim().isEmpty()) {
+            throw new WarehouseManagementException(ErrorCode.REQUIRED_FIELD_MISSING, fieldName);
+        }
+    }
+
+    /**
+     * Validates that a collection is not null or empty.
+     *
+     * @param collection the collection to validate
+     * @param fieldName the field name for error reporting
+     */
+    public static void requireNonEmpty(Collection<?> collection, String fieldName) {
+        if (collection == null || collection.isEmpty()) {
             throw new WarehouseManagementException(ErrorCode.REQUIRED_FIELD_MISSING, fieldName);
         }
     }

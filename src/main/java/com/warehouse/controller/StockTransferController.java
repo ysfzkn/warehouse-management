@@ -1,8 +1,13 @@
 package com.warehouse.controller;
 
+import com.warehouse.dto.StockTransferCreateRequest;
 import com.warehouse.dto.StockTransferDto;
+import com.warehouse.entity.Product;
 import com.warehouse.entity.StockTransfer;
+import com.warehouse.entity.StockTransferItem;
+import com.warehouse.entity.Warehouse;
 import com.warehouse.enums.TransferStatus;
+import com.warehouse.enums.TransferType;
 import com.warehouse.mapper.StockTransferMapper;
 import com.warehouse.service.StockTransferService;
 import jakarta.validation.Valid;
@@ -73,7 +78,8 @@ public class StockTransferController {
     }
 
     @PostMapping
-    public ResponseEntity<StockTransferDto> createTransfer(@Valid @RequestBody StockTransfer transfer) {
+    public ResponseEntity<StockTransferDto> createTransfer(@Valid @RequestBody StockTransferCreateRequest request) {
+        StockTransfer transfer = mapToEntity(request);
         StockTransfer createdTransfer = stockTransferService.createTransfer(transfer);
         StockTransferDto dto = transferMapper.toDto(createdTransfer);
         return ResponseEntity.status(HttpStatus.CREATED).body(dto);
@@ -115,5 +121,55 @@ public class StockTransferController {
     public ResponseEntity<Void> deleteTransfer(@PathVariable Long id) {
         stockTransferService.deleteTransfer(id);
         return ResponseEntity.noContent().build();
+    }
+
+    private StockTransfer mapToEntity(StockTransferCreateRequest request) {
+        StockTransfer transfer = new StockTransfer();
+
+        Warehouse sourceWarehouse = new Warehouse();
+        sourceWarehouse.setId(request.getSourceWarehouseId());
+        transfer.setSourceWarehouse(sourceWarehouse);
+
+        if (request.getDestinationWarehouseId() != null) {
+            Warehouse destination = new Warehouse();
+            destination.setId(request.getDestinationWarehouseId());
+            transfer.setDestinationWarehouse(destination);
+        }
+
+        transfer.setDriverName(request.getDriverName().trim());
+        transfer.setDriverTcId(request.getDriverTcId().trim());
+        transfer.setDriverPhone(request.getDriverPhone().trim());
+        transfer.setVehiclePlate(request.getVehiclePlate().trim().toUpperCase());
+        transfer.setNotes(request.getNotes() != null ? request.getNotes().trim() : null);
+        transfer.setTransferDate(request.getTransferDate());
+
+        TransferType transferType = request.getTransferType() != null ? request.getTransferType() : TransferType.WAREHOUSE;
+        transfer.setTransferType(transferType);
+
+        if (transferType == TransferType.CUSTOMER_DELIVERY) {
+            transfer.setCustomerFullName(request.getCustomerFullName() != null ? request.getCustomerFullName().trim() : null);
+            transfer.setCustomerPhone(request.getCustomerPhone() != null ? request.getCustomerPhone().trim() : null);
+            transfer.setCustomerAddress(request.getCustomerAddress() != null ? request.getCustomerAddress().trim() : null);
+        } else {
+            transfer.setCustomerFullName(null);
+            transfer.setCustomerPhone(null);
+            transfer.setCustomerAddress(null);
+        }
+
+        if (request.getItems() != null) {
+            transfer.setItems(
+                    request.getItems().stream().map(itemRequest -> {
+                        StockTransferItem item = new StockTransferItem();
+                        Product product = new Product();
+                        product.setId(itemRequest.getProductId());
+                        item.setProduct(product);
+                        item.setQuantity(itemRequest.getQuantity());
+                        item.setTransfer(transfer);
+                        return item;
+                    }).toList()
+            );
+        }
+
+        return transfer;
     }
 }

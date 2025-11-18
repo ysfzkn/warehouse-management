@@ -692,6 +692,26 @@ const Stock = () => {
     return warehouses.find(w => w.id === id);
   };
 
+  const getTransferItemsList = (transfer) => {
+    if (Array.isArray(transfer.items) && transfer.items.length > 0) {
+      return transfer.items;
+    }
+    if (transfer.product) {
+      return [{
+        product: transfer.product,
+        quantity: transfer.quantity
+      }];
+    }
+    return [];
+  };
+
+  const getTransferTotalQuantity = (transfer) => {
+    if (typeof transfer.totalQuantity === 'number' && transfer.totalQuantity > 0) {
+      return transfer.totalQuantity;
+    }
+    return getTransferItemsList(transfer).reduce((sum, item) => sum + (item.quantity || 0), 0);
+  };
+
 
   const getStockStatus = (stock) => {
     const available = (stock.quantity || 0) - (stock.reservedQuantity || 0) - (stock.consignedQuantity || 0);
@@ -713,12 +733,16 @@ const Stock = () => {
     // Product name filter
     const nameQ = (transferProductName || '').toLowerCase();
     if (nameQ) {
-      list = list.filter(t => (t.product?.name || '').toLowerCase().includes(nameQ));
+      list = list.filter(t =>
+        getTransferItemsList(t).some(item => (item.product?.name || '').toLowerCase().includes(nameQ))
+      );
     }
     // SKU filter
     const skuQ = (transferSku || '').toLowerCase();
     if (skuQ) {
-      list = list.filter(t => (t.product?.sku || '').toLowerCase().includes(skuQ));
+      list = list.filter(t =>
+        getTransferItemsList(t).some(item => (item.product?.sku || '').toLowerCase().includes(skuQ))
+      );
     }
     // Driver filter
     const driverQ = (transferDriver || '').toLowerCase();
@@ -1600,6 +1624,8 @@ const Stock = () => {
                         CANCELLED: { label: 'İptal Edildi', class: 'danger', icon: 'times-circle' }
                       };
                       const status = statusConfig[transfer.status] || statusConfig.PENDING;
+                      const transferItemsPreview = getTransferItemsList(transfer);
+                      const totalQuantity = getTransferTotalQuantity(transfer);
 
                       return (
                         <tr key={transfer.id}>
@@ -1630,11 +1656,27 @@ const Stock = () => {
                             </div>
                           </td>
                           <td className="align-middle">
-                            <div className="text-truncate" title={transfer.product?.name}>
-                              <div className="fw-bold small">{transfer.product?.name}</div>
-                              <small className="text-muted d-block text-truncate">Stok Kodu: {transfer.product?.sku}</small>
+                            <div className="text-truncate">
+                              {transferItemsPreview.length === 0 ? (
+                                <small className="text-muted">Ürün bilgisi yok</small>
+                              ) : (
+                                <>
+                                  {transferItemsPreview.slice(0, 3).map((item, idx) => (
+                                    <div key={`${transfer.id}-${item.product?.id || idx}`} className="d-flex justify-content-between align-items-center mb-1">
+                                      <div className="me-2 overflow-hidden">
+                                        <div className="fw-bold small text-truncate">{item.product?.name || '-'}</div>
+                                        <small className="text-muted text-truncate">{item.product?.sku || '-'}</small>
+                                      </div>
+                                      <span className="badge bg-light text-dark">{item.quantity}</span>
+                                    </div>
+                                  ))}
+                                  {transferItemsPreview.length > 3 && (
+                                    <small className="text-muted">+ {transferItemsPreview.length - 3} ürün daha</small>
+                                  )}
+                                </>
+                              )}
                               {transfer.createdBy && (
-                                <small className="text-muted d-block">
+                                <small className="text-muted d-block mt-1">
                                   <i className="fas fa-user me-1"></i>
                                   {transfer.createdBy}
                                 </small>
@@ -1700,7 +1742,7 @@ const Stock = () => {
                             </div>
                           </td>
                           <td className="text-center align-middle">
-                            <span className="badge bg-primary rounded-pill">{transfer.quantity}</span>
+                            <span className="badge bg-primary rounded-pill">{totalQuantity}</span>
                           </td>
                           {/* Şoför kolonu - tablet ve üstünde göster */}
                           <td className="align-middle d-none d-md-table-cell">

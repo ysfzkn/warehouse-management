@@ -3,6 +3,7 @@ package com.warehouse.mapper;
 import com.warehouse.dto.StockTransferDto;
 import com.warehouse.entity.Product;
 import com.warehouse.entity.StockTransfer;
+import com.warehouse.entity.StockTransferItem;
 import com.warehouse.entity.Warehouse;
 import com.warehouse.enums.TransferStatus;
 import com.warehouse.enums.TransferType;
@@ -22,6 +23,7 @@ class StockTransferMapperTest {
     private Warehouse sourceWarehouse;
     private Warehouse destinationWarehouse;
     private Product product;
+    private StockTransferItem transferItem;
 
     @BeforeEach
     void setUp() {
@@ -42,12 +44,18 @@ class StockTransferMapperTest {
         product.setName("Test Product");
         product.setSku("TEST-001");
 
+        transferItem = new StockTransferItem();
+        transferItem.setId(1L);
+        transferItem.setProduct(product);
+        transferItem.setQuantity(50);
+
         stockTransfer = new StockTransfer();
         stockTransfer.setId(1L);
         stockTransfer.setSourceWarehouse(sourceWarehouse);
         stockTransfer.setDestinationWarehouse(destinationWarehouse);
         stockTransfer.setProduct(product);
         stockTransfer.setQuantity(50);
+        stockTransfer.setItems(java.util.List.of(transferItem));
         stockTransfer.setDriverName("John Doe");
         stockTransfer.setDriverTcId("12345678901");
         stockTransfer.setDriverPhone("+905551234567");
@@ -105,6 +113,18 @@ class StockTransferMapperTest {
         assertEquals(1L, result.getProduct().getId());
         assertEquals("Test Product", result.getProduct().getName());
         assertEquals("TEST-001", result.getProduct().getSku());
+    }
+
+    @Test
+    void toDto_ShouldMapItems() {
+        StockTransferDto result = mapper.toDto(stockTransfer);
+
+        assertNotNull(result.getItems());
+        assertEquals(1, result.getItems().size());
+        assertEquals(50, result.getItems().get(0).getQuantity());
+        assertEquals("Test Product", result.getItems().get(0).getProduct().getName());
+        assertEquals(50, result.getTotalQuantity());
+        assertEquals(1, result.getUniqueProductCount());
     }
 
     @Test
