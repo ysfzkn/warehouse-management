@@ -234,3 +234,4 @@ const QuickStockAdjustModal = ({ stock, type, onSuccess, onClose }) => {
 export default QuickStockAdjustModal;
 
 
+

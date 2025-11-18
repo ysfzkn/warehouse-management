@@ -81,7 +81,7 @@ const StockImportHistory = () => {
                 {items.map(item => (
                   <tr key={item.id}>
                     <td>{item.createdAt ? new Date(item.createdAt).toLocaleString('tr-TR') : '-'}</td>
-                    <td>{item.warehouse?.name || '-'}</td>
+                    <td>{item.warehouseName || item.warehouse?.name || '-'}</td>
                     <td>{item.originalFilename}</td>
                     <td>{item.totalRows ?? '-'}</td>
                     <td>
