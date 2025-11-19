@@ -17,7 +17,7 @@ RUN apk add --no-cache maven && \
 RUN mvn clean package -DskipTests -Dmaven.repo.local=/tmp/maven-repo
 
 # Production stage with minimal base image
-FROM openjdk:17-alpine
+FROM eclipse-temurin:17-jdk-alpine
 
 WORKDIR /app
 
