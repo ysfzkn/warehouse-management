@@ -1,23 +1,17 @@
-FROM eclipse-temurin:17-jdk-alpine AS build
+FROM maven:3.9.9-eclipse-temurin-17-alpine AS build
 
 WORKDIR /app
 
-# Install only necessary packages
-RUN apk add --no-cache maven
-
-# Copy Maven files
+# Copy Maven metadata and download dependencies once
 COPY pom.xml .
+RUN mvn -B dependency:go-offline
+
+# Copy the rest of the source and build the jar
 COPY src ./src
-
-# Build the application
-RUN apk add --no-cache maven && \
-    mvn clean package -DskipTests
-
-# Build the application with optimizations
-RUN mvn clean package -DskipTests -Dmaven.repo.local=/tmp/maven-repo
+RUN mvn -B clean package -DskipTests
 
 # Production stage with minimal base image
-FROM eclipse-temurin:17-jdk-alpine
+FROM eclipse-temurin:17-jre-alpine
 
 WORKDIR /app
 
@@ -25,7 +19,7 @@ WORKDIR /app
 RUN apk add --no-cache curl
 
 # Copy the built JAR file from build stage
-COPY --from=build /app/target/warehouse-management-1.0.0.jar app.jar
+COPY --from=build /app/target/warehouse-management-*.jar app.jar
 
 # Create non-root user for security
 RUN addgroup -g 1001 -S appuser && \
