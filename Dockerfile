@@ -1,5 +1,4 @@
-# Optimized multi-stage build for Spring Boot application
-FROM openjdk:17-jdk-alpine AS build
+FROM eclipse-temurin:17-jdk-alpine AS build
 
 WORKDIR /app
 
