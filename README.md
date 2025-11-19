@@ -99,6 +99,21 @@ docker-compose up -d
 
 ---
 
+## 🧬 Database Migrations (Flyway)
+
+- All schema changes live under `src/main/resources/db/migration` (starting with `V1__init_schema.sql`).
+- Apply migrations manually with the bundled Maven plugin:
+  ```bash
+  mvn -Dflyway.url=jdbc:postgresql://localhost:5432/warehouse_db \
+      -Dflyway.user=warehouse_user \
+      -Dflyway.password=warehouse_pass \
+      flyway:migrate
+  ```
+- `deploy.sh` now spins up the local PostgreSQL container and runs Flyway before building the stack (set `SKIP_FLYWAY=true ./deploy.sh` to bypass this step).
+- Spring Boot also triggers Flyway on startup; set `SPRING_FLYWAY_BASELINE_ON_MIGRATE=true` (and optionally `SPRING_FLYWAY_BASELINE_VERSION=1`) **once** if you need to baseline an already populated database before adopting migrations.
+
+---
+
 ## 🛠️ Tech Stack
 
 ### Backend
@@ -106,6 +121,7 @@ docker-compose up -d
 - **Language:** Java 17
 - **ORM:** Spring Data JPA / Hibernate
 - **Database:** PostgreSQL 15 (production), H2 (development)
+- **Migrations:** Flyway 10.x
 - **Build Tool:** Maven
 - **Testing:** JUnit 5, Mockito
 
@@ -237,9 +253,16 @@ SPRING_DATASOURCE_PASSWORD=your_password
 # Application Profile
 SPRING_PROFILES_ACTIVE=prod
 
+# Flyway (optional overrides)
+SPRING_FLYWAY_BASELINE_ON_MIGRATE=false
+SPRING_FLYWAY_BASELINE_VERSION=1
+SPRING_FLYWAY_BASELINE_DESCRIPTION="Existing schema"
+
 # Server Configuration
 SERVER_PORT=8080
 ```
+
+`deploy.sh` also understands `SKIP_FLYWAY=true` if you need to skip the pre-build migration step locally.
 
 ### Application Profiles
 
@@ -263,6 +286,8 @@ docker-compose logs -f
 docker-compose down
 ```
 
+> Use `./deploy.sh` for an opinionated flow that also runs Flyway migrations before the containers are rebuilt. Set `SKIP_FLYWAY=true` if you only need to rebuild images.
+
 ### Cloud Deployment
 
 The application is ready for deployment on:
@@ -272,11 +297,28 @@ The application is ready for deployment on:
 - **AWS/GCP/Azure** - Docker-ready for any cloud platform
 - **VPS** - Deploy with Docker Compose
 
+For VPS or bare-metal deployments you can reuse `nginx/prod.conf` as-is; it proxies `/` to the React frontend and `/api/**` (including `/api/stream` and `/api/actuator/health`) to the Spring Boot service, so no Flyway-specific changes are needed.
+
+#### Railway + Flyway pipeline
+
+1. Install the Railway CLI (`npm install -g @railway/cli`) and log in.
+2. `railway init` inside this repository, then `railway add postgresql` to provision a managed database.
+3. Expose the generated credentials as environment variables (`DATABASE_URL`, `PGUSER`, `PGPASSWORD`, etc.).
+4. Run migrations before deploying the service:
+   ```bash
+   railway run "mvn -DskipTests -Dflyway.url=$DATABASE_URL \
+       -Dflyway.user=$PGUSER \
+       -Dflyway.password=$PGPASSWORD \
+       flyway:migrate"
+   ```
+5. For existing Railway databases, temporarily set `SPRING_FLYWAY_BASELINE_ON_MIGRATE=true` (or pass `-Dflyway.baselineOnMigrate=true`) for a single baseline run, then revert to `false`.
+6. Deploy the application with `railway up`; the platform builds from the root `Dockerfile`, and Flyway will validate migrations again during startup.
+
 ### Environment Setup
 
 1. Set environment variables
 2. Configure PostgreSQL connection
-3. Run database migrations (automatic on startup)
+3. Run Flyway migrations (`mvn flyway:migrate`, `deploy.sh`, or during app startup)
 4. Deploy with Docker or build from source
 
 ---

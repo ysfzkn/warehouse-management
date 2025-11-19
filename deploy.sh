@@ -22,13 +22,59 @@ if ! command -v docker-compose &> /dev/null && ! docker compose version &> /dev/
     exit 1
 fi
 
+USE_COMPOSE_V2=false
+if docker compose version &> /dev/null; then
+    USE_COMPOSE_V2=true
+fi
+
+compose() {
+    if [ "$USE_COMPOSE_V2" = true ]; then
+        docker compose "$@"
+    else
+        docker-compose "$@"
+    fi
+}
+
+FLYWAY_DATABASE=${FLYWAY_DATABASE:-warehouse_db}
+FLYWAY_URL=${FLYWAY_URL:-jdbc:postgresql://localhost:5432/${FLYWAY_DATABASE}}
+FLYWAY_USER=${FLYWAY_USER:-warehouse_user}
+FLYWAY_PASSWORD=${FLYWAY_PASSWORD:-warehouse_pass}
+SKIP_FLYWAY=${SKIP_FLYWAY:-false}
+
+run_flyway_migrations() {
+    if [ "$SKIP_FLYWAY" = true ]; then
+        echo "⚠️  Skipping Flyway migrations (SKIP_FLYWAY=true)"
+        return
+    fi
+
+    echo "🐘 Starting PostgreSQL container for migrations..."
+    compose up -d db
+
+    echo "⏳ Waiting for PostgreSQL to accept connections..."
+    DB_CONTAINER=""
+    until [ -n "$DB_CONTAINER" ]; do
+        DB_CONTAINER=$(compose ps -q db)
+        sleep 2
+    done
+
+    until docker exec "$DB_CONTAINER" pg_isready -U "$FLYWAY_USER" -d "$FLYWAY_DATABASE" > /dev/null 2>&1; do
+        sleep 3
+    done
+
+    echo "🧬 Applying Flyway migrations to $FLYWAY_URL ..."
+    mvn -DskipTests -Dflyway.url="$FLYWAY_URL" -Dflyway.user="$FLYWAY_USER" -Dflyway.password="$FLYWAY_PASSWORD" flyway:migrate
+}
+
 # Stop existing containers
 echo "🛑 Stopping existing containers..."
-docker-compose down || true
+compose down || true
 
 # Remove old images (optional)
 echo "🧹 Cleaning up old images..."
 docker image prune -f || true
+
+# Run Flyway migrations against the target database
+run_flyway_migrations
 
 # Build and start services
 echo "🔨 Building and starting services..."
@@ -40,13 +86,8 @@ echo "   - Multi-stage build with OpenJDK 17 JRE Alpine"
 echo "   - Optimized for production deployment"
 echo "   - Minimal base image for smaller size"
 
-if docker compose version &> /dev/null; then
-    docker compose build --parallel
-    docker compose up -d
-else
-    docker-compose build --parallel
-    docker-compose up -d
-fi
+compose build --parallel
+compose up -d
 
 # Wait for services to be ready
 echo "⏳ Waiting for services to be ready..."
@@ -54,11 +95,7 @@ sleep 30
 
 # Check if services are running
 echo "🔍 Checking service status..."
-if docker compose version &> /dev/null; then
-    docker compose ps
-else
-    docker-compose ps
-fi
+compose ps
 
 # Run health checks
 echo "🏥 Running health checks..."
@@ -108,9 +145,15 @@ echo "   Username: sa"
 echo "   Password: password"
 echo ""
 echo "📝 To view logs:"
-echo "   Backend: docker-compose logs backend"
-echo "   Frontend: docker-compose logs frontend"
-echo "   pgAdmin: docker-compose logs pgadmin"
+if [ "$USE_COMPOSE_V2" = true ]; then
+    echo "   Backend: docker compose logs backend"
+    echo "   Frontend: docker compose logs frontend"
+    echo "   pgAdmin: docker compose logs pgadmin"
+else
+    echo "   Backend: docker-compose logs backend"
+    echo "   Frontend: docker-compose logs frontend"
+    echo "   pgAdmin: docker-compose logs pgadmin"
+fi
 echo ""
 echo "🚀 For Railway deployment (recommended):"
 echo "   1. Visit: https://railway.app"
@@ -120,5 +163,9 @@ echo "   4. Login: railway login"
 echo "   5. Deploy: railway init && railway add postgresql && railway up"
 echo ""
 echo "🛑 To stop services:"
-echo "   docker-compose down"
+if [ "$USE_COMPOSE_V2" = true ]; then
+    echo "   docker compose down"
+else
+    echo "   docker-compose down"
+fi
 echo ""
