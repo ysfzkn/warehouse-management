@@ -1,45 +1,36 @@
-# Optimized multi-stage build for Spring Boot application
-FROM openjdk:17-jdk-alpine AS build
+##
+# Multi-stage build for Spring Boot backend
+##
+
+FROM maven:3.9.9-eclipse-temurin-17-alpine AS build
 
 WORKDIR /app
 
-# Install only necessary packages
-RUN apk add --no-cache maven
-
-# Copy Maven files
+# Copy Maven metadata and warm dependency cache (improves Docker layer reuse)
 COPY pom.xml .
+RUN mvn -B dependency:go-offline
+
+# Copy source after dependencies to avoid invalidating cache on every change
 COPY src ./src
+RUN mvn -B clean package -DskipTests
 
-# Build the application
-RUN apk add --no-cache maven && \
-    mvn clean package -DskipTests
-
-# Build the application with optimizations
-RUN mvn clean package -DskipTests -Dmaven.repo.local=/tmp/maven-repo
-
-# Production stage with minimal base image
-FROM openjdk:17-jdk-alpine
+FROM eclipse-temurin:17-jre-alpine
 
 WORKDIR /app
 
-# Install only curl for health checks (no wget needed)
 RUN apk add --no-cache curl
 
-# Copy the built JAR file from build stage
-COPY --from=build /app/target/warehouse-management-1.0.0.jar app.jar
+# Copy built jar (use wildcard to keep version-independent)
+COPY --from=build /app/target/warehouse-management-*.jar app.jar
 
-# Create non-root user for security
 RUN addgroup -g 1001 -S appuser && \
     adduser -S appuser -u 1001 -G appuser
 
 USER appuser
 
-# Expose port
 EXPOSE 8080
 
-# Optimized health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD curl -f http://localhost:8080/actuator/health || exit 1
 
-# Run the application with optimized JVM settings
 ENTRYPOINT ["java", "-jar", "app.jar"]
