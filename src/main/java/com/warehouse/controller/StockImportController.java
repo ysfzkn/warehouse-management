@@ -1,5 +1,6 @@
 package com.warehouse.controller;
 
+import com.warehouse.config.ImportProperties;
 import com.warehouse.entity.StockImportHistory;
 import com.warehouse.repository.StockImportHistoryRepository;
 import com.warehouse.service.StockImportService;
@@ -29,6 +30,7 @@ public class StockImportController {
 
     private final StockImportService stockImportService;
     private final StockImportHistoryRepository historyRepository;
+    private final ImportProperties importProperties;
 
     @GetMapping("/template")
     public ResponseEntity<Resource> downloadTemplate() throws IOException {
@@ -75,7 +77,7 @@ public class StockImportController {
     public ResponseEntity<Resource> downloadFile(@PathVariable Long id) throws IOException {
         StockImportHistory history = historyRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Record not found: " + id));
-        Path storageDir = Path.of(ImportMessages.STORAGE_DIR);
+        Path storageDir = Path.of(importProperties.getStorageDir());
         Path path = storageDir.resolve(history.getStoredFilename());
         if (!Files.exists(path)) {
             // Fallback: try to find by original filename suffix (for older inconsistent records)

@@ -1,6 +1,7 @@
 package com.warehouse.service.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.warehouse.config.ImportProperties;
 import com.warehouse.entity.*;
 import com.warehouse.repository.*;
 import com.warehouse.service.AuditService;
@@ -43,7 +44,6 @@ import java.util.Optional;
 public class StockImportServiceImpl implements StockImportService {
 
     private static final Logger logger = LoggerFactory.getLogger(StockImportServiceImpl.class);
-    private static final String STORAGE_DIR = ImportMessages.STORAGE_DIR;
     private static final String TEMPLATE_SHEET_NAME = ImportMessages.TEMPLATE_SHEET_NAME;
 
     private final ProductRepository productRepository;
@@ -53,6 +53,7 @@ public class StockImportServiceImpl implements StockImportService {
     private final StockImportHistoryRepository historyRepository;
     private final AuditService auditService;
     private final NotificationService notificationService;
+    private final ImportProperties importProperties;
 
     public StockImportServiceImpl(ProductRepository productRepository,
                                   CategoryRepository categoryRepository,
@@ -60,7 +61,8 @@ public class StockImportServiceImpl implements StockImportService {
                                   StockRepository stockRepository,
                                   StockImportHistoryRepository historyRepository,
                                   AuditService auditService,
-                                  NotificationService notificationService) {
+                                  NotificationService notificationService,
+                                  ImportProperties importProperties) {
         this.productRepository = productRepository;
         this.categoryRepository = categoryRepository;
         this.warehouseRepository = warehouseRepository;
@@ -68,6 +70,7 @@ public class StockImportServiceImpl implements StockImportService {
         this.historyRepository = historyRepository;
         this.auditService = auditService;
         this.notificationService = notificationService;
+        this.importProperties = importProperties;
     }
 
     @Override
@@ -148,7 +151,7 @@ public class StockImportServiceImpl implements StockImportService {
     }
 
     private Path storeFile(MultipartFile file, String storedFilename) throws IOException {
-        Path dir = Path.of(STORAGE_DIR);
+        Path dir = Path.of(importProperties.getStorageDir());
         Files.createDirectories(dir);
         Path target = dir.resolve(storedFilename);
         try (InputStream is = file.getInputStream()) {
