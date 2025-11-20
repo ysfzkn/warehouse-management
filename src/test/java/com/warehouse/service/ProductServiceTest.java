@@ -9,10 +9,10 @@ import com.warehouse.repository.BrandRepository;
 import com.warehouse.repository.CategoryRepository;
 import com.warehouse.repository.ColorRepository;
 import com.warehouse.repository.ProductRepository;
+import com.warehouse.service.impl.ProductServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -42,7 +42,6 @@ class ProductServiceTest {
     @Mock
     private ColorRepository colorRepository;
 
-    @InjectMocks
     private ProductService productService;
 
     private Product product;
@@ -52,6 +51,7 @@ class ProductServiceTest {
 
     @BeforeEach
     void setUp() {
+        productService = new ProductServiceImpl(productRepository, categoryRepository, brandRepository, colorRepository);
         category = new Category();
         category.setId(1L);
         category.setName("Electronics");

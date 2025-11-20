@@ -21,6 +21,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class AuditAndNotificationIntegrationTest {
 
     @Autowired private ProductRepository productRepository;
+    @Autowired private CategoryRepository categoryRepository;
     @Autowired private WarehouseRepository warehouseRepository;
     @Autowired private StockRepository stockRepository;
     @Autowired private AuditLogRepository auditLogRepository;
@@ -29,6 +30,7 @@ class AuditAndNotificationIntegrationTest {
     @Autowired private StockTransferService stockTransferService;
 
     private Product product;
+    private Category category;
     private Warehouse wh1;
     private Warehouse wh2;
 
@@ -40,16 +42,24 @@ class AuditAndNotificationIntegrationTest {
         productRepository.deleteAll();
         warehouseRepository.deleteAll();
 
+        category = new Category();
+        category.setName("Integration Category");
+        category = categoryRepository.save(category);
+
         product = new Product();
         product.setName("Test Product");
+        product.setSku("INT-TEST-001");
+        product.setCategory(category);
         productRepository.save(product);
 
         wh1 = new Warehouse();
         wh1.setName("WH-1");
+        wh1.setLocation("Istanbul");
         warehouseRepository.save(wh1);
 
         wh2 = new Warehouse();
         wh2.setName("WH-2");
+        wh2.setLocation("Ankara");
         warehouseRepository.save(wh2);
     }
 

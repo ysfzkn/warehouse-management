@@ -7,10 +7,10 @@ import com.warehouse.exception.WarehouseManagementException;
 import com.warehouse.repository.ProductRepository;
 import com.warehouse.repository.StockRepository;
 import com.warehouse.repository.WarehouseRepository;
+import com.warehouse.service.impl.StockServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -35,7 +35,12 @@ class StockServiceTest {
     @Mock
     private WarehouseRepository warehouseRepository;
 
-    @InjectMocks
+    @Mock
+    private AuditService auditService;
+
+    @Mock
+    private NotificationService notificationService;
+
     private StockService stockService;
 
     private Stock stock;
@@ -44,6 +49,7 @@ class StockServiceTest {
 
     @BeforeEach
     void setUp() {
+        stockService = new StockServiceImpl(stockRepository, productRepository, warehouseRepository, auditService, notificationService);
         product = new Product();
         product.setId(1L);
         product.setName("Test Product");

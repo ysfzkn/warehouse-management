@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
+
+const INITIAL_VISIBLE_PRODUCTS = 12;
 
 const StockForm = ({ products, warehouses, onSuccess, onCancel }) => {
   const [formData, setFormData] = useState({
@@ -12,16 +14,15 @@ const StockForm = ({ products, warehouses, onSuccess, onCancel }) => {
   });
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
+  const [productSearchTerm, setProductSearchTerm] = useState('');
+  const [visibleProductCount, setVisibleProductCount] = useState(INITIAL_VISIBLE_PRODUCTS);
 
   useEffect(() => {
-    // Set default values if available
-    if (products.length > 0) {
-      setFormData(prev => ({ ...prev, productId: products[0].id }));
-    }
+    // Set default warehouse if available
     if (warehouses.length > 0) {
       setFormData(prev => ({ ...prev, warehouseId: warehouses[0].id }));
     }
-  }, [products, warehouses]);
+  }, [warehouses]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -38,6 +39,46 @@ const StockForm = ({ products, warehouses, onSuccess, onCancel }) => {
       }));
     }
   };
+
+  const handleProductSelect = (productId) => {
+    setFormData(prev => ({ ...prev, productId }));
+    if (errors.productId) {
+      setErrors(prev => ({ ...prev, productId: '' }));
+    }
+  };
+
+  const filteredProducts = useMemo(() => {
+    if (!productSearchTerm.trim()) return products;
+    const query = productSearchTerm.trim().toLowerCase();
+    return products.filter(product => {
+      const haystack = [
+        product.name,
+        product.sku,
+        product.barcode,
+        product.brand?.name
+      ]
+        .filter(Boolean)
+        .map(text => text.toLowerCase());
+      return haystack.some(text => text.includes(query));
+    });
+  }, [products, productSearchTerm]);
+
+  const productOptions = useMemo(() => {
+    if (!formData.productId) return filteredProducts;
+    const hasSelected = filteredProducts.some(product => String(product.id) === String(formData.productId));
+    if (hasSelected) {
+      return filteredProducts;
+    }
+    const selectedProduct = products.find(product => String(product.id) === String(formData.productId));
+    return selectedProduct ? [selectedProduct, ...filteredProducts] : filteredProducts;
+  }, [filteredProducts, formData.productId, products]);
+
+  useEffect(() => {
+    setVisibleProductCount(INITIAL_VISIBLE_PRODUCTS);
+  }, [productSearchTerm, filteredProducts.length]);
+
+  const limitedProductOptions = useMemo(() => productOptions.slice(0, visibleProductCount), [productOptions, visibleProductCount]);
+  const hasMoreProducts = productOptions.length > visibleProductCount;
 
   const validateForm = () => {
     const newErrors = {};
@@ -109,22 +150,80 @@ const StockForm = ({ products, warehouses, onSuccess, onCancel }) => {
             <label htmlFor="productId" className="form-label">
               Ürün <span className="text-danger">*</span>
             </label>
-            <select
-              className={`form-select ${errors.productId ? 'is-invalid' : ''}`}
-              id="productId"
-              name="productId"
-              value={formData.productId}
-              onChange={handleChange}
-              required
-            >
-              <option value="">Ürün seçin</option>
-              {products.map((product) => (
-                <option key={product.id} value={product.id}>
-                  {product.name} ({product.sku})
-                </option>
-              ))}
-            </select>
-            {errors.productId && <div className="invalid-feedback">{errors.productId}</div>}
+            <div className="input-group mb-2">
+              <span className="input-group-text bg-light">
+                <i className="fas fa-search text-muted"></i>
+              </span>
+              <input
+                type="text"
+                className="form-control"
+                placeholder="Ürün adı, SKU veya marka ara..."
+                value={productSearchTerm}
+                onChange={(e) => setProductSearchTerm(e.target.value)}
+                disabled={products.length === 0}
+              />
+              {productSearchTerm && (
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary"
+                  onClick={() => setProductSearchTerm('')}
+                >
+                  Temizle
+                </button>
+              )}
+            </div>
+            <div className="d-flex justify-content-between small text-muted mb-2">
+              <span>{products.length} ürün</span>
+              {productSearchTerm && (
+                <span>{productOptions.length} sonuç</span>
+              )}
+            </div>
+            {productOptions.length === 0 ? (
+              <div className="alert alert-light border mt-2 py-3 mb-0">
+                <i className="fas fa-info-circle me-2 text-primary"></i>
+                {productSearchTerm
+                  ? 'Arama kriterlerine uygun ürün bulunamadı. Farklı anahtar kelimeler deneyin.'
+                  : 'Sistemde tanımlı ürün bulunamadı.'}
+              </div>
+            ) : (
+              <div className="stock-option-list border rounded-4 shadow-sm bg-white">
+                <div className="stock-option-grid">
+                  {limitedProductOptions.map(product => {
+                    const productId = String(product.id);
+                    const isSelected = String(formData.productId) === productId;
+                    return (
+                      <button
+                        type="button"
+                        key={product.id}
+                        className={`stock-option-button ${isSelected ? 'active' : ''}`}
+                        onClick={() => handleProductSelect(productId)}
+                      >
+                        <div className="fw-semibold text-dark">{product.name}</div>
+                        <div className="text-muted small">SKU: {product.sku}</div>
+                        {product.brand?.name && (
+                          <div className="badge bg-light text-dark mt-2">{product.brand.name}</div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            {hasMoreProducts && (
+              <button
+                type="button"
+                className="btn btn-light btn-sm w-100 mt-2 stock-load-more"
+                onClick={() => setVisibleProductCount(prev => prev + INITIAL_VISIBLE_PRODUCTS)}
+              >
+                Daha fazla göster ({productOptions.length - limitedProductOptions.length} ürün)
+              </button>
+            )}
+            {!formData.productId && productOptions.length > 0 && (
+              <small className="text-muted d-block mt-2">
+                Ürünü seçmek için kartın üzerine tıklayın.
+              </small>
+            )}
+            {errors.productId && <div className="invalid-feedback d-block">{errors.productId}</div>}
           </div>
         </div>
 

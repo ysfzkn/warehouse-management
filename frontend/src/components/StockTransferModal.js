@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
 import {
   extractPhoneDigits,
@@ -47,13 +47,16 @@ const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery 
   const [warehouseStocks, setWarehouseStocks] = useState([]);
   const [stockLoading, setStockLoading] = useState(false);
   const [transferItems, setTransferItems] = useState([]);
-  const [itemForm, setItemForm] = useState({ productId: stock?.product?.id || '', quantity: '' });
+  const [itemForm, setItemForm] = useState({ productId: '', quantity: '' });
   const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
   const [error, setError] = useState(null);
   const [validationErrors, setValidationErrors] = useState({});
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [createdTransferId, setCreatedTransferId] = useState(null);
+  const [stockSearchTerm, setStockSearchTerm] = useState('');
+  const INITIAL_VISIBLE_STOCKS = 12;
+  const [visibleStockCount, setVisibleStockCount] = useState(INITIAL_VISIBLE_STOCKS);
   const transferTypeOptions = [
     { key: 'WAREHOUSE', label: 'Depo Transferi', icon: 'fa-warehouse', accent: 'primary', hint: 'Şubeler arası stok taşıma' },
     { key: 'CUSTOMER_DELIVERY', label: 'Müşteri Sevkiyatı', icon: 'fa-shipping-fast', accent: 'info', hint: 'Depodan müşteriye sevk' }
@@ -164,7 +167,6 @@ useEffect(() => {
         quantity: 1,
         availableQuantity: calculateAvailableQuantity(stock)
       }]);
-      setItemForm(prev => ({ ...prev, productId: stock.product.id }));
     }
   }, [stock]);
 
@@ -176,6 +178,11 @@ useEffect(() => {
       setTransferItems([]);
     }
   }, [formData.sourceWarehouseId, fetchWarehouseStocks]);
+
+  useEffect(() => {
+    setStockSearchTerm('');
+    setVisibleStockCount(INITIAL_VISIBLE_STOCKS);
+  }, [formData.sourceWarehouseId]);
 
   const fetchWarehouses = async () => {
     try {
@@ -577,6 +584,24 @@ useEffect(() => {
   const formattedDriverPhone = formatPhoneForDisplay(formData.driverPhone);
   const formattedCustomerPhone = formatPhoneForDisplay(formData.customerPhone);
   const totalTransferQuantity = transferItems.reduce((sum, item) => sum + (item.quantity || 0), 0);
+  const filteredWarehouseStocks = useMemo(() => {
+    if (!stockSearchTerm.trim()) return warehouseStocks;
+    const q = stockSearchTerm.trim().toLowerCase();
+    return warehouseStocks.filter(stockItem => {
+      const name = stockItem.product?.name?.toLowerCase() || '';
+      const sku = stockItem.product?.sku?.toLowerCase() || '';
+      const barcode = stockItem.product?.barcode?.toLowerCase() || '';
+      return name.includes(q) || sku.includes(q) || barcode.includes(q);
+    });
+  }, [warehouseStocks, stockSearchTerm]);
+  useEffect(() => {
+    setVisibleStockCount(INITIAL_VISIBLE_STOCKS);
+  }, [stockSearchTerm, filteredWarehouseStocks.length]);
+  const limitedStockList = useMemo(
+    () => filteredWarehouseStocks.slice(0, visibleStockCount),
+    [filteredWarehouseStocks, visibleStockCount]
+  );
+  const hasMoreStocks = filteredWarehouseStocks.length > visibleStockCount;
 
   const steps = submitSuccess ? [
     { number: 1, title: 'Transfer Detayları', icon: 'fa-boxes' },
@@ -914,23 +939,104 @@ useEffect(() => {
                                     <i className="fas fa-box text-primary me-1"></i>
                                     Depo Stokları
                                   </label>
-                                  <select
-                                    className={`form-select form-select-lg ${validationErrors.itemProductId ? 'is-invalid' : ''}`}
-                                    value={itemForm.productId}
-                                    onChange={(e) => handleItemFormChange('productId', e.target.value)}
-                                    disabled={stockLoading || !warehouseStocks.length}
-                                  >
-                                    <option value="">
-                                      {stockLoading ? 'Stoklar yükleniyor...' : '-- Ürün seçiniz --'}
-                                    </option>
-                                    {warehouseStocks.map(stockItem => (
-                                      <option key={stockItem.product.id} value={stockItem.product.id}>
-                                        {stockItem.product.name} ({stockItem.product.sku}) · Mevcut: {calculateAvailableQuantity(stockItem)}
-                                      </option>
-                                    ))}
-                                  </select>
+                                  <div className="input-group input-group-lg mb-2">
+                                    <span className="input-group-text bg-light">
+                                      <i className="fas fa-search text-muted"></i>
+                                    </span>
+                                    <input
+                                      type="text"
+                                      className="form-control"
+                                      placeholder="Ürün adı, SKU veya barkod ile ara..."
+                                      value={stockSearchTerm}
+                                      onChange={(e) => setStockSearchTerm(e.target.value)}
+                                      disabled={stockLoading || !warehouseStocks.length}
+                                    />
+                                    {stockSearchTerm && (
+                                      <button
+                                        type="button"
+                                        className="btn btn-outline-secondary"
+                                        onClick={() => setStockSearchTerm('')}
+                                        disabled={stockLoading}
+                                      >
+                                        Temizle
+                                      </button>
+                                    )}
+                                  </div>
+                                  <div className="d-flex justify-content-between small text-muted mb-2">
+                                    <span>
+                                      {warehouseStocks.length > 0
+                                        ? `${warehouseStocks.length} ürün`
+                                        : 'Stok listesi hazır değil'}
+                                    </span>
+                                    {stockSearchTerm && (
+                                      <span>
+                                        {filteredWarehouseStocks.length} sonuç
+                                      </span>
+                                    )}
+                                  </div>
+                                  {stockLoading ? (
+                                    <div className="d-flex align-items-center gap-2 py-3">
+                                      <span className="spinner-border spinner-border-sm text-primary" role="status" aria-hidden="true"></span>
+                                      <span className="text-muted">Stoklar yükleniyor...</span>
+                                    </div>
+                                  ) : (
+                                    <>
+                                      {filteredWarehouseStocks.length === 0 ? (
+                                        <div className="alert alert-light border mt-2 py-3 mb-0">
+                                          <i className="fas fa-info-circle me-2 text-primary"></i>
+                                          {stockSearchTerm
+                                            ? 'Arama kriterine uygun ürün bulunamadı. Farklı anahtar kelimeler deneyin.'
+                                            : 'Bu depoda henüz stok bulunmuyor.'}
+                                        </div>
+                                      ) : (
+                                        <div className="stock-option-list border rounded-4 shadow-sm bg-white">
+                                          <div className="stock-option-grid">
+                                          {limitedStockList.map(stockItem => {
+                                            const optionProductId = String(stockItem.product.id);
+                                            const isSelected = String(itemForm.productId) === optionProductId;
+                                            const available = calculateAvailableQuantity(stockItem);
+                                            return (
+                                              <button
+                                                type="button"
+                                                key={stockItem.product.id}
+                                                className={`stock-option-button ${isSelected ? 'active' : ''}`}
+                                                onClick={() => handleItemFormChange('productId', optionProductId)}
+                                              >
+                                                <div className="d-flex justify-content-between align-items-start">
+                                                  <div className="me-3">
+                                                    <div className="fw-semibold text-dark">{stockItem.product.name}</div>
+                                                    <div className="text-muted small">SKU: {stockItem.product.sku}</div>
+                                                  </div>
+                                                  <div className="text-end">
+                                                    <span className={`badge ${available > 0 ? 'bg-success bg-opacity-10 text-success' : 'bg-danger bg-opacity-10 text-danger'}`}>
+                                                      Mevcut {available}
+                                                    </span>
+                                                  </div>
+                                                </div>
+                                              </button>
+                                            );
+                                          })}
+                                          </div>
+                                        </div>
+                                      )}
+                                    </>
+                                  )}
+                                  {hasMoreStocks && (
+                                    <button
+                                      type="button"
+                                      className="btn btn-light btn-sm w-100 mt-2 stock-load-more"
+                                      onClick={() => setVisibleStockCount(prev => prev + INITIAL_VISIBLE_STOCKS)}
+                                    >
+                                      Daha fazla göster ({filteredWarehouseStocks.length - limitedStockList.length} ürün)
+                                    </button>
+                                  )}
                                   {validationErrors.itemProductId && (
                                     <div className="invalid-feedback d-block">{validationErrors.itemProductId}</div>
+                                  )}
+                                  {!itemForm.productId && filteredWarehouseStocks.length > 0 && (
+                                    <small className="text-muted d-block mt-2">
+                                      Bir ürünü seçmek için listeden üzerine tıklayın.
+                                    </small>
                                   )}
                                 </div>
                                 <div className="col-md-3">
