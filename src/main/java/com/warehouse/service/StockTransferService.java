@@ -1,7 +1,11 @@
 package com.warehouse.service;
 
+import com.warehouse.dto.StockTransferFilter;
+import com.warehouse.dto.StockTransferSummary;
 import com.warehouse.entity.StockTransfer;
 import com.warehouse.enums.TransferStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 import java.util.List;
 import java.util.Optional;
@@ -12,6 +16,8 @@ import java.util.Optional;
 public interface StockTransferService {
 
     List<StockTransfer> getAllTransfers();
+
+    Page<StockTransfer> getTransfersPaged(StockTransferFilter filter, Pageable pageable);
 
     Optional<StockTransfer> getTransferById(Long id);
 
@@ -24,6 +30,10 @@ public interface StockTransferService {
     List<StockTransfer> getTransfersByStatus(TransferStatus status);
 
     List<StockTransfer> getTransfersForCurrentUser();
+
+    Page<StockTransfer> getTransfersForCurrentUserPaged(StockTransferFilter filter, Pageable pageable);
+
+    StockTransferSummary getTransferSummary(StockTransferFilter filter, boolean currentUserOnly);
 
     StockTransfer createTransfer(StockTransfer transfer);
 

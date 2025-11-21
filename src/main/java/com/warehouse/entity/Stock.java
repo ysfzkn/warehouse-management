@@ -23,11 +23,29 @@ import java.time.LocalDateTime;
         @Index(name = "idx_stocks_quantity", columnList = "quantity")
     }
 )
+@NamedEntityGraph(
+        name = Stock.GRAPH_WITH_PRODUCT_AND_WAREHOUSE,
+        attributeNodes = {
+                @NamedAttributeNode(value = "product", subgraph = "Stock.product"),
+                @NamedAttributeNode("warehouse")
+        },
+        subgraphs = {
+                @NamedSubgraph(
+                        name = "Stock.product",
+                        attributeNodes = {
+                                @NamedAttributeNode("brand"),
+                                @NamedAttributeNode("color")
+                        }
+                )
+        }
+)
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @EqualsAndHashCode(callSuper = false)
 public class Stock {
+
+    public static final String GRAPH_WITH_PRODUCT_AND_WAREHOUSE = "Stock.with-product-warehouse";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

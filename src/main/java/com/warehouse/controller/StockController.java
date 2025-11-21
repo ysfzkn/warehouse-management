@@ -1,8 +1,10 @@
 package com.warehouse.controller;
 
-import com.warehouse.entity.Stock;
+import com.warehouse.dto.PagedResponse;
 import com.warehouse.dto.StockDto;
+import com.warehouse.dto.StockFilter;
 import com.warehouse.dto.StockRequestDto;
+import com.warehouse.entity.Stock;
 import com.warehouse.service.StockService;
 import com.warehouse.service.StockRequestService;
 import com.warehouse.enums.StockRequestType;
@@ -10,6 +12,11 @@ import com.warehouse.entity.UserRole;
 import com.warehouse.util.CurrentUser;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.JpaSort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -40,14 +47,48 @@ public class StockController {
 
     @GetMapping
     @Transactional(readOnly = true)
-    public ResponseEntity<List<StockDto>> getAllStocks(
+    public ResponseEntity<PagedResponse<StockDto>> getAllStocks(
             @RequestParam(required = false) Long brandId,
             @RequestParam(required = false) Long colorId,
-            @RequestParam(required = false) Long warehouseId) {
-        List<Stock> stocks = (brandId != null || colorId != null || warehouseId != null)
-                ? stockService.getAllStocksFiltered(brandId, colorId, warehouseId)
-                : stockService.getAllStocks();
-        return ResponseEntity.ok(stocks.stream().map(this::toDto).toList());
+            @RequestParam(required = false) Long warehouseId,
+            @RequestParam(required = false) Long categoryId,
+            @RequestParam(required = false) Long subCategoryId,
+            @RequestParam(required = false) Boolean reservedOnly,
+            @RequestParam(required = false) Boolean consignedOnly,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false, defaultValue = "all") String status,
+            @RequestParam(required = false, defaultValue = "0") Integer page,
+            @RequestParam(required = false, defaultValue = "20") Integer size,
+            @RequestParam(defaultValue = "lastUpdated") String sortBy,
+            @RequestParam(defaultValue = "desc") String sortDir) {
+        int safePage = page != null && page >= 0 ? page : 0;
+        int safeSize = size != null && size > 0 ? size : 20;
+        Sort sort = resolveSort(sortBy, sortDir);
+        Pageable pageable = PageRequest.of(safePage, safeSize, sort);
+
+        StockFilter filter = new StockFilter();
+        filter.setBrandId(brandId);
+        filter.setColorId(colorId);
+        filter.setWarehouseId(warehouseId);
+        filter.setCategoryId(categoryId);
+        filter.setSubCategoryId(subCategoryId);
+        filter.setReservedOnly(Boolean.TRUE.equals(reservedOnly));
+        filter.setConsignedOnly(Boolean.TRUE.equals(consignedOnly));
+        filter.setSearch(search != null && !search.isBlank() ? search.trim() : null);
+        filter.setStatus(StockFilter.Status.from(status));
+
+        Page<Stock> stocks = stockService.getStocks(filter, pageable);
+        List<StockDto> content = stocks.getContent().stream().map(this::toDto).toList();
+        PagedResponse<StockDto> response = new PagedResponse<>(
+                content,
+                stocks.getNumber(),
+                stocks.getSize(),
+                stocks.getTotalElements(),
+                stocks.getTotalPages(),
+                stocks.isFirst(),
+                stocks.isLast()
+        );
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/{id}")
@@ -85,6 +126,13 @@ public class StockController {
     public ResponseEntity<List<StockDto>> getLowStockItems() {
         List<Stock> stocks = stockService.getLowStockItems();
         return ResponseEntity.ok(stocks.stream().map(this::toDto).toList());
+    }
+
+    @GetMapping("/low-stock/count")
+    @Transactional(readOnly = true)
+    public ResponseEntity<Long> getLowStockCount() {
+        long count = stockService.countLowStockItems();
+        return ResponseEntity.ok(count);
     }
 
     @GetMapping("/out-of-stock")
@@ -280,5 +328,19 @@ public class StockController {
             dto.warehouse = w;
         }
         return dto;
+    }
+
+    private Sort resolveSort(String sortBy, String sortDir) {
+        Sort.Direction direction = "asc".equalsIgnoreCase(sortDir) ? Sort.Direction.ASC : Sort.Direction.DESC;
+        if ("quantity".equalsIgnoreCase(sortBy)) {
+            return Sort.by(direction, "quantity");
+        }
+        if ("warehouse".equalsIgnoreCase(sortBy)) {
+            return JpaSort.unsafe(direction, "warehouse.name");
+        }
+        if ("product".equalsIgnoreCase(sortBy)) {
+            return JpaSort.unsafe(direction, "product.name");
+        }
+        return Sort.by(direction, "lastUpdated");
     }
 }

@@ -1,7 +1,10 @@
 package com.warehouse.controller;
 
+import com.warehouse.dto.PagedResponse;
 import com.warehouse.dto.StockTransferCreateRequest;
 import com.warehouse.dto.StockTransferDto;
+import com.warehouse.dto.StockTransferFilter;
+import com.warehouse.dto.StockTransferSummary;
 import com.warehouse.entity.Product;
 import com.warehouse.entity.StockTransfer;
 import com.warehouse.entity.StockTransferItem;
@@ -12,6 +15,10 @@ import com.warehouse.mapper.StockTransferMapper;
 import com.warehouse.service.StockTransferService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -34,10 +41,33 @@ public class StockTransferController {
     }
 
     @GetMapping
-    public ResponseEntity<List<StockTransferDto>> getAllTransfers() {
-        List<StockTransfer> transfers = stockTransferService.getAllTransfers();
-        List<StockTransferDto> dtos = transferMapper.toDtoList(transfers);
-        return ResponseEntity.ok(dtos);
+    public ResponseEntity<PagedResponse<StockTransferDto>> getAllTransfers(
+            @RequestParam(required = false) TransferStatus status,
+            @RequestParam(required = false) TransferType transferType,
+            @RequestParam(required = false) Long sourceWarehouseId,
+            @RequestParam(required = false) Long destinationWarehouseId,
+            @RequestParam(required = false) String productName,
+            @RequestParam(required = false) String sku,
+            @RequestParam(required = false) String driverName,
+            @PageableDefault(size = 25, sort = "transferDate", direction = Sort.Direction.DESC) Pageable pageable) {
+        StockTransferFilter filter = buildFilter(status, transferType, sourceWarehouseId, destinationWarehouseId, productName, sku, driverName);
+        Page<StockTransfer> transfers = stockTransferService.getTransfersPaged(filter, pageable);
+        List<StockTransferDto> dtos = transferMapper.toDtoList(transfers.getContent());
+        StockTransferSummary summary = stockTransferService.getTransferSummary(filter, false);
+        PagedResponse<StockTransferDto> response = new PagedResponse<>(
+                dtos,
+                transfers.getNumber(),
+                transfers.getSize(),
+                transfers.getTotalElements(),
+                transfers.getTotalPages(),
+                transfers.isFirst(),
+                transfers.isLast(),
+                Map.of(
+                        "statusCounts", summary.getStatusCounts(),
+                        "transferTypeCounts", summary.getTransferTypeCounts()
+                )
+        );
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/{id}")
@@ -71,10 +101,33 @@ public class StockTransferController {
     }
 
     @GetMapping("/current-user")
-    public ResponseEntity<List<StockTransferDto>> getCurrentUserTransfers() {
-        List<StockTransfer> transfers = stockTransferService.getTransfersForCurrentUser();
-        List<StockTransferDto> dtos = transferMapper.toDtoList(transfers);
-        return ResponseEntity.ok(dtos);
+    public ResponseEntity<PagedResponse<StockTransferDto>> getCurrentUserTransfers(
+            @RequestParam(required = false) TransferStatus status,
+            @RequestParam(required = false) TransferType transferType,
+            @RequestParam(required = false) Long sourceWarehouseId,
+            @RequestParam(required = false) Long destinationWarehouseId,
+            @RequestParam(required = false) String productName,
+            @RequestParam(required = false) String sku,
+            @RequestParam(required = false) String driverName,
+            @PageableDefault(size = 25, sort = "transferDate", direction = Sort.Direction.DESC) Pageable pageable) {
+        StockTransferFilter filter = buildFilter(status, transferType, sourceWarehouseId, destinationWarehouseId, productName, sku, driverName);
+        Page<StockTransfer> transfers = stockTransferService.getTransfersForCurrentUserPaged(filter, pageable);
+        List<StockTransferDto> dtos = transferMapper.toDtoList(transfers.getContent());
+        StockTransferSummary summary = stockTransferService.getTransferSummary(filter, true);
+        PagedResponse<StockTransferDto> response = new PagedResponse<>(
+                dtos,
+                transfers.getNumber(),
+                transfers.getSize(),
+                transfers.getTotalElements(),
+                transfers.getTotalPages(),
+                transfers.isFirst(),
+                transfers.isLast(),
+                Map.of(
+                        "statusCounts", summary.getStatusCounts(),
+                        "transferTypeCounts", summary.getTransferTypeCounts()
+                )
+        );
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping
@@ -121,6 +174,24 @@ public class StockTransferController {
     public ResponseEntity<Void> deleteTransfer(@PathVariable Long id) {
         stockTransferService.deleteTransfer(id);
         return ResponseEntity.noContent().build();
+    }
+
+    private StockTransferFilter buildFilter(TransferStatus status,
+                                            TransferType transferType,
+                                            Long sourceWarehouseId,
+                                            Long destinationWarehouseId,
+                                            String productName,
+                                            String sku,
+                                            String driverName) {
+        StockTransferFilter filter = new StockTransferFilter();
+        filter.setStatus(status);
+        filter.setTransferType(transferType);
+        filter.setSourceWarehouseId(sourceWarehouseId);
+        filter.setDestinationWarehouseId(destinationWarehouseId);
+        filter.setProductName(productName);
+        filter.setSku(sku);
+        filter.setDriverName(driverName);
+        return filter;
     }
 
     private StockTransfer mapToEntity(StockTransferCreateRequest request) {

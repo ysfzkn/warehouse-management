@@ -68,7 +68,7 @@ const Dashboard = () => {
         axios.get('/api/categories'),
         axios.get('/api/stocks/low-stock'),
         axios.get('/api/stocks/out-of-stock'),
-        axios.get('/api/stocks'),
+        axios.get('/api/stocks', { params: { size: 500, page: 0 } }),
         axios.get('/api/brands'),
         axios.get('/api/colors')
       ]);
@@ -76,9 +76,10 @@ const Dashboard = () => {
       const warehousesData = warehousesRes.data;
       const products = productsRes.data;
       const categories = categoriesRes.data;
-      const lowStockItems = lowStockRes.data || [];
-      const outOfStockItems = outOfStockRes.data || [];
-      const allStocksData = allStocksRes.data || [];
+      const lowStockItems = Array.isArray(lowStockRes.data) ? lowStockRes.data : (lowStockRes.data?.content || []);
+      const outOfStockItems = Array.isArray(outOfStockRes.data) ? outOfStockRes.data : (outOfStockRes.data?.content || []);
+      const allStocksRaw = allStocksRes.data;
+      const allStocksData = Array.isArray(allStocksRaw?.content) ? allStocksRaw.content : (Array.isArray(allStocksRaw) ? allStocksRaw : []);
       const brands = brandsRes.data || [];
       const colors = colorsRes.data || [];
       

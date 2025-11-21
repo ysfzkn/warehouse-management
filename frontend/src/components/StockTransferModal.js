@@ -126,9 +126,7 @@ const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery 
     }
     try {
       setStockLoading(true);
-      const response = await axios.get('/api/stocks', {
-        params: { warehouseId }
-      });
+      const response = await axios.get(`/api/stocks/warehouse/${warehouseId}`);
       const stocks = Array.isArray(response.data) ? response.data : [];
       setWarehouseStocks(stocks);
       syncItemsWithStocks(stocks);

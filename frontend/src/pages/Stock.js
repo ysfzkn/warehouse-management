@@ -12,6 +12,7 @@ import ConfirmModal from '../components/ConfirmModal';
 import NotesModal from '../components/NotesModal';
 import AuditTimelineModal from '../components/AuditTimelineModal';
 import MyStockRequestsModal from '../components/MyStockRequestsModal';
+import PaginationControls from '../components/PaginationControls';
 
 // Helper function to format dates in Turkey timezone
 const formatDateInTurkeyTimezone = (isoDateString, options = {}) => {
@@ -28,6 +29,8 @@ const formatDateInTurkeyTimezone = (isoDateString, options = {}) => {
     return '-';
   }
 };
+
+const PAGE_SIZE_OPTIONS = [10, 20, 50];
 
 // Stable filters bar component to prevent input remount/focus loss
 const StockFiltersBar = ({
@@ -223,6 +226,10 @@ const Stock = () => {
   const isAdmin = role === 'ADMIN';
   const canTransfer = isAdmin || role === 'STOCK_IN' || role === 'STOCK_OUT';
   const [stocks, setStocks] = useState([]);
+  const [stockPage, setStockPage] = useState(0);
+  const [stockPageSize, setStockPageSize] = useState(20);
+  const [stockTotalPages, setStockTotalPages] = useState(0);
+  const [totalStockCount, setTotalStockCount] = useState(0);
   const [products, setProducts] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -234,6 +241,12 @@ const Stock = () => {
   const [showTransferHistory, setShowTransferHistory] = useState(false);
   const [selectedStock, setSelectedStock] = useState(null);
   const [transfers, setTransfers] = useState([]);
+  const [transferPage, setTransferPage] = useState(0);
+  const [transferPageSize, setTransferPageSize] = useState(20);
+  const [transferTotalPages, setTransferTotalPages] = useState(0);
+  const [transferTotalCount, setTransferTotalCount] = useState(0);
+  const [transferStatusCounts, setTransferStatusCounts] = useState({});
+  const [transferTypeCounts, setTransferTypeCounts] = useState({});
   const [filter, setFilter] = useState('all'); // all, low-stock, out-of-stock
   const [brandId, setBrandId] = useState(null);
   const [colorId, setColorId] = useState(null);
@@ -279,11 +292,84 @@ const Stock = () => {
   const [lockCustomerTransfer, setLockCustomerTransfer] = useState(false);
   const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
 
+  const fetchStocks = useCallback(async (pageOverride = 0, pageSizeOverride) => {
+    const size = pageSizeOverride ?? stockPageSize;
+    const categoryId = selectedCategory ? Number(selectedCategory) : undefined;
+    const subCategoryId = selectedSubcategory ? Number(selectedSubcategory) : undefined;
+    const sortByParam = stockSortBy === 'lastUpdated'
+      ? 'lastUpdated'
+      : (stockSortBy === 'quantity' ? 'quantity' : 'warehouse');
+    const params = {
+      page: pageOverride,
+      size,
+      brandId: brandId || undefined,
+      colorId: colorId || undefined,
+      warehouseId: selectedWarehouseId || undefined,
+      categoryId: Number.isNaN(categoryId) ? undefined : categoryId,
+      subCategoryId: Number.isNaN(subCategoryId) ? undefined : subCategoryId,
+      reservedOnly: showReserved || undefined,
+      consignedOnly: showConsigned || undefined,
+      status: filter,
+      search: searchTerm ? searchTerm.trim() : undefined,
+      sortBy: sortByParam,
+      sortDir: stockSortDir
+    };
+
+    const response = await axios.get('/api/stocks', { params });
+    const data = response.data || {};
+    const content = Array.isArray(data.content) ? data.content : [];
+
+    setStocks(content);
+    setStockPage(data.page ?? pageOverride);
+    setTotalStockCount(typeof data.totalElements === 'number' ? data.totalElements : content.length);
+    setStockTotalPages(typeof data.totalPages === 'number' ? data.totalPages : 0);
+    return data;
+  }, [stockPageSize, brandId, colorId, selectedWarehouseId, selectedCategory, selectedSubcategory, showReserved, showConsigned, filter, searchTerm, stockSortBy, stockSortDir]);
+
+  const fetchTransfers = useCallback(async (page = 0, append = false, pageSizeOverride) => {
+    const size = pageSizeOverride ?? transferPageSize;
+    try {
+      const params = {
+        page,
+        size,
+        status: transferStatusFilter !== 'ALL' ? transferStatusFilter : undefined,
+        transferType: transferTypeFilter !== 'ALL' ? transferTypeFilter : undefined,
+        productName: transferProductName || undefined,
+        sku: transferSku || undefined,
+        driverName: transferDriver || undefined,
+        sourceWarehouseId: transferSourceWarehouseId || undefined,
+        destinationWarehouseId: transferDestinationWarehouseId || undefined
+      };
+      const endpoint = isAdmin ? '/api/stock-transfers' : '/api/stock-transfers/current-user';
+      const response = await axios.get(endpoint, { params });
+      const data = response.data || {};
+      const content = Array.isArray(data.content)
+        ? data.content
+        : (Array.isArray(data) ? data : []);
+      setTransfers(prev => append ? [...prev, ...content] : content);
+      setTransferPage(data.page ?? page);
+      setTransferTotalCount(prevCount => {
+        if (typeof data.totalElements === 'number') {
+          return data.totalElements;
+        }
+        return append ? prevCount + content.length : content.length;
+      });
+      setTransferTotalPages(typeof data.totalPages === 'number' ? data.totalPages : 0);
+
+      const metadata = data.metadata || {};
+      setTransferStatusCounts(metadata.statusCounts || {});
+      setTransferTypeCounts(metadata.transferTypeCounts || {});
+      return data;
+    } catch (error) {
+      console.error('Error fetching transfers:', error);
+      throw error;
+    }
+  }, [isAdmin, transferStatusFilter, transferTypeFilter, transferProductName, transferSku, transferDriver, transferSourceWarehouseId, transferDestinationWarehouseId, transferPageSize]);
+
   const fetchAllData = useCallback(async () => {
     try {
       setLoading(true);
       const calls = [
-        axios.get('/api/stocks', { params: { brandId, colorId, warehouseId: selectedWarehouseId || undefined } }),
         axios.get('/api/products'),
         axios.get('/api/warehouses')
       ];
@@ -295,12 +381,12 @@ const Stock = () => {
 
       const results = await Promise.all(calls);
 
-      setStocks(results[0].data);
-      setProducts(results[1].data);
-      setWarehouses(results[2].data);
+      let index = 0;
+      setProducts(results[index++].data);
+      setWarehouses(results[index++].data);
       
-      if (role === 'ADMIN' && results[3]) {
-        setPendingRequestsCount(results[3].data.count || 0);
+      if (role === 'ADMIN' && results[index]) {
+        setPendingRequestsCount(results[index].data.count || 0);
       }
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -308,11 +394,69 @@ const Stock = () => {
     } finally {
       setLoading(false);
     }
-  }, [brandId, colorId, selectedWarehouseId, role]);
+  }, [role]);
+  const handleStockPageSizeChange = async (e) => {
+    const newSize = Number(e.target.value);
+    setStockPageSize(newSize);
+    setStockPage(0);
+    try {
+      await fetchStocks(0, newSize);
+    } catch (error) {
+      console.error('Error changing stock page size:', error);
+      setError('Stok verileri yüklenirken hata oluştu');
+    }
+  };
+
+  const handleTransferPageSizeChange = async (e) => {
+    const newSize = Number(e.target.value);
+    setTransferPageSize(newSize);
+    setTransferPage(0);
+    try {
+      await fetchTransfers(0, false, newSize);
+    } catch (error) {
+      console.error('Error changing transfer page size:', error);
+      setError('Transfer verileri yüklenirken hata oluştu');
+    }
+  };
+
+  const handleStockPageChange = (newPage) => {
+    const total = stockTotalPages || 0;
+    if (newPage < 0 || (total > 0 && newPage >= total) || newPage === stockPage) {
+      return;
+    }
+    setStockPage(newPage);
+  };
+
+  const handleTransferPageChange = (newPage) => {
+    const total = transferTotalPages || 0;
+    if (newPage < 0 || (total > 0 && newPage >= total) || newPage === transferPage) {
+      return;
+    }
+    setTransferPage(newPage);
+  };
+
+
+  useEffect(() => {
+    fetchStocks(stockPage);
+  }, [fetchStocks, stockPage]);
 
   useEffect(() => {
     fetchAllData();
   }, [fetchAllData]);
+
+  useEffect(() => {
+    if (showTransferHistory) {
+      fetchTransfers(transferPage, false);
+    }
+  }, [showTransferHistory, fetchTransfers, transferPage]);
+
+  useEffect(() => {
+    setStockPage(0);
+  }, [filter, searchTerm, selectedCategory, selectedSubcategory, showReserved, showConsigned, brandId, colorId, selectedWarehouseId, stockSortBy, stockSortDir]);
+
+  useEffect(() => {
+    setTransferPage(0);
+  }, [transferStatusFilter, transferTypeFilter, transferProductName, transferSku, transferDriver, transferSourceWarehouseId, transferDestinationWarehouseId]);
 
   // Fetch main categories on mount
   useEffect(() => {
@@ -364,7 +508,7 @@ const Stock = () => {
       // Open transfer history and highlight by filtering to ALL
       setShowTransferHistory(true);
       // No direct single transfer view page exists; focus by opening history
-      setTimeout(() => { fetchTransfers(); }, 0);
+      setTimeout(() => { fetchTransfers(0, false); }, 0);
     }
     if (auditStockIdParam) {
       const idNum = Number(auditStockIdParam);
@@ -430,78 +574,6 @@ const Stock = () => {
     return val;
   }, []);
 
-  const filteredStocks = useMemo(() => {
-    let filtered = stocks;
-
-    // status filter
-    switch (filter) {
-      case 'low-stock':
-        filtered = filtered.filter(stock => stock.quantity <= getEffectiveMin(stock) && stock.quantity > 0);
-        break;
-      case 'out-of-stock':
-        filtered = filtered.filter(stock => stock.quantity === 0);
-        break;
-      default:
-        break;
-    }
-
-    // text search
-    const q = (searchTerm || '').toLowerCase();
-    if (q) {
-      filtered = filtered.filter(s =>
-        (s.product?.name || '').toLowerCase().includes(q) ||
-        (s.product?.sku || '').toLowerCase().includes(q) ||
-        (s.warehouse?.name || '').toLowerCase().includes(q)
-      );
-    }
-
-    // category filters
-    if (selectedCategory) {
-      filtered = filtered.filter(s => {
-        const prod = products.find(p => p.id === s.product?.id);
-        if (!prod || !prod.category) return false;
-        const categoryIdStr = prod.category?.id != null ? prod.category.id.toString() : '';
-        const parentIdStr = prod.category?.parent?.id != null ? prod.category.parent.id.toString() : '';
-        return categoryIdStr === selectedCategory || parentIdStr === selectedCategory;
-      });
-    }
-    if (selectedSubcategory) {
-      filtered = filtered.filter(s => {
-        const prod = products.find(p => p.id === s.product?.id);
-        if (!prod || !prod.category) return false;
-        const categoryIdStr = prod.category?.id != null ? prod.category.id.toString() : '';
-        return categoryIdStr === selectedSubcategory;
-      });
-    }
-
-    // reserved/consigned filters
-    if (showReserved) {
-      filtered = filtered.filter(s => (s.reservedQuantity || 0) > 0);
-    }
-    if (showConsigned) {
-      filtered = filtered.filter(s => (s.consignedQuantity || 0) > 0);
-    }
-
-    // Sorting
-    const sorted = [...filtered];
-    if (stockSortBy === 'lastUpdated') {
-      const dir = stockSortDir === 'asc' ? 1 : -1;
-      sorted.sort((a, b) => {
-        const da = a.lastUpdated ? new Date(a.lastUpdated).getTime() : 0;
-        const db = b.lastUpdated ? new Date(b.lastUpdated).getTime() : 0;
-        if (da === db) return 0;
-        return da < db ? -1 * dir : 1 * dir;
-      });
-    } else {
-      // Default: by warehouse then product
-      sorted.sort((a, b) => {
-        const warehouseCompare = (a.warehouse?.name || '').localeCompare(b.warehouse?.name || '');
-        if (warehouseCompare !== 0) return warehouseCompare;
-        return (a.product?.name || '').localeCompare(b.product?.name || '');
-      });
-    }
-    return sorted;
-  }, [stocks, filter, searchTerm, showReserved, showConsigned, selectedCategory, selectedSubcategory, products, stockSortBy, stockSortDir, getEffectiveMin]);
 
 
   const handleCreateStock = () => {
@@ -576,32 +648,19 @@ const Stock = () => {
     setLockCustomerTransfer(false);
     fetchAllData();
     if (showTransferHistory) {
-      fetchTransfers();
+      fetchTransfers(0, false);
     }
   };
 
-  const handleShowTransferHistory = async () => {
+  const handleShowTransferHistory = () => {
     setShowTransferHistory(!showTransferHistory);
-    if (!showTransferHistory) {
-      await fetchTransfers();
-    }
-  };
-
-  const fetchTransfers = async () => {
-    try {
-      const endpoint = isAdmin ? '/api/stock-transfers' : '/api/stock-transfers/current-user';
-      const response = await axios.get(endpoint);
-      setTransfers(response.data);
-    } catch (error) {
-      console.error('Error fetching transfers:', error);
-    }
   };
 
   const handleTransferStatusChange = async (transferId, action, payload = undefined) => {
     try {
       const body = payload && Object.keys(payload).length > 0 ? payload : undefined;
       await axios.post(`/api/stock-transfers/${transferId}/${action}`, body);
-      fetchTransfers();
+      fetchTransfers(0, false);
       fetchAllData();
     } catch (error) {
       const errorData = error?.response?.data;
@@ -644,7 +703,7 @@ const Stock = () => {
         setConfirmModal({ show: false });
         try {
           await axios.delete(`/api/stock-transfers/${transferId}`);
-          fetchTransfers();
+          fetchTransfers(0, false);
         } catch (error) {
           const errorData = error?.response?.data;
           const msg = errorData?.message || errorData?.error || error.message || 'Beklenmeyen bir durum oluştu';
@@ -712,6 +771,22 @@ const Stock = () => {
     return getTransferItemsList(transfer).reduce((sum, item) => sum + (item.quantity || 0), 0);
   };
 
+  const getStatusCount = (status) => {
+    if (transferStatusCounts && Object.prototype.hasOwnProperty.call(transferStatusCounts, status)) {
+      return transferStatusCounts[status];
+    }
+    return transfers.filter(t => t.status === status).length;
+  };
+
+  const getTransferTypeCount = (type) => {
+    if (transferTypeCounts && Object.prototype.hasOwnProperty.call(transferTypeCounts, type)) {
+      return transferTypeCounts[type];
+    }
+    if (type === 'CUSTOMER_DELIVERY') {
+      return transfers.filter(t => t.transferType === 'CUSTOMER_DELIVERY').length;
+    }
+    return transfers.filter(t => (t.transferType || 'WAREHOUSE') === 'WAREHOUSE').length;
+  };
 
   const getStockStatus = (stock) => {
     const available = (stock.quantity || 0) - (stock.reservedQuantity || 0) - (stock.consignedQuantity || 0);
@@ -720,47 +795,9 @@ const Stock = () => {
     return { status: 'normal', label: 'Normal', class: 'success' };
   };
 
-  // filteredStocks now computed via useMemo above
-  const filteredTransfers = useMemo(() => {
-    let list = Array.isArray(transfers) ? transfers : [];
-    // Status filter
-    if (transferStatusFilter !== 'ALL') {
-      list = list.filter(t => t.status === transferStatusFilter);
-    }
-    if (transferTypeFilter !== 'ALL') {
-      list = list.filter(t => (t.transferType || 'WAREHOUSE') === transferTypeFilter);
-    }
-    // Product name filter
-    const nameQ = (transferProductName || '').toLowerCase();
-    if (nameQ) {
-      list = list.filter(t =>
-        getTransferItemsList(t).some(item => (item.product?.name || '').toLowerCase().includes(nameQ))
-      );
-    }
-    // SKU filter
-    const skuQ = (transferSku || '').toLowerCase();
-    if (skuQ) {
-      list = list.filter(t =>
-        getTransferItemsList(t).some(item => (item.product?.sku || '').toLowerCase().includes(skuQ))
-      );
-    }
-    // Driver filter
-    const driverQ = (transferDriver || '').toLowerCase();
-    if (driverQ) {
-      list = list.filter(t => (t.driverName || '').toLowerCase().includes(driverQ));
-    }
-    // Source/Destination warehouse filter
-    if (transferSourceWarehouseId != null) {
-      list = list.filter(t => Number(t.sourceWarehouse?.id) === Number(transferSourceWarehouseId));
-    }
-    if (transferDestinationWarehouseId != null) {
-      list = list.filter(t => Number(t.destinationWarehouse?.id) === Number(transferDestinationWarehouseId));
-    }
-    return list;
-  }, [transfers, transferStatusFilter, transferTypeFilter, transferProductName, transferSku, transferDriver, transferSourceWarehouseId, transferDestinationWarehouseId]);
-
-  const warehouseTransferCount = transfers.filter(t => (t.transferType || 'WAREHOUSE') === 'WAREHOUSE').length;
-  const customerTransferCount = transfers.filter(t => t.transferType === 'CUSTOMER_DELIVERY').length;
+  const totalTransfers = typeof transferTotalCount === 'number' ? transferTotalCount : transfers.length;
+  const warehouseTransferCount = getTransferTypeCount('WAREHOUSE');
+  const customerTransferCount = getTransferTypeCount('CUSTOMER_DELIVERY');
 
   if (loading) {
     return (
@@ -847,6 +884,16 @@ const Stock = () => {
                   {role === 'STOCK_IN' && 'Stok ekleme talepleri oluşturabilir, müşteri sevkiyat transferlerinizi görüntüleyebilirsiniz.'}
                   {role === 'STOCK_OUT' && 'Stok çıkarma talepleri oluşturabilir, müşteri sevkiyat transferlerinizi görüntüleyebilirsiniz.'}
                 </span>
+              </div>
+              <div className="d-flex justify-content-between align-items-center px-3 py-2 flex-wrap gap-2">
+                <small className="text-muted">
+                  Gösterilen kayıt: {transfers.length}/{totalTransfers || transfers.length}
+                </small>
+                <PaginationControls
+                  page={transferPage}
+                  totalPages={transferTotalPages}
+                  onPageChange={handleTransferPageChange}
+                />
               </div>
               <div className="d-flex flex-wrap gap-2 justify-content-lg-end">
                 <button className="btn btn-success" onClick={handleShowTransferHistory}>
@@ -1019,6 +1066,21 @@ const Stock = () => {
       {!showTransferHistory && (
       <div className="card">
         <div className="card-body">
+          <div className="d-flex justify-content-end align-items-center mb-2 gap-2 flex-wrap">
+            <label className="form-label mb-0 small text-muted">
+              Sayfa Boyutu:
+              <select
+                className="form-select form-select-sm d-inline-block ms-2"
+                style={{ width: 'auto' }}
+                value={stockPageSize}
+                onChange={handleStockPageSizeChange}
+              >
+                {PAGE_SIZE_OPTIONS.map(size => (
+                  <option key={`stock-page-${size}`} value={size}>{size}</option>
+                ))}
+              </select>
+            </label>
+          </div>
           <div className="table-responsive">
             <table className="table table-striped table-hover">
               <thead>
@@ -1057,7 +1119,7 @@ const Stock = () => {
                 </tr>
               </thead>
               <tbody>
-                {filteredStocks.map((stock) => {
+                {stocks.map((stock) => {
                   const product = getProductById(stock.product.id);
                   const warehouse = getWarehouseById(stock.warehouse.id);
                   const stockStatus = getStockStatus(stock);
@@ -1174,7 +1236,18 @@ const Stock = () => {
             </table>
           </div>
 
-          {filteredStocks.length === 0 && (
+          <div className="d-flex justify-content-between align-items-center mt-2 flex-wrap gap-2">
+            <small className="text-muted">
+              Gösterilen kayıt: {stocks.length}/{totalStockCount || stocks.length}
+            </small>
+            <PaginationControls
+              page={stockPage}
+              totalPages={stockTotalPages}
+              onPageChange={handleStockPageChange}
+            />
+          </div>
+
+          {stocks.length === 0 && (
             <div className="text-center py-4">
               <i className="fas fa-cubes fa-3x text-muted mb-3"></i>
               <h5 className="text-muted">
@@ -1266,7 +1339,7 @@ const Stock = () => {
               <div className="card border-warning shadow-sm">
                 <div className="card-body text-center">
                   <i className="fas fa-clock fa-2x text-warning mb-2"></i>
-                  <h3 className="mb-0">{transfers.filter(t => t.status === 'PENDING').length}</h3>
+                  <h3 className="mb-0">{getStatusCount('PENDING')}</h3>
                   <p className="text-muted mb-0 small">Beklemede</p>
                 </div>
               </div>
@@ -1275,7 +1348,7 @@ const Stock = () => {
               <div className="card border-info shadow-sm">
                 <div className="card-body text-center">
                   <i className="fas fa-truck fa-2x text-info mb-2"></i>
-                  <h3 className="mb-0">{transfers.filter(t => t.status === 'IN_TRANSIT').length}</h3>
+                  <h3 className="mb-0">{getStatusCount('IN_TRANSIT')}</h3>
                   <p className="text-muted mb-0 small">Yolda</p>
                 </div>
               </div>
@@ -1284,7 +1357,7 @@ const Stock = () => {
               <div className="card border-success shadow-sm">
                 <div className="card-body text-center">
                   <i className="fas fa-check-circle fa-2x text-success mb-2"></i>
-                  <h3 className="mb-0">{transfers.filter(t => t.status === 'COMPLETED').length}</h3>
+                  <h3 className="mb-0">{getStatusCount('COMPLETED')}</h3>
                   <p className="text-muted mb-0 small">Tamamlandı</p>
                 </div>
               </div>
@@ -1293,7 +1366,7 @@ const Stock = () => {
               <div className="card border-danger shadow-sm">
                 <div className="card-body text-center">
                   <i className="fas fa-times-circle fa-2x text-danger mb-2"></i>
-                  <h3 className="mb-0">{transfers.filter(t => t.status === 'CANCELLED').length}</h3>
+                  <h3 className="mb-0">{getStatusCount('CANCELLED')}</h3>
                   <p className="text-muted mb-0 small">İptal Edildi</p>
                 </div>
               </div>
@@ -1327,7 +1400,7 @@ const Stock = () => {
                   />
                   <label className="btn btn-outline-secondary" htmlFor="status-all">
                     <i className="fas fa-list me-1"></i>
-                    Tümü ({transfers.length})
+                    Tümü ({totalTransfers})
                   </label>
 
                   <input
@@ -1389,7 +1462,7 @@ const Stock = () => {
                 
                 <div className="text-muted small">
                   <i className="fas fa-info-circle me-1"></i>
-                Toplam {filteredTransfers.length} transfer
+                Toplam {totalTransfers} transfer
                 </div>
               </div>
 
@@ -1532,15 +1605,27 @@ const Stock = () => {
                   Transfer Geçmişi
                 </h5>
                 <span className="badge bg-white text-dark">
-                  {transfers.filter(t => transferStatusFilter === 'ALL' || t.status === transferStatusFilter).length} kayıt
+                  {transferStatusFilter === 'ALL' ? totalTransfers : getStatusCount(transferStatusFilter)} kayıt
                 </span>
+              </div>
+              <div className="mt-2 d-flex justify-content-end">
+                <label className="form-label mb-0 small text-white">
+                  Sayfa Boyutu:
+                  <select
+                    className="form-select form-select-sm d-inline-block ms-2"
+                    style={{ width: 'auto' }}
+                    value={transferPageSize}
+                    onChange={handleTransferPageSizeChange}
+                  >
+                    {PAGE_SIZE_OPTIONS.map(size => (
+                      <option key={`transfer-page-${size}`} value={size}>{size}</option>
+                    ))}
+                  </select>
+                </label>
               </div>
             </div>
             <div className="card-body p-0">
-              {(() => {
-                const filteredCount = filteredTransfers.length;
-                return filteredCount === 0;
-              })() ? (
+              {transfers.length === 0 ? (
                 <div className="text-center py-5">
                   <i className="fas fa-inbox fa-4x text-muted mb-3"></i>
                   <h5 className="text-muted">
@@ -1554,6 +1639,7 @@ const Stock = () => {
                   </p>
                 </div>
               ) : (
+              <>
               <div className="table-responsive" style={{overflowX: 'auto'}}>
                 <table className="table table-hover mb-0 align-middle" style={{minWidth: '1200px'}}>
                   {/* Desktop için fixed layout */}
@@ -1616,7 +1702,7 @@ const Stock = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredTransfers.map((transfer) => {
+                    {transfers.map((transfer) => {
                       const statusConfig = {
                         PENDING: { label: 'Beklemede', class: 'warning', icon: 'clock' },
                         IN_TRANSIT: { label: 'Yolda', class: 'info', icon: 'truck' },
@@ -1951,6 +2037,17 @@ const Stock = () => {
                   </tbody>
                 </table>
               </div>
+              <div className="d-flex justify-content-between align-items-center px-3 py-3 flex-wrap gap-2">
+                <small className="text-muted">
+                  Gösterilen kayıt: {transfers.length}/{totalTransfers || transfers.length}
+                </small>
+                <PaginationControls
+                  page={transferPage}
+                  totalPages={transferTotalPages}
+                  onPageChange={handleTransferPageChange}
+                />
+              </div>
+              </>
               )}
             </div>
           </div>

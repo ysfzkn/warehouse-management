@@ -1,9 +1,11 @@
 package com.warehouse.service.impl;
 
+import com.warehouse.dto.StockTransferFilter;
+import com.warehouse.dto.StockTransferSummary;
+import com.warehouse.entity.Product;
 import com.warehouse.entity.Stock;
 import com.warehouse.entity.StockTransfer;
 import com.warehouse.entity.StockTransferItem;
-import com.warehouse.entity.Product;
 import com.warehouse.entity.Warehouse;
 import com.warehouse.enums.AuditAction;
 import com.warehouse.enums.TransferStatus;
@@ -25,6 +27,8 @@ import org.slf4j.LoggerFactory;
 import com.warehouse.constants.NotificationMessages;
 import com.warehouse.enums.DomainEntityType;
 import com.warehouse.enums.RoleName;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,9 +36,12 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
 import java.util.stream.Collectors;
+
 
 /**
  * Implementation of StockTransferService for managing stock transfers.
@@ -71,6 +78,26 @@ public class StockTransferServiceImpl implements StockTransferService {
     public List<StockTransfer> getAllTransfers() {
         logger.debug("Fetching all transfers");
         return stockTransferRepository.findAllOrderByTransferDateDesc();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<StockTransfer> getTransfersPaged(StockTransferFilter filter, Pageable pageable) {
+        TransferFilterParams params = TransferFilterParams.from(filter);
+        logger.debug("Fetching paged transfers - page: {}, size: {}", pageable.getPageNumber(), pageable.getPageSize());
+        return stockTransferRepository.findByFilters(
+                null,
+                params.status,
+                params.transferType,
+                params.sourceWarehouseId,
+                params.destinationWarehouseId,
+                params.driverNameProvided,
+                params.driverPattern,
+                params.productNameProvided,
+                params.productNamePattern,
+                params.skuProvided,
+                params.skuPattern,
+                pageable);
     }
 
     @Override
@@ -120,6 +147,70 @@ public class StockTransferServiceImpl implements StockTransferService {
         String username = CurrentUser.usernameOrSystem();
         logger.debug("Fetching transfers for user: {}", username);
         return stockTransferRepository.findAllByCreatedByOrderByTransferDateDesc(username);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<StockTransfer> getTransfersForCurrentUserPaged(StockTransferFilter filter, Pageable pageable) {
+        String username = CurrentUser.usernameOrSystem();
+        TransferFilterParams params = TransferFilterParams.from(filter);
+        logger.debug("Fetching paged transfers for user: {} - page: {}", username, pageable.getPageNumber());
+        return stockTransferRepository.findByFilters(
+                username,
+                params.status,
+                params.transferType,
+                params.sourceWarehouseId,
+                params.destinationWarehouseId,
+                params.driverNameProvided,
+                params.driverPattern,
+                params.productNameProvided,
+                params.productNamePattern,
+                params.skuProvided,
+                params.skuPattern,
+                pageable);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public StockTransferSummary getTransferSummary(StockTransferFilter filter, boolean currentUserOnly) {
+        TransferFilterParams params = TransferFilterParams.from(filter);
+        String createdBy = currentUserOnly ? CurrentUser.usernameOrSystem() : null;
+
+        Map<String, Long> statusCounts = stockTransferRepository.countByFiltersGroupedStatus(
+                        createdBy,
+                        params.status,
+                        params.transferType,
+                        params.sourceWarehouseId,
+                        params.destinationWarehouseId,
+                        params.driverNameProvided,
+                        params.driverPattern,
+                        params.productNameProvided,
+                        params.productNamePattern,
+                        params.skuProvided,
+                        params.skuPattern)
+                .stream()
+                .collect(Collectors.toMap(
+                        sc -> sc.getStatus().name(),
+                        StockTransferRepository.StatusCountProjection::getCount));
+
+        Map<String, Long> typeCounts = stockTransferRepository.countByFiltersGroupedTransferType(
+                        createdBy,
+                        params.status,
+                        params.transferType,
+                        params.sourceWarehouseId,
+                        params.destinationWarehouseId,
+                        params.driverNameProvided,
+                        params.driverPattern,
+                        params.productNameProvided,
+                        params.productNamePattern,
+                        params.skuProvided,
+                        params.skuPattern)
+                .stream()
+                .collect(Collectors.toMap(
+                        tc -> tc.getTransferType() != null ? tc.getTransferType().name() : TransferType.WAREHOUSE.name(),
+                        StockTransferRepository.TransferTypeCountProjection::getCount));
+
+        return new StockTransferSummary(statusCounts, typeCounts);
     }
 
     @Override
@@ -417,33 +508,11 @@ public class StockTransferServiceImpl implements StockTransferService {
         return RoleName.ADMIN.name().equalsIgnoreCase(CurrentUser.getRole());
     }
 
-    private void validateSufficientStock(Product product, Warehouse warehouse, Integer quantity) {
-        Optional<Stock> stockOpt = stockRepository.findByProductAndWarehouse(product, warehouse);
-        if (stockOpt.isEmpty()) {
-            logger.warn("Product not found in warehouse. Product id: {}, Warehouse id: {}", product.getId(), warehouse.getId());
-            throw new WarehouseManagementException(ErrorCode.PRODUCT_NOT_IN_WAREHOUSE);
-        }
-
-        Stock stock = stockOpt.get();
-        if (stock.getAvailableQuantity() < quantity) {
-            logger.warn("Insufficient stock. Available: {}, Requested: {}", stock.getAvailableQuantity(), quantity);
-            throw new WarehouseManagementException(ErrorCode.INSUFFICIENT_STOCK);
-        }
-    }
-
     private void validateSufficientAvailableStock(Stock stock, Integer quantity) {
         if (stock.getAvailableQuantity() < quantity) {
             logger.warn("Insufficient available stock. Available: {}, Requested: {}", stock.getAvailableQuantity(), quantity);
             throw new WarehouseManagementException(ErrorCode.INSUFFICIENT_STOCK);
         }
-    }
-
-    private Stock findSourceStockOrThrow(Warehouse warehouse, Product product) {
-        return stockRepository.findByProductAndWarehouse(product, warehouse)
-                .orElseThrow(() -> {
-                    logger.warn("Source stock not found for warehouse {} and product {}", warehouse.getId(), product.getId());
-                    return new WarehouseManagementException(ErrorCode.PRODUCT_NOT_IN_WAREHOUSE);
-                });
     }
 
     private void reserveStockForTransfer(Stock stock, Integer quantity) {
@@ -618,18 +687,36 @@ public class StockTransferServiceImpl implements StockTransferService {
     }
 
     private void validateSufficientStockForItems(Warehouse warehouse, List<StockTransferItem> items) {
+        Map<Long, Stock> stocks = loadSourceStocks(warehouse, items);
         for (StockTransferItem item : items) {
-            validateSufficientStock(item.getProduct(), warehouse, item.getQuantity());
+            Stock stock = stocks.get(item.getProduct().getId());
+            validateSufficientAvailableStock(stock, item.getQuantity());
         }
     }
 
     private Map<Long, Stock> loadSourceStocks(Warehouse warehouse, List<StockTransferItem> items) {
-        Map<Long, Stock> stocks = new HashMap<>();
+        Map<Long, Stock> stocks = fetchStocksByWarehouse(warehouse, items);
         for (StockTransferItem item : items) {
             Long productId = item.getProduct().getId();
-            stocks.computeIfAbsent(productId, id -> findSourceStockOrThrow(warehouse, item.getProduct()));
+            if (!stocks.containsKey(productId)) {
+                logger.warn("Product not found in warehouse. Product id: {}, Warehouse id: {}", productId, warehouse.getId());
+                throw new WarehouseManagementException(ErrorCode.PRODUCT_NOT_IN_WAREHOUSE);
+            }
         }
         return stocks;
+    }
+
+    private Map<Long, Stock> fetchStocksByWarehouse(Warehouse warehouse, List<StockTransferItem> items) {
+        List<Long> productIds = items.stream()
+                .map(item -> item.getProduct().getId())
+                .distinct()
+                .collect(Collectors.toList());
+        if (productIds.isEmpty()) {
+            return new HashMap<>();
+        }
+        List<Stock> stockList = stockRepository.findByWarehouseAndProductIds(warehouse, productIds);
+        return stockList.stream()
+                .collect(Collectors.toMap(stock -> stock.getProduct().getId(), Function.identity()));
     }
 
     private Product findProductOrThrow(Long productId) {
@@ -646,6 +733,64 @@ public class StockTransferServiceImpl implements StockTransferService {
                     logger.warn("Warehouse not found with id: {}", warehouseId);
                     return new WarehouseManagementException(ErrorCode.WAREHOUSE_NOT_FOUND);
                 });
+    }
+
+    private static String normalize(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private static class TransferFilterParams {
+        private final TransferStatus status;
+        private final TransferType transferType;
+        private final Long sourceWarehouseId;
+        private final Long destinationWarehouseId;
+        private final boolean productNameProvided;
+        private final boolean skuProvided;
+        private final boolean driverNameProvided;
+        private final String productNamePattern;
+        private final String skuPattern;
+        private final String driverPattern;
+
+        private TransferFilterParams(StockTransferFilter filter) {
+            if (filter == null) {
+                this.status = null;
+                this.transferType = null;
+                this.sourceWarehouseId = null;
+                this.destinationWarehouseId = null;
+                this.productNameProvided = false;
+                this.skuProvided = false;
+                this.driverNameProvided = false;
+                this.productNamePattern = "%";
+                this.skuPattern = "%";
+                this.driverPattern = "%";
+            } else {
+                this.status = filter.getStatus();
+                this.transferType = filter.getTransferType();
+                this.sourceWarehouseId = filter.getSourceWarehouseId();
+                this.destinationWarehouseId = filter.getDestinationWarehouseId();
+                String productName = normalize(filter.getProductName());
+                String sku = normalize(filter.getSku());
+                String driverName = normalize(filter.getDriverName());
+                this.productNameProvided = productName != null;
+                this.skuProvided = sku != null;
+                this.driverNameProvided = driverName != null;
+                this.productNamePattern = productNameProvided ? likePattern(productName) : "%";
+                this.skuPattern = skuProvided ? likePattern(sku) : "%";
+                this.driverPattern = driverNameProvided ? likePattern(driverName) : "%";
+            }
+        }
+
+        private static TransferFilterParams from(StockTransferFilter filter) {
+            return new TransferFilterParams(filter);
+        }
+
+        private static String likePattern(String value) {
+            return "%" + value.toLowerCase(Locale.ROOT) + "%";
+        }
     }
 }
 

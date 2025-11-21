@@ -2,11 +2,12 @@ package com.warehouse.service.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.warehouse.repository.NotificationRepository;
-import com.warehouse.repository.StockRepository;
+import com.warehouse.service.StockService;
 import com.warehouse.service.SsePushService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -28,15 +29,15 @@ public class SsePushServiceImpl implements SsePushService {
 
     private final Set<SseEmitter> emitters = new CopyOnWriteArraySet<>();
     private final NotificationRepository notificationRepository;
-    private final StockRepository stockRepository;
+    private final StockService stockService;
     private final ObjectMapper objectMapper;
 
     public SsePushServiceImpl(NotificationRepository notificationRepository,
-                              StockRepository stockRepository,
+                              @Lazy StockService stockService,
                               ObjectMapper objectMapper,
                               @Value("${app.sse.timeout-ms:3600000}") long connectionTimeoutMs) {
         this.notificationRepository = notificationRepository;
-        this.stockRepository = stockRepository;
+        this.stockService = stockService;
         this.objectMapper = objectMapper;
         this.connectionTimeoutMs = connectionTimeoutMs;
     }
@@ -79,7 +80,7 @@ public class SsePushServiceImpl implements SsePushService {
     private String buildSnapshotJson() {
         try {
             int unread = (int) notificationRepository.countByReadFalse();
-            int lowStock = (int) stockRepository.countLowStockItems();
+            long lowStock = stockService.countLowStockItems();
             return objectMapper.writeValueAsString(new Snapshot(unread, lowStock));
         } catch (Exception e) {
             logger.warn("Failed to build snapshot, sending empty counts", e);
@@ -91,7 +92,7 @@ public class SsePushServiceImpl implements SsePushService {
         }
     }
 
-    private record Snapshot(int unread, int lowStock) {}
+    private record Snapshot(int unread, long lowStock) {}
 }
 
 

@@ -5,34 +5,47 @@ import com.warehouse.entity.Product;
 import com.warehouse.entity.Warehouse;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
 @Repository
 public interface StockRepository extends JpaRepository<Stock, Long> {
 
+    @Override
+    @EntityGraph(value = Stock.GRAPH_WITH_PRODUCT_AND_WAREHOUSE, type = EntityGraph.EntityGraphType.LOAD)
+    List<Stock> findAll();
+
+    @EntityGraph(value = Stock.GRAPH_WITH_PRODUCT_AND_WAREHOUSE, type = EntityGraph.EntityGraphType.LOAD)
     Optional<Stock> findByProductAndWarehouse(Product product, Warehouse warehouse);
 
     @Query("SELECT s FROM Stock s WHERE s.product = :product ORDER BY s.warehouse.name")
+    @EntityGraph(value = Stock.GRAPH_WITH_PRODUCT_AND_WAREHOUSE, type = EntityGraph.EntityGraphType.LOAD)
     List<Stock> findByProduct(@Param("product") Product product);
 
     @Query("SELECT s FROM Stock s WHERE s.warehouse = :warehouse ORDER BY s.product.name")
+    @EntityGraph(value = Stock.GRAPH_WITH_PRODUCT_AND_WAREHOUSE, type = EntityGraph.EntityGraphType.LOAD)
     List<Stock> findByWarehouse(@Param("warehouse") Warehouse warehouse);
 
     @Query("SELECT s FROM Stock s WHERE s.quantity <= (CASE WHEN s.minStockLevel IS NULL OR s.minStockLevel = 0 THEN 10 ELSE s.minStockLevel END)")
+    @EntityGraph(value = Stock.GRAPH_WITH_PRODUCT_AND_WAREHOUSE, type = EntityGraph.EntityGraphType.LOAD)
     List<Stock> findLowStockItems();
 
     @Query("SELECT COUNT(s) FROM Stock s WHERE s.quantity <= (CASE WHEN s.minStockLevel IS NULL OR s.minStockLevel = 0 THEN 10 ELSE s.minStockLevel END)")
     long countLowStockItems();
 
     @Query("SELECT s FROM Stock s WHERE s.quantity = 0")
+    @EntityGraph(value = Stock.GRAPH_WITH_PRODUCT_AND_WAREHOUSE, type = EntityGraph.EntityGraphType.LOAD)
     List<Stock> findOutOfStockItems();
 
     @Query("SELECT s FROM Stock s WHERE s.warehouse = :warehouse AND s.quantity <= (CASE WHEN s.minStockLevel IS NULL OR s.minStockLevel = 0 THEN 10 ELSE s.minStockLevel END)")
+    @EntityGraph(value = Stock.GRAPH_WITH_PRODUCT_AND_WAREHOUSE, type = EntityGraph.EntityGraphType.LOAD)
     List<Stock> findLowStockItemsByWarehouse(@Param("warehouse") Warehouse warehouse);
 
     @Query("SELECT SUM(s.quantity) FROM Stock s WHERE s.product = :product")
@@ -41,36 +54,52 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
     @Query("SELECT SUM(s.quantity) FROM Stock s WHERE s.warehouse = :warehouse")
     Long getTotalQuantityByWarehouse(@Param("warehouse") Warehouse warehouse);
 
-    /**
-     * Database-side filtering for stocks with optional brand/color/warehouse filters.
-     * Ordered by lastUpdated desc to leverage index during scans.
-     */
+    @EntityGraph(value = Stock.GRAPH_WITH_PRODUCT_AND_WAREHOUSE, type = EntityGraph.EntityGraphType.LOAD)
     @Query("""
         SELECT s FROM Stock s
         JOIN s.product p
-        LEFT JOIN p.brand b
-        LEFT JOIN p.color c
-        WHERE (:brandId IS NULL OR b.id = :brandId)
-          AND (:colorId IS NULL OR c.id = :colorId)
+        JOIN p.category c
+        LEFT JOIN c.parent cp
+        WHERE (:brandId IS NULL OR p.brand.id = :brandId)
+          AND (:colorId IS NULL OR p.color.id = :colorId)
           AND (:warehouseId IS NULL OR s.warehouse.id = :warehouseId)
-        ORDER BY s.lastUpdated DESC
+          AND (
+                :categoryId IS NULL
+                OR c.id = :categoryId
+                OR (cp IS NOT NULL AND cp.id = :categoryId)
+          )
+          AND (:subCategoryId IS NULL OR c.id = :subCategoryId)
+          AND (:searchEnabled = false OR (
+                LOWER(p.name) LIKE :searchPattern
+             OR LOWER(p.sku) LIKE :searchPattern
+             OR LOWER(s.warehouse.name) LIKE :searchPattern
+             OR LOWER(COALESCE(s.warehouse.location, '')) LIKE :searchPattern))
+          AND (:reservedOnly = false OR COALESCE(s.reservedQuantity, 0) > 0)
+          AND (:consignedOnly = false OR COALESCE(s.consignedQuantity, 0) > 0)
+          AND (
+                :status = 'ALL'
+                OR (:status = 'LOW' AND s.quantity > 0 AND s.quantity <= (CASE WHEN s.minStockLevel IS NULL OR s.minStockLevel = 0 THEN 10 ELSE s.minStockLevel END))
+                OR (:status = 'OUT' AND s.quantity = 0)
+          )
     """)
-    List<Stock> findAllFiltered(@Param("brandId") Long brandId,
-                                @Param("colorId") Long colorId,
-                                @Param("warehouseId") Long warehouseId);
+    Page<Stock> findByFilters(@Param("brandId") Long brandId,
+                              @Param("colorId") Long colorId,
+                              @Param("warehouseId") Long warehouseId,
+                              @Param("categoryId") Long categoryId,
+                              @Param("subCategoryId") Long subCategoryId,
+                              @Param("searchEnabled") boolean searchEnabled,
+                              @Param("searchPattern") String searchPattern,
+                              @Param("reservedOnly") boolean reservedOnly,
+                              @Param("consignedOnly") boolean consignedOnly,
+                              @Param("status") String status,
+                              Pageable pageable);
 
     @Query("""
         SELECT s FROM Stock s
-        JOIN s.product p
-        LEFT JOIN p.brand b
-        LEFT JOIN p.color c
-        WHERE (:brandId IS NULL OR b.id = :brandId)
-          AND (:colorId IS NULL OR c.id = :colorId)
-          AND (:warehouseId IS NULL OR s.warehouse.id = :warehouseId)
-        ORDER BY s.lastUpdated DESC
+        WHERE s.warehouse = :warehouse
+          AND s.product.id IN :productIds
     """)
-    Page<Stock> findAllFiltered(@Param("brandId") Long brandId,
-                                @Param("colorId") Long colorId,
-                                @Param("warehouseId") Long warehouseId,
-                                Pageable pageable);
+    @EntityGraph(value = Stock.GRAPH_WITH_PRODUCT_AND_WAREHOUSE, type = EntityGraph.EntityGraphType.LOAD)
+    List<Stock> findByWarehouseAndProductIds(@Param("warehouse") Warehouse warehouse,
+                                             @Param("productIds") Collection<Long> productIds);
 }

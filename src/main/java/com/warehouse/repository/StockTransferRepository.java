@@ -4,6 +4,10 @@ import com.warehouse.entity.Product;
 import com.warehouse.entity.StockTransfer;
 import com.warehouse.entity.Warehouse;
 import com.warehouse.enums.TransferStatus;
+import com.warehouse.enums.TransferType;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -14,6 +18,10 @@ import java.util.List;
 
 @Repository
 public interface StockTransferRepository extends JpaRepository<StockTransfer, Long> {
+
+    @Override
+    @EntityGraph(value = StockTransfer.GRAPH_WITH_RELATIONS, type = EntityGraph.EntityGraphType.LOAD)
+    Page<StockTransfer> findAll(Pageable pageable);
 
     @Query("SELECT DISTINCT st FROM StockTransfer st " +
            "LEFT JOIN FETCH st.sourceWarehouse " +
@@ -127,4 +135,139 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, Lo
            "WHERE st.createdBy = :createdBy " +
            "ORDER BY st.transferDate DESC")
     List<StockTransfer> findAllByCreatedByOrderByTransferDateDesc(@Param("createdBy") String createdBy);
+
+    @EntityGraph(value = StockTransfer.GRAPH_WITH_RELATIONS, type = EntityGraph.EntityGraphType.LOAD)
+    @Query("""
+        SELECT st FROM StockTransfer st
+        LEFT JOIN st.product directProduct
+        WHERE (:createdBy IS NULL OR st.createdBy = :createdBy)
+          AND (:status IS NULL OR st.status = :status)
+          AND (:transferType IS NULL OR st.transferType = :transferType)
+          AND (:sourceWarehouseId IS NULL OR st.sourceWarehouse.id = :sourceWarehouseId)
+          AND (:destinationWarehouseId IS NULL OR st.destinationWarehouse.id = :destinationWarehouseId)
+          AND (:driverProvided = false OR LOWER(st.driverName) LIKE :driverPattern)
+          AND (
+                :productNameProvided = false
+                OR LOWER(COALESCE(directProduct.name, '')) LIKE :productNamePattern
+                OR EXISTS (
+                    SELECT 1 FROM StockTransferItem item
+                    WHERE item.transfer = st
+                      AND LOWER(COALESCE(item.product.name, '')) LIKE :productNamePattern
+                )
+          )
+          AND (
+                :skuProvided = false
+                OR LOWER(COALESCE(st.product.sku, '')) LIKE :skuPattern
+                OR EXISTS (
+                    SELECT 1 FROM StockTransferItem itemSku
+                    WHERE itemSku.transfer = st
+                      AND LOWER(COALESCE(itemSku.product.sku, '')) LIKE :skuPattern
+                )
+          )
+        ORDER BY st.transferDate DESC
+    """)
+    Page<StockTransfer> findByFilters(@Param("createdBy") String createdBy,
+                                      @Param("status") TransferStatus status,
+                                      @Param("transferType") TransferType transferType,
+                                      @Param("sourceWarehouseId") Long sourceWarehouseId,
+                                      @Param("destinationWarehouseId") Long destinationWarehouseId,
+                                      @Param("driverProvided") boolean driverProvided,
+                                      @Param("driverPattern") String driverPattern,
+                                      @Param("productNameProvided") boolean productNameProvided,
+                                      @Param("productNamePattern") String productNamePattern,
+                                      @Param("skuProvided") boolean skuProvided,
+                                      @Param("skuPattern") String skuPattern,
+                                      Pageable pageable);
+
+    @Query("""
+        SELECT st.status AS status, COUNT(DISTINCT st.id) AS count FROM StockTransfer st
+        LEFT JOIN st.product directProduct
+        WHERE (:createdBy IS NULL OR st.createdBy = :createdBy)
+          AND (:status IS NULL OR st.status = :status)
+          AND (:transferType IS NULL OR st.transferType = :transferType)
+          AND (:sourceWarehouseId IS NULL OR st.sourceWarehouse.id = :sourceWarehouseId)
+          AND (:destinationWarehouseId IS NULL OR st.destinationWarehouse.id = :destinationWarehouseId)
+          AND (:driverProvided = false OR LOWER(st.driverName) LIKE :driverPattern)
+          AND (
+                :productNameProvided = false
+                OR LOWER(COALESCE(directProduct.name, '')) LIKE :productNamePattern
+                OR EXISTS (
+                    SELECT 1 FROM StockTransferItem item
+                    WHERE item.transfer = st
+                      AND LOWER(COALESCE(item.product.name, '')) LIKE :productNamePattern
+                )
+          )
+          AND (
+                :skuProvided = false
+                OR LOWER(COALESCE(directProduct.sku, '')) LIKE :skuPattern
+                OR EXISTS (
+                    SELECT 1 FROM StockTransferItem itemSku
+                    WHERE itemSku.transfer = st
+                      AND LOWER(COALESCE(itemSku.product.sku, '')) LIKE :skuPattern
+                )
+          )
+        GROUP BY st.status
+    """)
+    List<StatusCountProjection> countByFiltersGroupedStatus(@Param("createdBy") String createdBy,
+                                                            @Param("status") TransferStatus status,
+                                                            @Param("transferType") TransferType transferType,
+                                                            @Param("sourceWarehouseId") Long sourceWarehouseId,
+                                                            @Param("destinationWarehouseId") Long destinationWarehouseId,
+                                                            @Param("driverProvided") boolean driverProvided,
+                                                            @Param("driverPattern") String driverPattern,
+                                                            @Param("productNameProvided") boolean productNameProvided,
+                                                            @Param("productNamePattern") String productNamePattern,
+                                                            @Param("skuProvided") boolean skuProvided,
+                                                            @Param("skuPattern") String skuPattern);
+
+    @Query("""
+        SELECT st.transferType AS transferType, COUNT(DISTINCT st.id) AS count FROM StockTransfer st
+        LEFT JOIN st.product directProduct
+        WHERE (:createdBy IS NULL OR st.createdBy = :createdBy)
+          AND (:status IS NULL OR st.status = :status)
+          AND (:transferType IS NULL OR st.transferType = :transferType)
+          AND (:sourceWarehouseId IS NULL OR st.sourceWarehouse.id = :sourceWarehouseId)
+          AND (:destinationWarehouseId IS NULL OR st.destinationWarehouse.id = :destinationWarehouseId)
+          AND (:driverProvided = false OR LOWER(st.driverName) LIKE :driverPattern)
+          AND (
+                :productNameProvided = false
+                OR LOWER(COALESCE(directProduct.name, '')) LIKE :productNamePattern
+                OR EXISTS (
+                    SELECT 1 FROM StockTransferItem item
+                    WHERE item.transfer = st
+                      AND LOWER(COALESCE(item.product.name, '')) LIKE :productNamePattern
+                )
+          )
+          AND (
+                :skuProvided = false
+                OR LOWER(COALESCE(directProduct.sku, '')) LIKE :skuPattern
+                OR EXISTS (
+                    SELECT 1 FROM StockTransferItem itemSku
+                    WHERE itemSku.transfer = st
+                      AND LOWER(COALESCE(itemSku.product.sku, '')) LIKE :skuPattern
+                )
+          )
+        GROUP BY st.transferType
+    """)
+    List<TransferTypeCountProjection> countByFiltersGroupedTransferType(@Param("createdBy") String createdBy,
+                                                                        @Param("status") TransferStatus status,
+                                                                        @Param("transferType") TransferType transferType,
+                                                                        @Param("sourceWarehouseId") Long sourceWarehouseId,
+                                                                        @Param("destinationWarehouseId") Long destinationWarehouseId,
+                                                                        @Param("driverProvided") boolean driverProvided,
+                                                                        @Param("driverPattern") String driverPattern,
+                                                                        @Param("productNameProvided") boolean productNameProvided,
+                                                                        @Param("productNamePattern") String productNamePattern,
+                                                                        @Param("skuProvided") boolean skuProvided,
+                                                                        @Param("skuPattern") String skuPattern);
+
+    interface StatusCountProjection {
+        TransferStatus getStatus();
+        long getCount();
+    }
+
+    interface TransferTypeCountProjection {
+        TransferType getTransferType();
+        long getCount();
+    }
 }

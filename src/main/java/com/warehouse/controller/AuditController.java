@@ -2,7 +2,10 @@ package com.warehouse.controller;
 
 import com.warehouse.entity.AuditLog;
 import com.warehouse.repository.AuditLogRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -18,17 +21,20 @@ public class AuditController {
         this.auditLogRepository = auditLogRepository;
     }
 
+    private static final int MAX_PAGE_SIZE = 500;
+
     @GetMapping
+    @Transactional(readOnly = true)
     public ResponseEntity<List<AuditLog>> byEntity(@RequestParam("entityType") String entityType,
                                                    @RequestParam("entityId") Long entityId,
                                                    @RequestParam(name = "page", defaultValue = "0") int page,
                                                    @RequestParam(name = "size", defaultValue = "200") int size) {
-        // Simple pagination in memory using repository query result
-        List<AuditLog> all = auditLogRepository.findByEntity(entityType, entityId);
-        int from = Math.min(page * size, all.size());
-        int to = Math.min(from + size, all.size());
-        List<AuditLog> content = all.subList(from, to);
-        return ResponseEntity.ok(content);
+        int safeSize = Math.max(1, Math.min(size, MAX_PAGE_SIZE));
+        PageRequest pageable = PageRequest.of(Math.max(page, 0), safeSize);
+        Page<AuditLog> auditPage = auditLogRepository.findByEntity(entityType, entityId, pageable);
+        return ResponseEntity.ok()
+                .header("X-Total-Count", String.valueOf(auditPage.getTotalElements()))
+                .body(auditPage.getContent());
     }
 }
 

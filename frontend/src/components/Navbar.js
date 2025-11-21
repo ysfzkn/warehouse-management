@@ -13,26 +13,48 @@ const Navbar = () => {
   const role = (typeof window !== 'undefined' && localStorage.getItem('auth_role')) || 'ADMIN';
 
   useEffect(() => {
-    // Initial snapshot via REST to hydrate dropdown list for admins; counts via SSE
-    (async () => {
+    let ignore = false;
+    const hydrate = async () => {
       try {
         if (role === 'ADMIN') {
           const listRes = await axios.get('/api/notifications', { params: { size: 200, page: 0 } });
-          const list = Array.isArray(listRes.data) ? listRes.data : [];
-          setNotifications(list);
-          setUnreadCount(list.filter(n => !n.read).length);
-        } else {
+          if (!ignore) {
+            const list = Array.isArray(listRes.data) ? listRes.data : [];
+            setNotifications(list);
+            setUnreadCount(list.filter(n => !n.read).length);
+          }
+        } else if (!ignore) {
           setNotifications([]);
           setUnreadCount(0);
         }
       } catch {}
       try {
-        const lowRes = await axios.get('/api/stocks/low-stock');
-        setLowStockCount(Array.isArray(lowRes.data) ? lowRes.data.length : 0);
+        const lowRes = await axios.get('/api/stocks/low-stock/count');
+        if (!ignore) {
+          const data = lowRes.data;
+          const count = typeof data === 'number'
+            ? data
+            : (Array.isArray(data) ? data.length : 0);
+          setLowStockCount(count);
+        }
       } catch {}
-    })();
+    };
+    hydrate();
+    return () => {
+      ignore = true;
+    };
+  }, [role]);
 
-    // SSE subscription for live counts
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      if (role !== 'ADMIN') return;
+      try {
+        const listRes = await axios.get('/api/notifications', { params: { size: 200, page: 0 } });
+        const list = Array.isArray(listRes.data) ? listRes.data : [];
+        setNotifications(list);
+      } catch {}
+    };
+
     const token = localStorage.getItem('auth_token');
     if (!token) return;
     const es = new EventSource(`/api/stream?token=${encodeURIComponent(token)}`);
@@ -41,18 +63,17 @@ const Navbar = () => {
         const data = typeof ev.data === 'string' ? JSON.parse(ev.data) : ev.data;
         const nextUnread = typeof data.unread === 'number' ? data.unread : null;
         const nextLow = typeof data.lowStock === 'number' ? data.lowStock : null;
-        if (nextUnread != null && nextUnread !== unreadCount) {
-          setUnreadCount(nextUnread);
-          // Refresh notifications list to reflect new items without full page refresh
-          if (role === 'ADMIN') {
-            try {
-              const listRes = await axios.get('/api/notifications', { params: { size: 200, page: 0 } });
-              const list = Array.isArray(listRes.data) ? listRes.data : [];
-              setNotifications(list);
-            } catch {}
-          }
+        if (nextUnread != null) {
+          setUnreadCount(prev => {
+            if (nextUnread !== prev) {
+              fetchNotifications();
+            }
+            return nextUnread;
+          });
         }
-        if (nextLow != null) setLowStockCount(nextLow);
+        if (nextLow != null) {
+          setLowStockCount(nextLow);
+        }
       } catch {}
     };
     es.addEventListener('snapshot', onMessage);
@@ -63,7 +84,7 @@ const Navbar = () => {
     return () => {
       try { es.close(); } catch {}
     };
-  }, [role, unreadCount]);
+  }, [role]);
 
   const isActive = (path) => {
     return location.pathname === path;

@@ -1,6 +1,9 @@
 package com.warehouse.service;
 
+import com.warehouse.dto.StockFilter;
 import com.warehouse.entity.Stock;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 import java.util.List;
 import java.util.Optional;
@@ -12,7 +15,9 @@ public interface StockService {
 
     List<Stock> getAllStocks();
 
-    List<Stock> getAllStocksFiltered(Long brandId, Long colorId, Long warehouseId);
+    Page<Stock> getAllStocks(Pageable pageable);
+
+    Page<Stock> getStocks(StockFilter filter, Pageable pageable);
 
     Optional<Stock> getStockById(Long id);
 

@@ -1,18 +1,19 @@
 package com.warehouse.service.impl;
 
-import com.warehouse.entity.Stock;
+import com.warehouse.constants.NotificationMessages;
+import com.warehouse.dto.StockFilter;
 import com.warehouse.entity.Product;
+import com.warehouse.entity.Stock;
 import com.warehouse.entity.Warehouse;
 import com.warehouse.enums.AuditAction;
+import com.warehouse.enums.DomainEntityType;
 import com.warehouse.exception.ErrorCode;
 import com.warehouse.exception.WarehouseManagementException;
-import com.warehouse.repository.StockRepository;
 import com.warehouse.repository.ProductRepository;
+import com.warehouse.repository.StockRepository;
 import com.warehouse.repository.WarehouseRepository;
 import com.warehouse.service.AuditService;
 import com.warehouse.service.NotificationService;
-import com.warehouse.constants.NotificationMessages;
-import com.warehouse.enums.DomainEntityType;
 import com.warehouse.service.StockService;
 import com.warehouse.util.CurrentUser;
 import com.warehouse.util.EntityValidator;
@@ -20,11 +21,14 @@ import com.warehouse.util.StockQuantityValidator;
 import com.warehouse.util.ValidationUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 
 /**
@@ -63,9 +67,35 @@ public class StockServiceImpl implements StockService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<Stock> getAllStocksFiltered(Long brandId, Long colorId, Long warehouseId) {
-        logger.debug("Fetching filtered stocks - brandId: {}, colorId: {}, warehouseId: {}", brandId, colorId, warehouseId);
-        return stockRepository.findAllFiltered(brandId, colorId, warehouseId);
+    public Page<Stock> getAllStocks(Pageable pageable) {
+        logger.debug("Fetching paged stocks - page: {}, size: {}", pageable.getPageNumber(), pageable.getPageSize());
+        return stockRepository.findAll(pageable);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<Stock> getStocks(StockFilter filter, Pageable pageable) {
+        StockFilter appliedFilter = filter != null ? filter : new StockFilter();
+        StockFilter.Status status = appliedFilter.getStatus() != null ? appliedFilter.getStatus() : StockFilter.Status.ALL;
+        String statusValue = status.name();
+        String search = appliedFilter.getSearch();
+        boolean searchEnabled = search != null && !search.isBlank();
+        String searchPattern = searchEnabled ? "%" + search.toLowerCase(Locale.ROOT) + "%" : "%";
+
+        logger.debug("Fetching stocks with advanced filters - page: {}, size: {}", pageable.getPageNumber(), pageable.getPageSize());
+        return stockRepository.findByFilters(
+                appliedFilter.getBrandId(),
+                appliedFilter.getColorId(),
+                appliedFilter.getWarehouseId(),
+                appliedFilter.getCategoryId(),
+                appliedFilter.getSubCategoryId(),
+                searchEnabled,
+                searchPattern,
+                appliedFilter.isReservedOnly(),
+                appliedFilter.isConsignedOnly(),
+                statusValue,
+                pageable
+        );
     }
 
     @Override

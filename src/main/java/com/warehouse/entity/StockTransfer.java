@@ -21,12 +21,31 @@ import java.util.List;
 
 @Entity
 @Table(name = "stock_transfers")
+@NamedEntityGraph(
+        name = StockTransfer.GRAPH_WITH_RELATIONS,
+        attributeNodes = {
+                @NamedAttributeNode("sourceWarehouse"),
+                @NamedAttributeNode("destinationWarehouse"),
+                @NamedAttributeNode("product"),
+                @NamedAttributeNode(value = "items", subgraph = "StockTransfer.items")
+        },
+        subgraphs = {
+                @NamedSubgraph(
+                        name = "StockTransfer.items",
+                        attributeNodes = {
+                                @NamedAttributeNode("product")
+                        }
+                )
+        }
+)
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @EqualsAndHashCode(callSuper = false)
 @ToString(exclude = {"sourceWarehouse", "destinationWarehouse", "product", "items"})
 public class StockTransfer {
+
+    public static final String GRAPH_WITH_RELATIONS = "StockTransfer.with-relations";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

@@ -26,11 +26,29 @@ import java.util.List;
         @Index(name = "idx_products_color_id", columnList = "color_id")
     }
 )
+@NamedEntityGraph(
+        name = Product.GRAPH_WITH_RELATIONS,
+        attributeNodes = {
+                @NamedAttributeNode(value = "category", subgraph = "Product.category"),
+                @NamedAttributeNode("brand"),
+                @NamedAttributeNode("color")
+        },
+        subgraphs = {
+                @NamedSubgraph(
+                        name = "Product.category",
+                        attributeNodes = {
+                                @NamedAttributeNode("parent")
+                        }
+                )
+        }
+)
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @EqualsAndHashCode(callSuper = false)
 public class Product {
+
+    public static final String GRAPH_WITH_RELATIONS = "Product.with-relations";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
