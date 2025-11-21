@@ -27,6 +27,7 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -205,6 +206,7 @@ public class StockServiceImpl implements StockService {
 
         stock.setProduct(product);
         stock.setWarehouse(warehouse);
+        stock.setAdditionNote(normalizeAdditionNote(stock.getAdditionNote()));
 
         Stock saved = stockRepository.save(stock);
         String username = CurrentUser.usernameOrSystem();
@@ -220,6 +222,18 @@ public class StockServiceImpl implements StockService {
     }
 
     @Override
+    public List<Stock> createStocks(List<Stock> stocks) {
+        if (stocks == null || stocks.isEmpty()) {
+            throw new WarehouseManagementException(ErrorCode.REQUIRED_FIELD_MISSING, "At least one stock entry is required");
+        }
+        List<Stock> created = new ArrayList<>();
+        for (Stock stock : stocks) {
+            created.add(createStock(stock));
+        }
+        return created;
+    }
+
+    @Override
     public Stock updateStock(Long id, Stock stockDetails) {
         logger.info("Updating stock with id: {}", id);
         Stock stock = getStockByIdOrThrow(id);
@@ -228,6 +242,7 @@ public class StockServiceImpl implements StockService {
         updateMinStockLevel(stock, stockDetails.getMinStockLevel());
         updateReservedQuantity(stock, stockDetails.getReservedQuantity());
         updateConsignedQuantity(stock, stockDetails.getConsignedQuantity());
+        updateAdditionNote(stock, stockDetails.getAdditionNote());
 
         StockQuantityValidator.validateAvailableQuantity(stock);
 
@@ -304,6 +319,17 @@ public class StockServiceImpl implements StockService {
                 String.format("Kullanıcı %s, %s/%s stok kaydını sildi.", username, warehouseName, productName),
                 DomainEntityType.Stock.name(), id);
         logger.info("Stock deleted successfully with id: {}", id);
+    }
+
+    @Override
+    public void deleteStocks(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            logger.debug("deleteStocks called with empty ids");
+            return;
+        }
+        for (Long id : ids) {
+            deleteStock(id);
+        }
     }
 
     @Override
@@ -408,6 +434,20 @@ public class StockServiceImpl implements StockService {
             ValidationUtil.requireNonNegative(consignedQuantity, "Consigned quantity");
             stock.setConsignedQuantity(consignedQuantity);
         }
+    }
+
+    private void updateAdditionNote(Stock stock, String additionNote) {
+        if (additionNote != null) {
+            stock.setAdditionNote(normalizeAdditionNote(additionNote));
+        }
+    }
+
+    private String normalizeAdditionNote(String additionNote) {
+        if (additionNote == null) {
+            return null;
+        }
+        String trimmed = additionNote.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
 }

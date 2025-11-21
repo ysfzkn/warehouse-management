@@ -174,6 +174,23 @@ public class StockController {
         return ResponseEntity.status(HttpStatus.CREATED).body(toDtoLean(createdStock));
     }
 
+    @PostMapping("/bulk")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<StockDto>> createStocksBulk(@Valid @RequestBody List<Stock> stocks) {
+        if (stocks == null || stocks.isEmpty()) {
+            return ResponseEntity.badRequest().build();
+        }
+        List<Stock> createdStocks = stockService.createStocks(stocks);
+        try {
+            ssePushService.broadcastCounts();
+            logger.debug("SSE counts broadcasted after createStocksBulk. created={}", createdStocks.size());
+        } catch (Exception e) {
+            logger.warn("SSE broadcast failed after createStocksBulk", e);
+        }
+        List<StockDto> response = createdStocks.stream().map(this::toDtoLean).toList();
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<StockDto> updateStock(@PathVariable Long id, @RequestBody Stock stock) {
@@ -282,6 +299,22 @@ public class StockController {
         return ResponseEntity.noContent().build();
     }
 
+    @DeleteMapping("/bulk")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Void> deleteStocks(@RequestBody List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return ResponseEntity.badRequest().build();
+        }
+        stockService.deleteStocks(ids);
+        try {
+            ssePushService.broadcastCounts();
+            logger.debug("SSE counts broadcasted after deleteStocks. deletedCount={}", ids.size());
+        } catch (Exception e) {
+            logger.warn("SSE broadcast failed after deleteStocks", e);
+        }
+        return ResponseEntity.noContent().build();
+    }
+
     private StockDto toDto(Stock s) {
         StockDto dto = new StockDto();
         dto.id = s.getId();
@@ -291,6 +324,7 @@ public class StockController {
         dto.minStockLevel = s.getMinStockLevel();
         dto.availableQuantity = s.getAvailableQuantity();
         dto.lastUpdated = s.getLastUpdated();
+        dto.additionNote = s.getAdditionNote();
         if (s.getProduct() != null) {
             StockDto.ProductDto p = new StockDto.ProductDto();
             p.id = s.getProduct().getId();
@@ -317,6 +351,7 @@ public class StockController {
         dto.minStockLevel = s.getMinStockLevel();
         dto.availableQuantity = s.getAvailableQuantity();
         dto.lastUpdated = s.getLastUpdated();
+        dto.additionNote = s.getAdditionNote();
         if (s.getProduct() != null) {
             StockDto.ProductDto p = new StockDto.ProductDto();
             p.id = s.getProduct().getId();

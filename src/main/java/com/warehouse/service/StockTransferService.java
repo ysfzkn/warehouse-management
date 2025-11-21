@@ -4,6 +4,7 @@ import com.warehouse.dto.StockTransferFilter;
 import com.warehouse.dto.StockTransferSummary;
 import com.warehouse.entity.StockTransfer;
 import com.warehouse.enums.TransferStatus;
+import com.warehouse.enums.TransferApprovalStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -46,4 +47,12 @@ public interface StockTransferService {
     StockTransfer updateTransfer(Long transferId, StockTransfer updatedTransfer);
 
     void deleteTransfer(Long transferId);
+
+    List<StockTransfer> getTransferApprovals(TransferApprovalStatus status);
+
+    long countTransferApprovals(TransferApprovalStatus status);
+
+    StockTransfer approveTransferStart(Long transferId, String approvalNote);
+
+    StockTransfer rejectTransferStart(Long transferId, String rejectionReason);
 }

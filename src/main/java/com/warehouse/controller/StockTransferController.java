@@ -11,6 +11,7 @@ import com.warehouse.entity.StockTransferItem;
 import com.warehouse.entity.Warehouse;
 import com.warehouse.enums.TransferStatus;
 import com.warehouse.enums.TransferType;
+import com.warehouse.enums.TransferApprovalStatus;
 import com.warehouse.mapper.StockTransferMapper;
 import com.warehouse.service.StockTransferService;
 import jakarta.validation.Valid;
@@ -21,6 +22,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -161,6 +163,39 @@ public class StockTransferController {
         StockTransfer transfer = stockTransferService.cancelTransfer(id, cancellationReason);
         StockTransferDto dto = transferMapper.toDto(transfer);
         return ResponseEntity.ok(dto);
+    }
+
+    @GetMapping("/approvals")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<StockTransferDto>> getTransferApprovals(@RequestParam(required = false) TransferApprovalStatus status) {
+        TransferApprovalStatus effectiveStatus = status != null ? status : TransferApprovalStatus.PENDING;
+        List<StockTransfer> transfers = stockTransferService.getTransferApprovals(effectiveStatus);
+        return ResponseEntity.ok(transferMapper.toDtoList(transfers));
+    }
+
+    @GetMapping("/approvals/count")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Map<String, Long>> getTransferApprovalCount() {
+        long count = stockTransferService.countTransferApprovals(TransferApprovalStatus.PENDING);
+        return ResponseEntity.ok(Map.of("count", count));
+    }
+
+    @PostMapping("/{id}/approve-start")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<StockTransferDto> approveTransferStart(@PathVariable Long id,
+                                                                 @RequestBody(required = false) Map<String, String> payload) {
+        String note = payload != null ? payload.get("note") : null;
+        StockTransfer transfer = stockTransferService.approveTransferStart(id, note);
+        return ResponseEntity.ok(transferMapper.toDto(transfer));
+    }
+
+    @PostMapping("/{id}/reject-start")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<StockTransferDto> rejectTransferStart(@PathVariable Long id,
+                                                                @RequestBody(required = false) Map<String, String> payload) {
+        String reason = payload != null ? payload.get("reason") : null;
+        StockTransfer transfer = stockTransferService.rejectTransferStart(id, reason);
+        return ResponseEntity.ok(transferMapper.toDto(transfer));
     }
 
     @PutMapping("/{id}")

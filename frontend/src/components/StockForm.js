@@ -3,53 +3,46 @@ import axios from 'axios';
 
 const INITIAL_VISIBLE_PRODUCTS = 12;
 
+const buildItemFromProduct = (product) => ({
+  productId: product.id,
+  name: product.name,
+  sku: product.sku,
+  brand: product.brand?.name || null,
+  quantity: '',
+  minStockLevel: '',
+  reservedQuantity: '0',
+  consignedQuantity: '0'
+});
+
 const StockForm = ({ products, warehouses, onSuccess, onCancel }) => {
-  const [formData, setFormData] = useState({
-    productId: '',
-    warehouseId: '',
-    quantity: '',
-    minStockLevel: '',
-    reservedQuantity: '0',
-    consignedQuantity: '0'
-  });
-  const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState({});
+  const [warehouseId, setWarehouseId] = useState('');
+  const [items, setItems] = useState([]);
   const [productSearchTerm, setProductSearchTerm] = useState('');
   const [visibleProductCount, setVisibleProductCount] = useState(INITIAL_VISIBLE_PRODUCTS);
+  const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState({
+    general: null,
+    warehouseId: null,
+    items: null,
+    additionNote: null,
+    perItem: {}
+  });
+  const [additionNote, setAdditionNote] = useState('');
+  const [feedback, setFeedback] = useState(null);
 
   useEffect(() => {
-    // Set default warehouse if available
-    if (warehouses.length > 0) {
-      setFormData(prev => ({ ...prev, warehouseId: warehouses[0].id }));
+    if (!warehouseId && warehouses.length > 0) {
+      setWarehouseId(String(warehouses[0].id));
     }
-  }, [warehouses]);
+  }, [warehouses, warehouseId]);
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-
-    // Clear error when user starts typing
-    if (errors[name]) {
-      setErrors(prev => ({
-        ...prev,
-        [name]: ''
-      }));
-    }
-  };
-
-  const handleProductSelect = (productId) => {
-    setFormData(prev => ({ ...prev, productId }));
-    if (errors.productId) {
-      setErrors(prev => ({ ...prev, productId: '' }));
-    }
-  };
+  useEffect(() => {
+    setVisibleProductCount(INITIAL_VISIBLE_PRODUCTS);
+  }, [productSearchTerm, products.length]);
 
   const filteredProducts = useMemo(() => {
     if (!productSearchTerm.trim()) return products;
-    const query = productSearchTerm.trim().toLowerCase();
+    const query = productSearchTerm.trim().toLocaleLowerCase('tr-TR');
     return products.filter(product => {
       const haystack = [
         product.name,
@@ -58,303 +51,583 @@ const StockForm = ({ products, warehouses, onSuccess, onCancel }) => {
         product.brand?.name
       ]
         .filter(Boolean)
-        .map(text => text.toLowerCase());
+        .map(text => text.toLocaleLowerCase('tr-TR'));
       return haystack.some(text => text.includes(query));
     });
   }, [products, productSearchTerm]);
 
-  const productOptions = useMemo(() => {
-    if (!formData.productId) return filteredProducts;
-    const hasSelected = filteredProducts.some(product => String(product.id) === String(formData.productId));
-    if (hasSelected) {
-      return filteredProducts;
-    }
-    const selectedProduct = products.find(product => String(product.id) === String(formData.productId));
-    return selectedProduct ? [selectedProduct, ...filteredProducts] : filteredProducts;
-  }, [filteredProducts, formData.productId, products]);
-
-  useEffect(() => {
-    setVisibleProductCount(INITIAL_VISIBLE_PRODUCTS);
-  }, [productSearchTerm, filteredProducts.length]);
-
-  const limitedProductOptions = useMemo(() => productOptions.slice(0, visibleProductCount), [productOptions, visibleProductCount]);
+  const productOptions = useMemo(() => filteredProducts.slice(0), [filteredProducts]);
+  const limitedProductOptions = useMemo(
+    () => productOptions.slice(0, visibleProductCount),
+    [productOptions, visibleProductCount]
+  );
   const hasMoreProducts = productOptions.length > visibleProductCount;
 
-  const validateForm = () => {
-    const newErrors = {};
+  const selectedProductMap = useMemo(() => {
+    const map = new Map();
+    items.forEach(item => map.set(String(item.productId), true));
+    return map;
+  }, [items]);
 
-    if (!formData.productId) {
-      newErrors.productId = 'Ürün seçiniz';
-    }
-
-    if (!formData.warehouseId) {
-      newErrors.warehouseId = 'Depo seçiniz';
-    }
-
-    if (!formData.quantity || parseInt(formData.quantity) < 0) {
-      newErrors.quantity = 'Geçerli bir miktar giriniz';
-    }
-
-    if (!formData.minStockLevel || parseInt(formData.minStockLevel) < 0) {
-      newErrors.minStockLevel = 'Geçerli bir minimum stok seviyesi giriniz';
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+  const clearFieldError = (field) => {
+    if (!errors[field]) return;
+    setErrors(prev => ({ ...prev, [field]: null }));
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const clearItemFieldError = (productId, field) => {
+    setErrors(prev => {
+      if (!prev.perItem?.[productId]?.[field]) {
+        return prev;
+      }
+      const nextPerItem = { ...prev.perItem };
+      const fieldErrors = { ...nextPerItem[productId] };
+      delete fieldErrors[field];
+      if (Object.keys(fieldErrors).length === 0) {
+        delete nextPerItem[productId];
+      } else {
+        nextPerItem[productId] = fieldErrors;
+      }
+      return { ...prev, perItem: nextPerItem };
+    });
+  };
+
+  const handleWarehouseChange = (event) => {
+    setWarehouseId(event.target.value);
+    clearFieldError('warehouseId');
+  };
+
+  const handleAdditionNoteChange = (event) => {
+    setAdditionNote(event.target.value);
+    clearFieldError('additionNote');
+  };
+
+  const handleAddProduct = (productId) => {
+    if (!warehouseId) {
+      setErrors(prev => ({ ...prev, warehouseId: 'Depo seçiniz' }));
+      return;
+    }
+    const product = products.find(p => String(p.id) === productId);
+    if (!product) return;
+    setItems(prev => {
+      if (prev.some(item => String(item.productId) === productId)) {
+        return prev;
+      }
+      return [...prev, buildItemFromProduct(product)];
+    });
+    setErrors(prev => ({ ...prev, items: null }));
+  };
+
+  const handleRemoveItem = (productId) => {
+    setItems(prev => prev.filter(item => String(item.productId) !== String(productId)));
+    setErrors(prev => {
+      if (!prev.perItem?.[productId]) return prev;
+      const nextPerItem = { ...prev.perItem };
+      delete nextPerItem[productId];
+      return { ...prev, perItem: nextPerItem };
+    });
+  };
+
+  const updateItemField = (productId, field, value) => {
+    setItems(prev =>
+      prev.map(item =>
+        String(item.productId) === String(productId)
+          ? { ...item, [field]: value }
+          : item
+      )
+    );
+    clearItemFieldError(productId, field);
+  };
+
+  const parseNumber = (value) => {
+    if (value === '' || value === null || value === undefined) {
+      return null;
+    }
+    const parsed = Number(value);
+    return Number.isNaN(parsed) ? null : parsed;
+  };
+
+  const validateForm = () => {
+    const nextErrors = { general: null, warehouseId: null, items: null, perItem: {} };
+
+    if (!warehouseId) {
+      nextErrors.warehouseId = 'Depo seçiniz';
+    }
+
+    if (items.length === 0) {
+      nextErrors.items = 'En az bir ürün seçerek miktar giriniz';
+    }
+
+    if (additionNote && additionNote.length > 500) {
+      nextErrors.additionNote = 'Not en fazla 500 karakter olabilir';
+    }
+
+    items.forEach(item => {
+      const itemErrors = {};
+      const quantity = parseNumber(item.quantity);
+      const minStockLevel = parseNumber(item.minStockLevel);
+      const reserved = parseNumber(item.reservedQuantity);
+      const consigned = parseNumber(item.consignedQuantity);
+
+      if (quantity === null || quantity <= 0) {
+        itemErrors.quantity = 'Geçerli bir miktar giriniz';
+      }
+      if (minStockLevel !== null && minStockLevel < 0) {
+        itemErrors.minStockLevel = 'Negatif olamaz';
+      }
+      if (reserved !== null && reserved < 0) {
+        itemErrors.reservedQuantity = 'Negatif olamaz';
+      }
+      if (consigned !== null && consigned < 0) {
+        itemErrors.consignedQuantity = 'Negatif olamaz';
+      }
+      if (Object.keys(itemErrors).length > 0) {
+        nextErrors.perItem[item.productId] = itemErrors;
+      }
+    });
+
+    const hasErrors =
+      Boolean(nextErrors.general) ||
+      Boolean(nextErrors.warehouseId) ||
+      Boolean(nextErrors.items) ||
+      Object.keys(nextErrors.perItem).length > 0;
+
+    setErrors(nextErrors);
+    return !hasErrors;
+  };
+
+  const buildPayload = () => {
+    const note = additionNote?.trim() || null;
+    return items.map(item => ({
+      product: { id: Number(item.productId) },
+      warehouse: { id: Number(warehouseId) },
+      quantity: Number(item.quantity),
+      minStockLevel: item.minStockLevel === '' ? null : Number(item.minStockLevel),
+      reservedQuantity: item.reservedQuantity === '' ? 0 : Number(item.reservedQuantity),
+      consignedQuantity: item.consignedQuantity === '' ? 0 : Number(item.consignedQuantity),
+      additionNote: note
+    }));
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setFeedback(null);
 
     if (!validateForm()) {
       return;
     }
 
     setLoading(true);
-
     try {
-      const dataToSend = {
-        product: { id: parseInt(formData.productId) },
-        warehouse: { id: parseInt(formData.warehouseId) },
-        quantity: parseInt(formData.quantity),
-        minStockLevel: parseInt(formData.minStockLevel),
-        reservedQuantity: parseInt(formData.reservedQuantity || 0),
-        consignedQuantity: parseInt(formData.consignedQuantity || 0)
-      };
-
-      await axios.post('/api/stocks', dataToSend);
-      onSuccess();
-    } catch (error) {
-      console.error('Error saving stock:', error);
-      if (error.response?.data) {
-        setErrors({ general: error.response.data });
-      } else {
-        setErrors({ general: 'Stok kaydedilirken hata oluştu' });
+      const payload = buildPayload();
+      const response = await axios.post('/api/stocks/bulk', payload);
+      const createdCount = Array.isArray(response.data) ? response.data.length : payload.length;
+      setFeedback({
+        type: 'success',
+        message: `${createdCount} stok kaydı başarıyla oluşturuldu.`
+      });
+      setItems([]);
+      setProductSearchTerm('');
+      setAdditionNote('');
+      if (onSuccess) {
+        onSuccess({ close: false, message: 'Stok kayıtları başarıyla oluşturuldu.' });
       }
+    } catch (error) {
+      const message =
+        error?.response?.data?.message ||
+        error?.response?.data?.error ||
+        (typeof error?.response?.data === 'string' ? error.response.data : null) ||
+        'Stok kaydedilirken hata oluştu';
+      setErrors(prev => ({ ...prev, general: message }));
     } finally {
       setLoading(false);
     }
   };
 
+  const getItemError = (productId, field) =>
+    errors.perItem?.[productId]?.[field] || null;
+
   return (
-    <form onSubmit={handleSubmit}>
+    <form onSubmit={handleSubmit} className="stock-form">
       {errors.general && (
         <div className="alert alert-danger" role="alert">
           {errors.general}
         </div>
       )}
+      {feedback && (
+        <div className={`alert alert-${feedback.type}`} role="alert">
+          {feedback.message}
+        </div>
+      )}
 
-      <div className="row">
-        <div className="col-md-6">
-          <div className="mb-3">
-            <label htmlFor="productId" className="form-label">
-              Ürün <span className="text-danger">*</span>
-            </label>
-            <div className="input-group mb-2">
-              <span className="input-group-text bg-light">
-                <i className="fas fa-search text-muted"></i>
-              </span>
-              <input
-                type="text"
-                className="form-control"
-                placeholder="Ürün adı, SKU veya marka ara..."
-                value={productSearchTerm}
-                onChange={(e) => setProductSearchTerm(e.target.value)}
-                disabled={products.length === 0}
-              />
-              {productSearchTerm && (
+      <div className="row g-3 mb-4">
+        <div className="col-lg-4">
+          <label className="form-label fw-semibold">
+            Depo Seçimi <span className="text-danger">*</span>
+          </label>
+          <select
+            className={`form-select ${errors.warehouseId ? 'is-invalid' : ''}`}
+            value={warehouseId}
+            onChange={handleWarehouseChange}
+          >
+            <option value="">Depo seçiniz</option>
+            {warehouses.map(warehouse => (
+              <option key={warehouse.id} value={warehouse.id}>
+                {warehouse.name} - {warehouse.location}
+              </option>
+            ))}
+          </select>
+          {errors.warehouseId && (
+            <div className="invalid-feedback">{errors.warehouseId}</div>
+          )}
+          <small className="text-muted d-block mt-2">
+            Bu depoya ait yeni stok kayıtları oluşturulur.
+          </small>
+        </div>
+        <div className="col-lg-8">
+          <div className="card border-0 shadow-sm h-100">
+            <div className="card-body d-flex flex-column justify-content-center">
+              <div className="d-flex flex-wrap align-items-center gap-3">
+                <span className="badge bg-primary bg-opacity-10 text-primary px-3 py-2">
+                  <i className="fas fa-boxes me-2"></i>
+                  {items.length} ürün seçildi
+                </span>
+                <span className="badge bg-secondary bg-opacity-10 text-secondary px-3 py-2">
+                  <i className="fas fa-layer-group me-2"></i>
+                  {products.length} ürün içinde arama
+                </span>
+                {feedback && (
+                  <span className="badge bg-success bg-opacity-10 text-success px-3 py-2">
+                    <i className="fas fa-check me-2"></i>
+                    Liste güncellendi
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="mb-4">
+        <label className="form-label fw-semibold">
+          Stok Ekleme Notu <small className="text-muted">(opsiyonel)</small>
+        </label>
+        <textarea
+          className={`form-control ${errors.additionNote ? 'is-invalid' : ''}`}
+          rows="3"
+          maxLength="500"
+          value={additionNote}
+          onChange={handleAdditionNoteChange}
+          placeholder="Bu stok ekleme işlemi için genel not girin..."
+        ></textarea>
+        <div className="d-flex justify-content-between mt-1">
+          {errors.additionNote ? (
+            <div className="invalid-feedback d-block">{errors.additionNote}</div>
+          ) : (
+            <small className="text-muted">Bu not listede oluşturulan tüm stoklara işlenecek.</small>
+          )}
+          <small className="text-muted">{additionNote.length}/500</small>
+        </div>
+      </div>
+
+      <div className="row g-4">
+        <div className="col-lg-5">
+          <div className="card border-0 shadow-sm h-100">
+            <div className="card-header bg-white border-0 pb-0">
+              <h5 className="card-title mb-1">
+                <i className="fas fa-search me-2 text-muted"></i>
+                Ürün Seçimi
+              </h5>
+              <p className="text-muted small mb-0">
+                Kartlara tıklayarak ürünleri listeye ekleyin.
+              </p>
+            </div>
+            <div className="card-body">
+              <div className="input-group mb-2">
+                <span className="input-group-text bg-light">
+                  <i className="fas fa-search text-muted"></i>
+                </span>
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="Ürün adı, SKU veya marka ara..."
+                  value={productSearchTerm}
+                  onChange={(e) => setProductSearchTerm(e.target.value)}
+                  disabled={products.length === 0}
+                />
+                {productSearchTerm && (
+                  <button
+                    type="button"
+                    className="btn btn-outline-secondary"
+                    onClick={() => setProductSearchTerm('')}
+                  >
+                    Temizle
+                  </button>
+                )}
+              </div>
+              <div className="d-flex justify-content-between small text-muted mb-3">
+                <span>{products.length} ürün</span>
+                {productSearchTerm && (
+                  <span>{productOptions.length} sonuç</span>
+                )}
+              </div>
+
+              {productOptions.length === 0 ? (
+                <div className="alert alert-light border">
+                  <i className="fas fa-info-circle me-2 text-primary"></i>
+                  {productSearchTerm
+                    ? 'Arama kriterlerine uygun ürün bulunamadı.'
+                    : 'Sistemde tanımlı ürün bulunamadı.'}
+                </div>
+              ) : (
+                <>
+                  <div className="stock-option-list border rounded-4 shadow-sm bg-white">
+                    <div className="stock-option-grid">
+                      {limitedProductOptions.map(product => {
+                        const productId = String(product.id);
+                        const isSelected = selectedProductMap.has(productId);
+                        return (
+                          <button
+                            type="button"
+                            key={product.id}
+                            className={`stock-option-button ${isSelected ? 'active' : ''}`}
+                            onClick={() => handleAddProduct(productId)}
+                            disabled={isSelected}
+                          >
+                            <div className="d-flex justify-content-between align-items-start">
+                              <div>
+                                <div className="fw-semibold text-dark">{product.name}</div>
+                                <div className="text-muted small">SKU: {product.sku}</div>
+                                {product.brand?.name && (
+                                  <div className="badge bg-light text-dark mt-2">
+                                    {product.brand.name}
+                                  </div>
+                                )}
+                              </div>
+                              {isSelected && (
+                                <span className="badge bg-success">
+                                  <i className="fas fa-check"></i>
+                                </span>
+                              )}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  {hasMoreProducts && (
+                    <button
+                      type="button"
+                      className="btn btn-light btn-sm w-100 mt-2 stock-load-more"
+                      onClick={() =>
+                        setVisibleProductCount(prev => prev + INITIAL_VISIBLE_PRODUCTS)
+                      }
+                    >
+                      Daha fazla göster ({productOptions.length - limitedProductOptions.length})
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="col-lg-7">
+          <div className="card border-0 shadow-sm h-100">
+            <div className="card-header bg-white border-0 pb-0 d-flex justify-content-between align-items-center">
+              <div>
+                <h5 className="card-title mb-1">
+                  <i className="fas fa-list me-2 text-muted"></i>
+                  Seçilen Ürünler
+                </h5>
+                <p className="text-muted small mb-0">
+                  Her ürün için miktar ve isteğe bağlı not girebilirsiniz.
+                </p>
+              </div>
+              {items.length > 0 && (
                 <button
                   type="button"
-                  className="btn btn-outline-secondary"
-                  onClick={() => setProductSearchTerm('')}
+                  className="btn btn-link text-danger text-decoration-none"
+                  onClick={() => {
+                    setItems([]);
+                    setErrors(prev => ({ ...prev, perItem: {}, items: null }));
+                  }}
                 >
-                  Temizle
+                  <i className="fas fa-trash me-1"></i>
+                  Listeyi Temizle
                 </button>
               )}
             </div>
-            <div className="d-flex justify-content-between small text-muted mb-2">
-              <span>{products.length} ürün</span>
-              {productSearchTerm && (
-                <span>{productOptions.length} sonuç</span>
+            <div className="card-body">
+              {items.length === 0 ? (
+                <div className="alert alert-light border mb-0">
+                  <i className="fas fa-box-open me-2"></i>
+                  Henüz ürün seçmediniz. Sol taraftan ürün ekleyin.
+                </div>
+              ) : (
+                <div className="d-flex flex-column gap-3">
+                  {items.map(item => (
+                    <div className="card border shadow-sm" key={item.productId}>
+                      <div className="card-body">
+                        <div className="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                          <div>
+                            <div className="fw-semibold">{item.name}</div>
+                            <small className="text-muted">SKU: {item.sku || '—'}</small>
+                            {item.brand && (
+                              <span className="badge bg-light text-dark ms-2">{item.brand}</span>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            className="btn btn-link text-danger text-decoration-none"
+                            onClick={() => handleRemoveItem(item.productId)}
+                          >
+                            <i className="fas fa-times me-1"></i>
+                            Kaldır
+                          </button>
+                        </div>
+                        <div className="row g-3 mt-3">
+                          <div className="col-md-3">
+                            <label className="form-label fw-semibold small text-muted">
+                              Miktar <span className="text-danger">*</span>
+                            </label>
+                            <input
+                              type="number"
+                              min="1"
+                              className={`form-control form-control-sm ${
+                                getItemError(item.productId, 'quantity') ? 'is-invalid' : ''
+                              }`}
+                              value={item.quantity}
+                              onChange={(e) =>
+                                updateItemField(item.productId, 'quantity', e.target.value)
+                              }
+                            />
+                            {getItemError(item.productId, 'quantity') && (
+                              <div className="invalid-feedback">
+                                {getItemError(item.productId, 'quantity')}
+                              </div>
+                            )}
+                          </div>
+                          <div className="col-md-3">
+                            <label className="form-label fw-semibold small text-muted">
+                              Min. Stok
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              className={`form-control form-control-sm ${
+                                getItemError(item.productId, 'minStockLevel') ? 'is-invalid' : ''
+                              }`}
+                              placeholder="Opsiyonel"
+                              value={item.minStockLevel}
+                              onChange={(e) =>
+                                updateItemField(item.productId, 'minStockLevel', e.target.value)
+                              }
+                            />
+                            {getItemError(item.productId, 'minStockLevel') && (
+                              <div className="invalid-feedback">
+                                {getItemError(item.productId, 'minStockLevel')}
+                              </div>
+                            )}
+                          </div>
+                          <div className="col-md-3">
+                            <label className="form-label fw-semibold small text-muted">
+                              Rezerve
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              className={`form-control form-control-sm ${
+                                getItemError(item.productId, 'reservedQuantity') ? 'is-invalid' : ''
+                              }`}
+                              placeholder="0"
+                              value={item.reservedQuantity}
+                              onChange={(e) =>
+                                updateItemField(item.productId, 'reservedQuantity', e.target.value)
+                              }
+                            />
+                            {getItemError(item.productId, 'reservedQuantity') && (
+                              <div className="invalid-feedback">
+                                {getItemError(item.productId, 'reservedQuantity')}
+                              </div>
+                            )}
+                          </div>
+                          <div className="col-md-3">
+                            <label className="form-label fw-semibold small text-muted">
+                              Emanet
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              className={`form-control form-control-sm ${
+                                getItemError(item.productId, 'consignedQuantity') ? 'is-invalid' : ''
+                              }`}
+                              placeholder="0"
+                              value={item.consignedQuantity}
+                              onChange={(e) =>
+                                updateItemField(item.productId, 'consignedQuantity', e.target.value)
+                              }
+                            />
+                            {getItemError(item.productId, 'consignedQuantity') && (
+                              <div className="invalid-feedback">
+                                {getItemError(item.productId, 'consignedQuantity')}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {errors.items && (
+                <div className="text-danger small mt-2">
+                  <i className="fas fa-exclamation-circle me-1"></i>
+                  {errors.items}
+                </div>
               )}
             </div>
-            {productOptions.length === 0 ? (
-              <div className="alert alert-light border mt-2 py-3 mb-0">
-                <i className="fas fa-info-circle me-2 text-primary"></i>
-                {productSearchTerm
-                  ? 'Arama kriterlerine uygun ürün bulunamadı. Farklı anahtar kelimeler deneyin.'
-                  : 'Sistemde tanımlı ürün bulunamadı.'}
-              </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-4">
+        <div className="text-muted small">
+          {items.length > 0
+            ? `${items.length} ürün kayda hazır`
+            : 'Kayda hazır ürün bulunmuyor'}
+        </div>
+        <div className="d-flex gap-2">
+          <button
+            type="button"
+            className="btn btn-outline-secondary"
+            onClick={onCancel}
+            disabled={loading}
+          >
+            <i className="fas fa-times me-2"></i>
+            Kapat
+          </button>
+          <button
+            type="submit"
+            className="btn btn-primary"
+            disabled={loading || items.length === 0}
+          >
+            {loading ? (
+              <>
+                <span
+                  className="spinner-border spinner-border-sm me-2"
+                  role="status"
+                  aria-hidden="true"
+                ></span>
+                Kaydediliyor...
+              </>
             ) : (
-              <div className="stock-option-list border rounded-4 shadow-sm bg-white">
-                <div className="stock-option-grid">
-                  {limitedProductOptions.map(product => {
-                    const productId = String(product.id);
-                    const isSelected = String(formData.productId) === productId;
-                    return (
-                      <button
-                        type="button"
-                        key={product.id}
-                        className={`stock-option-button ${isSelected ? 'active' : ''}`}
-                        onClick={() => handleProductSelect(productId)}
-                      >
-                        <div className="fw-semibold text-dark">{product.name}</div>
-                        <div className="text-muted small">SKU: {product.sku}</div>
-                        {product.brand?.name && (
-                          <div className="badge bg-light text-dark mt-2">{product.brand.name}</div>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+              <>
+                <i className="fas fa-save me-2"></i>
+                {items.length > 1 ? 'Toplu Stok Kaydı Oluştur' : 'Stok Kaydı Oluştur'}
+              </>
             )}
-            {hasMoreProducts && (
-              <button
-                type="button"
-                className="btn btn-light btn-sm w-100 mt-2 stock-load-more"
-                onClick={() => setVisibleProductCount(prev => prev + INITIAL_VISIBLE_PRODUCTS)}
-              >
-                Daha fazla göster ({productOptions.length - limitedProductOptions.length} ürün)
-              </button>
-            )}
-            {!formData.productId && productOptions.length > 0 && (
-              <small className="text-muted d-block mt-2">
-                Ürünü seçmek için kartın üzerine tıklayın.
-              </small>
-            )}
-            {errors.productId && <div className="invalid-feedback d-block">{errors.productId}</div>}
-          </div>
+          </button>
         </div>
-
-        <div className="col-md-6">
-          <div className="mb-3">
-            <label htmlFor="warehouseId" className="form-label">
-              Depo <span className="text-danger">*</span>
-            </label>
-            <select
-              className={`form-select ${errors.warehouseId ? 'is-invalid' : ''}`}
-              id="warehouseId"
-              name="warehouseId"
-              value={formData.warehouseId}
-              onChange={handleChange}
-              required
-            >
-              <option value="">Depo seçin</option>
-              {warehouses.map((warehouse) => (
-                <option key={warehouse.id} value={warehouse.id}>
-                  {warehouse.name} - {warehouse.location}
-                </option>
-              ))}
-            </select>
-            {errors.warehouseId && <div className="invalid-feedback">{errors.warehouseId}</div>}
-          </div>
-        </div>
-      </div>
-
-      <div className="row">
-        <div className="col-md-4">
-          <div className="mb-3">
-            <label htmlFor="quantity" className="form-label">
-              Miktar <span className="text-danger">*</span>
-            </label>
-            <input
-              type="number"
-              min="0"
-              className={`form-control ${errors.quantity ? 'is-invalid' : ''}`}
-              id="quantity"
-              name="quantity"
-              value={formData.quantity}
-              onChange={handleChange}
-              placeholder="100"
-              required
-            />
-            {errors.quantity && <div className="invalid-feedback">{errors.quantity}</div>}
-          </div>
-        </div>
-
-        <div className="col-md-4">
-          <div className="mb-3">
-            <label htmlFor="minStockLevel" className="form-label">
-              Min. Stok Seviyesi <span className="text-danger">*</span>
-            </label>
-            <input
-              type="number"
-              min="0"
-              className={`form-control ${errors.minStockLevel ? 'is-invalid' : ''}`}
-              id="minStockLevel"
-              name="minStockLevel"
-              value={formData.minStockLevel}
-              onChange={handleChange}
-              placeholder="10"
-              required
-            />
-            {errors.minStockLevel && <div className="invalid-feedback">{errors.minStockLevel}</div>}
-          </div>
-        </div>
-
-        <div className="col-md-4">
-          <div className="mb-3">
-            <label htmlFor="reservedQuantity" className="form-label">
-              Rezerve Miktar
-            </label>
-            <input
-              type="number"
-              min="0"
-              className="form-control"
-              id="reservedQuantity"
-              name="reservedQuantity"
-              value={formData.reservedQuantity}
-              onChange={handleChange}
-              placeholder="0"
-            />
-          </div>
-        </div>
-
-        <div className="col-md-4">
-          <div className="mb-3">
-            <label htmlFor="consignedQuantity" className="form-label">
-              Emanet
-            </label>
-            <input
-              type="number"
-              className="form-control"
-              id="consignedQuantity"
-              name="consignedQuantity"
-              value={formData.consignedQuantity}
-              onChange={handleChange}
-              placeholder="0"
-            />
-          </div>
-        </div>
-      </div>
-
-      <div className="d-flex justify-content-end gap-2">
-        <button
-          type="button"
-          className="btn btn-secondary"
-          onClick={onCancel}
-          disabled={loading}
-        >
-          İptal
-        </button>
-        <button
-          type="submit"
-          className="btn btn-primary"
-          disabled={loading}
-        >
-          {loading ? (
-            <>
-              <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-              Kaydediliyor...
-            </>
-          ) : (
-            <>
-              <i className="fas fa-save me-2"></i>
-              Stok Kaydı Oluştur
-            </>
-          )}
-        </button>
       </div>
     </form>
   );

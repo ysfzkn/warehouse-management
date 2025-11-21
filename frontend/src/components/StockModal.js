@@ -99,6 +99,7 @@ const StockModal = ({ warehouse, onClose }) => {
                       <th>Emanet</th>
                       <th>Min. Stok</th>
                       <th>Durum</th>
+                      <th>Not</th>
                       <th>Son Güncelleme</th>
                     </tr>
                   </thead>
@@ -125,6 +126,16 @@ const StockModal = ({ warehouse, onClose }) => {
                               {stockStatus.label}
                             </span>
                           </td>
+                      <td>
+                        {stock.additionNote ? (
+                          <small className="text-muted text-wrap d-block" style={{ maxWidth: '220px' }}>
+                            <i className="fas fa-sticky-note me-1"></i>
+                            {stock.additionNote}
+                          </small>
+                        ) : (
+                          <span className="text-muted">-</span>
+                        )}
+                      </td>
                           <td>
                             {new Date(stock.lastUpdated).toLocaleDateString('tr-TR')}
                           </td>

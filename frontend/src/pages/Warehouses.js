@@ -6,6 +6,8 @@ import FilterChips from '../components/FilterChips';
 import SearchableSelect from '../components/SearchableSelect';
 import ConfirmModal from '../components/ConfirmModal';
 
+const normalizeText = (text) => (text || '').toLocaleLowerCase('tr-TR');
+
 const Warehouses = () => {
   const [warehouses, setWarehouses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -51,12 +53,12 @@ const Warehouses = () => {
   };
 
   const filteredWarehouses = React.useMemo(() => {
-    const term = (searchTerm || '').toLowerCase();
+    const term = normalizeText(searchTerm);
     if (!term) return warehouses;
     return warehouses.filter(w =>
-      (w.name || '').toLowerCase().includes(term) ||
-      (w.location || '').toLowerCase().includes(term) ||
-      (w.manager || '').toLowerCase().includes(term)
+      normalizeText(w.name).includes(term) ||
+      normalizeText(w.location).includes(term) ||
+      normalizeText(w.manager).includes(term)
     );
   }, [warehouses, searchTerm]);
 

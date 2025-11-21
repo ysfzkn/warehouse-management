@@ -4,6 +4,8 @@ import CategoryForm from '../components/CategoryForm';
 import FilterChips from '../components/FilterChips';
 import ConfirmModal from '../components/ConfirmModal';
 
+const normalizeText = (text) => (text || '').toLocaleLowerCase('tr-TR');
+
 const Categories = () => {
   const [mainCategories, setMainCategories] = useState([]);
   const [expandedCategories, setExpandedCategories] = useState([]);
@@ -125,12 +127,12 @@ const Categories = () => {
   };
 
   const filteredCategories = useMemo(() => {
-    const q = (searchTerm || '').toLowerCase();
+    const q = normalizeText(searchTerm);
     if (!q) return mainCategories;
     return mainCategories.filter(c =>
-      (c.name || '').toLowerCase().includes(q) ||
-      (c.description || '').toLowerCase().includes(q) ||
-      c.subcategories.some(sub => (sub.name || '').toLowerCase().includes(q))
+      normalizeText(c.name).includes(q) ||
+      normalizeText(c.description).includes(q) ||
+      c.subcategories.some(sub => normalizeText(sub.name).includes(q))
     );
   }, [mainCategories, searchTerm]);
 

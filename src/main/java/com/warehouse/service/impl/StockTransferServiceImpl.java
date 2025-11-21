@@ -10,6 +10,7 @@ import com.warehouse.entity.Warehouse;
 import com.warehouse.enums.AuditAction;
 import com.warehouse.enums.TransferStatus;
 import com.warehouse.enums.TransferType;
+import com.warehouse.enums.TransferApprovalStatus;
 import com.warehouse.exception.ErrorCode;
 import com.warehouse.exception.WarehouseManagementException;
 import com.warehouse.repository.StockTransferRepository;
@@ -269,6 +270,13 @@ public class StockTransferServiceImpl implements StockTransferService {
             throw new WarehouseManagementException(ErrorCode.ONLY_PENDING_CAN_BE_STARTED);
         }
 
+        boolean isAdminUser = isCurrentUserAdmin();
+        if (!isAdminUser) {
+            StockTransfer saved = submitStartApprovalRequest(transfer);
+            logger.info("Transfer {} awaiting approval before start", saved.getId());
+            return stockTransferRepository.findByIdWithRelations(saved.getId()).orElse(saved);
+        }
+
         List<StockTransferItem> items = getTransferItemsOrFallback(transfer);
         Map<Long, Stock> sourceStocks = loadSourceStocks(transfer.getSourceWarehouse(), items);
         for (StockTransferItem item : items) {
@@ -278,9 +286,18 @@ public class StockTransferServiceImpl implements StockTransferService {
         }
 
         transfer.setStatus(TransferStatus.IN_TRANSIT);
+        if (transfer.getApprovalStatus() == TransferApprovalStatus.PENDING) {
+            transfer.setApprovalStatus(TransferApprovalStatus.APPROVED);
+            transfer.setApprovalDecisionBy(CurrentUser.usernameOrSystem());
+            transfer.setApprovalDecisionAt(LocalDateTime.now());
+        } else if (transfer.getApprovalStatus() == TransferApprovalStatus.REJECTED) {
+            transfer.setApprovalStatus(TransferApprovalStatus.NONE);
+            transfer.setApprovalDecisionBy(null);
+            transfer.setApprovalDecisionAt(null);
+            transfer.setApprovalNote(null);
+        }
         StockTransfer saved = stockTransferRepository.save(transfer);
         String username = CurrentUser.usernameOrSystem();
-        boolean isAdminUser = isCurrentUserAdmin();
         auditService.log(AuditAction.TRANSFER_START, DomainEntityType.StockTransfer.name(), saved.getId(), username,
                 String.format("Transfer yola çıkarıldı: %s | Ürünler=%s (Stok rezerve edildi)",
                         describeRoute(saved), describeItems(saved)));
@@ -447,6 +464,74 @@ public class StockTransferServiceImpl implements StockTransferService {
                 String.format("Kullanıcı %s, #%d numaralı transferi sildi.", username, transferId),
                 DomainEntityType.Stock.name(), transferId);
         logger.info("Transfer deleted successfully with id: {}", transferId);
+    }
+
+    @Override
+    public List<StockTransfer> getTransferApprovals(TransferApprovalStatus status) {
+        TransferApprovalStatus effectiveStatus = status != null ? status : TransferApprovalStatus.PENDING;
+        if (effectiveStatus == TransferApprovalStatus.NONE) {
+            return List.of();
+        }
+        return stockTransferRepository.findByApprovalStatusOrderByTransferDateDesc(effectiveStatus);
+    }
+
+    @Override
+    public long countTransferApprovals(TransferApprovalStatus status) {
+        TransferApprovalStatus effectiveStatus = status != null ? status : TransferApprovalStatus.PENDING;
+        if (effectiveStatus == TransferApprovalStatus.NONE) {
+            return 0;
+        }
+        return stockTransferRepository.countByApprovalStatus(effectiveStatus);
+    }
+
+    @Override
+    public StockTransfer approveTransferStart(Long transferId, String approvalNote) {
+        StockTransfer transfer = getTransferByIdOrThrow(transferId);
+        if (transfer.getApprovalStatus() != TransferApprovalStatus.PENDING) {
+            throw new WarehouseManagementException(ErrorCode.INVALID_TRANSFER_STATUS, "Onay bekleyen transfer bulunamadı");
+        }
+        String username = CurrentUser.usernameOrSystem();
+        String trimmedNote = approvalNote != null && !approvalNote.trim().isEmpty() ? approvalNote.trim() : null;
+        transfer.setApprovalStatus(TransferApprovalStatus.APPROVED);
+        transfer.setApprovalDecisionBy(username);
+        transfer.setApprovalDecisionAt(LocalDateTime.now());
+        transfer.setApprovalNote(trimmedNote);
+        stockTransferRepository.save(transfer);
+
+        StockTransfer started = startTransfer(transferId);
+        notificationService.create(
+                NotificationMessages.TRANSFER_START_APPROVED_TITLE,
+                String.format("Yönetici %s, #%d numaralı transferi onayladı ve başlattı. Rota: %s",
+                        username, started.getId(), describeRoute(started)),
+                DomainEntityType.StockTransfer.name(),
+                started.getId()
+        );
+        return started;
+    }
+
+    @Override
+    public StockTransfer rejectTransferStart(Long transferId, String rejectionReason) {
+        StockTransfer transfer = getTransferByIdOrThrow(transferId);
+        if (transfer.getApprovalStatus() != TransferApprovalStatus.PENDING) {
+            throw new WarehouseManagementException(ErrorCode.INVALID_TRANSFER_STATUS, "Onay bekleyen transfer bulunamadı");
+        }
+        String username = CurrentUser.usernameOrSystem();
+        String trimmedReason = rejectionReason != null && !rejectionReason.trim().isEmpty() ? rejectionReason.trim() : null;
+        transfer.setApprovalStatus(TransferApprovalStatus.REJECTED);
+        transfer.setApprovalDecisionBy(username);
+        transfer.setApprovalDecisionAt(LocalDateTime.now());
+        transfer.setApprovalNote(trimmedReason);
+        StockTransfer saved = stockTransferRepository.save(transfer);
+        notificationService.create(
+                NotificationMessages.TRANSFER_START_REJECTED_TITLE,
+                String.format("Yönetici %s, #%d numaralı transferin başlatılmasını reddetti.%s",
+                        username,
+                        saved.getId(),
+                        trimmedReason != null ? " Not: " + trimmedReason : ""),
+                DomainEntityType.StockTransfer.name(),
+                saved.getId()
+        );
+        return stockTransferRepository.findByIdWithRelations(saved.getId()).orElse(saved);
     }
 
     private TransferType validateTransferCreation(StockTransfer transfer, List<StockTransferItem> items) {
@@ -717,6 +802,28 @@ public class StockTransferServiceImpl implements StockTransferService {
         List<Stock> stockList = stockRepository.findByWarehouseAndProductIds(warehouse, productIds);
         return stockList.stream()
                 .collect(Collectors.toMap(stock -> stock.getProduct().getId(), Function.identity()));
+    }
+
+    private StockTransfer submitStartApprovalRequest(StockTransfer transfer) {
+        if (transfer.getApprovalStatus() == TransferApprovalStatus.PENDING) {
+            throw new WarehouseManagementException(ErrorCode.INVALID_TRANSFER_STATUS, "Transfer already awaiting approval");
+        }
+        String username = CurrentUser.usernameOrSystem();
+        transfer.setApprovalStatus(TransferApprovalStatus.PENDING);
+        transfer.setApprovalRequestedBy(username);
+        transfer.setApprovalRequestedAt(LocalDateTime.now());
+        transfer.setApprovalDecisionBy(null);
+        transfer.setApprovalDecisionAt(null);
+        transfer.setApprovalNote(null);
+        StockTransfer saved = stockTransferRepository.save(transfer);
+        notificationService.create(
+                NotificationMessages.TRANSFER_START_APPROVAL_REQUEST_TITLE,
+                String.format("Kullanıcı %s, #%d numaralı transferi başlatmak için onay istedi.", username, saved.getId()),
+                DomainEntityType.StockTransfer.name(),
+                saved.getId()
+        );
+        notifyAdminIfNonAdmin(saved, "için transfer başlatma onayı oluşturdu");
+        return saved;
     }
 
     private Product findProductOrThrow(Long productId) {

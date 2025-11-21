@@ -291,6 +291,9 @@ const Stock = () => {
   const [showMyRequestsModal, setShowMyRequestsModal] = useState(false);
   const [lockCustomerTransfer, setLockCustomerTransfer] = useState(false);
   const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
+  const [selectedStocks, setSelectedStocks] = useState([]);
+  const [successToast, setSuccessToast] = useState({ show: false, message: '' });
+  const toastTimeoutRef = useRef(null);
 
   const fetchStocks = useCallback(async (pageOverride = 0, pageSizeOverride) => {
     const size = pageSizeOverride ?? stockPageSize;
@@ -329,14 +332,17 @@ const Stock = () => {
   const fetchTransfers = useCallback(async (page = 0, append = false, pageSizeOverride) => {
     const size = pageSizeOverride ?? transferPageSize;
     try {
+      const normalizedProductName = transferProductName ? transferProductName.toLocaleLowerCase('tr-TR') : undefined;
+      const normalizedSku = transferSku ? transferSku.toLocaleLowerCase('tr-TR') : undefined;
+      const normalizedDriver = transferDriver ? transferDriver.toLocaleLowerCase('tr-TR') : undefined;
       const params = {
         page,
         size,
         status: transferStatusFilter !== 'ALL' ? transferStatusFilter : undefined,
         transferType: transferTypeFilter !== 'ALL' ? transferTypeFilter : undefined,
-        productName: transferProductName || undefined,
-        sku: transferSku || undefined,
-        driverName: transferDriver || undefined,
+        productName: normalizedProductName,
+        sku: normalizedSku,
+        driverName: normalizedDriver,
         sourceWarehouseId: transferSourceWarehouseId || undefined,
         destinationWarehouseId: transferDestinationWarehouseId || undefined
       };
@@ -376,7 +382,10 @@ const Stock = () => {
       
       // Fetch pending requests count for admins
       if (role === 'ADMIN') {
-        calls.push(axios.get('/api/stock-requests/pending/count'));
+        calls.push(
+          axios.get('/api/stock-requests/pending/count'),
+          axios.get('/api/stock-transfers/approvals/count')
+        );
       }
 
       const results = await Promise.all(calls);
@@ -385,8 +394,13 @@ const Stock = () => {
       setProducts(results[index++].data);
       setWarehouses(results[index++].data);
       
-      if (role === 'ADMIN' && results[index]) {
-        setPendingRequestsCount(results[index].data.count || 0);
+      if (role === 'ADMIN') {
+        const stockPendingResult = results[index] || null;
+        const transferPendingResult = results[index + 1] || null;
+        index += 2;
+        const stockPending = stockPendingResult?.data?.count || 0;
+        const transferPending = transferPendingResult?.data?.count || 0;
+        setPendingRequestsCount(stockPending + transferPending);
       }
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -568,10 +582,57 @@ const Stock = () => {
     }
   }, [stocks, pendingStockId]);
 
+  useEffect(() => {
+    if (!selectedStocks.length) return;
+    setSelectedStocks(prev => prev.filter(id => stocks.some(stock => stock.id === id)));
+  }, [stocks, selectedStocks.length]);
+
   const getEffectiveMin = useCallback((stock) => {
     const val = Number(stock?.minStockLevel);
     if (!Number.isFinite(val) || val <= 0) return 10;
     return val;
+  }, []);
+
+  const allVisibleStockIds = useMemo(() => stocks.map(stock => stock.id), [stocks]);
+  const areAllVisibleSelected = stocks.length > 0 && allVisibleStockIds.every(id => selectedStocks.includes(id));
+  const selectedStockCount = selectedStocks.length;
+
+  const toggleSelectAllVisible = () => {
+    if (!stocks.length) return;
+    setSelectedStocks(prev => {
+      if (areAllVisibleSelected) {
+        return prev.filter(id => !allVisibleStockIds.includes(id));
+      }
+      const merged = new Set(prev);
+      allVisibleStockIds.forEach(id => merged.add(id));
+      return Array.from(merged);
+    });
+  };
+
+  const toggleStockSelection = (id) => {
+    setSelectedStocks(prev =>
+      prev.includes(id) ? prev.filter(existingId => existingId !== id) : [...prev, id]
+    );
+  };
+
+  const clearSelectedStocks = () => setSelectedStocks([]);
+
+  const showSuccessToast = (message) => {
+    setSuccessToast({ show: true, message });
+    if (toastTimeoutRef.current) {
+      clearTimeout(toastTimeoutRef.current);
+    }
+    toastTimeoutRef.current = setTimeout(() => {
+      setSuccessToast({ show: false, message: '' });
+    }, 4000);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (toastTimeoutRef.current) {
+        clearTimeout(toastTimeoutRef.current);
+      }
+    };
   }, []);
 
 
@@ -606,7 +667,8 @@ const Stock = () => {
         setConfirmModal({ show: false });
         try {
           await axios.delete(`/api/stocks/${id}`);
-          fetchAllData();
+          await fetchAllData();
+          showSuccessToast('Stok kaydı silindi.');
         } catch (error) {
           const errorData = error?.response?.data;
           const msg = errorData?.message || errorData?.error || 'Beklenmeyen bir durum oluştu';
@@ -620,9 +682,46 @@ const Stock = () => {
     });
   };
 
-  const handleFormSuccess = () => {
-    setShowForm(false);
+  const handleBatchDeleteStocks = (ids) => {
+    if (!ids || ids.length === 0) {
+      return;
+    }
+    setConfirmModal({
+      show: true,
+      title: 'Seçili Stokları Sil',
+      message: `${ids.length} stok kaydını silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.`,
+      confirmText: 'Evet, Sil',
+      confirmVariant: 'danger',
+      icon: 'trash',
+      onConfirm: async () => {
+        setConfirmModal({ show: false });
+        try {
+          await axios.delete('/api/stocks/bulk', { data: ids });
+          setSelectedStocks(prev => prev.filter(id => !ids.includes(id)));
+          await fetchAllData();
+          showSuccessToast(`${ids.length} stok kaydı silindi.`);
+        } catch (error) {
+          const errorData = error?.response?.data;
+          const msg = errorData?.message || errorData?.error || error.message || 'Beklenmeyen bir durum oluştu';
+          setErrorModal({
+            show: true,
+            title: 'Stok Silme Hatası',
+            message: `Seçili stoklar silinirken hata oluştu: ${msg}`
+          });
+        }
+      }
+    });
+  };
+
+  const handleFormSuccess = (options = {}) => {
+    const shouldClose = options.close !== false;
+    if (shouldClose) {
+      setShowForm(false);
+    }
     fetchAllData();
+    if (options.message) {
+      showSuccessToast(options.message);
+    }
   };
 
   const handleQuickAdjustSuccess = () => {
@@ -659,9 +758,17 @@ const Stock = () => {
   const handleTransferStatusChange = async (transferId, action, payload = undefined) => {
     try {
       const body = payload && Object.keys(payload).length > 0 ? payload : undefined;
-      await axios.post(`/api/stock-transfers/${transferId}/${action}`, body);
+      const response = await axios.post(`/api/stock-transfers/${transferId}/${action}`, body);
+      const updatedTransfer = response?.data;
       fetchTransfers(0, false);
       fetchAllData();
+      if (action === 'start' && updatedTransfer?.approvalStatus === 'PENDING') {
+        setErrorModal({
+          show: true,
+          title: 'Onay Talebi Oluşturuldu',
+          message: 'Transferi başlatmak için yönetici onayı bekleniyor.'
+        });
+      }
     } catch (error) {
       const errorData = error?.response?.data;
       let errorMessage = 'Beklenmeyen bir durum oluştu';
@@ -945,6 +1052,24 @@ const Stock = () => {
         />
       )}
 
+      {successToast.show && (
+        <div className="toast-container position-fixed top-0 end-0 p-3" style={{ zIndex: 2000 }}>
+          <div className="toast show text-bg-success border-0 shadow" role="alert">
+            <div className="d-flex align-items-center">
+              <div className="toast-body">
+                <i className="fas fa-check-circle me-2"></i>
+                {successToast.message}
+              </div>
+              <button
+                type="button"
+                className="btn-close btn-close-white me-2 m-auto"
+                onClick={() => setSuccessToast({ show: false, message: '' })}
+              ></button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Filter Tabs */}
       {!showTransferHistory && (
       <div className="mb-4">
@@ -1081,10 +1206,47 @@ const Stock = () => {
               </select>
             </label>
           </div>
+          {selectedStockCount > 0 && (
+            <div className="alert alert-warning d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+              <div className="fw-semibold">
+                <i className="fas fa-check-square me-2"></i>
+                {selectedStockCount} stok seçildi
+              </div>
+              <div className="d-flex gap-2 flex-wrap">
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-secondary"
+                  onClick={clearSelectedStocks}
+                >
+                  Seçimi Temizle
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-danger"
+                  onClick={() => handleBatchDeleteStocks([...selectedStocks])}
+                >
+                  <i className="fas fa-trash me-1"></i>
+                  Seçilileri Sil
+                </button>
+              </div>
+            </div>
+          )}
           <div className="table-responsive">
             <table className="table table-striped table-hover">
               <thead>
                 <tr>
+                  <th className="text-center" style={{ width: '40px' }}>
+                    <div className="form-check mb-0">
+                      <input
+                        className="form-check-input"
+                        type="checkbox"
+                        checked={areAllVisibleSelected}
+                        onChange={toggleSelectAllVisible}
+                        disabled={stocks.length === 0}
+                        aria-label="Tümünü seç"
+                      />
+                    </div>
+                  </th>
                   <th>Depo</th>
                   <th>Ürün</th>
                   <th>Stok Kodu</th>
@@ -1124,9 +1286,21 @@ const Stock = () => {
                   const warehouse = getWarehouseById(stock.warehouse.id);
                   const stockStatus = getStockStatus(stock);
                   const categoryPath = product?.category ? `${product.category.parentName ? product.category.parentName + ' > ' : ''}${product.category.name}` : null;
+                  const isSelected = selectedStocks.includes(stock.id);
 
                   return (
-                    <tr key={stock.id}>
+                    <tr key={stock.id} className={isSelected ? 'table-active' : ''}>
+                      <td className="text-center align-middle">
+                        <div className="form-check mb-0">
+                          <input
+                            className="form-check-input"
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleStockSelection(stock.id)}
+                            aria-label="Stok seç"
+                          />
+                        </div>
+                      </td>
                       <td>{warehouse?.name}</td>
                       <td>
                         <div className="fw-semibold">{product?.name}</div>
@@ -1134,6 +1308,15 @@ const Stock = () => {
                           <small className="text-muted d-block">
                             <i className="fas fa-tag me-1"></i>
                             {categoryPath}
+                          </small>
+                        )}
+                        {stock.additionNote && (
+                          <small
+                            className="text-muted fst-italic d-block mt-1 text-truncate"
+                            title={stock.additionNote}
+                          >
+                            <i className="fas fa-sticky-note me-1"></i>
+                            {stock.additionNote}
                           </small>
                         )}
                       </td>
@@ -1644,6 +1827,7 @@ const Stock = () => {
                 <table className="table table-hover mb-0 align-middle" style={{minWidth: '1200px'}}>
                   {/* Desktop için fixed layout */}
                   <colgroup className="d-none d-xl-table-column-group">
+                    <col style={{width: '50px'}} />
                     <col style={{width: '70px'}} />      {/* No */}
                     <col style={{width: '130px'}} />     {/* Tarih */}
                     <col style={{width: '180px'}} />     {/* Ürün */}
@@ -1712,6 +1896,8 @@ const Stock = () => {
                       const status = statusConfig[transfer.status] || statusConfig.PENDING;
                       const transferItemsPreview = getTransferItemsList(transfer);
                       const totalQuantity = getTransferTotalQuantity(transfer);
+                      const awaitingApproval = (transfer.approvalStatus || '').toUpperCase() === 'PENDING';
+                      const approvalRejected = (transfer.approvalStatus || '').toUpperCase() === 'REJECTED';
 
                       return (
                         <tr key={transfer.id}>
@@ -1865,64 +2051,102 @@ const Stock = () => {
                                 {formatDateInTurkeyTimezone(transfer.cancelledDate, {day: '2-digit', month: '2-digit'})}
                               </small>
                             )}
+                            {awaitingApproval && (
+                              <small className="d-block text-warning mt-1">
+                                <i className="fas fa-hourglass-half me-1"></i>
+                                Onay Bekleniyor
+                              </small>
+                            )}
+                            {approvalRejected && (
+                              <small
+                                className="d-block text-danger mt-1 text-truncate"
+                                title={transfer.approvalNote || 'Onay reddedildi'}
+                              >
+                                <i className="fas fa-times-circle me-1"></i>
+                                Onay Reddedildi
+                              </small>
+                            )}
+                            {(transfer.approvalStatus || '').toUpperCase() === 'APPROVED' && transfer.approvalDecisionBy && (
+                              <small className="d-block text-muted mt-1">
+                                Onaylayan: {transfer.approvalDecisionBy}
+                              </small>
+                            )}
                           </td>
                           <td className="text-center align-middle" style={{padding: '6px'}}>
                             <div className="d-flex flex-column gap-1">
                               {transfer.status === 'PENDING' && (
-                                <>
-                                  <button
-                                    className="btn btn-sm btn-info w-100 py-1 px-2"
-                                    style={{fontSize: 'clamp(0.7rem, 2vw, 0.8rem)', whiteSpace: 'nowrap'}}
-                                    onClick={() => {
-                                      setConfirmModal({
-                                        show: true,
-                                        title: 'Transferi Yola Çıkart',
-                                        message: 'Transfer yola çıkartılacak ve stok rezerve edilecek. Onaylıyor musunuz?',
-                                        confirmText: 'Evet, Yola Çıkar',
-                                        confirmVariant: 'info',
-                                        icon: 'truck',
-                                        onConfirm: () => {
-                                          setConfirmModal({ show: false });
-                                          handleTransferStatusChange(transfer.id, 'start');
-                                        }
-                                      });
-                                    }}
-                                    title="Transfer yola çıkartılacak"
-                                  >
-                                    <i className="fas fa-truck me-1"></i>
-                                    <span className="d-none d-sm-inline">Yola Çıkar</span>
-                                    <span className="d-inline d-sm-none">Yola</span>
-                                  </button>
-                                  <button
-                                    className="btn btn-sm btn-success w-100 py-1 px-2"
-                                    style={{fontSize: 'clamp(0.7rem, 2vw, 0.8rem)', whiteSpace: 'nowrap'}}
-                                    onClick={() =>
-                                      openCompletionFlow(
-                                        transfer,
-                                        'Transfer direkt tamamlanacak ve stok kaynak depodan düşülecek. Onaylıyor musunuz?'
-                                      )
-                                    }
-                                    title="Transfer direkt tamamlanacak"
-                                  >
-                                    <i className="fas fa-check me-1"></i>
-                                    Tamamla
-                                  </button>
-                                  <button
-                                    className="btn btn-sm btn-danger w-100 py-1 px-2"
-                                    style={{fontSize: 'clamp(0.7rem, 2vw, 0.8rem)', whiteSpace: 'nowrap'}}
-                                    onClick={() => {
-                                      setCancellationModal({
-                                        show: true,
-                                        transferId: transfer.id,
-                                        reason: ''
-                                      });
-                                    }}
-                                    title="Transferi iptal et"
-                                  >
-                                    <i className="fas fa-ban me-1"></i>
-                                    İptal
-                                  </button>
-                                </>
+                                awaitingApproval ? (
+                                  <div className="d-flex flex-column gap-2">
+                                    <span className="badge bg-warning text-dark">
+                                      <i className="fas fa-hourglass-half me-1"></i>
+                                      Onay Bekleniyor
+                                    </span>
+                                    {isAdmin && (
+                                      <button
+                                        className="btn btn-sm btn-outline-primary"
+                                        onClick={() => setShowApprovalModal(true)}
+                                      >
+                                        <i className="fas fa-tasks me-1"></i>
+                                        Onayları Aç
+                                      </button>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <>
+                                    <button
+                                      className="btn btn-sm btn-info w-100 py-1 px-2"
+                                      style={{fontSize: 'clamp(0.7rem, 2vw, 0.8rem)', whiteSpace: 'nowrap'}}
+                                      onClick={() => {
+                                        setConfirmModal({
+                                          show: true,
+                                          title: 'Transferi Yola Çıkart',
+                                          message: 'Transfer yola çıkartılacak ve stok rezerve edilecek. Onaylıyor musunuz?',
+                                          confirmText: 'Evet, Yola Çıkar',
+                                          confirmVariant: 'info',
+                                          icon: 'truck',
+                                          onConfirm: () => {
+                                            setConfirmModal({ show: false });
+                                            handleTransferStatusChange(transfer.id, 'start');
+                                          }
+                                        });
+                                      }}
+                                      title="Transfer yola çıkartılacak"
+                                    >
+                                      <i className="fas fa-truck me-1"></i>
+                                      <span className="d-none d-sm-inline">Yola Çıkar</span>
+                                      <span className="d-inline d-sm-none">Yola</span>
+                                    </button>
+                                    <button
+                                      className="btn btn-sm btn-success w-100 py-1 px-2"
+                                      style={{fontSize: 'clamp(0.7rem, 2vw, 0.8rem)', whiteSpace: 'nowrap'}}
+                                      onClick={() =>
+                                        openCompletionFlow(
+                                          transfer,
+                                          'Transfer direkt tamamlanacak ve stok kaynak depodan düşülecek. Onaylıyor musunuz?'
+                                        )
+                                      }
+                                      title="Transfer direkt tamamlanacak"
+                                    >
+                                      <i className="fas fa-check me-1"></i>
+                                      Tamamla
+                                    </button>
+                                    <button
+                                      className="btn btn-sm btn-danger w-100 py-1 px-2"
+                                      style={{fontSize: 'clamp(0.7rem, 2vw, 0.8rem)', whiteSpace: 'nowrap'}}
+                                      onClick={() => {
+                                        setCancellationModal({
+                                          show: true,
+                                          transferId: transfer.id,
+                                          reason: ''
+                                        });
+                                      }}
+                                      title="Transferi iptal et"
+                                    >
+                                      <i className="fas fa-ban me-1"></i>
+                                      İptal
+                                    </button>
+                                  </>
+                                )
                               )}
                               {transfer.status === 'IN_TRANSIT' && (
                                 <>
@@ -2000,6 +2224,22 @@ const Stock = () => {
                                 >
                                   <i className="fas fa-sticky-note me-1"></i>
                                   Notlar
+                                </button>
+                              )}
+                              {approvalRejected && transfer.approvalNote && (
+                                <button
+                                  className="btn btn-sm btn-outline-danger w-100 py-1 px-2"
+                                  style={{fontSize: 'clamp(0.7rem, 2vw, 0.8rem)', whiteSpace: 'nowrap'}}
+                                  onClick={() => setNotesModal({
+                                    show: true,
+                                    notes: transfer.approvalNote,
+                                    transferId: transfer.id,
+                                    title: 'Onay Red Notu'
+                                  })}
+                                  title="Onay reddetme notunu görüntüle"
+                                >
+                                  <i className="fas fa-exclamation-circle me-1"></i>
+                                  Onay Notu
                                 </button>
                               )}
                               {transfer.completionNote && (

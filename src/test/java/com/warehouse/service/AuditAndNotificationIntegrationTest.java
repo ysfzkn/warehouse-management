@@ -5,9 +5,13 @@ import com.warehouse.enums.TransferStatus;
 import com.warehouse.enums.TransferType;
 import com.warehouse.repository.*;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,6 +40,7 @@ class AuditAndNotificationIntegrationTest {
 
     @BeforeEach
     void init() {
+        authenticateAsAdmin();
         notificationRepository.deleteAll();
         auditLogRepository.deleteAll();
         stockRepository.deleteAll();
@@ -61,6 +66,21 @@ class AuditAndNotificationIntegrationTest {
         wh2.setName("WH-2");
         wh2.setLocation("Ankara");
         warehouseRepository.save(wh2);
+    }
+
+    @AfterEach
+    void clearContext() {
+        SecurityContextHolder.clearContext();
+    }
+
+    private void authenticateAsAdmin() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(
+                        "admin",
+                        "password",
+                        List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))
+                )
+        );
     }
 
     @Test

@@ -5,6 +5,7 @@ import com.warehouse.entity.StockTransfer;
 import com.warehouse.entity.Warehouse;
 import com.warehouse.enums.TransferStatus;
 import com.warehouse.enums.TransferType;
+import com.warehouse.enums.TransferApprovalStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -58,6 +59,11 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, Lo
            "LEFT JOIN FETCH items.product " +
            "WHERE st.status = :status")
     List<StockTransfer> findByStatus(@Param("status") TransferStatus status);
+
+    @EntityGraph(value = StockTransfer.GRAPH_WITH_RELATIONS, type = EntityGraph.EntityGraphType.LOAD)
+    List<StockTransfer> findByApprovalStatusOrderByTransferDateDesc(TransferApprovalStatus status);
+
+    long countByApprovalStatus(TransferApprovalStatus status);
 
     @Query("SELECT DISTINCT st FROM StockTransfer st " +
            "LEFT JOIN FETCH st.sourceWarehouse " +

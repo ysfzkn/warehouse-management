@@ -9,6 +9,7 @@ public class StockDto {
     public Integer minStockLevel;
     public Integer availableQuantity;
     public java.time.LocalDateTime lastUpdated;
+    public String additionNote;
     public ProductDto product;
     public WarehouseDto warehouse;
 

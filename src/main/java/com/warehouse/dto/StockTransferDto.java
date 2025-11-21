@@ -2,6 +2,7 @@ package com.warehouse.dto;
 
 import com.warehouse.enums.TransferStatus;
 import com.warehouse.enums.TransferType;
+import com.warehouse.enums.TransferApprovalStatus;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
@@ -39,6 +40,12 @@ public class StockTransferDto {
     private Integer totalQuantity;
     private Integer uniqueProductCount;
     private List<TransferItemDto> items;
+    private TransferApprovalStatus approvalStatus;
+    private String approvalRequestedBy;
+    private LocalDateTime approvalRequestedAt;
+    private String approvalDecisionBy;
+    private LocalDateTime approvalDecisionAt;
+    private String approvalNote;
 
     @Data
     @NoArgsConstructor

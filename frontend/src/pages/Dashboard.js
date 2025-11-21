@@ -29,6 +29,8 @@ ChartJS.register(
   PointElement
 );
 
+const normalizeText = (text) => (text || '').toLocaleLowerCase('tr-TR');
+
 const Dashboard = () => {
   const navigate = useNavigate();
   const [stats, setStats] = useState({
@@ -179,13 +181,13 @@ const Dashboard = () => {
   }, [fetchDashboardData]);
 
   const filterStockList = useCallback((list) => {
-    const q = (searchTerm || '').toLowerCase();
+    const q = normalizeText(searchTerm);
     return (list || []).filter(s => {
       const matchesSearch = !q ||
-        (s.product?.name || '').toLowerCase().includes(q) ||
-        (s.product?.sku || '').toLowerCase().includes(q) ||
-        (s.warehouse?.name || '').toLowerCase().includes(q) ||
-        (s.warehouse?.location || '').toLowerCase().includes(q);
+        normalizeText(s.product?.name).includes(q) ||
+        normalizeText(s.product?.sku).includes(q) ||
+        normalizeText(s.warehouse?.name).includes(q) ||
+        normalizeText(s.warehouse?.location).includes(q);
       const matchesBrand = !brandId || (s.product?.brand?.id === brandId);
       const matchesColor = !colorId || (s.product?.color?.id === colorId);
       const matchesWarehouse = !selectedWarehouseId || (s.warehouse?.id === selectedWarehouseId);

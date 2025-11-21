@@ -15,6 +15,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.warehouse.enums.TransferStatus;
 import com.warehouse.enums.TransferType;
+import com.warehouse.enums.TransferApprovalStatus;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -98,6 +99,26 @@ public class StockTransfer {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private TransferStatus status = TransferStatus.PENDING;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "approval_status", length = 20, nullable = false)
+    private TransferApprovalStatus approvalStatus = TransferApprovalStatus.NONE;
+
+    @Column(name = "approval_requested_by", length = 100)
+    private String approvalRequestedBy;
+
+    @Column(name = "approval_requested_at")
+    private LocalDateTime approvalRequestedAt;
+
+    @Column(name = "approval_decision_by", length = 100)
+    private String approvalDecisionBy;
+
+    @Column(name = "approval_decision_at")
+    private LocalDateTime approvalDecisionAt;
+
+    @Size(max = 500, message = "Approval note cannot exceed 500 characters")
+    @Column(name = "approval_note", length = 500)
+    private String approvalNote;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "transfer_type", nullable = false, length = 40)

@@ -4,6 +4,8 @@ import ProductForm from '../components/ProductForm';
 import SearchableSelect from '../components/SearchableSelect';
 import ConfirmModal from '../components/ConfirmModal';
 
+const normalizeText = (text) => (text || '').toLocaleLowerCase('tr-TR');
+
 const Products = () => {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -44,9 +46,11 @@ const Products = () => {
   }, [selectedCategory]);
 
   useEffect(() => {
+    const normalizedSearch = normalizeText(searchTerm);
     const filteredProducts = products.filter(product => {
-      const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           product.sku.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSearch = !normalizedSearch ||
+        normalizeText(product.name).includes(normalizedSearch) ||
+        normalizeText(product.sku).includes(normalizedSearch);
       const categoryIdStr = product.category?.id != null ? product.category.id.toString() : '';
       const parentIdStr = product.category?.parent?.id != null ? product.category.parent.id.toString() : '';
       const matchesCategory = !selectedCategory || categoryIdStr === selectedCategory || parentIdStr === selectedCategory;

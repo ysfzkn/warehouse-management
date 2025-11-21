@@ -38,6 +38,12 @@ public class StockTransferMapper {
         dto.setCreatedBy(entity.getCreatedBy());
         dto.setCreatedAt(entity.getCreatedAt());
         dto.setUpdatedAt(entity.getUpdatedAt());
+        dto.setApprovalStatus(entity.getApprovalStatus());
+        dto.setApprovalRequestedBy(entity.getApprovalRequestedBy());
+        dto.setApprovalRequestedAt(entity.getApprovalRequestedAt());
+        dto.setApprovalDecisionBy(entity.getApprovalDecisionBy());
+        dto.setApprovalDecisionAt(entity.getApprovalDecisionAt());
+        dto.setApprovalNote(entity.getApprovalNote());
 
         if (entity.getSourceWarehouse() != null) {
             StockTransferDto.SimpleWarehouseDto sourceDto = new StockTransferDto.SimpleWarehouseDto();

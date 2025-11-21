@@ -46,6 +46,8 @@ public interface StockService {
 
     Stock createStock(Stock stock);
 
+    List<Stock> createStocks(List<Stock> stocks);
+
     Stock updateStock(Long id, Stock stockDetails);
 
     Stock addToStock(Long stockId, Integer quantity);
@@ -53,6 +55,8 @@ public interface StockService {
     Stock removeFromStock(Long stockId, Integer quantity);
 
     void deleteStock(Long id);
+
+    void deleteStocks(List<Long> ids);
 
     Stock reserveStock(Long stockId, Integer quantity);
 

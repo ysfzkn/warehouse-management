@@ -22,6 +22,9 @@ public final class NotificationMessages {
     public static final String TRANSFER_UPDATED_TITLE = "Transfer güncellendi";
     public static final String TRANSFER_DELETED_TITLE = "Transfer silindi";
     public static final String TRANSFER_ADMIN_ALERT_TITLE = "Personel Transfer İşlemi";
+    public static final String TRANSFER_START_APPROVAL_REQUEST_TITLE = "Transfer Başlatma Onayı";
+    public static final String TRANSFER_START_APPROVED_TITLE = "Transfer Başlatma Onayı Alındı";
+    public static final String TRANSFER_START_REJECTED_TITLE = "Transfer Başlatma Onayı Reddedildi";
 
     // Stock request notifications
     public static final String STOCK_REQUEST_CREATED_TITLE = "Yeni Stok Talebi";

@@ -3,6 +3,7 @@ package com.warehouse.entity;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
@@ -78,6 +79,10 @@ public class Stock {
     @Min(value = 0, message = "Consigned quantity cannot be negative")
     @Column(name = "consigned_quantity")
     private Integer consignedQuantity = 0; // Emanet miktar
+
+    @Size(max = 500, message = "Addition note cannot exceed 500 characters")
+    @Column(name = "addition_note", length = 500)
+    private String additionNote;
 
     @Column(name = "last_updated", nullable = false)
     private LocalDateTime lastUpdated;

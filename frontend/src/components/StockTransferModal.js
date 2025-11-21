@@ -584,11 +584,11 @@ useEffect(() => {
   const totalTransferQuantity = transferItems.reduce((sum, item) => sum + (item.quantity || 0), 0);
   const filteredWarehouseStocks = useMemo(() => {
     if (!stockSearchTerm.trim()) return warehouseStocks;
-    const q = stockSearchTerm.trim().toLowerCase();
+    const q = stockSearchTerm.trim().toLocaleLowerCase('tr-TR');
     return warehouseStocks.filter(stockItem => {
-      const name = stockItem.product?.name?.toLowerCase() || '';
-      const sku = stockItem.product?.sku?.toLowerCase() || '';
-      const barcode = stockItem.product?.barcode?.toLowerCase() || '';
+      const name = stockItem.product?.name ? stockItem.product.name.toLocaleLowerCase('tr-TR') : '';
+      const sku = stockItem.product?.sku ? stockItem.product.sku.toLocaleLowerCase('tr-TR') : '';
+      const barcode = stockItem.product?.barcode ? stockItem.product.barcode.toLocaleLowerCase('tr-TR') : '';
       return name.includes(q) || sku.includes(q) || barcode.includes(q);
     });
   }, [warehouseStocks, stockSearchTerm]);
