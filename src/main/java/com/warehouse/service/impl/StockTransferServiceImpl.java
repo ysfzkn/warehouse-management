@@ -242,17 +242,37 @@ public class StockTransferServiceImpl implements StockTransferService {
         transfer.setStatus(TransferStatus.PENDING);
         boolean isAdminUser = isCurrentUserAdmin();
 
+        // For non-admin users, create an approval request
+        if (!isAdminUser) {
+            transfer.setApprovalStatus(TransferApprovalStatus.PENDING);
+            transfer.setApprovalRequestedBy(username);
+            transfer.setApprovalRequestedAt(LocalDateTime.now());
+        } else {
+            transfer.setApprovalStatus(TransferApprovalStatus.NONE);
+        }
+
         StockTransfer saved = stockTransferRepository.save(transfer);
         auditService.log(AuditAction.TRANSFER_CREATE, DomainEntityType.StockTransfer.name(), saved.getId(), username,
                 String.format("Transfer oluşturuldu: %s | Ürünler=%s",
                         describeRoute(saved), describeItems(saved)));
+        
         if (isAdminUser) {
             notificationService.create(NotificationMessages.TRANSFER_CREATED_TITLE,
                     String.format("Kullanıcı %s, %s yönünde %s transferi oluşturdu. Ürünler: %s", username,
                             describeRoute(saved), transferType == TransferType.CUSTOMER_DELIVERY ? "müşteri sevkiyatı" : "depo", describeItems(saved)),
-                    DomainEntityType.Stock.name(), saved.getId());
+                    DomainEntityType.StockTransfer.name(), saved.getId());
+        } else {
+            // Notify admins about the transfer approval request
+            notificationService.create(
+                    NotificationMessages.TRANSFER_APPROVAL_REQUESTED_TITLE,
+                    String.format("Kullanıcı %s, %s yönünde %s transferi için onay talep etti. Ürünler: %s",
+                            username, describeRoute(saved),
+                            transferType == TransferType.CUSTOMER_DELIVERY ? "müşteri sevkiyatı" : "depo",
+                            describeItems(saved)),
+                    DomainEntityType.StockTransfer.name(),
+                    saved.getId()
+            );
         }
-        notifyAdminIfNonAdmin(saved, "oluşturdu");
         logger.info("Transfer created successfully with id: {}", saved.getId());
         
         // Fetch with relations again to avoid LazyInitializationException in mapper
@@ -271,7 +291,21 @@ public class StockTransferServiceImpl implements StockTransferService {
         }
 
         boolean isAdminUser = isCurrentUserAdmin();
-        if (!isAdminUser) {
+        
+        // If transfer was created by non-admin and needs approval, check if it's already approved
+        if (transfer.getApprovalStatus() == TransferApprovalStatus.PENDING) {
+            if (!isAdminUser) {
+                // Non-admin trying to start a pending approval transfer - should not happen, but handle gracefully
+                StockTransfer saved = submitStartApprovalRequest(transfer);
+                logger.info("Transfer {} awaiting approval before start", saved.getId());
+                return stockTransferRepository.findByIdWithRelations(saved.getId()).orElse(saved);
+            }
+            // Admin is approving and starting the transfer
+            transfer.setApprovalStatus(TransferApprovalStatus.APPROVED);
+            transfer.setApprovalDecisionBy(CurrentUser.usernameOrSystem());
+            transfer.setApprovalDecisionAt(LocalDateTime.now());
+        } else if (!isAdminUser && transfer.getApprovalStatus() == TransferApprovalStatus.NONE) {
+            // Non-admin trying to start a transfer that was created without approval (shouldn't happen for new flow)
             StockTransfer saved = submitStartApprovalRequest(transfer);
             logger.info("Transfer {} awaiting approval before start", saved.getId());
             return stockTransferRepository.findByIdWithRelations(saved.getId()).orElse(saved);
@@ -286,16 +320,6 @@ public class StockTransferServiceImpl implements StockTransferService {
         }
 
         transfer.setStatus(TransferStatus.IN_TRANSIT);
-        if (transfer.getApprovalStatus() == TransferApprovalStatus.PENDING) {
-            transfer.setApprovalStatus(TransferApprovalStatus.APPROVED);
-            transfer.setApprovalDecisionBy(CurrentUser.usernameOrSystem());
-            transfer.setApprovalDecisionAt(LocalDateTime.now());
-        } else if (transfer.getApprovalStatus() == TransferApprovalStatus.REJECTED) {
-            transfer.setApprovalStatus(TransferApprovalStatus.NONE);
-            transfer.setApprovalDecisionBy(null);
-            transfer.setApprovalDecisionAt(null);
-            transfer.setApprovalNote(null);
-        }
         StockTransfer saved = stockTransferRepository.save(transfer);
         String username = CurrentUser.usernameOrSystem();
         auditService.log(AuditAction.TRANSFER_START, DomainEntityType.StockTransfer.name(), saved.getId(), username,
@@ -467,6 +491,54 @@ public class StockTransferServiceImpl implements StockTransferService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public List<StockTransfer> getTransferRequestsForCurrentUser() {
+        String username = CurrentUser.usernameOrSystem();
+        logger.debug("Fetching transfer requests for user: {}", username);
+        List<StockTransfer> allUserTransfers = stockTransferRepository.findAllByCreatedByOrderByTransferDateDesc(username);
+        // Filter transfers that have approval status (PENDING, APPROVED, REJECTED)
+        return allUserTransfers.stream()
+                .filter(t -> t.getApprovalStatus() != null && t.getApprovalStatus() != TransferApprovalStatus.NONE)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public void deleteTransfers(List<Long> transferIds) {
+        if (transferIds == null || transferIds.isEmpty()) {
+            logger.warn("Attempted to delete transfers with empty list");
+            return;
+        }
+        logger.info("Deleting {} transfers", transferIds.size());
+        String username = CurrentUser.usernameOrSystem();
+        
+        for (Long transferId : transferIds) {
+            try {
+                StockTransfer transfer = getTransferByIdOrThrow(transferId);
+                
+                if (transfer.getStatus() == TransferStatus.IN_TRANSIT) {
+                    logger.warn("Cannot delete transfer in transit. Transfer id: {}", transferId);
+                    continue;
+                }
+                if (transfer.getStatus() == TransferStatus.COMPLETED) {
+                    logger.warn("Cannot delete completed transfer. Transfer id: {}", transferId);
+                    continue;
+                }
+                
+                stockTransferRepository.delete(transfer);
+                auditService.log(AuditAction.TRANSFER_DELETE, DomainEntityType.StockTransfer.name(), transferId, username,
+                        "Transfer silindi");
+            } catch (Exception e) {
+                logger.error("Error deleting transfer {}: {}", transferId, e.getMessage());
+            }
+        }
+        
+        notificationService.create(NotificationMessages.TRANSFER_DELETED_TITLE,
+                String.format("Kullanıcı %s, %d adet transferi sildi.", username, transferIds.size()),
+                DomainEntityType.Stock.name(), null);
+        logger.info("Batch delete completed for {} transfers", transferIds.size());
+    }
+
+    @Override
     public List<StockTransfer> getTransferApprovals(TransferApprovalStatus status) {
         TransferApprovalStatus effectiveStatus = status != null ? status : TransferApprovalStatus.PENDING;
         if (effectiveStatus == TransferApprovalStatus.NONE) {
@@ -498,14 +570,23 @@ public class StockTransferServiceImpl implements StockTransferService {
         transfer.setApprovalNote(trimmedNote);
         stockTransferRepository.save(transfer);
 
+        // Start the transfer (admin approval bypasses the approval check in startTransfer)
         StockTransfer started = startTransfer(transferId);
+        
+        // Notify admins
         notificationService.create(
-                NotificationMessages.TRANSFER_START_APPROVED_TITLE,
+                NotificationMessages.TRANSFER_APPROVAL_APPROVED_TITLE,
                 String.format("Yönetici %s, #%d numaralı transferi onayladı ve başlattı. Rota: %s",
                         username, started.getId(), describeRoute(started)),
                 DomainEntityType.StockTransfer.name(),
                 started.getId()
         );
+        
+        // Notify the user who created the transfer (notification will be visible to all admins and the user can see it in their requests)
+        auditService.log(AuditAction.TRANSFER_APPROVE, DomainEntityType.StockTransfer.name(), started.getId(), username,
+                String.format("Transfer onaylandı ve başlatıldı: %s | Ürünler=%s",
+                        describeRoute(started), describeItems(started)));
+        
         return started;
     }
 
@@ -522,15 +603,24 @@ public class StockTransferServiceImpl implements StockTransferService {
         transfer.setApprovalDecisionAt(LocalDateTime.now());
         transfer.setApprovalNote(trimmedReason);
         StockTransfer saved = stockTransferRepository.save(transfer);
+        
+        // Notify admins
         notificationService.create(
-                NotificationMessages.TRANSFER_START_REJECTED_TITLE,
-                String.format("Yönetici %s, #%d numaralı transferin başlatılmasını reddetti.%s",
+                NotificationMessages.TRANSFER_APPROVAL_REJECTED_TITLE,
+                String.format("Yönetici %s, #%d numaralı transferi reddetti.%s",
                         username,
                         saved.getId(),
                         trimmedReason != null ? " Not: " + trimmedReason : ""),
                 DomainEntityType.StockTransfer.name(),
                 saved.getId()
         );
+        
+        // Log rejection for audit trail
+        auditService.log(AuditAction.TRANSFER_REJECT, DomainEntityType.StockTransfer.name(), saved.getId(), username,
+                String.format("Transfer reddedildi: %s | Ürünler=%s%s",
+                        describeRoute(saved), describeItems(saved),
+                        trimmedReason != null ? " | Not: " + trimmedReason : ""));
+        
         return stockTransferRepository.findByIdWithRelations(saved.getId()).orElse(saved);
     }
 

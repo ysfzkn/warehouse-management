@@ -401,6 +401,7 @@ const Navbar = () => {
                                     const title = (n.title || '').toLowerCase();
                                     const isTransfer = n.entityType === 'StockTransfer' || title.includes('transfer');
                                     const isStockRequest = n.entityType === 'StockRequest';
+                                    const isTransferApprovalRequest = title.includes('onay') || title.includes('approval') || title.includes('talep');
                                     
                                     if (isStockRequest) {
                                       // For stock request notifications, open approval modal
@@ -411,8 +412,17 @@ const Navbar = () => {
                                       } else {
                                         navigate('/stock?openApproval=true');
                                       }
+                                    } else if (isTransfer && isTransferApprovalRequest) {
+                                      // For transfer approval request notifications, open approval modal with transfer tab
+                                      if (location.pathname === '/stock') {
+                                        try {
+                                          window.dispatchEvent(new CustomEvent('open-stock-approval', { detail: { tab: 'transfer' } }));
+                                        } catch {}
+                                      } else {
+                                        navigate('/stock?openApproval=true&tab=transfer');
+                                      }
                                     } else if (isTransfer) {
-                                      // For transfer notifications, open transfer audit timeline
+                                      // For other transfer notifications, open transfer audit timeline
                                       if (location.pathname === '/stock') {
                                         try {
                                           window.dispatchEvent(new CustomEvent('open-audit', { detail: { entityType: 'StockTransfer', entityId: Number(n.entityId) } }));

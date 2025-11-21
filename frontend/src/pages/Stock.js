@@ -292,6 +292,7 @@ const Stock = () => {
   const [lockCustomerTransfer, setLockCustomerTransfer] = useState(false);
   const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
   const [selectedStocks, setSelectedStocks] = useState([]);
+  const [selectedTransfers, setSelectedTransfers] = useState([]);
   const [successToast, setSuccessToast] = useState({ show: false, message: '' });
   const toastTimeoutRef = useRef(null);
 
@@ -551,8 +552,12 @@ const Stock = () => {
   }, []);
 
   // Listen to global event to open stock approval modal from Navbar
+  const [approvalModalTab, setApprovalModalTab] = useState('stock');
+
   useEffect(() => {
-    const handler = () => {
+    const handler = (event) => {
+      const tab = event.detail?.tab || 'stock';
+      setApprovalModalTab(tab);
       setShowApprovalModal(true);
     };
     window.addEventListener('open-stock-approval', handler);
@@ -563,9 +568,12 @@ const Stock = () => {
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     if (params.get('openApproval') === 'true') {
+      const tab = params.get('tab') || 'stock';
+      setApprovalModalTab(tab);
       setShowApprovalModal(true);
       // Clean up URL parameter
       params.delete('openApproval');
+      params.delete('tab');
       const newSearch = params.toString();
       const newUrl = newSearch ? `${location.pathname}?${newSearch}` : location.pathname;
       window.history.replaceState({}, '', newUrl);
@@ -616,6 +624,26 @@ const Stock = () => {
   };
 
   const clearSelectedStocks = () => setSelectedStocks([]);
+  const clearSelectedTransfers = () => setSelectedTransfers([]);
+  
+  const toggleTransferSelection = (id) => {
+    setSelectedTransfers(prev => 
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
+  
+  const toggleSelectAllVisibleTransfers = () => {
+    const allVisibleTransferIds = transfers.map(t => t.id);
+    const allSelected = allVisibleTransferIds.every(id => selectedTransfers.includes(id));
+    if (allSelected) {
+      setSelectedTransfers(prev => prev.filter(id => !allVisibleTransferIds.includes(id)));
+    } else {
+      setSelectedTransfers(prev => [...new Set([...prev, ...allVisibleTransferIds])]);
+    }
+  };
+  
+  const areAllVisibleTransfersSelected = transfers.length > 0 && transfers.every(t => selectedTransfers.includes(t.id));
+  const selectedTransferCount = selectedTransfers.length;
 
   const showSuccessToast = (message) => {
     setSuccessToast({ show: true, message });
@@ -707,6 +735,52 @@ const Stock = () => {
             show: true,
             title: 'Stok Silme Hatası',
             message: `Seçili stoklar silinirken hata oluştu: ${msg}`
+          });
+        }
+      }
+    });
+  };
+
+  const handleBatchDeleteTransfers = (ids) => {
+    if (!ids || ids.length === 0) {
+      return;
+    }
+    
+    const canDelete = ids.every(id => {
+      const transfer = transfers.find(t => t.id === id);
+      return transfer && transfer.status !== 'IN_TRANSIT' && transfer.status !== 'COMPLETED';
+    });
+    
+    if (!canDelete) {
+      setErrorModal({
+        show: true,
+        title: 'Transfer Silme Hatası',
+        message: 'Yolda veya tamamlanmış transferler silinemez.'
+      });
+      return;
+    }
+    
+    setConfirmModal({
+      show: true,
+      title: 'Seçili Transferleri Sil',
+      message: `${ids.length} transferi silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.`,
+      confirmText: 'Evet, Sil',
+      confirmVariant: 'danger',
+      icon: 'trash',
+      onConfirm: async () => {
+        setConfirmModal({ show: false });
+        try {
+          await axios.delete('/api/stock-transfers/bulk', { data: ids });
+          setSelectedTransfers(prev => prev.filter(id => !ids.includes(id)));
+          await fetchTransfers(0, false);
+          showSuccessToast(`${ids.length} transfer silindi.`);
+        } catch (error) {
+          const errorData = error?.response?.data;
+          const msg = errorData?.message || errorData?.error || error.message || 'Beklenmeyen bir durum oluştu';
+          setErrorModal({
+            show: true,
+            title: 'Transfer Silme Hatası',
+            message: `Seçili transferler silinirken hata oluştu: ${msg}`
           });
         }
       }
@@ -1807,6 +1881,31 @@ const Stock = () => {
                 </label>
               </div>
             </div>
+            {selectedTransferCount > 0 && isAdmin && (
+              <div className="alert alert-warning d-flex justify-content-between align-items-center flex-wrap gap-2 m-3 mb-0">
+                <div className="fw-semibold">
+                  <i className="fas fa-check-square me-2"></i>
+                  {selectedTransferCount} transfer seçildi
+                </div>
+                <div className="d-flex gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline-secondary"
+                    onClick={clearSelectedTransfers}
+                  >
+                    Seçimi Temizle
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-danger"
+                    onClick={() => handleBatchDeleteTransfers([...selectedTransfers])}
+                  >
+                    <i className="fas fa-trash me-1"></i>
+                    Seçilileri Sil
+                  </button>
+                </div>
+              </div>
+            )}
             <div className="card-body p-0">
               {transfers.length === 0 ? (
                 <div className="text-center py-5">
@@ -1827,7 +1926,7 @@ const Stock = () => {
                 <table className="table table-hover mb-0 align-middle" style={{minWidth: '1200px'}}>
                   {/* Desktop için fixed layout */}
                   <colgroup className="d-none d-xl-table-column-group">
-                    <col style={{width: '50px'}} />
+                    {isAdmin && <col style={{width: '40px'}} />}  {/* Checkbox */}
                     <col style={{width: '70px'}} />      {/* No */}
                     <col style={{width: '130px'}} />     {/* Tarih */}
                     <col style={{width: '180px'}} />     {/* Ürün */}
@@ -1841,6 +1940,20 @@ const Stock = () => {
                   </colgroup>
                   <thead className="table-light sticky-top" style={{position: 'sticky', top: 0, zIndex: 10}}>
                     <tr>
+                      {isAdmin && (
+                        <th className="text-center align-middle" style={{minWidth: '40px'}}>
+                          <div className="form-check mb-0">
+                            <input
+                              className="form-check-input"
+                              type="checkbox"
+                              checked={areAllVisibleTransfersSelected}
+                              onChange={toggleSelectAllVisibleTransfers}
+                              disabled={transfers.length === 0}
+                              aria-label="Tümünü seç"
+                            />
+                          </div>
+                        </th>
+                      )}
                       <th className="text-center align-middle" style={{minWidth: '60px'}}>
                         <i className="fas fa-hashtag d-none d-sm-inline me-1"></i>
                         <div className="small">No</div>
@@ -1899,8 +2012,25 @@ const Stock = () => {
                       const awaitingApproval = (transfer.approvalStatus || '').toUpperCase() === 'PENDING';
                       const approvalRejected = (transfer.approvalStatus || '').toUpperCase() === 'REJECTED';
 
+                      const isSelected = selectedTransfers.includes(transfer.id);
+                      const canDelete = transfer.status !== 'IN_TRANSIT' && transfer.status !== 'COMPLETED';
+                      
                       return (
-                        <tr key={transfer.id}>
+                        <tr key={transfer.id} className={isSelected ? 'table-active' : ''}>
+                          {isAdmin && (
+                            <td className="text-center align-middle">
+                              <div className="form-check mb-0">
+                                <input
+                                  className="form-check-input"
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={() => toggleTransferSelection(transfer.id)}
+                                  disabled={!canDelete}
+                                  aria-label="Transfer seç"
+                                />
+                              </div>
+                            </td>
+                          )}
                           <td className="text-center align-middle">
                             <span className="badge bg-dark d-block">#{transfer.id}</span>
                             <span
@@ -2502,6 +2632,7 @@ const Stock = () => {
           onApprove={() => {
             fetchAllData();
           }}
+          initialTab={approvalModalTab}
         />
       )}
       {showMyRequestsModal && (

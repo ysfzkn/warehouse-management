@@ -211,6 +211,22 @@ public class StockTransferController {
         return ResponseEntity.noContent().build();
     }
 
+    @DeleteMapping("/bulk")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Void> deleteTransfers(@RequestBody List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return ResponseEntity.badRequest().build();
+        }
+        stockTransferService.deleteTransfers(ids);
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/current-user/requests")
+    public ResponseEntity<List<StockTransferDto>> getTransferRequestsForCurrentUser() {
+        List<StockTransfer> transfers = stockTransferService.getTransferRequestsForCurrentUser();
+        return ResponseEntity.ok(transferMapper.toDtoList(transfers));
+    }
+
     private StockTransferFilter buildFilter(TransferStatus status,
                                             TransferType transferType,
                                             Long sourceWarehouseId,

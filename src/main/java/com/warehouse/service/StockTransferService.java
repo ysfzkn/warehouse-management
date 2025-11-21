@@ -55,4 +55,8 @@ public interface StockTransferService {
     StockTransfer approveTransferStart(Long transferId, String approvalNote);
 
     StockTransfer rejectTransferStart(Long transferId, String rejectionReason);
+
+    List<StockTransfer> getTransferRequestsForCurrentUser();
+
+    void deleteTransfers(List<Long> transferIds);
 }

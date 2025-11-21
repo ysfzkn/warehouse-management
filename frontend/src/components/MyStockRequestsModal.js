@@ -35,6 +35,11 @@ const MyStockRequestsModal = ({ onClose }) => {
   const [deletingId, setDeletingId] = useState(null);
   const [notesModal, setNotesModal] = useState({ show: false, title: '', notes: '', requestId: null });
 
+  const [transferRequests, setTransferRequests] = useState([]);
+  const [transferLoading, setTransferLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('stock'); // 'stock' or 'transfer'
+  const [transferFilter, setTransferFilter] = useState('PENDING');
+
   const fetchRequests = useCallback(async () => {
     try {
       setLoading(true);
@@ -48,9 +53,22 @@ const MyStockRequestsModal = ({ onClose }) => {
     }
   }, []);
 
+  const fetchTransferRequests = useCallback(async () => {
+    try {
+      setTransferLoading(true);
+      const response = await axios.get('/api/stock-transfers/current-user/requests');
+      setTransferRequests(Array.isArray(response.data) ? response.data : []);
+    } catch (err) {
+      console.error('Error fetching transfer requests:', err);
+    } finally {
+      setTransferLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchRequests();
-  }, [fetchRequests]);
+    fetchTransferRequests();
+  }, [fetchRequests, fetchTransferRequests]);
 
   const handleDelete = async (requestId) => {
     if (!window.confirm(`#${requestId} numaralı talebi silmek istediğinize emin misiniz?`)) {
@@ -73,12 +91,35 @@ const MyStockRequestsModal = ({ onClose }) => {
     rejected: allRequests.filter(r => r.status === 'REJECTED').length
   }), [allRequests]);
 
+  const transferStats = useMemo(() => ({
+    pending: transferRequests.filter(r => r.approvalStatus === 'PENDING').length,
+    approved: transferRequests.filter(r => r.approvalStatus === 'APPROVED').length,
+    rejected: transferRequests.filter(r => r.approvalStatus === 'REJECTED').length
+  }), [transferRequests]);
+
   const requests = useMemo(() => {
     if (filter === 'ALL') {
       return allRequests;
     }
     return allRequests.filter(r => r.status === filter);
   }, [allRequests, filter]);
+
+  const filteredTransferRequests = useMemo(() => {
+    if (transferFilter === 'ALL') {
+      return transferRequests;
+    }
+    return transferRequests.filter(r => r.approvalStatus === transferFilter);
+  }, [transferRequests, transferFilter]);
+
+  const getTransferItemsDescription = (transfer) => {
+    if (transfer.items && transfer.items.length > 0) {
+      return transfer.items.map(item => `${item.quantity} x ${item.product?.name || 'Ürün'}`).join(', ');
+    }
+    if (transfer.product) {
+      return `${transfer.quantity || 0} x ${transfer.product.name || 'Ürün'}`;
+    }
+    return 'Ürün bilgisi yok';
+  };
 
   return (
     <>
@@ -94,183 +135,368 @@ const MyStockRequestsModal = ({ onClose }) => {
             </div>
 
             <div className="modal-body p-0">
-              <div className="row g-3 p-3 bg-light border-bottom">
-                <div className="col-md-4">
-                  <div className="card border-warning shadow-sm h-100">
-                    <div className="card-body text-center">
-                      <i className="fas fa-clock fa-2x text-warning mb-2"></i>
-                      <h3 className="mb-0">{stats.pending}</h3>
-                      <p className="text-muted mb-0 small">Bekleyen Talepler</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="col-md-4">
-                  <div className="card border-success shadow-sm h-100">
-                    <div className="card-body text-center">
-                      <i className="fas fa-check-circle fa-2x text-success mb-2"></i>
-                      <h3 className="mb-0">{stats.approved}</h3>
-                      <p className="text-muted mb-0 small">Onaylananlar</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="col-md-4">
-                  <div className="card border-danger shadow-sm h-100">
-                    <div className="card-body text-center">
-                      <i className="fas fa-times-circle fa-2x text-danger mb-2"></i>
-                      <h3 className="mb-0">{stats.rejected}</h3>
-                      <p className="text-muted mb-0 small">Reddedilenler</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
               <div className="p-3 border-bottom bg-white">
-                <div className="btn-group flex-wrap w-100" role="group">
-                  {filterOptions.map(option => (
-                    <React.Fragment key={option.key}>
-                      <input
-                        type="radio"
-                        className="btn-check"
-                        name="myRequestFilter"
-                        id={`my-req-${option.key}`}
-                        value={option.key}
-                        checked={filter === option.key}
-                        onChange={(e) => setFilter(e.target.value)}
-                      />
-                      <label className={`btn btn-outline-${option.variant}`} htmlFor={`my-req-${option.key}`}>
-                        {option.label}
-                      </label>
-                    </React.Fragment>
-                  ))}
+                <div className="btn-group w-100" role="group">
+                  <input
+                    type="radio"
+                    className="btn-check"
+                    name="requestTab"
+                    id="tab-stock-requests"
+                    value="stock"
+                    checked={activeTab === 'stock'}
+                    onChange={() => setActiveTab('stock')}
+                  />
+                  <label className="btn btn-outline-primary" htmlFor="tab-stock-requests">
+                    <i className="fas fa-boxes me-2"></i>
+                    Stok Talepleri
+                  </label>
+
+                  <input
+                    type="radio"
+                    className="btn-check"
+                    name="requestTab"
+                    id="tab-transfer-requests"
+                    value="transfer"
+                    checked={activeTab === 'transfer'}
+                    onChange={() => setActiveTab('transfer')}
+                  />
+                  <label className="btn btn-outline-info" htmlFor="tab-transfer-requests">
+                    <i className="fas fa-exchange-alt me-2"></i>
+                    Transfer Talepleri
+                  </label>
                 </div>
               </div>
 
-              <div className="table-responsive" style={{ minHeight: '300px' }}>
-                {loading ? (
-                  <div className="text-center py-5">
-                    <div className="spinner-border text-info" role="status">
-                      <span className="visually-hidden">Yükleniyor...</span>
+              {activeTab === 'stock' ? (
+                <>
+                  <div className="row g-3 p-3 bg-light border-bottom">
+                    <div className="col-md-4">
+                      <div className="card border-warning shadow-sm h-100">
+                        <div className="card-body text-center">
+                          <i className="fas fa-clock fa-2x text-warning mb-2"></i>
+                          <h3 className="mb-0">{stats.pending}</h3>
+                          <p className="text-muted mb-0 small">Bekleyen Talepler</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="col-md-4">
+                      <div className="card border-success shadow-sm h-100">
+                        <div className="card-body text-center">
+                          <i className="fas fa-check-circle fa-2x text-success mb-2"></i>
+                          <h3 className="mb-0">{stats.approved}</h3>
+                          <p className="text-muted mb-0 small">Onaylananlar</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="col-md-4">
+                      <div className="card border-danger shadow-sm h-100">
+                        <div className="card-body text-center">
+                          <i className="fas fa-times-circle fa-2x text-danger mb-2"></i>
+                          <h3 className="mb-0">{stats.rejected}</h3>
+                          <p className="text-muted mb-0 small">Reddedilenler</p>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                ) : error ? (
-                  <div className="alert alert-danger m-3">
-                    <i className="fas fa-exclamation-triangle me-2"></i>
-                    {error}
+
+                  <div className="p-3 border-bottom bg-white">
+                    <div className="btn-group flex-wrap w-100" role="group">
+                      {filterOptions.map(option => (
+                        <React.Fragment key={option.key}>
+                          <input
+                            type="radio"
+                            className="btn-check"
+                            name="myRequestFilter"
+                            id={`my-req-${option.key}`}
+                            value={option.key}
+                            checked={filter === option.key}
+                            onChange={(e) => setFilter(e.target.value)}
+                          />
+                          <label className={`btn btn-outline-${option.variant}`} htmlFor={`my-req-${option.key}`}>
+                            {option.label}
+                          </label>
+                        </React.Fragment>
+                      ))}
+                    </div>
                   </div>
-                ) : requests.length === 0 ? (
-                  <div className="text-center py-5">
-                    <i className="fas fa-inbox fa-3x text-muted mb-3"></i>
-                    <p className="text-muted mb-0">
-                      {filter === 'PENDING' ? 'Bekleyen talebiniz bulunmuyor' : 'Bu filtrede kayıt bulunamadı'}
-                    </p>
-                  </div>
-                ) : (
-                  <table className="table table-hover align-middle mb-0">
-                    <thead className="table-light">
-                      <tr>
-                        <th style={{ width: '70px' }}>ID</th>
-                        <th>Ürün</th>
-                        <th>Depo</th>
-                        <th className="text-center">İşlem</th>
-                        <th className="text-center">Miktar</th>
-                        <th className="text-center">Durum</th>
-                        <th style={{ width: '160px' }}>Tarih</th>
-                        <th className="text-center" style={{ width: '160px' }}>İşlemler</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {requests.map(request => {
-                        const status = statusConfig[request.status] || statusConfig.PENDING;
-                        const canDelete = request.status === 'PENDING';
-                        return (
-                          <tr key={request.id}>
-                            <td>
-                              <span className="badge bg-dark">#{request.id}</span>
-                            </td>
-                            <td>
-                              <div className="fw-bold">{request.productName}</div>
-                              <small className="text-muted">SKU: {request.productSku}</small>
-                            </td>
-                            <td>{request.warehouseName}</td>
-                            <td className="text-center">
-                              <span className={`badge ${request.type === 'ADD' ? 'bg-success' : 'bg-danger'}`}>
-                                <i className={`fas fa-${request.type === 'ADD' ? 'plus' : 'minus'} me-1`}></i>
-                                {request.type === 'ADD' ? 'Ekleme' : 'Çıkarma'}
-                              </span>
-                            </td>
-                            <td className="text-center">
-                              <span className="badge bg-primary">{request.quantity}</span>
-                            </td>
-                            <td className="text-center">
-                              <span className={`badge bg-${status.className}`}>
-                                <i className={`fas ${status.icon} me-1`}></i>
-                                {status.label}
-                              </span>
-                            </td>
-                            <td>
-                              <small className="text-muted d-block">{formatDate(request.requestedAt)}</small>
-                              {request.reviewedAt && (
-                                <small className="text-muted d-block">
-                                  Güncelleme: {formatDate(request.reviewedAt)}
-                                </small>
-                              )}
-                            </td>
-                            <td className="text-center">
-                              <div className="d-flex gap-1 justify-content-center">
-                                {request.notes && (
-                                  <button
-                                    className="btn btn-sm btn-outline-secondary"
-                                    title="Notları Gör"
-                                    onClick={() => setNotesModal({
-                                      show: true,
-                                      title: 'Talep Notları',
-                                      notes: request.notes,
-                                      requestId: request.id
-                                    })}
-                                  >
-                                    <i className="fas fa-sticky-note"></i>
-                                  </button>
-                                )}
-                                {request.status === 'REJECTED' && request.rejectionReason && (
-                                  <button
-                                    className="btn btn-sm btn-outline-danger"
-                                    title="Ret Nedenini Gör"
-                                    onClick={() => setNotesModal({
-                                      show: true,
-                                      title: 'Reddetme Nedeni',
-                                      notes: request.rejectionReason,
-                                      requestId: request.id
-                                    })}
-                                  >
-                                    <i className="fas fa-comment-slash"></i>
-                                  </button>
-                                )}
-                                {canDelete && (
-                                  <button
-                                    className="btn btn-sm btn-outline-danger"
-                                    onClick={() => handleDelete(request.id)}
-                                    disabled={deletingId === request.id}
-                                    title="Talebi Sil"
-                                  >
-                                    {deletingId === request.id ? (
-                                      <span className="spinner-border spinner-border-sm"></span>
-                                    ) : (
-                                      <i className="fas fa-trash"></i>
-                                    )}
-                                  </button>
-                                )}
-                                {!request.notes && request.status !== 'REJECTED' && !canDelete && (
-                                  <span className="text-muted small">-</span>
-                                )}
-                              </div>
-                            </td>
+
+                  <div className="table-responsive" style={{ minHeight: '300px' }}>
+                    {loading ? (
+                      <div className="text-center py-5">
+                        <div className="spinner-border text-info" role="status">
+                          <span className="visually-hidden">Yükleniyor...</span>
+                        </div>
+                      </div>
+                    ) : error ? (
+                      <div className="alert alert-danger m-3">
+                        <i className="fas fa-exclamation-triangle me-2"></i>
+                        {error}
+                      </div>
+                    ) : requests.length === 0 ? (
+                      <div className="text-center py-5">
+                        <i className="fas fa-inbox fa-3x text-muted mb-3"></i>
+                        <p className="text-muted mb-0">
+                          {filter === 'PENDING' ? 'Bekleyen talebiniz bulunmuyor' : 'Bu filtrede kayıt bulunamadı'}
+                        </p>
+                      </div>
+                    ) : (
+                      <table className="table table-hover align-middle mb-0">
+                        <thead className="table-light">
+                          <tr>
+                            <th style={{ width: '70px' }}>ID</th>
+                            <th>Ürün</th>
+                            <th>Depo</th>
+                            <th className="text-center">İşlem</th>
+                            <th className="text-center">Miktar</th>
+                            <th className="text-center">Durum</th>
+                            <th style={{ width: '160px' }}>Tarih</th>
+                            <th className="text-center" style={{ width: '160px' }}>İşlemler</th>
                           </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                )}
-              </div>
+                        </thead>
+                        <tbody>
+                          {requests.map(request => {
+                            const status = statusConfig[request.status] || statusConfig.PENDING;
+                            const canDelete = request.status === 'PENDING';
+                            return (
+                              <tr key={request.id}>
+                                <td>
+                                  <span className="badge bg-dark">#{request.id}</span>
+                                </td>
+                                <td>
+                                  <div className="fw-bold">{request.productName}</div>
+                                  <small className="text-muted">SKU: {request.productSku}</small>
+                                </td>
+                                <td>{request.warehouseName}</td>
+                                <td className="text-center">
+                                  <span className={`badge ${request.type === 'ADD' ? 'bg-success' : 'bg-danger'}`}>
+                                    <i className={`fas fa-${request.type === 'ADD' ? 'plus' : 'minus'} me-1`}></i>
+                                    {request.type === 'ADD' ? 'Ekleme' : 'Çıkarma'}
+                                  </span>
+                                </td>
+                                <td className="text-center">
+                                  <span className="badge bg-primary">{request.quantity}</span>
+                                </td>
+                                <td className="text-center">
+                                  <span className={`badge bg-${status.className}`}>
+                                    <i className={`fas ${status.icon} me-1`}></i>
+                                    {status.label}
+                                  </span>
+                                </td>
+                                <td>
+                                  <small className="text-muted d-block">{formatDate(request.requestedAt)}</small>
+                                  {request.reviewedAt && (
+                                    <small className="text-muted d-block">
+                                      Güncelleme: {formatDate(request.reviewedAt)}
+                                    </small>
+                                  )}
+                                </td>
+                                <td className="text-center">
+                                  <div className="d-flex gap-1 justify-content-center">
+                                    {request.notes && (
+                                      <button
+                                        className="btn btn-sm btn-outline-secondary"
+                                        title="Notları Gör"
+                                        onClick={() => setNotesModal({
+                                          show: true,
+                                          title: 'Talep Notları',
+                                          notes: request.notes,
+                                          requestId: request.id
+                                        })}
+                                      >
+                                        <i className="fas fa-sticky-note"></i>
+                                      </button>
+                                    )}
+                                    {request.status === 'REJECTED' && request.rejectionReason && (
+                                      <button
+                                        className="btn btn-sm btn-outline-danger"
+                                        title="Ret Nedenini Gör"
+                                        onClick={() => setNotesModal({
+                                          show: true,
+                                          title: 'Reddetme Nedeni',
+                                          notes: request.rejectionReason,
+                                          requestId: request.id
+                                        })}
+                                      >
+                                        <i className="fas fa-comment-slash"></i>
+                                      </button>
+                                    )}
+                                    {canDelete && (
+                                      <button
+                                        className="btn btn-sm btn-outline-danger"
+                                        onClick={() => handleDelete(request.id)}
+                                        disabled={deletingId === request.id}
+                                        title="Talebi Sil"
+                                      >
+                                        {deletingId === request.id ? (
+                                          <span className="spinner-border spinner-border-sm"></span>
+                                        ) : (
+                                          <i className="fas fa-trash"></i>
+                                        )}
+                                      </button>
+                                    )}
+                                    {!request.notes && request.status !== 'REJECTED' && !canDelete && (
+                                      <span className="text-muted small">-</span>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="row g-3 p-3 bg-light border-bottom">
+                    <div className="col-md-4">
+                      <div className="card border-warning shadow-sm h-100">
+                        <div className="card-body text-center">
+                          <i className="fas fa-clock fa-2x text-warning mb-2"></i>
+                          <h3 className="mb-0">{transferStats.pending}</h3>
+                          <p className="text-muted mb-0 small">Bekleyen Transferler</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="col-md-4">
+                      <div className="card border-success shadow-sm h-100">
+                        <div className="card-body text-center">
+                          <i className="fas fa-check-circle fa-2x text-success mb-2"></i>
+                          <h3 className="mb-0">{transferStats.approved}</h3>
+                          <p className="text-muted mb-0 small">Onaylananlar</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="col-md-4">
+                      <div className="card border-danger shadow-sm h-100">
+                        <div className="card-body text-center">
+                          <i className="fas fa-times-circle fa-2x text-danger mb-2"></i>
+                          <h3 className="mb-0">{transferStats.rejected}</h3>
+                          <p className="text-muted mb-0 small">Reddedilenler</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-3 border-bottom bg-white">
+                    <div className="btn-group flex-wrap w-100" role="group">
+                      {filterOptions.map(option => (
+                        <React.Fragment key={option.key}>
+                          <input
+                            type="radio"
+                            className="btn-check"
+                            name="transferRequestFilter"
+                            id={`transfer-req-${option.key}`}
+                            value={option.key}
+                            checked={transferFilter === option.key}
+                            onChange={(e) => setTransferFilter(e.target.value)}
+                          />
+                          <label className={`btn btn-outline-${option.variant}`} htmlFor={`transfer-req-${option.key}`}>
+                            {option.label}
+                          </label>
+                        </React.Fragment>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="table-responsive" style={{ minHeight: '300px' }}>
+                    {transferLoading ? (
+                      <div className="text-center py-5">
+                        <div className="spinner-border text-info" role="status">
+                          <span className="visually-hidden">Yükleniyor...</span>
+                        </div>
+                      </div>
+                    ) : filteredTransferRequests.length === 0 ? (
+                      <div className="text-center py-5">
+                        <i className="fas fa-inbox fa-3x text-muted mb-3"></i>
+                        <p className="text-muted mb-0">
+                          {transferFilter === 'PENDING' ? 'Bekleyen transfer talebiniz bulunmuyor' : 'Bu filtrede kayıt bulunamadı'}
+                        </p>
+                      </div>
+                    ) : (
+                      <table className="table table-hover align-middle mb-0">
+                        <thead className="table-light">
+                          <tr>
+                            <th style={{ width: '70px' }}>ID</th>
+                            <th>Rota</th>
+                            <th>Ürünler</th>
+                            <th className="text-center">Tip</th>
+                            <th className="text-center">Durum</th>
+                            <th style={{ width: '160px' }}>Tarih</th>
+                            <th className="text-center" style={{ width: '160px' }}>İşlemler</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredTransferRequests.map(transfer => {
+                            const status = statusConfig[transfer.approvalStatus] || statusConfig.PENDING;
+                            const sourceName = transfer.sourceWarehouse?.name || 'Bilinmiyor';
+                            const destName = transfer.transferType === 'CUSTOMER_DELIVERY' 
+                              ? (transfer.customerFullName || 'Müşteri')
+                              : (transfer.destinationWarehouse?.name || 'Bilinmiyor');
+                            return (
+                              <tr key={transfer.id}>
+                                <td>
+                                  <span className="badge bg-dark">#{transfer.id}</span>
+                                </td>
+                                <td>
+                                  <div className="fw-bold">{sourceName} → {destName}</div>
+                                  {transfer.transferType === 'CUSTOMER_DELIVERY' && transfer.customerPhone && (
+                                    <small className="text-muted">{transfer.customerPhone}</small>
+                                  )}
+                                </td>
+                                <td>
+                                  <small>{getTransferItemsDescription(transfer)}</small>
+                                </td>
+                                <td className="text-center">
+                                  <span className={`badge ${transfer.transferType === 'CUSTOMER_DELIVERY' ? 'bg-info' : 'bg-primary'}`}>
+                                    {transfer.transferType === 'CUSTOMER_DELIVERY' ? 'Müşteri Sevkiyatı' : 'Depo Transferi'}
+                                  </span>
+                                </td>
+                                <td className="text-center">
+                                  <span className={`badge bg-${status.className}`}>
+                                    <i className={`fas ${status.icon} me-1`}></i>
+                                    {status.label}
+                                  </span>
+                                </td>
+                                <td>
+                                  <small className="text-muted d-block">{formatDate(transfer.transferDate)}</small>
+                                  {transfer.approvalDecisionAt && (
+                                    <small className="text-muted d-block">
+                                      Karar: {formatDate(transfer.approvalDecisionAt)}
+                                    </small>
+                                  )}
+                                </td>
+                                <td className="text-center">
+                                  <div className="d-flex gap-1 justify-content-center">
+                                    {transfer.approvalNote && (
+                                      <button
+                                        className="btn btn-sm btn-outline-secondary"
+                                        title="Notları Gör"
+                                        onClick={() => setNotesModal({
+                                          show: true,
+                                          title: transfer.approvalStatus === 'REJECTED' ? 'Reddetme Nedeni' : 'Onay Notu',
+                                          notes: transfer.approvalNote,
+                                          requestId: transfer.id
+                                        })}
+                                      >
+                                        <i className="fas fa-sticky-note"></i>
+                                      </button>
+                                    )}
+                                    {!transfer.approvalNote && (
+                                      <span className="text-muted small">-</span>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
 
             <div className="modal-footer bg-light">
@@ -295,4 +521,3 @@ const MyStockRequestsModal = ({ onClose }) => {
 };
 
 export default MyStockRequestsModal;
-

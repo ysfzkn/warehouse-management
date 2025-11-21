@@ -25,6 +25,9 @@ public final class NotificationMessages {
     public static final String TRANSFER_START_APPROVAL_REQUEST_TITLE = "Transfer Başlatma Onayı";
     public static final String TRANSFER_START_APPROVED_TITLE = "Transfer Başlatma Onayı Alındı";
     public static final String TRANSFER_START_REJECTED_TITLE = "Transfer Başlatma Onayı Reddedildi";
+    public static final String TRANSFER_APPROVAL_REQUESTED_TITLE = "Transfer Onay Talebi";
+    public static final String TRANSFER_APPROVAL_APPROVED_TITLE = "Transfer Onaylandı";
+    public static final String TRANSFER_APPROVAL_REJECTED_TITLE = "Transfer Reddedildi";
 
     // Stock request notifications
     public static final String STOCK_REQUEST_CREATED_TITLE = "Yeni Stok Talebi";

@@ -52,7 +52,7 @@ const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery 
   const [loadingData, setLoadingData] = useState(true);
   const [error, setError] = useState(null);
   const [validationErrors, setValidationErrors] = useState({});
-  const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [submitSuccess, setSubmitSuccess] = useState(null);
   const [createdTransferId, setCreatedTransferId] = useState(null);
   const [stockSearchTerm, setStockSearchTerm] = useState('');
   const INITIAL_VISIBLE_STOCKS = 12;
@@ -551,11 +551,13 @@ useEffect(() => {
 
       const response = await axios.post('/api/stock-transfers', transferData);
       setCreatedTransferId(response.data.id);
+      const isApprovalRequest = response.data.approvalStatus === 'PENDING';
+      setSubmitSuccess({ isApprovalRequest });
       
       // Wait another moment before transitioning to success (ensure smooth transition)
       await new Promise(resolve => setTimeout(resolve, 800));
       
-      setSubmitSuccess(true);
+      setSubmitSuccess({ isApprovalRequest, id: response.data.id });
       setCurrentStep(4); // Move to success step
       setLoading(false);
       // Don't call onSuccess() immediately - let user see success message
@@ -1530,11 +1532,21 @@ useEffect(() => {
                   
                   <h3 className="text-success mb-3">
                     <i className="fas fa-check-double me-2"></i>
-                    Transfer Başarıyla Oluşturuldu!
+                    {submitSuccess?.isApprovalRequest ? 'Transfer Talebi Başarıyla Oluşturuldu!' : 'Transfer Başarıyla Oluşturuldu!'}
                   </h3>
                   
                   <p className="text-muted mb-4">
-                    Transfer kaydı <strong>#{createdTransferId}</strong> numarası ile sisteme başarıyla kaydedildi.
+                    {submitSuccess?.isApprovalRequest ? (
+                      <>
+                        Transfer talebi <strong>#{createdTransferId}</strong> numarası ile sisteme başarıyla kaydedildi.
+                        <br />
+                        <strong className="text-warning">Yönetici onayı bekleniyor.</strong>
+                      </>
+                    ) : (
+                      <>
+                        Transfer kaydı <strong>#{createdTransferId}</strong> numarası ile sisteme başarıyla kaydedildi.
+                      </>
+                    )}
                   </p>
 
                   <div className="row g-3 mb-4">
@@ -1590,17 +1602,29 @@ useEffect(() => {
                     </div>
                   </div>
 
-                  <div className="alert alert-info d-flex align-items-start">
-                    <i className="fas fa-info-circle fa-2x me-3 mt-1"></i>
+                  <div className={`alert ${submitSuccess?.isApprovalRequest ? 'alert-warning' : 'alert-info'} d-flex align-items-start`}>
+                    <i className={`fas ${submitSuccess?.isApprovalRequest ? 'fa-clock' : 'fa-info-circle'} fa-2x me-3 mt-1`}></i>
                     <div className="text-start">
-                      <strong>Sonraki Adımlar:</strong>
+                      <strong>{submitSuccess?.isApprovalRequest ? 'Onay Bekleniyor:' : 'Sonraki Adımlar:'}</strong>
                       <ul className="mb-0 mt-2 text-start">
-                        <li>Transfer "Transfer Geçmişi" bölümünden takip edilebilir</li>
-                        <li>Şoför <strong>{formData.driverName}</strong> transferi teslim alabilir</li>
-                        <li>Araç plakası: <strong>{formData.vehiclePlate}</strong></li>
-                        <li>Transfer durumunu güncellemek için "Yola Çıkar" veya "Tamamla" butonlarını kullanabilirsiniz</li>
-                        {isCustomerTransfer && (
-                          <li>Müşteri: <strong>{formData.customerFullName}</strong> ({formattedCustomerPhone || '-'})</li>
+                        {submitSuccess?.isApprovalRequest ? (
+                          <>
+                            <li>Transfer talebiniz yönetici onayına gönderildi</li>
+                            <li>Onay durumunu "Taleplerim" bölümünden takip edebilirsiniz</li>
+                            <li>Yönetici onayladıktan sonra transfer başlayacak</li>
+                            <li>Şoför: <strong>{formData.driverName}</strong></li>
+                            <li>Araç plakası: <strong>{formData.vehiclePlate}</strong></li>
+                          </>
+                        ) : (
+                          <>
+                            <li>Transfer "Transfer Geçmişi" bölümünden takip edilebilir</li>
+                            <li>Şoför <strong>{formData.driverName}</strong> transferi teslim alabilir</li>
+                            <li>Araç plakası: <strong>{formData.vehiclePlate}</strong></li>
+                            <li>Transfer durumunu güncellemek için "Yola Çıkar" veya "Tamamla" butonlarını kullanabilirsiniz</li>
+                            {isCustomerTransfer && (
+                              <li>Müşteri: <strong>{formData.customerFullName}</strong> ({formattedCustomerPhone || '-'})</li>
+                            )}
+                          </>
                         )}
                       </ul>
                     </div>

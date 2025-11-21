@@ -1,8 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
-const StockRequestApprovalModal = ({ onClose, onApprove }) => {
-  const [activeTab, setActiveTab] = useState('stock');
+const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' }) => {
+  const [activeTab, setActiveTab] = useState(initialTab);
+  
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
   const [allRequests, setAllRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(null);
