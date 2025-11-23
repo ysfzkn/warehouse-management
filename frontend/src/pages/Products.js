@@ -63,13 +63,19 @@ const Products = () => {
         })
       );
       const idToTotal = totals.reduce((acc, t) => { acc[t.id] = t.total; return acc; }, {});
-      setProducts(list.map(p => ({ ...p, totalStock: idToTotal[p.id] ?? 0 })));
+      const productsWithStock = list.map(p => ({ ...p, totalStock: idToTotal[p.id] ?? 0 }));
+      setProducts(productsWithStock);
       
       // Update pagination state if response is paginated
       if (data.totalElements !== undefined) {
         setProductPage(data.page ?? pageOverride);
         setProductTotalCount(data.totalElements ?? list.length);
         setProductTotalPages(data.totalPages ?? 0);
+      } else {
+        // Non-paginated response - apply frontend filtering
+        setProductPage(0);
+        setProductTotalCount(list.length);
+        setProductTotalPages(1);
       }
     } catch (error) {
       console.error('Error fetching products:', error);
@@ -80,9 +86,16 @@ const Products = () => {
   }, [productPageSize]);
 
   useEffect(() => {
-    fetchProducts(productPage, productPageSize);
+    fetchProducts(0, productPageSize);
     fetchMainCategories();
-  }, [fetchProducts, productPage, productPageSize]);
+  }, [fetchProducts, productPageSize]);
+
+  // Reset to first page when filters change
+  useEffect(() => {
+    if (productPage !== 0) {
+      setProductPage(0);
+    }
+  }, [searchTerm, selectedCategory, selectedSubcategory, selectedBrand, selectedColor]);
 
   useEffect(() => {
     if (selectedCategory) {
@@ -94,9 +107,10 @@ const Products = () => {
     }
   }, [selectedCategory]);
 
+  // Apply frontend filtering (since backend doesn't support all filters yet)
   useEffect(() => {
     const normalizedSearch = normalizeText(searchTerm);
-    const filteredProducts = products.filter(product => {
+    const filtered = products.filter(product => {
       const matchesSearch = !normalizedSearch ||
         normalizeText(product.name).includes(normalizedSearch) ||
         normalizeText(product.sku).includes(normalizedSearch);
@@ -108,8 +122,13 @@ const Products = () => {
       const matchesColor = !selectedColor || product.color?.id === selectedColor;
       return matchesSearch && matchesCategory && matchesSubcategory && matchesBrand && matchesColor;
     });
-    setFilteredProducts(filteredProducts);
-  }, [products, searchTerm, selectedCategory, selectedSubcategory, selectedBrand, selectedColor]);
+    setFilteredProducts(filtered);
+    // Update pagination based on filtered results
+    if (filtered.length !== products.length) {
+      setProductTotalCount(filtered.length);
+      setProductTotalPages(Math.ceil(filtered.length / productPageSize));
+    }
+  }, [products, searchTerm, selectedCategory, selectedSubcategory, selectedBrand, selectedColor, productPageSize]);
 
   const fetchMainCategories = async () => {
     try {
@@ -499,7 +518,7 @@ const Products = () => {
                 </tr>
               </thead>
               <tbody>
-                {filteredProducts.map((product) => {
+                {filteredProducts.slice(productPage * productPageSize, (productPage + 1) * productPageSize).map((product) => {
                   const calculateTotalPrice = () => {
                     const sctAmount = product.price * (product.sctRate || 0) / 100;
                     const priceWithSct = product.price + sctAmount;
@@ -667,7 +686,7 @@ const Products = () => {
           {/* Mobile Card View */}
           <div className="d-lg-none">
             <div className="d-flex flex-column gap-3">
-              {filteredProducts.map((product) => {
+              {filteredProducts.slice(productPage * productPageSize, (productPage + 1) * productPageSize).map((product) => {
                 const calculateTotalPrice = () => {
                   const sctAmount = product.price * (product.sctRate || 0) / 100;
                   const priceWithSct = product.price + sctAmount;

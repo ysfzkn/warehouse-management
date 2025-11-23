@@ -375,28 +375,37 @@ const Navbar = () => {
                     )}
                   </button>
                   {showNotif && (
-                    <div className="user-dropdown" style={{minWidth: 360}}>
+                    <div className="user-dropdown position-absolute end-0 mt-2" style={{
+                      minWidth: 'calc(min(100vw - 32px, 360px))',
+                      maxWidth: 'calc(min(100vw - 32px, 400px))',
+                      zIndex: 1050
+                    }}>
                       <div className="p-3 border-bottom d-flex justify-content-between align-items-center">
                         <div className="fw-bold">Bildirimler</div>
-                        <small className="text-muted">Toplam {notifications.length}</small>
+                        <small className="text-muted d-none d-sm-inline">Toplam {notifications.length}</small>
                       </div>
-                      <div style={{maxHeight: 420, overflowY: 'auto'}}>
+                      <div style={{maxHeight: 'calc(min(100vh - 200px, 420px))', overflowY: 'auto'}}>
                         {notifications.length === 0 && (
                           <div className="p-3 text-muted">Bildirim yok.</div>
                         )}
                         {notifications.map(n => (
-                          <div key={n.id} className="dropdown-item-custom" style={{alignItems: 'flex-start'}}>
-                            <div className="me-2 mt-1" style={{color: n.read ? '#9ca3af' : '#10b981'}}>
-                              <i className={`fas ${n.read ? 'fa-circle' : 'fa-dot-circle'}`}></i>
+                          <div key={n.id} className="dropdown-item-custom" style={{
+                            alignItems: 'flex-start',
+                            padding: '0.75rem',
+                            flexWrap: 'wrap'
+                          }}>
+                            <div className="me-2 mt-1 flex-shrink-0" style={{color: n.read ? '#9ca3af' : '#10b981'}}>
+                              <i className={`fas ${n.read ? 'fa-circle' : 'fa-dot-circle'}`} style={{fontSize: '0.9rem'}}></i>
                             </div>
-                            <div>
-                              <div className="fw-semibold">{n.title}</div>
-                              <div className="text-muted" style={{fontSize: '0.85rem'}}>{n.message}</div>
+                            <div className="flex-grow-1" style={{minWidth: 0}}>
+                              <div className="fw-semibold" style={{fontSize: '0.95rem', lineHeight: '1.3'}}>{n.title}</div>
+                              <div className="text-muted" style={{fontSize: '0.85rem', lineHeight: '1.4', wordBreak: 'break-word'}}>{n.message}</div>
                             </div>
-                            <div className="ms-auto d-flex gap-2">
+                            <div className="d-flex gap-1 w-100 mt-2" style={{flexWrap: 'wrap'}}>
                               {n.entityType && n.entityId && (
                                 <button
-                                  className="btn btn-sm btn-primary"
+                                  className="btn btn-sm flex-fill btn-primary"
+                                  style={{minHeight: '38px'}}
                                   onClick={async () => {
                                     const title = (n.title || '').toLowerCase();
                                     const isTransfer = n.entityType === 'StockTransfer' || title.includes('transfer');
@@ -455,7 +464,8 @@ const Navbar = () => {
                               )}
                               {!n.read && (
                                 <button
-                                  className="btn btn-sm btn-outline-primary"
+                                  className="btn btn-sm flex-fill btn-outline-primary"
+                                  style={{minHeight: '38px'}}
                                   onClick={async () => {
                                     try {
                                       await axios.post(`/api/notifications/${n.id}/read`);

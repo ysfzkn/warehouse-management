@@ -26,6 +26,12 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
   const [subcategories, setSubcategories] = useState([]);
   const [brandId, setBrandId] = useState(null);
   const [colorId, setColorId] = useState(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createModalType, setCreateModalType] = useState(null); // 'brand', 'color', 'category', 'subcategory'
+  const [createModalName, setCreateModalName] = useState('');
+  const [createModalColorHex, setCreateModalColorHex] = useState('#000000');
+  const [createModalDescription, setCreateModalDescription] = useState('');
+  const [createModalLoading, setCreateModalLoading] = useState(false);
   
   // Calculate total price with taxes
   const calculateTotalPrice = () => {
@@ -128,6 +134,68 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
     } catch (error) {
       console.error('Error fetching subcategories:', error);
       return [];
+    }
+  };
+
+  const handleCreateNew = (type) => {
+    setCreateModalType(type);
+    setCreateModalName('');
+    setCreateModalColorHex('#000000');
+    setCreateModalDescription('');
+    setShowCreateModal(true);
+  };
+
+  const handleCreateSubmit = async () => {
+    if (!createModalName.trim()) {
+      alert('Lütfen bir isim giriniz');
+      return;
+    }
+
+    setCreateModalLoading(true);
+    try {
+      let created;
+      if (createModalType === 'brand') {
+        const response = await axios.post('/api/brands', { name: createModalName.trim() });
+        created = response.data;
+        setBrandId(created.id);
+      } else if (createModalType === 'color') {
+        const response = await axios.post('/api/colors', { 
+          name: createModalName.trim(),
+          hexCode: createModalColorHex
+        });
+        created = response.data;
+        setColorId(created.id);
+      } else if (createModalType === 'category') {
+        const response = await axios.post('/api/categories', { 
+          name: createModalName.trim(),
+          description: createModalDescription.trim() || null
+        });
+        created = response.data;
+        await fetchMainCategories();
+        setFormData(prev => ({ ...prev, categoryId: String(created.id) }));
+      } else if (createModalType === 'subcategory') {
+        if (!formData.categoryId) {
+          alert('Önce ana kategori seçiniz');
+          setCreateModalLoading(false);
+          return;
+        }
+        const response = await axios.post('/api/categories/batch', 
+          [{ name: createModalName.trim(), description: createModalDescription.trim() || null }],
+          { params: { parentId: formData.categoryId } }
+        );
+        created = response.data[0];
+        await fetchSubcategories(formData.categoryId);
+        setFormData(prev => ({ ...prev, subcategoryId: String(created.id) }));
+      }
+      setShowCreateModal(false);
+      setCreateModalName('');
+      setCreateModalColorHex('#000000');
+      setCreateModalDescription('');
+    } catch (error) {
+      console.error('Error creating:', error);
+      alert(error.response?.data?.message || 'Oluşturma sırasında hata oluştu');
+    } finally {
+      setCreateModalLoading(false);
     }
   };
 
@@ -490,21 +558,32 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
               <i className="fas fa-folder me-1"></i>
               Ana Kategori <span className="text-danger">*</span>
             </label>
-            <select
-              className={`form-select ${errors.categoryId ? 'is-invalid' : ''}`}
-              id="categoryId"
-              name="categoryId"
-              value={formData.categoryId}
-              onChange={handleChange}
-              required
-            >
-              <option value="">Ana kategori seçin</option>
-              {mainCategories.map((category) => (
-                <option key={category.id} value={String(category.id)}>
-                  {category.name}
-                </option>
-              ))}
-            </select>
+            <div className="input-group">
+              <select
+                className={`form-select ${errors.categoryId ? 'is-invalid' : ''}`}
+                id="categoryId"
+                name="categoryId"
+                value={formData.categoryId}
+                onChange={handleChange}
+                required
+              >
+                <option value="">Ana kategori seçin</option>
+                {mainCategories.map((category) => (
+                  <option key={category.id} value={String(category.id)}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className="btn btn-outline-primary"
+                onClick={() => handleCreateNew('category')}
+                title="Yeni kategori oluştur"
+                style={{ minWidth: '45px' }}
+              >
+                <i className="fas fa-plus"></i>
+              </button>
+            </div>
             {errors.categoryId && <div className="invalid-feedback">{errors.categoryId}</div>}
           </div>
         </div>
@@ -515,21 +594,33 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
               <i className="fas fa-folder-open me-1"></i>
               Alt Kategori (Opsiyonel)
             </label>
-            <select
-              className="form-select"
-              id="subcategoryId"
-              name="subcategoryId"
-              value={formData.subcategoryId}
-              onChange={handleChange}
-              disabled={!formData.categoryId}
-            >
-              <option value="">Alt kategori seçin (opsiyonel)</option>
-              {subcategories.map((subcategory) => (
-                <option key={subcategory.id} value={String(subcategory.id)}>
-                  {subcategory.name}
-                </option>
-              ))}
-            </select>
+            <div className="input-group">
+              <select
+                className="form-select"
+                id="subcategoryId"
+                name="subcategoryId"
+                value={formData.subcategoryId}
+                onChange={handleChange}
+                disabled={!formData.categoryId}
+              >
+                <option value="">Alt kategori seçin (opsiyonel)</option>
+                {subcategories.map((subcategory) => (
+                  <option key={subcategory.id} value={String(subcategory.id)}>
+                    {subcategory.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className="btn btn-outline-primary"
+                onClick={() => handleCreateNew('subcategory')}
+                disabled={!formData.categoryId}
+                title="Yeni alt kategori oluştur"
+                style={{ minWidth: '45px' }}
+              >
+                <i className="fas fa-plus"></i>
+              </button>
+            </div>
             {!formData.categoryId && (
               <small className="text-muted">Önce ana kategori seçin</small>
             )}
@@ -713,6 +804,118 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
           )}
         </button>
       </div>
+
+      {/* Create Modal */}
+      {showCreateModal && (
+        <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} tabIndex="-1">
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">
+                  {createModalType === 'brand' && <><i className="fas fa-copyright me-2"></i>Yeni Marka</>}
+                  {createModalType === 'color' && <><i className="fas fa-palette me-2"></i>Yeni Renk</>}
+                  {createModalType === 'category' && <><i className="fas fa-folder me-2"></i>Yeni Kategori</>}
+                  {createModalType === 'subcategory' && <><i className="fas fa-folder-open me-2"></i>Yeni Alt Kategori</>}
+                </h5>
+                <button
+                  type="button"
+                  className="btn-close"
+                  onClick={() => setShowCreateModal(false)}
+                  disabled={createModalLoading}
+                ></button>
+              </div>
+              <div className="modal-body">
+                <div className="mb-3">
+                  <label className="form-label">
+                    İsim <span className="text-danger">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={createModalName}
+                    onChange={(e) => setCreateModalName(e.target.value)}
+                    placeholder={
+                      createModalType === 'brand' ? 'Marka adı' :
+                      createModalType === 'color' ? 'Renk adı' :
+                      createModalType === 'category' ? 'Kategori adı' :
+                      'Alt kategori adı'
+                    }
+                    autoFocus
+                    disabled={createModalLoading}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !createModalLoading) {
+                        handleCreateSubmit();
+                      }
+                    }}
+                  />
+                </div>
+                {createModalType === 'color' && (
+                  <div className="mb-3">
+                    <label className="form-label">Renk Kodu (Hex)</label>
+                    <div className="input-group">
+                      <input
+                        type="color"
+                        className="form-control form-control-color"
+                        value={createModalColorHex}
+                        onChange={(e) => setCreateModalColorHex(e.target.value)}
+                        disabled={createModalLoading}
+                        style={{ width: '60px', height: '38px' }}
+                      />
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={createModalColorHex}
+                        onChange={(e) => setCreateModalColorHex(e.target.value)}
+                        placeholder="#000000"
+                        disabled={createModalLoading}
+                        maxLength={7}
+                      />
+                    </div>
+                  </div>
+                )}
+                {(createModalType === 'category' || createModalType === 'subcategory') && (
+                  <div className="mb-3">
+                    <label className="form-label">Açıklama (Opsiyonel)</label>
+                    <textarea
+                      className="form-control"
+                      value={createModalDescription}
+                      onChange={(e) => setCreateModalDescription(e.target.value)}
+                      placeholder="Kategori açıklaması"
+                      rows={3}
+                      disabled={createModalLoading}
+                    />
+                  </div>
+                )}
+              </div>
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setShowCreateModal(false)}
+                  disabled={createModalLoading}
+                >
+                  İptal
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={handleCreateSubmit}
+                  disabled={createModalLoading || !createModalName.trim()}
+                >
+                  {createModalLoading ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                      Oluşturuluyor...
+                    </>
+                  ) : (
+                    'Oluştur'
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </form>
   );
 };

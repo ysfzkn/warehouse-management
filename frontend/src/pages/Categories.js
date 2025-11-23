@@ -3,6 +3,7 @@ import axios from 'axios';
 import CategoryForm from '../components/CategoryForm';
 import FilterChips from '../components/FilterChips';
 import ConfirmModal from '../components/ConfirmModal';
+import PaginationControls from '../components/PaginationControls';
 
 const normalizeText = (text) => (text || '').toLocaleLowerCase('tr-TR');
 
@@ -18,17 +19,27 @@ const Categories = () => {
   const [showSubcategoryModal, setShowSubcategoryModal] = useState(false);
   const [selectedParentCategory, setSelectedParentCategory] = useState(null);
   const [selectedCategories, setSelectedCategories] = useState([]);
+  const [categoryPage, setCategoryPage] = useState(0);
+  const [categoryPageSize, setCategoryPageSize] = useState(20);
+  const [categoryTotalPages, setCategoryTotalPages] = useState(0);
+  const [categoryTotalCount, setCategoryTotalCount] = useState(0);
 
-  useEffect(() => {
-    fetchCategories();
-  }, []);
-
-  const fetchCategories = async () => {
+  const fetchCategories = useCallback(async (pageOverride = 0, pageSizeOverride) => {
     try {
       setLoading(true);
-      const response = await axios.get('/api/categories/top-level');
+      const size = pageSizeOverride ?? categoryPageSize;
+      const params = {
+        page: pageOverride,
+        size,
+        sortBy: 'name',
+        sortDir: 'asc'
+      };
+      const response = await axios.get('/api/categories/top-level', { params });
+      const data = response.data || {};
+      const list = Array.isArray(data.content) ? data.content : (Array.isArray(data) ? data : []);
+      
       const categoriesWithSubInfo = await Promise.all(
-        response.data.map(async (category) => {
+        list.map(async (category) => {
           try {
             const subResponse = await axios.get(`/api/categories/${category.id}/subcategories`);
             const ownCount = Number(category.productCount ?? 0);
@@ -53,13 +64,35 @@ const Categories = () => {
         })
       );
       setMainCategories(categoriesWithSubInfo);
+      
+      // Update pagination state if response is paginated
+      if (data.totalElements !== undefined) {
+        setCategoryPage(data.page ?? pageOverride);
+        setCategoryTotalCount(data.totalElements ?? list.length);
+        setCategoryTotalPages(data.totalPages ?? 0);
+      } else {
+        setCategoryPage(0);
+        setCategoryTotalCount(list.length);
+        setCategoryTotalPages(1);
+      }
     } catch (error) {
       console.error('Error fetching categories:', error);
       setError('Kategoriler yüklenirken hata oluştu');
     } finally {
       setLoading(false);
     }
-  };
+  }, [categoryPageSize]);
+
+  useEffect(() => {
+    fetchCategories(0, categoryPageSize);
+  }, [fetchCategories, categoryPageSize]);
+
+  // Reset to first page when search changes
+  useEffect(() => {
+    if (categoryPage !== 0) {
+      setCategoryPage(0);
+    }
+  }, [searchTerm]);
 
   const toggleCategoryExpansion = useCallback((categoryId) => {
     const id = Number(categoryId);
@@ -136,6 +169,20 @@ const Categories = () => {
       c.subcategories.some(sub => normalizeText(sub.name).includes(q))
     );
   }, [mainCategories, searchTerm]);
+
+  // Update pagination when filtered results change
+  useEffect(() => {
+    if (searchTerm) {
+      // Frontend filtering - update pagination based on filtered results
+      const total = filteredCategories.length;
+      setCategoryTotalCount(total);
+      setCategoryTotalPages(Math.ceil(total / categoryPageSize));
+      if (categoryPage > 0 && categoryPage >= Math.ceil(total / categoryPageSize)) {
+        setCategoryPage(0);
+      }
+    }
+    // If no search term, pagination is handled by fetchCategories
+  }, [filteredCategories.length, searchTerm, categoryPageSize]);
 
   // Selection handlers
   const allVisibleCategoryIds = filteredCategories.map(c => c.id);
@@ -314,7 +361,7 @@ const Categories = () => {
                 </tr>
               </thead>
               <tbody>
-                {filteredCategories.map((category) => {
+                {filteredCategories.slice(categoryPage * categoryPageSize, (categoryPage + 1) * categoryPageSize).map((category) => {
                   const isSelected = selectedCategories.includes(category.id);
                   return (
                   <React.Fragment key={category.id}>
@@ -483,7 +530,7 @@ const Categories = () => {
           {/* Mobile Card View */}
           <div className="d-lg-none">
             <div className="d-flex flex-column gap-3">
-              {filteredCategories.map((category) => {
+              {filteredCategories.slice(categoryPage * categoryPageSize, (categoryPage + 1) * categoryPageSize).map((category) => {
                 const isSelected = selectedCategories.includes(category.id);
                 const isExpanded = expandedCategories.includes(Number(category.id));
                 
