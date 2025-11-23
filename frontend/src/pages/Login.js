@@ -297,18 +297,172 @@ const Login = () => {
             width: 100% !important; 
             max-width: 100% !important;
             padding: 20px !important;
+            flex: 1 1 100% !important;
+          }
+          [style*="content"] {
+            padding: 10px !important;
+            min-height: 100vh !important;
+            align-items: center !important;
+          }
+        }
+
+        @media (max-width: 768px) {
+          [style*="loginCard"] {
+            padding: 30px 24px !important;
+            max-width: 100% !important;
+            border-radius: 16px !important;
+          }
+          [style*="loginTitle"] {
+            font-size: 24px !important;
+          }
+          [style*="loginSubtitle"] {
+            font-size: 14px !important;
+          }
+          [style*="loginIconContainer"] {
+            width: 64px !important;
+            height: 64px !important;
+            margin-bottom: 16px !important;
+          }
+          [style*="loginIcon"] {
+            font-size: 24px !important;
+          }
+          [style*="input"] {
+            padding: 12px 44px 12px 44px !important;
+            font-size: 16px !important;
+          }
+          [style*="inputIcon"] {
+            left: 14px !important;
+            font-size: 14px !important;
+          }
+          [style*="passwordToggle"] {
+            right: 14px !important;
+            font-size: 14px !important;
+            padding: 6px !important;
+            min-width: 36px !important;
+            min-height: 36px !important;
+          }
+          [style*="submitButton"] {
+            padding: 14px !important;
+            font-size: 15px !important;
+            min-height: 48px !important;
+          }
+          [style*="label"] {
+            font-size: 13px !important;
+            margin-bottom: 8px !important;
+          }
+          [style*="inputGroup"] {
+            margin-bottom: 20px !important;
+          }
+          [style*="errorAlert"] {
+            padding: 12px 16px !important;
+            font-size: 13px !important;
+            margin-bottom: 20px !important;
+          }
+          [style*="securityBadge"] {
+            font-size: 12px !important;
+            padding: 10px !important;
+            margin-top: 20px !important;
           }
         }
 
         @media (max-width: 576px) {
+          [style*="container"] {
+            padding: 0 !important;
+            overflow-x: hidden !important;
+          }
+          [style*="content"] {
+            padding: 0 !important;
+            margin: 0 !important;
+          }
+          .right-section {
+            padding: 16px !important;
+          }
           [style*="loginCard"] {
-            padding: 30px 20px !important;
+            padding: 24px 20px !important;
+            border-radius: 12px !important;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2) !important;
           }
-          [style*="heroTitle"] {
-            font-size: 36px !important;
+          [style*="loginHeader"] {
+            margin-bottom: 24px !important;
           }
-          [style*="featuresGrid"] {
-            grid-template-columns: 1fr !important;
+          [style*="loginTitle"] {
+            font-size: 22px !important;
+            margin-bottom: 6px !important;
+          }
+          [style*="loginSubtitle"] {
+            font-size: 13px !important;
+          }
+          [style*="loginIconContainer"] {
+            width: 56px !important;
+            height: 56px !important;
+            border-radius: 16px !important;
+            margin-bottom: 12px !important;
+          }
+          [style*="loginIcon"] {
+            font-size: 20px !important;
+          }
+          [style*="input"] {
+            padding: 14px 48px 14px 44px !important;
+            font-size: 16px !important;
+            border-radius: 10px !important;
+          }
+          [style*="inputIcon"] {
+            left: 12px !important;
+            font-size: 15px !important;
+          }
+          [style*="passwordToggle"] {
+            right: 12px !important;
+            font-size: 15px !important;
+            padding: 8px !important;
+            min-width: 40px !important;
+            min-height: 40px !important;
+          }
+          [style*="submitButton"] {
+            padding: 16px !important;
+            font-size: 16px !important;
+            min-height: 52px !important;
+            border-radius: 10px !important;
+          }
+          [style*="label"] {
+            font-size: 13px !important;
+            margin-bottom: 8px !important;
+          }
+          [style*="inputGroup"] {
+            margin-bottom: 18px !important;
+          }
+          [style*="form"] {
+            margin-bottom: 20px !important;
+          }
+          [style*="errorAlert"] {
+            padding: 12px 14px !important;
+            font-size: 12px !important;
+            margin-bottom: 18px !important;
+            border-radius: 10px !important;
+          }
+          [style*="securityBadge"] {
+            font-size: 11px !important;
+            padding: 10px !important;
+            margin-top: 18px !important;
+            border-radius: 8px !important;
+          }
+        }
+
+        @media (max-width: 375px) {
+          .right-section {
+            padding: 12px !important;
+          }
+          [style*="loginCard"] {
+            padding: 20px 16px !important;
+          }
+          [style*="loginTitle"] {
+            font-size: 20px !important;
+          }
+          [style*="input"] {
+            padding: 12px 44px 12px 40px !important;
+          }
+          [style*="submitButton"] {
+            padding: 14px !important;
+            font-size: 15px !important;
           }
         }
       `}</style>
@@ -326,6 +480,8 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'auto',
+    padding: '0',
+    width: '100%',
   },
   animatedBg: {
     position: 'fixed',
@@ -349,6 +505,7 @@ const styles = {
     minHeight: '100vh',
     margin: '0 auto',
     padding: '20px 0',
+    flexWrap: 'wrap',
   },
   leftSection: {
     flex: '0 0 55%',
@@ -455,6 +612,7 @@ const styles = {
     justifyContent: 'center',
     padding: '40px',
     animation: 'slideInRight 0.8s ease-out',
+    width: '100%',
   },
   loginCard: {
     background: '#ffffff',
