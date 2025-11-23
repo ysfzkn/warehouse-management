@@ -989,35 +989,182 @@ useEffect(() => {
                                             : 'Bu depoda henüz stok bulunmuyor.'}
                                         </div>
                                       ) : (
-                                        <div className="stock-option-list border rounded-4 shadow-sm bg-white">
-                                          <div className="stock-option-grid">
-                                          {limitedStockList.map(stockItem => {
-                                            const optionProductId = String(stockItem.product.id);
-                                            const isSelected = String(itemForm.productId) === optionProductId;
-                                            const available = calculateAvailableQuantity(stockItem);
-                                            return (
-                                              <button
-                                                type="button"
-                                                key={stockItem.product.id}
-                                                className={`stock-option-button ${isSelected ? 'active' : ''}`}
-                                                onClick={() => handleItemFormChange('productId', optionProductId)}
-                                              >
-                                                <div className="d-flex justify-content-between align-items-start">
-                                                  <div className="me-3">
-                                                    <div className="fw-semibold text-dark">{stockItem.product.name}</div>
-                                                    <div className="text-muted small">SKU: {stockItem.product.sku}</div>
-                                                  </div>
-                                                  <div className="text-end">
-                                                    <span className={`badge ${available > 0 ? 'bg-success bg-opacity-10 text-success' : 'bg-danger bg-opacity-10 text-danger'}`}>
-                                                      Mevcut {available}
-                                                    </span>
-                                                  </div>
-                                                </div>
-                                              </button>
-                                            );
-                                          })}
+                                        <>
+                                          {/* Desktop Table View */}
+                                          <div className="d-none d-md-block table-responsive border rounded shadow-sm bg-white">
+                                            <table className="table table-hover table-sm mb-0">
+                                              <thead className="table-light">
+                                                <tr>
+                                                  <th style={{ width: '40px' }}></th>
+                                                  <th>Ürün Adı</th>
+                                                  <th>Stok Kodu</th>
+                                                  <th className="text-center">Mevcut Stok</th>
+                                                  <th className="text-center">Rezerve</th>
+                                                  <th className="text-center">Emanet</th>
+                                                  <th className="text-center">Kullanılabilir</th>
+                                                </tr>
+                                              </thead>
+                                              <tbody>
+                                                {limitedStockList.map(stockItem => {
+                                                  const optionProductId = String(stockItem.product.id);
+                                                  const isSelected = String(itemForm.productId) === optionProductId;
+                                                  const available = calculateAvailableQuantity(stockItem);
+                                                  return (
+                                                    <tr
+                                                      key={stockItem.product.id}
+                                                      className={isSelected ? 'table-primary' : ''}
+                                                      style={{ cursor: 'pointer' }}
+                                                      onClick={() => handleItemFormChange('productId', optionProductId)}
+                                                    >
+                                                      <td className="text-center">
+                                                        {isSelected && (
+                                                          <span className="badge bg-primary">
+                                                            <i className="fas fa-check"></i>
+                                                          </span>
+                                                        )}
+                                                      </td>
+                                                      <td>
+                                                        <div className="fw-semibold">{stockItem.product.name}</div>
+                                                        {stockItem.product.brand?.name && (
+                                                          <small className="text-muted d-block">
+                                                            <i className="fas fa-copyright me-1"></i>
+                                                            {stockItem.product.brand.name}
+                                                          </small>
+                                                        )}
+                                                      </td>
+                                                      <td>
+                                                        <span className="badge text-bg-light border">
+                                                          {stockItem.product.sku}
+                                                        </span>
+                                                      </td>
+                                                      <td className="text-center">
+                                                        <span className="fw-bold">{stockItem.quantity}</span>
+                                                      </td>
+                                                      <td className="text-center">
+                                                        <span className={stockItem.reservedQuantity > 0 ? 'text-warning fw-bold' : 'text-muted'}>
+                                                          {stockItem.reservedQuantity || 0}
+                                                        </span>
+                                                      </td>
+                                                      <td className="text-center">
+                                                        <span className="text-muted">
+                                                          {stockItem.consignedQuantity || 0}
+                                                        </span>
+                                                      </td>
+                                                      <td className="text-center">
+                                                        <span className={`badge ${available > 0 ? 'bg-success bg-opacity-10 text-success' : 'bg-danger bg-opacity-10 text-danger'}`}>
+                                                          {available}
+                                                        </span>
+                                                      </td>
+                                                    </tr>
+                                                  );
+                                                })}
+                                              </tbody>
+                                            </table>
                                           </div>
-                                        </div>
+
+                                          {/* Mobile Card View */}
+                                          <div className="d-md-none">
+                                            <div className="d-flex flex-column gap-3" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+                                              {limitedStockList.map(stockItem => {
+                                                const optionProductId = String(stockItem.product.id);
+                                                const isSelected = String(itemForm.productId) === optionProductId;
+                                                const available = calculateAvailableQuantity(stockItem);
+                                                return (
+                                                  <div
+                                                    key={stockItem.product.id}
+                                                    className={`card border-2 shadow-sm ${isSelected ? 'border-primary bg-primary bg-opacity-10' : 'border-light'}`}
+                                                    style={{
+                                                      cursor: 'pointer',
+                                                      transition: 'all 0.2s ease',
+                                                      minHeight: '180px'
+                                                    }}
+                                                    onClick={() => handleItemFormChange('productId', optionProductId)}
+                                                  >
+                                                    <div className="card-body p-3">
+                                                      <div className="d-flex justify-content-between align-items-start mb-3">
+                                                        <div className="flex-grow-1 pe-2">
+                                                          <div className="fw-bold mb-2" style={{ fontSize: '1.05rem' }}>
+                                                            {stockItem.product.name}
+                                                          </div>
+                                                          <div className="d-flex flex-wrap gap-2 align-items-center mb-2">
+                                                            <span className="badge bg-light text-dark border">
+                                                              <i className="fas fa-barcode me-1"></i>
+                                                              {stockItem.product.sku}
+                                                            </span>
+                                                            {stockItem.product.brand?.name && (
+                                                              <span className="badge bg-light text-dark border">
+                                                                <i className="fas fa-copyright me-1"></i>
+                                                                {stockItem.product.brand.name}
+                                                              </span>
+                                                            )}
+                                                          </div>
+                                                        </div>
+                                                        {isSelected && (
+                                                          <div className="text-center">
+                                                            <div className="badge bg-primary text-white mb-1" style={{ fontSize: '0.75rem' }}>
+                                                              <i className="fas fa-check me-1"></i>
+                                                              Seçildi
+                                                            </div>
+                                                          </div>
+                                                        )}
+                                                      </div>
+                                                      
+                                                      <div className="row g-2 mb-2">
+                                                        <div className="col-6">
+                                                          <div className="text-center p-3 bg-light rounded border">
+                                                            <div className="small text-muted mb-2">
+                                                              <i className="fas fa-cubes me-1"></i>
+                                                              Mevcut
+                                                            </div>
+                                                            <div className="fw-bold" style={{ fontSize: '1.2rem' }}>
+                                                              {stockItem.quantity}
+                                                            </div>
+                                                          </div>
+                                                        </div>
+                                                        <div className="col-6">
+                                                          <div className={`text-center p-3 rounded border ${available > 0 ? 'bg-success bg-opacity-10 border-success' : 'bg-danger bg-opacity-10 border-danger'}`}>
+                                                            <div className="small mb-2">
+                                                              <i className="fas fa-check-circle me-1"></i>
+                                                              Kullanılabilir
+                                                            </div>
+                                                            <div className={`fw-bold ${available > 0 ? 'text-success' : 'text-danger'}`} style={{ fontSize: '1.2rem' }}>
+                                                              {available}
+                                                            </div>
+                                                          </div>
+                                                        </div>
+                                                      </div>
+                                                      
+                                                      <div className="row g-2">
+                                                        <div className="col-6">
+                                                          <div className="text-center p-2 bg-light rounded border">
+                                                            <div className="small text-muted mb-1">
+                                                              <i className="fas fa-lock me-1"></i>
+                                                              Rezerve
+                                                            </div>
+                                                            <div className={`fw-semibold ${stockItem.reservedQuantity > 0 ? 'text-warning' : 'text-muted'}`}>
+                                                              {stockItem.reservedQuantity || 0}
+                                                            </div>
+                                                          </div>
+                                                        </div>
+                                                        <div className="col-6">
+                                                          <div className="text-center p-2 bg-light rounded border">
+                                                            <div className="small text-muted mb-1">
+                                                              <i className="fas fa-handshake me-1"></i>
+                                                              Emanet
+                                                            </div>
+                                                            <div className="fw-semibold text-muted">
+                                                              {stockItem.consignedQuantity || 0}
+                                                            </div>
+                                                          </div>
+                                                        </div>
+                                                      </div>
+                                                    </div>
+                                                  </div>
+                                                );
+                                              })}
+                                            </div>
+                                          </div>
+                                        </>
                                       )}
                                     </>
                                   )}

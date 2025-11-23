@@ -355,223 +355,177 @@ const Products = () => {
         </div>
       )}
 
-      {/* Products Grid */}
-      <div className="row">
-        {filteredProducts.map((product) => (
-          <div key={product.id} className="col-md-6 col-lg-4 mb-4">
-            <div className="card h-100">
-              <div className="card-body">
-                <div className="d-flex justify-content-between align-items-start mb-2">
-                  <h5 className="card-title">{product.name}</h5>
-                  <span className={`badge ${product.active === false ? 'bg-secondary' : 'bg-success'}`}>
-                    {product.active === false ? 'Pasif' : 'Aktif'}
-                  </span>
-                </div>
+      {/* Products List */}
+      <div className="card">
+        <div className="card-body">
+          <div className="table-responsive">
+            <table className="table table-hover align-middle">
+              <thead className="table-light">
+                <tr>
+                  <th>Ürün Adı</th>
+                  <th>Stok Kodu</th>
+                  <th>Kategori</th>
+                  <th>Marka</th>
+                  <th>Renk</th>
+                  <th className="text-end">Fiyat</th>
+                  <th className="text-center">Stok</th>
+                  <th className="text-center">Durum</th>
+                  <th className="text-center" style={{ width: '280px' }}>İşlemler</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredProducts.map((product) => {
+                  const calculateTotalPrice = () => {
+                    const sctAmount = product.price * (product.sctRate || 0) / 100;
+                    const priceWithSct = product.price + sctAmount;
+                    const vatAmount = priceWithSct * (product.vatRate || 0) / 100;
+                    return priceWithSct + vatAmount;
+                  };
+                  const totalPrice = calculateTotalPrice();
+                  const w = product.widthCm || 0;
+                  const l = product.lengthCm || 0;
+                  const h = product.heightCm || 0;
+                  const desi = (h * w * l) / 3000;
+                  const shippingCost = desi * (product.shippingRate || 0);
 
-                <div className="mb-2 d-flex flex-wrap gap-2">
-                  <span className="badge text-bg-light border">
-                    <i className="fas fa-barcode me-1"></i>{product.sku}
-                  </span>
-                  {product.category?.name && (
-                    <span className="badge text-bg-light border">
-                      <i className="fas fa-tag me-1"></i>
-                      {product.category.parentName ? `${product.category.parentName} > ` : ''}
-                      {product.category.name}
-                    </span>
-                  )}
-                  {product.brand?.name && (
-                    <span className="badge text-bg-light border">
-                      <i className="fas fa-copyright me-1"></i>{product.brand?.name}
-                    </span>
-                  )}
-                  {product.color?.name && (
-                    <span className="badge text-bg-light border">
-                      <i className="fas fa-palette me-1"></i>{product.color?.name}
-                    </span>
-                  )}
-                </div>
-
-                {/* Price Display - Detailed or Simple */}
-                {showDetailedPrice ? (
-                  /* Detailed Price Breakdown */
-                  <div className="card mb-2" style={{ backgroundColor: '#f8f9fa', border: '1px solid #dee2e6' }}>
-                    <div className="card-body p-2">
-                      <div className="d-flex justify-content-between align-items-center mb-1">
-                        <small className="text-muted">
-                          <i className="fas fa-tag me-1"></i>Ana Fiyat:
-                        </small>
-                        <strong className="text-primary">
-                          ₺{product.price?.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
-                        </strong>
-                      </div>
-                      
-                      {Number(product.sctRate) > 0 && (
-                        <>
-                          <div className="d-flex justify-content-between align-items-center mb-1">
-                            <small className="text-muted">
-                              <i className="fas fa-plus-circle me-1"></i>ÖTV (%{product.sctRate}):
-                            </small>
-                            <small className="text-success">
-                              +₺{((product.price * product.sctRate) / 100).toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
-                            </small>
-                          </div>
-                          <div className="d-flex justify-content-between align-items-center mb-1">
-                            <small className="text-muted">ÖTV'li Fiyat:</small>
-                            <small>
-                              ₺{(product.price * (1 + product.sctRate / 100)).toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
-                            </small>
-                          </div>
-                        </>
-                      )}
-                      
-                      {Number(product.vatRate) > 0 && (
-                        <>
-                          <div className="d-flex justify-content-between align-items-center mb-1">
-                            <small className="text-muted">
-                              <i className="fas fa-plus-circle me-1"></i>KDV (%{product.vatRate}):
-                            </small>
-                            <small className="text-success">
-                              +₺{(() => {
-                                const baseForVat = product.price * (1 + (product.sctRate || 0) / 100);
-                                return (baseForVat * product.vatRate / 100).toLocaleString('tr-TR', { minimumFractionDigits: 2 });
-                              })()}
-                            </small>
-                          </div>
-                        </>
-                      )}
-                      
-                      {(product.vatRate > 0 || product.sctRate > 0) && (
-                        <>
-                          <hr className="my-1" />
-                          <div className="d-flex justify-content-between align-items-center">
-                            <strong className="text-dark">
-                              <i className="fas fa-receipt me-1"></i>Toplam Fiyat:
-                            </strong>
-                            <strong className="text-success fs-6">
-                              ₺{(() => {
-                                const sctAmount = product.price * (product.sctRate || 0) / 100;
-                                const priceWithSct = product.price + sctAmount;
-                                const vatAmount = priceWithSct * (product.vatRate || 0) / 100;
-                                return (priceWithSct + vatAmount).toLocaleString('tr-TR', { minimumFractionDigits: 2 });
-                              })()}
-                            </strong>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                ) : (
-                  /* Simple Price View */
-                  <div className="mb-2">
-                    <div className="d-flex justify-content-between align-items-center">
-                      <span>
-                        <strong>Fiyat:</strong>
-                        {(product.vatRate > 0 || product.sctRate > 0) && (
-                          <span className="badge bg-info ms-2" style={{ fontSize: '0.7rem' }}>
-                            {product.vatRate > 0 && `KDV %${product.vatRate}`}
-                            {product.vatRate > 0 && product.sctRate > 0 && ' + '}
-                            {product.sctRate > 0 && `ÖTV %${product.sctRate}`}
-                          </span>
+                  return (
+                    <tr key={product.id}>
+                      <td>
+                        <div className="fw-semibold">{product.name}</div>
+                        {product.description && (
+                          <small className="text-muted d-block mt-1" style={{ maxWidth: '300px' }}>
+                            {product.description.length > 80
+                              ? product.description.substring(0, 80) + '...'
+                              : product.description}
+                          </small>
                         )}
-                      </span>
-                      <strong className="text-success fs-5">
-                        ₺{(() => {
-                          const sctAmount = product.price * (product.sctRate || 0) / 100;
-                          const priceWithSct = product.price + sctAmount;
-                          const vatAmount = priceWithSct * (product.vatRate || 0) / 100;
-                          const totalPrice = priceWithSct + vatAmount;
-                          return totalPrice > product.price 
-                            ? totalPrice.toLocaleString('tr-TR', { minimumFractionDigits: 2 })
-                            : product.price.toLocaleString('tr-TR', { minimumFractionDigits: 2 });
-                        })()}
-                      </strong>
-                    </div>
-                    {(product.vatRate > 0 || product.sctRate > 0) && (
-                      <small className="text-muted">
-                        Ana: ₺{product.price?.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
-                      </small>
-                    )}
-                  </div>
-                )}
-                <p className="card-text d-flex align-items-center justify-content-between flex-wrap gap-2">
-                  <span>
-                    <strong>Desi:</strong> {(() => {
-                      const w = product.widthCm || 0; const l = product.lengthCm || 0; const h = product.heightCm || 0;
-                      const desi = (h * w * l) / 3000;
-                      return desi ? desi.toFixed(2) : '-';
-                    })()}
-                  </span>
-                  <button
-                    className="btn btn-sm btn-outline-primary"
-                    onClick={() => window.location.assign(`/desi?productId=${product.id}`)}
-                  >
-                    <i className="fas fa-calculator me-1"></i>
-                    Desi Hesapla
-                  </button>
-                </p>
-                <p className="card-text">
-                  <strong>Kargo Ücreti:</strong> {(() => {
-                    const w = product.widthCm || 0; const l = product.lengthCm || 0; const h = product.heightCm || 0;
-                    const desi = (h * w * l) / 3000;
-                    const rate = product.shippingRate || 0;
-                    const total = desi * rate;
-                    return isNaN(total) || total === 0 ? '-' : `₺${total.toFixed(2)}`;
-                  })()}
-                </p>
-
-                {product.description && (
-                  <p className="card-text text-muted small">
-                    {product.description.length > 100
-                      ? product.description.substring(0, 100) + '...'
-                      : product.description}
-                  </p>
-                )}
-
-                <div className="row mt-3">
-                  <div className="col-6">
-                    <span className="fw-bold">
-                      <i className="fas fa-cubes me-1"></i>
-                      Toplam Stok: {product.totalStock ?? getTotalStockQuantity(product)}
-                    </span>
-                  </div>
-                  <div className="col-6">
-                    {getLowStockCount(product) > 0 && (
-                      <span className="badge bg-warning text-dark">
-                        {getLowStockCount(product)} Düşük Stok
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div className="card-footer">
-                <div className="btn-group w-100" role="group">
-                  <button
-                    className="btn btn-outline-secondary btn-sm"
-                    onClick={() => handleEdit(product)}
-                  >
-                    <i className="fas fa-edit me-1"></i>
-                    Düzenle
-                  </button>
-                  <button
-                    className={`btn btn-sm ${(product.active === false) ? 'btn-outline-success' : 'btn-outline-warning'}`}
-                    onClick={() => handleToggleActive(product.id, product.active === false ? false : true)}
-                  >
-                    <i className={`fas ${(product.active === false) ? 'fa-play' : 'fa-pause'} me-1`}></i>
-                    {(product.active === false) ? 'Aktifleştir' : 'Pasifleştir'}
-                  </button>
-                  <button
-                    className="btn btn-outline-danger btn-sm"
-                    onClick={() => handleDelete(product.id)}
-                  >
-                    <i className="fas fa-trash me-1"></i>
-                    Sil
-                  </button>
-                </div>
-              </div>
-            </div>
+                      </td>
+                      <td>
+                        <span className="badge text-bg-light border">
+                          <i className="fas fa-barcode me-1"></i>{product.sku}
+                        </span>
+                      </td>
+                      <td>
+                        {product.category?.name ? (
+                          <span className="badge text-bg-light border">
+                            <i className="fas fa-tag me-1"></i>
+                            {product.category.parentName ? `${product.category.parentName} > ` : ''}
+                            {product.category.name}
+                          </span>
+                        ) : (
+                          <span className="text-muted">-</span>
+                        )}
+                      </td>
+                      <td>
+                        {product.brand?.name ? (
+                          <span className="badge text-bg-light border">
+                            <i className="fas fa-copyright me-1"></i>{product.brand.name}
+                          </span>
+                        ) : (
+                          <span className="text-muted">-</span>
+                        )}
+                      </td>
+                      <td>
+                        {product.color?.name ? (
+                          <span className="badge text-bg-light border">
+                            <i className="fas fa-palette me-1"></i>{product.color.name}
+                          </span>
+                        ) : (
+                          <span className="text-muted">-</span>
+                        )}
+                      </td>
+                      <td className="text-end">
+                        <div className="d-flex flex-column align-items-end">
+                          <strong className="text-success">
+                            ₺{totalPrice.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
+                          </strong>
+                          {showDetailedPrice && (product.vatRate > 0 || product.sctRate > 0) && (
+                            <small className="text-muted">
+                              Ana: ₺{product.price?.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
+                            </small>
+                          )}
+                          {(product.vatRate > 0 || product.sctRate > 0) && (
+                            <small className="text-info">
+                              {product.vatRate > 0 && `KDV %${product.vatRate}`}
+                              {product.vatRate > 0 && product.sctRate > 0 && ' + '}
+                              {product.sctRate > 0 && `ÖTV %${product.sctRate}`}
+                            </small>
+                          )}
+                        </div>
+                      </td>
+                      <td className="text-center">
+                        <div className="d-flex flex-column align-items-center gap-1">
+                          <span className="fw-bold">
+                            <i className="fas fa-cubes me-1"></i>
+                            {product.totalStock ?? getTotalStockQuantity(product)}
+                          </span>
+                          {getLowStockCount(product) > 0 && (
+                            <span className="badge bg-warning text-dark">
+                              {getLowStockCount(product)} Düşük
+                            </span>
+                          )}
+                          {desi > 0 && (
+                            <small className="text-muted">
+                              Desi: {desi.toFixed(2)}
+                            </small>
+                          )}
+                          {shippingCost > 0 && (
+                            <small className="text-muted">
+                              Kargo: ₺{shippingCost.toFixed(2)}
+                            </small>
+                          )}
+                        </div>
+                      </td>
+                      <td className="text-center">
+                        <span className={`badge ${product.active === false ? 'bg-secondary' : 'bg-success'}`}>
+                          {product.active === false ? 'Pasif' : 'Aktif'}
+                        </span>
+                      </td>
+                      <td className="text-center">
+                        <div className="d-flex justify-content-center">
+                          <div className="btn-group" role="group">
+                            <button
+                              className="btn btn-outline-secondary"
+                              onClick={() => handleEdit(product)}
+                              title="Düzenle"
+                              style={{ minWidth: '45px', padding: '0.5rem 0.75rem' }}
+                            >
+                              <i className="fas fa-edit"></i>
+                            </button>
+                            <button
+                              className={`btn ${(product.active === false) ? 'btn-outline-success' : 'btn-outline-warning'}`}
+                              onClick={() => handleToggleActive(product.id, product.active === false ? false : true)}
+                              title={(product.active === false) ? 'Aktifleştir' : 'Pasifleştir'}
+                              style={{ minWidth: '45px', padding: '0.5rem 0.75rem' }}
+                            >
+                              <i className={`fas ${(product.active === false) ? 'fa-play' : 'fa-pause'}`}></i>
+                            </button>
+                            <button
+                              className="btn btn-outline-primary"
+                              onClick={() => window.location.assign(`/desi?productId=${product.id}`)}
+                              title="Desi Hesapla"
+                              style={{ minWidth: '45px', padding: '0.5rem 0.75rem' }}
+                            >
+                              <i className="fas fa-calculator"></i>
+                            </button>
+                            <button
+                              className="btn btn-outline-danger"
+                              onClick={() => handleDelete(product.id)}
+                              title="Sil"
+                              style={{ minWidth: '45px', padding: '0.5rem 0.75rem' }}
+                            >
+                              <i className="fas fa-trash"></i>
+                            </button>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-        ))}
+        </div>
       </div>
 
       {filteredProducts.length === 0 && (

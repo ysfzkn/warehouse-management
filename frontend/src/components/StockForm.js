@@ -380,49 +380,114 @@ const StockForm = ({ products, warehouses, onSuccess, onCancel }) => {
                 </div>
               ) : (
                 <>
-                  <div className="stock-option-list border rounded-4 shadow-sm bg-white">
-                    <div className="stock-option-grid">
-                      {limitedProductOptions.map(product => {
-                        const productId = String(product.id);
-                        const isSelected = selectedProductMap.has(productId);
-                        return (
-                          <button
-                            type="button"
-                            key={product.id}
-                            className={`stock-option-button ${isSelected ? 'active' : ''}`}
-                            onClick={() => handleAddProduct(productId)}
-                            disabled={isSelected}
-                          >
-                            <div className="d-flex justify-content-between align-items-start">
-                              <div>
-                                <div className="fw-semibold text-dark">{product.name}</div>
-                                <div className="text-muted small">SKU: {product.sku}</div>
-                                {product.brand?.name && (
-                                  <div className="badge bg-light text-dark mt-2">
-                                    {product.brand.name}
+                  {/* Optimized Card View for All Devices */}
+                  <div className="d-flex flex-column gap-2" style={{ maxHeight: '65vh', overflowY: 'auto' }}>
+                    {limitedProductOptions.map(product => {
+                      const productId = String(product.id);
+                      const isSelected = selectedProductMap.has(productId);
+                      return (
+                        <div
+                          key={product.id}
+                          className={`card border shadow-sm ${isSelected ? 'border-success bg-success bg-opacity-10' : 'border-light'}`}
+                          style={{
+                            cursor: isSelected ? 'default' : 'pointer',
+                            transition: 'all 0.2s ease',
+                          }}
+                          onClick={() => !isSelected && handleAddProduct(productId)}
+                        >
+                          <div className="card-body p-3">
+                            <div className="row g-2 align-items-center">
+                              {/* Status Indicator */}
+                              <div className="col-auto">
+                                {isSelected ? (
+                                  <div className="text-center">
+                                    <i className="fas fa-check-circle text-success" style={{ fontSize: '1.5rem' }}></i>
+                                    <div className="small text-success mt-1 fw-bold">Seçildi</div>
+                                  </div>
+                                ) : (
+                                  <div className="text-center">
+                                    <i className="fas fa-circle text-muted" style={{ fontSize: '1.2rem', opacity: 0.3 }}></i>
                                   </div>
                                 )}
                               </div>
-                              {isSelected && (
-                                <span className="badge bg-success">
-                                  <i className="fas fa-check"></i>
-                                </span>
-                              )}
+
+                              {/* Product Info */}
+                              <div className="col">
+                                <div className="d-flex flex-column">
+                                  <div className="fw-bold mb-1" style={{ fontSize: '1rem' }}>
+                                    {product.name}
+                                  </div>
+                                  <div className="d-flex flex-wrap gap-1 align-items-center mb-1">
+                                    <span className="badge bg-light text-dark border" style={{ fontSize: '0.75rem' }}>
+                                      <i className="fas fa-barcode me-1"></i>
+                                      {product.sku}
+                                    </span>
+                                    {product.brand?.name && (
+                                      <span className="badge bg-light text-dark border" style={{ fontSize: '0.75rem' }}>
+                                        <i className="fas fa-copyright me-1"></i>
+                                        {product.brand.name}
+                                      </span>
+                                    )}
+                                    {product.category?.name && (
+                                      <span className="badge bg-info bg-opacity-10 text-info border border-info" style={{ fontSize: '0.7rem' }}>
+                                        <i className="fas fa-tag me-1"></i>
+                                        {product.category.parentName ? `${product.category.parentName.substring(0, 10)}${product.category.parentName.length > 10 ? '...' : ''} > ` : ''}
+                                        {product.category.name.length > 15 ? `${product.category.name.substring(0, 15)}...` : product.category.name}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {product.description && (
+                                    <small className="text-muted" style={{ fontSize: '0.75rem' }}>
+                                      {product.description.length > 60 ? `${product.description.substring(0, 60)}...` : product.description}
+                                    </small>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Action Button */}
+                              <div className="col-auto">
+                                {!isSelected ? (
+                                  <button
+                                    type="button"
+                                    className="btn btn-primary btn-sm"
+                                    style={{ minWidth: '80px', minHeight: '38px' }}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleAddProduct(productId);
+                                    }}
+                                  >
+                                    <i className="fas fa-plus me-1"></i>
+                                    <span className="d-none d-sm-inline">Ekle</span>
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    className="btn btn-success btn-sm"
+                                    disabled
+                                    style={{ minWidth: '80px', minHeight: '38px' }}
+                                  >
+                                    <i className="fas fa-check me-1"></i>
+                                    <span className="d-none d-sm-inline">Eklendi</span>
+                                  </button>
+                                )}
+                              </div>
                             </div>
-                          </button>
-                        );
-                      })}
-                    </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
+
                   {hasMoreProducts && (
                     <button
                       type="button"
-                      className="btn btn-light btn-sm w-100 mt-2 stock-load-more"
+                      className="btn btn-light btn-sm w-100 mt-2"
                       onClick={() =>
                         setVisibleProductCount(prev => prev + INITIAL_VISIBLE_PRODUCTS)
                       }
                     >
-                      Daha fazla göster ({productOptions.length - limitedProductOptions.length})
+                      <i className="fas fa-chevron-down me-2"></i>
+                      Daha fazla göster ({productOptions.length - limitedProductOptions.length} ürün)
                     </button>
                   )}
                 </>
