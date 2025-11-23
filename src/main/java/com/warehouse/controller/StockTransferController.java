@@ -235,7 +235,8 @@ public class StockTransferController {
                                             Long destinationWarehouseId,
                                             String productName,
                                             String sku,
-                                            String driverName) {
+                                            String driverName,
+                                            String notes) {
         StockTransferFilter filter = new StockTransferFilter();
         filter.setStatus(status);
         filter.setTransferType(transferType);
@@ -244,6 +245,7 @@ public class StockTransferController {
         filter.setProductName(productName);
         filter.setSku(sku);
         filter.setDriverName(driverName);
+        filter.setNotes(notes);
         return filter;
     }
 
