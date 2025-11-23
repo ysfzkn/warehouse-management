@@ -17,6 +17,7 @@ const Categories = () => {
   const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null });
   const [showSubcategoryModal, setShowSubcategoryModal] = useState(false);
   const [selectedParentCategory, setSelectedParentCategory] = useState(null);
+  const [selectedCategories, setSelectedCategories] = useState([]);
 
   useEffect(() => {
     fetchCategories();
@@ -136,6 +137,77 @@ const Categories = () => {
     );
   }, [mainCategories, searchTerm]);
 
+  // Selection handlers
+  const allVisibleCategoryIds = filteredCategories.map(c => c.id);
+  const areAllVisibleSelected = filteredCategories.length > 0 && allVisibleCategoryIds.every(id => selectedCategories.includes(id));
+  const selectedCategoryCount = selectedCategories.length;
+
+  const toggleSelectAllVisible = () => {
+    if (!filteredCategories.length) return;
+    if (areAllVisibleSelected) {
+      setSelectedCategories(prev => prev.filter(id => !allVisibleCategoryIds.includes(id)));
+    } else {
+      setSelectedCategories(prev => [...new Set([...prev, ...allVisibleCategoryIds])]);
+    }
+  };
+
+  const toggleCategorySelection = (id) => {
+    setSelectedCategories(prev =>
+      prev.includes(id) ? prev.filter(existingId => existingId !== id) : [...prev, id]
+    );
+  };
+
+  const clearSelectedCategories = () => {
+    setSelectedCategories([]);
+  };
+
+  const handleBatchDeleteCategories = (ids) => {
+    if (!ids || ids.length === 0) {
+      return;
+    }
+    setConfirmModal({
+      show: true,
+      title: 'Toplu Kategori Silme',
+      message: `${ids.length} kategoriyi silmek istediğinizden emin misiniz? Bu işlem geri alınamaz. Ürün veya alt kategori içeren kategoriler silinemez.`,
+      icon: 'trash',
+      confirmVariant: 'danger',
+      confirmText: 'Evet, Sil',
+      onConfirm: async () => {
+        setConfirmModal({ show: false, title: '', message: '', onConfirm: null });
+        try {
+          const deletePromises = ids.map(id => axios.delete(`/api/categories/${id}`));
+          const results = await Promise.allSettled(deletePromises);
+          const successful = results.filter(r => r.status === 'fulfilled').length;
+          const failed = results.filter(r => r.status === 'rejected').length;
+          setSelectedCategories([]);
+          fetchCategories();
+          const toast = document.createElement('div');
+          toast.className = `toast align-items-center text-bg-${failed > 0 ? 'warning' : 'success'} border-0 position-fixed top-0 end-0 m-3 show`;
+          toast.setAttribute('role', 'alert');
+          const message = failed > 0 
+            ? `${successful} kategori silindi, ${failed} kategori silinemedi (ürün veya alt kategori içeriyor olabilir)`
+            : `${successful} kategori başarıyla silindi`;
+          toast.innerHTML = `<div class="d-flex"><div class="toast-body">${message}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
+          document.body.appendChild(toast);
+          setTimeout(() => { try { document.body.removeChild(toast); } catch {} }, 3500);
+        } catch (error) {
+          const msg = error.response?.data || 'Kategoriler silinirken hata oluştu';
+          const toast = document.createElement('div');
+          toast.className = 'toast align-items-center text-bg-danger border-0 position-fixed top-0 end-0 m-3 show';
+          toast.setAttribute('role', 'alert');
+          toast.innerHTML = `<div class="d-flex"><div class="toast-body">${msg}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
+          document.body.appendChild(toast);
+          setTimeout(() => { try { document.body.removeChild(toast); } catch {} }, 3500);
+        }
+      }
+    });
+  };
+
+  useEffect(() => {
+    if (!selectedCategories.length) return;
+    setSelectedCategories(prev => prev.filter(id => mainCategories.some(category => category.id === id)));
+  }, [mainCategories, selectedCategories.length]);
+
   if (loading) {
     return (
       <div className="text-center">
@@ -190,10 +262,48 @@ const Categories = () => {
 
       <div className="card">
         <div className="card-body">
-          <div className="table-responsive">
+          {selectedCategoryCount > 0 && (
+            <div className="alert alert-warning d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+              <div className="fw-semibold">
+                <i className="fas fa-check-square me-2"></i>
+                {selectedCategoryCount} kategori seçildi
+              </div>
+              <div className="d-flex gap-2 flex-wrap">
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-secondary"
+                  onClick={clearSelectedCategories}
+                >
+                  Seçimi Temizle
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-danger"
+                  onClick={() => handleBatchDeleteCategories([...selectedCategories])}
+                >
+                  <i className="fas fa-trash me-1"></i>
+                  Seçilileri Sil
+                </button>
+              </div>
+            </div>
+          )}
+          {/* Desktop Table View */}
+          <div className="d-none d-lg-block table-responsive">
             <table className="table table-hover align-middle">
               <thead className="table-light">
                 <tr>
+                  <th className="text-center" style={{ width: '40px' }}>
+                    <div className="form-check mb-0">
+                      <input
+                        className="form-check-input"
+                        type="checkbox"
+                        checked={areAllVisibleSelected}
+                        onChange={toggleSelectAllVisible}
+                        disabled={filteredCategories.length === 0}
+                        aria-label="Tümünü seç"
+                      />
+                    </div>
+                  </th>
                   <th style={{ width: '30px' }}></th>
                   <th>Kategori Adı</th>
                   <th>Açıklama</th>
@@ -204,16 +314,30 @@ const Categories = () => {
                 </tr>
               </thead>
               <tbody>
-                {filteredCategories.map((category) => (
+                {filteredCategories.map((category) => {
+                  const isSelected = selectedCategories.includes(category.id);
+                  return (
                   <React.Fragment key={category.id}>
                     <tr
+                      className={isSelected ? 'table-active' : ''}
                       style={{ cursor: category.totalSubcategories > 0 ? 'pointer' : 'default' }}
                       onClick={(e) => {
-                        if (category.totalSubcategories > 0 && !e.target.closest('button, .btn-group')) {
+                        if (category.totalSubcategories > 0 && !e.target.closest('button, .btn-group, .form-check')) {
                           toggleCategoryExpansion(category.id);
                         }
                       }}
                     >
+                      <td className="text-center align-middle">
+                        <div className="form-check mb-0" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            className="form-check-input"
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleCategorySelection(category.id)}
+                            aria-label="Kategori seç"
+                          />
+                        </div>
+                      </td>
                       <td>
                         {category.totalSubcategories > 0 && (
                           <i className={`fas fa-chevron-${expandedCategories.includes(Number(category.id)) ? 'down' : 'right'} text-primary`}></i>
@@ -350,9 +474,173 @@ const Categories = () => {
                       </tr>
                     )}
                   </React.Fragment>
-                ))}
+                );
+                })}
               </tbody>
             </table>
+          </div>
+
+          {/* Mobile Card View */}
+          <div className="d-lg-none">
+            <div className="d-flex flex-column gap-3">
+              {filteredCategories.map((category) => {
+                const isSelected = selectedCategories.includes(category.id);
+                const isExpanded = expandedCategories.includes(Number(category.id));
+                
+                return (
+                  <div key={category.id}>
+                    <div
+                      className={`card border shadow-sm ${isSelected ? 'border-primary bg-primary bg-opacity-10' : ''}`}
+                    >
+                      <div className="card-body p-3">
+                        {/* Header */}
+                        <div className="d-flex justify-content-between align-items-start mb-3">
+                          <div className="flex-grow-1">
+                            <div className="d-flex align-items-center gap-2 mb-2">
+                              <div className="form-check">
+                                <input
+                                  className="form-check-input"
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={() => toggleCategorySelection(category.id)}
+                                  aria-label="Kategori seç"
+                                />
+                              </div>
+                              <div>
+                                <div className="fw-bold mb-1" style={{ fontSize: '1.05rem' }}>{category.name}</div>
+                                {category.totalSubcategories > 0 && (
+                                  <small className="text-primary">
+                                    <i className="fas fa-sitemap me-1"></i>
+                                    {category.totalSubcategories} alt kategori
+                                  </small>
+                                )}
+                              </div>
+                            </div>
+                            {category.description && (
+                              <small className="text-muted d-block mb-2">
+                                {category.description.length > 60 ? `${category.description.substring(0, 60)}...` : category.description}
+                              </small>
+                            )}
+                          </div>
+                          {category.totalSubcategories > 0 && (
+                            <button
+                              className="btn btn-sm btn-outline-primary"
+                              onClick={() => toggleCategoryExpansion(category.id)}
+                            >
+                              <i className={`fas fa-chevron-${isExpanded ? 'up' : 'down'}`}></i>
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Info Grid */}
+                        <div className="row g-2 mb-3">
+                          <div className="col-6">
+                            <div className="text-center p-2 bg-primary bg-opacity-10 rounded border border-primary">
+                              <div className="small text-muted mb-1">
+                                <i className="fas fa-box me-1"></i>
+                                Ürün Sayısı
+                              </div>
+                              <div className="fw-bold text-primary" style={{ fontSize: '1.1rem' }}>
+                                {category.totalProductCount ?? category.productCount}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="col-6">
+                            <div className="text-center p-2 bg-info bg-opacity-10 rounded border border-info">
+                              <div className="small text-muted mb-1">
+                                <i className="fas fa-sitemap me-1"></i>
+                                Alt Kategori
+                              </div>
+                              <div className="fw-bold text-info" style={{ fontSize: '1.1rem' }}>
+                                {category.totalSubcategories || 0}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Date */}
+                        <div className="mb-3">
+                          <small className="text-muted">
+                            <i className="fas fa-calendar me-1"></i>
+                            Oluşturulma: {new Date(category.createdAt).toLocaleDateString('tr-TR')}
+                          </small>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="d-flex flex-wrap gap-2">
+                          <button
+                            className="btn btn-sm btn-outline-secondary flex-fill"
+                            onClick={() => handleEdit(category)}
+                          >
+                            <i className="fas fa-edit me-1"></i>
+                            Düzenle
+                          </button>
+                          <button
+                            className="btn btn-sm btn-outline-primary flex-fill"
+                            onClick={() => handleAddSubcategory(category)}
+                          >
+                            <i className="fas fa-plus me-1"></i>
+                            Alt Kategori
+                          </button>
+                          <button
+                            className="btn btn-sm btn-outline-danger"
+                            onClick={() => handleDelete(category.id)}
+                            disabled={(category.totalProductCount ?? category.productCount) > 0 || category.totalSubcategories > 0}
+                            title={(category.totalProductCount ?? category.productCount) > 0 || category.totalSubcategories > 0 ? "Ürün veya alt kategori içeren kategoriler silinemez" : "Sil"}
+                          >
+                            <i className="fas fa-trash"></i>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Subcategories - Mobile View */}
+                    {isExpanded && category.subcategories && category.subcategories.length > 0 && (
+                      <div className="mt-2 ms-3">
+                        <div className="small fw-bold text-primary mb-2">
+                          <i className="fas fa-sitemap me-1"></i>
+                          Alt Kategoriler:
+                        </div>
+                        <div className="d-flex flex-column gap-2">
+                          {category.subcategories.map((subcategory) => (
+                            <div key={subcategory.id} className="card border border-info bg-info bg-opacity-5">
+                              <div className="card-body p-2">
+                                <div className="d-flex justify-content-between align-items-center">
+                                  <div>
+                                    <div className="fw-semibold small">{subcategory.name}</div>
+                                    <span className="badge bg-primary bg-opacity-10 text-primary" style={{ fontSize: '0.7rem' }}>
+                                      <i className="fas fa-box me-1"></i>
+                                      {subcategory.productCount || 0} ürün
+                                    </span>
+                                  </div>
+                                  <div className="btn-group btn-group-sm">
+                                    <button
+                                      className="btn btn-outline-secondary btn-sm"
+                                      onClick={() => handleEdit(subcategory)}
+                                      title="Düzenle"
+                                    >
+                                      <i className="fas fa-edit"></i>
+                                    </button>
+                                    <button
+                                      className="btn btn-outline-danger btn-sm"
+                                      onClick={() => handleDelete(subcategory.id)}
+                                      disabled={(subcategory.productCount || 0) > 0}
+                                      title={(subcategory.productCount || 0) > 0 ? "Ürün içeren kategoriler silinemez" : "Sil"}
+                                    >
+                                      <i className="fas fa-trash"></i>
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>

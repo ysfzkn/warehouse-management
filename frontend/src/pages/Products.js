@@ -29,6 +29,7 @@ const Products = () => {
   const [bulkDirection, setBulkDirection] = useState('INCREASE');
   const [bulkValue, setBulkValue] = useState('');
   const [bulkOnlyActive, setBulkOnlyActive] = useState(true);
+  const [selectedProducts, setSelectedProducts] = useState([]);
 
   useEffect(() => {
     fetchProducts();
@@ -186,6 +187,72 @@ const Products = () => {
   const getLowStockCount = (product) => {
     return product.stocks ? product.stocks.filter(stock => stock.quantity <= stock.minStockLevel).length : 0;
   };
+
+  // Selection handlers
+  const allVisibleProductIds = filteredProducts.map(p => p.id);
+  const areAllVisibleSelected = filteredProducts.length > 0 && allVisibleProductIds.every(id => selectedProducts.includes(id));
+  const selectedProductCount = selectedProducts.length;
+
+  const toggleSelectAllVisible = () => {
+    if (!filteredProducts.length) return;
+    if (areAllVisibleSelected) {
+      setSelectedProducts(prev => prev.filter(id => !allVisibleProductIds.includes(id)));
+    } else {
+      setSelectedProducts(prev => [...new Set([...prev, ...allVisibleProductIds])]);
+    }
+  };
+
+  const toggleProductSelection = (id) => {
+    setSelectedProducts(prev =>
+      prev.includes(id) ? prev.filter(existingId => existingId !== id) : [...prev, id]
+    );
+  };
+
+  const clearSelectedProducts = () => {
+    setSelectedProducts([]);
+  };
+
+  const handleBatchDeleteProducts = (ids) => {
+    if (!ids || ids.length === 0) {
+      return;
+    }
+    setConfirmModal({
+      show: true,
+      title: 'Toplu Ürün Silme',
+      message: `${ids.length} ürünü silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.`,
+      icon: 'trash',
+      confirmVariant: 'danger',
+      confirmText: 'Evet, Sil',
+      onConfirm: async () => {
+        setConfirmModal({ show: false, title: '', message: '', onConfirm: null });
+        try {
+          const deletePromises = ids.map(id => axios.delete(`/api/products/${id}`));
+          await Promise.all(deletePromises);
+          setSelectedProducts([]);
+          fetchProducts();
+          const toast = document.createElement('div');
+          toast.className = 'toast align-items-center text-bg-success border-0 position-fixed top-0 end-0 m-3 show';
+          toast.setAttribute('role', 'alert');
+          toast.innerHTML = `<div class="d-flex"><div class="toast-body">${ids.length} ürün başarıyla silindi</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
+          document.body.appendChild(toast);
+          setTimeout(() => { try { document.body.removeChild(toast); } catch {} }, 3500);
+        } catch (error) {
+          const msg = error.response?.data || 'Ürünler silinirken hata oluştu';
+          const toast = document.createElement('div');
+          toast.className = 'toast align-items-center text-bg-danger border-0 position-fixed top-0 end-0 m-3 show';
+          toast.setAttribute('role', 'alert');
+          toast.innerHTML = `<div class="d-flex"><div class="toast-body">${msg}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
+          document.body.appendChild(toast);
+          setTimeout(() => { try { document.body.removeChild(toast); } catch {} }, 3500);
+        }
+      }
+    });
+  };
+
+  useEffect(() => {
+    if (!selectedProducts.length) return;
+    setSelectedProducts(prev => prev.filter(id => products.some(product => product.id === id)));
+  }, [products, selectedProducts.length]);
 
   if (loading) {
     return (
@@ -358,10 +425,48 @@ const Products = () => {
       {/* Products List */}
       <div className="card">
         <div className="card-body">
-          <div className="table-responsive">
+          {selectedProductCount > 0 && (
+            <div className="alert alert-warning d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+              <div className="fw-semibold">
+                <i className="fas fa-check-square me-2"></i>
+                {selectedProductCount} ürün seçildi
+              </div>
+              <div className="d-flex gap-2 flex-wrap">
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-secondary"
+                  onClick={clearSelectedProducts}
+                >
+                  Seçimi Temizle
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-danger"
+                  onClick={() => handleBatchDeleteProducts([...selectedProducts])}
+                >
+                  <i className="fas fa-trash me-1"></i>
+                  Seçilileri Sil
+                </button>
+              </div>
+            </div>
+          )}
+          {/* Desktop Table View */}
+          <div className="d-none d-lg-block table-responsive">
             <table className="table table-hover align-middle">
               <thead className="table-light">
                 <tr>
+                  <th className="text-center" style={{ width: '40px' }}>
+                    <div className="form-check mb-0">
+                      <input
+                        className="form-check-input"
+                        type="checkbox"
+                        checked={areAllVisibleSelected}
+                        onChange={toggleSelectAllVisible}
+                        disabled={filteredProducts.length === 0}
+                        aria-label="Tümünü seç"
+                      />
+                    </div>
+                  </th>
                   <th>Ürün Adı</th>
                   <th>Stok Kodu</th>
                   <th>Kategori</th>
@@ -388,8 +493,21 @@ const Products = () => {
                   const desi = (h * w * l) / 3000;
                   const shippingCost = desi * (product.shippingRate || 0);
 
+                  const isSelected = selectedProducts.includes(product.id);
+
                   return (
-                    <tr key={product.id}>
+                    <tr key={product.id} className={isSelected ? 'table-active' : ''}>
+                      <td className="text-center align-middle">
+                        <div className="form-check mb-0">
+                          <input
+                            className="form-check-input"
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleProductSelection(product.id)}
+                            aria-label="Ürün seç"
+                          />
+                        </div>
+                      </td>
                       <td>
                         <div className="fw-semibold">{product.name}</div>
                         {product.description && (
@@ -524,6 +642,181 @@ const Products = () => {
                 })}
               </tbody>
             </table>
+          </div>
+
+          {/* Mobile Card View */}
+          <div className="d-lg-none">
+            <div className="d-flex flex-column gap-3">
+              {filteredProducts.map((product) => {
+                const calculateTotalPrice = () => {
+                  const sctAmount = product.price * (product.sctRate || 0) / 100;
+                  const priceWithSct = product.price + sctAmount;
+                  const vatAmount = priceWithSct * (product.vatRate || 0) / 100;
+                  return priceWithSct + vatAmount;
+                };
+                const totalPrice = calculateTotalPrice();
+                const w = product.widthCm || 0;
+                const l = product.lengthCm || 0;
+                const h = product.heightCm || 0;
+                const desi = (h * w * l) / 3000;
+                const shippingCost = desi * (product.shippingRate || 0);
+                const isSelected = selectedProducts.includes(product.id);
+
+                return (
+                  <div
+                    key={product.id}
+                    className={`card border shadow-sm ${isSelected ? 'border-primary bg-primary bg-opacity-10' : ''}`}
+                  >
+                    <div className="card-body p-3">
+                      {/* Header with checkbox and name */}
+                      <div className="d-flex justify-content-between align-items-start mb-3">
+                        <div className="flex-grow-1">
+                          <div className="d-flex align-items-center gap-2 mb-2">
+                            <div className="form-check">
+                              <input
+                                className="form-check-input"
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => toggleProductSelection(product.id)}
+                                aria-label="Ürün seç"
+                              />
+                            </div>
+                            <div>
+                              <div className="fw-bold mb-1" style={{ fontSize: '1.05rem' }}>{product.name}</div>
+                              <div className="d-flex flex-wrap gap-1 align-items-center">
+                                <span className="badge bg-light text-dark border" style={{ fontSize: '0.75rem' }}>
+                                  <i className="fas fa-barcode me-1"></i>
+                                  {product.sku}
+                                </span>
+                                <span className={`badge ${product.active === false ? 'bg-secondary' : 'bg-success'}`}>
+                                  {product.active === false ? 'Pasif' : 'Aktif'}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                          {product.description && (
+                            <small className="text-muted d-block mb-2">
+                              {product.description.length > 60 ? `${product.description.substring(0, 60)}...` : product.description}
+                            </small>
+                          )}
+                          <div className="d-flex flex-wrap gap-1 align-items-center">
+                            {product.category?.name && (
+                              <span className="badge bg-info bg-opacity-10 text-info border border-info" style={{ fontSize: '0.7rem' }}>
+                                <i className="fas fa-tag me-1"></i>
+                                {product.category.parentName ? `${product.category.parentName.substring(0, 10)}${product.category.parentName.length > 10 ? '...' : ''} > ` : ''}
+                                {product.category.name.length > 15 ? `${product.category.name.substring(0, 15)}...` : product.category.name}
+                              </span>
+                            )}
+                            {product.brand?.name && (
+                              <span className="badge bg-light text-dark border" style={{ fontSize: '0.7rem' }}>
+                                <i className="fas fa-copyright me-1"></i>
+                                {product.brand.name}
+                              </span>
+                            )}
+                            {product.color?.name && (
+                              <span className="badge bg-light text-dark border" style={{ fontSize: '0.7rem' }}>
+                                <i className="fas fa-palette me-1"></i>
+                                {product.color.name}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Info Grid */}
+                      <div className="row g-2 mb-3">
+                        <div className="col-6">
+                          <div className="text-center p-2 bg-light rounded border">
+                            <div className="small text-muted mb-1">
+                              <i className="fas fa-tag me-1"></i>
+                              Fiyat
+                            </div>
+                            <div className="fw-bold text-success" style={{ fontSize: '1.1rem' }}>
+                              ₺{totalPrice.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
+                            </div>
+                            {showDetailedPrice && (product.vatRate > 0 || product.sctRate > 0) && (
+                              <small className="text-muted d-block mt-1">
+                                Ana: ₺{product.price?.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
+                              </small>
+                            )}
+                          </div>
+                        </div>
+                        <div className="col-6">
+                          <div className="text-center p-2 bg-light rounded border">
+                            <div className="small text-muted mb-1">
+                              <i className="fas fa-cubes me-1"></i>
+                              Stok
+                            </div>
+                            <div className="fw-bold" style={{ fontSize: '1.1rem' }}>
+                              {product.totalStock ?? getTotalStockQuantity(product)}
+                            </div>
+                            {getLowStockCount(product) > 0 && (
+                              <span className="badge bg-warning text-dark mt-1" style={{ fontSize: '0.65rem' }}>
+                                {getLowStockCount(product)} Düşük
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Additional Info */}
+                      {(desi > 0 || shippingCost > 0) && (
+                        <div className="row g-2 mb-3">
+                          {desi > 0 && (
+                            <div className="col-6">
+                              <div className="text-center p-2 bg-light rounded border">
+                                <div className="small text-muted mb-1">Desi</div>
+                                <div className="fw-semibold small">{desi.toFixed(2)}</div>
+                              </div>
+                            </div>
+                          )}
+                          {shippingCost > 0 && (
+                            <div className="col-6">
+                              <div className="text-center p-2 bg-light rounded border">
+                                <div className="small text-muted mb-1">Kargo</div>
+                                <div className="fw-semibold small">₺{shippingCost.toFixed(2)}</div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Actions */}
+                      <div className="d-flex flex-wrap gap-2">
+                        <button
+                          className="btn btn-sm btn-outline-secondary flex-fill"
+                          onClick={() => handleEdit(product)}
+                        >
+                          <i className="fas fa-edit me-1"></i>
+                          Düzenle
+                        </button>
+                        <button
+                          className={`btn btn-sm ${(product.active === false) ? 'btn-outline-success' : 'btn-outline-warning'} flex-fill`}
+                          onClick={() => handleToggleActive(product.id, product.active === false ? false : true)}
+                        >
+                          <i className={`fas ${(product.active === false) ? 'fa-play' : 'fa-pause'} me-1`}></i>
+                          {(product.active === false) ? 'Aktif' : 'Pasif'}
+                        </button>
+                        <button
+                          className="btn btn-sm btn-outline-primary"
+                          onClick={() => window.location.assign(`/desi?productId=${product.id}`)}
+                          title="Desi Hesapla"
+                        >
+                          <i className="fas fa-calculator"></i>
+                        </button>
+                        <button
+                          className="btn btn-sm btn-outline-danger"
+                          onClick={() => handleDelete(product.id)}
+                          title="Sil"
+                        >
+                          <i className="fas fa-trash"></i>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>

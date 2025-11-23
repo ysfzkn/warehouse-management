@@ -48,6 +48,7 @@ public class StockImportServiceImpl implements StockImportService {
 
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
+    private final BrandRepository brandRepository;
     private final WarehouseRepository warehouseRepository;
     private final StockRepository stockRepository;
     private final StockImportHistoryRepository historyRepository;
@@ -57,6 +58,7 @@ public class StockImportServiceImpl implements StockImportService {
 
     public StockImportServiceImpl(ProductRepository productRepository,
                                   CategoryRepository categoryRepository,
+                                  BrandRepository brandRepository,
                                   WarehouseRepository warehouseRepository,
                                   StockRepository stockRepository,
                                   StockImportHistoryRepository historyRepository,
@@ -65,6 +67,7 @@ public class StockImportServiceImpl implements StockImportService {
                                   ImportProperties importProperties) {
         this.productRepository = productRepository;
         this.categoryRepository = categoryRepository;
+        this.brandRepository = brandRepository;
         this.warehouseRepository = warehouseRepository;
         this.stockRepository = stockRepository;
         this.historyRepository = historyRepository;
@@ -86,6 +89,7 @@ public class StockImportServiceImpl implements StockImportService {
             "Ürün Adı (zorunlu)",
             "Stok Kodu (zorunlu)",
             "Kategori Adı (zorunlu)",
+            "Marka (opsiyonel)",
             "Miktar (zorunlu)",
             "Emanet (opsiyonel)",
             "Fiyat (opsiyonel)",
@@ -223,14 +227,15 @@ public class StockImportServiceImpl implements StockImportService {
     private RowData extractRowData(Row row, int rowNumber) {
         return new RowData(
             rowNumber,
-            getStringValue(row, 0),
-            getStringValue(row, 1),
-            getStringValue(row, 2),
-            getStringValue(row, 3),
-            getStringValue(row, 4),
-            getStringValue(row, 5),
-            getStringValue(row, 6),
-            getStringValue(row, 7)
+            getStringValue(row, 0),  // Ürün Adı
+            getStringValue(row, 1),  // Stok Kodu
+            getStringValue(row, 2),  // Kategori Adı
+            getStringValue(row, 3),  // Marka (opsiyonel)
+            getStringValue(row, 4),  // Miktar
+            getStringValue(row, 5),  // Emanet
+            getStringValue(row, 6),  // Fiyat
+            getStringValue(row, 7),  // Minimum Stok
+            getStringValue(row, 8)   // Rezerve
         );
     }
 
@@ -282,7 +287,11 @@ public class StockImportServiceImpl implements StockImportService {
         int consigned = parseIntSafe(rowData.getConsigned(), 0);
 
         Category category = findOrCreateCategory(rowData.getCategoryName(), result);
-        Product product = findOrCreateProduct(rowData, price, category, result);
+        Brand brand = null;
+        if (!isBlank(rowData.getBrandName())) {
+            brand = findOrCreateBrand(rowData.getBrandName(), result);
+        }
+        Product product = findOrCreateProduct(rowData, price, category, brand, result);
         findOrUpdateStock(product, warehouse, quantity, minStock, reserved, consigned, result);
 
         result.incrementProcessedRows();
@@ -314,12 +323,33 @@ public class StockImportServiceImpl implements StockImportService {
                 });
     }
 
-    private Product findOrCreateProduct(RowData rowData, BigDecimal price, Category category, ImportResult result) {
+    private Brand findOrCreateBrand(String brandName, ImportResult result) {
+        return brandRepository.findByName(brandName.trim())
+                .orElseGet(() -> {
+                    Brand brand = new Brand();
+                    brand.setName(brandName.trim());
+                    brand.setActive(true);
+                    Brand saved = brandRepository.save(brand);
+                    result.incrementCreatedBrands();
+                    logger.debug("Created new brand: {}", brandName);
+                    return saved;
+                });
+    }
+
+    private Product findOrCreateProduct(RowData rowData, BigDecimal price, Category category, Brand brand, ImportResult result) {
         String skuTrimmed = rowData.getSku().trim();
         Optional<Product> existingProduct = productRepository.findBySku(skuTrimmed);
         
         if (existingProduct.isPresent()) {
-            return existingProduct.get();
+            Product product = existingProduct.get();
+            // Eğer marka belirtilmişse ve ürünün markası yoksa veya farklıysa, markayı güncelle
+            if (brand != null && (product.getBrand() == null || !product.getBrand().getId().equals(brand.getId()))) {
+                product.setBrand(brand);
+                product.setUpdatedAt(LocalDateTime.now());
+                productRepository.save(product);
+                logger.debug("Updated product brand: {} -> {}", product.getName(), brand.getName());
+            }
+            return product;
         }
 
         Product product = new Product();
@@ -327,6 +357,7 @@ public class StockImportServiceImpl implements StockImportService {
         product.setSku(skuTrimmed);
         product.setPrice(price);
         product.setCategory(category);
+        product.setBrand(brand);
         product.setActive(true);
         product.setCreatedAt(LocalDateTime.now());
         product.setUpdatedAt(LocalDateTime.now());
@@ -463,17 +494,19 @@ public class StockImportServiceImpl implements StockImportService {
         private final String name;
         private final String sku;
         private final String categoryName;
+        private final String brandName;
         private final String quantity;
         private final String consigned;
         private final String price;
         private final String minStock;
         private final String reserved;
 
-        RowData(int rowNumber, String name, String sku, String categoryName, String quantity,
+        RowData(int rowNumber, String name, String sku, String categoryName, String brandName, String quantity,
                 String consigned, String price, String minStock, String reserved) {
             this.name = name;
             this.sku = sku;
             this.categoryName = categoryName;
+            this.brandName = brandName;
             this.quantity = quantity;
             this.consigned = consigned;
             this.price = price;
@@ -483,6 +516,7 @@ public class StockImportServiceImpl implements StockImportService {
         String getName() { return name; }
         String getSku() { return sku; }
         String getCategoryName() { return categoryName; }
+        String getBrandName() { return brandName; }
         String getQuantity() { return quantity; }
         String getConsigned() { return consigned; }
         String getPrice() { return price; }
@@ -495,6 +529,7 @@ public class StockImportServiceImpl implements StockImportService {
         private int processedRows = 0;
         private int createdProducts = 0;
         private int createdCategories = 0;
+        private int createdBrands = 0;
         private int createdStocks = 0;
         private int updatedStocks = 0;
         private final List<com.warehouse.dto.FailedRowInfo> failedRows = new ArrayList<>();
@@ -504,6 +539,7 @@ public class StockImportServiceImpl implements StockImportService {
         void incrementProcessedRows() { processedRows++; }
         void incrementCreatedProducts() { createdProducts++; }
         void incrementCreatedCategories() { createdCategories++; }
+        void incrementCreatedBrands() { createdBrands++; }
         void incrementCreatedStocks() { createdStocks++; }
         void incrementUpdatedStocks() { updatedStocks++; }
         void addFailedRow(com.warehouse.dto.FailedRowInfo row) { failedRows.add(row); }
@@ -512,6 +548,7 @@ public class StockImportServiceImpl implements StockImportService {
         int getProcessedRows() { return processedRows; }
         int getCreatedProducts() { return createdProducts; }
         int getCreatedCategories() { return createdCategories; }
+        int getCreatedBrands() { return createdBrands; }
         int getCreatedStocks() { return createdStocks; }
         int getUpdatedStocks() { return updatedStocks; }
         List<com.warehouse.dto.FailedRowInfo> getFailedRows() { return failedRows; }

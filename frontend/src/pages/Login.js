@@ -319,12 +319,13 @@ const Login = () => {
             font-size: 14px !important;
           }
           [style*="loginIconContainer"] {
-            width: 64px !important;
-            height: 64px !important;
+            width: 56px !important;
+            height: 56px !important;
             margin-bottom: 16px !important;
+            border-radius: 14px !important;
           }
           [style*="loginIcon"] {
-            font-size: 24px !important;
+            font-size: 20px !important;
           }
           [style*="input"] {
             padding: 12px 44px 12px 44px !important;
@@ -393,13 +394,13 @@ const Login = () => {
             font-size: 13px !important;
           }
           [style*="loginIconContainer"] {
-            width: 56px !important;
-            height: 56px !important;
-            border-radius: 16px !important;
+            width: 48px !important;
+            height: 48px !important;
+            border-radius: 12px !important;
             margin-bottom: 12px !important;
           }
           [style*="loginIcon"] {
-            font-size: 20px !important;
+            font-size: 18px !important;
           }
           [style*="input"] {
             padding: 14px 48px 14px 44px !important;
