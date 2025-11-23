@@ -73,7 +73,8 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
                 LOWER(p.name) LIKE :searchPattern
              OR LOWER(p.sku) LIKE :searchPattern
              OR LOWER(s.warehouse.name) LIKE :searchPattern
-             OR LOWER(COALESCE(s.warehouse.location, '')) LIKE :searchPattern))
+             OR LOWER(COALESCE(s.warehouse.location, '')) LIKE :searchPattern
+             OR LOWER(COALESCE(s.additionNote, '')) LIKE :searchPattern))
           AND (:reservedOnly = false OR COALESCE(s.reservedQuantity, 0) > 0)
           AND (:consignedOnly = false OR COALESCE(s.consignedQuantity, 0) > 0)
           AND (

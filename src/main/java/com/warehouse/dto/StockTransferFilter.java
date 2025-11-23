@@ -12,6 +12,7 @@ public class StockTransferFilter {
     private String productName;
     private String sku;
     private String driverName;
+    private String notes;
 
     public TransferStatus getStatus() {
         return status;
@@ -67,6 +68,14 @@ public class StockTransferFilter {
 
     public void setDriverName(String driverName) {
         this.driverName = driverName;
+    }
+
+    public String getNotes() {
+        return notes;
+    }
+
+    public void setNotes(String notes) {
+        this.notes = notes;
     }
 }
 

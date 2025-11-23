@@ -17,6 +17,8 @@ import com.warehouse.constants.BusinessMessages;
 import com.warehouse.constants.EntityNames;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -58,9 +60,23 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional(readOnly = true)
+    public Page<Product> getAllProducts(Pageable pageable) {
+        logger.debug("Fetching paged products - page: {}, size: {}", pageable.getPageNumber(), pageable.getPageSize());
+        return productRepository.findAll(pageable);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<Product> getAllActiveProducts() {
         logger.debug("Fetching all active products");
         return productRepository.findAllActive();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<Product> getAllActiveProducts(Pageable pageable) {
+        logger.debug("Fetching paged active products - page: {}, size: {}", pageable.getPageNumber(), pageable.getPageSize());
+        return productRepository.findAllActive(pageable);
     }
 
     @Override

@@ -1064,7 +1064,7 @@ useEffect(() => {
 
                                           {/* Mobile Card View */}
                                           <div className="d-md-none">
-                                            <div className="d-flex flex-column gap-3" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+                                            <div className="d-flex flex-column gap-2" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
                                               {limitedStockList.map(stockItem => {
                                                 const optionProductId = String(stockItem.product.id);
                                                 const isSelected = String(itemForm.productId) === optionProductId;
@@ -1076,83 +1076,82 @@ useEffect(() => {
                                                     style={{
                                                       cursor: 'pointer',
                                                       transition: 'all 0.2s ease',
-                                                      minHeight: '180px'
+                                                      borderRadius: '8px'
                                                     }}
                                                     onClick={() => handleItemFormChange('productId', optionProductId)}
                                                   >
-                                                    <div className="card-body p-3">
-                                                      <div className="d-flex justify-content-between align-items-start mb-3">
-                                                        <div className="flex-grow-1 pe-2">
-                                                          <div className="fw-bold mb-2" style={{ fontSize: '1.05rem' }}>
+                                                    <div className="card-body p-2">
+                                                      <div className="d-flex justify-content-between align-items-start mb-2">
+                                                        <div className="flex-grow-1 pe-2" style={{ minWidth: 0 }}>
+                                                          <div className="fw-bold mb-1" style={{ fontSize: '0.9rem', lineHeight: '1.3' }}>
                                                             {stockItem.product.name}
                                                           </div>
-                                                          <div className="d-flex flex-wrap gap-2 align-items-center mb-2">
-                                                            <span className="badge bg-light text-dark border">
+                                                          <div className="d-flex flex-wrap gap-1 align-items-center">
+                                                            <span className="badge bg-light text-dark border" style={{ fontSize: '0.7rem', padding: '0.25rem 0.5rem' }}>
                                                               <i className="fas fa-barcode me-1"></i>
                                                               {stockItem.product.sku}
                                                             </span>
                                                             {stockItem.product.brand?.name && (
-                                                              <span className="badge bg-light text-dark border">
+                                                              <span className="badge bg-light text-dark border" style={{ fontSize: '0.7rem', padding: '0.25rem 0.5rem' }}>
                                                                 <i className="fas fa-copyright me-1"></i>
-                                                                {stockItem.product.brand.name}
+                                                                {stockItem.product.brand.name.length > 12 ? `${stockItem.product.brand.name.substring(0, 12)}...` : stockItem.product.brand.name}
                                                               </span>
                                                             )}
                                                           </div>
                                                         </div>
-                                                        {isSelected && (
-                                                          <div className="text-center">
-                                                            <div className="badge bg-primary text-white mb-1" style={{ fontSize: '0.75rem' }}>
-                                                              <i className="fas fa-check me-1"></i>
-                                                              Seçildi
-                                                            </div>
-                                                          </div>
-                                                        )}
+                                                        <div className="flex-shrink-0">
+                                                          {isSelected && (
+                                                            <span className="badge bg-primary" style={{ fontSize: '0.75rem', padding: '0.4rem 0.6rem' }}>
+                                                              <i className="fas fa-check"></i>
+                                                            </span>
+                                                          )}
+                                                        </div>
                                                       </div>
                                                       
-                                                      <div className="row g-2 mb-2">
+                                                      <div className="row g-1 mb-1">
                                                         <div className="col-6">
-                                                          <div className="text-center p-3 bg-light rounded border">
-                                                            <div className="small text-muted mb-2">
+                                                          <div className="text-center p-2 bg-light rounded" style={{ border: '1px solid #dee2e6' }}>
+                                                            <div className="small text-muted mb-1" style={{ fontSize: '0.7rem' }}>
                                                               <i className="fas fa-cubes me-1"></i>
                                                               Mevcut
                                                             </div>
-                                                            <div className="fw-bold" style={{ fontSize: '1.2rem' }}>
+                                                            <div className="fw-bold" style={{ fontSize: '1rem' }}>
                                                               {stockItem.quantity}
                                                             </div>
                                                           </div>
                                                         </div>
                                                         <div className="col-6">
-                                                          <div className={`text-center p-3 rounded border ${available > 0 ? 'bg-success bg-opacity-10 border-success' : 'bg-danger bg-opacity-10 border-danger'}`}>
-                                                            <div className="small mb-2">
+                                                          <div className={`text-center p-2 rounded ${available > 0 ? 'bg-success bg-opacity-10 border border-success' : 'bg-danger bg-opacity-10 border border-danger'}`}>
+                                                            <div className="small mb-1" style={{ fontSize: '0.7rem' }}>
                                                               <i className="fas fa-check-circle me-1"></i>
                                                               Kullanılabilir
                                                             </div>
-                                                            <div className={`fw-bold ${available > 0 ? 'text-success' : 'text-danger'}`} style={{ fontSize: '1.2rem' }}>
+                                                            <div className={`fw-bold ${available > 0 ? 'text-success' : 'text-danger'}`} style={{ fontSize: '1rem' }}>
                                                               {available}
                                                             </div>
                                                           </div>
                                                         </div>
                                                       </div>
                                                       
-                                                      <div className="row g-2">
+                                                      <div className="row g-1">
                                                         <div className="col-6">
-                                                          <div className="text-center p-2 bg-light rounded border">
-                                                            <div className="small text-muted mb-1">
+                                                          <div className="text-center p-1 bg-light rounded" style={{ border: '1px solid #dee2e6' }}>
+                                                            <div className="small text-muted mb-0" style={{ fontSize: '0.65rem' }}>
                                                               <i className="fas fa-lock me-1"></i>
                                                               Rezerve
                                                             </div>
-                                                            <div className={`fw-semibold ${stockItem.reservedQuantity > 0 ? 'text-warning' : 'text-muted'}`}>
+                                                            <div className={`fw-semibold ${stockItem.reservedQuantity > 0 ? 'text-warning' : 'text-muted'}`} style={{ fontSize: '0.85rem' }}>
                                                               {stockItem.reservedQuantity || 0}
                                                             </div>
                                                           </div>
                                                         </div>
                                                         <div className="col-6">
-                                                          <div className="text-center p-2 bg-light rounded border">
-                                                            <div className="small text-muted mb-1">
+                                                          <div className="text-center p-1 bg-light rounded" style={{ border: '1px solid #dee2e6' }}>
+                                                            <div className="small text-muted mb-0" style={{ fontSize: '0.65rem' }}>
                                                               <i className="fas fa-handshake me-1"></i>
                                                               Emanet
                                                             </div>
-                                                            <div className="fw-semibold text-muted">
+                                                            <div className="fw-semibold text-muted" style={{ fontSize: '0.85rem' }}>
                                                               {stockItem.consignedQuantity || 0}
                                                             </div>
                                                           </div>

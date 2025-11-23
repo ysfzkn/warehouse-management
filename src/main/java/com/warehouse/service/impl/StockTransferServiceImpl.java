@@ -98,6 +98,8 @@ public class StockTransferServiceImpl implements StockTransferService {
                 params.productNamePattern,
                 params.skuProvided,
                 params.skuPattern,
+                params.notesProvided,
+                params.notesPattern,
                 pageable);
     }
 
@@ -168,6 +170,8 @@ public class StockTransferServiceImpl implements StockTransferService {
                 params.productNamePattern,
                 params.skuProvided,
                 params.skuPattern,
+                params.notesProvided,
+                params.notesPattern,
                 pageable);
     }
 
@@ -948,9 +952,11 @@ public class StockTransferServiceImpl implements StockTransferService {
         private final boolean productNameProvided;
         private final boolean skuProvided;
         private final boolean driverNameProvided;
+        private final boolean notesProvided;
         private final String productNamePattern;
         private final String skuPattern;
         private final String driverPattern;
+        private final String notesPattern;
 
         private TransferFilterParams(StockTransferFilter filter) {
             if (filter == null) {
@@ -961,9 +967,11 @@ public class StockTransferServiceImpl implements StockTransferService {
                 this.productNameProvided = false;
                 this.skuProvided = false;
                 this.driverNameProvided = false;
+                this.notesProvided = false;
                 this.productNamePattern = "%";
                 this.skuPattern = "%";
                 this.driverPattern = "%";
+                this.notesPattern = "%";
             } else {
                 this.status = filter.getStatus();
                 this.transferType = filter.getTransferType();
@@ -972,12 +980,15 @@ public class StockTransferServiceImpl implements StockTransferService {
                 String productName = normalize(filter.getProductName());
                 String sku = normalize(filter.getSku());
                 String driverName = normalize(filter.getDriverName());
+                String notes = normalize(filter.getNotes());
                 this.productNameProvided = productName != null;
                 this.skuProvided = sku != null;
                 this.driverNameProvided = driverName != null;
+                this.notesProvided = notes != null;
                 this.productNamePattern = productNameProvided ? likePattern(productName) : "%";
                 this.skuPattern = skuProvided ? likePattern(sku) : "%";
                 this.driverPattern = driverNameProvided ? likePattern(driverName) : "%";
+                this.notesPattern = notesProvided ? likePattern(notes) : "%";
             }
         }
 
@@ -986,7 +997,8 @@ public class StockTransferServiceImpl implements StockTransferService {
         }
 
         private static String likePattern(String value) {
-            return "%" + value.toLowerCase(Locale.ROOT) + "%";
+            // Use Turkish locale for proper case-insensitive search with Turkish characters
+            return "%" + value.toLowerCase(Locale.forLanguageTag("tr-TR")) + "%";
         }
     }
 }

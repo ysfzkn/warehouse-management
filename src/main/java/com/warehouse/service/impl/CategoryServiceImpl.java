@@ -12,6 +12,8 @@ import com.warehouse.constants.EntityNames;
 import com.warehouse.util.NameUniquenessValidator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -45,9 +47,23 @@ public class CategoryServiceImpl implements CategoryService {
 
     @Override
     @Transactional(readOnly = true)
+    public Page<Category> getAllCategories(Pageable pageable) {
+        logger.debug("Fetching paged categories - page: {}, size: {}", pageable.getPageNumber(), pageable.getPageSize());
+        return categoryRepository.findAll(pageable);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<Category> getAllActiveCategories() {
         logger.debug("Fetching all active categories");
         return categoryRepository.findAllActive();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<Category> getAllActiveCategories(Pageable pageable) {
+        logger.debug("Fetching paged active categories - page: {}, size: {}", pageable.getPageNumber(), pageable.getPageSize());
+        return categoryRepository.findAllActive(pageable);
     }
 
     @Override
@@ -169,6 +185,13 @@ public class CategoryServiceImpl implements CategoryService {
     public List<Category> getTopLevelCategories() {
         logger.debug("Fetching top-level categories");
         return categoryRepository.findTopLevelCategories();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<Category> getTopLevelCategories(Pageable pageable) {
+        logger.debug("Fetching paged top-level categories - page: {}, size: {}", pageable.getPageNumber(), pageable.getPageSize());
+        return categoryRepository.findTopLevelCategories(pageable);
     }
 
     @Override

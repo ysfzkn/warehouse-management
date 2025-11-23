@@ -262,6 +262,7 @@ const Stock = () => {
   const [transferProductName, setTransferProductName] = useState('');
   const [transferSku, setTransferSku] = useState('');
   const [transferDriver, setTransferDriver] = useState('');
+  const [transferNotes, setTransferNotes] = useState('');
   const [transferSourceWarehouseId, setTransferSourceWarehouseId] = useState(null);
   const [transferDestinationWarehouseId, setTransferDestinationWarehouseId] = useState(null);
   const [transferTypeFilter, setTransferTypeFilter] = useState('ALL');
@@ -336,6 +337,7 @@ const Stock = () => {
       const normalizedProductName = transferProductName ? transferProductName.toLocaleLowerCase('tr-TR') : undefined;
       const normalizedSku = transferSku ? transferSku.toLocaleLowerCase('tr-TR') : undefined;
       const normalizedDriver = transferDriver ? transferDriver.toLocaleLowerCase('tr-TR') : undefined;
+      const normalizedNotes = transferNotes ? transferNotes.toLocaleLowerCase('tr-TR') : undefined;
       const params = {
         page,
         size,
@@ -344,6 +346,7 @@ const Stock = () => {
         productName: normalizedProductName,
         sku: normalizedSku,
         driverName: normalizedDriver,
+        notes: normalizedNotes,
         sourceWarehouseId: transferSourceWarehouseId || undefined,
         destinationWarehouseId: transferDestinationWarehouseId || undefined
       };
@@ -371,7 +374,7 @@ const Stock = () => {
       console.error('Error fetching transfers:', error);
       throw error;
     }
-  }, [isAdmin, transferStatusFilter, transferTypeFilter, transferProductName, transferSku, transferDriver, transferSourceWarehouseId, transferDestinationWarehouseId, transferPageSize]);
+  }, [isAdmin, transferStatusFilter, transferTypeFilter, transferProductName, transferSku, transferDriver, transferNotes, transferSourceWarehouseId, transferDestinationWarehouseId, transferPageSize]);
 
   const fetchAllData = useCallback(async () => {
     try {
@@ -471,7 +474,7 @@ const Stock = () => {
 
   useEffect(() => {
     setTransferPage(0);
-  }, [transferStatusFilter, transferTypeFilter, transferProductName, transferSku, transferDriver, transferSourceWarehouseId, transferDestinationWarehouseId]);
+  }, [transferStatusFilter, transferTypeFilter, transferProductName, transferSku, transferDriver, transferNotes, transferSourceWarehouseId, transferDestinationWarehouseId]);
 
   // Fetch main categories on mount
   useEffect(() => {
@@ -1989,6 +1992,20 @@ const Stock = () => {
                 </div>
               </div>
               <div className="row g-2 mt-2">
+                <div className="col-md-12">
+                  <div className="input-group">
+                    <span className="input-group-text"><i className="fas fa-sticky-note"></i></span>
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="Notlarda ara (Türkçe karakter desteği ile)..."
+                      value={transferNotes}
+                      onChange={(e) => setTransferNotes(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="row g-2 mt-2">
                 <div className="col-md-6">
                   <SearchableSelect
                     value={transferSourceWarehouseId}
@@ -2015,13 +2032,14 @@ const Stock = () => {
                 </div>
               </div>
               <div className="col-md-12 d-flex flex-wrap gap-2 mt-1">
-                {(transferProductName || transferSku || transferDriver || transferSourceWarehouseId || transferDestinationWarehouseId) && (
+                {(transferProductName || transferSku || transferDriver || transferNotes || transferSourceWarehouseId || transferDestinationWarehouseId) && (
                   <button
                     className="btn btn-sm btn-outline-secondary"
                     onClick={() => {
                       setTransferProductName('');
                       setTransferSku('');
                       setTransferDriver('');
+                      setTransferNotes('');
                       setTransferSourceWarehouseId(null);
                       setTransferDestinationWarehouseId(null);
                     }}

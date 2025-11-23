@@ -81,7 +81,8 @@ public class StockServiceImpl implements StockService {
         String statusValue = status.name();
         String search = appliedFilter.getSearch();
         boolean searchEnabled = search != null && !search.isBlank();
-        String searchPattern = searchEnabled ? "%" + search.toLowerCase(Locale.ROOT) + "%" : "%";
+        // Use Turkish locale for proper case-insensitive search with Turkish characters
+        String searchPattern = searchEnabled ? "%" + search.toLowerCase(Locale.forLanguageTag("tr-TR")) + "%" : "%";
 
         logger.debug("Fetching stocks with advanced filters - page: {}, size: {}", pageable.getPageNumber(), pageable.getPageSize());
         return stockRepository.findByFilters(

@@ -6,6 +6,11 @@ import com.warehouse.dto.ProductDto;
 import com.warehouse.service.ProductService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
+import com.warehouse.dto.PagedResponse;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -26,9 +31,34 @@ public class ProductController {
 
     @GetMapping
     @Transactional(readOnly = true)
-    public ResponseEntity<List<ProductDto>> getAllProducts() {
-        List<Product> products = productService.getAllProducts();
-        return ResponseEntity.ok(products.stream().map(this::toDto).toList());
+    public ResponseEntity<?> getAllProducts(
+            @RequestParam(required = false, defaultValue = "0") Integer page,
+            @RequestParam(required = false, defaultValue = "20") Integer size,
+            @RequestParam(required = false, defaultValue = "name") String sortBy,
+            @RequestParam(required = false, defaultValue = "asc") String sortDir) {
+        if (page != null && size != null) {
+            // Paginated response
+            int safePage = Math.max(0, page);
+            int safeSize = Math.max(1, Math.min(size, 100));
+            Sort sort = Sort.by(Sort.Direction.fromString(sortDir), sortBy);
+            Pageable pageable = PageRequest.of(safePage, safeSize, sort);
+            Page<Product> productPage = productService.getAllProducts(pageable);
+            List<ProductDto> content = productPage.getContent().stream().map(this::toDto).toList();
+            PagedResponse<ProductDto> response = new PagedResponse<>(
+                    content,
+                    productPage.getNumber(),
+                    productPage.getSize(),
+                    productPage.getTotalElements(),
+                    productPage.getTotalPages(),
+                    productPage.isFirst(),
+                    productPage.isLast()
+            );
+            return ResponseEntity.ok(response);
+        } else {
+            // Non-paginated response (backward compatibility)
+            List<Product> products = productService.getAllProducts();
+            return ResponseEntity.ok(products.stream().map(this::toDto).toList());
+        }
     }
 
     @GetMapping("/active")

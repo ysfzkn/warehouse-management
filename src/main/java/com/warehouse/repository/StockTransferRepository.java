@@ -170,6 +170,10 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, Lo
                       AND LOWER(COALESCE(itemSku.product.sku, '')) LIKE :skuPattern
                 )
           )
+          AND (
+                :notesProvided = false
+                OR LOWER(COALESCE(st.notes, '')) LIKE :notesPattern
+          )
         ORDER BY st.transferDate DESC
     """)
     Page<StockTransfer> findByFilters(@Param("createdBy") String createdBy,
@@ -183,6 +187,8 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, Lo
                                       @Param("productNamePattern") String productNamePattern,
                                       @Param("skuProvided") boolean skuProvided,
                                       @Param("skuPattern") String skuPattern,
+                                      @Param("notesProvided") boolean notesProvided,
+                                      @Param("notesPattern") String notesPattern,
                                       Pageable pageable);
 
     @Query("""

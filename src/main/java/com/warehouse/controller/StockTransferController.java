@@ -51,8 +51,9 @@ public class StockTransferController {
             @RequestParam(required = false) String productName,
             @RequestParam(required = false) String sku,
             @RequestParam(required = false) String driverName,
+            @RequestParam(required = false) String notes,
             @PageableDefault(size = 25, sort = "transferDate", direction = Sort.Direction.DESC) Pageable pageable) {
-        StockTransferFilter filter = buildFilter(status, transferType, sourceWarehouseId, destinationWarehouseId, productName, sku, driverName);
+        StockTransferFilter filter = buildFilter(status, transferType, sourceWarehouseId, destinationWarehouseId, productName, sku, driverName, notes);
         Page<StockTransfer> transfers = stockTransferService.getTransfersPaged(filter, pageable);
         List<StockTransferDto> dtos = transferMapper.toDtoList(transfers.getContent());
         StockTransferSummary summary = stockTransferService.getTransferSummary(filter, false);
@@ -111,8 +112,9 @@ public class StockTransferController {
             @RequestParam(required = false) String productName,
             @RequestParam(required = false) String sku,
             @RequestParam(required = false) String driverName,
+            @RequestParam(required = false) String notes,
             @PageableDefault(size = 25, sort = "transferDate", direction = Sort.Direction.DESC) Pageable pageable) {
-        StockTransferFilter filter = buildFilter(status, transferType, sourceWarehouseId, destinationWarehouseId, productName, sku, driverName);
+        StockTransferFilter filter = buildFilter(status, transferType, sourceWarehouseId, destinationWarehouseId, productName, sku, driverName, notes);
         Page<StockTransfer> transfers = stockTransferService.getTransfersForCurrentUserPaged(filter, pageable);
         List<StockTransferDto> dtos = transferMapper.toDtoList(transfers.getContent());
         StockTransferSummary summary = stockTransferService.getTransferSummary(filter, true);

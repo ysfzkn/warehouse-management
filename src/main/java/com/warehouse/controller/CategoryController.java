@@ -6,6 +6,11 @@ import com.warehouse.repository.CategoryRepository;
 import com.warehouse.dto.CategoryDto;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
+import com.warehouse.dto.PagedResponse;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -65,33 +70,73 @@ public class CategoryController {
     }
 
     @GetMapping("/top-level")
-    public ResponseEntity<List<CategoryDto>> getTopLevelCategories() {
+    public ResponseEntity<?> getTopLevelCategories(
+            @RequestParam(required = false, defaultValue = "0") Integer page,
+            @RequestParam(required = false, defaultValue = "20") Integer size,
+            @RequestParam(required = false, defaultValue = "name") String sortBy,
+            @RequestParam(required = false, defaultValue = "asc") String sortDir) {
         var counts = categoryRepository.fetchCategoryProductCounts();
         var countMap = new java.util.HashMap<Long, Long>();
         counts.forEach(c -> countMap.put(c.getCategoryId(), c.getProductCount()));
 
-        List<Category> topLevelCategories = categoryService.getTopLevelCategories();
+        if (page != null && size != null) {
+            // Paginated response
+            int safePage = Math.max(0, page);
+            int safeSize = Math.max(1, Math.min(size, 100));
+            Sort sort = Sort.by(Sort.Direction.fromString(sortDir), sortBy);
+            Pageable pageable = PageRequest.of(safePage, safeSize, sort);
+            Page<Category> categoryPage = categoryService.getTopLevelCategories(pageable);
 
-        var result = topLevelCategories.stream()
-            .map(cat -> {
-                Long productCount = countMap.getOrDefault(cat.getId(), 0L);
+            var content = categoryPage.getContent().stream()
+                .map(cat -> {
+                    Long productCount = countMap.getOrDefault(cat.getId(), 0L);
+                    var dto = new CategoryDto();
+                    dto.setId(cat.getId());
+                    dto.setName(cat.getName());
+                    dto.setDescription(cat.getDescription());
+                    dto.setActive(cat.isActive());
+                    dto.setProductCount(productCount);
+                    dto.setParentId(null);
+                    dto.setParentName(null);
+                    dto.setChildren(new java.util.ArrayList<>());
+                    dto.setCreatedAt(cat.getCreatedAt());
+                    dto.setUpdatedAt(cat.getUpdatedAt());
+                    return dto;
+                })
+                .toList();
 
-                var dto = new CategoryDto();
-                dto.setId(cat.getId());
-                dto.setName(cat.getName());
-                dto.setDescription(cat.getDescription());
-                dto.setActive(cat.isActive());
-                dto.setProductCount(productCount);
-                dto.setParentId(null);
-                dto.setParentName(null);
-                dto.setChildren(new java.util.ArrayList<>());
-                dto.setCreatedAt(cat.getCreatedAt());
-                dto.setUpdatedAt(cat.getUpdatedAt());
-                return dto;
-            })
-            .toList();
-
-        return ResponseEntity.ok(result);
+            PagedResponse<CategoryDto> response = new PagedResponse<>(
+                    content,
+                    categoryPage.getNumber(),
+                    categoryPage.getSize(),
+                    categoryPage.getTotalElements(),
+                    categoryPage.getTotalPages(),
+                    categoryPage.isFirst(),
+                    categoryPage.isLast()
+            );
+            return ResponseEntity.ok(response);
+        } else {
+            // Non-paginated response (backward compatibility)
+            List<Category> topLevelCategories = categoryService.getTopLevelCategories();
+            var result = topLevelCategories.stream()
+                .map(cat -> {
+                    Long productCount = countMap.getOrDefault(cat.getId(), 0L);
+                    var dto = new CategoryDto();
+                    dto.setId(cat.getId());
+                    dto.setName(cat.getName());
+                    dto.setDescription(cat.getDescription());
+                    dto.setActive(cat.isActive());
+                    dto.setProductCount(productCount);
+                    dto.setParentId(null);
+                    dto.setParentName(null);
+                    dto.setChildren(new java.util.ArrayList<>());
+                    dto.setCreatedAt(cat.getCreatedAt());
+                    dto.setUpdatedAt(cat.getUpdatedAt());
+                    return dto;
+                })
+                .toList();
+            return ResponseEntity.ok(result);
+        }
     }
 
     @GetMapping("/{parentId}/subcategories")

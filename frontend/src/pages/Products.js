@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import ProductForm from '../components/ProductForm';
 import SearchableSelect from '../components/SearchableSelect';
 import ConfirmModal from '../components/ConfirmModal';
+import PaginationControls from '../components/PaginationControls';
 
 const normalizeText = (text) => (text || '').toLocaleLowerCase('tr-TR');
 
@@ -30,11 +31,58 @@ const Products = () => {
   const [bulkValue, setBulkValue] = useState('');
   const [bulkOnlyActive, setBulkOnlyActive] = useState(true);
   const [selectedProducts, setSelectedProducts] = useState([]);
+  const [productPage, setProductPage] = useState(0);
+  const [productPageSize, setProductPageSize] = useState(20);
+  const [productTotalPages, setProductTotalPages] = useState(0);
+  const [productTotalCount, setProductTotalCount] = useState(0);
+  const [filteredProducts, setFilteredProducts] = useState([]);
+
+  const fetchProducts = useCallback(async (pageOverride = 0, pageSizeOverride) => {
+    try {
+      setLoading(true);
+      const size = pageSizeOverride ?? productPageSize;
+      const params = {
+        page: pageOverride,
+        size,
+        sortBy: 'name',
+        sortDir: 'asc'
+      };
+      const response = await axios.get('/api/products', { params });
+      const data = response.data || {};
+      const list = Array.isArray(data.content) ? data.content : (Array.isArray(data) ? data : []);
+      
+      // Fetch total stock per product to avoid 0 when stocks are not included in product payload
+      const totals = await Promise.all(
+        list.map(async (p) => {
+          try {
+            const r = await axios.get(`/api/stocks/product/${p.id}/total-quantity`);
+            return { id: p.id, total: typeof r.data === 'number' ? r.data : 0 };
+          } catch {
+            return { id: p.id, total: 0 };
+          }
+        })
+      );
+      const idToTotal = totals.reduce((acc, t) => { acc[t.id] = t.total; return acc; }, {});
+      setProducts(list.map(p => ({ ...p, totalStock: idToTotal[p.id] ?? 0 })));
+      
+      // Update pagination state if response is paginated
+      if (data.totalElements !== undefined) {
+        setProductPage(data.page ?? pageOverride);
+        setProductTotalCount(data.totalElements ?? list.length);
+        setProductTotalPages(data.totalPages ?? 0);
+      }
+    } catch (error) {
+      console.error('Error fetching products:', error);
+      setError('Ürünler yüklenirken hata oluştu');
+    } finally {
+      setLoading(false);
+    }
+  }, [productPageSize]);
 
   useEffect(() => {
-    fetchProducts();
+    fetchProducts(productPage, productPageSize);
     fetchMainCategories();
-  }, []);
+  }, [fetchProducts, productPage, productPageSize]);
 
   useEffect(() => {
     if (selectedCategory) {
@@ -62,34 +110,6 @@ const Products = () => {
     });
     setFilteredProducts(filteredProducts);
   }, [products, searchTerm, selectedCategory, selectedSubcategory, selectedBrand, selectedColor]);
-
-  const [filteredProducts, setFilteredProducts] = useState([]);
-
-  const fetchProducts = async () => {
-    try {
-      setLoading(true);
-      const response = await axios.get('/api/products');
-      const list = response.data || [];
-      // Fetch total stock per product to avoid 0 when stocks are not included in product payload
-      const totals = await Promise.all(
-        list.map(async (p) => {
-          try {
-            const r = await axios.get(`/api/stocks/product/${p.id}/total-quantity`);
-            return { id: p.id, total: typeof r.data === 'number' ? r.data : 0 };
-          } catch {
-            return { id: p.id, total: 0 };
-          }
-        })
-      );
-      const idToTotal = totals.reduce((acc, t) => { acc[t.id] = t.total; return acc; }, {});
-      setProducts(list.map(p => ({ ...p, totalStock: idToTotal[p.id] ?? 0 })));
-    } catch (error) {
-      console.error('Error fetching products:', error);
-      setError('Ürünler yüklenirken hata oluştu');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const fetchMainCategories = async () => {
     try {
@@ -818,6 +838,39 @@ const Products = () => {
               })}
             </div>
           </div>
+          
+          {/* Pagination */}
+          {productTotalPages > 1 && (
+            <div className="d-flex justify-content-between align-items-center mt-3 flex-wrap gap-2">
+              <div className="text-muted small">
+                Toplam {productTotalCount} ürün, Sayfa {productPage + 1} / {productTotalPages}
+              </div>
+              <div className="d-flex align-items-center gap-2">
+                <select
+                  className="form-select form-select-sm"
+                  style={{ width: 'auto' }}
+                  value={productPageSize}
+                  onChange={(e) => {
+                    setProductPageSize(Number(e.target.value));
+                    setProductPage(0);
+                  }}
+                >
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+                <PaginationControls
+                  page={productPage}
+                  totalPages={productTotalPages}
+                  onPageChange={(newPage) => {
+                    setProductPage(newPage);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                />
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
