@@ -76,7 +76,8 @@ const Dashboard = () => {
       ]);
 
       const warehousesData = warehousesRes.data;
-      const products = productsRes.data;
+      const productsData = productsRes.data;
+      const products = Array.isArray(productsData) ? productsData : (Array.isArray(productsData?.content) ? productsData.content : []);
       const categories = categoriesRes.data;
       const lowStockItems = Array.isArray(lowStockRes.data) ? lowStockRes.data : (lowStockRes.data?.content || []);
       const outOfStockItems = Array.isArray(outOfStockRes.data) ? outOfStockRes.data : (outOfStockRes.data?.content || []);

@@ -135,7 +135,7 @@ const StockFiltersBar = ({
             onChange={(e) => setSelectedCategory(e.target.value)}
           >
             <option value="">Tüm Ana Kategoriler</option>
-            {categories.map((category) => (
+            {Array.isArray(categories) && categories.map((category) => (
               <option key={category.id} value={category.id}>
                 {category.name}
               </option>
@@ -150,7 +150,7 @@ const StockFiltersBar = ({
             disabled={!selectedCategory}
           >
             <option value="">Tüm Alt Kategoriler</option>
-            {subcategories.map((subcategory) => (
+            {Array.isArray(subcategories) && subcategories.map((subcategory) => (
               <option key={subcategory.id} value={subcategory.id}>
                 {subcategory.name}
               </option>
@@ -194,7 +194,7 @@ const StockFiltersBar = ({
         chips={[
           searchTerm ? { icon: 'fas fa-search', label: `Arama: "${searchTerm}"`, onClear: () => setSearchTerm('') } : null,
           selectedWarehouseId ? { icon: 'fas fa-warehouse', label: `Depo: ${selectedWarehouseOpt?.name || getWarehouseById(selectedWarehouseId)?.name || selectedWarehouseId}`, onClear: () => { setSelectedWarehouseId(null); setSelectedWarehouseOpt(null); } } : null,
-          selectedCategory ? { icon: 'fas fa-tag', label: `Ana Kategori: ${categories.find(c => c.id.toString() === selectedCategory)?.name || selectedCategory}`, onClear: () => { setSelectedCategory(''); setSelectedSubcategory(''); setSubcategories([]); } } : null,
+          selectedCategory ? { icon: 'fas fa-tag', label: `Ana Kategori: ${Array.isArray(categories) ? categories.find(c => c.id.toString() === selectedCategory)?.name || selectedCategory : selectedCategory}`, onClear: () => { setSelectedCategory(''); setSelectedSubcategory(''); setSubcategories([]); } } : null,
           selectedSubcategory ? { icon: 'fas fa-tags', label: `Alt Kategori: ${subcategories.find(c => c.id.toString() === selectedSubcategory)?.name || selectedSubcategory}`, onClear: () => setSelectedSubcategory('') } : null,
           brandId ? { icon: 'fas fa-copyright', label: `Marka: ${brandOpt?.name || brandId}`, onClear: () => { setBrandId(null); setBrandOpt(null); } } : null,
           colorId ? { icon: 'fas fa-palette', label: `Renk: ${colorOpt?.name || colorId}`, onClear: () => { setColorId(null); setColorOpt(null); } } : null,
@@ -395,8 +395,11 @@ const Stock = () => {
       const results = await Promise.all(calls);
 
       let index = 0;
-      setProducts(results[index++].data);
-      setWarehouses(results[index++].data);
+      const productsData = results[index++].data;
+      const warehousesData = results[index++].data;
+      // Handle paginated response
+      setProducts(Array.isArray(productsData) ? productsData : (Array.isArray(productsData?.content) ? productsData.content : []));
+      setWarehouses(Array.isArray(warehousesData) ? warehousesData : (Array.isArray(warehousesData?.content) ? warehousesData.content : []));
       
       if (role === 'ADMIN') {
         const stockPendingResult = results[index] || null;
@@ -481,7 +484,9 @@ const Stock = () => {
     const fetchMainCategories = async () => {
       try {
         const response = await axios.get('/api/categories/top-level');
-        setCategories(response.data);
+        const categoriesData = response.data;
+        // Handle paginated response
+        setCategories(Array.isArray(categoriesData) ? categoriesData : (Array.isArray(categoriesData?.content) ? categoriesData.content : []));
       } catch (error) {
         // noop
       }
@@ -928,6 +933,7 @@ const Stock = () => {
   };
 
   const getProductById = (id) => {
+    if (!Array.isArray(products)) return null;
     return products.find(p => p.id === id);
   };
 
@@ -1360,10 +1366,15 @@ const Stock = () => {
               </thead>
               <tbody>
                 {stocks.map((stock) => {
-                  const product = getProductById(stock.product.id);
-                  const warehouse = getWarehouseById(stock.warehouse.id);
+                  // Use product from stock directly (it comes from backend with name and sku)
+                  // stock.product already contains name and sku from backend
+                  const productName = stock.product?.name || (getProductById(stock.product?.id)?.name);
+                  const productSku = stock.product?.sku || (getProductById(stock.product?.id)?.sku);
+                  const warehouse = stock.warehouse || getWarehouseById(stock.warehouse?.id);
                   const stockStatus = getStockStatus(stock);
-                  const categoryPath = product?.category ? `${product.category.parentName ? product.category.parentName + ' > ' : ''}${product.category.name}` : null;
+                  // Try to get category from product if available, otherwise use getProductById
+                  const productWithCategory = getProductById(stock.product?.id);
+                  const categoryPath = productWithCategory?.category ? `${productWithCategory.category.parentName ? productWithCategory.category.parentName + ' > ' : ''}${productWithCategory.category.name}` : null;
                   const isSelected = selectedStocks.includes(stock.id);
 
                   return (
@@ -1379,9 +1390,9 @@ const Stock = () => {
                           />
                         </div>
                       </td>
-                      <td>{warehouse?.name}</td>
+                      <td>{warehouse?.name || '-'}</td>
                       <td>
-                        <div className="fw-semibold">{product?.name}</div>
+                        <div className="fw-semibold">{productName || '-'}</div>
                         {categoryPath && (
                           <small className="text-muted d-block">
                             <i className="fas fa-tag me-1"></i>
@@ -1398,7 +1409,7 @@ const Stock = () => {
                           </small>
                         )}
                       </td>
-                      <td>{product?.sku}</td>
+                      <td>{productSku || '-'}</td>
                       <td>
                         <span className="fw-bold">{stock.quantity}</span>
                       </td>
@@ -1495,10 +1506,15 @@ const Stock = () => {
           <div className="d-lg-none">
             <div className="d-flex flex-column gap-3">
               {stocks.map((stock) => {
-                const product = getProductById(stock.product.id);
-                const warehouse = getWarehouseById(stock.warehouse.id);
+                // Use product from stock directly (it comes from backend with name and sku)
+                // stock.product already contains name and sku from backend
+                const productName = stock.product?.name || (getProductById(stock.product?.id)?.name);
+                const productSku = stock.product?.sku || (getProductById(stock.product?.id)?.sku);
+                const warehouse = stock.warehouse || getWarehouseById(stock.warehouse?.id);
                 const stockStatus = getStockStatus(stock);
-                const categoryPath = product?.category ? `${product.category.parentName ? product.category.parentName + ' > ' : ''}${product.category.name}` : null;
+                // Try to get category from product if available, otherwise use getProductById
+                const productWithCategory = getProductById(stock.product?.id);
+                const categoryPath = productWithCategory?.category ? `${productWithCategory.category.parentName ? productWithCategory.category.parentName + ' > ' : ''}${productWithCategory.category.name}` : null;
                 const isSelected = selectedStocks.includes(stock.id);
 
                 return (
@@ -1523,14 +1539,14 @@ const Stock = () => {
                               </div>
                             )}
                             <div>
-                              <div className="fw-bold mb-1">{warehouse?.name}</div>
-                              <div className="fw-semibold" style={{ fontSize: '1.05rem' }}>{product?.name}</div>
+                              <div className="fw-bold mb-1">{warehouse?.name || '-'}</div>
+                              <div className="fw-semibold" style={{ fontSize: '1.05rem' }}>{productName || '-'}</div>
                             </div>
                           </div>
                           <div className="d-flex flex-wrap gap-2 align-items-center mb-2">
                             <span className="badge bg-light text-dark border">
                               <i className="fas fa-barcode me-1"></i>
-                              {product?.sku}
+                              {productSku || '-'}
                             </span>
                             {categoryPath && (
                               <span className="badge bg-info bg-opacity-10 text-info border border-info" style={{ fontSize: '0.7rem' }}>
