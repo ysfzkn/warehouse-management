@@ -319,13 +319,17 @@ const Login = () => {
             font-size: 14px !important;
           }
           [style*="loginIconContainer"] {
-            width: 44px !important;
-            height: 44px !important;
-            margin-bottom: 14px !important;
+            width: 48px !important;
+            height: 48px !important;
+            margin-bottom: 16px !important;
             border-radius: 12px !important;
           }
           [style*="loginIcon"] {
-            font-size: 18px !important;
+            font-size: 20px !important;
+            line-height: 1 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
           }
           [style*="input"] {
             padding: 12px 44px 12px 44px !important;
@@ -394,13 +398,17 @@ const Login = () => {
             font-size: 13px !important;
           }
           [style*="loginIconContainer"] {
-            width: 40px !important;
-            height: 40px !important;
-            border-radius: 10px !important;
-            margin-bottom: 10px !important;
+            width: 48px !important;
+            height: 48px !important;
+            border-radius: 12px !important;
+            margin-bottom: 16px !important;
           }
           [style*="loginIcon"] {
-            font-size: 16px !important;
+            font-size: 20px !important;
+            line-height: 1 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
           }
           [style*="input"] {
             padding: 14px 48px 14px 44px !important;
@@ -459,13 +467,17 @@ const Login = () => {
             font-size: 20px !important;
           }
           [style*="loginIconContainer"] {
-            width: 36px !important;
-            height: 36px !important;
-            border-radius: 9px !important;
-            margin-bottom: 8px !important;
+            width: 44px !important;
+            height: 44px !important;
+            border-radius: 11px !important;
+            margin-bottom: 12px !important;
           }
           [style*="loginIcon"] {
-            font-size: 14px !important;
+            font-size: 18px !important;
+            line-height: 1 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
           }
           [style*="input"] {
             padding: 12px 44px 12px 40px !important;
@@ -650,6 +662,10 @@ const styles = {
   loginIcon: {
     fontSize: '32px',
     color: '#ffffff',
+    lineHeight: '1',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   loginTitle: {
     fontSize: '32px',

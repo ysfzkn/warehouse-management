@@ -133,18 +133,26 @@ const Products = () => {
   const fetchMainCategories = async () => {
     try {
       const response = await axios.get('/api/categories/top-level');
-      setCategories(response.data);
+      const data = response.data || {};
+      // Handle paginated response
+      const categoriesList = Array.isArray(data.content) ? data.content : (Array.isArray(data) ? data : []);
+      setCategories(categoriesList);
     } catch (error) {
       console.error('Error fetching main categories:', error);
+      setCategories([]);
     }
   };
 
   const fetchSubcategories = async (parentId) => {
     try {
       const response = await axios.get(`/api/categories/${parentId}/subcategories`);
-      setSubcategories(response.data);
+      const data = response.data || {};
+      // Handle paginated response
+      const subcategoriesList = Array.isArray(data.content) ? data.content : (Array.isArray(data) ? data : []);
+      setSubcategories(subcategoriesList);
     } catch (error) {
       console.error('Error fetching subcategories:', error);
+      setSubcategories([]);
     }
   };
 
@@ -362,7 +370,7 @@ const Products = () => {
             onChange={(e) => setSelectedCategory(e.target.value)}
           >
             <option value="">Tüm Ana Kategoriler</option>
-            {categories.map((category) => (
+            {Array.isArray(categories) && categories.map((category) => (
               <option key={category.id} value={category.id}>
                 {category.name}
               </option>
@@ -377,7 +385,7 @@ const Products = () => {
             disabled={!selectedCategory}
           >
             <option value="">Tüm Alt Kategoriler</option>
-            {subcategories.map((subcategory) => (
+            {Array.isArray(subcategories) && subcategories.map((subcategory) => (
               <option key={subcategory.id} value={subcategory.id}>
                 {subcategory.name}
               </option>
