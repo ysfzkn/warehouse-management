@@ -4,6 +4,7 @@ import com.warehouse.entity.Product;
 import com.warehouse.dto.BulkPriceUpdateRequest;
 import com.warehouse.dto.ProductDto;
 import com.warehouse.service.ProductService;
+import com.warehouse.service.StockService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import com.warehouse.dto.PagedResponse;
@@ -16,6 +17,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/products")
@@ -23,10 +25,12 @@ import java.util.List;
 public class ProductController {
 
     private final ProductService productService;
+    private final StockService stockService;
 
     @Autowired
-    public ProductController(ProductService productService) {
+    public ProductController(ProductService productService, StockService stockService) {
         this.productService = productService;
+        this.stockService = stockService;
     }
 
     @GetMapping
@@ -43,7 +47,7 @@ public class ProductController {
             Sort sort = Sort.by(Sort.Direction.fromString(sortDir), sortBy);
             Pageable pageable = PageRequest.of(safePage, safeSize, sort);
             Page<Product> productPage = productService.getAllProducts(pageable);
-            List<ProductDto> content = productPage.getContent().stream().map(this::toDto).toList();
+            List<ProductDto> content = mapProductsWithTotals(productPage.getContent());
             PagedResponse<ProductDto> response = new PagedResponse<>(
                     content,
                     productPage.getNumber(),
@@ -57,7 +61,7 @@ public class ProductController {
         } else {
             // Non-paginated response (backward compatibility)
             List<Product> products = productService.getAllProducts();
-            return ResponseEntity.ok(products.stream().map(this::toDto).toList());
+            return ResponseEntity.ok(mapProductsWithTotals(products));
         }
     }
 
@@ -65,14 +69,14 @@ public class ProductController {
     @Transactional(readOnly = true)
     public ResponseEntity<List<ProductDto>> getAllActiveProducts() {
         List<Product> products = productService.getAllActiveProducts();
-        return ResponseEntity.ok(products.stream().map(this::toDto).toList());
+        return ResponseEntity.ok(mapProductsWithTotals(products));
     }
 
     @GetMapping("/{id}")
     @Transactional(readOnly = true)
     public ResponseEntity<ProductDto> getProductById(@PathVariable Long id) {
         return productService.getProductById(id)
-                .map(product -> ResponseEntity.ok(toDto(product)))
+                .map(product -> ResponseEntity.ok(toDtoWithTotal(product)))
                 .orElse(ResponseEntity.notFound().build());
     }
 
@@ -80,7 +84,7 @@ public class ProductController {
     @Transactional(readOnly = true)
     public ResponseEntity<ProductDto> getProductByIdWithStocks(@PathVariable Long id) {
         return productService.getProductByIdWithStocks(id)
-                .map(product -> ResponseEntity.ok(toDto(product)))
+                .map(product -> ResponseEntity.ok(toDtoWithTotal(product)))
                 .orElse(ResponseEntity.notFound().build());
     }
 
@@ -88,7 +92,7 @@ public class ProductController {
     @Transactional(readOnly = true)
     public ResponseEntity<ProductDto> getProductBySku(@PathVariable String sku) {
         return productService.getProductBySku(sku)
-                .map(product -> ResponseEntity.ok(toDto(product)))
+                .map(product -> ResponseEntity.ok(toDtoWithTotal(product)))
                 .orElse(ResponseEntity.notFound().build());
     }
 
@@ -96,14 +100,14 @@ public class ProductController {
     @Transactional(readOnly = true)
     public ResponseEntity<List<ProductDto>> getProductsByCategory(@PathVariable Long categoryId) {
         List<Product> products = productService.getProductsByCategory(categoryId);
-        return ResponseEntity.ok(products.stream().map(this::toDto).toList());
+        return ResponseEntity.ok(mapProductsWithTotals(products));
     }
 
     @GetMapping("/search")
     @Transactional(readOnly = true)
     public ResponseEntity<List<ProductDto>> searchProducts(@RequestParam String name) {
         List<Product> products = productService.searchProductsByName(name);
-        return ResponseEntity.ok(products.stream().map(this::toDto).toList());
+        return ResponseEntity.ok(mapProductsWithTotals(products));
     }
 
     @GetMapping("/filter")
@@ -112,7 +116,7 @@ public class ProductController {
             @RequestParam(required = false) Long brandId,
             @RequestParam(required = false) Long colorId) {
         List<Product> products = productService.filterProductsByBrandAndColor(brandId, colorId);
-        return ResponseEntity.ok(products.stream().map(this::toDto).toList());
+        return ResponseEntity.ok(mapProductsWithTotals(products));
     }
 
     @GetMapping("/{id}/desi")
@@ -230,6 +234,29 @@ public class ProductController {
             colorInfo.hexCode = p.getColor().getHexCode();
             dto.color = colorInfo;
         }
+        return dto;
+    }
+
+    private List<ProductDto> mapProductsWithTotals(List<Product> products) {
+        if (products == null || products.isEmpty()) {
+            return List.of();
+        }
+        List<Long> ids = products.stream()
+                .map(Product::getId)
+                .toList();
+        Map<Long, Long> totals = stockService.getTotalQuantitiesByProductIds(ids);
+        return products.stream()
+                .map(product -> {
+                    ProductDto dto = toDto(product);
+                    dto.totalQuantity = totals.getOrDefault(product.getId(), 0L);
+                    return dto;
+                })
+                .toList();
+    }
+
+    private ProductDto toDtoWithTotal(Product product) {
+        ProductDto dto = toDto(product);
+        dto.totalQuantity = stockService.getTotalQuantityByProduct(product.getId());
         return dto;
     }
 }

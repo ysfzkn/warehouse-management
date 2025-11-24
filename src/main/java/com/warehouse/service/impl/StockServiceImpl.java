@@ -28,9 +28,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Implementation of StockService for managing stock operations.
@@ -192,6 +197,38 @@ public class StockServiceImpl implements StockService {
         Warehouse warehouse = findWarehouseOrThrow(warehouseId);
         Long total = stockRepository.getTotalQuantityByWarehouse(warehouse);
         return total != null ? total : 0L;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<Long, Long> getTotalQuantitiesByProductIds(List<Long> productIds) {
+        if (productIds == null || productIds.isEmpty()) {
+            return Map.of();
+        }
+
+        Set<Long> distinctIds = productIds.stream()
+                .filter(id -> id != null && id > 0)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+
+        if (distinctIds.isEmpty()) {
+            return Map.of();
+        }
+
+        List<StockRepository.ProductQuantityAggregate> aggregates =
+                stockRepository.getTotalQuantitiesByProductIds(distinctIds);
+
+        Map<Long, Long> result = new HashMap<>();
+        distinctIds.forEach(id -> result.put(id, 0L));
+
+        for (StockRepository.ProductQuantityAggregate aggregate : aggregates) {
+            Long productId = aggregate.getProductId();
+            Long totalQuantity = aggregate.getTotalQuantity();
+            if (productId != null) {
+                result.put(productId, totalQuantity != null ? totalQuantity : 0L);
+            }
+        }
+
+        return result;
     }
 
     @Override

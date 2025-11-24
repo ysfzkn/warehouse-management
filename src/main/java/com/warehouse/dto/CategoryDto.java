@@ -19,6 +19,7 @@ public class CategoryDto {
     private Long parentId;
     private String parentName;
     private List<CategoryDto> children;
+    private List<CategoryDto> subcategories;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

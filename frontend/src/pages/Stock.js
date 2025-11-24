@@ -485,8 +485,14 @@ const Stock = () => {
       try {
         const response = await axios.get('/api/categories/top-level');
         const categoriesData = response.data;
-        // Handle paginated response
-        setCategories(Array.isArray(categoriesData) ? categoriesData : (Array.isArray(categoriesData?.content) ? categoriesData.content : []));
+        const list = Array.isArray(categoriesData?.content)
+          ? categoriesData.content
+          : (Array.isArray(categoriesData) ? categoriesData : []);
+        const normalized = list.map(cat => ({
+          ...cat,
+          children: Array.isArray(cat.children) ? cat.children : (Array.isArray(cat.subcategories) ? cat.subcategories : [])
+        }));
+        setCategories(normalized);
       } catch (error) {
         // noop
       }
@@ -497,7 +503,17 @@ const Stock = () => {
   // Fetch subcategories when a main category is selected
   useEffect(() => {
     const fetchSubs = async () => {
-      if (!selectedCategory) { setSubcategories([]); setSelectedSubcategory(''); return; }
+      if (!selectedCategory) {
+        setSubcategories([]);
+        setSelectedSubcategory('');
+        return;
+      }
+      const parent = categories.find(cat => cat.id?.toString() === String(selectedCategory));
+      if (parent && Array.isArray(parent.children) && parent.children.length > 0) {
+        setSubcategories(parent.children);
+        setSelectedSubcategory('');
+        return;
+      }
       try {
         const response = await axios.get(`/api/categories/${selectedCategory}/subcategories`);
         setSubcategories(response.data);
@@ -508,7 +524,7 @@ const Stock = () => {
       }
     };
     fetchSubs();
-  }, [selectedCategory]);
+  }, [selectedCategory, categories]);
 
   // Initialize filters from query params
   // React to query string changes (navigation within app)

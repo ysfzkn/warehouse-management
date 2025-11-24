@@ -155,6 +155,16 @@ public class StockController {
         return ResponseEntity.ok(total);
     }
 
+    @GetMapping("/products/total-quantities")
+    @Transactional(readOnly = true)
+    public ResponseEntity<Map<Long, Long>> getTotalQuantitiesByProducts(@RequestParam(name = "productIds") List<Long> productIds) {
+        if (productIds == null || productIds.isEmpty()) {
+            return ResponseEntity.ok(Map.of());
+        }
+        Map<Long, Long> totals = stockService.getTotalQuantitiesByProductIds(productIds);
+        return ResponseEntity.ok(totals);
+    }
+
     @GetMapping("/warehouse/{warehouseId}/total-quantity")
     public ResponseEntity<Long> getTotalQuantityByWarehouse(@PathVariable Long warehouseId) {
         Long total = stockService.getTotalQuantityByWarehouse(warehouseId);

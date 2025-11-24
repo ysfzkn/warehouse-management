@@ -126,7 +126,7 @@ const DesiCalculator = () => {
                     <div className="fw-bold">{result.lengthCm}</div>
                   </div>
                   <div className="col-md-3 mb-3">
-                    <div className="text-muted small">Yükseklik (cm)</div>
+                    <div className="text-muted small">Derinlik (cm)</div>
                     <div className="fw-bold">{result.heightCm}</div>
                   </div>
                   <div className="col-md-3 mb-3">
@@ -179,7 +179,7 @@ const DesiCalculator = () => {
                 />
               </div>
               <div className="col-md-3">
-                <label className="form-label">Yükseklik (cm)</label>
+                <label className="form-label">Derinlik (cm)</label>
                 <input
                   type="number"
                   className="form-control"

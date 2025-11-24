@@ -15,7 +15,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.transaction.annotation.Transactional;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/categories")
@@ -55,6 +58,7 @@ public class CategoryController {
                 c.getParent() != null ? c.getParent().getId() : null,
                 c.getParent() != null ? c.getParent().getName() : null,
                 new java.util.ArrayList<>(),
+                new java.util.ArrayList<>(),
                 c.getCreatedAt(),
                 c.getUpdatedAt()
             );
@@ -86,23 +90,11 @@ public class CategoryController {
             Sort sort = Sort.by(Sort.Direction.fromString(sortDir), sortBy);
             Pageable pageable = PageRequest.of(safePage, safeSize, sort);
             Page<Category> categoryPage = categoryService.getTopLevelCategories(pageable);
+            List<Category> parents = categoryPage.getContent();
+            Map<Long, List<CategoryDto>> childrenMap = loadSubcategoriesForParents(parents, countMap);
 
-            var content = categoryPage.getContent().stream()
-                .map(cat -> {
-                    Long productCount = countMap.getOrDefault(cat.getId(), 0L);
-                    var dto = new CategoryDto();
-                    dto.setId(cat.getId());
-                    dto.setName(cat.getName());
-                    dto.setDescription(cat.getDescription());
-                    dto.setActive(cat.isActive());
-                    dto.setProductCount(productCount);
-                    dto.setParentId(null);
-                    dto.setParentName(null);
-                    dto.setChildren(new java.util.ArrayList<>());
-                    dto.setCreatedAt(cat.getCreatedAt());
-                    dto.setUpdatedAt(cat.getUpdatedAt());
-                    return dto;
-                })
+            var content = parents.stream()
+                .map(cat -> buildCategoryDto(cat, countMap, childrenMap.getOrDefault(cat.getId(), List.of())))
                 .toList();
 
             PagedResponse<CategoryDto> response = new PagedResponse<>(
@@ -118,22 +110,9 @@ public class CategoryController {
         } else {
             // Non-paginated response (backward compatibility)
             List<Category> topLevelCategories = categoryService.getTopLevelCategories();
+            Map<Long, List<CategoryDto>> childrenMap = loadSubcategoriesForParents(topLevelCategories, countMap);
             var result = topLevelCategories.stream()
-                .map(cat -> {
-                    Long productCount = countMap.getOrDefault(cat.getId(), 0L);
-                    var dto = new CategoryDto();
-                    dto.setId(cat.getId());
-                    dto.setName(cat.getName());
-                    dto.setDescription(cat.getDescription());
-                    dto.setActive(cat.isActive());
-                    dto.setProductCount(productCount);
-                    dto.setParentId(null);
-                    dto.setParentName(null);
-                    dto.setChildren(new java.util.ArrayList<>());
-                    dto.setCreatedAt(cat.getCreatedAt());
-                    dto.setUpdatedAt(cat.getUpdatedAt());
-                    return dto;
-                })
+                .map(cat -> buildCategoryDto(cat, countMap, childrenMap.getOrDefault(cat.getId(), List.of())))
                 .toList();
             return ResponseEntity.ok(result);
         }
@@ -237,9 +216,45 @@ public class CategoryController {
         dto.setParentId(c.getParent() != null ? c.getParent().getId() : null);
         dto.setParentName(c.getParent() != null ? c.getParent().getName() : null);
         dto.setChildren(new java.util.ArrayList<>());
+        dto.setSubcategories(new java.util.ArrayList<>());
         dto.setProductCount(0L);
         dto.setCreatedAt(c.getCreatedAt());
         dto.setUpdatedAt(c.getUpdatedAt());
+        return dto;
+    }
+
+    private Map<Long, List<CategoryDto>> loadSubcategoriesForParents(List<Category> parents, Map<Long, Long> countMap) {
+        Map<Long, List<CategoryDto>> childrenMap = new HashMap<>();
+        if (parents == null || parents.isEmpty()) {
+            return childrenMap;
+        }
+        List<Long> parentIds = parents.stream().map(Category::getId).toList();
+        List<Category> subcategories = categoryRepository.findByParentIdIn(parentIds);
+        for (Category sub : subcategories) {
+            if (sub.getParent() == null) {
+                continue;
+            }
+            Long parentId = sub.getParent().getId();
+            childrenMap.computeIfAbsent(parentId, id -> new ArrayList<>())
+                    .add(buildCategoryDto(sub, countMap, List.of()));
+        }
+        return childrenMap;
+    }
+
+    private CategoryDto buildCategoryDto(Category category, Map<Long, Long> countMap, List<CategoryDto> children) {
+        var dto = new CategoryDto();
+        dto.setId(category.getId());
+        dto.setName(category.getName());
+        dto.setDescription(category.getDescription());
+        dto.setActive(category.isActive());
+        dto.setProductCount(countMap.getOrDefault(category.getId(), 0L));
+        dto.setParentId(category.getParent() != null ? category.getParent().getId() : null);
+        dto.setParentName(category.getParent() != null ? category.getParent().getName() : null);
+        List<CategoryDto> childList = children != null ? children : new ArrayList<>();
+        dto.setChildren(childList);
+        dto.setSubcategories(childList);
+        dto.setCreatedAt(category.getCreatedAt());
+        dto.setUpdatedAt(category.getUpdatedAt());
         return dto;
     }
 }

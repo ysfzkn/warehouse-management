@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import SearchableSelect from './SearchableSelect';
+import './ProductForm.css';
 
 const ProductForm = ({ product, onSuccess, onCancel }) => {
   const [formData, setFormData] = useState({
@@ -32,17 +33,41 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
   const [createModalColorHex, setCreateModalColorHex] = useState('#000000');
   const [createModalDescription, setCreateModalDescription] = useState('');
   const [createModalLoading, setCreateModalLoading] = useState(false);
+  const [priceIncludesVat, setPriceIncludesVat] = useState(false);
   
   // Calculate total price with taxes
   const calculateTotalPrice = () => {
-    const basePrice = parseFloat(formData.price) || 0;
+    const enteredPrice = parseFloat(formData.price) || 0;
     const sctRate = parseFloat(formData.sctRate) || 0;
     const vatRate = parseFloat(formData.vatRate) || 0;
     
-    const sctAmount = basePrice * (sctRate / 100);
-    const priceWithSct = basePrice + sctAmount;
-    const vatAmount = priceWithSct * (vatRate / 100);
-    const totalPrice = priceWithSct + vatAmount;
+    let basePrice, sctAmount, priceWithSct, vatAmount, totalPrice;
+    
+    if (priceIncludesVat && enteredPrice > 0) {
+      // Girilen fiyat KDV dahil ise, geriye doğru hesaplama yap
+      // totalPrice = priceWithSct * (1 + vatRate / 100)
+      // priceWithSct = totalPrice / (1 + vatRate / 100)
+      totalPrice = enteredPrice;
+      priceWithSct = totalPrice / (1 + vatRate / 100);
+      vatAmount = totalPrice - priceWithSct;
+      
+      // ÖTV varsa, basePrice'ı hesapla
+      if (sctRate > 0) {
+        // priceWithSct = basePrice * (1 + sctRate / 100)
+        basePrice = priceWithSct / (1 + sctRate / 100);
+        sctAmount = priceWithSct - basePrice;
+      } else {
+        basePrice = priceWithSct;
+        sctAmount = 0;
+      }
+    } else {
+      // Girilen fiyat KDV hariç ise, ileriye doğru hesaplama yap
+      basePrice = enteredPrice;
+      sctAmount = basePrice * (sctRate / 100);
+      priceWithSct = basePrice + sctAmount;
+      vatAmount = priceWithSct * (vatRate / 100);
+      totalPrice = priceWithSct + vatAmount;
+    }
     
     return {
       basePrice,
@@ -117,22 +142,59 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
     }
   }, [product]);
 
+  const normalizeSubcategories = (subs = [], parentMeta = {}) => {
+    return subs.map(sub => ({
+      ...sub,
+      parentId: sub.parentId ?? parentMeta.id ?? null,
+      parentName: sub.parentName ?? parentMeta.name ?? null,
+      productCount: Number(sub.productCount ?? 0)
+    }));
+  };
+
+  const sortByName = (list = []) =>
+    [...list].sort((a, b) => (a.name || '').localeCompare(b.name || '', 'tr'));
+
   const fetchMainCategories = async () => {
     try {
       const response = await axios.get('/api/categories/top-level');
-      setMainCategories(response.data);
+      const data = response.data || {};
+      // Handle paginated response
+      const categoriesList = Array.isArray(data.content) ? data.content : (Array.isArray(data) ? data : []);
+      const normalized = categoriesList.map(cat => {
+        const children = normalizeSubcategories(
+          Array.isArray(cat.children) ? cat.children : (Array.isArray(cat.subcategories) ? cat.subcategories : []),
+          { id: cat.id, name: cat.name }
+        );
+        return { ...cat, children: sortByName(children) };
+      });
+      setMainCategories(sortByName(normalized));
     } catch (error) {
       console.error('Error fetching main categories:', error);
+      setMainCategories([]);
     }
   };
 
-  const fetchSubcategories = async (parentId) => {
+  const fetchSubcategories = async (parentId, { forceRefresh = false } = {}) => {
     try {
+      const parentIdNum = Number(parentId);
+      const parent = mainCategories.find(cat => Number(cat.id) === parentIdNum);
+      if (!forceRefresh && parent && Array.isArray(parent.children) && parent.children.length > 0) {
+        const sorted = sortByName(parent.children);
+        setSubcategories(sorted);
+        return sorted;
+      }
       const response = await axios.get(`/api/categories/${parentId}/subcategories`);
-      setSubcategories(response.data);
-      return response.data;
+      const data = response.data || {};
+      const subcategoriesList = Array.isArray(data.content) ? data.content : (Array.isArray(data) ? data : []);
+      const normalized = sortByName(normalizeSubcategories(subcategoriesList, { id: parentIdNum, name: parent?.name }));
+      setSubcategories(normalized);
+      if (parent) {
+        setMainCategories(prev => prev.map(cat => cat.id === parentIdNum ? { ...cat, children: normalized } : cat));
+      }
+      return normalized;
     } catch (error) {
       console.error('Error fetching subcategories:', error);
+      setSubcategories([]);
       return [];
     }
   };
@@ -145,47 +207,169 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
     setShowCreateModal(true);
   };
 
+  const showToast = (message, type = 'success') => {
+    const toast = document.createElement('div');
+    const bgClass = type === 'success' ? 'text-bg-success' : type === 'warning' ? 'text-bg-warning' : 'text-bg-danger';
+    const icon = type === 'success' ? 'fa-check-circle' : type === 'warning' ? 'fa-exclamation-triangle' : 'fa-times-circle';
+    toast.className = `toast align-items-center ${bgClass} border-0 position-fixed top-0 end-0 m-3 show`;
+    toast.setAttribute('role', 'alert');
+    toast.style.zIndex = '9999';
+    toast.innerHTML = `
+      <div class="d-flex align-items-center">
+        <div class="toast-body d-flex align-items-center">
+          <i class="fas ${icon} me-2"></i>
+          <span>${message}</span>
+        </div>
+        <button type="button" class="btn-close ${type === 'success' ? 'btn-close-white' : ''} me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button>
+      </div>
+    `;
+    document.body.appendChild(toast);
+    setTimeout(() => {
+      try {
+        toast.classList.remove('show');
+        setTimeout(() => {
+          try { document.body.removeChild(toast); } catch {}
+        }, 300);
+      } catch {}
+    }, type === 'success' ? 3000 : 5000);
+  };
+
   const handleCreateSubmit = async () => {
     if (!createModalName.trim()) {
-      alert('Lütfen bir isim giriniz');
+      showToast('Lütfen bir isim giriniz', 'warning');
       return;
     }
 
     setCreateModalLoading(true);
     try {
       let created;
+      const trimmedName = createModalName.trim();
+      
       if (createModalType === 'brand') {
-        const response = await axios.post('/api/brands', { name: createModalName.trim() });
+        // Check if brand already exists
+        try {
+          const searchResponse = await axios.get('/api/brands/search', { params: { name: trimmedName } });
+          const existing = searchResponse.data?.find(b => b.name.toLowerCase() === trimmedName.toLowerCase());
+          if (existing) {
+            setBrandId(existing.id);
+            setShowCreateModal(false);
+            setCreateModalName('');
+            setCreateModalColorHex('#000000');
+            setCreateModalDescription('');
+            showToast(`"${trimmedName}" markası zaten mevcut. Seçildi.`, 'warning');
+            setCreateModalLoading(false);
+            return;
+          }
+        } catch (searchError) {
+          // Continue with creation if search fails
+        }
+        
+        const response = await axios.post('/api/brands', { name: trimmedName });
         created = response.data;
         setBrandId(created.id);
+        showToast(`"${trimmedName}" markası başarıyla oluşturuldu.`, 'success');
       } else if (createModalType === 'color') {
+        // Check if color already exists
+        try {
+          const searchResponse = await axios.get('/api/colors/search', { params: { name: trimmedName } });
+          const existing = searchResponse.data?.find(c => c.name.toLowerCase() === trimmedName.toLowerCase());
+          if (existing) {
+            setColorId(existing.id);
+            setShowCreateModal(false);
+            setCreateModalName('');
+            setCreateModalColorHex('#000000');
+            setCreateModalDescription('');
+            showToast(`"${trimmedName}" rengi zaten mevcut. Seçildi.`, 'warning');
+            setCreateModalLoading(false);
+            return;
+          }
+        } catch (searchError) {
+          // Continue with creation if search fails
+        }
+        
         const response = await axios.post('/api/colors', { 
-          name: createModalName.trim(),
+          name: trimmedName,
           hexCode: createModalColorHex
         });
         created = response.data;
         setColorId(created.id);
+        showToast(`"${trimmedName}" rengi başarıyla oluşturuldu.`, 'success');
       } else if (createModalType === 'category') {
+        // Check if category already exists
+        try {
+          const existing = mainCategories.find(c => c.name.toLowerCase() === trimmedName.toLowerCase());
+          if (existing) {
+            setFormData(prev => ({ ...prev, categoryId: String(existing.id) }));
+            setShowCreateModal(false);
+            setCreateModalName('');
+            setCreateModalColorHex('#000000');
+            setCreateModalDescription('');
+            showToast(`"${trimmedName}" kategorisi zaten mevcut. Seçildi.`, 'warning');
+            setCreateModalLoading(false);
+            return;
+          }
+        } catch (searchError) {
+          // Continue with creation if search fails
+        }
+        
         const response = await axios.post('/api/categories', { 
-          name: createModalName.trim(),
+          name: trimmedName,
           description: createModalDescription.trim() || null
         });
         created = response.data;
         await fetchMainCategories();
         setFormData(prev => ({ ...prev, categoryId: String(created.id) }));
+        showToast(`"${trimmedName}" kategorisi başarıyla oluşturuldu.`, 'success');
       } else if (createModalType === 'subcategory') {
         if (!formData.categoryId) {
-          alert('Önce ana kategori seçiniz');
+          showToast('Önce ana kategori seçiniz', 'warning');
           setCreateModalLoading(false);
           return;
         }
+        
+        // Check if subcategory already exists
+        try {
+          const existing = subcategories.find(s => s.name.toLowerCase() === trimmedName.toLowerCase());
+          if (existing) {
+            setFormData(prev => ({ ...prev, subcategoryId: String(existing.id) }));
+            setShowCreateModal(false);
+            setCreateModalName('');
+            setCreateModalColorHex('#000000');
+            setCreateModalDescription('');
+            showToast(`"${trimmedName}" alt kategorisi zaten mevcut. Seçildi.`, 'warning');
+            setCreateModalLoading(false);
+            return;
+          }
+        } catch (searchError) {
+          // Continue with creation if search fails
+        }
+        
         const response = await axios.post('/api/categories/batch', 
-          [{ name: createModalName.trim(), description: createModalDescription.trim() || null }],
+          [{ name: trimmedName, description: createModalDescription.trim() || null }],
           { params: { parentId: formData.categoryId } }
         );
         created = response.data[0];
-        await fetchSubcategories(formData.categoryId);
-        setFormData(prev => ({ ...prev, subcategoryId: String(created.id) }));
+        const updatedSubs = await fetchSubcategories(formData.categoryId, { forceRefresh: true });
+        const createdMatch = updatedSubs.find(sub => Number(sub.id) === Number(created?.id));
+        const effectiveSub = createdMatch || {
+          ...(created || {}),
+          id: created?.id,
+          name: created?.name ?? trimmedName,
+          parentId: Number(formData.categoryId),
+          parentName: mainCategories.find(cat => cat.id?.toString() === formData.categoryId)?.name || null
+        };
+        if (!createdMatch) {
+          setSubcategories(prev => sortByName([...(prev || []), effectiveSub]));
+          setMainCategories(prev => prev.map(cat => {
+            if (cat.id?.toString() === formData.categoryId) {
+              const updatedChildren = sortByName([...(cat.children || []), effectiveSub]);
+              return { ...cat, children: updatedChildren };
+            }
+            return cat;
+          }));
+        }
+        setFormData(prev => ({ ...prev, subcategoryId: String((effectiveSub?.id ?? created?.id) ?? '') }));
+        showToast(`"${trimmedName}" alt kategorisi başarıyla oluşturuldu.`, 'success');
       }
       setShowCreateModal(false);
       setCreateModalName('');
@@ -193,7 +377,27 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
       setCreateModalDescription('');
     } catch (error) {
       console.error('Error creating:', error);
-      alert(error.response?.data?.message || 'Oluşturma sırasında hata oluştu');
+      const errorResponse = error.response?.data;
+      let errorMessage = 'Oluşturma sırasında hata oluştu';
+      
+      if (errorResponse) {
+        if (typeof errorResponse === 'string') {
+          errorMessage = errorResponse;
+        } else if (errorResponse.message) {
+          errorMessage = errorResponse.message;
+        } else if (errorResponse.error) {
+          errorMessage = errorResponse.error;
+        }
+      }
+      
+      // Check for duplicate/conflict errors
+      if (error.response?.status === 409 || errorMessage.toLowerCase().includes('zaten') || errorMessage.toLowerCase().includes('mevcut') || errorMessage.toLowerCase().includes('duplicate') || errorMessage.toLowerCase().includes('exists')) {
+        const itemType = createModalType === 'brand' ? 'marka' : createModalType === 'color' ? 'renk' : createModalType === 'category' ? 'kategori' : 'alt kategori';
+        showToast(`"${createModalName.trim()}" ${itemType} zaten mevcut.`, 'warning');
+      } else {
+        const itemType = createModalType === 'brand' ? 'Marka' : createModalType === 'color' ? 'Renk' : createModalType === 'category' ? 'Kategori' : 'Alt kategori';
+        showToast(`${itemType} oluşturulurken hata: ${errorMessage}`, 'error');
+      }
     } finally {
       setCreateModalLoading(false);
     }
@@ -298,6 +502,7 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
   };
 
   return (
+    <div className="product-form-container">
     <form onSubmit={handleSubmit}>
       {errors.general && (
         <div className="alert alert-danger" role="alert">
@@ -306,7 +511,7 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
       )}
 
       <div className="row">
-        <div className="col-md-6">
+        <div className="col-12 col-md-6">
           <div className="mb-3">
             <label htmlFor="name" className="form-label">
               Ürün Adı <span className="text-danger">*</span>
@@ -325,7 +530,7 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
           </div>
         </div>
 
-        <div className="col-md-6">
+        <div className="col-12 col-md-6">
           <div className="mb-3">
             <label htmlFor="sku" className="form-label">
               Stok Kodu <span className="text-danger">*</span>
@@ -371,7 +576,7 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
       </div>
 
       <div className="row">
-        <div className="col-md-4">
+        <div className="col-12 col-md-6 col-lg-4">
           <div className="mb-4">
             <label htmlFor="price" className="form-label">
               <i className="fas fa-tag me-1"></i>
@@ -390,10 +595,34 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
               required
             />
             {errors.price && <div className="invalid-feedback">{errors.price}</div>}
+            <div className="mt-2">
+              <div className="form-check form-switch d-flex align-items-center">
+                <input
+                  className="form-check-input"
+                  type="checkbox"
+                  id="priceIncludesVat"
+                  checked={priceIncludesVat}
+                  onChange={(e) => setPriceIncludesVat(e.target.checked)}
+                  style={{ width: '48px', height: '24px', cursor: 'pointer' }}
+                />
+                <label className="form-check-label ms-2" htmlFor="priceIncludesVat" style={{ cursor: 'pointer' }}>
+                  <span className={priceIncludesVat ? 'text-primary fw-semibold' : 'text-muted'}>
+                    <i className={`fas ${priceIncludesVat ? 'fa-check-circle' : 'fa-circle'} me-1`}></i>
+                    KDV Dahil
+                  </span>
+                </label>
+              </div>
+              {priceIncludesVat && formData.vatRate && (
+                <small className="text-muted d-block mt-1 ms-5">
+                  <i className="fas fa-info-circle me-1"></i>
+                  Girilen fiyat %{formData.vatRate} KDV dahil olarak kabul edilecektir
+                </small>
+              )}
+            </div>
           </div>
         </div>
 
-        <div className="col-md-4">
+        <div className="col-12 col-md-6 col-lg-4">
           <div className="mb-4">
             <label htmlFor="vatRate" className="form-label">
               <i className="fas fa-percentage me-1"></i>KDV Oranı (%)
@@ -429,7 +658,7 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
           </div>
         </div>
 
-        <div className="col-md-4">
+        <div className="col-12 col-md-6 col-lg-4">
           <div className="mb-4">
             <label htmlFor="sctRate" className="form-label">
               <i className="fas fa-percentage me-1"></i>ÖTV Oranı (%)
@@ -476,7 +705,7 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
       </div>
 
       <div className="row">
-        <div className="col-md-6">
+        <div className="col-12 col-md-6">
           <div className="mb-3">
             <label className="form-label">
               <i className="fas fa-ruler-combined me-1"></i>
@@ -514,7 +743,7 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
                 name="heightCm"
                 value={formData.heightCm}
                 onChange={handleChange}
-                placeholder="Yükseklik"
+                placeholder="Derinlik"
               />
             </div>
           </div>
@@ -552,7 +781,7 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
       </div>
 
       <div className="row">
-        <div className="col-md-4">
+        <div className="col-12 col-md-6 col-lg-4">
           <div className="mb-3">
             <label htmlFor="categoryId" className="form-label">
               <i className="fas fa-folder me-1"></i>
@@ -568,7 +797,7 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
                 required
               >
                 <option value="">Ana kategori seçin</option>
-                {mainCategories.map((category) => (
+                {Array.isArray(mainCategories) && mainCategories.map((category) => (
                   <option key={category.id} value={String(category.id)}>
                     {category.name}
                   </option>
@@ -588,7 +817,7 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
           </div>
         </div>
 
-        <div className="col-md-4">
+        <div className="col-12 col-md-6 col-lg-4">
           <div className="mb-3">
             <label htmlFor="subcategoryId" className="form-label">
               <i className="fas fa-folder-open me-1"></i>
@@ -604,7 +833,7 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
                 disabled={!formData.categoryId}
               >
                 <option value="">Alt kategori seçin (opsiyonel)</option>
-                {subcategories.map((subcategory) => (
+                {Array.isArray(subcategories) && subcategories.map((subcategory) => (
                   <option key={subcategory.id} value={String(subcategory.id)}>
                     {subcategory.name}
                   </option>
@@ -627,47 +856,94 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
           </div>
         </div>
         
-        <div className="col-md-4">
-          <SearchableSelect
-            label={
-              <span>
-                <i className="fas fa-copyright me-1"></i>
-                Marka
-              </span>
-            }
-            value={brandId}
-            onChange={(id) => setBrandId(id)}
-            searchEndpoint="/api/brands/search"
-            placeholder="Marka ara..."
-          />
+        <div className="col-12 col-md-6 col-lg-4">
+          <div className="mb-3">
+            <label className="form-label">
+              <i className="fas fa-copyright me-1"></i>
+              Marka
+            </label>
+            <div className="d-flex" style={{ gap: '0.5rem' }}>
+              <div style={{ flex: 1 }}>
+                <SearchableSelect
+                  value={brandId}
+                  onChange={(id) => setBrandId(id)}
+                  searchEndpoint="/api/brands/search"
+                  placeholder="Marka ara..."
+                  wrapperClassName=""
+                />
+              </div>
+              <button
+                type="button"
+                className="btn btn-outline-primary d-flex align-items-center justify-content-center"
+                onClick={() => handleCreateNew('brand')}
+                title="Yeni marka oluştur"
+                style={{ 
+                  minWidth: '42px', 
+                  width: '42px',
+                  height: '38px',
+                  padding: '0',
+                  flexShrink: 0
+                }}
+              >
+                <i className="fas fa-plus"></i>
+              </button>
+            </div>
+          </div>
         </div>
 
-        <div className="col-md-4">
-          <SearchableSelect
-            label={
-              <span>
-                <i className="fas fa-palette me-1"></i>
-                Renk
-              </span>
-            }
-            value={colorId}
-            onChange={(id) => setColorId(id)}
-            searchEndpoint="/api/colors/search"
-            placeholder="Renk ara..."
-            renderOption={(opt) => (
-              <span>
-                <span className="me-2" style={{ display: 'inline-block', width: 12, height: 12, backgroundColor: opt.hexCode || '#ccc', border: '1px solid #ccc' }}></span>
-                {opt.name}
-              </span>
-            )}
-          />
+        <div className="col-12 col-md-6 col-lg-4">
+          <div className="mb-3">
+            <label className="form-label">
+              <i className="fas fa-palette me-1"></i>
+              Renk
+            </label>
+            <div className="d-flex" style={{ gap: '0.5rem' }}>
+              <div style={{ flex: 1 }}>
+                <SearchableSelect
+                  value={colorId}
+                  onChange={(id) => setColorId(id)}
+                  searchEndpoint="/api/colors/search"
+                  placeholder="Renk ara..."
+                  renderOption={(opt) => (
+                    <span>
+                      <span className="me-2" style={{ display: 'inline-block', width: 12, height: 12, backgroundColor: opt.hexCode || '#ccc', border: '1px solid #ccc' }}></span>
+                      {opt.name}
+                    </span>
+                  )}
+                  wrapperClassName=""
+                />
+              </div>
+              <button
+                type="button"
+                className="btn btn-outline-primary d-flex align-items-center justify-content-center"
+                onClick={() => handleCreateNew('color')}
+                title="Yeni renk oluştur"
+                style={{ 
+                  minWidth: '42px', 
+                  width: '42px',
+                  height: '38px',
+                  padding: '0',
+                  flexShrink: 0
+                }}
+              >
+                <i className="fas fa-plus"></i>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
       {/* Shipping and Status Section */}
-      <div className="row mb-3">
+      <div className="row mt-4">
         <div className="col-12">
-          <h6 className="text-muted mb-3">
+          <h6 className="text-muted mb-4" style={{ 
+            marginTop: '0.5rem', 
+            marginBottom: '1.5rem',
+            fontSize: '1rem', 
+            fontWeight: '600',
+            paddingBottom: '0.75rem',
+            borderBottom: '1px solid #e9ecef'
+          }}>
             <i className="fas fa-shipping-fast me-2"></i>
             Kargo ve Durum
           </h6>
@@ -675,7 +951,7 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
       </div>
 
       <div className="row">
-        <div className="col-md-6">
+        <div className="col-md-6 col-12 mb-3 mb-md-0">
           <div className="mb-3">
             <label htmlFor="shippingRate" className="form-label">
               <i className="fas fa-truck me-1"></i>
@@ -700,7 +976,7 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
           </div>
         </div>
 
-        <div className="col-md-6">
+        <div className="col-md-6 col-12">
           <div className="mb-3">
             <label className="form-label d-block">
               <i className="fas fa-toggle-on me-1"></i>
@@ -732,9 +1008,21 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
           <h6 className="alert-heading mb-2">
             <i className="fas fa-calculator me-2"></i>
             Fiyat Hesaplama Önizlemesi
+            {priceIncludesVat && (
+              <span className="badge bg-primary ms-2">
+                <i className="fas fa-info-circle me-1"></i>
+                KDV Dahil Fiyat
+              </span>
+            )}
           </h6>
           <div className="row g-2">
-            <div className="col-md-6">
+            <div className="col-12 col-md-6">
+              {priceIncludesVat && (
+                <div className="d-flex justify-content-between small mb-2 p-2 bg-light rounded">
+                  <span className="text-muted">Girilen Fiyat (KDV Dahil):</span>
+                  <strong className="text-primary">₺{parseFloat(formData.price).toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</strong>
+                </div>
+              )}
               <div className="d-flex justify-content-between small">
                 <span className="text-muted">Ana Fiyat:</span>
                 <strong>₺{calculateTotalPrice().basePrice.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</strong>
@@ -763,15 +1051,28 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
                 <strong className="text-success fs-5">₺{calculateTotalPrice().totalPrice.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</strong>
               </div>
             </div>
-            <div className="col-md-6">
+            <div className="col-12 col-md-6">
               <small className="text-muted d-block">
                 <i className="fas fa-lightbulb me-1 text-warning"></i>
                 <strong>Hesaplama Formülü:</strong>
               </small>
-              <small className="text-muted d-block">1. ÖTV Tutarı = Ana Fiyat × ÖTV%</small>
-              <small className="text-muted d-block">2. ÖTV'li Fiyat = Ana Fiyat + ÖTV</small>
-              <small className="text-muted d-block">3. KDV Tutarı = ÖTV'li Fiyat × KDV%</small>
-              <small className="text-muted d-block">4. <strong>Toplam = ÖTV'li Fiyat + KDV</strong></small>
+              {priceIncludesVat ? (
+                <>
+                  <small className="text-muted d-block">1. <strong>Girilen Fiyat = KDV Dahil Fiyat</strong></small>
+                  <small className="text-muted d-block">2. ÖTV'li Fiyat = KDV Dahil Fiyat ÷ (1 + KDV%)</small>
+                  {calculateTotalPrice().sctAmount > 0 && (
+                    <small className="text-muted d-block">3. Ana Fiyat = ÖTV'li Fiyat ÷ (1 + ÖTV%)</small>
+                  )}
+                  <small className="text-muted d-block">4. KDV Tutarı = KDV Dahil Fiyat - ÖTV'li Fiyat</small>
+                </>
+              ) : (
+                <>
+                  <small className="text-muted d-block">1. ÖTV Tutarı = Ana Fiyat × ÖTV%</small>
+                  <small className="text-muted d-block">2. ÖTV'li Fiyat = Ana Fiyat + ÖTV</small>
+                  <small className="text-muted d-block">3. KDV Tutarı = ÖTV'li Fiyat × KDV%</small>
+                  <small className="text-muted d-block">4. <strong>Toplam = ÖTV'li Fiyat + KDV</strong></small>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -917,6 +1218,7 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
         </div>
       )}
     </form>
+    </div>
   );
 };
 

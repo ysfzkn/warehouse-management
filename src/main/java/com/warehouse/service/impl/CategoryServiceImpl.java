@@ -254,6 +254,7 @@ public class CategoryServiceImpl implements CategoryService {
                 category.getParent() != null ? category.getParent().getId() : null,
                 category.getParent() != null ? category.getParent().getName() : null,
                 new ArrayList<>(),
+                new ArrayList<>(),
                 category.getCreatedAt(),
                 category.getUpdatedAt()
             );
@@ -268,6 +269,7 @@ public class CategoryServiceImpl implements CategoryService {
                 CategoryDto parentDto = categoryMap.get(category.getParent().getId());
                 if (parentDto != null) {
                     parentDto.getChildren().add(dto);
+                    parentDto.getSubcategories().add(dto);
                 }
             }
         }

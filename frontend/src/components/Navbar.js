@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
@@ -136,6 +137,128 @@ const Navbar = () => {
     transition: 'all 0.3s ease'
   };
 
+  const renderNotificationPortal = () => {
+    if (!showNotif) return null;
+    return createPortal(
+      <>
+        <div
+          className="notification-backdrop"
+          onClick={() => setShowNotif(false)}
+        />
+        <div className="notification-panel" role="dialog" aria-label="Bildirimler">
+          <div className="notification-panel-header">
+            <div>
+              <div className="fw-bold">Bildirimler</div>
+              <small className="text-muted">Toplam {notifications.length}</small>
+            </div>
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-secondary rounded-circle d-flex align-items-center justify-content-center"
+              onClick={() => setShowNotif(false)}
+              aria-label="Kapat"
+            >
+              <i className="fas fa-times"></i>
+            </button>
+          </div>
+          <div className="notification-list">
+            {notifications.length === 0 && (
+              <div className="p-3 text-muted">Bildirim yok.</div>
+            )}
+            {notifications.map(n => (
+              <div key={n.id} className="dropdown-item-custom" style={{
+                alignItems: 'flex-start',
+                padding: '0.75rem',
+                flexWrap: 'wrap'
+              }}>
+                <div className="me-2 mt-1 flex-shrink-0" style={{color: n.read ? '#9ca3af' : '#10b981'}}>
+                  <i className={`fas ${n.read ? 'fa-circle' : 'fa-dot-circle'}`} style={{fontSize: '0.9rem'}}></i>
+                </div>
+                <div className="flex-grow-1" style={{minWidth: 0}}>
+                  <div className="fw-semibold" style={{fontSize: '0.95rem', lineHeight: '1.3'}}>{n.title}</div>
+                  <div className="text-muted" style={{fontSize: '0.85rem', lineHeight: '1.4', wordBreak: 'break-word'}}>{n.message}</div>
+                </div>
+                <div className="d-flex gap-1 w-100 mt-2" style={{flexWrap: 'wrap'}}>
+                  {n.entityType && n.entityId && (
+                    <button
+                      className="btn btn-sm flex-fill btn-primary"
+                      style={{minHeight: '38px'}}
+                      onClick={async () => {
+                        const title = (n.title || '').toLowerCase();
+                        const isTransfer = n.entityType === 'StockTransfer' || title.includes('transfer');
+                        const isStockRequest = n.entityType === 'StockRequest';
+                        const isTransferApprovalRequest = title.includes('onay') || title.includes('approval') || title.includes('talep');
+                        
+                        if (isStockRequest) {
+                          if (location.pathname === '/stock') {
+                            try {
+                              window.dispatchEvent(new CustomEvent('open-stock-approval'));
+                            } catch {}
+                          } else {
+                            navigate('/stock?openApproval=true');
+                          }
+                        } else if (isTransfer && isTransferApprovalRequest) {
+                          if (location.pathname === '/stock') {
+                            try {
+                              window.dispatchEvent(new CustomEvent('open-stock-approval', { detail: { tab: 'transfer' } }));
+                            } catch {}
+                          } else {
+                            navigate('/stock?openApproval=true&tab=transfer');
+                          }
+                        } else if (isTransfer) {
+                          if (location.pathname === '/stock') {
+                            try {
+                              window.dispatchEvent(new CustomEvent('open-audit', { detail: { entityType: 'StockTransfer', entityId: Number(n.entityId) } }));
+                            } catch {}
+                          } else {
+                            const params = new URLSearchParams();
+                            params.set('auditTransferId', n.entityId);
+                            navigate(`/stock?${params.toString()}`);
+                          }
+                        } else {
+                          if (location.pathname === '/stock') {
+                            try {
+                              window.dispatchEvent(new CustomEvent('open-audit', { detail: { entityType: 'Stock', entityId: Number(n.entityId) } }));
+                            } catch {}
+                          } else {
+                            const params = new URLSearchParams();
+                            params.set('auditStockId', n.entityId);
+                            navigate(`/stock?${params.toString()}`);
+                          }
+                        }
+                        setShowNotif(false);
+                        try { await axios.post(`/api/notifications/${n.id}/read`); } catch {}
+                        setNotifications(prev => prev.map(x => x.id === n.id ? {...x, read: true} : x));
+                        setUnreadCount(c => Math.max(0, c - 1));
+                      }}
+                    >
+                      Görüntüle
+                    </button>
+                  )}
+                  {!n.read && (
+                    <button
+                      className="btn btn-sm flex-fill btn-outline-primary"
+                      style={{minHeight: '38px'}}
+                      onClick={async () => {
+                        try {
+                          await axios.post(`/api/notifications/${n.id}/read`);
+                          setNotifications(prev => prev.map(x => x.id === n.id ? {...x, read: true} : x));
+                          setUnreadCount(c => Math.max(0, c - 1));
+                        } catch (e) {}
+                      }}
+                    >
+                      Okundu
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </>,
+      document.body
+    );
+  };
+
   return (
     <>
       <style>{`
@@ -167,6 +290,96 @@ const Navbar = () => {
           animation: pulse 2s infinite;
           box-shadow: 0 2px 8px rgba(239, 68, 68, 0.4);
           border: 2px solid #1e3c72;
+        }
+
+        .notification-panel {
+          position: fixed;
+          top: 72px;
+          right: 16px;
+          background: #fff;
+          border-radius: 16px;
+          box-shadow: 0 20px 45px rgba(15, 23, 42, 0.25);
+          width: min(360px, calc(100vw - 64px));
+          max-height: min(75vh, 520px);
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+          z-index: 1200;
+          animation: slideDown 0.25s ease;
+        }
+
+        .notification-panel-header {
+          padding: 1rem 1.25rem;
+          border-bottom: 1px solid #f1f5f9;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 0.5rem;
+        }
+
+        .notification-list {
+          padding: 0.5rem 0.25rem 0.5rem 0.75rem;
+          overflow-y: auto;
+        }
+
+        .notification-backdrop {
+          position: fixed;
+          inset: 0;
+          background: rgba(15, 23, 42, 0.35);
+          backdrop-filter: blur(2px);
+          z-index: 1050;
+        }
+
+        @media (max-width: 1024px) {
+          .notification-panel {
+            width: min(420px, calc(100vw - 32px));
+            right: 12px;
+            left: auto;
+          }
+        }
+
+        @media (max-width: 768px) {
+          .notification-panel {
+            width: calc(100vw - 24px);
+            right: 12px;
+            left: 12px;
+            top: 64px;
+          }
+        }
+
+        @media (max-width: 576px) {
+          .notification-panel {
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            top: auto;
+            width: 100%;
+            max-height: min(85vh, 520px);
+            border-radius: 24px 24px 0 0;
+            margin: 0;
+            padding-bottom: env(safe-area-inset-bottom, 16px);
+            animation: slideUp 0.3s ease;
+          }
+
+          .notification-panel-header {
+            position: sticky;
+            top: 0;
+            background: #fff;
+            border-bottom: 1px solid #f1f5f9;
+            z-index: 1;
+          }
+        }
+
+        @keyframes slideUp {
+          from {
+            transform: translateY(20px);
+            opacity: 0;
+          }
+          to {
+            transform: translateY(0);
+            opacity: 1;
+          }
         }
         
         @keyframes pulse {
@@ -374,115 +587,6 @@ const Navbar = () => {
                       <span className="notification-badge" style={{right: -4}}>{unreadCount}</span>
                     )}
                   </button>
-                  {showNotif && (
-                    <div className="user-dropdown position-absolute end-0 mt-2" style={{
-                      minWidth: 'calc(min(100vw - 32px, 360px))',
-                      maxWidth: 'calc(min(100vw - 32px, 400px))',
-                      zIndex: 1050
-                    }}>
-                      <div className="p-3 border-bottom d-flex justify-content-between align-items-center">
-                        <div className="fw-bold">Bildirimler</div>
-                        <small className="text-muted d-none d-sm-inline">Toplam {notifications.length}</small>
-                      </div>
-                      <div style={{maxHeight: 'calc(min(100vh - 200px, 420px))', overflowY: 'auto'}}>
-                        {notifications.length === 0 && (
-                          <div className="p-3 text-muted">Bildirim yok.</div>
-                        )}
-                        {notifications.map(n => (
-                          <div key={n.id} className="dropdown-item-custom" style={{
-                            alignItems: 'flex-start',
-                            padding: '0.75rem',
-                            flexWrap: 'wrap'
-                          }}>
-                            <div className="me-2 mt-1 flex-shrink-0" style={{color: n.read ? '#9ca3af' : '#10b981'}}>
-                              <i className={`fas ${n.read ? 'fa-circle' : 'fa-dot-circle'}`} style={{fontSize: '0.9rem'}}></i>
-                            </div>
-                            <div className="flex-grow-1" style={{minWidth: 0}}>
-                              <div className="fw-semibold" style={{fontSize: '0.95rem', lineHeight: '1.3'}}>{n.title}</div>
-                              <div className="text-muted" style={{fontSize: '0.85rem', lineHeight: '1.4', wordBreak: 'break-word'}}>{n.message}</div>
-                            </div>
-                            <div className="d-flex gap-1 w-100 mt-2" style={{flexWrap: 'wrap'}}>
-                              {n.entityType && n.entityId && (
-                                <button
-                                  className="btn btn-sm flex-fill btn-primary"
-                                  style={{minHeight: '38px'}}
-                                  onClick={async () => {
-                                    const title = (n.title || '').toLowerCase();
-                                    const isTransfer = n.entityType === 'StockTransfer' || title.includes('transfer');
-                                    const isStockRequest = n.entityType === 'StockRequest';
-                                    const isTransferApprovalRequest = title.includes('onay') || title.includes('approval') || title.includes('talep');
-                                    
-                                    if (isStockRequest) {
-                                      // For stock request notifications, open approval modal
-                                      if (location.pathname === '/stock') {
-                                        try {
-                                          window.dispatchEvent(new CustomEvent('open-stock-approval'));
-                                        } catch {}
-                                      } else {
-                                        navigate('/stock?openApproval=true');
-                                      }
-                                    } else if (isTransfer && isTransferApprovalRequest) {
-                                      // For transfer approval request notifications, open approval modal with transfer tab
-                                      if (location.pathname === '/stock') {
-                                        try {
-                                          window.dispatchEvent(new CustomEvent('open-stock-approval', { detail: { tab: 'transfer' } }));
-                                        } catch {}
-                                      } else {
-                                        navigate('/stock?openApproval=true&tab=transfer');
-                                      }
-                                    } else if (isTransfer) {
-                                      // For other transfer notifications, open transfer audit timeline
-                                      if (location.pathname === '/stock') {
-                                        try {
-                                          window.dispatchEvent(new CustomEvent('open-audit', { detail: { entityType: 'StockTransfer', entityId: Number(n.entityId) } }));
-                                        } catch {}
-                                      } else {
-                                        const params = new URLSearchParams();
-                                        params.set('auditTransferId', n.entityId);
-                                        navigate(`/stock?${params.toString()}`);
-                                      }
-                                    } else {
-                                      // Stock: open stock audit timeline
-                                      if (location.pathname === '/stock') {
-                                        try {
-                                          window.dispatchEvent(new CustomEvent('open-audit', { detail: { entityType: 'Stock', entityId: Number(n.entityId) } }));
-                                        } catch {}
-                                      } else {
-                                        const params = new URLSearchParams();
-                                        params.set('auditStockId', n.entityId);
-                                        navigate(`/stock?${params.toString()}`);
-                                      }
-                                    }
-                                    setShowNotif(false);
-                                    try { await axios.post(`/api/notifications/${n.id}/read`); } catch {}
-                                    setNotifications(prev => prev.map(x => x.id === n.id ? {...x, read: true} : x));
-                                    setUnreadCount(c => Math.max(0, c - 1));
-                                  }}
-                                >
-                                  Görüntüle
-                                </button>
-                              )}
-                              {!n.read && (
-                                <button
-                                  className="btn btn-sm flex-fill btn-outline-primary"
-                                  style={{minHeight: '38px'}}
-                                  onClick={async () => {
-                                    try {
-                                      await axios.post(`/api/notifications/${n.id}/read`);
-                                      setNotifications(prev => prev.map(x => x.id === n.id ? {...x, read: true} : x));
-                                      setUnreadCount(c => Math.max(0, c - 1));
-                                    } catch (e) {}
-                                  }}
-                                >
-                                  Okundu
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
                 </div>
               )}
               <div 
@@ -528,7 +632,9 @@ const Navbar = () => {
           </div>
         </div>
       </nav>
-      
+
+      {renderNotificationPortal()}
+
       {/* Backdrop for user dropdown */}
       {showUserDropdown && (
         <div 

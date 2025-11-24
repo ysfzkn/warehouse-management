@@ -1,0 +1,91 @@
+/* ProductForm Tablet Optimizations */
+
+/* Tablet breakpoint (768px - 991px) - iPad Air, iPad Mini, etc. */
+@media (min-width: 768px) and (max-width: 991px) {
+  /* Ensure proper spacing for tablet */
+  .product-form-container {
+    padding: 1rem;
+  }
+
+  /* Input groups should not overflow */
+  .input-group {
+    flex-wrap: nowrap;
+  }
+
+  /* Button groups should wrap nicely */
+  .d-flex.gap-1 {
+    flex-wrap: wrap;
+  }
+
+  /* Modal adjustments for tablet */
+  .modal-dialog {
+    max-width: 90%;
+    margin: 1rem auto;
+  }
+
+  /* Form sections spacing */
+  .row {
+    margin-left: -0.5rem;
+    margin-right: -0.5rem;
+  }
+
+  .row > * {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
+
+  /* SearchableSelect with button adjustments */
+  .d-flex[style*="gap"] {
+    gap: 0.5rem !important;
+  }
+
+  /* KDV toggle info text wrapping */
+  small.text-muted.d-block {
+    word-break: break-word;
+    line-height: 1.4;
+  }
+
+  /* Price calculation preview adjustments */
+  .alert-info .row {
+    margin-left: 0;
+    margin-right: 0;
+  }
+
+  .alert-info .row > * {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+}
+
+/* Large tablets (992px - 1199px) */
+@media (min-width: 992px) and (max-width: 1199px) {
+  /* Slightly tighter spacing for large tablets */
+  .row > * {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+}
+
+/* Prevent horizontal scrolling on tablets */
+@media (max-width: 1024px) {
+  .container-fluid {
+    overflow-x: hidden;
+  }
+
+  /* Ensure form doesn't overflow */
+  form {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  /* Input groups should not cause overflow */
+  .input-group {
+    max-width: 100%;
+  }
+
+  /* Button groups in input-group */
+  .input-group .btn {
+    flex-shrink: 0;
+  }
+}
+

@@ -31,6 +31,7 @@ public class ProductDto {
     public BigDecimal sctRate;
     public LocalDateTime createdAt;
     public LocalDateTime updatedAt;
+    public Long totalQuantity;
 
     public static class CategoryInfo {
         public Long id;

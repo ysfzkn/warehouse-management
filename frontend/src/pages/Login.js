@@ -132,8 +132,9 @@ const Login = () => {
         <div className="right-section" style={styles.rightSection}>
           <div style={styles.loginCard}>
             <div style={styles.loginHeader}>
-              <div style={styles.loginIconContainer}>
-                <i className="fas fa-lock" style={styles.loginIcon}></i>
+              {/* Icon container with responsive class */}
+              <div className="login-icon-container">
+                <i className="fas fa-lock login-icon"></i>
               </div>
               <h2 style={styles.loginTitle}>Hoş Geldiniz</h2>
               <p style={styles.loginSubtitle}>Devam etmek için lütfen giriş yapın</p>
@@ -225,6 +226,24 @@ const Login = () => {
 
       {/* Inline Styles with Animations */}
       <style>{`
+        /* Login Icon Container - Responsive Sizing */
+        .login-icon-container {
+          width: 80px;
+          height: 80px;
+          background: linear-gradient(135deg, #2196f3 0%, #1976d2 50%, #0d47a1 100%);
+          border-radius: 20px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin: 0 auto 24px;
+          box-shadow: 0 8px 32px rgba(33,150,243,0.5);
+        }
+
+        .login-icon {
+          font-size: 32px;
+          color: #ffffff;
+        }
+
         @keyframes gradientShift {
           0% { background-position: 0% 50%; }
           50% { background-position: 100% 50%; }
@@ -249,11 +268,6 @@ const Login = () => {
         @keyframes fadeIn {
           from { opacity: 0; }
           to { opacity: 1; }
-        }
-
-        @keyframes pulse {
-          0%, 100% { transform: scale(1); }
-          50% { transform: scale(1.05); }
         }
 
         /* Feature card hover effect */
@@ -291,85 +305,106 @@ const Login = () => {
           color: #495057 !important;
         }
 
-        @media (max-width: 992px) {
-          .left-section { display: none !important; }
+        /* Tablet to Mobile transition */
+        @media (max-width: 1000px) {
+          .left-section { 
+            display: none !important; 
+          }
           .right-section { 
             width: 100% !important; 
             max-width: 100% !important;
-            padding: 20px !important;
+            padding: 30px 20px !important;
             flex: 1 1 100% !important;
           }
           [style*="content"] {
-            padding: 10px !important;
+            padding: 0 !important;
             min-height: 100vh !important;
             align-items: center !important;
+            justify-content: center !important;
+          }
+          [style*="loginCard"] {
+            max-width: 500px !important;
+          }
+          .login-icon-container {
+            width: 60px !important;
+            height: 60px !important;
+            margin-bottom: 20px !important;
+            border-radius: 15px !important;
+          }
+          .login-icon {
+            font-size: 26px !important;
           }
         }
 
+        /* Standard Mobile */
         @media (max-width: 768px) {
+          .right-section {
+            padding: 24px 16px !important;
+          }
           [style*="loginCard"] {
-            padding: 30px 24px !important;
+            padding: 36px 28px !important;
             max-width: 100% !important;
-            border-radius: 16px !important;
+            border-radius: 20px !important;
+          }
+          [style*="loginHeader"] {
+            margin-bottom: 32px !important;
           }
           [style*="loginTitle"] {
-            font-size: 24px !important;
+            font-size: 26px !important;
+            margin-bottom: 8px !important;
           }
           [style*="loginSubtitle"] {
             font-size: 14px !important;
           }
-          [style*="loginIconContainer"] {
-            width: 48px !important;
-            height: 48px !important;
-            margin-bottom: 16px !important;
-            border-radius: 12px !important;
+          .login-icon-container {
+            width: 54px !important;
+            height: 54px !important;
+            margin-bottom: 18px !important;
+            border-radius: 14px !important;
           }
-          [style*="loginIcon"] {
-            font-size: 20px !important;
-            line-height: 1 !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
+          .login-icon {
+            font-size: 23px !important;
           }
           [style*="input"] {
-            padding: 12px 44px 12px 44px !important;
+            padding: 13px 46px 13px 42px !important;
             font-size: 16px !important;
           }
           [style*="inputIcon"] {
             left: 14px !important;
-            font-size: 14px !important;
+            font-size: 15px !important;
           }
           [style*="passwordToggle"] {
             right: 14px !important;
-            font-size: 14px !important;
-            padding: 6px !important;
-            min-width: 36px !important;
-            min-height: 36px !important;
+            font-size: 15px !important;
+            padding: 8px !important;
+            min-width: 38px !important;
+            min-height: 38px !important;
           }
           [style*="submitButton"] {
-            padding: 14px !important;
-            font-size: 15px !important;
-            min-height: 48px !important;
+            padding: 15px !important;
+            font-size: 16px !important;
+            min-height: 50px !important;
           }
           [style*="label"] {
             font-size: 13px !important;
             margin-bottom: 8px !important;
           }
           [style*="inputGroup"] {
-            margin-bottom: 20px !important;
+            margin-bottom: 22px !important;
           }
           [style*="errorAlert"] {
             padding: 12px 16px !important;
             font-size: 13px !important;
-            margin-bottom: 20px !important;
+            margin-bottom: 22px !important;
           }
           [style*="securityBadge"] {
             font-size: 12px !important;
             padding: 10px !important;
-            margin-top: 20px !important;
+            margin-top: 22px !important;
           }
         }
 
+        /* Small Mobile */
         @media (max-width: 576px) {
           [style*="container"] {
             padding: 0 !important;
@@ -380,12 +415,86 @@ const Login = () => {
             margin: 0 !important;
           }
           .right-section {
-            padding: 16px !important;
+            padding: 20px 14px !important;
           }
           [style*="loginCard"] {
-            padding: 24px 20px !important;
-            border-radius: 12px !important;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.2) !important;
+            padding: 32px 24px !important;
+            border-radius: 18px !important;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.25) !important;
+          }
+          [style*="loginHeader"] {
+            margin-bottom: 28px !important;
+          }
+          [style*="loginTitle"] {
+            font-size: 24px !important;
+            margin-bottom: 6px !important;
+          }
+          [style*="loginSubtitle"] {
+            font-size: 13px !important;
+          }
+          .login-icon-container {
+            width: 50px !important;
+            height: 50px !important;
+            border-radius: 13px !important;
+            margin-bottom: 16px !important;
+          }
+          .login-icon {
+            font-size: 21px !important;
+          }
+          [style*="input"] {
+            padding: 13px 46px 13px 40px !important;
+            font-size: 16px !important;
+            border-radius: 11px !important;
+          }
+          [style*="inputIcon"] {
+            left: 13px !important;
+            font-size: 14px !important;
+          }
+          [style*="passwordToggle"] {
+            right: 12px !important;
+            font-size: 15px !important;
+            padding: 8px !important;
+            min-width: 38px !important;
+            min-height: 38px !important;
+          }
+          [style*="submitButton"] {
+            padding: 15px !important;
+            font-size: 16px !important;
+            min-height: 50px !important;
+            border-radius: 11px !important;
+          }
+          [style*="label"] {
+            font-size: 13px !important;
+            margin-bottom: 8px !important;
+          }
+          [style*="inputGroup"] {
+            margin-bottom: 20px !important;
+          }
+          [style*="form"] {
+            margin-bottom: 20px !important;
+          }
+          [style*="errorAlert"] {
+            padding: 12px 14px !important;
+            font-size: 13px !important;
+            margin-bottom: 20px !important;
+            border-radius: 10px !important;
+          }
+          [style*="securityBadge"] {
+            font-size: 11px !important;
+            padding: 10px !important;
+            margin-top: 20px !important;
+            border-radius: 9px !important;
+          }
+        }
+
+        /* Extra Small Mobile (iPhone SE, etc.) */
+        @media (max-width: 400px) {
+          .right-section {
+            padding: 16px 12px !important;
+          }
+          [style*="loginCard"] {
+            padding: 28px 20px !important;
+            border-radius: 16px !important;
           }
           [style*="loginHeader"] {
             margin-bottom: 24px !important;
@@ -395,96 +504,98 @@ const Login = () => {
             margin-bottom: 6px !important;
           }
           [style*="loginSubtitle"] {
-            font-size: 13px !important;
+            font-size: 12px !important;
           }
-          [style*="loginIconContainer"] {
-            width: 48px !important;
-            height: 48px !important;
+          .login-icon-container {
+            width: 46px !important;
+            height: 46px !important;
             border-radius: 12px !important;
-            margin-bottom: 16px !important;
+            margin-bottom: 14px !important;
           }
-          [style*="loginIcon"] {
-            font-size: 20px !important;
-            line-height: 1 !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
+          .login-icon {
+            font-size: 19px !important;
           }
           [style*="input"] {
-            padding: 14px 48px 14px 44px !important;
+            padding: 12px 44px 12px 38px !important;
             font-size: 16px !important;
-            border-radius: 10px !important;
           }
           [style*="inputIcon"] {
             left: 12px !important;
-            font-size: 15px !important;
+            font-size: 14px !important;
           }
           [style*="passwordToggle"] {
-            right: 12px !important;
-            font-size: 15px !important;
-            padding: 8px !important;
-            min-width: 40px !important;
-            min-height: 40px !important;
+            right: 10px !important;
+            font-size: 14px !important;
+            padding: 7px !important;
+            min-width: 36px !important;
+            min-height: 36px !important;
           }
           [style*="submitButton"] {
-            padding: 16px !important;
-            font-size: 16px !important;
-            min-height: 52px !important;
-            border-radius: 10px !important;
-          }
-          [style*="label"] {
-            font-size: 13px !important;
-            margin-bottom: 8px !important;
+            padding: 14px !important;
+            font-size: 15px !important;
+            min-height: 48px !important;
           }
           [style*="inputGroup"] {
             margin-bottom: 18px !important;
           }
-          [style*="form"] {
-            margin-bottom: 20px !important;
-          }
           [style*="errorAlert"] {
-            padding: 12px 14px !important;
+            padding: 11px 13px !important;
             font-size: 12px !important;
             margin-bottom: 18px !important;
-            border-radius: 10px !important;
           }
           [style*="securityBadge"] {
             font-size: 11px !important;
-            padding: 10px !important;
+            padding: 9px !important;
             margin-top: 18px !important;
-            border-radius: 8px !important;
           }
         }
 
-        @media (max-width: 375px) {
+        /* Very Small Mobile (< 360px) */
+        @media (max-width: 360px) {
           .right-section {
-            padding: 12px !important;
+            padding: 14px 10px !important;
           }
           [style*="loginCard"] {
-            padding: 20px 16px !important;
+            padding: 24px 16px !important;
+          }
+          [style*="loginHeader"] {
+            margin-bottom: 20px !important;
           }
           [style*="loginTitle"] {
             font-size: 20px !important;
+            margin-bottom: 5px !important;
           }
-          [style*="loginIconContainer"] {
+          [style*="loginSubtitle"] {
+            font-size: 12px !important;
+          }
+          .login-icon-container {
             width: 44px !important;
             height: 44px !important;
             border-radius: 11px !important;
             margin-bottom: 12px !important;
           }
-          [style*="loginIcon"] {
+          .login-icon {
             font-size: 18px !important;
-            line-height: 1 !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
           }
           [style*="input"] {
-            padding: 12px 44px 12px 40px !important;
+            padding: 12px 42px 12px 36px !important;
+          }
+          [style*="inputIcon"] {
+            left: 11px !important;
+          }
+          [style*="passwordToggle"] {
+            right: 9px !important;
+            padding: 6px !important;
+            min-width: 34px !important;
+            min-height: 34px !important;
           }
           [style*="submitButton"] {
-            padding: 14px !important;
+            padding: 13px !important;
             font-size: 15px !important;
+            min-height: 46px !important;
+          }
+          [style*="inputGroup"] {
+            margin-bottom: 16px !important;
           }
         }
       `}</style>
@@ -648,25 +759,6 @@ const styles = {
     textAlign: 'center',
     marginBottom: '40px',
   },
-  loginIconContainer: {
-    width: '80px',
-    height: '80px',
-    background: 'linear-gradient(135deg, #2196f3 0%, #1976d2 50%, #0d47a1 100%)',
-    borderRadius: '20px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    margin: '0 auto 24px',
-    boxShadow: '0 8px 32px rgba(33,150,243,0.5)',
-  },
-  loginIcon: {
-    fontSize: '32px',
-    color: '#ffffff',
-    lineHeight: '1',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   loginTitle: {
     fontSize: '32px',
     fontWeight: '700',
@@ -762,5 +854,3 @@ const styles = {
 };
 
 export default Login;
-
-

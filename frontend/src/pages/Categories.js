@@ -23,6 +23,19 @@ const Categories = () => {
   const [categoryPageSize, setCategoryPageSize] = useState(20);
   const [categoryTotalPages, setCategoryTotalPages] = useState(0);
   const [categoryTotalCount, setCategoryTotalCount] = useState(0);
+  const [categorySortBy, setCategorySortBy] = useState('name');
+  const [categorySortDir, setCategorySortDir] = useState('asc');
+  const handleCategorySortChange = (value) => {
+    setCategorySortBy(value);
+    if (value === 'updatedAt') {
+      setCategorySortDir('desc');
+    }
+    setCategoryPage(0);
+  };
+  const categorySortOptions = [
+    { value: 'name', label: 'İsme Göre', icon: 'fa-font' },
+    { value: 'updatedAt', label: 'Son Güncellemeye Göre', icon: 'fa-clock' }
+  ];
 
   const fetchCategories = useCallback(async (pageOverride = 0, pageSizeOverride) => {
     try {
@@ -31,38 +44,32 @@ const Categories = () => {
       const params = {
         page: pageOverride,
         size,
-        sortBy: 'name',
-        sortDir: 'asc'
+        sortBy: categorySortBy,
+        sortDir: categorySortDir
       };
       const response = await axios.get('/api/categories/top-level', { params });
       const data = response.data || {};
       const list = Array.isArray(data.content) ? data.content : (Array.isArray(data) ? data : []);
       
-      const categoriesWithSubInfo = await Promise.all(
-        list.map(async (category) => {
-          try {
-            const subResponse = await axios.get(`/api/categories/${category.id}/subcategories`);
-            const ownCount = Number(category.productCount ?? 0);
-            const subTotalCount = (subResponse.data || []).reduce((sum, s) => sum + Number(s.productCount || 0), 0);
-            return {
-              ...category,
-              subcategories: subResponse.data,
-              productCount: ownCount,
-              totalProductCount: ownCount + subTotalCount,
-              totalSubcategories: subResponse.data.length
-            };
-          } catch (error) {
-            console.error(`Error fetching subcategories for ${category.name}:`, error);
-            return {
-              ...category,
-              subcategories: [],
-              productCount: Number(category.productCount ?? 0),
-              totalProductCount: Number(category.productCount ?? 0),
-              totalSubcategories: 0
-            };
-          }
-        })
-      );
+      const categoriesWithSubInfo = list.map((category) => {
+        const ownCount = Number(category.productCount ?? 0);
+        const rawSubs = Array.isArray(category.children) ? category.children : (Array.isArray(category.subcategories) ? category.subcategories : []);
+        const normalizedSubs = rawSubs.map((sub) => ({
+          ...sub,
+          parentId: sub.parentId ?? category.id,
+          parentName: sub.parentName ?? category.name,
+          productCount: Number(sub.productCount ?? 0)
+        }));
+        const subTotalCount = normalizedSubs.reduce((sum, sub) => sum + Number(sub.productCount || 0), 0);
+        return {
+          ...category,
+          subcategories: normalizedSubs,
+          children: normalizedSubs,
+          productCount: ownCount,
+          totalProductCount: ownCount + subTotalCount,
+          totalSubcategories: normalizedSubs.length
+        };
+      });
       setMainCategories(categoriesWithSubInfo);
       
       // Update pagination state if response is paginated
@@ -81,18 +88,18 @@ const Categories = () => {
     } finally {
       setLoading(false);
     }
-  }, [categoryPageSize]);
+  }, [categoryPageSize, categorySortBy, categorySortDir]);
 
   useEffect(() => {
     fetchCategories(0, categoryPageSize);
   }, [fetchCategories, categoryPageSize]);
 
-  // Reset to first page when search changes
+  // Reset to first page when search or sort changes
   useEffect(() => {
     if (categoryPage !== 0) {
       setCategoryPage(0);
     }
-  }, [searchTerm]);
+  }, [searchTerm, categorySortBy, categorySortDir]);
 
   const toggleCategoryExpansion = useCallback((categoryId) => {
     const id = Number(categoryId);
@@ -284,17 +291,78 @@ const Categories = () => {
       </div>
 
       {/* Filters */}
-      <div className="row mb-3">
-        <div className="col-md-8">
-          <div className="input-group">
-            <span className="input-group-text"><i className="fas fa-search"></i></span>
-            <input
-              type="text"
-              className="form-control"
-              placeholder="Kategori adı veya açıklama ara..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
+      <div className="row g-3 mb-3">
+        <div className="col-12 col-md-6 col-lg-4">
+          <div className="border rounded-3 p-3 h-100 bg-body">
+            <div className="d-flex align-items-center justify-content-between mb-2">
+              <div>
+                <small className="text-uppercase text-muted fw-semibold">Arama</small>
+                <div className="fw-semibold text-truncate">Kategori / açıklama</div>
+              </div>
+              <span className="badge text-bg-light border d-inline-flex align-items-center">
+                <i className="fas fa-search me-1 text-muted"></i>
+                Ara
+              </span>
+            </div>
+            <div className="input-group">
+              <span className="input-group-text bg-transparent border-end-0">
+                <i className="fas fa-search text-secondary"></i>
+              </span>
+              <input
+                type="text"
+                className="form-control border-start-0"
+                placeholder="Kategori adı veya açıklama ara..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+          </div>
+        </div>
+        <div className="col-12 col-md-6 col-lg-4">
+          <div className="border rounded-3 p-3 h-100 bg-body">
+            <div className="d-flex justify-content-between align-items-center mb-2">
+              <div>
+                <small className="text-uppercase text-muted fw-semibold">Sıralama</small>
+                <div className="fw-semibold">
+                  {categorySortOptions.find((opt) => opt.value === categorySortBy)?.label}
+                </div>
+              </div>
+              <button
+                type="button"
+                className="btn btn-sm btn-outline-primary rounded-circle"
+                onClick={() => {
+                  setCategorySortDir(categorySortDir === 'asc' ? 'desc' : 'asc');
+                  setCategoryPage(0);
+                }}
+                title={categorySortDir === 'asc' ? 'Artan sıralama' : 'Azalan sıralama'}
+              >
+                <i className={`fas fa-arrow-${categorySortDir === 'asc' ? 'up' : 'down'}`}></i>
+              </button>
+            </div>
+            <div className="d-flex flex-wrap gap-2">
+              {categorySortOptions.map((option) => (
+                <div key={option.value} className="flex-grow-1">
+                  <input
+                    type="radio"
+                    className="btn-check"
+                    name="category-sort-option"
+                    id={`category-sort-${option.value}`}
+                    checked={categorySortBy === option.value}
+                    onChange={() => handleCategorySortChange(option.value)}
+                  />
+                  <label
+                    className={`btn btn-sm w-100 d-flex align-items-center justify-content-center gap-2 ${
+                      categorySortBy === option.value ? 'btn-primary text-white' : 'btn-outline-primary'
+                    }`}
+                    htmlFor={`category-sort-${option.value}`}
+                    style={{ minHeight: '38px' }}
+                  >
+                    <i className={`fas ${option.icon}`}></i>
+                    <span className="text-truncate">{option.label}</span>
+                  </label>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>

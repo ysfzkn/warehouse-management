@@ -103,4 +103,17 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
     @EntityGraph(value = Stock.GRAPH_WITH_PRODUCT_AND_WAREHOUSE, type = EntityGraph.EntityGraphType.LOAD)
     List<Stock> findByWarehouseAndProductIds(@Param("warehouse") Warehouse warehouse,
                                              @Param("productIds") Collection<Long> productIds);
+
+    @Query("""
+        SELECT s.product.id AS productId, SUM(s.quantity) AS totalQuantity
+        FROM Stock s
+        WHERE s.product.id IN :productIds
+        GROUP BY s.product.id
+    """)
+    List<ProductQuantityAggregate> getTotalQuantitiesByProductIds(@Param("productIds") Collection<Long> productIds);
+
+    interface ProductQuantityAggregate {
+        Long getProductId();
+        Long getTotalQuantity();
+    }
 }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import ProductForm from '../components/ProductForm';
 import SearchableSelect from '../components/SearchableSelect';
@@ -36,6 +36,25 @@ const Products = () => {
   const [productTotalPages, setProductTotalPages] = useState(0);
   const [productTotalCount, setProductTotalCount] = useState(0);
   const [filteredProducts, setFilteredProducts] = useState([]);
+  const [productSortBy, setProductSortBy] = useState('name');
+  const [productSortDir, setProductSortDir] = useState('asc');
+  const handleProductSortChange = (value) => {
+    setProductSortBy(value);
+    if (value === 'updatedAt') {
+      setProductSortDir('desc');
+    }
+    setProductPage(0);
+  };
+  const productSortOptions = [
+    { value: 'name', label: 'İsme Göre', icon: 'fa-font' },
+    { value: 'updatedAt', label: 'Son Güncellemeye Göre', icon: 'fa-clock' }
+  ];
+  const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
+  const [subcategoryDropdownOpen, setSubcategoryDropdownOpen] = useState(false);
+  const [categorySearch, setCategorySearch] = useState('');
+  const [subcategorySearch, setSubcategorySearch] = useState('');
+  const categoryDropdownRef = useRef(null);
+  const subcategoryDropdownRef = useRef(null);
 
   const fetchProducts = useCallback(async (pageOverride = 0, pageSizeOverride) => {
     try {
@@ -44,26 +63,19 @@ const Products = () => {
       const params = {
         page: pageOverride,
         size,
-        sortBy: 'name',
-        sortDir: 'asc'
+        sortBy: productSortBy,
+        sortDir: productSortDir
       };
       const response = await axios.get('/api/products', { params });
       const data = response.data || {};
       const list = Array.isArray(data.content) ? data.content : (Array.isArray(data) ? data : []);
       
-      // Fetch total stock per product to avoid 0 when stocks are not included in product payload
-      const totals = await Promise.all(
-        list.map(async (p) => {
-          try {
-            const r = await axios.get(`/api/stocks/product/${p.id}/total-quantity`);
-            return { id: p.id, total: typeof r.data === 'number' ? r.data : 0 };
-          } catch {
-            return { id: p.id, total: 0 };
-          }
-        })
-      );
-      const idToTotal = totals.reduce((acc, t) => { acc[t.id] = t.total; return acc; }, {});
-      const productsWithStock = list.map(p => ({ ...p, totalStock: idToTotal[p.id] ?? 0 }));
+      const productsWithStock = list.map(p => ({
+        ...p,
+        totalStock: typeof p.totalQuantity === 'number'
+          ? p.totalQuantity
+          : Number(p.totalQuantity) || 0
+      }));
       setProducts(productsWithStock);
       
       // Update pagination state if response is paginated
@@ -83,19 +95,39 @@ const Products = () => {
     } finally {
       setLoading(false);
     }
-  }, [productPageSize]);
+  }, [productPageSize, productSortBy, productSortDir]);
 
   useEffect(() => {
     fetchProducts(0, productPageSize);
     fetchMainCategories();
   }, [fetchProducts, productPageSize]);
 
-  // Reset to first page when filters change
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (categoryDropdownRef.current && !categoryDropdownRef.current.contains(event.target)) {
+        setCategoryDropdownOpen(false);
+      }
+      if (subcategoryDropdownRef.current && !subcategoryDropdownRef.current.contains(event.target)) {
+        setSubcategoryDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  // Reset to first page when filters or sort change
   useEffect(() => {
     if (productPage !== 0) {
       setProductPage(0);
     }
-  }, [searchTerm, selectedCategory, selectedSubcategory, selectedBrand, selectedColor]);
+  }, [searchTerm, selectedCategory, selectedSubcategory, selectedBrand, selectedColor, productSortBy, productSortDir]);
+
+  useEffect(() => {
+    setSubcategoryDropdownOpen(false);
+    setSubcategorySearch('');
+  }, [selectedCategory]);
 
   useEffect(() => {
     if (selectedCategory) {
@@ -106,6 +138,45 @@ const Products = () => {
       setSelectedSubcategory('');
     }
   }, [selectedCategory]);
+
+  const selectedCategoryOption = categories.find(category => category.id?.toString() === selectedCategory);
+  const selectedCategoryLabel = selectedCategoryOption?.name || 'Tüm Ana Kategoriler';
+  const normalizedCategoryQuery = normalizeText(categorySearch);
+  const filteredCategoryOptions = categories.filter(category =>
+    !normalizedCategoryQuery || normalizeText(category.name).includes(normalizedCategoryQuery)
+  );
+
+  const selectedSubcategoryOption = subcategories.find(sub => sub.id?.toString() === selectedSubcategory);
+  const selectedSubcategoryLabel = selectedSubcategoryOption?.name ||
+    (selectedCategory ? 'Tüm Alt Kategoriler' : 'Önce ana kategori seçin');
+  const normalizedSubcategoryQuery = normalizeText(subcategorySearch);
+  const filteredSubcategoryOptions = subcategories.filter(sub =>
+    !normalizedSubcategoryQuery || normalizeText(sub.name).includes(normalizedSubcategoryQuery)
+  );
+
+  const handleCategorySelect = (value) => {
+    setSelectedCategory(value);
+    setSelectedSubcategory('');
+    setCategoryDropdownOpen(false);
+    setCategorySearch('');
+  };
+
+  const handleSubcategorySelect = (value) => {
+    if (!selectedCategory) {
+      return;
+    }
+    setSelectedSubcategory(value);
+    setSubcategoryDropdownOpen(false);
+    setSubcategorySearch('');
+  };
+
+  const clearCategorySelection = () => {
+    handleCategorySelect('');
+  };
+
+  const clearSubcategorySelection = () => {
+    handleSubcategorySelect('');
+  };
 
   // Apply frontend filtering (since backend doesn't support all filters yet)
   useEffect(() => {
@@ -136,7 +207,11 @@ const Products = () => {
       const data = response.data || {};
       // Handle paginated response
       const categoriesList = Array.isArray(data.content) ? data.content : (Array.isArray(data) ? data : []);
-      setCategories(categoriesList);
+      const normalized = categoriesList.map(cat => {
+        const children = Array.isArray(cat.children) ? cat.children : (Array.isArray(cat.subcategories) ? cat.subcategories : []);
+        return { ...cat, children };
+      });
+      setCategories(normalized);
     } catch (error) {
       console.error('Error fetching main categories:', error);
       setCategories([]);
@@ -145,14 +220,20 @@ const Products = () => {
 
   const fetchSubcategories = async (parentId) => {
     try {
+      const parent = categories.find(cat => cat.id?.toString() === String(parentId));
+      if (parent && Array.isArray(parent.children) && parent.children.length > 0) {
+        setSubcategories(parent.children);
+        return parent.children;
+      }
       const response = await axios.get(`/api/categories/${parentId}/subcategories`);
       const data = response.data || {};
-      // Handle paginated response
       const subcategoriesList = Array.isArray(data.content) ? data.content : (Array.isArray(data) ? data : []);
       setSubcategories(subcategoriesList);
+      return subcategoriesList;
     } catch (error) {
       console.error('Error fetching subcategories:', error);
       setSubcategories([]);
+      return [];
     }
   };
 
@@ -321,6 +402,95 @@ const Products = () => {
 
   return (
     <div>
+      <style>{`
+        .filter-dropdown-card {
+          position: relative;
+          border: 1px solid rgba(15, 23, 42, 0.05);
+          transition: box-shadow 0.2s ease, border-color 0.2s ease;
+        }
+        .filter-dropdown-card:hover {
+          border-color: rgba(59, 130, 246, 0.4);
+          box-shadow: 0 10px 25px rgba(15, 23, 42, 0.08);
+        }
+        .filter-dropdown-toggle {
+          width: 100%;
+          border: 1px solid rgba(15, 23, 42, 0.08);
+          border-radius: 16px;
+          background: linear-gradient(135deg, #f8fafc, #eef2ff);
+          padding: 0.9rem 1rem;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 0.5rem;
+          transition: all 0.2s ease;
+        }
+        .filter-dropdown-toggle span.label {
+          font-size: 0.7rem;
+          letter-spacing: 0.08em;
+          color: #94a3b8;
+          text-transform: uppercase;
+          margin-bottom: 0.1rem;
+          display: block;
+        }
+        .filter-dropdown-toggle strong {
+          font-size: 0.95rem;
+          color: #0f172a;
+        }
+        .filter-dropdown-toggle:disabled {
+          cursor: not-allowed;
+          opacity: 0.6;
+        }
+        .filter-dropdown-toggle.active {
+          border-color: #3b82f6;
+          background: linear-gradient(135deg, #e0f2fe, #dbeafe);
+        }
+        .filter-dropdown-menu {
+          position: absolute;
+          top: calc(100% + 12px);
+          left: 0;
+          right: 0;
+          background: #fff;
+          border-radius: 18px;
+          border: 1px solid rgba(15,23,42,0.08);
+          box-shadow: 0 20px 45px rgba(15, 23, 42, 0.15);
+          padding: 0.75rem;
+          z-index: 1050;
+        }
+        .filter-dropdown-list {
+          max-height: 260px;
+          overflow-y: auto;
+          padding-right: 4px;
+        }
+        .filter-dropdown-item {
+          width: 100%;
+          border: 1px solid transparent;
+          background: transparent;
+          border-radius: 12px;
+          padding: 0.6rem 0.75rem;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          color: #0f172a;
+          transition: all 0.15s ease;
+        }
+        .filter-dropdown-item:hover {
+          background: #f1f5f9;
+        }
+        .filter-dropdown-item.active {
+          background: #e0f2fe;
+          border-color: #bae6fd;
+          color: #0c4a6e;
+          font-weight: 600;
+        }
+        .filter-dropdown-item .badge {
+          font-size: 0.7rem;
+        }
+        @media (max-width: 768px) {
+          .filter-dropdown-menu {
+            top: calc(100% + 8px);
+          }
+        }
+      `}</style>
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h2>Ürünler</h2>
         <div className="d-flex gap-2">
@@ -348,49 +518,232 @@ const Products = () => {
       </div>
 
       {/* Filters */}
-      <div className="row mb-4">
-        <div className="col-md-4">
-          <div className="input-group">
-            <span className="input-group-text">
-              <i className="fas fa-search"></i>
-            </span>
-            <input
-              type="text"
-              className="form-control"
-              placeholder="Ürün adı veya Stok Kodu ara..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
+      <div className="row g-3 mb-4 align-items-stretch">
+        <div className="col-12 col-md-6 col-xl-3">
+          <div className="border rounded-3 p-3 h-100 bg-body">
+            <div className="d-flex align-items-center justify-content-between mb-2">
+              <div>
+                <small className="text-uppercase text-muted fw-semibold">Arama</small>
+                <div className="fw-semibold text-truncate">Ürün / SKU</div>
+              </div>
+              <span className="badge text-bg-light border d-inline-flex align-items-center">
+                <i className="fas fa-search me-1 text-muted"></i>
+                Ara
+              </span>
+            </div>
+            <div className="input-group">
+              <span className="input-group-text bg-transparent border-end-0">
+                <i className="fas fa-search text-secondary"></i>
+              </span>
+              <input
+                type="text"
+                className="form-control border-start-0"
+                placeholder="Ürün adı veya Stok Kodu ara..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
           </div>
         </div>
-        <div className="col-md-4">
-          <select
-            className="form-select"
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-          >
-            <option value="">Tüm Ana Kategoriler</option>
-            {Array.isArray(categories) && categories.map((category) => (
-              <option key={category.id} value={category.id}>
-                {category.name}
-              </option>
-            ))}
-          </select>
+        <div className="col-12 col-md-6 col-xl-3">
+          <div className="border rounded-3 p-3 h-100 bg-body filter-dropdown-card" ref={categoryDropdownRef}>
+            <div className="d-flex align-items-center justify-content-between mb-2">
+              <div>
+                <small className="text-uppercase text-muted fw-semibold">Filtre</small>
+                <div className="fw-semibold text-truncate">Ana kategori</div>
+              </div>
+              <i className="fas fa-layer-group text-muted"></i>
+            </div>
+            <button
+              type="button"
+              className={`filter-dropdown-toggle ${categoryDropdownOpen ? 'active' : ''}`}
+              onClick={() => setCategoryDropdownOpen(prev => !prev)}
+            >
+              <div className="text-start flex-grow-1">
+                <span className="label">Seçim</span>
+                <strong>{selectedCategoryLabel}</strong>
+              </div>
+              <div className="text-muted">
+                <i className={`fas fa-chevron-${categoryDropdownOpen ? 'up' : 'down'}`}></i>
+              </div>
+            </button>
+            {categoryDropdownOpen && (
+              <div className="filter-dropdown-menu">
+                <div className="input-group input-group-sm mb-2">
+                  <span className="input-group-text border-end-0 bg-transparent">
+                    <i className="fas fa-search text-muted"></i>
+                  </span>
+                  <input
+                    type="text"
+                    className="form-control border-start-0"
+                    placeholder="Kategori ara..."
+                    value={categorySearch}
+                    onChange={(e) => setCategorySearch(e.target.value)}
+                  />
+                  {selectedCategory && (
+                    <button
+                      type="button"
+                      className="btn btn-link text-decoration-none"
+                      onClick={clearCategorySelection}
+                    >
+                      Temizle
+                    </button>
+                  )}
+                </div>
+                <div className="filter-dropdown-list">
+                  <button
+                    type="button"
+                    className={`filter-dropdown-item ${!selectedCategory ? 'active' : ''}`}
+                    onClick={clearCategorySelection}
+                  >
+                    <span>Tüm Ana Kategoriler</span>
+                    {!selectedCategory && <i className="fas fa-check"></i>}
+                  </button>
+                  {filteredCategoryOptions.map((category) => (
+                    <button
+                      type="button"
+                      key={category.id}
+                      className={`filter-dropdown-item ${selectedCategory === String(category.id) ? 'active' : ''}`}
+                      onClick={() => handleCategorySelect(String(category.id))}
+                    >
+                      <span className="text-truncate">{category.name}</span>
+                      {selectedCategory === String(category.id) && <i className="fas fa-check"></i>}
+                    </button>
+                  ))}
+                  {!filteredCategoryOptions.length && (
+                    <div className="text-muted small px-1 py-2">Sonuç bulunamadı.</div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
-        <div className="col-md-4">
-          <select
-            className="form-select"
-            value={selectedSubcategory}
-            onChange={(e) => setSelectedSubcategory(e.target.value)}
-            disabled={!selectedCategory}
-          >
-            <option value="">Tüm Alt Kategoriler</option>
-            {Array.isArray(subcategories) && subcategories.map((subcategory) => (
-              <option key={subcategory.id} value={subcategory.id}>
-                {subcategory.name}
-              </option>
-            ))}
-          </select>
+        <div className="col-12 col-md-6 col-xl-3">
+          <div className="border rounded-3 p-3 h-100 bg-body filter-dropdown-card" ref={subcategoryDropdownRef}>
+            <div className="d-flex align-items-center justify-content-between mb-2">
+              <div>
+                <small className="text-uppercase text-muted fw-semibold">Filtre</small>
+                <div className="fw-semibold text-truncate">Alt kategori</div>
+              </div>
+              <i className="fas fa-diagram-project text-muted"></i>
+            </div>
+            <button
+              type="button"
+              className={`filter-dropdown-toggle ${subcategoryDropdownOpen ? 'active' : ''}`}
+              onClick={() => selectedCategory && setSubcategoryDropdownOpen(prev => !prev)}
+              disabled={!selectedCategory}
+            >
+              <div className="text-start flex-grow-1">
+                <span className="label">Seçim</span>
+                <strong>{selectedSubcategoryLabel}</strong>
+              </div>
+              <div className="text-muted">
+                <i className={`fas fa-chevron-${subcategoryDropdownOpen ? 'up' : 'down'}`}></i>
+              </div>
+            </button>
+            {subcategoryDropdownOpen && (
+              <div className="filter-dropdown-menu">
+                {selectedCategory ? (
+                  <>
+                    <div className="input-group input-group-sm mb-2">
+                      <span className="input-group-text border-end-0 bg-transparent">
+                        <i className="fas fa-search text-muted"></i>
+                      </span>
+                      <input
+                        type="text"
+                        className="form-control border-start-0"
+                        placeholder="Alt kategori ara..."
+                        value={subcategorySearch}
+                        onChange={(e) => setSubcategorySearch(e.target.value)}
+                      />
+                      {selectedSubcategory && (
+                        <button
+                          type="button"
+                          className="btn btn-link text-decoration-none"
+                          onClick={clearSubcategorySelection}
+                        >
+                          Temizle
+                        </button>
+                      )}
+                    </div>
+                    <div className="filter-dropdown-list">
+                      <button
+                        type="button"
+                        className={`filter-dropdown-item ${!selectedSubcategory ? 'active' : ''}`}
+                        onClick={clearSubcategorySelection}
+                      >
+                        <span>Tüm Alt Kategoriler</span>
+                        {!selectedSubcategory && <i className="fas fa-check"></i>}
+                      </button>
+                      {filteredSubcategoryOptions.map((subcategory) => (
+                        <button
+                          type="button"
+                          key={subcategory.id}
+                          className={`filter-dropdown-item ${selectedSubcategory === String(subcategory.id) ? 'active' : ''}`}
+                          onClick={() => handleSubcategorySelect(String(subcategory.id))}
+                        >
+                          <span className="text-truncate">{subcategory.name}</span>
+                          {selectedSubcategory === String(subcategory.id) && <i className="fas fa-check"></i>}
+                        </button>
+                      ))}
+                      {!filteredSubcategoryOptions.length && (
+                        <div className="text-muted small px-1 py-2">Alt kategori bulunamadı.</div>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-muted small">Önce ana kategori seçiniz.</div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="col-12 col-md-6 col-xl-3">
+          <div className="border rounded-3 p-3 h-100 bg-body">
+            <div className="d-flex justify-content-between align-items-center mb-3">
+              <div>
+                <small className="text-uppercase text-muted fw-semibold">Sıralama</small>
+                <div className="fw-semibold text-truncate">
+                  {productSortOptions.find((opt) => opt.value === productSortBy)?.label}
+                </div>
+              </div>
+              <button
+                type="button"
+                className="btn btn-sm btn-outline-primary rounded-circle"
+                onClick={() => {
+                  setProductSortDir(productSortDir === 'asc' ? 'desc' : 'asc');
+                  setProductPage(0);
+                }}
+                title={productSortDir === 'asc' ? 'Artan sıralama' : 'Azalan sıralama'}
+              >
+                <i className={`fas fa-arrow-${productSortDir === 'asc' ? 'up' : 'down'}`}></i>
+              </button>
+            </div>
+            <div className="d-flex flex-wrap gap-2">
+              {productSortOptions.map((option) => (
+                <div key={option.value} className="flex-grow-1">
+                  <input
+                    type="radio"
+                    className="btn-check"
+                    name="product-sort-option"
+                    id={`product-sort-${option.value}`}
+                    checked={productSortBy === option.value}
+                    onChange={() => handleProductSortChange(option.value)}
+                  />
+                  <label
+                    className={`btn btn-sm w-100 d-flex align-items-center justify-content-center gap-2 ${
+                      productSortBy === option.value ? 'btn-primary text-white' : 'btn-outline-primary'
+                    }`}
+                    htmlFor={`product-sort-${option.value}`}
+                    style={{ minHeight: '38px' }}
+                  >
+                    <i className={`fas ${option.icon}`}></i>
+                    <span className="text-truncate">{option.label}</span>
+                  </label>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 

@@ -6,6 +6,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -36,6 +37,9 @@ public interface CategoryRepository extends JpaRepository<Category, Long> {
 
     @Query("SELECT p.category.id AS categoryId, COUNT(p.id) AS productCount FROM Product p WHERE p.category IS NOT NULL GROUP BY p.category.id")
     List<CategoryProductCount> fetchCategoryProductCounts();
+
+    @Query("SELECT c FROM Category c JOIN FETCH c.parent WHERE c.parent.id IN :parentIds ORDER BY c.parent.id, c.name")
+    List<Category> findByParentIdIn(@org.springframework.data.repository.query.Param("parentIds") Collection<Long> parentIds);
 
     interface CategoryProductCount {
         Long getCategoryId();
