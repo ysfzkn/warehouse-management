@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -11,7 +11,9 @@ const Navbar = () => {
   const [notifications, setNotifications] = useState([]);
   const [showNotif, setShowNotif] = useState(false);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
+  const [userDropdownCoords, setUserDropdownCoords] = useState({ top: null, right: 16 });
   const role = (typeof window !== 'undefined' && localStorage.getItem('auth_role')) || 'ADMIN';
+  const userBadgeRef = useRef(null);
 
   useEffect(() => {
     let ignore = false;
@@ -134,8 +136,31 @@ const Navbar = () => {
     borderRadius: '25px',
     border: '1px solid rgba(255,255,255,0.2)',
     cursor: 'pointer',
-    transition: 'all 0.3s ease'
+    transition: 'all 0.3s ease',
+    minWidth: '52px',
+    minHeight: '48px'
   };
+
+  const updateUserDropdownCoords = useCallback(() => {
+    if (!userBadgeRef.current) return;
+    const rect = userBadgeRef.current.getBoundingClientRect();
+    setUserDropdownCoords({
+      top: rect.bottom + 12 + window.scrollY,
+      right: Math.max(12, window.innerWidth - rect.right - 12)
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!showUserDropdown) return;
+    const handlePositionChange = () => updateUserDropdownCoords();
+    handlePositionChange();
+    window.addEventListener('resize', handlePositionChange);
+    window.addEventListener('scroll', handlePositionChange, true);
+    return () => {
+      window.removeEventListener('resize', handlePositionChange);
+      window.removeEventListener('scroll', handlePositionChange, true);
+    };
+  }, [showUserDropdown, updateUserDropdownCoords]);
 
   const renderNotificationPortal = () => {
     if (!showNotif) return null;
@@ -259,6 +284,55 @@ const Navbar = () => {
     );
   };
 
+  const renderUserDropdownPortal = () => {
+    if (!showUserDropdown) return null;
+    const fallbackTop = typeof window !== 'undefined' ? window.scrollY + 80 : 80;
+    const fallbackRight = typeof window !== 'undefined' ? 16 : 16;
+    return createPortal(
+      <>
+        <div
+          className="notification-backdrop"
+          onClick={() => setShowUserDropdown(false)}
+          style={{ backdropFilter: 'blur(2px)', background: 'rgba(15,23,42,0.3)', zIndex: 1100 }}
+        />
+        <div
+          className="user-dropdown-panel"
+          style={{
+            position: 'fixed',
+            top: userDropdownCoords.top ?? fallbackTop,
+            right: userDropdownCoords.right ?? fallbackRight,
+            left: 'auto'
+          }}
+        >
+          <div className="user-dropdown-header">
+            <div>
+              <div className="fw-bold text-dark">{localStorage.getItem('auth_user') || 'Admin'}</div>
+              <small className="text-muted">
+                {role === 'ADMIN' && 'Yönetici'}
+                {role === 'STOCK_IN' && 'Stok Giriş Sorumlusu'}
+                {role === 'STOCK_OUT' && 'Stok Çıkış Sorumlusu'}
+              </small>
+            </div>
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-secondary rounded-circle d-flex align-items-center justify-content-center"
+              onClick={() => setShowUserDropdown(false)}
+            >
+              <i className="fas fa-times"></i>
+            </button>
+          </div>
+          <div className="user-dropdown-actions">
+            <button className="btn btn-outline-danger w-100" onClick={handleLogout}>
+              <i className="fas fa-sign-out-alt me-2"></i>
+              Çıkış Yap
+            </button>
+          </div>
+        </div>
+      </>,
+      document.body
+    );
+  };
+
   return (
     <>
       <style>{`
@@ -290,6 +364,37 @@ const Navbar = () => {
           animation: pulse 2s infinite;
           box-shadow: 0 2px 8px rgba(239, 68, 68, 0.4);
           border: 2px solid #1e3c72;
+        }
+
+        .user-dropdown-panel {
+          width: min(280px, calc(100vw - 32px));
+          background: #fff;
+          border-radius: 20px;
+          box-shadow: 0 20px 50px rgba(15, 23, 42, 0.25);
+          border: 1px solid rgba(15,23,42,0.08);
+          z-index: 1300;
+          padding-bottom: 1rem;
+        }
+
+        .user-dropdown-header {
+          padding: 1rem 1.25rem;
+          border-bottom: 1px solid #f1f5f9;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 0.5rem;
+        }
+
+        .user-dropdown-actions {
+          padding: 1rem 1.25rem 0;
+        }
+
+        @media (max-width: 600px) {
+          .user-dropdown-panel {
+            width: calc(100vw - 24px);
+            right: 12px !important;
+            left: 12px !important;
+          }
         }
 
         .notification-panel {
@@ -431,6 +536,51 @@ const Navbar = () => {
           height: 1px;
           background: #e5e7eb;
           margin: 0.5rem 0;
+        }
+
+        @media (max-width: 991.98px) {
+          .navbar .navbar-collapse {
+            background: rgba(12, 18, 34, 0.9);
+            border-radius: 24px;
+            padding: 1rem;
+            margin-top: 0.75rem;
+            box-shadow: 0 20px 40px rgba(15, 23, 42, 0.35);
+          }
+          .navbar .nav-link-custom {
+            width: 100%;
+            margin: 0.25rem 0;
+            border-radius: 14px;
+            padding: 0.75rem 1rem;
+            text-align: left;
+          }
+          .navbar .dropdown-menu {
+            position: static !important;
+            transform: none !important;
+            width: 100%;
+            margin-top: 0.5rem;
+            border-radius: 18px;
+            box-shadow: inset 0 0 0 1px rgba(255,255,255,0.05);
+          }
+          .navbar-toggler {
+            border-radius: 12px;
+            padding: 0.35rem 0.65rem;
+          }
+        }
+
+        .mobile-user-actions {
+          margin-left: auto;
+          gap: 0.75rem;
+        }
+
+        @media (max-width: 767.98px) {
+          .mobile-user-actions {
+            width: 100%;
+            justify-content: flex-end;
+            margin-top: 1rem;
+          }
+          .mobile-user-actions .btn {
+            padding: 0.35rem 0.45rem;
+          }
         }
       `}</style>
       
@@ -574,7 +724,7 @@ const Navbar = () => {
               )}
             </ul>
 
-            <div className="d-flex align-items-center position-relative">
+            <div className="d-flex align-items-center position-relative mobile-user-actions ms-lg-3">
               {role === 'ADMIN' && (
                 <div className="position-relative me-3">
                   <button
@@ -590,9 +740,12 @@ const Navbar = () => {
                 </div>
               )}
               <div 
-                className="text-white d-flex align-items-center"
+              className="text-white d-flex align-items-center"
                 style={userBadgeStyle}
-                onClick={() => setShowUserDropdown(!showUserDropdown)}
+                ref={userBadgeRef}
+              onClick={() => setShowUserDropdown(!showUserDropdown)}
+              aria-haspopup="true"
+              aria-expanded={showUserDropdown}
               >
                 <div 
                   className="rounded-circle d-flex align-items-center justify-content-center me-2" 
@@ -612,43 +765,14 @@ const Navbar = () => {
                 <i className={`fas fa-chevron-${showUserDropdown ? 'up' : 'down'} small`}></i>
               </div>
               
-              {showUserDropdown && (
-                <div className="user-dropdown">
-                  <div className="p-3 border-bottom">
-                    <div className="fw-bold text-dark">{localStorage.getItem('auth_user') || 'Admin'}</div>
-                    <small className="text-muted">
-                      {role === 'ADMIN' && 'Yönetici'}
-                      {role === 'STOCK_IN' && 'Stok Giriş Sorumlusu'}
-                      {role === 'STOCK_OUT' && 'Stok Çıkış Sorumlusu'}
-                    </small>
-                  </div>
-                  <div className="dropdown-item-custom text-danger" onClick={handleLogout}>
-                    <i className="fas fa-sign-out-alt me-2"></i>
-                    Çıkış Yap
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         </div>
       </nav>
 
       {renderNotificationPortal()}
+      {renderUserDropdownPortal()}
 
-      {/* Backdrop for user dropdown */}
-      {showUserDropdown && (
-        <div 
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            zIndex: 999
-          }}
-          onClick={() => setShowUserDropdown(false)}
-        />
-      )}
     </>
   );
 };

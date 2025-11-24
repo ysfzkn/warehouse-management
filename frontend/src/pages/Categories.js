@@ -282,12 +282,41 @@ const Categories = () => {
 
   return (
     <div>
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h2>Kategoriler</h2>
-        <button className="btn btn-primary" onClick={handleCreate}>
-          <i className="fas fa-plus me-2"></i>
-          Yeni Kategori
-        </button>
+      <style>{`
+        .page-header {
+          gap: 1.25rem;
+        }
+        .page-title h2 {
+          font-weight: 600;
+          letter-spacing: -0.02em;
+        }
+        .page-title p {
+          color: #94a3b8;
+          font-size: 0.9rem;
+          margin-bottom: 0;
+        }
+        .page-actions {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.75rem;
+        }
+        @media (max-width: 767px) {
+          .page-actions .btn {
+            width: 100%;
+          }
+        }
+      `}</style>
+      <div className="page-header d-flex flex-column flex-lg-row align-items-lg-center justify-content-between mb-4">
+        <div className="page-title">
+          <h2 className="mb-1">Kategoriler</h2>
+          <p className="small">Ana ve alt kategorileri düzenleyip yeni gruplar oluşturun.</p>
+        </div>
+        <div className="page-actions">
+          <button className="btn btn-primary" onClick={handleCreate}>
+            <i className="fas fa-plus me-2"></i>
+            Yeni Kategori
+          </button>
+        </div>
       </div>
 
       {/* Filters */}

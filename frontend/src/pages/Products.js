@@ -490,10 +490,35 @@ const Products = () => {
             top: calc(100% + 8px);
           }
         }
+        .page-header {
+          gap: 1.5rem;
+        }
+        .page-title h2 {
+          font-weight: 600;
+          letter-spacing: -0.02em;
+        }
+        .page-title p {
+          color: #94a3b8;
+          font-size: 0.9rem;
+          margin-bottom: 0;
+        }
+        .page-actions {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.75rem;
+        }
+        @media (max-width: 767px) {
+          .page-actions .btn {
+            width: 100%;
+          }
+        }
       `}</style>
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h2>Ürünler</h2>
-        <div className="d-flex gap-2">
+      <div className="page-header d-flex flex-column flex-lg-row align-items-lg-center justify-content-between mb-4">
+        <div className="page-title">
+          <h2 className="mb-1">Ürünler</h2>
+          <p className="small">Envanterdeki tüm ürünleri izleyin ve yönetin.</p>
+        </div>
+        <div className="page-actions">
           <button 
             className="btn btn-outline-secondary btn-sm"
             onClick={() => setShowBulkModal(true)}

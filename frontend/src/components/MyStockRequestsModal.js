@@ -123,6 +123,60 @@ const MyStockRequestsModal = ({ onClose }) => {
 
   return (
     <>
+      <style>{`
+        @media (max-width: 767.98px) {
+          .my-requests-mobile-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+          }
+          .my-requests-card {
+            border-radius: 20px;
+            border: 1px solid rgba(15, 23, 42, 0.08);
+            background: #fff;
+            box-shadow: 0 18px 35px rgba(15, 23, 42, 0.12);
+          }
+          .my-requests-card__header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 0.5rem;
+          }
+          .my-requests-card__title {
+            font-size: 1.05rem;
+            font-weight: 600;
+            color: #0f172a;
+          }
+          .my-requests-card__meta {
+            font-size: 0.82rem;
+            color: #64748b;
+          }
+          .my-requests-card__details {
+            font-size: 0.83rem;
+            color: #475569;
+            line-height: 1.4;
+          }
+          .my-requests-card__meta-row {
+            display: flex;
+            align-items: center;
+            gap: 0.65rem;
+            margin-bottom: 0.45rem;
+          }
+          .my-requests-card__meta-row:last-child {
+            margin-bottom: 0;
+          }
+          .my-requests-pill {
+            border-radius: 999px;
+            padding: 0.25rem 0.75rem;
+            font-size: 0.78rem;
+            font-weight: 600;
+          }
+          .my-requests-actions .btn {
+            border-radius: 14px;
+            font-weight: 600;
+          }
+        }
+      `}</style>
       <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
         <div className="modal-dialog modal-xl modal-dialog-scrollable">
           <div className="modal-content">
@@ -220,7 +274,7 @@ const MyStockRequestsModal = ({ onClose }) => {
                     </div>
                   </div>
 
-                  <div className="table-responsive" style={{ minHeight: '300px' }}>
+                  <div className="p-3" style={{ minHeight: '300px' }}>
                     {loading ? (
                       <div className="text-center py-5">
                         <div className="spinner-border text-info" role="status">
@@ -228,7 +282,7 @@ const MyStockRequestsModal = ({ onClose }) => {
                         </div>
                       </div>
                     ) : error ? (
-                      <div className="alert alert-danger m-3">
+                      <div className="alert alert-danger m-0">
                         <i className="fas fa-exclamation-triangle me-2"></i>
                         {error}
                       </div>
@@ -240,110 +294,222 @@ const MyStockRequestsModal = ({ onClose }) => {
                         </p>
                       </div>
                     ) : (
-                      <table className="table table-hover align-middle mb-0">
-                        <thead className="table-light">
-                          <tr>
-                            <th style={{ width: '70px' }}>ID</th>
-                            <th>Ürün</th>
-                            <th>Depo</th>
-                            <th className="text-center">İşlem</th>
-                            <th className="text-center">Miktar</th>
-                            <th className="text-center">Durum</th>
-                            <th style={{ width: '160px' }}>Tarih</th>
-                            <th className="text-center" style={{ width: '160px' }}>İşlemler</th>
-                          </tr>
-                        </thead>
-                        <tbody>
+                      <>
+                        <div className="d-none d-md-block table-responsive">
+                          <table className="table table-hover align-middle mb-0">
+                            <thead className="table-light">
+                              <tr>
+                                <th style={{ width: '70px' }}>ID</th>
+                                <th>Ürün</th>
+                                <th>Depo</th>
+                                <th className="text-center">İşlem</th>
+                                <th className="text-center">Miktar</th>
+                                <th className="text-center">Durum</th>
+                                <th style={{ width: '160px' }}>Tarih</th>
+                                <th className="text-center" style={{ width: '160px' }}>İşlemler</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {requests.map(request => {
+                                const status = statusConfig[request.status] || statusConfig.PENDING;
+                                const canDelete = request.status === 'PENDING';
+                                return (
+                                  <tr key={request.id}>
+                                    <td>
+                                      <span className="badge bg-dark">#{request.id}</span>
+                                    </td>
+                                    <td>
+                                      <div className="fw-bold">{request.productName}</div>
+                                      <small className="text-muted">SKU: {request.productSku}</small>
+                                    </td>
+                                    <td>{request.warehouseName}</td>
+                                    <td className="text-center">
+                                      <span className={`badge ${request.type === 'ADD' ? 'bg-success' : 'bg-danger'}`}>
+                                        <i className={`fas fa-${request.type === 'ADD' ? 'plus' : 'minus'} me-1`}></i>
+                                        {request.type === 'ADD' ? 'Ekleme' : 'Çıkarma'}
+                                      </span>
+                                    </td>
+                                    <td className="text-center">
+                                      <span className="badge bg-primary">{request.quantity}</span>
+                                    </td>
+                                    <td className="text-center">
+                                      <span className={`badge bg-${status.className}`}>
+                                        <i className={`fas ${status.icon} me-1`}></i>
+                                        {status.label}
+                                      </span>
+                                    </td>
+                                    <td>
+                                      <small className="text-muted d-block">{formatDate(request.requestedAt)}</small>
+                                      {request.reviewedAt && (
+                                        <small className="text-muted d-block">
+                                          Güncelleme: {formatDate(request.reviewedAt)}
+                                        </small>
+                                      )}
+                                    </td>
+                                    <td className="text-center">
+                                      <div className="d-flex gap-1 justify-content-center">
+                                        {request.notes && (
+                                          <button
+                                            className="btn btn-sm btn-outline-secondary"
+                                            title="Notları Gör"
+                                            onClick={() => setNotesModal({
+                                              show: true,
+                                              title: 'Talep Notları',
+                                              notes: request.notes,
+                                              requestId: request.id
+                                            })}
+                                          >
+                                            <i className="fas fa-sticky-note"></i>
+                                          </button>
+                                        )}
+                                        {request.status === 'REJECTED' && request.rejectionReason && (
+                                          <button
+                                            className="btn btn-sm btn-outline-danger"
+                                            title="Ret Nedenini Gör"
+                                            onClick={() => setNotesModal({
+                                              show: true,
+                                              title: 'Reddetme Nedeni',
+                                              notes: request.rejectionReason,
+                                              requestId: request.id
+                                            })}
+                                          >
+                                            <i className="fas fa-comment-slash"></i>
+                                          </button>
+                                        )}
+                                        {canDelete && (
+                                          <button
+                                            className="btn btn-sm btn-outline-danger"
+                                            onClick={() => handleDelete(request.id)}
+                                            disabled={deletingId === request.id}
+                                            title="Talebi Sil"
+                                          >
+                                            {deletingId === request.id ? (
+                                              <span className="spinner-border spinner-border-sm"></span>
+                                            ) : (
+                                              <i className="fas fa-trash"></i>
+                                            )}
+                                          </button>
+                                        )}
+                                        {!request.notes && request.status !== 'REJECTED' && !canDelete && (
+                                          <span className="text-muted small">-</span>
+                                        )}
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                        <div className="d-md-none px-3 pb-3 my-requests-mobile-list">
                           {requests.map(request => {
                             const status = statusConfig[request.status] || statusConfig.PENDING;
                             const canDelete = request.status === 'PENDING';
                             return (
-                              <tr key={request.id}>
-                                <td>
-                                  <span className="badge bg-dark">#{request.id}</span>
-                                </td>
-                                <td>
-                                  <div className="fw-bold">{request.productName}</div>
-                                  <small className="text-muted">SKU: {request.productSku}</small>
-                                </td>
-                                <td>{request.warehouseName}</td>
-                                <td className="text-center">
-                                  <span className={`badge ${request.type === 'ADD' ? 'bg-success' : 'bg-danger'}`}>
-                                    <i className={`fas fa-${request.type === 'ADD' ? 'plus' : 'minus'} me-1`}></i>
-                                    {request.type === 'ADD' ? 'Ekleme' : 'Çıkarma'}
-                                  </span>
-                                </td>
-                                <td className="text-center">
-                                  <span className="badge bg-primary">{request.quantity}</span>
-                                </td>
-                                <td className="text-center">
-                                  <span className={`badge bg-${status.className}`}>
-                                    <i className={`fas ${status.icon} me-1`}></i>
-                                    {status.label}
-                                  </span>
-                                </td>
-                                <td>
-                                  <small className="text-muted d-block">{formatDate(request.requestedAt)}</small>
-                                  {request.reviewedAt && (
-                                    <small className="text-muted d-block">
-                                      Güncelleme: {formatDate(request.reviewedAt)}
-                                    </small>
-                                  )}
-                                </td>
-                                <td className="text-center">
-                                  <div className="d-flex gap-1 justify-content-center">
+                              <div key={request.id} className="my-requests-card card border-0">
+                                <div className="card-body">
+                                  <div className="my-requests-card__header mb-2">
+                                    <div>
+                                      <div className="my-requests-card__title">Talep #{request.id}</div>
+                                      <small className="my-requests-card__meta">
+                                        {request.type === 'ADD' ? 'Stok Ekleme' : 'Stok Çıkarma'}
+                                      </small>
+                                    </div>
+                                    <span className={`my-requests-pill badge bg-${status.className}`}>
+                                      <i className={`fas ${status.icon} me-1`}></i>
+                                      {status.label}
+                                    </span>
+                                  </div>
+                                  <div className="my-requests-card__details mb-3">
+                                    <div className="my-requests-card__meta-row fw-semibold text-dark">
+                                      <i className="fas fa-box text-primary"></i>
+                                      {request.productName}
+                                    </div>
+                                    <div className="my-requests-card__meta-row">
+                                      <i className="fas fa-barcode"></i>
+                                      {request.productSku || '-'}
+                                    </div>
+                                    <div className="my-requests-card__meta-row">
+                                      <i className="fas fa-warehouse"></i>
+                                      {request.warehouseName || '-'}
+                                    </div>
+                                    <div className="my-requests-card__meta-row">
+                                      <i className="fas fa-calendar"></i>
+                                      {formatDate(request.requestedAt)}
+                                    </div>
+                                    {request.reviewedAt && (
+                                      <div className="my-requests-card__meta-row">
+                                        <i className="fas fa-history"></i>
+                                        Güncelleme: {formatDate(request.reviewedAt)}
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div className="d-flex flex-wrap gap-2 mb-3">
+                                    <span className="badge bg-primary">
+                                      <i className="fas fa-hashtag me-1"></i>
+                                      {request.quantity}
+                                    </span>
+                                    <span className={`badge ${request.type === 'ADD' ? 'bg-success' : 'bg-danger'}`}>
+                                      <i className={`fas fa-${request.type === 'ADD' ? 'plus' : 'minus'} me-1`}></i>
+                                      {request.type === 'ADD' ? 'Ekleme' : 'Çıkarma'}
+                                    </span>
+                                  </div>
+                                  <div className="my-requests-actions d-flex flex-wrap gap-2">
                                     {request.notes && (
                                       <button
-                                        className="btn btn-sm btn-outline-secondary"
-                                        title="Notları Gör"
-                                        onClick={() => setNotesModal({
-                                          show: true,
-                                          title: 'Talep Notları',
-                                          notes: request.notes,
-                                          requestId: request.id
-                                        })}
+                                        className="btn btn-outline-secondary btn-sm flex-fill"
+                                        onClick={() =>
+                                          setNotesModal({
+                                            show: true,
+                                            title: 'Talep Notları',
+                                            notes: request.notes,
+                                            requestId: request.id
+                                          })
+                                        }
                                       >
-                                        <i className="fas fa-sticky-note"></i>
+                                        <i className="fas fa-sticky-note me-1"></i>
+                                        Notu Gör
                                       </button>
                                     )}
                                     {request.status === 'REJECTED' && request.rejectionReason && (
                                       <button
-                                        className="btn btn-sm btn-outline-danger"
-                                        title="Ret Nedenini Gör"
-                                        onClick={() => setNotesModal({
-                                          show: true,
-                                          title: 'Reddetme Nedeni',
-                                          notes: request.rejectionReason,
-                                          requestId: request.id
-                                        })}
+                                        className="btn btn-outline-danger btn-sm flex-fill"
+                                        onClick={() =>
+                                          setNotesModal({
+                                            show: true,
+                                            title: 'Reddetme Nedeni',
+                                            notes: request.rejectionReason,
+                                            requestId: request.id
+                                          })
+                                        }
                                       >
-                                        <i className="fas fa-comment-slash"></i>
+                                        <i className="fas fa-comment-slash me-1"></i>
+                                        Ret Detayı
                                       </button>
                                     )}
                                     {canDelete && (
                                       <button
-                                        className="btn btn-sm btn-outline-danger"
+                                        className="btn btn-outline-danger btn-sm flex-fill"
                                         onClick={() => handleDelete(request.id)}
                                         disabled={deletingId === request.id}
-                                        title="Talebi Sil"
                                       >
                                         {deletingId === request.id ? (
                                           <span className="spinner-border spinner-border-sm"></span>
                                         ) : (
-                                          <i className="fas fa-trash"></i>
+                                          <>
+                                            <i className="fas fa-trash me-1"></i>
+                                            Talebi Sil
+                                          </>
                                         )}
                                       </button>
                                     )}
-                                    {!request.notes && request.status !== 'REJECTED' && !canDelete && (
-                                      <span className="text-muted small">-</span>
-                                    )}
                                   </div>
-                                </td>
-                              </tr>
+                                </div>
+                              </div>
                             );
                           })}
-                        </tbody>
-                      </table>
+                        </div>
+                      </>
                     )}
                   </div>
                 </>
@@ -400,7 +566,7 @@ const MyStockRequestsModal = ({ onClose }) => {
                     </div>
                   </div>
 
-                  <div className="table-responsive" style={{ minHeight: '300px' }}>
+                  <div className="p-3" style={{ minHeight: '300px' }}>
                     {transferLoading ? (
                       <div className="text-center py-5">
                         <div className="spinner-border text-info" role="status">
@@ -415,84 +581,163 @@ const MyStockRequestsModal = ({ onClose }) => {
                         </p>
                       </div>
                     ) : (
-                      <table className="table table-hover align-middle mb-0">
-                        <thead className="table-light">
-                          <tr>
-                            <th style={{ width: '70px' }}>ID</th>
-                            <th>Rota</th>
-                            <th>Ürünler</th>
-                            <th className="text-center">Tip</th>
-                            <th className="text-center">Durum</th>
-                            <th style={{ width: '160px' }}>Tarih</th>
-                            <th className="text-center" style={{ width: '160px' }}>İşlemler</th>
-                          </tr>
-                        </thead>
-                        <tbody>
+                      <>
+                        <div className="d-none d-md-block table-responsive">
+                          <table className="table table-hover align-middle mb-0">
+                            <thead className="table-light">
+                              <tr>
+                                <th style={{ width: '70px' }}>ID</th>
+                                <th>Rota</th>
+                                <th>Ürünler</th>
+                                <th className="text-center">Tip</th>
+                                <th className="text-center">Durum</th>
+                                <th style={{ width: '160px' }}>Tarih</th>
+                                <th className="text-center" style={{ width: '160px' }}>İşlemler</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {filteredTransferRequests.map(transfer => {
+                                const status = statusConfig[transfer.approvalStatus] || statusConfig.PENDING;
+                                const sourceName = transfer.sourceWarehouse?.name || 'Bilinmiyor';
+                                const destName =
+                                  transfer.transferType === 'CUSTOMER_DELIVERY'
+                                    ? (transfer.customerFullName || 'Müşteri')
+                                    : (transfer.destinationWarehouse?.name || 'Bilinmiyor');
+                                return (
+                                  <tr key={transfer.id}>
+                                    <td>
+                                      <span className="badge bg-dark">#{transfer.id}</span>
+                                    </td>
+                                    <td>
+                                      <div className="fw-bold">{sourceName} → {destName}</div>
+                                      {transfer.transferType === 'CUSTOMER_DELIVERY' && transfer.customerPhone && (
+                                        <small className="text-muted">{transfer.customerPhone}</small>
+                                      )}
+                                    </td>
+                                    <td>
+                                      <small>{getTransferItemsDescription(transfer)}</small>
+                                    </td>
+                                    <td className="text-center">
+                                      <span className={`badge ${transfer.transferType === 'CUSTOMER_DELIVERY' ? 'bg-info' : 'bg-primary'}`}>
+                                        {transfer.transferType === 'CUSTOMER_DELIVERY' ? 'Müşteri Sevkiyatı' : 'Depo Transferi'}
+                                      </span>
+                                    </td>
+                                    <td className="text-center">
+                                      <span className={`badge bg-${status.className}`}>
+                                        <i className={`fas ${status.icon} me-1`}></i>
+                                        {status.label}
+                                      </span>
+                                    </td>
+                                    <td>
+                                      <small className="text-muted d-block">{formatDate(transfer.transferDate)}</small>
+                                      {transfer.approvalDecisionAt && (
+                                        <small className="text-muted d-block">
+                                          Karar: {formatDate(transfer.approvalDecisionAt)}
+                                        </small>
+                                      )}
+                                    </td>
+                                    <td className="text-center">
+                                      <div className="d-flex gap-1 justify-content-center">
+                                        {transfer.approvalNote && (
+                                          <button
+                                            className="btn btn-sm btn-outline-secondary"
+                                            title="Notları Gör"
+                                            onClick={() => setNotesModal({
+                                              show: true,
+                                              title: transfer.approvalStatus === 'REJECTED' ? 'Reddetme Nedeni' : 'Onay Notu',
+                                              notes: transfer.approvalNote,
+                                              requestId: transfer.id
+                                            })}
+                                          >
+                                            <i className="fas fa-sticky-note"></i>
+                                          </button>
+                                        )}
+                                        {!transfer.approvalNote && (
+                                          <span className="text-muted small">-</span>
+                                        )}
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                        <div className="d-md-none px-3 pb-3 my-requests-mobile-list">
                           {filteredTransferRequests.map(transfer => {
                             const status = statusConfig[transfer.approvalStatus] || statusConfig.PENDING;
                             const sourceName = transfer.sourceWarehouse?.name || 'Bilinmiyor';
-                            const destName = transfer.transferType === 'CUSTOMER_DELIVERY' 
-                              ? (transfer.customerFullName || 'Müşteri')
-                              : (transfer.destinationWarehouse?.name || 'Bilinmiyor');
+                            const destName =
+                              transfer.transferType === 'CUSTOMER_DELIVERY'
+                                ? (transfer.customerFullName || 'Müşteri')
+                                : (transfer.destinationWarehouse?.name || 'Bilinmiyor');
                             return (
-                              <tr key={transfer.id}>
-                                <td>
-                                  <span className="badge bg-dark">#{transfer.id}</span>
-                                </td>
-                                <td>
-                                  <div className="fw-bold">{sourceName} → {destName}</div>
-                                  {transfer.transferType === 'CUSTOMER_DELIVERY' && transfer.customerPhone && (
-                                    <small className="text-muted">{transfer.customerPhone}</small>
-                                  )}
-                                </td>
-                                <td>
-                                  <small>{getTransferItemsDescription(transfer)}</small>
-                                </td>
-                                <td className="text-center">
-                                  <span className={`badge ${transfer.transferType === 'CUSTOMER_DELIVERY' ? 'bg-info' : 'bg-primary'}`}>
-                                    {transfer.transferType === 'CUSTOMER_DELIVERY' ? 'Müşteri Sevkiyatı' : 'Depo Transferi'}
-                                  </span>
-                                </td>
-                                <td className="text-center">
-                                  <span className={`badge bg-${status.className}`}>
-                                    <i className={`fas ${status.icon} me-1`}></i>
-                                    {status.label}
-                                  </span>
-                                </td>
-                                <td>
-                                  <small className="text-muted d-block">{formatDate(transfer.transferDate)}</small>
-                                  {transfer.approvalDecisionAt && (
-                                    <small className="text-muted d-block">
-                                      Karar: {formatDate(transfer.approvalDecisionAt)}
-                                    </small>
-                                  )}
-                                </td>
-                                <td className="text-center">
-                                  <div className="d-flex gap-1 justify-content-center">
-                                    {transfer.approvalNote && (
-                                      <button
-                                        className="btn btn-sm btn-outline-secondary"
-                                        title="Notları Gör"
-                                        onClick={() => setNotesModal({
-                                          show: true,
-                                          title: transfer.approvalStatus === 'REJECTED' ? 'Reddetme Nedeni' : 'Onay Notu',
-                                          notes: transfer.approvalNote,
-                                          requestId: transfer.id
-                                        })}
-                                      >
-                                        <i className="fas fa-sticky-note"></i>
-                                      </button>
+                              <div key={transfer.id} className="my-requests-card card border-0">
+                                <div className="card-body">
+                                  <div className="my-requests-card__header mb-2">
+                                    <div>
+                                      <div className="my-requests-card__title">Transfer #{transfer.id}</div>
+                                      <small className="my-requests-card__meta">
+                                        {transfer.transferType === 'CUSTOMER_DELIVERY' ? 'Müşteri Sevkiyatı' : 'Depo Transferi'}
+                                      </small>
+                                    </div>
+                                    <span className={`my-requests-pill badge bg-${status.className}`}>
+                                      <i className={`fas ${status.icon} me-1`}></i>
+                                      {status.label}
+                                    </span>
+                                  </div>
+                                  <div className="my-requests-card__details mb-3">
+                                    <div className="my-requests-card__meta-row fw-semibold text-dark">
+                                      <i className="fas fa-route text-primary"></i>
+                                      {sourceName} → {destName}
+                                    </div>
+                                    {transfer.transferType === 'CUSTOMER_DELIVERY' && transfer.customerPhone && (
+                                      <div className="my-requests-card__meta-row">
+                                        <i className="fas fa-phone"></i>
+                                        {transfer.customerPhone}
+                                      </div>
                                     )}
-                                    {!transfer.approvalNote && (
-                                      <span className="text-muted small">-</span>
+                                    <div className="my-requests-card__meta-row">
+                                      <i className="fas fa-box"></i>
+                                      {getTransferItemsDescription(transfer)}
+                                    </div>
+                                    <div className="my-requests-card__meta-row">
+                                      <i className="fas fa-calendar"></i>
+                                      {formatDate(transfer.transferDate)}
+                                    </div>
+                                    {transfer.approvalDecisionAt && (
+                                      <div className="my-requests-card__meta-row">
+                                        <i className="fas fa-history"></i>
+                                        Karar: {formatDate(transfer.approvalDecisionAt)}
+                                      </div>
                                     )}
                                   </div>
-                                </td>
-                              </tr>
+                                  <div className="my-requests-actions d-flex flex-wrap gap-2">
+                                    {transfer.approvalNote ? (
+                                      <button
+                                        className="btn btn-outline-secondary btn-sm flex-fill"
+                                        onClick={() =>
+                                          setNotesModal({
+                                            show: true,
+                                            title: transfer.approvalStatus === 'REJECTED' ? 'Reddetme Nedeni' : 'Onay Notu',
+                                            notes: transfer.approvalNote,
+                                            requestId: transfer.id
+                                          })
+                                        }
+                                      >
+                                        <i className="fas fa-sticky-note me-1"></i>
+                                        Notu Gör
+                                      </button>
+                                    ) : (
+                                      <span className="text-muted small">Not bulunmuyor</span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
                             );
                           })}
-                        </tbody>
-                      </table>
+                        </div>
+                      </>
                     )}
                   </div>
                 </>
