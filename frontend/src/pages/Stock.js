@@ -429,6 +429,7 @@ const Stock = () => {
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [showTransferHistory, setShowTransferHistory] = useState(false);
+  const [transferDetailModal, setTransferDetailModal] = useState({ show: false, transfer: null });
   const [selectedStock, setSelectedStock] = useState(null);
   const [transfers, setTransfers] = useState([]);
   const [transferPage, setTransferPage] = useState(0);
@@ -629,6 +630,14 @@ const Stock = () => {
       setError('Transfer verileri yüklenirken hata oluştu');
     }
   };
+
+const openTransferDetailModal = (transfer) => {
+  setTransferDetailModal({ show: true, transfer });
+};
+
+const closeTransferDetailModal = () => {
+  setTransferDetailModal({ show: false, transfer: null });
+};
 
   const handleStockPageChange = (newPage) => {
     const total = stockTotalPages || 0;
@@ -2017,6 +2026,145 @@ const Stock = () => {
         />
       )}
 
+  {transferDetailModal.show && transferDetailModal.transfer && (
+    <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 2000 }}>
+      <div className="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div className="modal-content shadow border-0 rounded-4">
+          <div className="modal-header text-white" style={{ background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)' }}>
+            <h5 className="modal-title">
+              <i className="fas fa-eye me-2"></i>
+              Transfer #{transferDetailModal.transfer.id} Detayı
+            </h5>
+            <button type="button" className="btn-close btn-close-white" onClick={closeTransferDetailModal}></button>
+          </div>
+          <div className="modal-body">
+            {(() => {
+              const t = transferDetailModal.transfer;
+              const items = Array.isArray(t.items) && t.items.length ? t.items : (Array.isArray(t.transferItems) ? t.transferItems : []);
+              const routeLabel =
+                (t.transferType || 'WAREHOUSE') === 'CUSTOMER_DELIVERY'
+                  ? `${t.sourceWarehouse?.name || '-'} → Müşteri`
+                  : `${t.sourceWarehouse?.name || '-'} → ${t.destinationWarehouse?.name || '-'}`;
+              return (
+                <>
+                  <div className="row g-3 mb-3">
+                    <div className="col-md-4">
+                      <div className="border rounded-3 p-3 h-100">
+                        <small className="text-muted text-uppercase">Transfer Tipi</small>
+                        <div className="fw-semibold">{(t.transferType || 'WAREHOUSE') === 'CUSTOMER_DELIVERY' ? 'Müşteri Sevkiyatı' : 'Depo Transferi'}</div>
+                      </div>
+                    </div>
+                    <div className="col-md-4">
+                      <div className="border rounded-3 p-3 h-100">
+                        <small className="text-muted text-uppercase">Durum</small>
+                        <div className="fw-semibold">{(t.status || '').replace('_', ' ') || '-'}</div>
+                      </div>
+                    </div>
+                    <div className="col-md-4">
+                      <div className="border rounded-3 p-3 h-100">
+                        <small className="text-muted text-uppercase">Tarih</small>
+                        <div className="fw-semibold">{formatDateInTurkeyTimezone(t.transferDate, { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="row g-3 mb-4">
+                    <div className="col-md-6">
+                      <div className="border rounded-3 p-3 h-100">
+                        <small className="text-muted text-uppercase">Rota</small>
+                        <div className="fw-semibold">{routeLabel}</div>
+                        {t.customerAddress && (
+                          <small className="text-muted d-block mt-1">
+                            <i className="fas fa-map-marker-alt me-1"></i>
+                            {t.customerAddress}
+                          </small>
+                        )}
+                      </div>
+                    </div>
+                    <div className="col-md-6">
+                      <div className="border rounded-3 p-3 h-100">
+                        <small className="text-muted text-uppercase">Sürücü / Araç</small>
+                        <div className="fw-semibold">{t.driverName || '-'}</div>
+                        <small className="text-muted d-block">{t.driverPhone || ''}</small>
+                        {t.vehiclePlate && (
+                          <span className="badge bg-secondary mt-2">
+                            <i className="fas fa-car me-1"></i>
+                            {t.vehiclePlate}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <h6 className="fw-bold mb-2">
+                    <i className="fas fa-box me-2"></i>
+                    Ürünler
+                  </h6>
+                  {items.length === 0 ? (
+                    <p className="text-muted small mb-4">Ürün bilgisi bulunamadı.</p>
+                  ) : (
+                    <div className="table-responsive mb-4">
+                      <table className="table table-sm align-middle">
+                        <thead className="table-light">
+                          <tr>
+                            <th>Ürün</th>
+                            <th>SKU</th>
+                            <th className="text-end">Miktar</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {items.map((item, idx) => (
+                            <tr key={`${t.id}-detail-${item.id || idx}`}>
+                              <td>{item.product?.name || '-'}</td>
+                              <td>{item.product?.sku || '-'}</td>
+                              <td className="text-end">{item.quantity}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  {(t.notes || t.completionNote || t.cancellationReason) && (
+                    <div className="row g-3">
+                      {t.notes && (
+                        <div className="col-md-4">
+                          <div className="border rounded-3 p-3 h-100">
+                            <small className="text-muted text-uppercase">Transfer Notu</small>
+                            <p className="mb-0 small">{t.notes}</p>
+                          </div>
+                        </div>
+                      )}
+                      {t.completionNote && (
+                        <div className="col-md-4">
+                          <div className="border rounded-3 p-3 h-100">
+                            <small className="text-muted text-uppercase">Tamamlama Notu</small>
+                            <p className="mb-0 small">{t.completionNote}</p>
+                          </div>
+                        </div>
+                      )}
+                      {t.cancellationReason && (
+                        <div className="col-md-4">
+                          <div className="border rounded-3 p-3 h-100">
+                            <small className="text-muted text-uppercase">İptal Nedeni</small>
+                            <p className="mb-0 small text-danger">{t.cancellationReason}</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
+          </div>
+          <div className="modal-footer bg-light">
+            <button type="button" className="btn btn-secondary" onClick={closeTransferDetailModal}>
+              <i className="fas fa-times me-2"></i>
+              Kapat
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )}
+
       {/* Transfer History Section */}
       {showTransferHistory && (
         <div className="mt-4">
@@ -2845,6 +2993,15 @@ const Stock = () => {
                                   Hareketler
                                 </button>
                               )}
+                          <button
+                            className="btn btn-sm btn-outline-primary w-100 py-1 px-2"
+                            style={{fontSize: 'clamp(0.7rem, 2vw, 0.8rem)', whiteSpace: 'nowrap'}}
+                            onClick={() => openTransferDetailModal(transfer)}
+                            title="Transfer detaylarını görüntüle"
+                          >
+                            <i className="fas fa-eye me-1"></i>
+                            Detay
+                          </button>
                             </div>
                           </td>
                         </tr>
@@ -2871,6 +3028,17 @@ const Stock = () => {
                     const approvalRejected = (transfer.approvalStatus || '').toUpperCase() === 'REJECTED';
                     const isSelected = selectedTransfers.includes(transfer.id);
                     const canDelete = transfer.status !== 'IN_TRANSIT' && transfer.status !== 'COMPLETED';
+                    const routeLabel =
+                      (transfer.transferType || 'WAREHOUSE') === 'CUSTOMER_DELIVERY'
+                        ? `${transfer.sourceWarehouse?.name || '-'} → Müşteri`
+                        : `${transfer.sourceWarehouse?.name || '-'} → ${transfer.destinationWarehouse?.name || '-'}`;
+                    const transferDateFull = formatDateInTurkeyTimezone(transfer.transferDate, {
+                      year: 'numeric',
+                      month: '2-digit',
+                      day: '2-digit',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    });
 
                     return (
                       <div
@@ -2880,27 +3048,11 @@ const Stock = () => {
                         <div className="card-body p-3">
                           <div className="transfer-mobile-card__header mb-3">
                             <div className="flex-grow-1">
-                              <div className="transfer-mobile-card__tags mb-2">
-                                <span className="mobile-chip">#{transfer.id}</span>
-                                <span
-                                  className={`mobile-chip ${
-                                    (transfer.transferType || 'WAREHOUSE') === 'CUSTOMER_DELIVERY'
-                                      ? 'bg-info bg-opacity-10 text-info border border-info'
-                                      : 'bg-secondary bg-opacity-10 text-secondary border border-secondary'
-                                  }`}
-                                >
-                                  {(transfer.transferType || 'WAREHOUSE') === 'CUSTOMER_DELIVERY' ? 'Müşteri' : 'Depo'}
-                                </span>
-                              </div>
-                              <div className="transfer-mobile-card__title">
+                              <div className="transfer-mobile-card__title">Transfer #{transfer.id}</div>
+                              <div className="text-muted small mb-1">{routeLabel}</div>
+                              <div className="text-muted small">
                                 <i className="fas fa-calendar me-1"></i>
-                                {formatDateInTurkeyTimezone(transfer.transferDate, {
-                                  year: 'numeric',
-                                  month: '2-digit',
-                                  day: '2-digit',
-                                  hour: '2-digit',
-                                  minute: '2-digit'
-                                })}
+                                {transferDateFull}
                               </div>
                             </div>
                             <div className="d-flex align-items-start gap-2">
@@ -2916,6 +3068,15 @@ const Stock = () => {
                                   />
                                 </div>
                               )}
+                              <span
+                                className={`mobile-chip ${
+                                  (transfer.transferType || 'WAREHOUSE') === 'CUSTOMER_DELIVERY'
+                                    ? 'bg-info bg-opacity-10 text-info border border-info'
+                                    : 'bg-secondary bg-opacity-10 text-secondary border border-secondary'
+                                }`}
+                              >
+                                {(transfer.transferType || 'WAREHOUSE') === 'CUSTOMER_DELIVERY' ? 'Müşteri' : 'Depo'}
+                              </span>
                               <span className={`mobile-chip badge bg-${status.class}`}>
                                 <i className={`fas fa-${status.icon} me-1`}></i>
                                 {status.label}
@@ -3023,6 +3184,14 @@ const Stock = () => {
                               )}
                             </div>
                           </div>
+
+                          <button
+                            className="btn btn-outline-primary w-100 mb-2"
+                            onClick={() => openTransferDetailModal(transfer)}
+                          >
+                            <i className="fas fa-eye me-1"></i>
+                            Detayı Gör
+                          </button>
 
                           <div className="transfer-mobile-card__primary-actions">
                             {transfer.status === 'PENDING' && !awaitingApproval && (

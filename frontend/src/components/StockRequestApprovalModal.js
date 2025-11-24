@@ -14,6 +14,7 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
   const [processing, setProcessing] = useState(null);
   const [rejectionModal, setRejectionModal] = useState({ show: false, id: null, reason: '', type: 'stock' });
   const [notesModal, setNotesModal] = useState({ show: false, title: '', content: '', type: 'info' });
+  const [requestDetailModal, setRequestDetailModal] = useState({ show: false, payload: null, context: 'stock' });
   const [filter, setFilter] = useState('PENDING');
   const [allTransferApprovals, setAllTransferApprovals] = useState([]);
   const [transferApprovals, setTransferApprovals] = useState([]);
@@ -585,7 +586,7 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                         <p className="mb-0">Seçilen filtreye uygun talep bulunamadı.</p>
                       </div>
                     ) : (
-                      <div className="my-requests-mobile-list">
+                      <div className="my-requests-mobile-list mt-3">
                         {requests.map((request) => {
                           const statusMeta = getStatusMeta(request.status);
                           return (
@@ -650,6 +651,13 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                                     Talep notunu gör
                                   </button>
                                 )}
+                                <button
+                                  className="btn btn-outline-primary btn-sm w-100 mb-2"
+                                  onClick={() => setRequestDetailModal({ show: true, payload: request, context: 'stock' })}
+                                >
+                                  <i className="fas fa-eye me-1"></i>
+                                  Detay
+                                </button>
                                 <div className="my-requests-actions d-flex flex-wrap gap-2">
                                   {matchesFilter(request.status, 'PENDING') ? (
                                     <>
@@ -962,7 +970,7 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                         <p className="text-muted mb-0">Seçilen filtreye uygun transfer onayı yok.</p>
                       </div>
                     ) : (
-                      <div className="my-requests-mobile-list">
+                      <div className="my-requests-mobile-list mt-3">
                         {transferApprovals.map((transfer) => {
                           const routeLabel =
                             transfer.transferType === 'CUSTOMER_DELIVERY'
@@ -1021,6 +1029,13 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                                     )}
                                   </div>
                                 )}
+                                <button
+                                  className="btn btn-outline-primary btn-sm w-100 mb-2"
+                                  onClick={() => setRequestDetailModal({ show: true, payload: transfer, context: 'transfer' })}
+                                >
+                                  <i className="fas fa-eye me-1"></i>
+                                  Detay
+                                </button>
                                 <div className="my-requests-actions d-flex flex-wrap gap-2">
                                   {matchesFilter(transfer.approvalStatus, 'PENDING') ? (
                                     <>
@@ -1102,6 +1117,137 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
           </div>
         </div>
       </div>
+
+      {requestDetailModal.show && requestDetailModal.payload && (
+        <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1065 }}>
+          <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+            <div className="modal-content border-0 shadow-lg rounded-4">
+              <div className="modal-header bg-primary text-white">
+                <h5 className="modal-title">
+                  <i className="fas fa-eye me-2"></i>
+                  {requestDetailModal.context === 'transfer' ? 'Transfer Talebi Detayı' : 'Stok Talebi Detayı'}
+                </h5>
+                <button type="button" className="btn-close btn-close-white" onClick={() => setRequestDetailModal({ show: false, payload: null, context: 'stock' })}></button>
+              </div>
+              <div className="modal-body">
+                {requestDetailModal.context === 'transfer' ? (
+                  (() => {
+                    const t = requestDetailModal.payload;
+                    const items = Array.isArray(t.items) ? t.items : [];
+                    const routeLabel =
+                      t.transferType === 'CUSTOMER_DELIVERY'
+                        ? `${t.sourceWarehouse?.name || '-'} → Müşteri`
+                        : `${t.sourceWarehouse?.name || '-'} → ${t.destinationWarehouse?.name || '-'}`;
+                    const statusMeta = getStatusMeta(t.approvalStatus);
+                    return (
+                      <>
+                        <div className="mb-3">
+                          <small className="text-muted text-uppercase d-block">Transfer</small>
+                          <div className="fw-semibold">#{t.id} • {routeLabel}</div>
+                          <small className="text-muted">{formatDate(t.approvalRequestedAt || t.transferDate)}</small>
+                        </div>
+                        <div className="mb-3">
+                          <small className="text-muted text-uppercase d-block">Durum</small>
+                          <span className={`badge bg-${statusMeta.className}`}>
+                            <i className={`fas ${statusMeta.icon} me-1`}></i>
+                            {statusMeta.label}
+                          </span>
+                        </div>
+                        <div className="mb-3">
+                          <small className="text-muted text-uppercase d-block">Ürünler</small>
+                          {items.length === 0 ? (
+                            <span className="text-muted small">Ürün bilgisi bulunamadı</span>
+                          ) : (
+                            <ul className="list-group list-group-flush">
+                              {items.map((item, idx) => (
+                                <li key={`${t.id}-detail-${item.id || idx}`} className="list-group-item px-0 d-flex justify-content-between">
+                                  <div>
+                                    <div className="fw-semibold small">{item.product?.name || '-'}</div>
+                                    <small className="text-muted">{item.product?.sku || '-'}</small>
+                                  </div>
+                                  <span className="badge bg-primary">{item.quantity}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                        {t.approvalNote && (
+                          <div className="alert alert-info small mb-0">
+                            <i className="fas fa-sticky-note me-1"></i>
+                            {t.approvalNote}
+                          </div>
+                        )}
+                        {t.rejectionReason && (
+                          <div className="alert alert-danger small mt-2 mb-0">
+                            <i className="fas fa-exclamation-circle me-1"></i>
+                            {t.rejectionReason}
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()
+                ) : (
+                  (() => {
+                    const r = requestDetailModal.payload;
+                    const statusMeta = getStatusMeta(r.status);
+                    return (
+                      <>
+                        <div className="mb-3">
+                          <small className="text-muted text-uppercase d-block">Ürün</small>
+                          <div className="fw-semibold">{r.stock?.product?.name || r.productName || '-'}</div>
+                          <small className="text-muted">{r.stock?.product?.sku || r.productSku || '-'}</small>
+                        </div>
+                        <div className="mb-3">
+                          <small className="text-muted text-uppercase d-block">Depo</small>
+                          <div className="fw-semibold">{r.stock?.warehouse?.name || r.warehouseName || '-'}</div>
+                        </div>
+                        <div className="row g-2 mb-3">
+                          <div className="col-6">
+                            <small className="text-muted text-uppercase d-block">Miktar</small>
+                            <div className="fw-semibold">{r.quantity}</div>
+                          </div>
+                          <div className="col-6">
+                            <small className="text-muted text-uppercase d-block">Durum</small>
+                            <span className={`badge bg-${statusMeta.className}`}>
+                              <i className={`fas ${statusMeta.icon} me-1`}></i>
+                              {statusMeta.label}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="mb-3">
+                          <small className="text-muted text-uppercase d-block">Talep Tarihi</small>
+                          <div className="fw-semibold">{formatDate(r.requestedAt || r.createdAt)}</div>
+                          {r.reviewedAt && (
+                            <small className="text-muted">Güncelleme: {formatDate(r.reviewedAt)}</small>
+                          )}
+                        </div>
+                        {r.notes && (
+                          <div className="alert alert-info small mb-0">
+                            <i className="fas fa-sticky-note me-1"></i>
+                            {r.notes}
+                          </div>
+                        )}
+                        {r.rejectionReason && (
+                          <div className="alert alert-danger small mt-2 mb-0">
+                            <i className="fas fa-times-circle me-1"></i>
+                            {r.rejectionReason}
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()
+                )}
+              </div>
+              <div className="modal-footer bg-light">
+                <button type="button" className="btn btn-secondary" onClick={() => setRequestDetailModal({ show: false, payload: null, context: 'stock' })}>
+                  <i className="fas fa-times me-2"></i>
+                  Kapat
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Rejection Reason Modal */}
       {rejectionModal.show && (
