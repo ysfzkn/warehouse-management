@@ -77,21 +77,24 @@ const StockFiltersBar = ({
         @media (max-width: 991.98px) {
           .stock-mobile-card,
           .transfer-mobile-card {
-            border-radius: 20px;
-            border: 1px solid rgba(15,23,42,0.08);
+            border-radius: 22px;
+            border: 1px solid rgba(15,23,42,0.12);
             background: linear-gradient(135deg, #ffffff, #f8fafc);
+            box-shadow: 0 16px 40px rgba(15,23,42,0.12);
           }
           .stock-mobile-card.is-selected,
           .transfer-mobile-card.is-selected {
             border-color: #3b82f6 !important;
-            box-shadow: 0 18px 40px rgba(59,130,246,0.18);
+            box-shadow: 0 20px 45px rgba(59,130,246,0.22);
           }
           .stock-mobile-card__header,
           .transfer-mobile-card__header {
             display: flex;
-            align-items: flex-start;
-            justify-content: space-between;
+            flex-direction: column;
             gap: 0.75rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 1px solid rgba(15,23,42,0.08);
+            margin-bottom: 1rem;
           }
           .stock-mobile-card__warehouse {
             font-size: 0.8rem;
@@ -104,25 +107,56 @@ const StockFiltersBar = ({
             font-size: 1.05rem;
             font-weight: 600;
             color: #0f172a;
+            margin-bottom: 0.1rem;
           }
-          .stock-mobile-card__tags,
-          .transfer-mobile-card__tags {
-            display: flex;
+          .transfer-mobile-card__header .text-muted.small {
+            display: block;
+          }
+          .transfer-mobile-card__badges {
+            text-align: right;
+            margin-top: 0.5rem;
+          }
+          .transfer-mobile-card__badges small {
+            color: #64748b;
+            font-size: 0.75rem;
+            display: block;
+            margin-bottom: 0.5rem;
+          }
+          .transfer-mobile-card__badges .d-flex {
+            gap: 0.5rem !important;
+            justify-content: flex-end;
             flex-wrap: wrap;
-            gap: 0.4rem;
-            margin-bottom: 0.75rem;
+            align-items: center;
           }
           .mobile-chip {
             border-radius: 999px;
-            padding: 0.3rem 0.75rem;
-            font-size: 0.72rem;
+            padding: 0.4rem 0.85rem;
+            font-size: 0.7rem;
             font-weight: 600;
-            border: 1px solid rgba(15,23,42,0.08);
-            background: #f1f5f9;
-            color: #0f172a;
+            border: none;
+            display: inline-flex;
+            align-items: center;
+            white-space: nowrap;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
           }
           .mobile-chip.badge {
             border: none;
+          }
+          .mobile-chip.bg-warning {
+            background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%) !important;
+            color: #fff !important;
+          }
+          .mobile-chip.bg-info {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+            color: #fff !important;
+          }
+          .mobile-chip.bg-success {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+            color: #fff !important;
+          }
+          .mobile-chip.bg-danger {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
+            color: #fff !important;
           }
           .mobile-stat-grid .mobile-stat-tile {
             border-radius: 16px;
@@ -154,17 +188,27 @@ const StockFiltersBar = ({
           .transfer-mobile-card__actions {
             display: flex;
             flex-wrap: wrap;
-            gap: 0.5rem;
-            justify-content: flex-end;
+            gap: 0.6rem;
+            justify-content: center;
+            align-items: center;
+            margin-top: 0.5rem;
+            padding-top: 0.75rem;
+            border-top: 1px solid rgba(15,23,42,0.08);
           }
           .mobile-action-btn {
-            width: 42px;
-            height: 42px;
-            border-radius: 14px !important;
+            width: 44px;
+            height: 44px;
+            border-radius: 12px !important;
             display: inline-flex;
             align-items: center;
             justify-content: center;
             padding: 0 !important;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+            transition: all 0.2s ease;
+          }
+          .mobile-action-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
           }
           .mobile-action-btn i {
             font-size: 0.95rem;
@@ -174,16 +218,33 @@ const StockFiltersBar = ({
             flex-direction: column;
             gap: 0.5rem;
             margin-bottom: 0.75rem;
+            align-items: center;
           }
           .transfer-mobile-card__primary-actions .btn {
             border-radius: 14px;
             font-weight: 600;
+            width: 100%;
+            max-width: 100%;
           }
           .transfer-mobile-card__summary {
             border-radius: 16px;
             border: 1px solid rgba(15,23,42,0.08);
             background: #fff;
             padding: 0.9rem;
+            margin-top: 1rem;
+          }
+          .transfer-type-pill {
+            border-radius: 999px;
+            padding: 0.4rem 0.85rem;
+            font-size: 0.7rem;
+            font-weight: 600;
+            background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+            color: #475569;
+            border: 1px solid rgba(148,163,184,0.3);
+            display: inline-flex;
+            align-items: center;
+            white-space: nowrap;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.06);
           }
         }
 
@@ -409,6 +470,25 @@ const StockFiltersBar = ({
     </>
   );
 };
+
+const transferStatusMap = {
+  PENDING: { label: 'Beklemede', bootstrap: 'warning', icon: 'clock' },
+  PENDING_APPROVAL: { label: 'Beklemede', bootstrap: 'warning', icon: 'clock' },
+  IN_TRANSIT: { label: 'Yolda', bootstrap: 'info', icon: 'truck' },
+  COMPLETED: { label: 'Tamamlandı', bootstrap: 'success', icon: 'check-circle' },
+  CANCELLED: { label: 'İptal Edildi', bootstrap: 'danger', icon: 'times-circle' },
+  APPROVED: { label: 'Onaylandı', bootstrap: 'success', icon: 'check' },
+  REJECTED: { label: 'Reddedildi', bootstrap: 'danger', icon: 'times' },
+  DEFAULT: { label: 'İşlemde', bootstrap: 'secondary', icon: 'info-circle' },
+};
+
+const getTransferStatusMeta = (status) => {
+  const key = (status || '').toUpperCase();
+  return transferStatusMap[key] || transferStatusMap.DEFAULT;
+};
+
+const getTransferTypeLabel = (type) =>
+  (type || 'WAREHOUSE') === 'CUSTOMER_DELIVERY' ? 'Müşteri Sevkiyatı' : 'Depo Transferi';
 
 const Stock = () => {
   const location = useLocation();
@@ -2033,7 +2113,7 @@ const closeTransferDetailModal = () => {
           <div className="modal-header text-white" style={{ background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)' }}>
             <h5 className="modal-title">
               <i className="fas fa-eye me-2"></i>
-              Transfer #{transferDetailModal.transfer.id} Detayı
+              Transfer {transferDetailModal.transfer.id} Detayı
             </h5>
             <button type="button" className="btn-close btn-close-white" onClick={closeTransferDetailModal}></button>
           </div>
@@ -2051,13 +2131,21 @@ const closeTransferDetailModal = () => {
                     <div className="col-md-4">
                       <div className="border rounded-3 p-3 h-100">
                         <small className="text-muted text-uppercase">Transfer Tipi</small>
-                        <div className="fw-semibold">{(t.transferType || 'WAREHOUSE') === 'CUSTOMER_DELIVERY' ? 'Müşteri Sevkiyatı' : 'Depo Transferi'}</div>
+                        <div className="fw-semibold">{getTransferTypeLabel(t.transferType)}</div>
                       </div>
                     </div>
                     <div className="col-md-4">
                       <div className="border rounded-3 p-3 h-100">
-                        <small className="text-muted text-uppercase">Durum</small>
-                        <div className="fw-semibold">{(t.status || '').replace('_', ' ') || '-'}</div>
+                        <small className="text-muted text-uppercase d-block mb-1">Durum</small>
+                        {(() => {
+                          const meta = getTransferStatusMeta(t.status);
+                          return (
+                            <span className={`badge bg-${meta.bootstrap}`}>
+                              <i className={`fas fa-${meta.icon} me-1`}></i>
+                              {meta.label}
+                            </span>
+                          );
+                        })()}
                       </div>
                     </div>
                     <div className="col-md-4">
@@ -3046,44 +3134,47 @@ const closeTransferDetailModal = () => {
                         className={`transfer-mobile-card card border-0 shadow-sm ${isSelected ? 'is-selected' : ''}`}
                       >
                         <div className="card-body p-3">
-                          <div className="transfer-mobile-card__header mb-3">
-                            <div className="flex-grow-1">
-                              <div className="transfer-mobile-card__title">Transfer #{transfer.id}</div>
-                              <div className="text-muted small mb-1">{routeLabel}</div>
-                              <div className="text-muted small">
-                                <i className="fas fa-calendar me-1"></i>
-                                {transferDateFull}
-                              </div>
-                            </div>
-                            <div className="d-flex align-items-start gap-2">
-                              {isAdmin && (
-                                <div className="form-check mt-1">
-                                  <input
-                                    className="form-check-input"
-                                    type="checkbox"
-                                    checked={isSelected}
-                                    onChange={() => toggleTransferSelection(transfer.id)}
-                                    disabled={!canDelete}
-                                    aria-label="Transfer seç"
-                                  />
+                          {(() => {
+                            const typeLabel = getTransferTypeLabel(transfer.transferType);
+                            const statusMeta = getTransferStatusMeta(transfer.status);
+                            return (
+                              <div className="transfer-mobile-card__header mb-3">
+                                <div>
+                                  <div className="transfer-mobile-card__title">Transfer {transfer.id}</div>
+                                  <div className="text-muted small mb-1">{routeLabel}</div>
                                 </div>
-                              )}
-                              <span
-                                className={`mobile-chip ${
-                                  (transfer.transferType || 'WAREHOUSE') === 'CUSTOMER_DELIVERY'
-                                    ? 'bg-info bg-opacity-10 text-info border border-info'
-                                    : 'bg-secondary bg-opacity-10 text-secondary border border-secondary'
-                                }`}
-                              >
-                                {(transfer.transferType || 'WAREHOUSE') === 'CUSTOMER_DELIVERY' ? 'Müşteri' : 'Depo'}
-                              </span>
-                              <span className={`mobile-chip badge bg-${status.class}`}>
-                                <i className={`fas fa-${status.icon} me-1`}></i>
-                                {status.label}
-                              </span>
+                                <div className="transfer-mobile-card__badges">
+                                  <small className="text-muted d-block mb-2">
+                                    <i className="fas fa-calendar me-1"></i>
+                                    {transferDateFull}
+                                  </small>
+                                  <div className="d-flex flex-wrap gap-2 justify-content-end align-items-center">
+                                    <span className={`mobile-chip badge bg-${statusMeta.bootstrap}`}>
+                                      <i className={`fas fa-${statusMeta.icon} me-1`}></i>
+                                      {statusMeta.label}
+                                    </span>
+                                    <span className="transfer-type-pill">
+                                      <i className="fas fa-route me-1"></i>
+                                      {typeLabel}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })()}
+                          {isAdmin && (
+                            <div className="form-check mb-3">
+                              <input
+                                className="form-check-input"
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => toggleTransferSelection(transfer.id)}
+                                disabled={!canDelete}
+                                aria-label="Transfer seç"
+                              />
+                              <label className="form-check-label small ms-2 text-muted">Seç</label>
                             </div>
-                          </div>
-
+                          )}
                           {/* Products */}
                           {transferItemsPreview.length > 0 && (
                             <div className="mb-3">

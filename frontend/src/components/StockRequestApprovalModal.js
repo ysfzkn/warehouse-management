@@ -658,7 +658,7 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                                   <i className="fas fa-eye me-1"></i>
                                   Detay
                                 </button>
-                                <div className="my-requests-actions d-flex flex-wrap gap-2">
+                                <div className="my-requests-actions d-flex flex-wrap gap-2 justify-content-center">
                                   {matchesFilter(request.status, 'PENDING') ? (
                                     <>
                                       <button
@@ -1036,7 +1036,7 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                                   <i className="fas fa-eye me-1"></i>
                                   Detay
                                 </button>
-                                <div className="my-requests-actions d-flex flex-wrap gap-2">
+                                <div className="my-requests-actions d-flex flex-wrap gap-2 justify-content-center">
                                   {matchesFilter(transfer.approvalStatus, 'PENDING') ? (
                                     <>
                                       <button
@@ -1138,12 +1138,12 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                       t.transferType === 'CUSTOMER_DELIVERY'
                         ? `${t.sourceWarehouse?.name || '-'} → Müşteri`
                         : `${t.sourceWarehouse?.name || '-'} → ${t.destinationWarehouse?.name || '-'}`;
-                    const statusMeta = getStatusMeta(t.approvalStatus);
+                    const statusMeta = getStatusMeta(t.approvalStatus || t.status);
                     return (
                       <>
                         <div className="mb-3">
                           <small className="text-muted text-uppercase d-block">Transfer</small>
-                          <div className="fw-semibold">#{t.id} • {routeLabel}</div>
+                          <div className="fw-semibold">Transfer {t.id} • {routeLabel}</div>
                           <small className="text-muted">{formatDate(t.approvalRequestedAt || t.transferDate)}</small>
                         </div>
                         <div className="mb-3">
