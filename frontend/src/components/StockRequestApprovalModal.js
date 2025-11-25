@@ -58,10 +58,29 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
   const fetchTransferApprovals = async () => {
     try {
       setTransferLoading(true);
-      const response = await axios.get('/api/stock-transfers/approvals');
-      const list = Array.isArray(response.data) ? response.data : [];
-      setAllTransferApprovals(list);
-      setTransferApprovals(list);
+      const statuses = ['PENDING', 'APPROVED', 'REJECTED'];
+
+      const responses = await Promise.all(
+        statuses.map(async (status) => {
+          try {
+            const { data } = await axios.get('/api/stock-transfers/approvals', {
+              params: { status }
+            });
+            const list = Array.isArray(data) ? data : [];
+            return list.map((item) => ({
+              ...item,
+              approvalStatus: item.approvalStatus || status
+            }));
+          } catch (error) {
+            console.error(`❌ Error fetching transfer approvals for ${status}:`, error);
+            return [];
+          }
+        })
+      );
+
+      const mergedList = responses.flat();
+      setAllTransferApprovals(mergedList);
+      setTransferApprovals(mergedList.filter((approval) => matchesFilter(approval.approvalStatus, transferFilter)));
     } catch (error) {
       console.error('❌ Error fetching transfer approvals:', error);
     } finally {
@@ -145,10 +164,17 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
     if (!filterValue || filterValue === 'ALL') return true;
     const normalizedFilter = normalizeStatus(filterValue);
     const normalizedStatus = normalizeStatus(statusValue);
-    if (normalizedFilter === 'PENDING') {
-      return normalizedStatus.startsWith('PENDING');
+
+    const startsWithFilter = () => normalizedStatus.startsWith(normalizedFilter);
+
+    switch (normalizedFilter) {
+      case 'PENDING':
+      case 'APPROVED':
+      case 'REJECTED':
+        return startsWithFilter();
+      default:
+        return normalizedStatus === normalizedFilter;
     }
-    return normalizedStatus === normalizedFilter;
   };
 
   const getStatusMeta = (statusValue) => {
@@ -929,6 +955,15 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                                       <i className="fas fa-times me-1"></i>
                                       Reddet
                                     </button>
+                                    <button
+                                      className="btn btn-sm btn-outline-primary"
+                                      onClick={() =>
+                                        setRequestDetailModal({ show: true, payload: transfer, context: 'transfer' })
+                                      }
+                                    >
+                                      <i className="fas fa-eye me-1"></i>
+                                      Detay
+                                    </button>
                                   </div>
                                 ) : (
                                   <div className="d-flex gap-1 flex-wrap">
@@ -947,7 +982,18 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                                         <i className="fas fa-sticky-note"></i>
                                       </button>
                                     )}
-                                    <span className="text-muted small">-</span>
+                                    <button
+                                      className="btn btn-sm btn-outline-primary"
+                                      onClick={() =>
+                                        setRequestDetailModal({ show: true, payload: transfer, context: 'transfer' })
+                                      }
+                                    >
+                                      <i className="fas fa-eye me-1"></i>
+                                      Detay
+                                    </button>
+                                    {!transfer.approvalNote && (
+                                      <span className="text-muted small">-</span>
+                                    )}
                                   </div>
                                 )}
                               </td>
@@ -1021,7 +1067,9 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                                         className="d-flex justify-content-between align-items-center small bg-light rounded-pill px-3 py-1 mb-1"
                                       >
                                         <span className="text-truncate me-2">{item.product?.name || 'Ürün'}</span>
-                                        <span className="badge bg-primary">{item.quantity}</span>
+                                        <span className="badge bg-primary d-inline-flex align-items-center justify-content-center" style={{ minWidth: '3.25rem' }}>
+                                          {item.quantity}
+                                        </span>
                                       </div>
                                     ))}
                                     {transfer.items.length > 2 && (
@@ -1165,7 +1213,7 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                                     <div className="fw-semibold small">{item.product?.name || '-'}</div>
                                     <small className="text-muted">{item.product?.sku || '-'}</small>
                                   </div>
-                                  <span className="badge bg-primary">{item.quantity}</span>
+                                  <span className="badge bg-primary d-inline-flex align-items-center justify-content-center" style={{ minWidth: '3.25rem' }}>{item.quantity}</span>
                                 </li>
                               ))}
                             </ul>

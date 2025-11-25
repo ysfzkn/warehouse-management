@@ -3200,7 +3200,10 @@ const Stock = () => {
                                         <div className="fw-semibold small">{item.product?.name || '-'}</div>
                                         <small className="text-muted">{item.product?.sku || '-'}</small>
                                       </div>
-                                      <span className="badge bg-primary text-center" style={{ minWidth: '3rem' }}>
+                                      <span
+                                        className="badge bg-primary d-inline-flex align-items-center justify-content-center"
+                                        style={{ minWidth: '3rem' }}
+                                      >
                                         {item.quantity}
                                       </span>
                                     </div>
