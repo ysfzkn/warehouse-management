@@ -3,7 +3,7 @@ import axios from 'axios';
 
 const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' }) => {
   const [activeTab, setActiveTab] = useState(initialTab);
-  
+
   useEffect(() => {
     if (initialTab) {
       setActiveTab(initialTab);
@@ -232,6 +232,27 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
             flex: 1 1 auto;
           }
         }
+        .table-responsive {
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
+          width: 100%;
+        }
+        .table-responsive table {
+          width: 100%;
+          table-layout: auto;
+          min-width: 100%;
+        }
+        @media (max-width: 991.98px) {
+          .table-responsive th,
+          .table-responsive td {
+            padding: 0.5rem 0.4rem;
+            font-size: 0.85rem;
+          }
+          .table-responsive .btn-sm {
+            padding: 0.25rem 0.4rem;
+            font-size: 0.75rem;
+          }
+        }
         @media (max-width: 767.98px) {
           .my-requests-mobile-list {
             display: flex;
@@ -432,7 +453,7 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                   </div>
 
                   {/* Requests Table */}
-                  <div className="d-none d-md-block table-responsive">
+                  <div className="d-none d-md-block">
                     {loading ? (
                       <div className="text-center py-5">
                         <div className="spinner-border text-primary" role="status">
@@ -450,21 +471,22 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                         </h5>
                       </div>
                     ) : (
-                      <table className="table table-hover align-middle mb-0">
-                        <thead className="table-light sticky-top" style={{ top: 0 }}>
-                          <tr>
-                            <th className="text-center" style={{ width: '60px' }}>ID</th>
-                            <th style={{ minWidth: '150px' }}>Ürün</th>
-                            <th style={{ minWidth: '120px' }}>Depo</th>
-                            <th className="text-center" style={{ width: '100px' }}>İşlem</th>
-                            <th className="text-center" style={{ width: '80px' }}>Miktar</th>
-                            <th style={{ minWidth: '100px' }}>Mevcut Stok</th>
-                            <th style={{ minWidth: '120px' }}>Talep Eden</th>
-                            <th style={{ minWidth: '130px' }}>Talep Tarihi</th>
-                            <th className="text-center" style={{ width: '100px' }}>Durum</th>
-                            <th className="text-center" style={{ minWidth: '180px' }}>İşlemler</th>
-                          </tr>
-                        </thead>
+                      <div className="table-responsive" style={{ overflowX: 'auto' }}>
+                        <table className="table table-hover align-middle mb-0" style={{ width: '100%', tableLayout: 'auto' }}>
+                          <thead className="table-light sticky-top" style={{ top: 0 }}>
+                            <tr>
+                              <th className="text-center" style={{ width: 'auto', minWidth: '60px' }}>ID</th>
+                              <th style={{ width: 'auto', minWidth: '120px' }}>Ürün</th>
+                              <th style={{ width: 'auto', minWidth: '100px' }}>Depo</th>
+                              <th className="text-center" style={{ width: 'auto', minWidth: '90px' }}>İşlem</th>
+                              <th className="text-center" style={{ width: 'auto', minWidth: '70px' }}>Miktar</th>
+                              <th style={{ width: 'auto', minWidth: '100px' }}>Mevcut Stok</th>
+                              <th style={{ width: 'auto', minWidth: '100px' }}>Talep Eden</th>
+                              <th style={{ width: 'auto', minWidth: '120px' }}>Talep Tarihi</th>
+                              <th className="text-center" style={{ width: 'auto', minWidth: '90px' }}>Durum</th>
+                              <th className="text-center" style={{ width: 'auto', minWidth: '150px' }}>İşlemler</th>
+                            </tr>
+                          </thead>
                         <tbody>
                           {requests.map((request) => (
                             <tr key={request.id} className={request.status === 'PENDING' ? 'table-warning' : ''}>
@@ -472,10 +494,10 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                                 <span className="badge bg-dark">#{request.id}</span>
                               </td>
                               <td>
-                                <div className="fw-bold">{request.productName}</div>
-                                <small className="text-muted">SKU: {request.productSku}</small>
+                                <div className="fw-bold text-truncate" style={{ maxWidth: '200px' }} title={request.productName}>{request.productName}</div>
+                                <small className="text-muted text-truncate d-block" style={{ maxWidth: '200px' }} title={request.productSku}>SKU: {request.productSku}</small>
                               </td>
-                              <td>{request.warehouseName}</td>
+                              <td className="text-truncate" style={{ maxWidth: '150px' }} title={request.warehouseName}>{request.warehouseName}</td>
                               <td className="text-center">
                                 <span className={`badge ${request.type === 'ADD' ? 'bg-success' : 'bg-danger'}`}>
                                   <i className={`fas fa-${request.type === 'ADD' ? 'plus' : 'minus'} me-1`}></i>
@@ -556,9 +578,9 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                                     {request.status === 'REJECTED' && request.rejectionReason && (
                                       <button
                                         className="btn btn-sm btn-outline-danger"
-                                        onClick={() => setNotesModal({ 
-                                          show: true, 
-                                          title: 'Reddetme Nedeni', 
+                                        onClick={() => setNotesModal({
+                                          show: true,
+                                          title: 'Reddetme Nedeni',
                                           content: request.rejectionReason,
                                           type: 'danger',
                                           icon: 'fa-times-circle',
@@ -573,9 +595,9 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                                     {request.notes && (
                                       <button
                                         className="btn btn-sm btn-outline-info"
-                                        onClick={() => setNotesModal({ 
-                                          show: true, 
-                                          title: 'Talep Notları', 
+                                        onClick={() => setNotesModal({
+                                          show: true,
+                                          title: 'Talep Notları',
                                           content: request.notes,
                                           type: 'info',
                                           icon: 'fa-sticky-note',
@@ -597,6 +619,7 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                           ))}
                         </tbody>
                       </table>
+                      </div>
                     )}
                   </div>
                   <div className="d-md-none px-3 pb-3">
@@ -798,26 +821,24 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                             onChange={(e) => setTransferFilter(e.target.value)}
                           />
                           <label
-                            className={`btn ${
-                              status === 'PENDING'
+                            className={`btn ${status === 'PENDING'
                                 ? 'btn-outline-warning'
                                 : status === 'APPROVED'
                                   ? 'btn-outline-success'
                                   : status === 'REJECTED'
                                     ? 'btn-outline-danger'
                                     : 'btn-outline-secondary'
-                            }`}
+                              }`}
                             htmlFor={`transfer-${status.toLowerCase()}`}
                           >
-                            <i className={`fas ${
-                              status === 'PENDING'
+                            <i className={`fas ${status === 'PENDING'
                                 ? 'fa-clock'
                                 : status === 'APPROVED'
                                   ? 'fa-check'
                                   : status === 'REJECTED'
                                     ? 'fa-times'
                                     : 'fa-list'
-                            } me-1`}></i>
+                              } me-1`}></i>
                             {status === 'PENDING' && 'Bekleyen'}
                             {status === 'APPROVED' && 'Onaylanan'}
                             {status === 'REJECTED' && 'Reddedilen'}
@@ -827,7 +848,7 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                       ))}
                     </div>
                   </div>
-                  <div className="d-none d-md-block table-responsive">
+                  <div className="d-none d-md-block">
                     {transferLoading ? (
                       <div className="text-center py-5">
                         <div className="spinner-border text-info" role="status">
@@ -845,23 +866,24 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                         </h5>
                       </div>
                     ) : (
-                      <table className="table table-hover align-middle mb-0">
-                        <thead className="table-light sticky-top" style={{ top: 0 }}>
-                          <tr>
-                            <th style={{ width: '80px' }}>Transfer</th>
-                            <th style={{ minWidth: '200px' }}>Rota</th>
-                            <th style={{ minWidth: '200px' }}>Ürünler</th>
-                            <th style={{ minWidth: '150px' }}>Talep Eden</th>
-                            <th style={{ minWidth: '150px' }}>Talep Tarihi</th>
-                            <th style={{ minWidth: '120px' }}>Durum</th>
-                            <th style={{ minWidth: '160px' }}>İşlemler</th>
-                          </tr>
-                        </thead>
+                      <div className="table-responsive" style={{ overflowX: 'auto' }}>
+                        <table className="table table-hover align-middle mb-0" style={{ width: '100%', tableLayout: 'auto' }}>
+                          <thead className="table-light sticky-top" style={{ top: 0 }}>
+                            <tr>
+                              <th style={{ width: 'auto', minWidth: '70px' }}>Transfer</th>
+                              <th style={{ width: 'auto', minWidth: '150px' }}>Rota</th>
+                              <th style={{ width: 'auto', minWidth: '150px' }}>Ürünler</th>
+                              <th style={{ width: 'auto', minWidth: '120px' }}>Talep Eden</th>
+                              <th style={{ width: 'auto', minWidth: '120px' }}>Talep Tarihi</th>
+                              <th style={{ width: 'auto', minWidth: '100px' }}>Durum</th>
+                              <th style={{ width: 'auto', minWidth: '140px' }}>İşlemler</th>
+                            </tr>
+                          </thead>
                         <tbody>
                           {transferApprovals.map((transfer) => (
                             <tr key={transfer.id}>
                               <td>
-                                <div className="fw-bold">#{transfer.id}</div>
+                                <span className="badge bg-dark">#{transfer.id}</span>
                                 <small className="text-muted text-uppercase">
                                   {transfer.transferType === 'CUSTOMER_DELIVERY' ? 'Müşteri' : 'Depo'}
                                 </small>
@@ -869,15 +891,15 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                               <td>
                                 {transfer.transferType === 'CUSTOMER_DELIVERY' ? (
                                   <>
-                                    <div className="fw-semibold">{transfer.customerFullName || '-'}</div>
-                                    <small className="text-muted d-block">
+                                    <div className="fw-semibold text-truncate" style={{ maxWidth: '200px' }} title={transfer.customerFullName || '-'}>{transfer.customerFullName || '-'}</div>
+                                    <small className="text-muted d-block text-truncate" style={{ maxWidth: '200px' }}>
                                       {transfer.sourceWarehouse?.name || '-'} → Müşteri
                                     </small>
                                   </>
                                 ) : (
                                   <>
-                                    <div className="fw-semibold">{transfer.sourceWarehouse?.name || '-'}</div>
-                                    <small className="text-muted d-block">
+                                    <div className="fw-semibold text-truncate" style={{ maxWidth: '200px' }} title={transfer.sourceWarehouse?.name || '-'}>{transfer.sourceWarehouse?.name || '-'}</div>
+                                    <small className="text-muted d-block text-truncate" style={{ maxWidth: '200px' }} title={`${transfer.sourceWarehouse?.name || '-'} → ${transfer.destinationWarehouse?.name || '-'}`}>
                                       {transfer.sourceWarehouse?.name || '-'} → {transfer.destinationWarehouse?.name || '-'}
                                     </small>
                                   </>
@@ -889,7 +911,7 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                                     {transfer.items.slice(0, 3).map(item => (
                                       <div key={`${transfer.id}-${item.id}`} className="d-flex justify-content-between small">
                                         <span className="text-truncate me-2">{item.product?.name || 'Ürün'}</span>
-                                        <span className="badge bg-light text-dark">{item.quantity}</span>
+                                        <span className="badge bg-dark text-light d-inline-flex align-items-center justify-content-center mb-1" style={{ minWidth: '3.25rem' }}>{item.quantity}</span>
                                       </div>
                                     ))}
                                     {transfer.items.length > 3 && (
@@ -910,15 +932,14 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                                 <small>{formatDate(transfer.approvalRequestedAt || transfer.transferDate)}</small>
                               </td>
                               <td>
-                                <span className={`badge ${
-                                  transfer.approvalStatus === 'PENDING'
+                                <span className={`badge ${transfer.approvalStatus === 'PENDING'
                                     ? 'bg-warning'
                                     : transfer.approvalStatus === 'APPROVED'
                                       ? 'bg-success'
                                       : transfer.approvalStatus === 'REJECTED'
                                         ? 'bg-danger'
                                         : 'bg-secondary'
-                                }`}>
+                                  }`}>
                                   {transfer.approvalStatus === 'PENDING' && 'Onay Bekliyor'}
                                   {transfer.approvalStatus === 'APPROVED' && 'Onaylandı'}
                                   {transfer.approvalStatus === 'REJECTED' && 'Reddedildi'}
@@ -1001,6 +1022,7 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                           ))}
                         </tbody>
                       </table>
+                      </div>
                     )}
                   </div>
                   <div className="d-md-none px-3 pb-3">
@@ -1305,7 +1327,7 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
               <div className="modal-header bg-danger text-white">
                 <h5 className="modal-title">
                   <i className="fas fa-ban me-2"></i>
-                {rejectionModal.type === 'transfer' ? 'Transferi Reddet' : 'Talebi Reddet'}
+                  {rejectionModal.type === 'transfer' ? 'Transferi Reddet' : 'Talebi Reddet'}
                 </h5>
                 <button
                   type="button"
@@ -1314,11 +1336,11 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                 ></button>
               </div>
               <div className="modal-body">
-                  <div className="alert alert-warning">
-                    <i className="fas fa-exclamation-triangle me-2"></i>
-                    {rejectionModal.type === 'transfer'
-                      ? 'Bu transfer onayı reddedilecek. Lütfen bir neden belirtin.'
-                      : 'Bu talep reddedilecek. Lütfen bir neden belirtin.'}
+                <div className="alert alert-warning">
+                  <i className="fas fa-exclamation-triangle me-2"></i>
+                  {rejectionModal.type === 'transfer'
+                    ? 'Bu transfer onayı reddedilecek. Lütfen bir neden belirtin.'
+                    : 'Bu talep reddedilecek. Lütfen bir neden belirtin.'}
                 </div>
                 <div className="mb-3">
                   <label htmlFor="rejectionReason" className="form-label">
@@ -1369,27 +1391,27 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
 
       {/* Notes/Rejection Reason Display Modal */}
       {notesModal.show && (
-        <div 
-          className="modal show d-block" 
+        <div
+          className="modal show d-block"
           tabIndex="-1"
           style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1065 }}
           onClick={() => setNotesModal({ show: false, title: '', content: '', type: 'info' })}
         >
-          <div 
+          <div
             className="modal-dialog modal-dialog-centered modal-dialog-scrollable"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="modal-content shadow-lg border-0" style={{ overflow: 'hidden' }}>
-              <div 
+              <div
                 className={`modal-header text-white border-0`}
                 style={{
-                  background: notesModal.type === 'danger' 
+                  background: notesModal.type === 'danger'
                     ? 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)'
                     : 'linear-gradient(135deg, #0dcaf0 0%, #0891b2 100%)'
                 }}
               >
                 <h5 className="modal-title d-flex align-items-center">
-                  <div 
+                  <div
                     className="rounded-circle d-flex align-items-center justify-content-center me-3"
                     style={{
                       width: '40px',
@@ -1416,25 +1438,25 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                 ></button>
               </div>
               <div className="modal-body p-4">
-                <div 
+                <div
                   className={`alert border-0 mb-0`}
                   style={{
-                    background: notesModal.type === 'danger' 
+                    background: notesModal.type === 'danger'
                       ? 'linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)'
                       : 'linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%)',
                     borderLeft: `4px solid ${notesModal.type === 'danger' ? '#dc3545' : '#0dcaf0'}`
                   }}
                 >
                   <div className="d-flex">
-                    <div 
+                    <div
                       className="flex-shrink-0 me-3"
                       style={{ fontSize: '1.5rem', opacity: 0.7 }}
                     >
                       <i className={`fas ${notesModal.icon}`}></i>
                     </div>
                     <div className="flex-grow-1">
-                      <p className="mb-0" style={{ 
-                        whiteSpace: 'pre-wrap', 
+                      <p className="mb-0" style={{
+                        whiteSpace: 'pre-wrap',
                         wordBreak: 'break-word',
                         lineHeight: '1.6',
                         color: '#1f2937'
