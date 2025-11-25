@@ -893,7 +893,7 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                                   <>
                                     <div className="fw-semibold text-truncate" style={{ maxWidth: '200px' }} title={transfer.customerFullName || '-'}>{transfer.customerFullName || '-'}</div>
                                     <small className="text-muted d-block text-truncate" style={{ maxWidth: '200px' }}>
-                                      {transfer.sourceWarehouse?.name || '-'} → Müşteri
+                                      {transfer.sourceWarehouse?.name || '-'} → {transfer.customerFullName || 'Müşteri'}
                                     </small>
                                   </>
                                 ) : (
@@ -1042,7 +1042,7 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                         {transferApprovals.map((transfer) => {
                           const routeLabel =
                             transfer.transferType === 'CUSTOMER_DELIVERY'
-                              ? `${transfer.sourceWarehouse?.name || '-'} → Müşteri`
+                              ? `${transfer.sourceWarehouse?.name || '-'} → ${transfer.customerFullName || 'Müşteri'}`
                               : `${transfer.sourceWarehouse?.name || '-'} → ${transfer.destinationWarehouse?.name || '-'}`;
                           const statusMeta = getStatusMeta(transfer.approvalStatus);
                           return (
@@ -1206,7 +1206,7 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                     const items = Array.isArray(t.items) ? t.items : [];
                     const routeLabel =
                       t.transferType === 'CUSTOMER_DELIVERY'
-                        ? `${t.sourceWarehouse?.name || '-'} → Müşteri`
+                        ? `${t.sourceWarehouse?.name || '-'} → ${t.customerFullName || 'Müşteri'}`
                         : `${t.sourceWarehouse?.name || '-'} → ${t.destinationWarehouse?.name || '-'}`;
                     const statusMeta = getStatusMeta(t.approvalStatus || t.status);
                     return (
@@ -1216,6 +1216,15 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                           <div className="fw-semibold">Transfer {t.id} • {routeLabel}</div>
                           <small className="text-muted">{formatDate(t.approvalRequestedAt || t.transferDate)}</small>
                         </div>
+                        {t.transferType === 'CUSTOMER_DELIVERY' && t.customerAddress && (
+                          <div className="mb-3">
+                            <small className="text-muted text-uppercase d-block">Adres</small>
+                            <div className="fw-semibold">
+                              <i className="fas fa-map-marker-alt me-1 text-muted"></i>
+                              {t.customerAddress}
+                            </div>
+                          </div>
+                        )}
                         <div className="mb-3">
                           <small className="text-muted text-uppercase d-block">Durum</small>
                           <span className={`badge bg-${statusMeta.className}`}>

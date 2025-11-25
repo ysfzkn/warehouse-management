@@ -662,7 +662,7 @@ public class StockTransferServiceImpl implements StockTransferService {
         if (customer == null || customer.trim().isEmpty()) {
             customer = "Müşteri";
         }
-        return String.format("%s -> Müşteri (%s)", sourceName, customer);
+        return String.format("%s -> %s", sourceName, customer);
     }
 
     private void notifyAdminIfNonAdmin(StockTransfer transfer, String actionVerb) {

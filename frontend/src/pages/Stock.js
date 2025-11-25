@@ -2123,7 +2123,7 @@ const Stock = () => {
                   const items = Array.isArray(t.items) && t.items.length ? t.items : (Array.isArray(t.transferItems) ? t.transferItems : []);
                   const routeLabel =
                     (t.transferType || 'WAREHOUSE') === 'CUSTOMER_DELIVERY'
-                      ? `${t.sourceWarehouse?.name || '-'} → Müşteri`
+                      ? `${t.sourceWarehouse?.name || '-'} → ${t.customerFullName || 'Müşteri'}`
                       : `${t.sourceWarehouse?.name || '-'} → ${t.destinationWarehouse?.name || '-'}`;
                   return (
                     <>
@@ -3116,7 +3116,7 @@ const Stock = () => {
                         const canDelete = transfer.status !== 'IN_TRANSIT' && transfer.status !== 'COMPLETED';
                         const routeLabel =
                           (transfer.transferType || 'WAREHOUSE') === 'CUSTOMER_DELIVERY'
-                            ? `${transfer.sourceWarehouse?.name || '-'} → Müşteri`
+                            ? `${transfer.sourceWarehouse?.name || '-'} → ${transfer.customerFullName || 'Müşteri'}`
                             : `${transfer.sourceWarehouse?.name || '-'} → ${transfer.destinationWarehouse?.name || '-'}`;
                         const transferDateFull = formatDateInTurkeyTimezone(transfer.transferDate, {
                           year: 'numeric',
