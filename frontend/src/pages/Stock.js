@@ -998,7 +998,7 @@ const Stock = () => {
         setConfirmModal({ show: false });
         try {
           await axios.delete(`/api/stocks/${id}`);
-          await fetchAllData();
+          await Promise.all([fetchAllData(), fetchStocks(stockPage)]);
           showSuccessToast('Stok kaydı silindi.');
         } catch (error) {
           const errorData = error?.response?.data;
@@ -1029,7 +1029,7 @@ const Stock = () => {
         try {
           await axios.delete('/api/stocks/bulk', { data: ids });
           setSelectedStocks(prev => prev.filter(id => !ids.includes(id)));
-          await fetchAllData();
+          await Promise.all([fetchAllData(), fetchStocks(stockPage)]);
           showSuccessToast(`${ids.length} stok kaydı silindi.`);
         } catch (error) {
           const errorData = error?.response?.data;
@@ -1090,26 +1090,26 @@ const Stock = () => {
     });
   };
 
-  const handleFormSuccess = (options = {}) => {
+  const handleFormSuccess = async (options = {}) => {
     const shouldClose = options.close !== false;
     if (shouldClose) {
       setShowForm(false);
     }
-    fetchAllData();
+    await Promise.all([fetchAllData(), fetchStocks(0)]);
     if (options.message) {
       showSuccessToast(options.message);
     }
   };
 
-  const handleQuickAdjustSuccess = () => {
+  const handleQuickAdjustSuccess = async () => {
     setQuickAdjustModal({ show: false, stock: null, type: null });
-    fetchAllData();
+    await Promise.all([fetchAllData(), fetchStocks(stockPage)]);
   };
 
-  const handleSettingsSuccess = () => {
+  const handleSettingsSuccess = async () => {
     setShowSettingsModal(false);
     setSelectedStock(null);
-    fetchAllData();
+    await Promise.all([fetchAllData(), fetchStocks(stockPage)]);
   };
 
   const handleStockTransfer = (stock, lockToCustomer = false) => {
@@ -1118,11 +1118,11 @@ const Stock = () => {
     setShowTransferModal(true);
   };
 
-  const handleTransferSuccess = () => {
+  const handleTransferSuccess = async () => {
     setShowTransferModal(false);
     setSelectedStock(null);
     setLockCustomerTransfer(false);
-    fetchAllData();
+    await Promise.all([fetchAllData(), fetchStocks(stockPage)]);
     if (showTransferHistory) {
       fetchTransfers(0, false);
     }
@@ -1137,8 +1137,7 @@ const Stock = () => {
       const body = payload && Object.keys(payload).length > 0 ? payload : undefined;
       const response = await axios.post(`/api/stock-transfers/${transferId}/${action}`, body);
       const updatedTransfer = response?.data;
-      fetchTransfers(0, false);
-      fetchAllData();
+      await Promise.all([fetchTransfers(0, false), fetchAllData(), fetchStocks(stockPage)]);
       if (action === 'start' && updatedTransfer?.approvalStatus === 'PENDING') {
         setErrorModal({
           show: true,
@@ -1565,7 +1564,7 @@ const Stock = () => {
                     setExcelResult(res.data);
                     // Başarılı yükleme sonrası tüm verileri yenile
                     if (res.data && (res.data.status === 'BAŞARILI' || res.data.status === 'SUCCESS' || res.data.status === 'KISMEN' || res.data.status === 'PARTIAL')) {
-                      await fetchAllData();
+                      await Promise.all([fetchAllData(), fetchStocks(0)]);
                     }
                   } catch (e) {
                     const data = e?.response?.data;
@@ -1636,8 +1635,8 @@ const Stock = () => {
               </div>
             )}
             {/* Desktop Table View */}
-            <div className="d-none d-lg-block table-responsive">
-              <table className="table table-striped table-hover">
+            <div className="d-none d-lg-block table-responsive" style={{ transition: 'opacity 0.3s ease-in-out' }}>
+              <table className="table table-striped table-hover" style={{ transition: 'opacity 0.3s ease-in-out' }}>
                 <thead>
                   <tr>
                     <th className="text-center" style={{ width: '40px' }}>
@@ -1824,8 +1823,8 @@ const Stock = () => {
             </div>
 
             {/* Mobile Card View */}
-            <div className="d-lg-none">
-              <div className="d-flex flex-column gap-3">
+            <div className="d-lg-none" style={{ transition: 'opacity 0.3s ease-in-out' }}>
+              <div className="d-flex flex-column gap-3" style={{ transition: 'opacity 0.3s ease-in-out' }}>
                 {stocks.map((stock) => {
                   const productName = stock.product?.name || (getProductById(stock.product?.id)?.name);
                   const productSku = stock.product?.sku || (getProductById(stock.product?.id)?.sku);
