@@ -2713,23 +2713,6 @@ const Stock = () => {
                   <i className="fas fa-history me-2"></i>
                   Transfer Geçmişi
                 </h5>
-                <span className="badge bg-white text-dark">
-                  {transferStatusFilter === 'ALL' ? totalTransfers : getStatusCount(transferStatusFilter)} kayıt
-                </span>
-              </div>
-              <div className="mt-2 d-flex justify-content-end">
-                <div className="page-size-control d-flex align-items-center flex-wrap">
-                  <span className="form-label mb-0 small text-white">Sayfa Boyutu</span>
-                  <select
-                    className="form-select form-select-sm page-size-select"
-                    value={transferPageSize}
-                    onChange={handleTransferPageSizeChange}
-                  >
-                    {PAGE_SIZE_OPTIONS.map(size => (
-                      <option key={`transfer-page-${size}`} value={size}>{size}</option>
-                    ))}
-                  </select>
-                </div>
               </div>
             </div>
             {selectedTransferCount > 0 && isAdmin && (
@@ -2758,6 +2741,20 @@ const Stock = () => {
               </div>
             )}
             <div className="card-body p-0">
+              <div className="px-3 pt-3 d-flex justify-content-end align-items-center mb-2 gap-2 flex-wrap">
+                <div className="page-size-control d-flex align-items-center flex-wrap">
+                  <span className="form-label mb-0 small text-muted">Sayfa Boyutu</span>
+                  <select
+                    className="form-select form-select-sm page-size-select"
+                    value={transferPageSize}
+                    onChange={handleTransferPageSizeChange}
+                  >
+                    {PAGE_SIZE_OPTIONS.map(size => (
+                      <option key={`transfer-page-${size}`} value={size}>{size}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
               {transfers.length === 0 ? (
                 <div className="text-center py-5">
                   <i className="fas fa-inbox fa-4x text-muted mb-3"></i>
@@ -2775,25 +2772,25 @@ const Stock = () => {
                 <>
                   {/* Desktop Table View */}
                   <div className="breakpoint-1155-desktop table-responsive" style={{ overflowX: 'auto' }}>
-                    <table className="table table-hover mb-0 align-middle" style={{ minWidth: '1200px' }}>
-                      {/* Desktop için fixed layout */}
+                    <table className="table table-hover table-sm mb-0 align-middle transfer-table-compact">
+                      {/* Desktop için fixed layout - geniş ekranlarda */}
                       <colgroup className="d-none d-xl-table-column-group">
                         {isAdmin && <col style={{ width: '40px' }} />}  {/* Checkbox */}
-                        <col style={{ width: '70px' }} />      {/* No */}
-                        <col style={{ width: '130px' }} />     {/* Tarih */}
-                        <col style={{ width: '180px' }} />     {/* Ürün */}
-                        <col style={{ width: '180px' }} />     {/* Kaynak */}
-                        <col style={{ width: '180px' }} />     {/* Hedef */}
-                        <col style={{ width: '85px' }} />      {/* Miktar */}
-                        <col style={{ width: '150px' }} />     {/* Şoför */}
-                        <col style={{ width: '110px' }} />     {/* Plaka */}
-                        <col style={{ width: '130px' }} />     {/* Durum */}
-                        <col style={{ width: '180px' }} />     {/* İşlemler */}
+                        <col style={{ width: '60px' }} />      {/* No */}
+                        <col style={{ width: '110px' }} />     {/* Tarih */}
+                        <col style={{ width: '140px' }} />     {/* Ürün */}
+                        <col style={{ width: '140px' }} />     {/* Kaynak */}
+                        <col style={{ width: '140px' }} />     {/* Hedef */}
+                        <col style={{ width: '70px' }} />      {/* Miktar */}
+                        <col style={{ width: '110px' }} />     {/* Şoför */}
+                        <col style={{ width: '70px' }} />      {/* Plaka */}
+                        <col style={{ width: '90px' }} />      {/* Durum */}
+                        <col style={{ width: '140px' }} />     {/* İşlemler */}
                       </colgroup>
                       <thead className="table-light sticky-top" style={{ position: 'sticky', top: 0, zIndex: 10 }}>
                         <tr>
                           {isAdmin && (
-                            <th className="text-center align-middle" style={{ minWidth: '40px' }}>
+                            <th className="text-center align-middle" style={{ width: '40px' }}>
                               <div className="form-check mb-0">
                                 <input
                                   className="form-check-input"
@@ -2806,19 +2803,19 @@ const Stock = () => {
                               </div>
                             </th>
                           )}
-                          <th className="text-center align-middle" style={{ minWidth: '60px' }}>
+                          <th className="text-center align-middle" style={{ width: '60px' }}>
                             <i className="fas fa-hashtag d-none d-sm-inline me-1"></i>
                             <div className="small">No</div>
                           </th>
-                          <th className="align-middle" style={{ minWidth: '120px' }}>
+                          <th className="align-middle">
                             <i className="fas fa-calendar d-none d-sm-inline me-1"></i>
                             <div className="small">Tarih</div>
                           </th>
-                          <th className="align-middle" style={{ minWidth: '150px' }}>
+                          <th className="align-middle">
                             <i className="fas fa-box d-none d-sm-inline me-1"></i>
                             <div className="small">Ürün</div>
                           </th>
-                          <th className="align-middle" style={{ minWidth: '150px' }}>
+                          <th className="align-middle">
                             <i className="fas fa-warehouse text-danger d-none d-sm-inline me-1"></i>
                             <div className="small">Kaynak</div>
                           </th>
@@ -2826,25 +2823,25 @@ const Stock = () => {
                             <i className="fas fa-warehouse text-success d-none d-sm-inline me-1"></i>
                             <div className="small">Hedef</div>
                           </th>
-                          <th className="text-center align-middle" style={{ minWidth: '75px' }}>
+                          <th className="text-center align-middle" style={{ width: '70px' }}>
                             <i className="fas fa-boxes d-none d-sm-inline me-1"></i>
                             <div className="small">Adet</div>
                           </th>
-                          {/* Şoför kolonu - tablet ve üstünde göster */}
-                          <th className="align-middle d-none d-md-table-cell" style={{ minWidth: '140px' }}>
+                          {/* Şoför kolonu - sadece geniş ekranlarda göster */}
+                          <th className="align-middle d-none d-xl-table-cell">
                             <i className="fas fa-user me-1"></i>
                             <div className="small">Şoför</div>
                           </th>
-                          {/* Plaka kolonu - tablet ve üstünde göster */}
-                          <th className="text-center align-middle d-none d-lg-table-cell" style={{ minWidth: '100px' }}>
+                          {/* Plaka kolonu - sadece geniş ekranlarda göster */}
+                          <th className="text-center align-middle d-none d-xl-table-cell" style={{ width: '70px' }}>
                             <i className="fas fa-car me-1"></i>
                             <div className="small">Plaka</div>
                           </th>
-                          <th className="text-center align-middle" style={{ minWidth: '120px' }}>
+                          <th className="text-center align-middle" style={{ width: '100px' }}>
                             <i className="fas fa-info-circle d-none d-sm-inline me-1"></i>
                             <div className="small">Durum</div>
                           </th>
-                          <th className="text-center align-middle" style={{ minWidth: '160px' }}>
+                          <th className="text-center align-middle" style={{ width: '140px' }}>
                             <i className="fas fa-cog d-none d-sm-inline me-1"></i>
                             <div className="small">İşlemler</div>
                           </th>

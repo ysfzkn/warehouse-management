@@ -576,7 +576,7 @@ const Products = () => {
       <div className="row g-3 mb-4 align-items-stretch">
         <div className="col-12 col-md-6 col-xl-3">
           <div className="border rounded-3 p-3 h-100 bg-body">
-            <div className="d-flex align-items-center justify-content-between mb-4">
+            <div className="d-flex align-items-center justify-content-between mb-5">
               <div>
                 <small className="text-uppercase text-muted fw-semibold">Arama</small>
                 <div className="fw-semibold text-truncate">Ürün / SKU</div>
@@ -602,7 +602,7 @@ const Products = () => {
         </div>
         <div className="col-12 col-md-6 col-xl-3">
           <div className="border rounded-3 p-3 h-100 bg-body filter-dropdown-card" ref={categoryDropdownRef}>
-            <div className="d-flex align-items-center justify-content-between mb-2">
+            <div className="d-flex align-items-center justify-content-between mb-4">
               <div>
                 <small className="text-uppercase text-muted fw-semibold">Filtre</small>
                 <div className="fw-semibold text-truncate">Ana kategori</div>
@@ -624,7 +624,7 @@ const Products = () => {
             </button>
             {categoryDropdownOpen && (
               <div className="filter-dropdown-menu">
-                <div className="input-group input-group-sm mb-2">
+                <div className="input-group input-group-sm mb-4">
                   <span className="input-group-text border-end-0 bg-transparent">
                     <i className="fas fa-search text-muted"></i>
                   </span>
@@ -675,7 +675,7 @@ const Products = () => {
         </div>
         <div className="col-12 col-md-6 col-xl-3">
           <div className="border rounded-3 p-3 h-100 bg-body filter-dropdown-card" ref={subcategoryDropdownRef}>
-            <div className="d-flex align-items-center justify-content-between mb-2">
+            <div className="d-flex align-items-center justify-content-between mb-4">
               <div>
                 <small className="text-uppercase text-muted fw-semibold">Filtre</small>
                 <div className="fw-semibold text-truncate">Alt kategori</div>

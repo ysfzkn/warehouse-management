@@ -27,7 +27,7 @@ body {
   --radius: 12px;
 
   /* Density controls */
-  --density-modifier: 1;
+  --density-modifier: 0.8;
   --density-card-padding: 1.5rem;
   --density-table-font: 0.98rem;
   --density-table-padding-y: 0.65rem;
@@ -193,6 +193,13 @@ label,
 .list-group-item {
   padding-top: calc(var(--density-table-padding-y) * 0.8);
   padding-bottom: calc(var(--density-table-padding-y) * 0.8);
+}
+
+.transfer-table-compact th,
+.transfer-table-compact td {
+  font-size: 0.85rem;
+  padding-top: calc(var(--density-table-padding-y) * 0.6);
+  padding-bottom: calc(var(--density-table-padding-y) * 0.6);
 }
 
 .table-actions {
