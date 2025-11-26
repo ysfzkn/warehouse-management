@@ -269,15 +269,20 @@ const Products = () => {
         setConfirmModal({ show: false, title: '', message: '', onConfirm: null });
         try {
           await axios.delete(`/api/products/${id}`);
-          fetchProducts();
         } catch (error) {
-          const msg = error.response?.data || 'Ürün silinirken hata oluştu';
+          const errorData = error?.response?.data;
+          const msg = errorData?.message || errorData?.error || (typeof errorData === 'string' ? errorData : 'Ürün silinirken hata oluştu');
           const toast = document.createElement('div');
-          toast.className = 'toast align-items-center text-bg-danger border-0 position-fixed top-0 end-0 m-3 show';
+          toast.className = 'toast align-items-center text-bg-danger border-0 position-fixed top-0 end-0 m-3 show fs-6';
+          toast.style.minWidth = '360px';
+          toast.style.padding = '0.5rem 0.75rem';
           toast.setAttribute('role', 'alert');
-          toast.innerHTML = `<div class="d-flex"><div class="toast-body">${msg}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
+          toast.innerHTML = `<div class="d-flex"><div class="toast-body fw-semibold">${msg}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
           document.body.appendChild(toast);
-          setTimeout(() => { try { document.body.removeChild(toast); } catch {} }, 3500);
+          setTimeout(() => { try { document.body.removeChild(toast); } catch {} }, 7000);
+        } finally {
+          // Hata olsa bile, kısmen silinmiş ürünler varsa listeyi güncelle
+          fetchProducts(productPage, productPageSize);
         }
       }
     });
@@ -357,21 +362,28 @@ const Products = () => {
           const deletePromises = ids.map(id => axios.delete(`/api/products/${id}`));
           await Promise.all(deletePromises);
           setSelectedProducts([]);
-          fetchProducts();
           const toast = document.createElement('div');
-          toast.className = 'toast align-items-center text-bg-success border-0 position-fixed top-0 end-0 m-3 show';
+          toast.className = 'toast align-items-center text-bg-success border-0 position-fixed top-0 end-0 m-3 show fs-6';
+          toast.style.minWidth = '360px';
+          toast.style.padding = '0.5rem 0.75rem';
           toast.setAttribute('role', 'alert');
-          toast.innerHTML = `<div class="d-flex"><div class="toast-body">${ids.length} ürün başarıyla silindi</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
+          toast.innerHTML = `<div class="d-flex"><div class="toast-body fw-semibold">${ids.length} ürün başarıyla silindi</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
           document.body.appendChild(toast);
-          setTimeout(() => { try { document.body.removeChild(toast); } catch {} }, 3500);
+          setTimeout(() => { try { document.body.removeChild(toast); } catch {} }, 7000);
         } catch (error) {
-          const msg = error.response?.data || 'Ürünler silinirken hata oluştu';
+          const errorData = error?.response?.data;
+          const msg = errorData?.message || errorData?.error || (typeof errorData === 'string' ? errorData : 'Ürünler silinirken hata oluştu');
           const toast = document.createElement('div');
-          toast.className = 'toast align-items-center text-bg-danger border-0 position-fixed top-0 end-0 m-3 show';
+          toast.className = 'toast align-items-center text-bg-danger border-0 position-fixed top-0 end-0 m-3 show fs-6';
+          toast.style.minWidth = '360px';
+          toast.style.padding = '0.5rem 0.75rem';
           toast.setAttribute('role', 'alert');
-          toast.innerHTML = `<div class="d-flex"><div class="toast-body">${msg}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
+          toast.innerHTML = `<div class="d-flex"><div class="toast-body fw-semibold">${msg}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
           document.body.appendChild(toast);
-          setTimeout(() => { try { document.body.removeChild(toast); } catch {} }, 3500);
+          setTimeout(() => { try { document.body.removeChild(toast); } catch {} }, 7000);
+        } finally {
+          // Bazı ürünler silinmiş olabilir, duruma bakılmaksızın listeyi yenile
+          fetchProducts(productPage, productPageSize);
         }
       }
     });

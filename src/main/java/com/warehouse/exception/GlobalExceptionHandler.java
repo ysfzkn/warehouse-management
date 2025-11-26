@@ -6,14 +6,15 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import org.hibernate.LazyInitializationException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -96,6 +97,35 @@ public class GlobalExceptionHandler {
                 request.getRequestURI()
         );
         logger.warn("Constraint violation at path={} message={}", request.getRequestURI(), errorMessage);
+        return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ErrorResponse> handleDataIntegrityViolationException(
+            DataIntegrityViolationException ex, HttpServletRequest request) {
+
+        String detailedMessage = ex.getMostSpecificCause() != null
+                ? ex.getMostSpecificCause().getMessage()
+                : ex.getMessage();
+
+        String userMessage = "Veri bütünlüğü hatası oluştu. Lütfen bağlı kayıtları kontrol edin.";
+
+        if (detailedMessage != null && detailedMessage.contains("fk_transfer_items_product")) {
+            userMessage = "Bu ürün geçmiş stok transferlerinde kullanıldığı için silinemez. " +
+                    "İlgili stok transfer kayıtları silinmeden ürün silinemez.";
+        }
+
+        ErrorResponse errorResponse = new ErrorResponse(
+                "DB_CONSTRAINT_VIOLATION",
+                HttpStatus.BAD_REQUEST.value(),
+                HttpStatus.BAD_REQUEST.name(),
+                userMessage,
+                request.getRequestURI()
+        );
+
+        logger.warn("Data integrity violation at path={} message={} detail={}",
+                request.getRequestURI(), userMessage, detailedMessage, ex);
+
         return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
     }
 
