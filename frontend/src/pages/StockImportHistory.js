@@ -58,13 +58,24 @@ const StockImportHistory = () => {
 
   return (
     <div>
+      <style>{`
+        .import-history-card {
+          border-radius: 18px;
+        }
+        .import-history-card .stat-pill {
+          border-radius: 999px;
+          padding: 0.35rem 0.85rem;
+          font-size: 0.78rem;
+        }
+      `}</style>
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h2>Excel Stok Aktarım Geçmişi</h2>
       </div>
       <div className="card">
         <div className="card-body">
-          <div className="table-responsive">
-            <table className="table table-hover">
+          {/* Desktop / Large Tablet Table View */}
+          <div className="table-responsive d-none d-lg-block">
+            <table className="table table-hover align-middle">
               <thead>
                 <tr>
                   <th>Tarih</th>
@@ -74,7 +85,7 @@ const StockImportHistory = () => {
                   <th>Ürün (Yeni)</th>
                   <th>Stok (Yeni/Güncellenen)</th>
                   <th>Durum</th>
-                  <th></th>
+                  <th className="text-end">İşlemler</th>
                 </tr>
               </thead>
               <tbody>
@@ -138,6 +149,103 @@ const StockImportHistory = () => {
                 ))}
               </tbody>
             </table>
+          </div>
+
+          {/* Mobile / Small-Medium Tablet Card View */}
+          <div className="d-lg-none">
+            {items.length === 0 ? (
+              <div className="text-center text-muted py-4">
+                Kayıt bulunamadı.
+              </div>
+            ) : (
+              <div className="d-flex flex-column gap-3">
+                {items.map(item => (
+                  <div key={item.id} className="card import-history-card border shadow-sm">
+                    <div className="card-body p-3">
+                      <div className="d-flex justify-content-between align-items-start mb-2">
+                        <div>
+                          <div className="fw-bold">
+                            {item.warehouseName || item.warehouse?.name || '-'}
+                          </div>
+                          <small className="text-muted d-block">
+                            {item.createdAt ? new Date(item.createdAt).toLocaleString('tr-TR') : '-'}
+                          </small>
+                        </div>
+                        <span className={`badge bg-${badgeClass(item.status)}`}>
+                          {trStatus(item.status)}
+                        </span>
+                      </div>
+                      <div className="mb-2">
+                        <div className="small text-muted">Dosya</div>
+                        <div className="text-truncate">{item.originalFilename}</div>
+                      </div>
+                      <div className="row g-2 mb-2">
+                        <div className="col-4 d-flex">
+                          <div className="stat-pill bg-light border text-center w-100">
+                            <div className="text-muted small text-uppercase">Satır</div>
+                            <div className="fw-bold">{item.totalRows ?? '-'}</div>
+                          </div>
+                        </div>
+                        <div className="col-4 d-flex">
+                          <div className="stat-pill bg-success bg-opacity-10 text-success w-100 text-center">
+                            <div className="small text-uppercase">Yeni Ürün</div>
+                            <div className="fw-bold">{item.createdProducts ?? 0}</div>
+                          </div>
+                        </div>
+                        <div className="col-4 d-flex">
+                          <div className="stat-pill bg-info bg-opacity-10 text-info w-100 text-center">
+                            <div className="small text-uppercase">Stok</div>
+                            <div className="fw-bold">
+                              {(item.createdStocks ?? 0)}/{item.updatedStocks ?? 0}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="d-flex flex-wrap gap-2 mt-2">
+                        {(item.status === 'KISMEN' || item.status === 'PARTIAL' || item.status === 'BAŞARISIZ' || item.status === 'FAILED') && item.failedRows && (
+                          <button 
+                            className="btn btn-sm btn-outline-warning flex-fill" 
+                            onClick={() => {
+                              try {
+                                const parsed = JSON.parse(item.failedRows);
+                                setFailedRows(Array.isArray(parsed) ? parsed : []);
+                                setShowFailedRowsModal(true);
+                              } catch (e) {
+                                console.error('Failed rows parse error:', e);
+                              }
+                            }}
+                          >
+                            <i className="fas fa-exclamation-triangle me-1"></i>
+                            Başarısız Satırlar
+                          </button>
+                        )}
+                        <button 
+                          className="btn btn-sm btn-outline-secondary flex-fill" 
+                          onClick={async () => {
+                            try {
+                              const res = await axios.get(`/api/stock-imports/${item.id}/file`, { responseType: 'blob' });
+                              const url = window.URL.createObjectURL(new Blob([res.data]));
+                              const link = document.createElement('a');
+                              link.href = url;
+                              link.setAttribute('download', item.originalFilename || 'stok_import.xlsx');
+                              document.body.appendChild(link);
+                              link.click();
+                              link.remove();
+                              window.URL.revokeObjectURL(url);
+                            } catch (e) {
+                              console.error('Dosya indirme hatası:', e);
+                            }
+                          }}
+                        >
+                          <i className="fas fa-download me-1"></i>
+                          Dosyayı İndir
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>

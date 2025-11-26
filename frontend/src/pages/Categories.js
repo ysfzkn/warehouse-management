@@ -50,7 +50,7 @@ const Categories = () => {
       const response = await axios.get('/api/categories/top-level', { params });
       const data = response.data || {};
       const list = Array.isArray(data.content) ? data.content : (Array.isArray(data) ? data : []);
-      
+
       const categoriesWithSubInfo = list.map((category) => {
         const ownCount = Number(category.productCount ?? 0);
         const rawSubs = Array.isArray(category.children) ? category.children : (Array.isArray(category.subcategories) ? category.subcategories : []);
@@ -71,7 +71,7 @@ const Categories = () => {
         };
       });
       setMainCategories(categoriesWithSubInfo);
-      
+
       // Update pagination state if response is paginated
       if (data.totalElements !== undefined) {
         setCategoryPage(data.page ?? pageOverride);
@@ -144,7 +144,7 @@ const Categories = () => {
           toast.setAttribute('role', 'alert');
           toast.innerHTML = `<div class="d-flex"><div class="toast-body">${msg}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
           document.body.appendChild(toast);
-          setTimeout(() => { try { document.body.removeChild(toast); } catch {} }, 3500);
+          setTimeout(() => { try { document.body.removeChild(toast); } catch { } }, 3500);
         }
       }
     });
@@ -238,12 +238,12 @@ const Categories = () => {
           const toast = document.createElement('div');
           toast.className = `toast align-items-center text-bg-${failed > 0 ? 'warning' : 'success'} border-0 position-fixed top-0 end-0 m-3 show`;
           toast.setAttribute('role', 'alert');
-          const message = failed > 0 
+          const message = failed > 0
             ? `${successful} kategori silindi, ${failed} kategori silinemedi (ürün veya alt kategori içeriyor olabilir)`
             : `${successful} kategori başarıyla silindi`;
           toast.innerHTML = `<div class="d-flex"><div class="toast-body">${message}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
           document.body.appendChild(toast);
-          setTimeout(() => { try { document.body.removeChild(toast); } catch {} }, 3500);
+          setTimeout(() => { try { document.body.removeChild(toast); } catch { } }, 3500);
         } catch (error) {
           const msg = error.response?.data || 'Kategoriler silinirken hata oluştu';
           const toast = document.createElement('div');
@@ -251,7 +251,7 @@ const Categories = () => {
           toast.setAttribute('role', 'alert');
           toast.innerHTML = `<div class="d-flex"><div class="toast-body">${msg}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
           document.body.appendChild(toast);
-          setTimeout(() => { try { document.body.removeChild(toast); } catch {} }, 3500);
+          setTimeout(() => { try { document.body.removeChild(toast); } catch { } }, 3500);
         }
       }
     });
@@ -323,7 +323,7 @@ const Categories = () => {
       <div className="row g-3 mb-3">
         <div className="col-12 col-md-6 col-lg-4">
           <div className="border rounded-3 p-3 h-100 bg-body">
-            <div className="d-flex align-items-center justify-content-between mb-2">
+            <div className="d-flex align-items-center justify-content-between mb-4">
               <div>
                 <small className="text-uppercase text-muted fw-semibold">Arama</small>
                 <div className="fw-semibold text-truncate">Kategori / açıklama</div>
@@ -380,9 +380,8 @@ const Categories = () => {
                     onChange={() => handleCategorySortChange(option.value)}
                   />
                   <label
-                    className={`btn btn-sm w-100 d-flex align-items-center justify-content-center gap-2 ${
-                      categorySortBy === option.value ? 'btn-primary text-white' : 'btn-outline-primary'
-                    }`}
+                    className={`btn btn-sm w-100 d-flex align-items-center justify-content-center gap-2 ${categorySortBy === option.value ? 'btn-primary text-white' : 'btn-outline-primary'
+                      }`}
                     htmlFor={`category-sort-${option.value}`}
                     style={{ minHeight: '38px' }}
                   >
@@ -461,164 +460,164 @@ const Categories = () => {
                 {filteredCategories.slice(categoryPage * categoryPageSize, (categoryPage + 1) * categoryPageSize).map((category) => {
                   const isSelected = selectedCategories.includes(category.id);
                   return (
-                  <React.Fragment key={category.id}>
-                    <tr
-                      className={isSelected ? 'table-active' : ''}
-                      style={{ cursor: category.totalSubcategories > 0 ? 'pointer' : 'default' }}
-                      onClick={(e) => {
-                        if (category.totalSubcategories > 0 && !e.target.closest('button, .btn-group, .form-check')) {
-                          toggleCategoryExpansion(category.id);
-                        }
-                      }}
-                    >
-                      <td className="text-center align-middle">
-                        <div className="form-check mb-0" onClick={(e) => e.stopPropagation()}>
-                          <input
-                            className="form-check-input"
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => toggleCategorySelection(category.id)}
-                            aria-label="Kategori seç"
-                          />
-                        </div>
-                      </td>
-                      <td>
-                        {category.totalSubcategories > 0 && (
-                          <i className={`fas fa-chevron-${expandedCategories.includes(Number(category.id)) ? 'down' : 'right'} text-primary`}></i>
-                        )}
-                      </td>
-                      <td>
-                        <div className="fw-semibold">{category.name}</div>
-                        {category.totalSubcategories > 0 && (
-                          <small className="text-primary">
-                            <i className="fas fa-sitemap me-1"></i>
-                            {category.totalSubcategories} alt kategori
-                          </small>
-                        )}
-                      </td>
-                      <td>
-                        <span className="text-muted small">
-                          {category.description || '-'}
-                        </span>
-                      </td>
-                      <td className="text-center">
-                        <span className="badge bg-primary bg-opacity-10 text-primary">
-                          <i className="fas fa-box me-1"></i>
-                          {category.totalProductCount ?? category.productCount}
-                        </span>
-                      </td>
-                      <td className="text-center">
-                        {category.totalSubcategories > 0 ? (
-                          <span className="badge bg-info bg-opacity-10 text-info">
-                            <i className="fas fa-sitemap me-1"></i>
-                            {category.totalSubcategories}
-                          </span>
-                        ) : (
-                          <span className="text-muted">-</span>
-                        )}
-                      </td>
-                      <td>
-                        <small className="text-muted">
-                          <i className="fas fa-calendar me-1"></i>
-                          {new Date(category.createdAt).toLocaleDateString('tr-TR')}
-                        </small>
-                      </td>
-                      <td className="text-center">
-                        <div className="d-flex justify-content-center">
-                          <div className="btn-group" role="group" onClick={(e) => e.stopPropagation()}>
-                            <button
-                              className="btn btn-outline-secondary"
-                              onClick={() => handleEdit(category)}
-                              title="Düzenle"
-                              style={{ minWidth: '45px', padding: '0.5rem 0.75rem' }}
-                            >
-                              <i className="fas fa-edit"></i>
-                            </button>
-                            <button
-                              className="btn btn-outline-primary"
-                              onClick={() => handleAddSubcategory(category)}
-                              title="Alt Kategori Ekle"
-                              style={{ minWidth: '45px', padding: '0.5rem 0.75rem' }}
-                            >
-                              <i className="fas fa-plus"></i>
-                            </button>
-                            <button
-                              className="btn btn-outline-danger"
-                              onClick={() => handleDelete(category.id)}
-                              disabled={(category.totalProductCount ?? category.productCount) > 0 || category.totalSubcategories > 0}
-                              title={(category.totalProductCount ?? category.productCount) > 0 || category.totalSubcategories > 0 ? "Ürün veya alt kategori içeren kategoriler silinemez" : "Sil"}
-                              style={{ minWidth: '45px', padding: '0.5rem 0.75rem' }}
-                            >
-                              <i className="fas fa-trash"></i>
-                            </button>
+                    <React.Fragment key={category.id}>
+                      <tr
+                        className={isSelected ? 'table-active' : ''}
+                        style={{ cursor: category.totalSubcategories > 0 ? 'pointer' : 'default' }}
+                        onClick={(e) => {
+                          if (category.totalSubcategories > 0 && !e.target.closest('button, .btn-group, .form-check')) {
+                            toggleCategoryExpansion(category.id);
+                          }
+                        }}
+                      >
+                        <td className="text-center align-middle">
+                          <div className="form-check mb-0" onClick={(e) => e.stopPropagation()}>
+                            <input
+                              className="form-check-input"
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleCategorySelection(category.id)}
+                              aria-label="Kategori seç"
+                            />
                           </div>
-                        </div>
-                      </td>
-                    </tr>
-                    {/* Alt Kategoriler - Expand edildiğinde göster */}
-                    {expandedCategories.includes(Number(category.id)) && category.subcategories && category.subcategories.length > 0 && (
-                      <tr className="table-light">
-                        <td colSpan="7" className="p-0">
-                          <div className="p-3 bg-light">
-                            <div className="small mb-2 fw-bold text-primary">
+                        </td>
+                        <td>
+                          {category.totalSubcategories > 0 && (
+                            <i className={`fas fa-chevron-${expandedCategories.includes(Number(category.id)) ? 'down' : 'right'} text-primary`}></i>
+                          )}
+                        </td>
+                        <td>
+                          <div className="fw-semibold">{category.name}</div>
+                          {category.totalSubcategories > 0 && (
+                            <small className="text-primary">
                               <i className="fas fa-sitemap me-1"></i>
-                              Alt Kategoriler:
-                            </div>
-                            <div className="table-responsive">
-                              <table className="table table-sm table-bordered mb-0">
-                                <thead>
-                                  <tr>
-                                    <th>Alt Kategori Adı</th>
-                                    <th className="text-center">Ürün Sayısı</th>
-                                    <th className="text-center" style={{ width: '180px' }}>İşlemler</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {category.subcategories.map((subcategory) => (
-                                    <tr key={subcategory.id}>
-                                      <td>
-                                        <div className="fw-semibold">{subcategory.name}</div>
-                                      </td>
-                                      <td className="text-center">
-                                        <span className="badge bg-primary bg-opacity-10 text-primary">
-                                          <i className="fas fa-box me-1"></i>
-                                          {subcategory.productCount || 0}
-                                        </span>
-                                      </td>
-                                      <td className="text-center">
-                                        <div className="d-flex justify-content-center">
-                                          <div className="btn-group" role="group">
-                                            <button
-                                              className="btn btn-outline-secondary"
-                                              onClick={() => handleEdit(subcategory)}
-                                              title="Düzenle"
-                                              style={{ minWidth: '45px', padding: '0.5rem 0.75rem' }}
-                                            >
-                                              <i className="fas fa-edit"></i>
-                                            </button>
-                                            <button
-                                              className="btn btn-outline-danger"
-                                              onClick={() => handleDelete(subcategory.id)}
-                                              disabled={(subcategory.productCount || 0) > 0}
-                                              title={(subcategory.productCount || 0) > 0 ? "Ürün içeren kategoriler silinemez" : "Sil"}
-                                              style={{ minWidth: '45px', padding: '0.5rem 0.75rem' }}
-                                            >
-                                              <i className="fas fa-trash"></i>
-                                            </button>
-                                          </div>
-                                        </div>
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
+                              {category.totalSubcategories} alt kategori
+                            </small>
+                          )}
+                        </td>
+                        <td>
+                          <span className="text-muted small">
+                            {category.description || '-'}
+                          </span>
+                        </td>
+                        <td className="text-center">
+                          <span className="badge bg-primary bg-opacity-10 text-primary">
+                            <i className="fas fa-box me-1"></i>
+                            {category.totalProductCount ?? category.productCount}
+                          </span>
+                        </td>
+                        <td className="text-center">
+                          {category.totalSubcategories > 0 ? (
+                            <span className="badge bg-info bg-opacity-10 text-info">
+                              <i className="fas fa-sitemap me-1"></i>
+                              {category.totalSubcategories}
+                            </span>
+                          ) : (
+                            <span className="text-muted">-</span>
+                          )}
+                        </td>
+                        <td>
+                          <small className="text-muted">
+                            <i className="fas fa-calendar me-1"></i>
+                            {new Date(category.createdAt).toLocaleDateString('tr-TR')}
+                          </small>
+                        </td>
+                        <td className="text-center">
+                          <div className="d-flex justify-content-center">
+                            <div className="btn-group" role="group" onClick={(e) => e.stopPropagation()}>
+                              <button
+                                className="btn btn-outline-secondary"
+                                onClick={() => handleEdit(category)}
+                                title="Düzenle"
+                                style={{ minWidth: '45px', padding: '0.5rem 0.75rem' }}
+                              >
+                                <i className="fas fa-edit"></i>
+                              </button>
+                              <button
+                                className="btn btn-outline-primary"
+                                onClick={() => handleAddSubcategory(category)}
+                                title="Alt Kategori Ekle"
+                                style={{ minWidth: '45px', padding: '0.5rem 0.75rem' }}
+                              >
+                                <i className="fas fa-plus"></i>
+                              </button>
+                              <button
+                                className="btn btn-outline-danger"
+                                onClick={() => handleDelete(category.id)}
+                                disabled={(category.totalProductCount ?? category.productCount) > 0 || category.totalSubcategories > 0}
+                                title={(category.totalProductCount ?? category.productCount) > 0 || category.totalSubcategories > 0 ? "Ürün veya alt kategori içeren kategoriler silinemez" : "Sil"}
+                                style={{ minWidth: '45px', padding: '0.5rem 0.75rem' }}
+                              >
+                                <i className="fas fa-trash"></i>
+                              </button>
                             </div>
                           </div>
                         </td>
                       </tr>
-                    )}
-                  </React.Fragment>
-                );
+                      {/* Alt Kategoriler - Expand edildiğinde göster */}
+                      {expandedCategories.includes(Number(category.id)) && category.subcategories && category.subcategories.length > 0 && (
+                        <tr className="table-light">
+                          <td colSpan="7" className="p-0">
+                            <div className="p-3 bg-light">
+                              <div className="small mb-2 fw-bold text-primary">
+                                <i className="fas fa-sitemap me-1"></i>
+                                Alt Kategoriler:
+                              </div>
+                              <div className="table-responsive">
+                                <table className="table table-sm table-bordered mb-0">
+                                  <thead>
+                                    <tr>
+                                      <th>Alt Kategori Adı</th>
+                                      <th className="text-center">Ürün Sayısı</th>
+                                      <th className="text-center" style={{ width: '180px' }}>İşlemler</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {category.subcategories.map((subcategory) => (
+                                      <tr key={subcategory.id}>
+                                        <td>
+                                          <div className="fw-semibold">{subcategory.name}</div>
+                                        </td>
+                                        <td className="text-center">
+                                          <span className="badge bg-primary bg-opacity-10 text-primary">
+                                            <i className="fas fa-box me-1"></i>
+                                            {subcategory.productCount || 0}
+                                          </span>
+                                        </td>
+                                        <td className="text-center">
+                                          <div className="d-flex justify-content-center">
+                                            <div className="btn-group" role="group">
+                                              <button
+                                                className="btn btn-outline-secondary"
+                                                onClick={() => handleEdit(subcategory)}
+                                                title="Düzenle"
+                                                style={{ minWidth: '45px', padding: '0.5rem 0.75rem' }}
+                                              >
+                                                <i className="fas fa-edit"></i>
+                                              </button>
+                                              <button
+                                                className="btn btn-outline-danger"
+                                                onClick={() => handleDelete(subcategory.id)}
+                                                disabled={(subcategory.productCount || 0) > 0}
+                                                title={(subcategory.productCount || 0) > 0 ? "Ürün içeren kategoriler silinemez" : "Sil"}
+                                                style={{ minWidth: '45px', padding: '0.5rem 0.75rem' }}
+                                              >
+                                                <i className="fas fa-trash"></i>
+                                              </button>
+                                            </div>
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
                 })}
               </tbody>
             </table>
@@ -630,7 +629,7 @@ const Categories = () => {
               {filteredCategories.slice(categoryPage * categoryPageSize, (categoryPage + 1) * categoryPageSize).map((category) => {
                 const isSelected = selectedCategories.includes(category.id);
                 const isExpanded = expandedCategories.includes(Number(category.id));
-                
+
                 return (
                   <div key={category.id}>
                     <div

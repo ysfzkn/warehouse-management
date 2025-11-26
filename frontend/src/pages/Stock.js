@@ -137,7 +137,7 @@ const StockFiltersBar = ({
         }
         .mobile-selection-toolbar .btn {
           min-width: 110px;
-        }
+          }
           .mobile-chip {
             border-radius: 999px;
             padding: 0.4rem 0.85rem;
@@ -1996,28 +1996,28 @@ const Stock = () => {
                           </div>
                         </div>
 
-        <div className="stock-mobile-card__tags">
-          <div className="stock-mobile-card__tags-left">
-            <span className="mobile-chip">
-              <i className="fas fa-barcode me-1"></i>
-              {productSku || '-'}
-            </span>
-            {categoryPath && (
-              <span className="mobile-chip bg-info bg-opacity-10 text-info border border-info">
-                <i className="fas fa-tag me-1"></i>
-                {categoryPath.length > 24 ? `${categoryPath.substring(0, 24)}…` : categoryPath}
-              </span>
-            )}
-          </div>
-          <div className="stock-mobile-card__tags-right">
-            {stock.additionNote && (
-              <span className="mobile-chip mobile-chip-note" title={stock.additionNote}>
-                <i className="fas fa-sticky-note me-1"></i>
-                {stock.additionNote.length > 60 ? `${stock.additionNote.substring(0, 60)}…` : stock.additionNote}
-              </span>
-            )}
-          </div>
-        </div>
+                        <div className="stock-mobile-card__tags">
+                          <div className="stock-mobile-card__tags-left">
+                            <span className="mobile-chip">
+                              <i className="fas fa-barcode me-1"></i>
+                              {productSku || '-'}
+                            </span>
+                            {categoryPath && (
+                              <span className="mobile-chip bg-info bg-opacity-10 text-info border border-info">
+                                <i className="fas fa-tag me-1"></i>
+                                {categoryPath.length > 24 ? `${categoryPath.substring(0, 24)}…` : categoryPath}
+                              </span>
+                            )}
+                          </div>
+                          <div className="stock-mobile-card__tags-right">
+                            {stock.additionNote && (
+                              <span className="mobile-chip mobile-chip-note" title={stock.additionNote}>
+                                <i className="fas fa-sticky-note me-1"></i>
+                                {stock.additionNote.length > 60 ? `${stock.additionNote.substring(0, 60)}…` : stock.additionNote}
+                              </span>
+                            )}
+                          </div>
+                        </div>
 
                         <div className="row g-2 mb-3 mobile-stat-grid">
                           <div className="col-6">
@@ -3329,7 +3329,7 @@ const Stock = () => {
                                           <label className="small text-muted ms-2">Seç</label>
                                         </div>
                                       )}
-                                      </div>
+                                    </div>
 
                                     {/* Tarih + Type + Status */}
                                     <div className="transfer-mobile-card__badges d-flex justify-content-between align-items-center gap-3 mb-3">
@@ -3352,476 +3352,476 @@ const Stock = () => {
                                   </>
                                 );
                               })()}
-                            {/* Products */}
-                            {transferItemsPreview.length > 0 && (
-                              <div className="mb-3">
-                                <div className="small fw-bold mb-2 text-uppercase text-muted">
-                                  <i className="fas fa-box me-1"></i>
-                                  Ürünler ({transferItemsPreview.length})
-                                </div>
-                                <div className="d-flex flex-column gap-2">
-                                  {transferItemsPreview.slice(0, 2).map((item, idx) => (
-                                    <div
-                                      key={`${transfer.id}-${item.product?.id || idx}`}
-                                      className="mobile-stat-tile d-grid align-items-center"
-                                      style={{ textAlign: 'left', gridTemplateColumns: '1fr auto', columnGap: '0.75rem' }}
-                                    >
-                                      <div className="d-flex flex-column gap-1">
-                                        <div className="fw-semibold small">{item.product?.name || '-'}</div>
-                                        <small className="text-muted">{item.product?.sku || '-'}</small>
-                                      </div>
-                                      <span
-                                        className="badge bg-primary d-inline-flex align-items-center justify-content-center"
-                                        style={{ minWidth: '3rem' }}
+                              {/* Products */}
+                              {transferItemsPreview.length > 0 && (
+                                <div className="mb-3">
+                                  <div className="small fw-bold mb-2 text-uppercase text-muted">
+                                    <i className="fas fa-box me-1"></i>
+                                    Ürünler ({transferItemsPreview.length})
+                                  </div>
+                                  <div className="d-flex flex-column gap-2">
+                                    {transferItemsPreview.slice(0, 2).map((item, idx) => (
+                                      <div
+                                        key={`${transfer.id}-${item.product?.id || idx}`}
+                                        className="mobile-stat-tile d-grid align-items-center"
+                                        style={{ textAlign: 'left', gridTemplateColumns: '1fr auto', columnGap: '0.75rem' }}
                                       >
-                                        {item.quantity}
-                                      </span>
-                                    </div>
-                                  ))}
-                                  {transferItemsPreview.length > 2 && (
-                                    <small className="text-muted">
-                                      + {transferItemsPreview.length - 2} ürün daha
-                                    </small>
-                                  )}
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Warehouses */}
-                            <div className="row g-2 mb-3 mobile-stat-grid">
-                              <div className="col-6">
-                                <div className="mobile-stat-tile" style={{ textAlign: 'left' }}>
-                                  <div className="label">
-                                    <i className="fas fa-warehouse me-1"></i>
-                                    Kaynak
+                                        <div className="d-flex flex-column gap-1">
+                                          <div className="fw-semibold small">{item.product?.name || '-'}</div>
+                                          <small className="text-muted">{item.product?.sku || '-'}</small>
+                                        </div>
+                                        <span
+                                          className="badge bg-primary d-inline-flex align-items-center justify-content-center"
+                                          style={{ minWidth: '3rem' }}
+                                        >
+                                          {item.quantity}
+                                        </span>
+                                      </div>
+                                    ))}
+                                    {transferItemsPreview.length > 2 && (
+                                      <small className="text-muted">
+                                        + {transferItemsPreview.length - 2} ürün daha
+                                      </small>
+                                    )}
                                   </div>
-                                  <div className="value" style={{ fontSize: '0.95rem' }}>{transfer.sourceWarehouse?.name || '-'}</div>
-                                  <small className="text-muted d-block">{transfer.sourceWarehouse?.location || ''}</small>
                                 </div>
-                              </div>
-                              <div className="col-6">
-                                <div className="mobile-stat-tile" style={{ textAlign: 'left' }}>
-                                  <div className="label">
-                                    <i className={`fas ${(transfer.transferType || 'WAREHOUSE') === 'CUSTOMER_DELIVERY' ? 'fa-user-tag' : 'fa-warehouse'} me-1`}></i>
-                                    Hedef
-                                  </div>
-                                  {(transfer.transferType || 'WAREHOUSE') === 'CUSTOMER_DELIVERY' ? (
-                                    <>
-                                      <div className="value" style={{ fontSize: '0.95rem' }}>{transfer.customerFullName || '-'}</div>
-                                      <small className="text-muted d-block">{transfer.customerPhone || ''}</small>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <div className="value" style={{ fontSize: '0.95rem' }}>{transfer.destinationWarehouse?.name || '-'}</div>
-                                      <small className="text-muted d-block">{transfer.destinationWarehouse?.location || ''}</small>
-                                    </>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
+                              )}
 
-                            {(transfer.driverName || transfer.vehiclePlate) && (
+                              {/* Warehouses */}
                               <div className="row g-2 mb-3 mobile-stat-grid">
-                                {transfer.driverName && (
-                                  <div className="col-6">
-                                    <div className="mobile-stat-tile" style={{ textAlign: 'left' }}>
-                                      <div className="label">
-                                        <i className="fas fa-user me-1"></i>
-                                        Şoför
-                                      </div>
-                                      <div className="value" style={{ fontSize: '0.95rem' }}>{transfer.driverName}</div>
+                                <div className="col-6">
+                                  <div className="mobile-stat-tile" style={{ textAlign: 'left' }}>
+                                    <div className="label">
+                                      <i className="fas fa-warehouse me-1"></i>
+                                      Kaynak
                                     </div>
+                                    <div className="value" style={{ fontSize: '0.95rem' }}>{transfer.sourceWarehouse?.name || '-'}</div>
+                                    <small className="text-muted d-block">{transfer.sourceWarehouse?.location || ''}</small>
                                   </div>
-                                )}
-                                {transfer.vehiclePlate && (
-                                  <div className="col-6">
-                                    <div className="mobile-stat-tile" style={{ textAlign: 'left' }}>
-                                      <div className="label">
-                                        <i className="fas fa-car me-1"></i>
-                                        Plaka
-                                      </div>
-                                      <div className="value" style={{ fontSize: '0.95rem' }}>{transfer.vehiclePlate}</div>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            )}
-
-                            <div className="transfer-mobile-card__summary mb-3">
-                              <div className="d-flex justify-content-between">
-                                <div>
-                                  <div className="small text-muted text-uppercase">Toplam Miktar</div>
-                                  <div className="fw-bold">{totalQuantity}</div>
                                 </div>
-                                {transfer.createdBy && (
-                                  <div className="text-end">
-                                    <div className="small text-muted text-uppercase">Oluşturan</div>
-                                    <div className="fw-semibold small">{transfer.createdBy}</div>
+                                <div className="col-6">
+                                  <div className="mobile-stat-tile" style={{ textAlign: 'left' }}>
+                                    <div className="label">
+                                      <i className={`fas ${(transfer.transferType || 'WAREHOUSE') === 'CUSTOMER_DELIVERY' ? 'fa-user-tag' : 'fa-warehouse'} me-1`}></i>
+                                      Hedef
+                                    </div>
+                                    {(transfer.transferType || 'WAREHOUSE') === 'CUSTOMER_DELIVERY' ? (
+                                      <>
+                                        <div className="value" style={{ fontSize: '0.95rem' }}>{transfer.customerFullName || '-'}</div>
+                                        <small className="text-muted d-block">{transfer.customerPhone || ''}</small>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <div className="value" style={{ fontSize: '0.95rem' }}>{transfer.destinationWarehouse?.name || '-'}</div>
+                                        <small className="text-muted d-block">{transfer.destinationWarehouse?.location || ''}</small>
+                                      </>
+                                    )}
                                   </div>
+                                </div>
+                              </div>
+
+                              {(transfer.driverName || transfer.vehiclePlate) && (
+                                <div className="row g-2 mb-3 mobile-stat-grid">
+                                  {transfer.driverName && (
+                                    <div className="col-6">
+                                      <div className="mobile-stat-tile" style={{ textAlign: 'left' }}>
+                                        <div className="label">
+                                          <i className="fas fa-user me-1"></i>
+                                          Şoför
+                                        </div>
+                                        <div className="value" style={{ fontSize: '0.95rem' }}>{transfer.driverName}</div>
+                                      </div>
+                                    </div>
+                                  )}
+                                  {transfer.vehiclePlate && (
+                                    <div className="col-6">
+                                      <div className="mobile-stat-tile" style={{ textAlign: 'left' }}>
+                                        <div className="label">
+                                          <i className="fas fa-car me-1"></i>
+                                          Plaka
+                                        </div>
+                                        <div className="value" style={{ fontSize: '0.95rem' }}>{transfer.vehiclePlate}</div>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+
+                              <div className="transfer-mobile-card__summary mb-3">
+                                <div className="d-flex justify-content-between">
+                                  <div>
+                                    <div className="small text-muted text-uppercase">Toplam Miktar</div>
+                                    <div className="fw-bold">{totalQuantity}</div>
+                                  </div>
+                                  {transfer.createdBy && (
+                                    <div className="text-end">
+                                      <div className="small text-muted text-uppercase">Oluşturan</div>
+                                      <div className="fw-semibold small">{transfer.createdBy}</div>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              <button
+                                className="btn btn-outline-primary w-100 mb-2"
+                                onClick={() => openTransferDetailModal(transfer)}
+                              >
+                                <i className="fas fa-eye me-1"></i>
+                                Detayı Gör
+                              </button>
+
+                              <div className="transfer-mobile-card__primary-actions d-flex justify-content-center gap-3 flex-wrap mb-2">
+                                {transfer.status === 'PENDING' && !awaitingApproval && (
+                                  <>
+                                    <button
+                                      className="btn btn-info"
+                                      onClick={() => {
+                                        setConfirmModal({
+                                          show: true,
+                                          title: 'Transferi Yola Çıkar',
+                                          message: 'Transfer yola çıkarılacak ve stok rezerve edilecek. Onaylıyor musunuz?',
+                                          confirmText: 'Evet, Yola Çıkar',
+                                          confirmVariant: 'info',
+                                          icon: 'truck',
+                                          onConfirm: () => {
+                                            setConfirmModal({ show: false });
+                                            handleTransferStatusChange(transfer.id, 'start');
+                                          }
+                                        });
+                                      }}
+                                    >
+                                      <i className="fas fa-truck me-1"></i>
+                                      Yola Çıkar
+                                    </button>
+                                    <button
+                                      className="btn btn-success"
+                                      onClick={() =>
+                                        openCompletionFlow(
+                                          transfer,
+                                          'Transfer direkt tamamlanacak ve stok kaynak depodan düşülecek. Onaylıyor musunuz?'
+                                        )
+                                      }
+                                    >
+                                      <i className="fas fa-check me-1"></i>
+                                      Tamamla
+                                    </button>
+                                  </>
+                                )}
+                                {approvalRejected && transfer.rejectionReason && (
+                                  <button
+                                    className="btn btn-outline-danger"
+                                    onClick={() => setNotesModal({
+                                      show: true,
+                                      notes: transfer.rejectionReason,
+                                      transferId: transfer.id,
+                                      title: 'Onay Notu'
+                                    })}
+                                  >
+                                    <i className="fas fa-exclamation-circle me-1"></i>
+                                    Onay Notu
+                                  </button>
+                                )}
+                              </div>
+
+                              <div className="transfer-mobile-card__actions d-flex justify-content-center gap-3 flex-wrap mt-2">
+                                {transfer.notes && (
+                                  <button
+                                    className="btn btn-outline-secondary mobile-action-btn"
+                                    onClick={() => setNotesModal({
+                                      show: true,
+                                      notes: transfer.notes,
+                                      transferId: transfer.id,
+                                      title: 'Transfer Notu'
+                                    })}
+                                    title="Transfer notunu aç"
+                                  >
+                                    <i className="fas fa-sticky-note"></i>
+                                  </button>
+                                )}
+                                {transfer.completionNote && (
+                                  <button
+                                    className="btn btn-outline-success mobile-action-btn"
+                                    onClick={() => setNotesModal({
+                                      show: true,
+                                      notes: transfer.completionNote,
+                                      transferId: transfer.id,
+                                      title: 'Tamamlama Notu'
+                                    })}
+                                    title="Tamamlama notunu aç"
+                                  >
+                                    <i className="fas fa-clipboard-check"></i>
+                                  </button>
+                                )}
+                                {role === 'ADMIN' && (
+                                  <button
+                                    className="btn btn-outline-secondary mobile-action-btn"
+                                    onClick={() => setAuditModal({ show: true, entityType: 'StockTransfer', entityId: transfer.id })}
+                                    title="Hareket geçmişi"
+                                  >
+                                    <i className="fas fa-history"></i>
+                                  </button>
+                                )}
+                                {role === 'ADMIN' && canDelete && (
+                                  <button
+                                    className="btn btn-outline-danger mobile-action-btn"
+                                    onClick={() => handleDeleteTransfer(transfer.id)}
+                                    title="Transferi sil"
+                                  >
+                                    <i className="fas fa-trash"></i>
+                                  </button>
                                 )}
                               </div>
                             </div>
-
-                            <button
-                              className="btn btn-outline-primary w-100 mb-2"
-                              onClick={() => openTransferDetailModal(transfer)}
-                            >
-                              <i className="fas fa-eye me-1"></i>
-                              Detayı Gör
-                            </button>
-
-                            <div className="transfer-mobile-card__primary-actions d-flex justify-content-center gap-3 flex-wrap mb-2">
-                              {transfer.status === 'PENDING' && !awaitingApproval && (
-                                <>
-                                  <button
-                                    className="btn btn-info"
-                                    onClick={() => {
-                                      setConfirmModal({
-                                        show: true,
-                                        title: 'Transferi Yola Çıkar',
-                                        message: 'Transfer yola çıkarılacak ve stok rezerve edilecek. Onaylıyor musunuz?',
-                                        confirmText: 'Evet, Yola Çıkar',
-                                        confirmVariant: 'info',
-                                        icon: 'truck',
-                                        onConfirm: () => {
-                                          setConfirmModal({ show: false });
-                                          handleTransferStatusChange(transfer.id, 'start');
-                                        }
-                                      });
-                                    }}
-                                  >
-                                    <i className="fas fa-truck me-1"></i>
-                                    Yola Çıkar
-                                  </button>
-                                  <button
-                                    className="btn btn-success"
-                                    onClick={() =>
-                                      openCompletionFlow(
-                                        transfer,
-                                        'Transfer direkt tamamlanacak ve stok kaynak depodan düşülecek. Onaylıyor musunuz?'
-                                      )
-                                    }
-                                  >
-                                    <i className="fas fa-check me-1"></i>
-                                    Tamamla
-                                  </button>
-                                </>
-                              )}
-                              {approvalRejected && transfer.rejectionReason && (
-                                <button
-                                  className="btn btn-outline-danger"
-                                  onClick={() => setNotesModal({
-                                    show: true,
-                                    notes: transfer.rejectionReason,
-                                    transferId: transfer.id,
-                                    title: 'Onay Notu'
-                                  })}
-                                >
-                                  <i className="fas fa-exclamation-circle me-1"></i>
-                                  Onay Notu
-                                </button>
-                              )}
-                            </div>
-
-                            <div className="transfer-mobile-card__actions d-flex justify-content-center gap-3 flex-wrap mt-2">
-                              {transfer.notes && (
-                                <button
-                                  className="btn btn-outline-secondary mobile-action-btn"
-                                  onClick={() => setNotesModal({
-                                    show: true,
-                                    notes: transfer.notes,
-                                    transferId: transfer.id,
-                                    title: 'Transfer Notu'
-                                  })}
-                                  title="Transfer notunu aç"
-                                >
-                                  <i className="fas fa-sticky-note"></i>
-                                </button>
-                              )}
-                              {transfer.completionNote && (
-                                <button
-                                  className="btn btn-outline-success mobile-action-btn"
-                                  onClick={() => setNotesModal({
-                                    show: true,
-                                    notes: transfer.completionNote,
-                                    transferId: transfer.id,
-                                    title: 'Tamamlama Notu'
-                                  })}
-                                  title="Tamamlama notunu aç"
-                                >
-                                  <i className="fas fa-clipboard-check"></i>
-                                </button>
-                              )}
-                              {role === 'ADMIN' && (
-                                <button
-                                  className="btn btn-outline-secondary mobile-action-btn"
-                                  onClick={() => setAuditModal({ show: true, entityType: 'StockTransfer', entityId: transfer.id })}
-                                  title="Hareket geçmişi"
-                                >
-                                  <i className="fas fa-history"></i>
-                                </button>
-                              )}
-                              {role === 'ADMIN' && canDelete && (
-                                <button
-                                  className="btn btn-outline-danger mobile-action-btn"
-                                  onClick={() => handleDeleteTransfer(transfer.id)}
-                                  title="Transferi sil"
-                                >
-                                  <i className="fas fa-trash"></i>
-                                </button>
-                              )}
-                            </div>
                           </div>
-                          </div>
-                    );
+                        );
                       })}
+                    </div>
+                  </div>
+
+                  <div className="d-flex justify-content-between align-items-center px-3 py-3 flex-wrap gap-2">
+                    <small className="text-muted">
+                      Gösterilen kayıt: {transfers.length}/{totalTransfers || transfers.length}
+                    </small>
+                    <PaginationControls
+                      page={transferPage}
+                      totalPages={transferTotalPages}
+                      onPageChange={handleTransferPageChange}
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )
+      }
+
+      {/* Confirmation Modal */}
+      <ConfirmModal
+        show={confirmModal.show}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmText={confirmModal.confirmText}
+        cancelText="İptal"
+        confirmVariant={confirmModal.confirmVariant}
+        icon={confirmModal.icon}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal({ show: false })}
+      />
+
+      {/* Error Modal */}
+      <ConfirmModal
+        show={errorModal.show}
+        title={errorModal.title}
+        message={errorModal.message}
+        confirmText="Tamam"
+        cancelText={null}
+        confirmVariant="danger"
+        icon="exclamation-triangle"
+        onConfirm={() => setErrorModal({ show: false, title: '', message: '' })}
+        onCancel={() => setErrorModal({ show: false, title: '', message: '' })}
+      />
+
+      {/* Notes Modal */}
+      <NotesModal
+        show={notesModal.show}
+        notes={notesModal.notes}
+        title={notesModal.title}
+        transferId={notesModal.transferId}
+        onClose={() => setNotesModal({ show: false, notes: '', transferId: null, title: '' })}
+      />
+
+      {/* Cancellation Reason Modal */}
+      {
+        cancellationModal.show && (
+          <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+            <div className="modal-dialog modal-dialog-centered">
+              <div className="modal-content">
+                <div className="modal-header bg-danger text-white">
+                  <h5 className="modal-title">
+                    <i className="fas fa-ban me-2"></i>
+                    Transferi İptal Et
+                  </h5>
+                  <button
+                    type="button"
+                    className="btn-close btn-close-white"
+                    onClick={() => setCancellationModal({ show: false, transferId: null, reason: '' })}
+                  ></button>
+                </div>
+                <div className="modal-body">
+                  <div className="alert alert-warning">
+                    <i className="fas fa-exclamation-triangle me-2"></i>
+                    Transfer iptal edilecek. Bu işlem geri alınamaz.
+                  </div>
+                  <div className="mb-3">
+                    <label htmlFor="cancellationReason" className="form-label">
+                      <i className="fas fa-comment-alt me-1"></i>
+                      İptal Nedeni <span className="text-muted">(Opsiyonel)</span>
+                    </label>
+                    <textarea
+                      id="cancellationReason"
+                      className="form-control"
+                      rows="4"
+                      value={cancellationModal.reason}
+                      onChange={(e) => setCancellationModal({ ...cancellationModal, reason: e.target.value })}
+                      placeholder="İptal nedenini buraya yazabilirsiniz..."
+                      maxLength="500"
+                    />
+                    <small className="text-muted">
+                      {cancellationModal.reason.length}/500 karakter
+                    </small>
                   </div>
                 </div>
-
-              <div className="d-flex justify-content-between align-items-center px-3 py-3 flex-wrap gap-2">
-                <small className="text-muted">
-                  Gösterilen kayıt: {transfers.length}/{totalTransfers || transfers.length}
-                </small>
-                <PaginationControls
-                  page={transferPage}
-                  totalPages={transferTotalPages}
-                  onPageChange={handleTransferPageChange}
-                />
-              </div>
-            </>
-              )}
-          </div>
-        </div>
-        </div>
-  )
-}
-
-{/* Confirmation Modal */ }
-<ConfirmModal
-  show={confirmModal.show}
-  title={confirmModal.title}
-  message={confirmModal.message}
-  confirmText={confirmModal.confirmText}
-  cancelText="İptal"
-  confirmVariant={confirmModal.confirmVariant}
-  icon={confirmModal.icon}
-  onConfirm={confirmModal.onConfirm}
-  onCancel={() => setConfirmModal({ show: false })}
-/>
-
-{/* Error Modal */ }
-<ConfirmModal
-  show={errorModal.show}
-  title={errorModal.title}
-  message={errorModal.message}
-  confirmText="Tamam"
-  cancelText={null}
-  confirmVariant="danger"
-  icon="exclamation-triangle"
-  onConfirm={() => setErrorModal({ show: false, title: '', message: '' })}
-  onCancel={() => setErrorModal({ show: false, title: '', message: '' })}
-/>
-
-{/* Notes Modal */ }
-<NotesModal
-  show={notesModal.show}
-  notes={notesModal.notes}
-  title={notesModal.title}
-  transferId={notesModal.transferId}
-  onClose={() => setNotesModal({ show: false, notes: '', transferId: null, title: '' })}
-/>
-
-{/* Cancellation Reason Modal */ }
-{
-  cancellationModal.show && (
-    <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-      <div className="modal-dialog modal-dialog-centered">
-        <div className="modal-content">
-          <div className="modal-header bg-danger text-white">
-            <h5 className="modal-title">
-              <i className="fas fa-ban me-2"></i>
-              Transferi İptal Et
-            </h5>
-            <button
-              type="button"
-              className="btn-close btn-close-white"
-              onClick={() => setCancellationModal({ show: false, transferId: null, reason: '' })}
-            ></button>
-          </div>
-          <div className="modal-body">
-            <div className="alert alert-warning">
-              <i className="fas fa-exclamation-triangle me-2"></i>
-              Transfer iptal edilecek. Bu işlem geri alınamaz.
-            </div>
-            <div className="mb-3">
-              <label htmlFor="cancellationReason" className="form-label">
-                <i className="fas fa-comment-alt me-1"></i>
-                İptal Nedeni <span className="text-muted">(Opsiyonel)</span>
-              </label>
-              <textarea
-                id="cancellationReason"
-                className="form-control"
-                rows="4"
-                value={cancellationModal.reason}
-                onChange={(e) => setCancellationModal({ ...cancellationModal, reason: e.target.value })}
-                placeholder="İptal nedenini buraya yazabilirsiniz..."
-                maxLength="500"
-              />
-              <small className="text-muted">
-                {cancellationModal.reason.length}/500 karakter
-              </small>
-            </div>
-          </div>
-          <div className="modal-footer">
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => setCancellationModal({ show: false, transferId: null, reason: '' })}
-            >
-              <i className="fas fa-times me-2"></i>
-              Vazgeç
-            </button>
-            <button
-              type="button"
-              className="btn btn-danger"
-              onClick={() => {
-                handleTransferStatusChange(
-                  cancellationModal.transferId,
-                  'cancel',
-                  cancellationModal.reason.trim()
-                    ? { cancellationReason: cancellationModal.reason.trim() }
-                    : undefined
-                );
-                setCancellationModal({ show: false, transferId: null, reason: '' });
-              }}
-            >
-              <i className="fas fa-ban me-2"></i>
-              İptal Et
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-{
-  completionModal.show && (
-    <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-      <div className="modal-dialog modal-dialog-centered">
-        <div className="modal-content">
-          <div className="modal-header bg-success text-white">
-            <h5 className="modal-title">
-              <i className="fas fa-clipboard-check me-2"></i>
-              Tamamlama Notu
-            </h5>
-            <button
-              type="button"
-              className="btn-close btn-close-white"
-              onClick={() => setCompletionModal({ show: false, transferId: null, note: '', message: '', transfer: null })}
-            ></button>
-          </div>
-          <div className="modal-body">
-            <div className="alert alert-info">
-              <i className="fas fa-info-circle me-2"></i>
-              {completionModal.message || 'Sevk tamamlanmadan önce teslimat durumunu ve varsa özel notları ekleyebilirsiniz.'}
-            </div>
-            {completionModal.transfer?.transferType === 'CUSTOMER_DELIVERY' && (
-              <div className="mb-3">
-                <div className="fw-bold">
-                  <i className="fas fa-user-tag me-2 text-info"></i>
-                  {completionModal.transfer.customerFullName}
+                <div className="modal-footer">
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => setCancellationModal({ show: false, transferId: null, reason: '' })}
+                  >
+                    <i className="fas fa-times me-2"></i>
+                    Vazgeç
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-danger"
+                    onClick={() => {
+                      handleTransferStatusChange(
+                        cancellationModal.transferId,
+                        'cancel',
+                        cancellationModal.reason.trim()
+                          ? { cancellationReason: cancellationModal.reason.trim() }
+                          : undefined
+                      );
+                      setCancellationModal({ show: false, transferId: null, reason: '' });
+                    }}
+                  >
+                    <i className="fas fa-ban me-2"></i>
+                    İptal Et
+                  </button>
                 </div>
-                <small className="text-muted d-block">
-                  <i className="fas fa-phone me-1"></i>
-                  {completionModal.transfer.customerPhone}
-                </small>
-                <small className="text-muted d-block">
-                  <i className="fas fa-map-marker-alt me-1"></i>
-                  {completionModal.transfer.customerAddress}
-                </small>
               </div>
-            )}
-            <div className="mb-3">
-              <label htmlFor="completionNote" className="form-label">
-                <i className="fas fa-comment-alt me-1"></i>
-                Tamamlama Notu <span className="text-muted">(Opsiyonel)</span>
-              </label>
-              <textarea
-                id="completionNote"
-                className="form-control"
-                rows="4"
-                value={completionModal.note}
-                onChange={(e) => setCompletionModal({ ...completionModal, note: e.target.value })}
-                placeholder="Teslim alan kişi, adres detayları veya önemli gözlemler..."
-                maxLength="500"
-              />
-              <small className="text-muted">{completionModal.note.length}/500 karakter</small>
             </div>
           </div>
-          <div className="modal-footer">
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => setCompletionModal({ show: false, transferId: null, note: '', message: '', transfer: null })}
-            >
-              <i className="fas fa-times me-2"></i>
-              Vazgeç
-            </button>
-            <button
-              type="button"
-              className="btn btn-success"
-              onClick={() => {
-                handleTransferStatusChange(
-                  completionModal.transferId,
-                  'complete',
-                  completionModal.note.trim()
-                    ? { completionNote: completionModal.note.trim() }
-                    : undefined
-                );
-                setCompletionModal({ show: false, transferId: null, note: '', message: '', transfer: null });
-              }}
-            >
-              <i className="fas fa-check me-2"></i>
-              Kaydet ve Tamamla
-            </button>
+        )
+      }
+
+      {
+        completionModal.show && (
+          <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+            <div className="modal-dialog modal-dialog-centered">
+              <div className="modal-content">
+                <div className="modal-header bg-success text-white">
+                  <h5 className="modal-title">
+                    <i className="fas fa-clipboard-check me-2"></i>
+                    Tamamlama Notu
+                  </h5>
+                  <button
+                    type="button"
+                    className="btn-close btn-close-white"
+                    onClick={() => setCompletionModal({ show: false, transferId: null, note: '', message: '', transfer: null })}
+                  ></button>
+                </div>
+                <div className="modal-body">
+                  <div className="alert alert-info">
+                    <i className="fas fa-info-circle me-2"></i>
+                    {completionModal.message || 'Sevk tamamlanmadan önce teslimat durumunu ve varsa özel notları ekleyebilirsiniz.'}
+                  </div>
+                  {completionModal.transfer?.transferType === 'CUSTOMER_DELIVERY' && (
+                    <div className="mb-3">
+                      <div className="fw-bold">
+                        <i className="fas fa-user-tag me-2 text-info"></i>
+                        {completionModal.transfer.customerFullName}
+                      </div>
+                      <small className="text-muted d-block">
+                        <i className="fas fa-phone me-1"></i>
+                        {completionModal.transfer.customerPhone}
+                      </small>
+                      <small className="text-muted d-block">
+                        <i className="fas fa-map-marker-alt me-1"></i>
+                        {completionModal.transfer.customerAddress}
+                      </small>
+                    </div>
+                  )}
+                  <div className="mb-3">
+                    <label htmlFor="completionNote" className="form-label">
+                      <i className="fas fa-comment-alt me-1"></i>
+                      Tamamlama Notu <span className="text-muted">(Opsiyonel)</span>
+                    </label>
+                    <textarea
+                      id="completionNote"
+                      className="form-control"
+                      rows="4"
+                      value={completionModal.note}
+                      onChange={(e) => setCompletionModal({ ...completionModal, note: e.target.value })}
+                      placeholder="Teslim alan kişi, adres detayları veya önemli gözlemler..."
+                      maxLength="500"
+                    />
+                    <small className="text-muted">{completionModal.note.length}/500 karakter</small>
+                  </div>
+                </div>
+                <div className="modal-footer">
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => setCompletionModal({ show: false, transferId: null, note: '', message: '', transfer: null })}
+                  >
+                    <i className="fas fa-times me-2"></i>
+                    Vazgeç
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-success"
+                    onClick={() => {
+                      handleTransferStatusChange(
+                        completionModal.transferId,
+                        'complete',
+                        completionModal.note.trim()
+                          ? { completionNote: completionModal.note.trim() }
+                          : undefined
+                      );
+                      setCompletionModal({ show: false, transferId: null, note: '', message: '', transfer: null });
+                    }}
+                  >
+                    <i className="fas fa-check me-2"></i>
+                    Kaydet ve Tamamla
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
-    </div>
-  )
-}
+        )
+      }
 
-{/* Audit Timeline Modal */ }
-{
-  auditModal.show && (
-    <AuditTimelineModal
-      entityType={auditModal.entityType}
-      entityId={auditModal.entityId}
-      onClose={() => setAuditModal({ show: false, entityType: null, entityId: null })}
-    />
-  )
-}
+      {/* Audit Timeline Modal */}
+      {
+        auditModal.show && (
+          <AuditTimelineModal
+            entityType={auditModal.entityType}
+            entityId={auditModal.entityId}
+            onClose={() => setAuditModal({ show: false, entityType: null, entityId: null })}
+          />
+        )
+      }
 
-{/* Stock Request Approval Modal */ }
-{
-  showApprovalModal && (
-    <StockRequestApprovalModal
-      onClose={() => setShowApprovalModal(false)}
-      onApprove={() => {
-        fetchAllData();
-      }}
-      initialTab={approvalModalTab}
-    />
-  )
-}
-{
-  showMyRequestsModal && (
-    <MyStockRequestsModal
-      onClose={() => setShowMyRequestsModal(false)}
-    />
-  )
-}
+      {/* Stock Request Approval Modal */}
+      {
+        showApprovalModal && (
+          <StockRequestApprovalModal
+            onClose={() => setShowApprovalModal(false)}
+            onApprove={() => {
+              fetchAllData();
+            }}
+            initialTab={approvalModalTab}
+          />
+        )
+      }
+      {
+        showMyRequestsModal && (
+          <MyStockRequestsModal
+            onClose={() => setShowMyRequestsModal(false)}
+          />
+        )
+      }
     </div >
   );
 };

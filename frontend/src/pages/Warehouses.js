@@ -146,6 +146,33 @@ const Warehouses = () => {
 
   return (
     <div>
+      <style>{`
+        .warehouse-card-actions {
+          display: flex;
+          flex-wrap: nowrap;
+          gap: 0.4rem;
+          width: 100%;
+        }
+        .warehouse-card-actions .btn {
+          flex: 1 1 0;
+        }
+        @media (max-width: 1199.98px) and (min-width: 768px) {
+          .warehouse-card-actions {
+            flex-wrap: wrap;
+          }
+          .warehouse-card-actions .btn {
+            flex: 1 1 calc(50% - 0.4rem);
+          }
+        }
+        @media (max-width: 767.98px) {
+          .warehouse-card-actions {
+            flex-wrap: wrap;
+          }
+          .warehouse-card-actions .btn {
+            flex: 1 1 100%;
+          }
+        }
+      `}</style>
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h2>Depolar</h2>
         <button className="btn btn-primary" onClick={handleCreate}>
@@ -218,7 +245,7 @@ const Warehouses = () => {
               </div>
 
               <div className="card-footer">
-                <div className="btn-group w-100" role="group">
+                <div className="warehouse-card-actions" role="group">
                   <button
                     className="btn btn-outline-primary btn-sm"
                     onClick={() => handleViewStock(warehouse)}
