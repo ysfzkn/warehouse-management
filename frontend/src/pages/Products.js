@@ -755,7 +755,7 @@ const Products = () => {
         </div>
         <div className="col-12 col-md-6 col-xl-3">
           <div className="border rounded-3 p-3 h-100 bg-body">
-            <div className="d-flex justify-content-between align-items-center mb-3">
+            <div className="d-flex justify-content-between align-items-center mb-4">
               <div>
                 <small className="text-uppercase text-muted fw-semibold">Sıralama</small>
                 <div className="fw-semibold text-truncate">
