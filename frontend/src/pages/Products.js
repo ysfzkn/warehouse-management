@@ -512,6 +512,20 @@ const Products = () => {
             width: 100%;
           }
         }
+        .product-mobile-card .mobile-product-status {
+          font-size: 0.78rem;
+          border-radius: 999px;
+          padding: 0.3rem 0.9rem;
+          min-width: 84px;
+          text-align: center;
+          line-height: 1.2;
+        }
+        .product-mobile-card .mobile-product-sku {
+          font-size: 0.85rem;
+          padding: 0.4rem 0.9rem;
+          border-radius: 999px;
+          font-weight: 600;
+        }
       `}</style>
       <div className="page-header d-flex flex-column flex-lg-row align-items-lg-center justify-content-between mb-4">
         <div className="page-title">
@@ -1090,62 +1104,66 @@ const Products = () => {
                 return (
                   <div
                     key={product.id}
-                    className={`card border shadow-sm ${isSelected ? 'border-primary bg-primary bg-opacity-10' : ''}`}
+                    className={`product-mobile-card card border shadow-sm ${isSelected ? 'border-primary bg-primary bg-opacity-10' : ''}`}
                   >
                     <div className="card-body p-3">
                       {/* Header with checkbox and name */}
-                      <div className="d-flex justify-content-between align-items-start mb-3">
-                        <div className="flex-grow-1">
-                          <div className="d-flex align-items-center gap-2 mb-2">
-                            <div className="form-check">
-                              <input
-                                className="form-check-input"
-                                type="checkbox"
-                                checked={isSelected}
-                                onChange={() => toggleProductSelection(product.id)}
-                                aria-label="Ürün seç"
-                              />
-                            </div>
-                            <div>
-                              <div className="fw-bold mb-1" style={{ fontSize: '1.05rem' }}>{product.name}</div>
-                              <div className="d-flex flex-wrap gap-1 align-items-center">
-                                <span className="badge bg-light text-dark border" style={{ fontSize: '0.75rem' }}>
-                                  <i className="fas fa-barcode me-1"></i>
-                                  {product.sku}
-                                </span>
-                                <span className={`badge ${product.active === false ? 'bg-secondary' : 'bg-success'}`}>
-                                  {product.active === false ? 'Pasif' : 'Aktif'}
-                                </span>
-                              </div>
-                            </div>
+                      <div className="d-flex justify-content-between align-items-start mb-3 gap-3">
+                        <div className="d-flex align-items-start gap-2 flex-grow-1">
+                          <div className="form-check mt-1">
+                            <input
+                              className="form-check-input"
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleProductSelection(product.id)}
+                              aria-label="Ürün seç"
+                            />
                           </div>
-                          {product.description && (
-                            <small className="text-muted d-block mb-2">
-                              {product.description.length > 60 ? `${product.description.substring(0, 60)}...` : product.description}
-                            </small>
-                          )}
-                          <div className="d-flex flex-wrap gap-1 align-items-center">
-                            {product.category?.name && (
-                              <span className="badge bg-info bg-opacity-10 text-info border border-info" style={{ fontSize: '0.7rem' }}>
-                                <i className="fas fa-tag me-1"></i>
-                                {product.category.parentName ? `${product.category.parentName.substring(0, 10)}${product.category.parentName.length > 10 ? '...' : ''} > ` : ''}
-                                {product.category.name.length > 15 ? `${product.category.name.substring(0, 15)}...` : product.category.name}
+                          <div className="w-100">
+                            <div className="d-flex justify-content-between align-items-start gap-2">
+                              <div className="fw-bold mb-1" style={{ fontSize: '1.05rem' }}>{product.name}</div>
+                              <span
+                                className={`badge mobile-product-status ${
+                                  product.active === false ? 'bg-secondary text-light' : 'bg-success text-white'
+                                }`}
+                              >
+                                {product.active === false ? 'Pasif' : 'Aktif'}
                               </span>
-                            )}
-                            {product.brand?.name && (
-                              <span className="badge bg-light text-dark border" style={{ fontSize: '0.7rem' }}>
-                                <i className="fas fa-copyright me-1"></i>
-                                {product.brand.name}
+                            </div>
+                            <div className="d-flex flex-wrap gap-1 align-items-center mb-1">
+                              <span className="badge bg-light text-dark border mobile-product-sku">
+                                <i className="fas fa-barcode me-1"></i>
+                                {product.sku}
                               </span>
-                            )}
-                            {product.color?.name && (
-                              <span className="badge bg-light text-dark border" style={{ fontSize: '0.7rem' }}>
-                                <i className="fas fa-palette me-1"></i>
-                                {product.color.name}
-                              </span>
-                            )}
+                            </div>
                           </div>
                         </div>
+                      </div>
+                      {product.description && (
+                        <small className="text-muted d-block mb-2">
+                          {product.description.length > 60 ? `${product.description.substring(0, 60)}...` : product.description}
+                        </small>
+                      )}
+                      <div className="d-flex flex-wrap gap-1 align-items-center mb-2">
+                        {product.category?.name && (
+                          <span className="badge bg-info bg-opacity-10 text-info border border-info" style={{ fontSize: '0.7rem' }}>
+                            <i className="fas fa-tag me-1"></i>
+                            {product.category.parentName ? `${product.category.parentName.substring(0, 10)}${product.category.parentName.length > 10 ? '...' : ''} > ` : ''}
+                            {product.category.name.length > 15 ? `${product.category.name.substring(0, 15)}...` : product.category.name}
+                          </span>
+                        )}
+                        {product.brand?.name && (
+                          <span className="badge bg-light text-dark border" style={{ fontSize: '0.7rem' }}>
+                            <i className="fas fa-copyright me-1"></i>
+                            {product.brand.name}
+                          </span>
+                        )}
+                        {product.color?.name && (
+                          <span className="badge bg-light text-dark border" style={{ fontSize: '0.7rem' }}>
+                            <i className="fas fa-palette me-1"></i>
+                            {product.color.name}
+                          </span>
+                        )}
                       </div>
 
                       {/* Info Grid */}
