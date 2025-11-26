@@ -1595,11 +1595,10 @@ const Stock = () => {
         <div className="card">
           <div className="card-body">
             <div className="d-flex justify-content-end align-items-center mb-2 gap-2 flex-wrap">
-              <label className="form-label mb-0 small text-muted">
-                Sayfa Boyutu:
+              <div className="page-size-control d-flex align-items-center flex-wrap">
+                <span className="form-label mb-0 small text-muted">Sayfa Boyutu</span>
                 <select
-                  className="form-select form-select-sm d-inline-block ms-2"
-                  style={{ width: 'auto' }}
+                  className="form-select form-select-sm"
                   value={stockPageSize}
                   onChange={handleStockPageSizeChange}
                 >
@@ -1607,7 +1606,7 @@ const Stock = () => {
                     <option key={`stock-page-${size}`} value={size}>{size}</option>
                   ))}
                 </select>
-              </label>
+              </div>
             </div>
             {selectedStockCount > 0 && (
               <div className="alert alert-warning d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
@@ -1681,7 +1680,7 @@ const Stock = () => {
                         ></i>
                       </button>
                     </th>
-                    <th>İşlemler</th>
+                    <th className="table-actions text-center">İşlemler</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1759,7 +1758,7 @@ const Stock = () => {
                             {formatDateInTurkeyTimezone(stock.lastUpdated, { hour: '2-digit', minute: '2-digit' })}
                           </small>
                         </td>
-                        <td>
+                        <td className="table-actions">
                           <div className="btn-group" role="group">
                             {(role === 'ADMIN' || role === 'STOCK_IN') && (
                               <button
@@ -2546,11 +2545,10 @@ const Stock = () => {
                 </span>
               </div>
               <div className="mt-2 d-flex justify-content-end">
-                <label className="form-label mb-0 small text-white">
-                  Sayfa Boyutu:
+                <div className="page-size-control d-flex align-items-center flex-wrap">
+                  <span className="form-label mb-0 small text-white">Sayfa Boyutu</span>
                   <select
-                    className="form-select form-select-sm d-inline-block ms-2"
-                    style={{ width: 'auto' }}
+                    className="form-select form-select-sm"
                     value={transferPageSize}
                     onChange={handleTransferPageSizeChange}
                   >
@@ -2558,7 +2556,7 @@ const Stock = () => {
                       <option key={`transfer-page-${size}`} value={size}>{size}</option>
                     ))}
                   </select>
-                </label>
+                </div>
               </div>
             </div>
             {selectedTransferCount > 0 && isAdmin && (
