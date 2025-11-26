@@ -536,6 +536,12 @@ const Products = () => {
           border-radius: 999px;
           font-weight: 600;
         }
+        .product-mobile-card .stat-tile {
+          min-height: 110px;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+        }
       `}</style>
       <div className="page-header d-flex flex-column flex-lg-row align-items-lg-center justify-content-between mb-4">
         <div className="page-title">
@@ -570,7 +576,7 @@ const Products = () => {
       <div className="row g-3 mb-4 align-items-stretch">
         <div className="col-12 col-md-6 col-xl-3">
           <div className="border rounded-3 p-3 h-100 bg-body">
-            <div className="d-flex align-items-center justify-content-between mb-2">
+            <div className="d-flex align-items-center justify-content-between mb-4">
               <div>
                 <small className="text-uppercase text-muted fw-semibold">Arama</small>
                 <div className="fw-semibold text-truncate">Ürün / SKU</div>
@@ -1215,8 +1221,8 @@ const Products = () => {
 
                       {/* Info Grid */}
                       <div className="row g-2 mb-3">
-                        <div className="col-6">
-                          <div className="text-center p-2 bg-light rounded border">
+                        <div className="col-6 d-flex">
+                          <div className="text-center p-2 bg-light rounded border stat-tile w-100">
                             <div className="small text-muted mb-1">
                               <i className="fas fa-tag me-1"></i>
                               Fiyat
@@ -1231,8 +1237,8 @@ const Products = () => {
                             )}
                           </div>
                         </div>
-                        <div className="col-6">
-                          <div className="text-center p-2 bg-light rounded border">
+                        <div className="col-6 d-flex">
+                          <div className="text-center p-2 bg-light rounded border stat-tile w-100">
                             <div className="small text-muted mb-1">
                               <i className="fas fa-cubes me-1"></i>
                               Stok
@@ -1254,7 +1260,7 @@ const Products = () => {
                         <div className="row g-2 mb-3">
                           {desi > 0 && (
                             <div className="col-6">
-                              <div className="text-center p-2 bg-light rounded border">
+                              <div className="text-center p-2 bg-light rounded border stat-tile w-100">
                                 <div className="small text-muted mb-1">Desi</div>
                                 <div className="fw-semibold small">{desi.toFixed(2)}</div>
                               </div>
@@ -1262,7 +1268,7 @@ const Products = () => {
                           )}
                           {shippingCost > 0 && (
                             <div className="col-6">
-                              <div className="text-center p-2 bg-light rounded border">
+                              <div className="text-center p-2 bg-light rounded border stat-tile w-100">
                                 <div className="small text-muted mb-1">Kargo</div>
                                 <div className="fw-semibold small">₺{shippingCost.toFixed(2)}</div>
                               </div>
@@ -1272,35 +1278,41 @@ const Products = () => {
                       )}
 
                       {/* Actions */}
-                      <div className="d-flex flex-wrap gap-2">
-                        <button
-                          className="btn btn-sm btn-outline-secondary flex-fill"
-                          onClick={() => handleEdit(product)}
-                        >
-                          <i className="fas fa-edit me-1"></i>
-                          Düzenle
-                        </button>
-                        <button
-                          className={`btn btn-sm ${(product.active === false) ? 'btn-outline-success' : 'btn-outline-warning'} flex-fill`}
-                          onClick={() => handleToggleActive(product.id, product.active === false ? false : true)}
-                        >
-                          <i className={`fas ${(product.active === false) ? 'fa-play' : 'fa-pause'} me-1`}></i>
-                          {(product.active === false) ? 'Aktif' : 'Pasif'}
-                        </button>
-                        <button
-                          className="btn btn-sm btn-outline-primary"
-                          onClick={() => window.location.assign(`/desi?productId=${product.id}`)}
-                          title="Desi Hesapla"
-                        >
-                          <i className="fas fa-calculator"></i>
-                        </button>
-                        <button
-                          className="btn btn-sm btn-outline-danger"
-                          onClick={() => handleDelete(product.id)}
-                          title="Sil"
-                        >
-                          <i className="fas fa-trash"></i>
-                        </button>
+                      <div className="row g-2">
+                        <div className="col-6 d-flex">
+                          <button
+                            className="btn btn-sm btn-outline-secondary flex-fill"
+                            onClick={() => handleEdit(product)}
+                          >
+                            <i className="fas fa-edit me-1"></i>
+                            Düzenle
+                          </button>
+                        </div>
+                        <div className="col-6 d-flex flex-wrap gap-2">
+                          <button
+                            className={`btn btn-sm ${(product.active === false) ? 'btn-outline-success' : 'btn-outline-warning'} flex-fill`}
+                            onClick={() => handleToggleActive(product.id, product.active === false ? false : true)}
+                          >
+                            <i className={`fas ${(product.active === false) ? 'fa-play' : 'fa-pause'} me-1`}></i>
+                            {(product.active === false) ? 'Aktif' : 'Pasif'}
+                          </button>
+                          <div className="d-flex flex-fill gap-2">
+                            <button
+                              className="btn btn-sm btn-outline-primary flex-fill"
+                              onClick={() => window.location.assign(`/desi?productId=${product.id}`)}
+                              title="Desi Hesapla"
+                            >
+                              <i className="fas fa-calculator"></i>
+                            </button>
+                            <button
+                              className="btn btn-sm btn-outline-danger flex-fill"
+                              onClick={() => handleDelete(product.id)}
+                              title="Sil"
+                            >
+                              <i className="fas fa-trash"></i>
+                            </button>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>

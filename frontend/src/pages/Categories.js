@@ -711,29 +711,33 @@ const Categories = () => {
                         </div>
 
                         {/* Actions */}
-                        <div className="d-flex flex-wrap gap-2">
-                          <button
-                            className="btn btn-sm btn-outline-secondary flex-fill"
-                            onClick={() => handleEdit(category)}
-                          >
-                            <i className="fas fa-edit me-1"></i>
-                            Düzenle
-                          </button>
-                          <button
-                            className="btn btn-sm btn-outline-primary flex-fill"
-                            onClick={() => handleAddSubcategory(category)}
-                          >
-                            <i className="fas fa-plus me-1"></i>
-                            Alt Kategori
-                          </button>
-                          <button
-                            className="btn btn-sm btn-outline-danger"
-                            onClick={() => handleDelete(category.id)}
-                            disabled={(category.totalProductCount ?? category.productCount) > 0 || category.totalSubcategories > 0}
-                            title={(category.totalProductCount ?? category.productCount) > 0 || category.totalSubcategories > 0 ? "Ürün veya alt kategori içeren kategoriler silinemez" : "Sil"}
-                          >
-                            <i className="fas fa-trash"></i>
-                          </button>
+                        <div className="row g-2">
+                          <div className="col-6 d-flex">
+                            <button
+                              className="btn btn-sm btn-outline-secondary flex-fill"
+                              onClick={() => handleEdit(category)}
+                            >
+                              <i className="fas fa-edit me-1"></i>
+                              Düzenle
+                            </button>
+                          </div>
+                          <div className="col-6 d-flex gap-2 flex-wrap">
+                            <button
+                              className="btn btn-sm btn-outline-primary flex-fill"
+                              onClick={() => handleAddSubcategory(category)}
+                            >
+                              <i className="fas fa-plus me-1"></i>
+                              Alt Kategori
+                            </button>
+                            <button
+                              className="btn btn-sm btn-outline-danger flex-fill"
+                              onClick={() => handleDelete(category.id)}
+                              disabled={(category.totalProductCount ?? category.productCount) > 0 || category.totalSubcategories > 0}
+                              title={(category.totalProductCount ?? category.productCount) > 0 || category.totalSubcategories > 0 ? "Ürün veya alt kategori içeren kategoriler silinemez" : "Sil"}
+                            >
+                              <i className="fas fa-trash"></i>
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </div>
