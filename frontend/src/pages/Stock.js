@@ -128,6 +128,16 @@ const StockFiltersBar = ({
             flex-wrap: wrap;
             align-items: center;
           }
+        .mobile-selection-toolbar {
+          border: 1px solid rgba(15, 23, 42, 0.08);
+          border-radius: 18px;
+          padding: 0.75rem 1rem;
+          background: #fff;
+          box-shadow: 0 10px 25px rgba(15, 23, 42, 0.08);
+        }
+        .mobile-selection-toolbar .btn {
+          min-width: 110px;
+        }
           .mobile-chip {
             border-radius: 999px;
             padding: 0.4rem 0.85rem;
@@ -1674,6 +1684,43 @@ const Stock = () => {
           </div>
         </div>
       )}
+      {!showTransferHistory && stocks.length > 0 && (
+        <div className="mobile-selection-toolbar d-lg-none mb-3">
+          <div className="d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <div className="fw-semibold">
+              Seçili stok: {selectedStockCount}
+            </div>
+            <div className="d-flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="btn btn-sm btn-outline-primary"
+                onClick={toggleSelectAllVisible}
+              >
+                {areAllVisibleSelected ? 'Seçimi Kaldır' : 'Tümünü Seç'}
+              </button>
+              {selectedStockCount > 0 && (
+                <>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline-secondary"
+                    onClick={clearSelectedStocks}
+                  >
+                    Seçimi Temizle
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-danger"
+                    onClick={() => handleBatchDeleteStocks([...selectedStocks])}
+                  >
+                    Seçilileri Sil
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Stock Table */}
       {!showTransferHistory && (
         <div className="card">
@@ -2619,6 +2666,45 @@ const Stock = () => {
               </div>
             </div>
           </div>
+
+          {transfers.length > 0 && (
+            <div className="mobile-selection-toolbar d-lg-none mb-3">
+              <div className="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <div className="fw-semibold">
+                  Seçili transfer: {selectedTransferCount}
+                </div>
+                <div className="d-flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline-primary"
+                    onClick={toggleSelectAllVisibleTransfers}
+                  >
+                    {areAllVisibleTransfersSelected ? 'Seçimi Kaldır' : 'Tümünü Seç'}
+                  </button>
+                  {selectedTransferCount > 0 && (
+                    <>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-outline-secondary"
+                        onClick={clearSelectedTransfers}
+                      >
+                        Seçimi Temizle
+                      </button>
+                      {isAdmin && (
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-danger"
+                          onClick={() => handleBatchDeleteTransfers([...selectedTransfers])}
+                        >
+                          Seçilileri Sil
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="card shadow-sm">
             <div className="card-header bg-gradient text-white" style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>

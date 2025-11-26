@@ -349,8 +349,9 @@ const Navbar = () => {
         
         .notification-badge {
           position: absolute;
-          top: -4px;
-          right: -8px;
+          top: -6px;
+          right: 0;
+          transform: translate(30%, -30%);
           background: #ef4444;
           color: white;
           border-radius: 50%;
