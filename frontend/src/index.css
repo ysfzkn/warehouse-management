@@ -139,6 +139,24 @@ label,
   min-width: 72px;
 }
 
+.breakpoint-1155-desktop {
+  display: block;
+}
+
+.breakpoint-1155-mobile {
+  display: none;
+}
+
+@media (max-width: 1155px) {
+  .breakpoint-1155-desktop {
+    display: none !important;
+  }
+
+  .breakpoint-1155-mobile {
+    display: block !important;
+  }
+}
+
 /* Compact state on large tables/lists */
 .table-sm th,
 .table-sm td,

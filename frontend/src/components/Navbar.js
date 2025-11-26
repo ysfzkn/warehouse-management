@@ -538,7 +538,7 @@ const Navbar = () => {
           margin: 0.5rem 0;
         }
 
-        @media (max-width: 991.98px) {
+        @media (max-width: 1199.98px) {
           .navbar .navbar-collapse {
             background: rgba(12, 18, 34, 0.9);
             border-radius: 24px;
@@ -572,7 +572,7 @@ const Navbar = () => {
           gap: 0.75rem;
         }
 
-        @media (max-width: 767.98px) {
+        @media (max-width: 1199.98px) {
           .mobile-user-actions {
             width: 100%;
             justify-content: flex-end;
@@ -584,7 +584,7 @@ const Navbar = () => {
         }
       `}</style>
       
-      <nav className="navbar navbar-expand-lg navbar-dark" style={navbarStyle}>
+      <nav className="navbar navbar-expand-xl navbar-dark" style={navbarStyle}>
         <div className="container-fluid">
           <Link 
             className="navbar-brand navbar-brand-custom d-flex align-items-center text-white" 
@@ -597,8 +597,8 @@ const Navbar = () => {
               alt="Logo" 
               style={{ height: 32, marginRight: '0.75rem' }} 
             />
-            <span className="d-none d-lg-inline">Depo Yönetim Sistemi</span>
-            <span className="d-lg-none">DYS</span>
+            <span className="d-none d-xl-inline">Depo Yönetim Sistemi</span>
+            <span className="d-xl-none">DYS</span>
           </Link>
 
           <button

@@ -74,7 +74,7 @@ const StockFiltersBar = ({
   return (
     <>
       <style>{`
-        @media (max-width: 991.98px) {
+        @media (max-width: 1155px) {
           .stock-mobile-card,
           .transfer-mobile-card {
             border-radius: 22px;
@@ -158,18 +158,101 @@ const StockFiltersBar = ({
             background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
             color: #fff !important;
           }
+          .mobile-card-checkbox-wrapper {
+            width: 36px;
+            height: 36px;
+            border-radius: 12px;
+            background: rgba(15,23,42,0.04);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+          }
+          .mobile-card-checkbox {
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 6px;
+            border: 2px solid rgba(15,23,42,0.35);
+            background: #fff;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.2s ease;
+          }
+          .mobile-card-checkbox:checked {
+            background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
+            border-color: transparent;
+            box-shadow: 0 4px 10px rgba(37,99,235,0.35);
+          }
+          .mobile-card-checkbox:checked::after {
+            content: '';
+            position: absolute;
+            left: 4px;
+            top: 1px;
+            width: 6px;
+            height: 10px;
+            border: solid #fff;
+            border-width: 0 2px 2px 0;
+            transform: rotate(45deg);
+          }
+          .mobile-card-checkbox:focus-visible {
+            outline: none;
+            box-shadow: 0 0 0 4px rgba(59,130,246,0.35);
+          }
+          .stock-mobile-card__tags {
+            display: flex;
+            justify-content: space-between;
+            gap: 0.75rem;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
+          }
+          .stock-mobile-card__tags-left {
+            display: inline-flex;
+            flex-wrap: wrap;
+            gap: 0.4rem;
+            align-items: center;
+          }
+          .stock-mobile-card__tags-right {
+            margin-left: auto;
+            display: flex;
+            justify-content: flex-end;
+            min-height: 36px;
+          }
+          .mobile-chip-note {
+            background: rgba(15,23,42,0.06);
+            color: #475569;
+            max-width: 180px;
+            text-overflow: ellipsis;
+            overflow: hidden;
+            display: inline-flex;
+            align-items: center;
+            white-space: nowrap;
+          }
           .mobile-stat-grid .mobile-stat-tile {
             border-radius: 16px;
             padding: 0.8rem;
             border: 1px solid rgba(15,23,42,0.08);
             background: #fff;
             text-align: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+          }
+          .mobile-stat-grid .col-6,
+          .mobile-stat-grid .col-4 {
+            display: flex;
+          }
+          .mobile-stat-grid .col-6 .mobile-stat-tile,
+          .mobile-stat-grid .col-4 .mobile-stat-tile {
+            width: 100%;
+            height: 100%;
           }
           .mobile-stat-tile .label {
             font-size: 0.7rem;
             text-transform: uppercase;
             letter-spacing: 0.08em;
             color: #94a3b8;
+            white-space: nowrap;
           }
           .mobile-stat-tile .value {
             font-size: 1.15rem;
@@ -543,7 +626,7 @@ const Stock = () => {
   const [selectedCategory, setSelectedCategory] = useState('');
   const [selectedSubcategory, setSelectedSubcategory] = useState('');
   // Stock list sorting
-  const [stockSortBy, setStockSortBy] = useState('default'); // 'default' | 'lastUpdated'
+  const [stockSortBy, setStockSortBy] = useState('lastUpdated'); // 'warehouse' | 'lastUpdated' | 'quantity'
   const [stockSortDir, setStockSortDir] = useState('desc'); // 'asc' | 'desc'
 
   // Modal states
@@ -619,7 +702,8 @@ const Stock = () => {
         driverName: normalizedDriver,
         notes: normalizedNotes,
         sourceWarehouseId: transferSourceWarehouseId || undefined,
-        destinationWarehouseId: transferDestinationWarehouseId || undefined
+        destinationWarehouseId: transferDestinationWarehouseId || undefined,
+        sort: 'updatedAt,desc'
       };
       const endpoint = isAdmin ? '/api/stock-transfers' : '/api/stock-transfers/current-user';
       const response = await axios.get(endpoint, { params });
@@ -1320,7 +1404,7 @@ const Stock = () => {
           flex-wrap: wrap;
           gap: 0.75rem;
         }
-        @media (max-width: 992px) {
+        @media (max-width: 1155px) {
           .stock-page-actions .btn {
             width: 100%;
           }
@@ -1634,7 +1718,7 @@ const Stock = () => {
               </div>
             )}
             {/* Desktop Table View */}
-            <div className="d-none d-lg-block table-responsive" style={{ transition: 'opacity 0.3s ease-in-out' }}>
+            <div className="breakpoint-1155-desktop table-responsive" style={{ transition: 'opacity 0.3s ease-in-out' }}>
               <table className="table table-striped table-hover" style={{ transition: 'opacity 0.3s ease-in-out' }}>
                 <thead>
                   <tr>
@@ -1822,7 +1906,7 @@ const Stock = () => {
             </div>
 
             {/* Mobile Card View */}
-            <div className="d-lg-none" style={{ transition: 'opacity 0.3s ease-in-out' }}>
+            <div className="breakpoint-1155-mobile" style={{ transition: 'opacity 0.3s ease-in-out' }}>
               <div className="d-flex flex-column gap-3" style={{ transition: 'opacity 0.3s ease-in-out' }}>
                 {stocks.map((stock) => {
                   const productName = stock.product?.name || (getProductById(stock.product?.id)?.name);
@@ -1847,17 +1931,17 @@ const Stock = () => {
                             <div className="stock-mobile-card__warehouse">{warehouse?.name || '-'}</div>
                             <div className="stock-mobile-card__title">{productName || '-'}</div>
                           </div>
-                          <div className="d-flex align-items-start gap-2">
+                          <div className="d-flex align-items-center gap-2 flex-nowrap">
                             {isAdmin && (
-                              <div className="form-check mt-1">
+                              <label className="mobile-card-checkbox-wrapper mb-0">
                                 <input
-                                  className="form-check-input"
+                                  className="mobile-card-checkbox"
                                   type="checkbox"
                                   checked={isSelected}
                                   onChange={() => toggleStockSelection(stock.id)}
                                   aria-label="Stok seç"
                                 />
-                              </div>
+                              </label>
                             )}
                             <span className={`mobile-chip badge bg-${stockStatus.class}`}>
                               {stockStatus.label}
@@ -1865,25 +1949,28 @@ const Stock = () => {
                           </div>
                         </div>
 
-                        <div className="stock-mobile-card__tags">
-                          <span className="mobile-chip">
-                            <i className="fas fa-barcode me-1"></i>
-                            {productSku || '-'}
-                          </span>
-                          {categoryPath && (
-                            <span className="mobile-chip bg-info bg-opacity-10 text-info border border-info">
-                              <i className="fas fa-tag me-1"></i>
-                              {categoryPath.length > 24 ? `${categoryPath.substring(0, 24)}…` : categoryPath}
-                            </span>
-                          )}
-                        </div>
-
-                        {stock.additionNote && (
-                          <div className="small text-muted mb-3">
-                            <i className="fas fa-sticky-note me-1"></i>
-                            {stock.additionNote.length > 60 ? `${stock.additionNote.substring(0, 60)}…` : stock.additionNote}
-                          </div>
-                        )}
+        <div className="stock-mobile-card__tags">
+          <div className="stock-mobile-card__tags-left">
+            <span className="mobile-chip">
+              <i className="fas fa-barcode me-1"></i>
+              {productSku || '-'}
+            </span>
+            {categoryPath && (
+              <span className="mobile-chip bg-info bg-opacity-10 text-info border border-info">
+                <i className="fas fa-tag me-1"></i>
+                {categoryPath.length > 24 ? `${categoryPath.substring(0, 24)}…` : categoryPath}
+              </span>
+            )}
+          </div>
+          <div className="stock-mobile-card__tags-right">
+            {stock.additionNote && (
+              <span className="mobile-chip mobile-chip-note" title={stock.additionNote}>
+                <i className="fas fa-sticky-note me-1"></i>
+                {stock.additionNote.length > 60 ? `${stock.additionNote.substring(0, 60)}…` : stock.additionNote}
+              </span>
+            )}
+          </div>
+        </div>
 
                         <div className="row g-2 mb-3 mobile-stat-grid">
                           <div className="col-6">
@@ -2601,7 +2688,7 @@ const Stock = () => {
               ) : (
                 <>
                   {/* Desktop Table View */}
-                  <div className="d-none d-lg-block table-responsive" style={{ overflowX: 'auto' }}>
+                  <div className="breakpoint-1155-desktop table-responsive" style={{ overflowX: 'auto' }}>
                     <table className="table table-hover mb-0 align-middle" style={{ minWidth: '1200px' }}>
                       {/* Desktop için fixed layout */}
                       <colgroup className="d-none d-xl-table-column-group">
@@ -3095,7 +3182,7 @@ const Stock = () => {
                   </div>
 
                   {/* Mobile Card View for Transfers */}
-                  <div className="d-lg-none">
+                  <div className="breakpoint-1155-mobile">
                     <div className="d-flex flex-column gap-3 p-3">
                       {transfers.map((transfer) => {
                         const statusConfig = {

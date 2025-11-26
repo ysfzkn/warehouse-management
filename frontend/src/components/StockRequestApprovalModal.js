@@ -224,7 +224,7 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
           font-weight: 600;
           box-shadow: inset 0 0 0 1px rgba(15,23,42,0.05);
         }
-        @media (max-width: 991.98px) {
+        @media (max-width: 1155px) {
           .approval-filter-group {
             flex-direction: column;
           }
@@ -242,7 +242,7 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
           table-layout: auto;
           min-width: 100%;
         }
-        @media (max-width: 991.98px) {
+        @media (max-width: 1155px) {
           .table-responsive th,
           .table-responsive td {
             padding: 0.5rem 0.4rem;
@@ -253,7 +253,7 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
             font-size: 0.75rem;
           }
         }
-        @media (max-width: 767.98px) {
+        @media (max-width: 1155px) {
           .my-requests-mobile-list {
             display: flex;
             flex-direction: column;
@@ -453,7 +453,7 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                   </div>
 
                   {/* Requests Table */}
-                  <div className="d-none d-md-block">
+                  <div className="breakpoint-1155-desktop">
                     {loading ? (
                       <div className="text-center py-5">
                         <div className="spinner-border text-primary" role="status">
@@ -622,7 +622,7 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                       </div>
                     )}
                   </div>
-                  <div className="d-md-none px-3 pb-3">
+                  <div className="breakpoint-1155-mobile px-3 pb-3">
                     {loading ? (
                       <div className="text-center py-5">
                         <div className="spinner-border text-primary" role="status">
@@ -848,7 +848,7 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                       ))}
                     </div>
                   </div>
-                  <div className="d-none d-md-block">
+                  <div className="breakpoint-1155-desktop">
                     {transferLoading ? (
                       <div className="text-center py-5">
                         <div className="spinner-border text-info" role="status">
@@ -1025,7 +1025,7 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                       </div>
                     )}
                   </div>
-                  <div className="d-md-none px-3 pb-3">
+                  <div className="breakpoint-1155-mobile px-3 pb-3">
                     {transferLoading ? (
                       <div className="text-center py-4">
                         <div className="spinner-border text-info" role="status">
