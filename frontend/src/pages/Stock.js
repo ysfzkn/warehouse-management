@@ -30,7 +30,7 @@ const formatDateInTurkeyTimezone = (isoDateString, options = {}) => {
   }
 };
 
-const PAGE_SIZE_OPTIONS = [10, 20, 50];
+const PAGE_SIZE_OPTIONS = [20, 50, 100, 250];
 
 // Stable filters bar component to prevent input remount/focus loss
 const StockFiltersBar = ({
@@ -590,7 +590,7 @@ const Stock = () => {
   const canTransfer = isAdmin || role === 'STOCK_IN' || role === 'STOCK_OUT';
   const [stocks, setStocks] = useState([]);
   const [stockPage, setStockPage] = useState(0);
-  const [stockPageSize, setStockPageSize] = useState(20);
+  const [stockPageSize, setStockPageSize] = useState(100);
   const [stockTotalPages, setStockTotalPages] = useState(0);
   const [totalStockCount, setTotalStockCount] = useState(0);
   const [products, setProducts] = useState([]);
@@ -606,7 +606,7 @@ const Stock = () => {
   const [selectedStock, setSelectedStock] = useState(null);
   const [transfers, setTransfers] = useState([]);
   const [transferPage, setTransferPage] = useState(0);
-  const [transferPageSize, setTransferPageSize] = useState(20);
+  const [transferPageSize, setTransferPageSize] = useState(100);
   const [transferTotalPages, setTransferTotalPages] = useState(0);
   const [transferTotalCount, setTransferTotalCount] = useState(0);
   const [transferStatusCounts, setTransferStatusCounts] = useState({});
@@ -1729,7 +1729,7 @@ const Stock = () => {
               <div className="page-size-control d-flex align-items-center flex-wrap">
                 <span className="form-label mb-0 small text-muted">Sayfa Boyutu</span>
                 <select
-                  className="form-select form-select-sm"
+                  className="form-select form-select-sm page-size-select"
                   value={stockPageSize}
                   onChange={handleStockPageSizeChange}
                 >
@@ -2721,7 +2721,7 @@ const Stock = () => {
                 <div className="page-size-control d-flex align-items-center flex-wrap">
                   <span className="form-label mb-0 small text-white">Sayfa Boyutu</span>
                   <select
-                    className="form-select form-select-sm"
+                    className="form-select form-select-sm page-size-select"
                     value={transferPageSize}
                     onChange={handleTransferPageSizeChange}
                   >

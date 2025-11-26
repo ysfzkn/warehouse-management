@@ -139,6 +139,36 @@ label,
   min-width: 72px;
 }
 
+.page-size-select {
+  border-radius: 999px;
+  background:
+    linear-gradient(135deg, #eef2ff, #e0f2fe) padding-box,
+    linear-gradient(135deg, rgba(59,130,246,0.5), rgba(14,165,233,0.5)) border-box;
+  border: 1px solid transparent;
+  box-shadow: 0 6px 18px rgba(15,23,42,0.12);
+  font-weight: 600;
+  min-width: 0;
+  width: 2.5rem;
+  line-height: 1.5;
+  text-align: center;
+  text-align-last: center;
+}
+
+.page-size-select option {
+  font-size: 0.85rem;
+  font-weight: 500;
+  padding: 0.25rem 0.5rem;
+}
+
+.page-size-select:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(59,130,246,0.4);
+}
+
+.page-size-select option {
+  font-weight: 500;
+}
+
 .breakpoint-1155-desktop {
   display: block;
 }
