@@ -479,10 +479,7 @@ public class StockTransferServiceImpl implements StockTransferService {
             logger.warn("Cannot delete transfer in transit. Transfer id: {}", transferId);
             throw new WarehouseManagementException(ErrorCode.CANNOT_DELETE_IN_TRANSIT);
         }
-        if (transfer.getStatus() == TransferStatus.COMPLETED) {
-            logger.warn("Cannot delete completed transfer. Transfer id: {}", transferId);
-            throw new WarehouseManagementException(ErrorCode.CANNOT_DELETE_COMPLETED);
-        }
+        // Tamamlanmış transferlerin silinmesine izin veriyoruz; sadece yoldaki (IN_TRANSIT) transferler engellenir
 
         stockTransferRepository.delete(transfer);
         String username = CurrentUser.usernameOrSystem();
@@ -523,11 +520,7 @@ public class StockTransferServiceImpl implements StockTransferService {
                     logger.warn("Cannot delete transfer in transit. Transfer id: {}", transferId);
                     continue;
                 }
-                if (transfer.getStatus() == TransferStatus.COMPLETED) {
-                    logger.warn("Cannot delete completed transfer. Transfer id: {}", transferId);
-                    continue;
-                }
-                
+
                 stockTransferRepository.delete(transfer);
                 auditService.log(AuditAction.TRANSFER_DELETE, DomainEntityType.StockTransfer.name(), transferId, username,
                         "Transfer silindi");

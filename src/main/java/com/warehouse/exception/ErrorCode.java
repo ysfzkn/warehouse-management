@@ -39,6 +39,7 @@ public enum ErrorCode {
     TRANSFER_ALREADY_CANCELLED("TRANSFER_005", "Transfer zaten iptal edilmiş", HttpStatus.BAD_REQUEST),
     CANNOT_CANCEL_COMPLETED("TRANSFER_006", "Tamamlanan transfer iptal edilemez", HttpStatus.BAD_REQUEST),
     CANNOT_DELETE_IN_TRANSIT("TRANSFER_007", "Yoldaki transfer silinemez", HttpStatus.BAD_REQUEST),
+    // Tamamlanan transferlerin silinmesine artık izin veriyoruz, bu nedenle CANNOT_DELETE_COMPLETED kullanılmıyor
     CANNOT_DELETE_COMPLETED("TRANSFER_008", "Tamamlanan transfer silinemez", HttpStatus.BAD_REQUEST),
     ONLY_PENDING_CAN_BE_UPDATED("TRANSFER_009", "Sadece beklemedeki transferler güncellenebilir", HttpStatus.BAD_REQUEST),
     ONLY_PENDING_CAN_BE_STARTED("TRANSFER_010", "Sadece beklemedeki transferler başlatılabilir", HttpStatus.BAD_REQUEST),
@@ -51,6 +52,7 @@ public enum ErrorCode {
     CANNOT_DELETE_WITH_STOCKS("RELATION_001", "İlişkili stoklar varken silme yapılamaz", HttpStatus.BAD_REQUEST),
     CANNOT_DELETE_WITH_PRODUCTS("RELATION_002", "İlişkili ürünler varken silme yapılamaz", HttpStatus.BAD_REQUEST),
     CANNOT_DELETE_WITH_SUBCATEGORIES("RELATION_003", "İlişkili alt kategoriler varken silme yapılamaz", HttpStatus.BAD_REQUEST),
+    CANNOT_DELETE_PRODUCT_WITH_TRANSFERS("RELATION_004", "Aktif veya geçmiş stok transferlerinde kullanılan ürün silinemez", HttpStatus.BAD_REQUEST),
     CATEGORY_INVALID_PARENT("CATEGORY_003", "Geçersiz üst kategori", HttpStatus.BAD_REQUEST),
     
     // Genel (500)

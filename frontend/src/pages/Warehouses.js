@@ -84,15 +84,20 @@ const Warehouses = () => {
         setConfirmModal({ show: false, title: '', message: '', onConfirm: null });
         try {
           await axios.delete(`/api/warehouses/${id}`);
-          fetchWarehouses();
         } catch (error) {
-          const msg = error.response?.data || 'Depo silinirken hata oluştu';
+          const errorData = error?.response?.data;
+          const msg = errorData?.message || errorData?.error || (typeof errorData === 'string' ? errorData : 'Depo silinirken hata oluştu');
           const toast = document.createElement('div');
-          toast.className = 'toast align-items-center text-bg-danger border-0 position-fixed top-0 end-0 m-3 show';
+          toast.className = 'toast align-items-center text-bg-danger border-0 position-fixed top-0 end-0 m-3 show fs-6';
+          toast.style.minWidth = '360px';
+          toast.style.padding = '0.5rem 0.75rem';
           toast.setAttribute('role', 'alert');
-          toast.innerHTML = `<div class="d-flex"><div class="toast-body">${msg}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
+          toast.innerHTML = `<div class="d-flex"><div class="toast-body fw-semibold">${msg}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
           document.body.appendChild(toast);
-          setTimeout(() => { try { document.body.removeChild(toast); } catch {} }, 3500);
+          setTimeout(() => { try { document.body.removeChild(toast); } catch {} }, 7000);
+        } finally {
+          // Hata olsa bile, kısmen silinmiş kayıtlar varsa depo listesini yenile
+          fetchWarehouses();
         }
       }
     });

@@ -136,15 +136,20 @@ const Categories = () => {
         setConfirmModal({ show: false, title: '', message: '', onConfirm: null });
         try {
           await axios.delete(`/api/categories/${id}`);
-          fetchCategories();
         } catch (error) {
-          const msg = error.response?.data || 'Kategori silinirken hata oluştu';
+          const errorData = error?.response?.data;
+          const msg = errorData?.message || errorData?.error || (typeof errorData === 'string' ? errorData : 'Kategori silinirken hata oluştu');
           const toast = document.createElement('div');
-          toast.className = 'toast align-items-center text-bg-danger border-0 position-fixed top-0 end-0 m-3 show';
+          toast.className = 'toast align-items-center text-bg-danger border-0 position-fixed top-0 end-0 m-3 show fs-6';
+          toast.style.minWidth = '360px';
+          toast.style.padding = '0.5rem 0.75rem';
           toast.setAttribute('role', 'alert');
-          toast.innerHTML = `<div class="d-flex"><div class="toast-body">${msg}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
+          toast.innerHTML = `<div class="d-flex"><div class="toast-body fw-semibold">${msg}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
           document.body.appendChild(toast);
-          setTimeout(() => { try { document.body.removeChild(toast); } catch { } }, 3500);
+          setTimeout(() => { try { document.body.removeChild(toast); } catch { } }, 7000);
+        } finally {
+          // Silme sonrası, hata olsa bile kategori listesini güncelle
+          fetchCategories(categoryPage, categoryPageSize);
         }
       }
     });
@@ -234,24 +239,31 @@ const Categories = () => {
           const successful = results.filter(r => r.status === 'fulfilled').length;
           const failed = results.filter(r => r.status === 'rejected').length;
           setSelectedCategories([]);
-          fetchCategories();
           const toast = document.createElement('div');
-          toast.className = `toast align-items-center text-bg-${failed > 0 ? 'warning' : 'success'} border-0 position-fixed top-0 end-0 m-3 show`;
+          toast.className = `toast align-items-center text-bg-${failed > 0 ? 'warning' : 'success'} border-0 position-fixed top-0 end-0 m-3 show fs-6`;
+          toast.style.minWidth = '360px';
+          toast.style.padding = '0.5rem 0.75rem';
           toast.setAttribute('role', 'alert');
           const message = failed > 0
             ? `${successful} kategori silindi, ${failed} kategori silinemedi (ürün veya alt kategori içeriyor olabilir)`
             : `${successful} kategori başarıyla silindi`;
-          toast.innerHTML = `<div class="d-flex"><div class="toast-body">${message}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
+          toast.innerHTML = `<div class="d-flex"><div class="toast-body fw-semibold">${message}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
           document.body.appendChild(toast);
-          setTimeout(() => { try { document.body.removeChild(toast); } catch { } }, 3500);
+          setTimeout(() => { try { document.body.removeChild(toast); } catch { } }, 7000);
         } catch (error) {
-          const msg = error.response?.data || 'Kategoriler silinirken hata oluştu';
+          const errorData = error?.response?.data;
+          const msg = errorData?.message || errorData?.error || (typeof errorData === 'string' ? errorData : 'Kategoriler silinirken hata oluştu');
           const toast = document.createElement('div');
-          toast.className = 'toast align-items-center text-bg-danger border-0 position-fixed top-0 end-0 m-3 show';
+          toast.className = 'toast align-items-center text-bg-danger border-0 position-fixed top-0 end-0 m-3 show fs-6';
+          toast.style.minWidth = '360px';
+          toast.style.padding = '0.5rem 0.75rem';
           toast.setAttribute('role', 'alert');
-          toast.innerHTML = `<div class="d-flex"><div class="toast-body">${msg}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
+          toast.innerHTML = `<div class="d-flex"><div class="toast-body fw-semibold">${msg}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
           document.body.appendChild(toast);
-          setTimeout(() => { try { document.body.removeChild(toast); } catch { } }, 3500);
+          setTimeout(() => { try { document.body.removeChild(toast); } catch { } }, 7000);
+        } finally {
+          // Toplu silme sonrasında da kategori listesini yenile
+          fetchCategories(categoryPage, categoryPageSize);
         }
       }
     });

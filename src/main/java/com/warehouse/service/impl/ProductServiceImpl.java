@@ -11,6 +11,7 @@ import com.warehouse.repository.ProductRepository;
 import com.warehouse.repository.CategoryRepository;
 import com.warehouse.repository.BrandRepository;
 import com.warehouse.repository.ColorRepository;
+import com.warehouse.repository.StockTransferRepository;
 import com.warehouse.service.ProductService;
 import com.warehouse.util.EntityValidator;
 import com.warehouse.constants.BusinessMessages;
@@ -40,15 +41,18 @@ public class ProductServiceImpl implements ProductService {
     private final CategoryRepository categoryRepository;
     private final BrandRepository brandRepository;
     private final ColorRepository colorRepository;
+    private final StockTransferRepository stockTransferRepository;
 
     public ProductServiceImpl(ProductRepository productRepository,
                              CategoryRepository categoryRepository,
                              BrandRepository brandRepository,
-                             ColorRepository colorRepository) {
+                             ColorRepository colorRepository,
+                             StockTransferRepository stockTransferRepository) {
         this.productRepository = productRepository;
         this.categoryRepository = categoryRepository;
         this.brandRepository = brandRepository;
         this.colorRepository = colorRepository;
+        this.stockTransferRepository = stockTransferRepository;
     }
 
     @Override
@@ -179,9 +183,22 @@ public class ProductServiceImpl implements ProductService {
     public void deleteProduct(Long id) {
         logger.info("Deleting product with id: {}", id);
         Product product = getProductByIdOrThrow(id);
+        // Önce stok ilişkilerini kontrol et
         EntityValidator.validateEntityHasNoRelations(
             !product.getStocks().isEmpty(), EntityNames.PRODUCT, EntityNames.RELATION_STOCKS
         );
+
+        // Ardından transfer ilişkilerini kontrol et (hem aktif hem geçmiş)
+        var transfersUsingProduct = stockTransferRepository.findByProduct(product);
+        if (transfersUsingProduct != null && !transfersUsingProduct.isEmpty()) {
+            logger.warn("Cannot delete product with id {} because it is used in {} stock transfers",
+                    id, transfersUsingProduct.size());
+            throw new WarehouseManagementException(
+                    ErrorCode.CANNOT_DELETE_PRODUCT_WITH_TRANSFERS,
+                    "Bu ürün en az bir stok transferinde kullanılmıştır. Geçmiş transfer kayıtları silinmeden ürün silinemez."
+            );
+        }
+
         productRepository.delete(product);
         logger.info("Product deleted successfully with id: {}", id);
     }

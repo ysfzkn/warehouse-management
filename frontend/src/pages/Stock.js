@@ -1092,7 +1092,6 @@ const Stock = () => {
         setConfirmModal({ show: false });
         try {
           await axios.delete(`/api/stocks/${id}`);
-          await Promise.all([fetchAllData(), fetchStocks(stockPage)]);
           showSuccessToast('Stok kaydı silindi.');
         } catch (error) {
           const errorData = error?.response?.data;
@@ -1102,6 +1101,9 @@ const Stock = () => {
             title: 'Stok Silme Hatası',
             message: `Stok silinirken hata oluştu: ${msg}`
           });
+        } finally {
+          // Hata olsa bile, kısmen silinmiş stoklar varsa listeyi yenile
+          await Promise.all([fetchAllData(), fetchStocks(stockPage)]);
         }
       }
     });
@@ -1123,7 +1125,6 @@ const Stock = () => {
         try {
           await axios.delete('/api/stocks/bulk', { data: ids });
           setSelectedStocks(prev => prev.filter(id => !ids.includes(id)));
-          await Promise.all([fetchAllData(), fetchStocks(stockPage)]);
           showSuccessToast(`${ids.length} stok kaydı silindi.`);
         } catch (error) {
           const errorData = error?.response?.data;
@@ -1133,6 +1134,9 @@ const Stock = () => {
             title: 'Stok Silme Hatası',
             message: `Seçili stoklar silinirken hata oluştu: ${msg}`
           });
+        } finally {
+          // Bazı stok kayıtları silinmiş olabilir; duruma bakmadan listeyi yenile
+          await Promise.all([fetchAllData(), fetchStocks(stockPage)]);
         }
       }
     });
@@ -1145,14 +1149,15 @@ const Stock = () => {
 
     const canDelete = ids.every(id => {
       const transfer = transfers.find(t => t.id === id);
-      return transfer && transfer.status !== 'IN_TRANSIT' && transfer.status !== 'COMPLETED';
+      // Sadece yoldaki transferlerin silinmesine izin verme; tamamlanmış transferler silinebilir
+      return transfer && transfer.status !== 'IN_TRANSIT';
     });
 
     if (!canDelete) {
       setErrorModal({
         show: true,
         title: 'Transfer Silme Hatası',
-        message: 'Yolda veya tamamlanmış transferler silinemez.'
+        message: 'Yoldaki (IN_TRANSIT) transferler silinemez.'
       });
       return;
     }
@@ -1169,7 +1174,6 @@ const Stock = () => {
         try {
           await axios.delete('/api/stock-transfers/bulk', { data: ids });
           setSelectedTransfers(prev => prev.filter(id => !ids.includes(id)));
-          await fetchTransfers(0, false);
           showSuccessToast(`${ids.length} transfer silindi.`);
         } catch (error) {
           const errorData = error?.response?.data;
@@ -1179,6 +1183,9 @@ const Stock = () => {
             title: 'Transfer Silme Hatası',
             message: `Seçili transferler silinirken hata oluştu: ${msg}`
           });
+        } finally {
+          // Bazı transferler silinmiş olabilir; listeyi her durumda yenile
+          await fetchTransfers(0, false);
         }
       }
     });
@@ -1280,7 +1287,7 @@ const Stock = () => {
         setConfirmModal({ show: false });
         try {
           await axios.delete(`/api/stock-transfers/${transferId}`);
-          fetchTransfers(0, false);
+          showSuccessToast('Transfer kaydı silindi.');
         } catch (error) {
           const errorData = error?.response?.data;
           const msg = errorData?.message || errorData?.error || error.message || 'Beklenmeyen bir durum oluştu';
@@ -1289,6 +1296,9 @@ const Stock = () => {
             title: 'Transfer Silme Hatası',
             message: `Transfer silinirken hata oluştu: ${msg}`
           });
+        } finally {
+          // Hata olsa bile, kısmen silinmiş olabilir; transfer listesini yenile
+          await fetchTransfers(0, false);
         }
       }
     });
