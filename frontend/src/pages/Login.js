@@ -58,55 +58,55 @@ const Login = () => {
             </div>
 
             {/* Title */}
-            <h1 style={styles.heroTitle}>
+            <h1 className="hero-title" style={styles.heroTitle}>
               Beyaz Eşya Stok
               <br />
               <span style={styles.heroTitleAccent}>Yönetim Sistemi</span>
             </h1>
 
-            <p style={styles.heroSubtitle}>
+            <p className="hero-subtitle" style={styles.heroSubtitle}>
               Depo operasyonlarınızı dijitalleştirin, envanter yönetiminizi optimize edin
             </p>
 
             {/* Feature Cards */}
-            <div style={styles.featuresGrid}>
-              <div style={styles.featureCard}>
-                <div style={styles.featureIcon}>
-                  <i className="fas fa-boxes" style={{fontSize: '24px'}}></i>
+            <div className="features-grid" style={styles.featuresGrid}>
+              <div className="feature-card" style={styles.featureCard}>
+                <div className="feature-icon" style={styles.featureIcon}>
+                  <i className="fas fa-boxes" style={{fontSize: '20px'}}></i>
                 </div>
                 <div style={styles.featureText}>
-                  <div style={styles.featureTitle}>Gerçek Zamanlı</div>
-                  <div style={styles.featureSubtitle}>Stok Takibi</div>
+                  <div className="feature-title" style={styles.featureTitle}>Gerçek Zamanlı</div>
+                  <div className="feature-subtitle" style={styles.featureSubtitle}>Stok Takibi</div>
                 </div>
               </div>
               
-              <div style={styles.featureCard}>
-                <div style={styles.featureIcon}>
-                  <i className="fas fa-warehouse" style={{fontSize: '24px'}}></i>
+              <div className="feature-card" style={styles.featureCard}>
+                <div className="feature-icon" style={styles.featureIcon}>
+                  <i className="fas fa-warehouse" style={{fontSize: '20px'}}></i>
                 </div>
                 <div style={styles.featureText}>
-                  <div style={styles.featureTitle}>Çoklu Depo</div>
-                  <div style={styles.featureSubtitle}>Yönetimi</div>
+                  <div className="feature-title" style={styles.featureTitle}>Çoklu Depo</div>
+                  <div className="feature-subtitle" style={styles.featureSubtitle}>Yönetimi</div>
                 </div>
               </div>
 
-              <div style={styles.featureCard}>
-                <div style={styles.featureIcon}>
-                  <i className="fas fa-exchange-alt" style={{fontSize: '24px'}}></i>
+              <div className="feature-card" style={styles.featureCard}>
+                <div className="feature-icon" style={styles.featureIcon}>
+                  <i className="fas fa-exchange-alt" style={{fontSize: '20px'}}></i>
                 </div>
                 <div style={styles.featureText}>
-                  <div style={styles.featureTitle}>Hızlı Transfer</div>
-                  <div style={styles.featureSubtitle}>Operasyonları</div>
+                  <div className="feature-title" style={styles.featureTitle}>Hızlı Transfer</div>
+                  <div className="feature-subtitle" style={styles.featureSubtitle}>Operasyonları</div>
                 </div>
               </div>
 
-              <div style={styles.featureCard}>
-                <div style={styles.featureIcon}>
-                  <i className="fas fa-chart-line" style={{fontSize: '24px'}}></i>
+              <div className="feature-card" style={styles.featureCard}>
+                <div className="feature-icon" style={styles.featureIcon}>
+                  <i className="fas fa-chart-line" style={{fontSize: '20px'}}></i>
                 </div>
                 <div style={styles.featureText}>
-                  <div style={styles.featureTitle}>Detaylı</div>
-                  <div style={styles.featureSubtitle}>Raporlama</div>
+                  <div className="feature-title" style={styles.featureTitle}>Detaylı</div>
+                  <div className="feature-subtitle" style={styles.featureSubtitle}>Raporlama</div>
                 </div>
               </div>
             </div>
@@ -115,7 +115,7 @@ const Login = () => {
             {floatingIcons.map((item, index) => (
               <i
                 key={index}
-                className={`fas ${item.icon}`}
+                className={`fas ${item.icon} floating-icon`}
                 style={{
                   ...styles.floatingIcon,
                   left: `${15 + index * 18}%`,
@@ -130,33 +130,33 @@ const Login = () => {
 
         {/* Right Section - Login Form */}
         <div className="right-section" style={styles.rightSection}>
-          <div style={styles.loginCard}>
-            <div style={styles.loginHeader}>
+          <div className="login-card" style={styles.loginCard}>
+            <div className="login-header" style={styles.loginHeader}>
               {/* Icon container with responsive class */}
               <div className="login-icon-container">
                 <i className="fas fa-lock login-icon"></i>
               </div>
-              <h2 style={styles.loginTitle}>Hoş Geldiniz</h2>
-              <p style={styles.loginSubtitle}>Devam etmek için lütfen giriş yapın</p>
+              <h2 className="login-title" style={styles.loginTitle}>Hoş Geldiniz</h2>
+              <p className="login-subtitle" style={styles.loginSubtitle}>Devam etmek için lütfen giriş yapın</p>
             </div>
 
             {error && (
-              <div style={styles.errorAlert}>
+              <div className="error-alert" style={styles.errorAlert}>
                 <i className="fas fa-exclamation-circle me-2"></i>
                 {error}
               </div>
             )}
 
-            <form onSubmit={handleSubmit} style={styles.form}>
-              <div style={styles.inputGroup}>
-                <label style={styles.label}>
+            <form onSubmit={handleSubmit} className="login-form" style={styles.form}>
+              <div className="input-group-custom" style={styles.inputGroup}>
+                <label className="input-label" style={styles.label}>
                   <i className="fas fa-user me-2"></i>
                   Kullanıcı Adı
                 </label>
                 <div style={styles.inputWrapper}>
                   <input
                     type="text"
-                    className="form-control"
+                    className="form-control login-input"
                     style={styles.input}
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
@@ -165,21 +165,21 @@ const Login = () => {
                     required
                     autoFocus
                   />
-                  <div style={styles.inputIcon}>
+                  <div className="input-icon-left" style={styles.inputIcon}>
                     <i className="fas fa-user"></i>
                   </div>
                 </div>
               </div>
 
-              <div style={styles.inputGroup}>
-                <label style={styles.label}>
+              <div className="input-group-custom" style={styles.inputGroup}>
+                <label className="input-label" style={styles.label}>
                   <i className="fas fa-key me-2"></i>
                   Şifre
                 </label>
                 <div style={styles.inputWrapper}>
                   <input
                     type={showPassword ? 'text' : 'password'}
-                    className="form-control"
+                    className="form-control login-input"
                     style={styles.input}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -187,11 +187,12 @@ const Login = () => {
                     placeholder="Şifrenizi giriniz"
                     required
                   />
-                  <div style={styles.inputIcon}>
+                  <div className="input-icon-left" style={styles.inputIcon}>
                     <i className="fas fa-key"></i>
                   </div>
                   <button
                     type="button"
+                    className="password-toggle-btn"
                     style={styles.passwordToggle}
                     onClick={() => setShowPassword(!showPassword)}
                   >
@@ -200,7 +201,7 @@ const Login = () => {
                 </div>
               </div>
 
-              <button type="submit" style={styles.submitButton} disabled={loading}>
+              <button type="submit" className="submit-btn" style={styles.submitButton} disabled={loading}>
                 {loading ? (
                   <>
                     <span className="spinner-border spinner-border-sm me-2" role="status"></span>
@@ -216,7 +217,7 @@ const Login = () => {
             </form>
 
             {/* Security Badge */}
-            <div style={styles.securityBadge}>
+            <div className="security-badge" style={styles.securityBadge}>
               <i className="fas fa-shield-alt me-2"></i>
               Güvenli Bağlantı
             </div>
@@ -226,21 +227,21 @@ const Login = () => {
 
       {/* Inline Styles with Animations */}
       <style>{`
-        /* Login Icon Container - Responsive Sizing */
+        /* Login Icon Container - Base Sizing */
         .login-icon-container {
-          width: 80px;
-          height: 80px;
+          width: 64px;
+          height: 64px;
           background: linear-gradient(135deg, #2196f3 0%, #1976d2 50%, #0d47a1 100%);
-          border-radius: 20px;
+          border-radius: 16px;
           display: flex;
           align-items: center;
           justify-content: center;
-          margin: 0 auto 24px;
-          box-shadow: 0 8px 32px rgba(33,150,243,0.5);
+          margin: 0 auto 18px;
+          box-shadow: 0 6px 24px rgba(33,150,243,0.45);
         }
 
         .login-icon {
-          font-size: 32px;
+          font-size: 26px;
           color: #ffffff;
         }
 
@@ -251,8 +252,8 @@ const Login = () => {
         }
 
         @keyframes float {
-          0%, 100% { transform: translateY(0px) rotate(0deg); opacity: 0.15; }
-          50% { transform: translateY(-20px) rotate(5deg); opacity: 0.25; }
+          0%, 100% { transform: translateY(0px) rotate(0deg); opacity: 0.12; }
+          50% { transform: translateY(-15px) rotate(5deg); opacity: 0.2; }
         }
 
         @keyframes slideInLeft {
@@ -271,41 +272,327 @@ const Login = () => {
         }
 
         /* Feature card hover effect */
-        [style*="featureCard"]:hover {
-          transform: translateY(-4px);
-          background: linear-gradient(135deg, rgba(255,255,255,0.2) 0%, rgba(77,195,247,0.15) 100%) !important;
-          box-shadow: 0 12px 32px rgba(0,210,255,0.3);
+        .feature-card:hover {
+          transform: translateY(-3px);
+          background: linear-gradient(135deg, rgba(255,255,255,0.18) 0%, rgba(77,195,247,0.12) 100%) !important;
+          box-shadow: 0 10px 28px rgba(0,210,255,0.25);
         }
 
         /* Input focus effects */
-        input:focus {
+        .login-input:focus {
           border-color: #2196f3 !important;
-          box-shadow: 0 0 0 4px rgba(33,150,243,0.15) !important;
+          box-shadow: 0 0 0 3px rgba(33,150,243,0.12) !important;
         }
 
         /* Button hover effects */
-        button[type="submit"]:not(:disabled):hover {
+        .submit-btn:not(:disabled):hover {
           transform: translateY(-2px);
           background: linear-gradient(135deg, #42a5f5 0%, #2196f3 50%, #1976d2 100%) !important;
-          box-shadow: 0 12px 40px rgba(33,150,243,0.6) !important;
+          box-shadow: 0 10px 32px rgba(33,150,243,0.55) !important;
         }
 
-        button[type="submit"]:not(:disabled):active {
+        .submit-btn:not(:disabled):active {
           transform: translateY(0);
-          box-shadow: 0 8px 32px rgba(33,150,243,0.5) !important;
+          box-shadow: 0 6px 24px rgba(33,150,243,0.45) !important;
         }
 
-        button[type="submit"]:disabled {
+        .submit-btn:disabled {
           opacity: 0.7;
           cursor: not-allowed;
         }
 
         /* Password toggle hover */
-        button[style*="passwordToggle"]:hover {
+        .password-toggle-btn:hover {
           color: #495057 !important;
         }
 
-        /* Tablet to Mobile transition */
+        /* ===== LAPTOP SCREENS (14" - 15.6" typically 1366x768 to 1920x1080) ===== */
+        @media (min-width: 1001px) and (max-width: 1600px) {
+          .hero-title {
+            font-size: 38px !important;
+            margin-bottom: 14px !important;
+          }
+          .hero-subtitle {
+            font-size: 15px !important;
+            margin-bottom: 32px !important;
+            max-width: 420px !important;
+          }
+          .features-grid {
+            gap: 14px !important;
+            margin-top: 28px !important;
+          }
+          .feature-card {
+            padding: 16px !important;
+            border-radius: 12px !important;
+          }
+          .feature-icon {
+            width: 42px !important;
+            height: 42px !important;
+            border-radius: 10px !important;
+          }
+          .feature-icon i {
+            font-size: 17px !important;
+          }
+          .feature-title {
+            font-size: 14px !important;
+          }
+          .feature-subtitle {
+            font-size: 12px !important;
+          }
+          .floating-icon {
+            font-size: 36px !important;
+          }
+          .left-section {
+            padding: 40px !important;
+          }
+          .right-section {
+            padding: 30px !important;
+          }
+          .login-card {
+            padding: 36px !important;
+            max-width: 380px !important;
+            border-radius: 20px !important;
+          }
+          .login-icon-container {
+            width: 56px !important;
+            height: 56px !important;
+            border-radius: 14px !important;
+            margin-bottom: 16px !important;
+          }
+          .login-icon {
+            font-size: 23px !important;
+          }
+          .login-title {
+            font-size: 24px !important;
+            margin-bottom: 6px !important;
+          }
+          .login-subtitle {
+            font-size: 13px !important;
+          }
+          .login-header {
+            margin-bottom: 28px !important;
+          }
+          .input-group-custom {
+            margin-bottom: 18px !important;
+          }
+          .input-label {
+            font-size: 12px !important;
+            margin-bottom: 7px !important;
+          }
+          .login-input {
+            padding: 11px 40px !important;
+            font-size: 14px !important;
+            border-radius: 10px !important;
+          }
+          .input-icon-left {
+            left: 13px !important;
+            font-size: 14px !important;
+          }
+          .password-toggle-btn {
+            right: 12px !important;
+            font-size: 14px !important;
+          }
+          .submit-btn {
+            padding: 12px !important;
+            font-size: 14px !important;
+            border-radius: 10px !important;
+            margin-top: 6px !important;
+          }
+          .security-badge {
+            font-size: 11px !important;
+            padding: 10px !important;
+            margin-top: 18px !important;
+            border-radius: 7px !important;
+          }
+          .error-alert {
+            padding: 12px 14px !important;
+            font-size: 12px !important;
+            margin-bottom: 18px !important;
+            border-radius: 10px !important;
+          }
+          .login-form {
+            margin-bottom: 18px !important;
+          }
+        }
+
+        /* ===== SMALL LAPTOP (13" - 14" at 1366x768) ===== */
+        @media (min-width: 1001px) and (max-width: 1400px) {
+          .hero-title {
+            font-size: 34px !important;
+            margin-bottom: 12px !important;
+          }
+          .hero-subtitle {
+            font-size: 14px !important;
+            margin-bottom: 28px !important;
+            max-width: 380px !important;
+          }
+          .features-grid {
+            gap: 12px !important;
+            margin-top: 24px !important;
+          }
+          .feature-card {
+            padding: 14px !important;
+          }
+          .feature-icon {
+            width: 38px !important;
+            height: 38px !important;
+          }
+          .feature-icon i {
+            font-size: 15px !important;
+          }
+          .feature-title {
+            font-size: 13px !important;
+          }
+          .feature-subtitle {
+            font-size: 11px !important;
+          }
+          .floating-icon {
+            font-size: 32px !important;
+          }
+          .left-section {
+            padding: 32px !important;
+          }
+          .right-section {
+            padding: 24px !important;
+          }
+          .login-card {
+            padding: 32px !important;
+            max-width: 360px !important;
+            border-radius: 18px !important;
+          }
+          .login-icon-container {
+            width: 50px !important;
+            height: 50px !important;
+            border-radius: 12px !important;
+            margin-bottom: 14px !important;
+          }
+          .login-icon {
+            font-size: 20px !important;
+          }
+          .login-title {
+            font-size: 22px !important;
+            margin-bottom: 5px !important;
+          }
+          .login-subtitle {
+            font-size: 12px !important;
+          }
+          .login-header {
+            margin-bottom: 24px !important;
+          }
+          .input-group-custom {
+            margin-bottom: 16px !important;
+          }
+          .input-label {
+            font-size: 11px !important;
+            margin-bottom: 6px !important;
+          }
+          .login-input {
+            padding: 10px 38px !important;
+            font-size: 13px !important;
+            border-radius: 9px !important;
+          }
+          .input-icon-left {
+            left: 12px !important;
+            font-size: 13px !important;
+          }
+          .password-toggle-btn {
+            right: 10px !important;
+            font-size: 13px !important;
+          }
+          .submit-btn {
+            padding: 11px !important;
+            font-size: 13px !important;
+            border-radius: 9px !important;
+            margin-top: 4px !important;
+          }
+          .security-badge {
+            font-size: 10px !important;
+            padding: 9px !important;
+            margin-top: 16px !important;
+          }
+          .error-alert {
+            padding: 10px 12px !important;
+            font-size: 11px !important;
+            margin-bottom: 16px !important;
+          }
+          .login-form {
+            margin-bottom: 16px !important;
+          }
+        }
+
+        /* ===== VERY SMALL LAPTOP / LOW RES (1280x720 - 1366x768) ===== */
+        @media (min-width: 1001px) and (max-width: 1300px) and (max-height: 800px) {
+          .hero-title {
+            font-size: 30px !important;
+          }
+          .hero-subtitle {
+            font-size: 13px !important;
+            margin-bottom: 24px !important;
+          }
+          .features-grid {
+            gap: 10px !important;
+            margin-top: 20px !important;
+          }
+          .feature-card {
+            padding: 12px !important;
+          }
+          .feature-icon {
+            width: 34px !important;
+            height: 34px !important;
+          }
+          .feature-icon i {
+            font-size: 14px !important;
+          }
+          .feature-title {
+            font-size: 12px !important;
+          }
+          .feature-subtitle {
+            font-size: 10px !important;
+          }
+          .left-section {
+            padding: 24px !important;
+          }
+          .right-section {
+            padding: 20px !important;
+          }
+          .login-card {
+            padding: 28px !important;
+            max-width: 340px !important;
+          }
+          .login-icon-container {
+            width: 46px !important;
+            height: 46px !important;
+            margin-bottom: 12px !important;
+          }
+          .login-icon {
+            font-size: 18px !important;
+          }
+          .login-title {
+            font-size: 20px !important;
+          }
+          .login-subtitle {
+            font-size: 11px !important;
+          }
+          .login-header {
+            margin-bottom: 20px !important;
+          }
+          .input-group-custom {
+            margin-bottom: 14px !important;
+          }
+          .login-input {
+            padding: 9px 36px !important;
+            font-size: 13px !important;
+          }
+          .submit-btn {
+            padding: 10px !important;
+            font-size: 13px !important;
+          }
+          .security-badge {
+            margin-top: 14px !important;
+          }
+        }
+
+        /* ===== TABLET TO MOBILE TRANSITION ===== */
         @media (max-width: 1000px) {
           .left-section { 
             display: none !important; 
@@ -316,257 +603,181 @@ const Login = () => {
             padding: 30px 20px !important;
             flex: 1 1 100% !important;
           }
-          [style*="content"] {
-            padding: 0 !important;
-            min-height: 100vh !important;
-            align-items: center !important;
-            justify-content: center !important;
-          }
-          [style*="loginCard"] {
-            max-width: 500px !important;
+          .login-card {
+            max-width: 440px !important;
+            padding: 40px 32px !important;
           }
           .login-icon-container {
-            width: 60px !important;
-            height: 60px !important;
-            margin-bottom: 20px !important;
-            border-radius: 15px !important;
-          }
-          .login-icon {
-            font-size: 26px !important;
-          }
-        }
-
-        /* Standard Mobile */
-        @media (max-width: 768px) {
-          .right-section {
-            padding: 24px 16px !important;
-          }
-          [style*="loginCard"] {
-            padding: 36px 28px !important;
-            max-width: 100% !important;
-            border-radius: 20px !important;
-          }
-          [style*="loginHeader"] {
-            margin-bottom: 32px !important;
-          }
-          [style*="loginTitle"] {
-            font-size: 26px !important;
-            margin-bottom: 8px !important;
-          }
-          [style*="loginSubtitle"] {
-            font-size: 14px !important;
-          }
-          .login-icon-container {
-            width: 54px !important;
-            height: 54px !important;
+            width: 56px !important;
+            height: 56px !important;
             margin-bottom: 18px !important;
             border-radius: 14px !important;
           }
           .login-icon {
-            font-size: 23px !important;
+            font-size: 24px !important;
           }
-          [style*="input"] {
-            padding: 13px 46px 13px 42px !important;
-            font-size: 16px !important;
+          .login-title {
+            font-size: 26px !important;
           }
-          [style*="inputIcon"] {
-            left: 14px !important;
-            font-size: 15px !important;
-          }
-          [style*="passwordToggle"] {
-            right: 14px !important;
-            font-size: 15px !important;
-            padding: 8px !important;
-            min-width: 38px !important;
-            min-height: 38px !important;
-          }
-          [style*="submitButton"] {
-            padding: 15px !important;
-            font-size: 16px !important;
-            min-height: 50px !important;
-          }
-          [style*="label"] {
-            font-size: 13px !important;
-            margin-bottom: 8px !important;
-          }
-          [style*="inputGroup"] {
-            margin-bottom: 22px !important;
-          }
-          [style*="errorAlert"] {
-            padding: 12px 16px !important;
-            font-size: 13px !important;
-            margin-bottom: 22px !important;
-          }
-          [style*="securityBadge"] {
-            font-size: 12px !important;
-            padding: 10px !important;
-            margin-top: 22px !important;
+          .login-subtitle {
+            font-size: 14px !important;
           }
         }
 
-        /* Small Mobile */
-        @media (max-width: 576px) {
-          [style*="container"] {
-            padding: 0 !important;
-            overflow-x: hidden !important;
-          }
-          [style*="content"] {
-            padding: 0 !important;
-            margin: 0 !important;
-          }
+        /* ===== STANDARD MOBILE ===== */
+        @media (max-width: 768px) {
           .right-section {
-            padding: 20px 14px !important;
+            padding: 24px 16px !important;
           }
-          [style*="loginCard"] {
+          .login-card {
             padding: 32px 24px !important;
+            max-width: 100% !important;
             border-radius: 18px !important;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.25) !important;
           }
-          [style*="loginHeader"] {
+          .login-header {
             margin-bottom: 28px !important;
           }
-          [style*="loginTitle"] {
+          .login-title {
             font-size: 24px !important;
             margin-bottom: 6px !important;
           }
-          [style*="loginSubtitle"] {
+          .login-subtitle {
             font-size: 13px !important;
           }
           .login-icon-container {
-            width: 50px !important;
-            height: 50px !important;
-            border-radius: 13px !important;
+            width: 52px !important;
+            height: 52px !important;
             margin-bottom: 16px !important;
+            border-radius: 13px !important;
           }
           .login-icon {
-            font-size: 21px !important;
-          }
-          [style*="input"] {
-            padding: 13px 46px 13px 40px !important;
-            font-size: 16px !important;
-            border-radius: 11px !important;
-          }
-          [style*="inputIcon"] {
-            left: 13px !important;
-            font-size: 14px !important;
-          }
-          [style*="passwordToggle"] {
-            right: 12px !important;
-            font-size: 15px !important;
-            padding: 8px !important;
-            min-width: 38px !important;
-            min-height: 38px !important;
-          }
-          [style*="submitButton"] {
-            padding: 15px !important;
-            font-size: 16px !important;
-            min-height: 50px !important;
-            border-radius: 11px !important;
-          }
-          [style*="label"] {
-            font-size: 13px !important;
-            margin-bottom: 8px !important;
-          }
-          [style*="inputGroup"] {
-            margin-bottom: 20px !important;
-          }
-          [style*="form"] {
-            margin-bottom: 20px !important;
-          }
-          [style*="errorAlert"] {
-            padding: 12px 14px !important;
-            font-size: 13px !important;
-            margin-bottom: 20px !important;
-            border-radius: 10px !important;
-          }
-          [style*="securityBadge"] {
-            font-size: 11px !important;
-            padding: 10px !important;
-            margin-top: 20px !important;
-            border-radius: 9px !important;
-          }
-        }
-
-        /* Extra Small Mobile (iPhone SE, etc.) */
-        @media (max-width: 400px) {
-          .right-section {
-            padding: 16px 12px !important;
-          }
-          [style*="loginCard"] {
-            padding: 28px 20px !important;
-            border-radius: 16px !important;
-          }
-          [style*="loginHeader"] {
-            margin-bottom: 24px !important;
-          }
-          [style*="loginTitle"] {
             font-size: 22px !important;
-            margin-bottom: 6px !important;
           }
-          [style*="loginSubtitle"] {
-            font-size: 12px !important;
-          }
-          .login-icon-container {
-            width: 46px !important;
-            height: 46px !important;
-            border-radius: 12px !important;
-            margin-bottom: 14px !important;
-          }
-          .login-icon {
-            font-size: 19px !important;
-          }
-          [style*="input"] {
-            padding: 12px 44px 12px 38px !important;
+          .login-input {
+            padding: 12px 42px !important;
             font-size: 16px !important;
           }
-          [style*="inputIcon"] {
-            left: 12px !important;
+          .input-icon-left {
+            left: 14px !important;
             font-size: 14px !important;
           }
-          [style*="passwordToggle"] {
-            right: 10px !important;
+          .password-toggle-btn {
+            right: 12px !important;
             font-size: 14px !important;
-            padding: 7px !important;
+            padding: 8px !important;
             min-width: 36px !important;
             min-height: 36px !important;
           }
-          [style*="submitButton"] {
+          .submit-btn {
             padding: 14px !important;
             font-size: 15px !important;
             min-height: 48px !important;
           }
-          [style*="inputGroup"] {
-            margin-bottom: 18px !important;
-          }
-          [style*="errorAlert"] {
-            padding: 11px 13px !important;
+          .input-label {
             font-size: 12px !important;
-            margin-bottom: 18px !important;
+            margin-bottom: 7px !important;
           }
-          [style*="securityBadge"] {
+          .input-group-custom {
+            margin-bottom: 20px !important;
+          }
+          .error-alert {
+            padding: 11px 14px !important;
+            font-size: 12px !important;
+            margin-bottom: 20px !important;
+          }
+          .security-badge {
             font-size: 11px !important;
-            padding: 9px !important;
-            margin-top: 18px !important;
+            padding: 10px !important;
+            margin-top: 20px !important;
           }
         }
 
-        /* Very Small Mobile (< 360px) */
-        @media (max-width: 360px) {
+        /* ===== SMALL MOBILE ===== */
+        @media (max-width: 576px) {
           .right-section {
-            padding: 14px 10px !important;
+            padding: 20px 14px !important;
           }
-          [style*="loginCard"] {
-            padding: 24px 16px !important;
+          .login-card {
+            padding: 28px 22px !important;
+            border-radius: 16px !important;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.25) !important;
           }
-          [style*="loginHeader"] {
-            margin-bottom: 20px !important;
+          .login-header {
+            margin-bottom: 24px !important;
           }
-          [style*="loginTitle"] {
-            font-size: 20px !important;
+          .login-title {
+            font-size: 22px !important;
             margin-bottom: 5px !important;
           }
-          [style*="loginSubtitle"] {
+          .login-subtitle {
             font-size: 12px !important;
+          }
+          .login-icon-container {
+            width: 48px !important;
+            height: 48px !important;
+            border-radius: 12px !important;
+            margin-bottom: 14px !important;
+          }
+          .login-icon {
+            font-size: 20px !important;
+          }
+          .login-input {
+            padding: 12px 40px !important;
+            font-size: 16px !important;
+            border-radius: 10px !important;
+          }
+          .input-icon-left {
+            left: 13px !important;
+            font-size: 13px !important;
+          }
+          .password-toggle-btn {
+            right: 10px !important;
+            font-size: 14px !important;
+          }
+          .submit-btn {
+            padding: 13px !important;
+            font-size: 15px !important;
+            min-height: 46px !important;
+            border-radius: 10px !important;
+          }
+          .input-group-custom {
+            margin-bottom: 18px !important;
+          }
+          .login-form {
+            margin-bottom: 18px !important;
+          }
+          .error-alert {
+            padding: 10px 12px !important;
+            font-size: 12px !important;
+            margin-bottom: 18px !important;
+            border-radius: 10px !important;
+          }
+          .security-badge {
+            font-size: 10px !important;
+            padding: 9px !important;
+            margin-top: 18px !important;
+            border-radius: 8px !important;
+          }
+        }
+
+        /* ===== EXTRA SMALL MOBILE (iPhone SE, etc.) ===== */
+        @media (max-width: 400px) {
+          .right-section {
+            padding: 16px 12px !important;
+          }
+          .login-card {
+            padding: 24px 18px !important;
+            border-radius: 14px !important;
+          }
+          .login-header {
+            margin-bottom: 20px !important;
+          }
+          .login-title {
+            font-size: 20px !important;
+            margin-bottom: 4px !important;
+          }
+          .login-subtitle {
+            font-size: 11px !important;
           }
           .login-icon-container {
             width: 44px !important;
@@ -577,25 +788,86 @@ const Login = () => {
           .login-icon {
             font-size: 18px !important;
           }
-          [style*="input"] {
-            padding: 12px 42px 12px 36px !important;
+          .login-input {
+            padding: 11px 38px !important;
+            font-size: 16px !important;
           }
-          [style*="inputIcon"] {
-            left: 11px !important;
+          .input-icon-left {
+            left: 12px !important;
+            font-size: 13px !important;
           }
-          [style*="passwordToggle"] {
+          .password-toggle-btn {
             right: 9px !important;
-            padding: 6px !important;
+            font-size: 13px !important;
+            padding: 7px !important;
             min-width: 34px !important;
             min-height: 34px !important;
           }
-          [style*="submitButton"] {
-            padding: 13px !important;
-            font-size: 15px !important;
-            min-height: 46px !important;
+          .submit-btn {
+            padding: 12px !important;
+            font-size: 14px !important;
+            min-height: 44px !important;
           }
-          [style*="inputGroup"] {
+          .input-group-custom {
             margin-bottom: 16px !important;
+          }
+          .error-alert {
+            padding: 9px 11px !important;
+            font-size: 11px !important;
+            margin-bottom: 16px !important;
+          }
+          .security-badge {
+            font-size: 10px !important;
+            padding: 8px !important;
+            margin-top: 16px !important;
+          }
+        }
+
+        /* ===== VERY SMALL MOBILE (< 360px) ===== */
+        @media (max-width: 360px) {
+          .right-section {
+            padding: 14px 10px !important;
+          }
+          .login-card {
+            padding: 22px 16px !important;
+          }
+          .login-header {
+            margin-bottom: 18px !important;
+          }
+          .login-title {
+            font-size: 19px !important;
+          }
+          .login-subtitle {
+            font-size: 11px !important;
+          }
+          .login-icon-container {
+            width: 42px !important;
+            height: 42px !important;
+            border-radius: 10px !important;
+            margin-bottom: 11px !important;
+          }
+          .login-icon {
+            font-size: 17px !important;
+          }
+          .login-input {
+            padding: 10px 36px !important;
+          }
+          .input-icon-left {
+            left: 11px !important;
+          }
+          .password-toggle-btn {
+            right: 8px !important;
+            padding: 6px !important;
+            min-width: 32px !important;
+            min-height: 32px !important;
+          }
+          .submit-btn {
+            padding: 11px !important;
+            font-size: 14px !important;
+            min-height: 42px !important;
+          }
+          .input-group-custom {
+            margin-bottom: 14px !important;
           }
         }
       `}</style>
@@ -603,7 +875,7 @@ const Login = () => {
   );
 };
 
-// Inline styles object
+// Inline styles object - Base (for large screens 1600px+)
 const styles = {
   container: {
     position: 'relative',
@@ -634,18 +906,19 @@ const styles = {
     zIndex: 1,
     display: 'flex',
     width: '100%',
-    maxWidth: '1400px',
+    maxWidth: '1300px',
     minHeight: '100vh',
     margin: '0 auto',
-    padding: '20px 0',
+    padding: '16px 0',
     flexWrap: 'wrap',
+    alignItems: 'center',
   },
   leftSection: {
     flex: '0 0 55%',
     display: 'flex',
     flexDirection: 'column',
     justifyContent: 'center',
-    padding: '60px',
+    padding: '48px',
     position: 'relative',
     overflow: 'hidden',
     animation: 'slideInLeft 0.8s ease-out',
@@ -655,21 +928,21 @@ const styles = {
     zIndex: 2,
   },
   logoContainer: {
-    marginBottom: '40px',
+    marginBottom: '32px',
     animation: 'fadeIn 1s ease-out',
   },
   logo: {
-    maxHeight: '80px',
+    maxHeight: '64px',
     width: 'auto',
     filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.2))',
   },
   heroTitle: {
-    fontSize: '56px',
+    fontSize: '44px',
     fontWeight: '800',
     color: '#ffffff',
-    marginBottom: '20px',
+    marginBottom: '16px',
     lineHeight: '1.2',
-    textShadow: '0 2px 20px rgba(0,0,0,0.2)',
+    textShadow: '0 2px 16px rgba(0,0,0,0.18)',
     animation: 'fadeIn 1.2s ease-out',
   },
   heroTitleAccent: {
@@ -679,62 +952,62 @@ const styles = {
     backgroundClip: 'text',
   },
   heroSubtitle: {
-    fontSize: '20px',
+    fontSize: '16px',
     color: 'rgba(255,255,255,0.9)',
-    marginBottom: '50px',
-    maxWidth: '540px',
+    marginBottom: '36px',
+    maxWidth: '460px',
     lineHeight: '1.6',
     animation: 'fadeIn 1.4s ease-out',
   },
   featuresGrid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(2, 1fr)',
-    gap: '20px',
-    marginTop: '40px',
+    gap: '16px',
+    marginTop: '32px',
     animation: 'fadeIn 1.6s ease-out',
   },
   featureCard: {
-    background: 'rgba(255,255,255,0.12)',
+    background: 'rgba(255,255,255,0.1)',
     backdropFilter: 'blur(12px)',
-    borderRadius: '16px',
-    padding: '24px',
+    borderRadius: '14px',
+    padding: '18px',
     display: 'flex',
     alignItems: 'center',
-    gap: '16px',
-    border: '1px solid rgba(255,255,255,0.25)',
-    boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
+    gap: '14px',
+    border: '1px solid rgba(255,255,255,0.2)',
+    boxShadow: '0 6px 24px rgba(0,0,0,0.08)',
     transition: 'all 0.3s ease',
     cursor: 'default',
   },
   featureIcon: {
-    width: '56px',
-    height: '56px',
-    borderRadius: '12px',
-    background: 'linear-gradient(135deg, rgba(255,255,255,0.3) 0%, rgba(77,195,247,0.3) 100%)',
+    width: '46px',
+    height: '46px',
+    borderRadius: '10px',
+    background: 'linear-gradient(135deg, rgba(255,255,255,0.25) 0%, rgba(77,195,247,0.25) 100%)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     color: '#ffffff',
     flexShrink: 0,
-    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+    boxShadow: '0 4px 10px rgba(0,0,0,0.12)',
   },
   featureText: {
     flex: 1,
   },
   featureTitle: {
-    fontSize: '18px',
+    fontSize: '15px',
     fontWeight: '700',
     color: '#ffffff',
-    marginBottom: '4px',
+    marginBottom: '3px',
   },
   featureSubtitle: {
-    fontSize: '14px',
+    fontSize: '12px',
     color: 'rgba(255,255,255,0.8)',
   },
   floatingIcon: {
     position: 'absolute',
-    fontSize: '48px',
-    color: 'rgba(255,255,255,0.15)',
+    fontSize: '40px',
+    color: 'rgba(255,255,255,0.12)',
     animation: 'float 3s ease-in-out infinite',
     pointerEvents: 'none',
   },
@@ -743,81 +1016,81 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: '40px',
+    padding: '32px',
     animation: 'slideInRight 0.8s ease-out',
     width: '100%',
   },
   loginCard: {
     background: '#ffffff',
-    borderRadius: '24px',
-    padding: '50px',
+    borderRadius: '20px',
+    padding: '40px',
     width: '100%',
-    maxWidth: '480px',
-    boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+    maxWidth: '400px',
+    boxShadow: '0 16px 48px rgba(0,0,0,0.25)',
   },
   loginHeader: {
     textAlign: 'center',
-    marginBottom: '40px',
+    marginBottom: '32px',
   },
   loginTitle: {
-    fontSize: '32px',
+    fontSize: '26px',
     fontWeight: '700',
     color: '#1a1a2e',
-    marginBottom: '8px',
+    marginBottom: '6px',
   },
   loginSubtitle: {
-    fontSize: '16px',
+    fontSize: '14px',
     color: '#6c757d',
   },
   errorAlert: {
     background: 'linear-gradient(135deg, #f44336 0%, #e53935 50%, #d32f2f 100%)',
     color: '#ffffff',
-    padding: '16px 20px',
-    borderRadius: '12px',
-    marginBottom: '24px',
-    fontSize: '14px',
+    padding: '14px 16px',
+    borderRadius: '10px',
+    marginBottom: '20px',
+    fontSize: '13px',
     fontWeight: '500',
     display: 'flex',
     alignItems: 'center',
-    boxShadow: '0 4px 16px rgba(244,67,54,0.4)',
+    boxShadow: '0 4px 14px rgba(244,67,54,0.35)',
   },
   form: {
-    marginBottom: '24px',
+    marginBottom: '20px',
   },
   inputGroup: {
-    marginBottom: '24px',
+    marginBottom: '20px',
   },
   label: {
     display: 'block',
-    fontSize: '14px',
+    fontSize: '13px',
     fontWeight: '600',
     color: '#495057',
-    marginBottom: '10px',
+    marginBottom: '8px',
   },
   inputWrapper: {
     position: 'relative',
   },
   input: {
     width: '100%',
-    padding: '14px 48px 14px 48px',
-    fontSize: '15px',
-    borderRadius: '12px',
+    padding: '12px 42px',
+    fontSize: '14px',
+    borderRadius: '10px',
     border: '2px solid #e9ecef',
     transition: 'all 0.3s ease',
     outline: 'none',
   },
   inputIcon: {
     position: 'absolute',
-    left: '16px',
+    left: '14px',
     top: '50%',
     transform: 'translateY(-50%)',
     color: '#adb5bd',
-    fontSize: '16px',
+    fontSize: '14px',
     pointerEvents: 'none',
   },
   passwordToggle: {
     position: 'absolute',
-    right: '16px',
+    right: '14px',
     top: '50%',
     transform: 'translateY(-50%)',
     background: 'none',
@@ -825,31 +1098,31 @@ const styles = {
     color: '#6c757d',
     cursor: 'pointer',
     padding: '4px 8px',
-    fontSize: '16px',
+    fontSize: '14px',
     transition: 'color 0.2s ease',
   },
   submitButton: {
     width: '100%',
-    padding: '16px',
-    fontSize: '16px',
+    padding: '13px',
+    fontSize: '14px',
     fontWeight: '600',
     color: '#ffffff',
     background: 'linear-gradient(135deg, #2196f3 0%, #1e88e5 50%, #1565c0 100%)',
     border: 'none',
-    borderRadius: '12px',
+    borderRadius: '10px',
     cursor: 'pointer',
     transition: 'all 0.3s ease',
-    boxShadow: '0 8px 32px rgba(33,150,243,0.4)',
-    marginTop: '8px',
+    boxShadow: '0 6px 24px rgba(33,150,243,0.35)',
+    marginTop: '6px',
   },
   securityBadge: {
     textAlign: 'center',
-    fontSize: '13px',
+    fontSize: '12px',
     color: '#6c757d',
-    padding: '12px',
+    padding: '10px',
     background: '#f8f9fa',
     borderRadius: '8px',
-    marginTop: '24px',
+    marginTop: '20px',
   },
 };
 
