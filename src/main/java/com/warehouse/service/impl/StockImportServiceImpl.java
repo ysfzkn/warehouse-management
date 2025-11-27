@@ -89,8 +89,8 @@ public class StockImportServiceImpl implements StockImportService {
             "Ürün Adı (zorunlu)",
             "Stok Kodu (zorunlu)",
             "Kategori Adı (zorunlu)",
-            "Marka (opsiyonel)",
             "Miktar (zorunlu)",
+            "Marka (opsiyonel)",
             "Emanet (opsiyonel)",
             "Fiyat (opsiyonel)",
             "Minimum Stok (opsiyonel)",
@@ -230,8 +230,8 @@ public class StockImportServiceImpl implements StockImportService {
             getStringValue(row, 0),  // Ürün Adı
             getStringValue(row, 1),  // Stok Kodu
             getStringValue(row, 2),  // Kategori Adı
-            getStringValue(row, 3),  // Marka (opsiyonel)
-            getStringValue(row, 4),  // Miktar
+            getStringValue(row, 4),  // Marka (opsiyonel)
+            getStringValue(row, 3),  // Miktar
             getStringValue(row, 5),  // Emanet
             getStringValue(row, 6),  // Fiyat
             getStringValue(row, 7),  // Minimum Stok
