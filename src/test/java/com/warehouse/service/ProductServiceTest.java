@@ -9,6 +9,7 @@ import com.warehouse.repository.BrandRepository;
 import com.warehouse.repository.CategoryRepository;
 import com.warehouse.repository.ColorRepository;
 import com.warehouse.repository.ProductRepository;
+import com.warehouse.repository.StockTransferRepository;
 import com.warehouse.service.impl.ProductServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -42,6 +43,9 @@ class ProductServiceTest {
     @Mock
     private ColorRepository colorRepository;
 
+    @Mock
+    private StockTransferRepository stockTransferRepository;
+
     private ProductService productService;
 
     private Product product;
@@ -51,7 +55,13 @@ class ProductServiceTest {
 
     @BeforeEach
     void setUp() {
-        productService = new ProductServiceImpl(productRepository, categoryRepository, brandRepository, colorRepository);
+        productService = new ProductServiceImpl(
+                productRepository,
+                categoryRepository,
+                brandRepository,
+                colorRepository,
+                stockTransferRepository
+        );
         category = new Category();
         category.setId(1L);
         category.setName("Electronics");
