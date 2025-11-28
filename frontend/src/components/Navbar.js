@@ -12,23 +12,74 @@ const Navbar = () => {
   const [showNotif, setShowNotif] = useState(false);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [userDropdownCoords, setUserDropdownCoords] = useState({ top: null, right: 16 });
+  const [notifPage, setNotifPage] = useState(0);
+  const [notifHasMore, setNotifHasMore] = useState(true);
+  const [notifLoading, setNotifLoading] = useState(false);
+  const [notifRefreshing, setNotifRefreshing] = useState(false);
   const role = (typeof window !== 'undefined' && localStorage.getItem('auth_role')) || 'ADMIN';
   const userBadgeRef = useRef(null);
+  const notifLoadingRef = useRef(false);
+  const notifRefreshingRef = useRef(false);
+  const NOTIFICATION_BATCH_SIZE = 10;
+
+  const loadNotifications = useCallback(async ({ page = 0, reset = false, silent = false } = {}) => {
+    if (role !== 'ADMIN') return;
+    if (!silent && notifLoadingRef.current && !reset) return;
+    if (silent && notifRefreshingRef.current && !reset) return;
+    if (silent) {
+      notifRefreshingRef.current = true;
+      setNotifRefreshing(true);
+    } else {
+      notifLoadingRef.current = true;
+      setNotifLoading(true);
+    }
+    try {
+      const res = await axios.get('/api/notifications', { params: { size: NOTIFICATION_BATCH_SIZE, page } });
+      const list = Array.isArray(res.data) ? res.data : [];
+      setNotifications(prev => {
+        if (reset || page === 0) {
+          const next = list;
+          setUnreadCount(next.filter(n => !n.read).length);
+          return next;
+        }
+        const existingIds = new Set(prev.map(item => item.id));
+        const appended = list.filter(item => !existingIds.has(item.id));
+        const next = [...prev, ...appended];
+        setUnreadCount(next.filter(n => !n.read).length);
+        return next;
+      });
+      setNotifHasMore(list.length === NOTIFICATION_BATCH_SIZE);
+      setNotifPage(page);
+    } catch {
+      if (reset || page === 0) {
+        setNotifications([]);
+        setUnreadCount(0);
+        setNotifHasMore(false);
+        setNotifPage(0);
+      }
+    } finally {
+      if (silent) {
+        notifRefreshingRef.current = false;
+        setNotifRefreshing(false);
+      } else {
+        notifLoadingRef.current = false;
+        setNotifLoading(false);
+      }
+    }
+  }, [role, NOTIFICATION_BATCH_SIZE]);
 
   useEffect(() => {
     let ignore = false;
     const hydrate = async () => {
       try {
         if (role === 'ADMIN') {
-          const listRes = await axios.get('/api/notifications', { params: { size: 200, page: 0 } });
-          if (!ignore) {
-            const list = Array.isArray(listRes.data) ? listRes.data : [];
-            setNotifications(list);
-            setUnreadCount(list.filter(n => !n.read).length);
-          }
+          await loadNotifications({ page: 0, reset: true });
+          if (ignore) return;
         } else if (!ignore) {
           setNotifications([]);
           setUnreadCount(0);
+          setNotifHasMore(false);
+          setNotifPage(0);
         }
       } catch {}
       try {
@@ -46,18 +97,9 @@ const Navbar = () => {
     return () => {
       ignore = true;
     };
-  }, [role]);
+  }, [role, loadNotifications]);
 
   useEffect(() => {
-    const fetchNotifications = async () => {
-      if (role !== 'ADMIN') return;
-      try {
-        const listRes = await axios.get('/api/notifications', { params: { size: 200, page: 0 } });
-        const list = Array.isArray(listRes.data) ? listRes.data : [];
-        setNotifications(list);
-      } catch {}
-    };
-
     const token = localStorage.getItem('auth_token');
     if (!token) return;
     const es = new EventSource(`/api/stream?token=${encodeURIComponent(token)}`);
@@ -69,7 +111,7 @@ const Navbar = () => {
         if (nextUnread != null) {
           setUnreadCount(prev => {
             if (nextUnread !== prev) {
-              fetchNotifications();
+              loadNotifications({ page: 0, reset: true, silent: true });
             }
             return nextUnread;
           });
@@ -87,7 +129,7 @@ const Navbar = () => {
     return () => {
       try { es.close(); } catch {}
     };
-  }, [role]);
+  }, [role, loadNotifications]);
 
   const isActive = (path) => {
     return location.pathname === path;
@@ -174,7 +216,10 @@ const Navbar = () => {
           <div className="notification-panel-header">
             <div>
               <div className="fw-bold">Bildirimler</div>
-              <small className="text-muted">Toplam {notifications.length}</small>
+              <small className="text-muted">
+                Gösterilen {notifications.length}
+                {unreadCount > 0 && ` • Okunmamış ${unreadCount}`}
+              </small>
             </div>
             <button
               type="button"
@@ -277,6 +322,26 @@ const Navbar = () => {
                 </div>
               </div>
             ))}
+          </div>
+          <div className="notification-footer border-top p-3">
+            {notifLoading && (
+              <div className="text-center text-muted small">
+                Yükleniyor...
+              </div>
+            )}
+            {!notifLoading && notifHasMore && (
+              <button
+                className="btn btn-outline-secondary w-100"
+                onClick={() => loadNotifications({ page: notifPage + 1 })}
+              >
+                Daha Fazla Yükle
+              </button>
+            )}
+            {!notifLoading && !notifHasMore && notifications.length > 0 && (
+              <small className="text-muted d-block text-center">
+                Tüm bildirimler yüklendi
+              </small>
+            )}
           </div>
         </div>
       </>,
