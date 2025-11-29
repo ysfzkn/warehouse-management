@@ -273,10 +273,9 @@ const StockFiltersBar = ({
           .stock-mobile-card__footer,
           .transfer-mobile-card__footer {
             display: flex;
+            flex-direction: column;
             align-items: center;
-            justify-content: space-between;
             gap: 0.75rem;
-            flex-wrap: wrap;
           }
           .stock-mobile-card__actions,
           .transfer-mobile-card__actions {
@@ -285,6 +284,7 @@ const StockFiltersBar = ({
             gap: 0.6rem;
             justify-content: center;
             align-items: center;
+            width: 100%;
             margin-top: 0.5rem;
             padding-top: 0.75rem;
             border-top: 1px solid rgba(15,23,42,0.08);
@@ -404,7 +404,7 @@ const StockFiltersBar = ({
                 ref={searchInputRef}
                 type="text"
                 className="form-control border-start-0"
-                placeholder="Ürün adı, stok kodu veya depo ara..."
+                placeholder="Ürün adı, stok kodu, depo, müşteri adı veya telefon ara..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
@@ -1959,7 +1959,11 @@ const Stock = () => {
                           <div className="fw-semibold">{productName || '-'}</div>
                           <small className="text-muted d-md-none">{productSku || '-'}</small>
                           {stock.customerName && (
-                            <small className="badge bg-info bg-opacity-10 text-info border border-info d-lg-none mt-1 d-inline-block">
+                            <small 
+                              className="badge bg-info bg-opacity-10 text-info border border-info d-lg-none mt-1 d-inline-block"
+                              title={stock.customerName}
+                              style={{ fontSize: '0.7rem' }}
+                            >
                               <i className="fas fa-user me-1"></i>
                               {stock.customerName}
                             </small>
@@ -2003,13 +2007,17 @@ const Stock = () => {
                         <td className="d-none d-xl-table-cell">{stock.consignedQuantity || 0}</td>
                         <td className="d-none d-md-table-cell">
                           {stock.customerName ? (
-                            <div>
-                              <span className="badge bg-info bg-opacity-10 text-info border border-info mb-1 d-block" title={stock.customerPhone ? `Tel: ${formatPhoneForDisplay(stock.customerPhone)}` : ''}>
+                            <div style={{ maxWidth: '150px' }}>
+                              <span 
+                                className="badge bg-info bg-opacity-10 text-info border border-info mb-1 d-block" 
+                                title={stock.customerName + (stock.customerPhone ? `\nTel: ${formatPhoneForDisplay(stock.customerPhone)}` : '')}
+                                style={{ fontSize: '0.75rem', whiteSpace: 'normal', wordWrap: 'break-word', lineHeight: '1.3' }}
+                              >
                                 <i className="fas fa-user me-1"></i>
-                                <span className="text-truncate d-inline-block" style={{ maxWidth: '100px' }}>{stock.customerName}</span>
+                                {stock.customerName}
                               </span>
                               {stock.customerPhone && (
-                                <small className="text-muted d-block text-truncate" style={{ maxWidth: '120px' }} title={formatPhoneForDisplay(stock.customerPhone)}>
+                                <small className="text-muted d-block" style={{ fontSize: '0.7rem', whiteSpace: 'normal', wordWrap: 'break-word' }} title={formatPhoneForDisplay(stock.customerPhone)}>
                                   <i className="fas fa-phone me-1"></i>
                                   {formatPhoneForDisplay(stock.customerPhone)}
                                 </small>
@@ -2162,12 +2170,20 @@ const Stock = () => {
                           <div className="stock-mobile-card__tags-right">
                             {stock.customerName && (
                               <>
-                                <span className="mobile-chip bg-info bg-opacity-10 text-info border border-info">
+                                <span 
+                                  className="mobile-chip bg-info bg-opacity-10 text-info border border-info"
+                                  title={stock.customerName}
+                                  style={{ fontSize: '0.7rem' }}
+                                >
                                   <i className="fas fa-user me-1"></i>
                                   {stock.customerName}
                                 </span>
                                 {stock.customerPhone && (
-                                  <span className="mobile-chip bg-info bg-opacity-10 text-info border border-info">
+                                  <span 
+                                    className="mobile-chip bg-info bg-opacity-10 text-info border border-info"
+                                    title={formatPhoneForDisplay(stock.customerPhone)}
+                                    style={{ fontSize: '0.7rem' }}
+                                  >
                                     <i className="fas fa-phone me-1"></i>
                                     {formatPhoneForDisplay(stock.customerPhone)}
                                   </span>
@@ -2236,7 +2252,7 @@ const Stock = () => {
                         </div>
 
                         <div className="stock-mobile-card__footer">
-                          <small className="text-muted">
+                          <small className="text-muted text-center">
                             <i className="fas fa-clock me-1"></i>
                             {formatDateInTurkeyTimezone(stock.lastUpdated, {
                               year: 'numeric',

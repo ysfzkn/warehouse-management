@@ -115,9 +115,12 @@ const StockSettingsModal = ({ stock, onSuccess, onClose }) => {
     setErrors({});
 
     try {
+      // CRITICAL: Never send quantity field in settings update
+      // Quantity can ONLY be changed via add/remove endpoints
       const updateData = {
         consignedQuantity: settings.consignedQuantity,
         minStockLevel: settings.minStockLevel
+        // Explicitly NOT including quantity field for security
       };
       
       if (isEmanetDepo) {
@@ -127,6 +130,9 @@ const StockSettingsModal = ({ stock, onSuccess, onClose }) => {
         updateData.customerName = null;
         updateData.customerPhone = null;
       }
+
+      // Ensure quantity is never sent (defensive programming)
+      delete updateData.quantity;
 
       await axios.put(`/api/stocks/${stock.id}`, updateData);
 

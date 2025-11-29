@@ -296,7 +296,11 @@ public class StockServiceImpl implements StockService {
         Stock stock = getStockByIdOrThrow(id);
         Warehouse warehouse = stock.getWarehouse();
 
-        updateStockQuantity(stock, stockDetails.getQuantity());
+        // CRITICAL: Quantity updates are NOT allowed through this endpoint
+        // Quantity can ONLY be changed via add/remove endpoints (/add, /remove)
+        // This prevents accidental zeroing or incorrect quantity updates
+        // If quantity is provided in the request, it will be ignored for security
+        
         updateMinStockLevel(stock, stockDetails.getMinStockLevel());
         updateReservedQuantity(stock, stockDetails.getReservedQuantity());
         updateConsignedQuantity(stock, stockDetails.getConsignedQuantity());

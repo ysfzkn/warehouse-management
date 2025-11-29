@@ -97,7 +97,9 @@ const StockModal = ({ warehouse, onClose }) => {
         stock.product?.sku,
         stock.product?.category?.name,
         stock.product?.category?.parentName,
-        stock.product?.brand?.name
+        stock.product?.brand?.name,
+        stock.customerName,
+        stock.customerPhone
       ]
         .filter(Boolean)
         .map((field) => field.toLocaleLowerCase('tr-TR'));
@@ -192,7 +194,7 @@ const StockModal = ({ warehouse, onClose }) => {
                       <input
                         type="text"
                         className="form-control border-start-0"
-                        placeholder="Ürün adı, SKU veya kategori ara..."
+                        placeholder="Ürün adı, SKU, kategori, müşteri adı veya telefon ara..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                       />
@@ -248,13 +250,21 @@ const StockModal = ({ warehouse, onClose }) => {
                             <td>{stock.consignedQuantity || 0}</td>
                             <td>
                               {stock.customerName ? (
-                                <div>
-                                  <span className="badge bg-info bg-opacity-10 text-info border border-info mb-1 d-block">
+                                <div style={{ maxWidth: '150px' }}>
+                                  <span 
+                                    className="badge bg-info bg-opacity-10 text-info border border-info mb-1 d-block"
+                                    title={stock.customerName + (stock.customerPhone ? `\nTel: ${formatPhoneForDisplay(stock.customerPhone)}` : '')}
+                                    style={{ fontSize: '0.75rem', whiteSpace: 'normal', wordWrap: 'break-word', lineHeight: '1.3' }}
+                                  >
                                     <i className="fas fa-user me-1"></i>
                                     {stock.customerName}
                                   </span>
                                   {stock.customerPhone && (
-                                    <small className="text-muted d-block">
+                                    <small 
+                                      className="text-muted d-block"
+                                      title={formatPhoneForDisplay(stock.customerPhone)}
+                                      style={{ fontSize: '0.7rem', whiteSpace: 'normal', wordWrap: 'break-word' }}
+                                    >
                                       <i className="fas fa-phone me-1"></i>
                                       {formatPhoneForDisplay(stock.customerPhone)}
                                     </small>
@@ -362,13 +372,23 @@ const StockModal = ({ warehouse, onClose }) => {
                               <div className="row g-2 mb-2">
                                 <div className="col-12 d-flex">
                                   <div className="stat-tile w-100 text-center bg-info bg-opacity-10 border border-info">
-                                    <div className="small text-muted text-uppercase mb-1">
+                                    <div className="small text-muted text-uppercase mb-1" style={{ fontSize: '0.7rem' }}>
                                       <i className="fas fa-user me-1"></i>
                                       Müşteri
                                     </div>
-                                    <div className="fw-semibold text-info">{stock.customerName}</div>
+                                    <div 
+                                      className="fw-semibold text-info" 
+                                      title={stock.customerName}
+                                      style={{ fontSize: '0.85rem', whiteSpace: 'normal', wordWrap: 'break-word', lineHeight: '1.3' }}
+                                    >
+                                      {stock.customerName}
+                                    </div>
                                     {stock.customerPhone && (
-                                      <div className="small text-muted mt-1">
+                                      <div 
+                                        className="small text-muted mt-1"
+                                        title={formatPhoneForDisplay(stock.customerPhone)}
+                                        style={{ fontSize: '0.7rem', whiteSpace: 'normal', wordWrap: 'break-word' }}
+                                      >
                                         <i className="fas fa-phone me-1"></i>
                                         {formatPhoneForDisplay(stock.customerPhone)}
                                       </div>
