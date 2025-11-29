@@ -1,6 +1,7 @@
 package com.warehouse.service.impl;
 
 import com.warehouse.constants.NotificationMessages;
+import com.warehouse.dto.BulkDeleteResponse;
 import com.warehouse.dto.StockFilter;
 import com.warehouse.entity.Product;
 import com.warehouse.entity.Stock;
@@ -360,14 +361,86 @@ public class StockServiceImpl implements StockService {
     }
 
     @Override
-    public void deleteStocks(List<Long> ids) {
+    public BulkDeleteResponse deleteStocks(List<Long> ids) {
         if (ids == null || ids.isEmpty()) {
             logger.debug("deleteStocks called with empty ids");
-            return;
+            return new BulkDeleteResponse(0, 0, List.of());
         }
+        
+        logger.info("Deleting {} stocks", ids.size());
+        List<BulkDeleteResponse.DeleteError> errors = new java.util.ArrayList<>();
+        int successCount = 0;
+        String username = CurrentUser.usernameOrSystem();
+        
         for (Long id : ids) {
-            deleteStock(id);
+            try {
+                Stock stock = getStockByIdOrThrow(id);
+                String warehouseName = stock.getWarehouse().getName();
+                String productName = stock.getProduct().getName();
+                String productSku = stock.getProduct().getSku();
+                
+                stockRepository.delete(stock);
+                auditService.log(AuditAction.STOCK_DELETE, DomainEntityType.Stock.name(), id, username,
+                        String.format("Stok silindi: Depo=%s, Ürün=%s", warehouseName, productName));
+                successCount++;
+                logger.debug("Stock deleted successfully with id: {}", id);
+            } catch (WarehouseManagementException e) {
+                // Domain exception'ları yakala
+                Stock stock = null;
+                try {
+                    stock = getStockByIdOrThrow(id);
+                } catch (Exception ex) {
+                    // Stok bulunamadı
+                }
+                String stockInfo = stock != null
+                    ? String.format("%s / %s (SKU: %s)", 
+                        stock.getWarehouse() != null ? stock.getWarehouse().getName() : "Bilinmeyen",
+                        stock.getProduct() != null ? stock.getProduct().getName() : "Bilinmeyen",
+                        stock.getProduct() != null ? stock.getProduct().getSku() : "N/A")
+                    : String.format("Stok #%d", id);
+                
+                errors.add(new BulkDeleteResponse.DeleteError(
+                    id,
+                    stockInfo,
+                    stock != null && stock.getProduct() != null ? stock.getProduct().getSku() : null,
+                    e.getErrorCode().getCode(),
+                    e.getMessage()
+                ));
+                logger.warn("Cannot delete stock with id {}: {}", id, e.getMessage());
+            } catch (Exception e) {
+                // Diğer hatalar
+                Stock stock = null;
+                try {
+                    stock = getStockByIdOrThrow(id);
+                } catch (Exception ex) {
+                    // Stok bulunamadı
+                }
+                String stockInfo = stock != null
+                    ? String.format("%s / %s (SKU: %s)", 
+                        stock.getWarehouse() != null ? stock.getWarehouse().getName() : "Bilinmeyen",
+                        stock.getProduct() != null ? stock.getProduct().getName() : "Bilinmeyen",
+                        stock.getProduct() != null ? stock.getProduct().getSku() : "N/A")
+                    : String.format("Stok #%d", id);
+                
+                errors.add(new BulkDeleteResponse.DeleteError(
+                    id,
+                    stockInfo,
+                    stock != null && stock.getProduct() != null ? stock.getProduct().getSku() : null,
+                    ErrorCode.INTERNAL_SERVER_ERROR.getCode(),
+                    "Stok silinirken beklenmeyen bir hata oluştu: " + e.getMessage()
+                ));
+                logger.error("Error deleting stock {}: {}", id, e.getMessage(), e);
+            }
         }
+        
+        if (successCount > 0) {
+            notificationService.create(NotificationMessages.STOCK_DELETED_TITLE,
+                    String.format("Kullanıcı %s, %d adet stok kaydını sildi.", username, successCount),
+                    DomainEntityType.Stock.name(), null);
+        }
+        
+        logger.info("Batch delete completed: {} successful, {} errors", successCount, errors.size());
+        return new BulkDeleteResponse(successCount, errors.size(), errors);
     }
 
     @Override

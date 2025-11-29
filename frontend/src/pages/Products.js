@@ -24,6 +24,7 @@ const Products = () => {
   const [selectedColorOpt, setSelectedColorOpt] = useState(null);
   const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null });
   const [errorModal, setErrorModal] = useState({ show: false, title: '', message: '' });
+  const [errorDetailsModal, setErrorDetailsModal] = useState({ show: false, title: '', errors: [] });
   const [showDetailedPrice, setShowDetailedPrice] = useState(true);
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [bulkMode, setBulkMode] = useState('PERCENTAGE');
@@ -258,6 +259,7 @@ const Products = () => {
   };
 
   const handleDelete = async (id) => {
+    const product = products.find(p => p.id === id);
     setConfirmModal({
       show: true,
       title: 'Ürün Silme',
@@ -269,17 +271,37 @@ const Products = () => {
         setConfirmModal({ show: false, title: '', message: '', onConfirm: null });
         try {
           await axios.delete(`/api/products/${id}`);
-        } catch (error) {
-          const errorData = error?.response?.data;
-          const msg = errorData?.message || errorData?.error || (typeof errorData === 'string' ? errorData : 'Ürün silinirken hata oluştu');
           const toast = document.createElement('div');
-          toast.className = 'toast align-items-center text-bg-danger border-0 position-fixed top-0 end-0 m-3 show fs-6';
+          toast.className = 'toast align-items-center text-bg-success border-0 position-fixed top-0 end-0 m-3 show fs-6';
           toast.style.minWidth = '360px';
           toast.style.padding = '0.5rem 0.75rem';
           toast.setAttribute('role', 'alert');
-          toast.innerHTML = `<div class="d-flex"><div class="toast-body fw-semibold">${msg}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
+          toast.innerHTML = `<div class="d-flex"><div class="toast-body fw-semibold">Ürün başarıyla silindi</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
           document.body.appendChild(toast);
           setTimeout(() => { try { document.body.removeChild(toast); } catch {} }, 7000);
+        } catch (error) {
+          const errorData = error?.response?.data;
+          const msg = errorData?.message || errorData?.error || (typeof errorData === 'string' ? errorData : 'Ürün silinirken hata oluştu');
+          
+          // Eğer ürün transfer ile bağlıysa detaylı uyarı göster
+          if (msg.includes('transfer') || errorData?.code === 'RELATION_004') {
+            setErrorModal({
+              show: true,
+              title: 'Ürün Silinemez',
+              message: product 
+                ? `${product.name} (SKU: ${product.sku}) - ${msg}`
+                : msg
+            });
+          } else {
+            const toast = document.createElement('div');
+            toast.className = 'toast align-items-center text-bg-danger border-0 position-fixed top-0 end-0 m-3 show fs-6';
+            toast.style.minWidth = '360px';
+            toast.style.padding = '0.5rem 0.75rem';
+            toast.setAttribute('role', 'alert');
+            toast.innerHTML = `<div class="d-flex"><div class="toast-body fw-semibold">${msg}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
+            document.body.appendChild(toast);
+            setTimeout(() => { try { document.body.removeChild(toast); } catch {} }, 7000);
+          }
         } finally {
           // Hata olsa bile, kısmen silinmiş ürünler varsa listeyi güncelle
           fetchProducts(productPage, productPageSize);
@@ -358,31 +380,62 @@ const Products = () => {
       confirmText: 'Evet, Sil',
       onConfirm: async () => {
         setConfirmModal({ show: false, title: '', message: '', onConfirm: null });
+        
         try {
-          const deletePromises = ids.map(id => axios.delete(`/api/products/${id}`));
-          await Promise.all(deletePromises);
-          setSelectedProducts([]);
-          const toast = document.createElement('div');
-          toast.className = 'toast align-items-center text-bg-success border-0 position-fixed top-0 end-0 m-3 show fs-6';
-          toast.style.minWidth = '360px';
-          toast.style.padding = '0.5rem 0.75rem';
-          toast.setAttribute('role', 'alert');
-          toast.innerHTML = `<div class="d-flex"><div class="toast-body fw-semibold">${ids.length} ürün başarıyla silindi</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
-          document.body.appendChild(toast);
-          setTimeout(() => { try { document.body.removeChild(toast); } catch {} }, 7000);
+          // Backend'den toplu silme endpoint'ini kullan
+          const response = await axios.delete('/api/products/bulk', { data: ids });
+          const result = response.data;
+          
+          // Başarılı silinen ürünler için toast göster
+          if (result.successCount > 0) {
+            const toast = document.createElement('div');
+            toast.className = 'toast align-items-center text-bg-success border-0 position-fixed top-0 end-0 m-3 show fs-6';
+            toast.style.minWidth = '360px';
+            toast.style.padding = '0.5rem 0.75rem';
+            toast.setAttribute('role', 'alert');
+            toast.innerHTML = `<div class="d-flex"><div class="toast-body fw-semibold">${result.successCount} ürün başarıyla silindi</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
+            document.body.appendChild(toast);
+            setTimeout(() => { try { document.body.removeChild(toast); } catch {} }, 7000);
+          }
+          
+          // Hata alan ürünler varsa detaylı hata listesi göster
+          if (result.errors && result.errors.length > 0) {
+            const formattedErrors = result.errors.map(err => ({
+              productName: err.name || 'Bilinmeyen Ürün',
+              sku: err.sku || 'N/A',
+              error: err.errorMessage || 'Bilinmeyen hata',
+              errorCode: err.errorCode || null
+            }));
+            
+            setErrorDetailsModal({
+              show: true,
+              title: 'Silinemeyen Ürünler',
+              errors: formattedErrors
+            });
+          }
+          
+          // Seçili ürünleri temizle (sadece başarıyla silinenleri kaldır, hata alanları seçimde kalsın)
+          const errorIds = new Set((result.errors || []).map(err => err.id));
+          setSelectedProducts(prev => prev.filter(id => {
+            // Eğer bu ID silinmeye çalışılan ID'ler arasındaysa
+            if (ids.includes(id)) {
+              // Hata alan ürünleri seçimde tut, başarıyla silinenleri kaldır
+              return errorIds.has(id);
+            }
+            // Diğer ürünleri olduğu gibi tut
+            return true;
+          }));
         } catch (error) {
+          // Backend hatası (örneğin network hatası)
           const errorData = error?.response?.data;
-          const msg = errorData?.message || errorData?.error || (typeof errorData === 'string' ? errorData : 'Ürünler silinirken hata oluştu');
-          const toast = document.createElement('div');
-          toast.className = 'toast align-items-center text-bg-danger border-0 position-fixed top-0 end-0 m-3 show fs-6';
-          toast.style.minWidth = '360px';
-          toast.style.padding = '0.5rem 0.75rem';
-          toast.setAttribute('role', 'alert');
-          toast.innerHTML = `<div class="d-flex"><div class="toast-body fw-semibold">${msg}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
-          document.body.appendChild(toast);
-          setTimeout(() => { try { document.body.removeChild(toast); } catch {} }, 7000);
+          const msg = errorData?.message || errorData?.error || error.message || 'Ürünler silinirken hata oluştu';
+          setErrorModal({
+            show: true,
+            title: 'Toplu Silme Hatası',
+            message: msg
+          });
         } finally {
-          // Bazı ürünler silinmiş olabilir, duruma bakılmaksızın listeyi yenile
+          // Listeyi yenile
           fetchProducts(productPage, productPageSize);
         }
       }
@@ -1432,6 +1485,60 @@ const Products = () => {
         onConfirm={() => setErrorModal({ show: false, title: '', message: '' })}
         onCancel={() => setErrorModal({ show: false, title: '', message: '' })}
       />
+
+      {/* Error Details Modal */}
+      {errorDetailsModal.show && (
+        <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <div className="modal-dialog modal-lg">
+            <div className="modal-content">
+              <div className="modal-header bg-danger text-white">
+                <h5 className="modal-title">
+                  <i className="fas fa-exclamation-triangle me-2"></i>
+                  {errorDetailsModal.title}
+                </h5>
+                <button
+                  type="button"
+                  className="btn-close btn-close-white"
+                  onClick={() => setErrorDetailsModal({ show: false, title: '', errors: [] })}
+                ></button>
+              </div>
+              <div className="modal-body">
+                <div className="alert alert-warning">
+                  <i className="fas fa-info-circle me-2"></i>
+                  Aşağıdaki {errorDetailsModal.errors.length} ürün silinemedi. Bu ürünler transfer kayıtları ile bağlantılı olabilir.
+                </div>
+                <div className="list-group" style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                  {errorDetailsModal.errors.map((error, index) => (
+                    <div key={index} className="list-group-item border-start border-danger border-3">
+                      <div className="d-flex flex-column gap-2">
+                        <div className="fw-bold text-danger">
+                          <i className="fas fa-box me-2"></i>
+                          Ürün: {error.productName}
+                        </div>
+                        <div className="text-muted">
+                          <strong>Stok Kodu:</strong> <span className="badge bg-secondary">{error.sku}</span>
+                        </div>
+                        <div className="text-danger mt-1">
+                          <strong>Hata:</strong> {error.error}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setErrorDetailsModal({ show: false, title: '', errors: [] })}
+                >
+                  Kapat
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Bulk Price Modal */}
       {showBulkModal && (

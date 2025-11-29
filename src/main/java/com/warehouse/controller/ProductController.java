@@ -1,6 +1,7 @@
 package com.warehouse.controller;
 
 import com.warehouse.entity.Product;
+import com.warehouse.dto.BulkDeleteResponse;
 import com.warehouse.dto.BulkPriceUpdateRequest;
 import com.warehouse.dto.ProductDto;
 import com.warehouse.service.ProductService;
@@ -168,6 +169,15 @@ public class ProductController {
     public ResponseEntity<Void> deleteProduct(@PathVariable Long id) {
         productService.deleteProduct(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/bulk")
+    public ResponseEntity<BulkDeleteResponse> deleteProducts(@RequestBody List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return ResponseEntity.badRequest().build();
+        }
+        BulkDeleteResponse response = productService.deleteProducts(ids);
+        return ResponseEntity.ok(response);
     }
 
     @PutMapping("/{id}/deactivate")

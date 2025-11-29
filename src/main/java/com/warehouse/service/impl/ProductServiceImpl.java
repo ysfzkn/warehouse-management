@@ -1,5 +1,6 @@
 package com.warehouse.service.impl;
 
+import com.warehouse.dto.BulkDeleteResponse;
 import com.warehouse.dto.BulkPriceUpdateRequest;
 import com.warehouse.entity.Product;
 import com.warehouse.entity.Category;
@@ -201,6 +202,88 @@ public class ProductServiceImpl implements ProductService {
 
         productRepository.delete(product);
         logger.info("Product deleted successfully with id: {}", id);
+    }
+
+    @Override
+    public BulkDeleteResponse deleteProducts(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            logger.warn("Attempted to delete products with empty list");
+            return new BulkDeleteResponse(0, 0, List.of());
+        }
+        
+        logger.info("Deleting {} products", ids.size());
+        List<BulkDeleteResponse.DeleteError> errors = new java.util.ArrayList<>();
+        int successCount = 0;
+        
+        for (Long id : ids) {
+            try {
+                Product product = getProductByIdOrThrow(id);
+                
+                // Önce stok ilişkilerini kontrol et
+                if (!product.getStocks().isEmpty()) {
+                    errors.add(new BulkDeleteResponse.DeleteError(
+                        id,
+                        product.getName(),
+                        product.getSku(),
+                        ErrorCode.CANNOT_DELETE_WITH_STOCKS.getCode(),
+                        "Bu ürün stok kayıtlarında kullanılmaktadır. Stok kayıtları silinmeden ürün silinemez."
+                    ));
+                    continue;
+                }
+                
+                // Ardından transfer ilişkilerini kontrol et
+                var transfersUsingProduct = stockTransferRepository.findByProduct(product);
+                if (transfersUsingProduct != null && !transfersUsingProduct.isEmpty()) {
+                    errors.add(new BulkDeleteResponse.DeleteError(
+                        id,
+                        product.getName(),
+                        product.getSku(),
+                        ErrorCode.CANNOT_DELETE_PRODUCT_WITH_TRANSFERS.getCode(),
+                        "Bu ürün en az bir stok transferinde kullanılmıştır. Geçmiş transfer kayıtları silinmeden ürün silinemez."
+                    ));
+                    continue;
+                }
+                
+                productRepository.delete(product);
+                successCount++;
+                logger.debug("Product deleted successfully with id: {}", id);
+            } catch (WarehouseManagementException e) {
+                // Domain exception'ları yakala
+                Product product = null;
+                try {
+                    product = getProductByIdOrThrow(id);
+                } catch (Exception ex) {
+                    // Ürün bulunamadı
+                }
+                errors.add(new BulkDeleteResponse.DeleteError(
+                    id,
+                    product != null ? product.getName() : "Bilinmeyen Ürün",
+                    product != null ? product.getSku() : "N/A",
+                    e.getErrorCode().getCode(),
+                    e.getMessage()
+                ));
+                logger.warn("Cannot delete product with id {}: {}", id, e.getMessage());
+            } catch (Exception e) {
+                // Diğer hatalar
+                Product product = null;
+                try {
+                    product = getProductByIdOrThrow(id);
+                } catch (Exception ex) {
+                    // Ürün bulunamadı
+                }
+                errors.add(new BulkDeleteResponse.DeleteError(
+                    id,
+                    product != null ? product.getName() : "Bilinmeyen Ürün",
+                    product != null ? product.getSku() : "N/A",
+                    ErrorCode.INTERNAL_SERVER_ERROR.getCode(),
+                    "Ürün silinirken beklenmeyen bir hata oluştu: " + e.getMessage()
+                ));
+                logger.error("Error deleting product {}: {}", id, e.getMessage(), e);
+            }
+        }
+        
+        logger.info("Batch delete completed: {} successful, {} errors", successCount, errors.size());
+        return new BulkDeleteResponse(successCount, errors.size(), errors);
     }
 
     @Override

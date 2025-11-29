@@ -1,5 +1,6 @@
 package com.warehouse.service.impl;
 
+import com.warehouse.dto.BulkDeleteResponse;
 import com.warehouse.dto.StockTransferFilter;
 import com.warehouse.dto.StockTransferSummary;
 import com.warehouse.entity.Product;
@@ -475,12 +476,7 @@ public class StockTransferServiceImpl implements StockTransferService {
         logger.info("Deleting transfer with id: {}", transferId);
         StockTransfer transfer = getTransferByIdOrThrow(transferId);
 
-        if (transfer.getStatus() == TransferStatus.IN_TRANSIT) {
-            logger.warn("Cannot delete transfer in transit. Transfer id: {}", transferId);
-            throw new WarehouseManagementException(ErrorCode.CANNOT_DELETE_IN_TRANSIT);
-        }
-        // Tamamlanmış transferlerin silinmesine izin veriyoruz; sadece yoldaki (IN_TRANSIT) transferler engellenir
-
+        // Tüm transfer durumlarının (yolda, tamamlanan, beklemede) silinmesine izin veriyoruz
         stockTransferRepository.delete(transfer);
         String username = CurrentUser.usernameOrSystem();
         auditService.log(AuditAction.TRANSFER_DELETE, DomainEntityType.StockTransfer.name(), transferId, username,
@@ -504,35 +500,84 @@ public class StockTransferServiceImpl implements StockTransferService {
     }
 
     @Override
-    public void deleteTransfers(List<Long> transferIds) {
+    public BulkDeleteResponse deleteTransfers(List<Long> transferIds) {
         if (transferIds == null || transferIds.isEmpty()) {
             logger.warn("Attempted to delete transfers with empty list");
-            return;
+            return new BulkDeleteResponse(0, 0, List.of());
         }
+        
         logger.info("Deleting {} transfers", transferIds.size());
         String username = CurrentUser.usernameOrSystem();
+        List<BulkDeleteResponse.DeleteError> errors = new java.util.ArrayList<>();
+        int successCount = 0;
         
         for (Long transferId : transferIds) {
             try {
                 StockTransfer transfer = getTransferByIdOrThrow(transferId);
                 
-                if (transfer.getStatus() == TransferStatus.IN_TRANSIT) {
-                    logger.warn("Cannot delete transfer in transit. Transfer id: {}", transferId);
-                    continue;
-                }
-
+                // Tüm transfer durumlarının (yolda, tamamlanan, beklemede) silinmesine izin veriyoruz
                 stockTransferRepository.delete(transfer);
                 auditService.log(AuditAction.TRANSFER_DELETE, DomainEntityType.StockTransfer.name(), transferId, username,
                         "Transfer silindi");
+                successCount++;
+                logger.debug("Transfer deleted successfully with id: {}", transferId);
+            } catch (WarehouseManagementException e) {
+                // Domain exception'ları yakala
+                StockTransfer transfer = null;
+                try {
+                    transfer = getTransferByIdOrThrow(transferId);
+                } catch (Exception ex) {
+                    // Transfer bulunamadı
+                }
+                String transferInfo = transfer != null 
+                    ? String.format("Transfer #%d (%s → %s)", transferId,
+                        transfer.getSourceWarehouse() != null ? transfer.getSourceWarehouse().getName() : "Bilinmeyen",
+                        transfer.getDestinationWarehouse() != null ? transfer.getDestinationWarehouse().getName() 
+                            : (transfer.getCustomerFullName() != null ? transfer.getCustomerFullName() : "Bilinmeyen"))
+                    : String.format("Transfer #%d", transferId);
+                
+                errors.add(new BulkDeleteResponse.DeleteError(
+                    transferId,
+                    transferInfo,
+                    null, // Transfer için SKU yok
+                    e.getErrorCode().getCode(),
+                    e.getMessage()
+                ));
+                logger.warn("Cannot delete transfer with id {}: {}", transferId, e.getMessage());
             } catch (Exception e) {
-                logger.error("Error deleting transfer {}: {}", transferId, e.getMessage());
+                // Diğer hatalar
+                StockTransfer transfer = null;
+                try {
+                    transfer = getTransferByIdOrThrow(transferId);
+                } catch (Exception ex) {
+                    // Transfer bulunamadı
+                }
+                String transferInfo = transfer != null 
+                    ? String.format("Transfer #%d (%s → %s)", transferId,
+                        transfer.getSourceWarehouse() != null ? transfer.getSourceWarehouse().getName() : "Bilinmeyen",
+                        transfer.getDestinationWarehouse() != null ? transfer.getDestinationWarehouse().getName() 
+                            : (transfer.getCustomerFullName() != null ? transfer.getCustomerFullName() : "Bilinmeyen"))
+                    : String.format("Transfer #%d", transferId);
+                
+                errors.add(new BulkDeleteResponse.DeleteError(
+                    transferId,
+                    transferInfo,
+                    null,
+                    ErrorCode.INTERNAL_SERVER_ERROR.getCode(),
+                    "Transfer silinirken beklenmeyen bir hata oluştu: " + e.getMessage()
+                ));
+                logger.error("Error deleting transfer {}: {}", transferId, e.getMessage(), e);
             }
         }
         
-        notificationService.create(NotificationMessages.TRANSFER_DELETED_TITLE,
-                String.format("Kullanıcı %s, %d adet transferi sildi.", username, transferIds.size()),
-                DomainEntityType.Stock.name(), null);
-        logger.info("Batch delete completed for {} transfers", transferIds.size());
+        if (successCount > 0) {
+            notificationService.create(NotificationMessages.TRANSFER_DELETED_TITLE,
+                    String.format("Kullanıcı %s, %d adet transferi sildi.", username, successCount),
+                    DomainEntityType.Stock.name(), null);
+        }
+        
+        logger.info("Batch delete completed: {} successful, {} errors", successCount, errors.size());
+        return new BulkDeleteResponse(successCount, errors.size(), errors);
     }
 
     @Override

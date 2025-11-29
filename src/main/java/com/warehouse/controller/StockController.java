@@ -1,5 +1,6 @@
 package com.warehouse.controller;
 
+import com.warehouse.dto.BulkDeleteResponse;
 import com.warehouse.dto.PagedResponse;
 import com.warehouse.dto.StockDto;
 import com.warehouse.dto.StockFilter;
@@ -311,18 +312,18 @@ public class StockController {
 
     @DeleteMapping("/bulk")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<Void> deleteStocks(@RequestBody List<Long> ids) {
+    public ResponseEntity<BulkDeleteResponse> deleteStocks(@RequestBody List<Long> ids) {
         if (ids == null || ids.isEmpty()) {
             return ResponseEntity.badRequest().build();
         }
-        stockService.deleteStocks(ids);
+        BulkDeleteResponse response = stockService.deleteStocks(ids);
         try {
             ssePushService.broadcastCounts();
-            logger.debug("SSE counts broadcasted after deleteStocks. deletedCount={}", ids.size());
+            logger.debug("SSE counts broadcasted after deleteStocks. deletedCount={}", response.getSuccessCount());
         } catch (Exception e) {
             logger.warn("SSE broadcast failed after deleteStocks", e);
         }
-        return ResponseEntity.noContent().build();
+        return ResponseEntity.ok(response);
     }
 
     private StockDto toDto(Stock s) {

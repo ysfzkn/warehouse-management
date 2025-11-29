@@ -1,5 +1,6 @@
 package com.warehouse.service;
 
+import com.warehouse.dto.BulkDeleteResponse;
 import com.warehouse.dto.StockFilter;
 import com.warehouse.entity.Stock;
 import org.springframework.data.domain.Page;
@@ -59,7 +60,7 @@ public interface StockService {
 
     void deleteStock(Long id);
 
-    void deleteStocks(List<Long> ids);
+    BulkDeleteResponse deleteStocks(List<Long> ids);
 
     Stock reserveStock(Long stockId, Integer quantity);
 

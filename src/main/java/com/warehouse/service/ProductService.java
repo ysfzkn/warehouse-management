@@ -1,5 +1,6 @@
 package com.warehouse.service;
 
+import com.warehouse.dto.BulkDeleteResponse;
 import com.warehouse.dto.BulkPriceUpdateRequest;
 import com.warehouse.entity.Product;
 import org.springframework.data.domain.Page;
@@ -42,6 +43,8 @@ public interface ProductService {
     Product updateProduct(Long id, Product productDetails);
 
     void deleteProduct(Long id);
+
+    BulkDeleteResponse deleteProducts(List<Long> ids);
 
     void deactivateProduct(Long id);
 

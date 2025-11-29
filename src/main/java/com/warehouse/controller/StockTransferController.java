@@ -1,5 +1,6 @@
 package com.warehouse.controller;
 
+import com.warehouse.dto.BulkDeleteResponse;
 import com.warehouse.dto.PagedResponse;
 import com.warehouse.dto.StockTransferCreateRequest;
 import com.warehouse.dto.StockTransferDto;
@@ -215,12 +216,12 @@ public class StockTransferController {
 
     @DeleteMapping("/bulk")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<Void> deleteTransfers(@RequestBody List<Long> ids) {
+    public ResponseEntity<BulkDeleteResponse> deleteTransfers(@RequestBody List<Long> ids) {
         if (ids == null || ids.isEmpty()) {
             return ResponseEntity.badRequest().build();
         }
-        stockTransferService.deleteTransfers(ids);
-        return ResponseEntity.noContent().build();
+        BulkDeleteResponse response = stockTransferService.deleteTransfers(ids);
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/current-user/requests")

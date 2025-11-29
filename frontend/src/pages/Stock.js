@@ -642,6 +642,7 @@ const Stock = () => {
   // Modal states
   const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null });
   const [errorModal, setErrorModal] = useState({ show: false, title: '', message: '' });
+  const [errorDetailsModal, setErrorDetailsModal] = useState({ show: false, title: '', errors: [] });
   const [notesModal, setNotesModal] = useState({ show: false, notes: '', transferId: null, title: '' });
   const [cancellationModal, setCancellationModal] = useState({ show: false, transferId: null, reason: '' });
   const [completionModal, setCompletionModal] = useState({ show: false, transferId: null, note: '', message: '', transfer: null });
@@ -1122,20 +1123,56 @@ const Stock = () => {
       icon: 'trash',
       onConfirm: async () => {
         setConfirmModal({ show: false });
+        
         try {
-          await axios.delete('/api/stocks/bulk', { data: ids });
-          setSelectedStocks(prev => prev.filter(id => !ids.includes(id)));
-          showSuccessToast(`${ids.length} stok kaydı silindi.`);
+          // Backend'den toplu silme endpoint'ini kullan
+          const response = await axios.delete('/api/stocks/bulk', { data: ids });
+          const result = response.data;
+          
+          // Başarılı silinen stoklar için toast göster
+          if (result.successCount > 0) {
+            showSuccessToast(`${result.successCount} stok kaydı başarıyla silindi.`);
+          }
+          
+          // Hata alan stoklar varsa detaylı hata listesi göster
+          if (result.errors && result.errors.length > 0) {
+            const formattedErrors = result.errors.map(err => ({
+              stockId: err.id,
+              stockInfo: err.name || `Stok #${err.id}`,
+              error: err.errorMessage || 'Bilinmeyen hata',
+              errorCode: err.errorCode || null,
+              sku: err.sku || null
+            }));
+            
+            setErrorDetailsModal({
+              show: true,
+              title: 'Silinemeyen Stoklar',
+              errors: formattedErrors
+            });
+          }
+          
+          // Seçili stokları temizle (sadece başarıyla silinenleri kaldır)
+          const errorIds = new Set((result.errors || []).map(err => err.id));
+          setSelectedStocks(prev => prev.filter(id => {
+            // Eğer bu ID silinmeye çalışılan ID'ler arasındaysa
+            if (ids.includes(id)) {
+              // Hata alan stokları seçimde tut
+              return errorIds.has(id);
+            }
+            // Diğer stokları olduğu gibi tut
+            return true;
+          }));
         } catch (error) {
+          // Backend hatası (örneğin network hatası)
           const errorData = error?.response?.data;
-          const msg = errorData?.message || errorData?.error || error.message || 'Beklenmeyen bir durum oluştu';
+          const msg = errorData?.message || errorData?.error || error.message || 'Stoklar silinirken hata oluştu';
           setErrorModal({
             show: true,
-            title: 'Stok Silme Hatası',
-            message: `Seçili stoklar silinirken hata oluştu: ${msg}`
+            title: 'Toplu Silme Hatası',
+            message: msg
           });
         } finally {
-          // Bazı stok kayıtları silinmiş olabilir; duruma bakmadan listeyi yenile
+          // Listeyi yenile
           await Promise.all([fetchAllData(), fetchStocks(stockPage)]);
         }
       }
@@ -1144,21 +1181,6 @@ const Stock = () => {
 
   const handleBatchDeleteTransfers = (ids) => {
     if (!ids || ids.length === 0) {
-      return;
-    }
-
-    const canDelete = ids.every(id => {
-      const transfer = transfers.find(t => t.id === id);
-      // Sadece yoldaki transferlerin silinmesine izin verme; tamamlanmış transferler silinebilir
-      return transfer && transfer.status !== 'IN_TRANSIT';
-    });
-
-    if (!canDelete) {
-      setErrorModal({
-        show: true,
-        title: 'Transfer Silme Hatası',
-        message: 'Yoldaki (IN_TRANSIT) transferler silinemez.'
-      });
       return;
     }
 
@@ -1171,20 +1193,55 @@ const Stock = () => {
       icon: 'trash',
       onConfirm: async () => {
         setConfirmModal({ show: false });
+        
         try {
-          await axios.delete('/api/stock-transfers/bulk', { data: ids });
-          setSelectedTransfers(prev => prev.filter(id => !ids.includes(id)));
-          showSuccessToast(`${ids.length} transfer silindi.`);
+          // Backend'den toplu silme endpoint'ini kullan
+          const response = await axios.delete('/api/stock-transfers/bulk', { data: ids });
+          const result = response.data;
+          
+          // Başarılı silinen transferler için toast göster
+          if (result.successCount > 0) {
+            showSuccessToast(`${result.successCount} transfer başarıyla silindi.`);
+          }
+          
+          // Hata alan transferler varsa detaylı hata listesi göster
+          if (result.errors && result.errors.length > 0) {
+            const formattedErrors = result.errors.map(err => ({
+              transferId: err.id,
+              transferInfo: err.name || `Transfer #${err.id}`,
+              error: err.errorMessage || 'Bilinmeyen hata',
+              errorCode: err.errorCode || null
+            }));
+            
+            setErrorDetailsModal({
+              show: true,
+              title: 'Silinemeyen Transferler',
+              errors: formattedErrors
+            });
+          }
+          
+          // Seçili transferleri temizle (sadece başarıyla silinenleri kaldır)
+          const errorIds = new Set((result.errors || []).map(err => err.id));
+          setSelectedTransfers(prev => prev.filter(id => {
+            // Eğer bu ID silinmeye çalışılan ID'ler arasındaysa
+            if (ids.includes(id)) {
+              // Hata alan transferleri seçimde tut
+              return errorIds.has(id);
+            }
+            // Diğer transferleri olduğu gibi tut
+            return true;
+          }));
         } catch (error) {
+          // Backend hatası (örneğin network hatası)
           const errorData = error?.response?.data;
-          const msg = errorData?.message || errorData?.error || error.message || 'Beklenmeyen bir durum oluştu';
+          const msg = errorData?.message || errorData?.error || error.message || 'Transferler silinirken hata oluştu';
           setErrorModal({
             show: true,
-            title: 'Transfer Silme Hatası',
-            message: `Seçili transferler silinirken hata oluştu: ${msg}`
+            title: 'Toplu Silme Hatası',
+            message: msg
           });
         } finally {
-          // Bazı transferler silinmiş olabilir; listeyi her durumda yenile
+          // Listeyi yenile
           await fetchTransfers(0, false);
         }
       }
@@ -2872,7 +2929,6 @@ const Stock = () => {
                           const approvalRejected = (transfer.approvalStatus || '').toUpperCase() === 'REJECTED';
 
                           const isSelected = selectedTransfers.includes(transfer.id);
-                          const canDelete = transfer.status !== 'IN_TRANSIT' && transfer.status !== 'COMPLETED';
 
                           return (
                             <tr key={transfer.id} className={isSelected ? 'table-active' : ''}>
@@ -2884,7 +2940,6 @@ const Stock = () => {
                                       type="checkbox"
                                       checked={isSelected}
                                       onChange={() => toggleTransferSelection(transfer.id)}
-                                      disabled={!canDelete}
                                       aria-label="Transfer seç"
                                     />
                                   </div>
@@ -3628,6 +3683,62 @@ const Stock = () => {
         onConfirm={() => setErrorModal({ show: false, title: '', message: '' })}
         onCancel={() => setErrorModal({ show: false, title: '', message: '' })}
       />
+
+      {/* Error Details Modal */}
+      {errorDetailsModal.show && (
+        <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <div className="modal-dialog modal-lg">
+            <div className="modal-content">
+              <div className="modal-header bg-danger text-white">
+                <h5 className="modal-title">
+                  <i className="fas fa-exclamation-triangle me-2"></i>
+                  {errorDetailsModal.title}
+                </h5>
+                <button
+                  type="button"
+                  className="btn-close btn-close-white"
+                  onClick={() => setErrorDetailsModal({ show: false, title: '', errors: [] })}
+                ></button>
+              </div>
+              <div className="modal-body">
+                <div className="alert alert-warning">
+                  <i className="fas fa-info-circle me-2"></i>
+                  Aşağıdaki {errorDetailsModal.errors.length} kayıt silinemedi.
+                </div>
+                <div className="list-group" style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                  {errorDetailsModal.errors.map((error, index) => (
+                    <div key={index} className="list-group-item border-start border-danger border-3">
+                      <div className="d-flex flex-column gap-2">
+                        <div className="fw-bold text-danger">
+                          <i className={`fas ${error.transferInfo ? 'fa-truck' : 'fa-box'} me-2`}></i>
+                          {error.transferInfo || error.stockInfo || `#${error.transferId || error.stockId || index + 1}`}
+                        </div>
+                        {error.sku && (
+                          <div className="text-muted">
+                            <strong>Stok Kodu:</strong> <span className="badge bg-secondary">{error.sku}</span>
+                          </div>
+                        )}
+                        <div className="text-danger mt-1">
+                          <strong>Hata:</strong> {error.error}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setErrorDetailsModal({ show: false, title: '', errors: [] })}
+                >
+                  Kapat
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Notes Modal */}
       <NotesModal
