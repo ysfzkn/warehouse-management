@@ -209,10 +209,22 @@ const Warehouses = () => {
             <div className="card h-100">
               <div className="card-body">
                 <div className="d-flex justify-content-between align-items-start mb-2">
-                  <h5 className="card-title">{warehouse.name}</h5>
-                  <span className={`badge ${warehouse.active === false ? 'bg-secondary' : 'bg-success'}`}>
-                    {warehouse.active === false ? 'Pasif' : 'Aktif'}
-                  </span>
+                  <div className="flex-grow-1">
+                    <h5 className="card-title mb-1">{warehouse.name}</h5>
+                    <div className="d-flex gap-2 flex-wrap">
+                      <span className={`badge ${warehouse.active === false ? 'bg-secondary' : 'bg-success'}`}>
+                        {warehouse.active === false ? 'Pasif' : 'Aktif'}
+                      </span>
+                      <span className={`badge ${
+                        warehouse.warehouseType === 'EMANET_DEPO' 
+                          ? 'bg-info bg-opacity-10 text-info border border-info' 
+                          : 'bg-primary bg-opacity-10 text-primary border border-primary'
+                      }`}>
+                        <i className={`fas ${warehouse.warehouseType === 'EMANET_DEPO' ? 'fa-handshake' : 'fa-warehouse'} me-1`}></i>
+                        {warehouse.warehouseType === 'EMANET_DEPO' ? 'Emanet Depo' : 'Standart Depo'}
+                      </span>
+                    </div>
+                  </div>
                 </div>
 
                 <p className="card-text text-muted">

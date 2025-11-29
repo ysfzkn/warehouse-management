@@ -6,6 +6,7 @@ import com.warehouse.dto.StockFilter;
 import com.warehouse.entity.Product;
 import com.warehouse.entity.Stock;
 import com.warehouse.entity.Warehouse;
+import com.warehouse.enums.WarehouseType;
 import com.warehouse.enums.AuditAction;
 import com.warehouse.enums.DomainEntityType;
 import com.warehouse.exception.ErrorCode;
@@ -241,20 +242,37 @@ public class StockServiceImpl implements StockService {
         Product product = findProductOrThrow(stock.getProduct().getId());
         Warehouse warehouse = findWarehouseOrThrow(stock.getWarehouse().getId());
 
-        validateStockUniqueness(product, warehouse);
+        validateStockUniqueness(product, warehouse, stock.getCustomerName());
 
         stock.setProduct(product);
         stock.setWarehouse(warehouse);
         stock.setAdditionNote(normalizeAdditionNote(stock.getAdditionNote()));
+        
+        // For STANDART warehouses, customerName and customerPhone should be null
+        if (warehouse.getWarehouseType() == WarehouseType.STANDART) {
+            stock.setCustomerName(null);
+            stock.setCustomerPhone(null);
+        } else if (warehouse.getWarehouseType() == WarehouseType.EMANET_DEPO) {
+            // For EMANET_DEPO, customerPhone is required
+            if (stock.getCustomerName() == null || stock.getCustomerName().trim().isEmpty()) {
+                throw new WarehouseManagementException(ErrorCode.REQUIRED_FIELD_MISSING, 
+                    "Emanet depo için müşteri adı gereklidir.");
+            }
+            if (stock.getCustomerPhone() == null || stock.getCustomerPhone().trim().isEmpty()) {
+                throw new WarehouseManagementException(ErrorCode.REQUIRED_FIELD_MISSING, 
+                    "Emanet depo için müşteri telefon numarası gereklidir.");
+            }
+        }
 
         Stock saved = stockRepository.save(stock);
         String username = CurrentUser.usernameOrSystem();
+        String customerInfo = saved.getCustomerName() != null ? " (Müşteri: " + saved.getCustomerName() + ")" : "";
         auditService.log(AuditAction.STOCK_CREATE, DomainEntityType.Stock.name(), saved.getId(), username,
-                String.format("Stok oluşturuldu: Depo=%s, Ürün=%s, Miktar=%s", 
-                        warehouse.getName(), product.getName(), String.valueOf(saved.getQuantity())));
+                String.format("Stok oluşturuldu: Depo=%s, Ürün=%s, Miktar=%s%s", 
+                        warehouse.getName(), product.getName(), String.valueOf(saved.getQuantity()), customerInfo));
         notificationService.create(NotificationMessages.STOCK_CREATED_TITLE,
-                String.format("Kullanıcı %s, %s/%s için %d adet stok oluşturdu.", username,
-                        warehouse.getName(), product.getName(), saved.getQuantity()),
+                String.format("Kullanıcı %s, %s/%s için %d adet stok oluşturdu.%s", username,
+                        warehouse.getName(), product.getName(), saved.getQuantity(), customerInfo),
                 DomainEntityType.Stock.name(), saved.getId());
         logger.info("Stock created successfully with id: {}", saved.getId());
         return saved;
@@ -276,12 +294,39 @@ public class StockServiceImpl implements StockService {
     public Stock updateStock(Long id, Stock stockDetails) {
         logger.info("Updating stock with id: {}", id);
         Stock stock = getStockByIdOrThrow(id);
+        Warehouse warehouse = stock.getWarehouse();
 
         updateStockQuantity(stock, stockDetails.getQuantity());
         updateMinStockLevel(stock, stockDetails.getMinStockLevel());
         updateReservedQuantity(stock, stockDetails.getReservedQuantity());
         updateConsignedQuantity(stock, stockDetails.getConsignedQuantity());
         updateAdditionNote(stock, stockDetails.getAdditionNote());
+        
+        // Update customer info for EMANET_DEPO warehouses
+        if (warehouse.getWarehouseType() == WarehouseType.EMANET_DEPO) {
+            // Update customer name if provided
+            if (stockDetails.getCustomerName() != null) {
+                String customerName = stockDetails.getCustomerName().trim();
+                if (customerName.isEmpty()) {
+                    throw new WarehouseManagementException(ErrorCode.REQUIRED_FIELD_MISSING, 
+                        "Emanet depo için müşteri adı gereklidir.");
+                }
+                stock.setCustomerName(customerName);
+            }
+            // Update customer phone if provided
+            if (stockDetails.getCustomerPhone() != null) {
+                String customerPhone = stockDetails.getCustomerPhone().trim();
+                if (customerPhone.isEmpty()) {
+                    throw new WarehouseManagementException(ErrorCode.REQUIRED_FIELD_MISSING, 
+                        "Emanet depo için müşteri telefon numarası gereklidir.");
+                }
+                stock.setCustomerPhone(customerPhone);
+            }
+        } else {
+            // For STANDART warehouses, customer info should always be null
+            stock.setCustomerName(null);
+            stock.setCustomerPhone(null);
+        }
 
         StockQuantityValidator.validateAvailableQuantity(stock);
 
@@ -505,15 +550,36 @@ public class StockServiceImpl implements StockService {
                 });
     }
 
-    private void validateStockUniqueness(Product product, Warehouse warehouse) {
-        Optional<Stock> existingStock = stockRepository.findByProductAndWarehouse(product, warehouse);
-        if (existingStock.isPresent()) {
-            logger.warn("Stock already exists for product id: {} and warehouse id: {}", product.getId(), warehouse.getId());
-            String message = String.format(
-                "Stock record already exists. Product %s already has a stock record in warehouse %s. Please edit the existing record from Stock Management screen.",
-                product.getName(), warehouse.getName()
-            );
-            throw new WarehouseManagementException(ErrorCode.STOCK_ALREADY_EXISTS, message);
+    private void validateStockUniqueness(Product product, Warehouse warehouse, String customerName) {
+        // For EMANET_DEPO warehouses, check uniqueness with customerName
+        if (warehouse.getWarehouseType() == WarehouseType.EMANET_DEPO) {
+            if (customerName == null || customerName.trim().isEmpty()) {
+                throw new WarehouseManagementException(ErrorCode.REQUIRED_FIELD_MISSING, 
+                    "Emanet depo için müşteri adı gereklidir.");
+            }
+            Optional<Stock> existingStock = stockRepository.findByProductAndWarehouseAndCustomerName(
+                product, warehouse, customerName.trim());
+            if (existingStock.isPresent()) {
+                logger.warn("Stock already exists for product id: {}, warehouse id: {}, customer: {}", 
+                    product.getId(), warehouse.getId(), customerName);
+                String message = String.format(
+                    "Bu ürün için %s müşterisi adına zaten bir stok kaydı mevcut. Lütfen mevcut kaydı düzenleyin.",
+                    customerName
+                );
+                throw new WarehouseManagementException(ErrorCode.STOCK_ALREADY_EXISTS, message);
+            }
+        } else {
+            // For STANDART warehouses, check uniqueness without customerName
+            Optional<Stock> existingStock = stockRepository.findByProductAndWarehouse(product, warehouse);
+            if (existingStock.isPresent()) {
+                logger.warn("Stock already exists for product id: {} and warehouse id: {}", 
+                    product.getId(), warehouse.getId());
+                String message = String.format(
+                    "Stock record already exists. Product %s already has a stock record in warehouse %s. Please edit the existing record from Stock Management screen.",
+                    product.getName(), warehouse.getName()
+                );
+                throw new WarehouseManagementException(ErrorCode.STOCK_ALREADY_EXISTS, message);
+            }
         }
     }
 

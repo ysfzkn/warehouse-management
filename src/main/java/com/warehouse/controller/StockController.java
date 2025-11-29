@@ -336,6 +336,8 @@ public class StockController {
         dto.availableQuantity = s.getAvailableQuantity();
         dto.lastUpdated = s.getLastUpdated();
         dto.additionNote = s.getAdditionNote();
+        dto.customerName = s.getCustomerName();
+        dto.customerPhone = s.getCustomerPhone();
         if (s.getProduct() != null) {
             StockDto.ProductDto p = new StockDto.ProductDto();
             p.id = s.getProduct().getId();
@@ -348,6 +350,7 @@ public class StockController {
             w.id = s.getWarehouse().getId();
             w.name = s.getWarehouse().getName();
             w.location = s.getWarehouse().getLocation();
+            w.warehouseType = s.getWarehouse().getWarehouseType() != null ? s.getWarehouse().getWarehouseType().name() : null;
             dto.warehouse = w;
         }
         return dto;
@@ -363,6 +366,8 @@ public class StockController {
         dto.availableQuantity = s.getAvailableQuantity();
         dto.lastUpdated = s.getLastUpdated();
         dto.additionNote = s.getAdditionNote();
+        dto.customerName = s.getCustomerName();
+        dto.customerPhone = s.getCustomerPhone();
         if (s.getProduct() != null) {
             StockDto.ProductDto p = new StockDto.ProductDto();
             p.id = s.getProduct().getId();
@@ -371,6 +376,7 @@ public class StockController {
         if (s.getWarehouse() != null) {
             StockDto.WarehouseDto w = new StockDto.WarehouseDto();
             w.id = s.getWarehouse().getId();
+            w.warehouseType = s.getWarehouse().getWarehouseType() != null ? s.getWarehouse().getWarehouseType().name() : null;
             dto.warehouse = w;
         }
         return dto;

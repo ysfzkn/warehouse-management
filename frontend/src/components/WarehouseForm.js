@@ -15,7 +15,8 @@ const WarehouseForm = ({ warehouse, onSuccess, onCancel }) => {
     phone: '',
     manager: '',
     capacitySqm: '',
-    isActive: true
+    isActive: true,
+    warehouseType: 'STANDART'
   });
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
@@ -28,7 +29,8 @@ const WarehouseForm = ({ warehouse, onSuccess, onCancel }) => {
         phone: extractPhoneDigits(warehouse.phone || ''),
         manager: warehouse.manager || '',
         capacitySqm: warehouse.capacitySqm || '',
-        isActive: warehouse.isActive !== false
+        isActive: warehouse.isActive !== false,
+        warehouseType: warehouse.warehouseType || 'STANDART'
       });
     }
   }, [warehouse]);
@@ -229,6 +231,30 @@ const WarehouseForm = ({ warehouse, onSuccess, onCancel }) => {
           </div>
         </div>
 
+        <div className="col-md-6">
+          <div className="mb-3">
+            <label htmlFor="warehouseType" className="form-label">
+              Depo Tipi <span className="text-danger">*</span>
+            </label>
+            <select
+              className="form-select"
+              id="warehouseType"
+              name="warehouseType"
+              value={formData.warehouseType}
+              onChange={handleChange}
+              required
+            >
+              <option value="STANDART">Standart Depo</option>
+              <option value="EMANET_DEPO">Emanet Depo</option>
+            </select>
+            <small className="text-muted d-block mt-1">
+              Emanet depo seçildiğinde, stok eklerken müşteri bilgisi alınacaktır.
+            </small>
+          </div>
+        </div>
+      </div>
+
+      <div className="row">
         <div className="col-md-6">
           <div className="mb-3">
             <div className="form-check mt-4">

@@ -1,5 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import {
+  extractPhoneDigits,
+  formatPhoneForSubmit,
+  formatPhoneInputValue,
+  isPhoneComplete,
+  PHONE_PLACEHOLDER
+} from '../utils/phone';
 
 /**
  * Stock settings modal - for managing consigned, reserved, and min stock levels
@@ -8,27 +15,56 @@ const StockSettingsModal = ({ stock, onSuccess, onClose }) => {
   const role = (typeof window !== 'undefined' && localStorage.getItem('auth_role')) || 'ADMIN';
   const [settings, setSettings] = useState({
     consignedQuantity: 0,
-    minStockLevel: 10
+    minStockLevel: 10,
+    customerName: '',
+    customerPhone: ''
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  const [errors, setErrors] = useState({});
+
+  // Check if warehouse is EMANET_DEPO type
+  // Support both string and enum formats
+  const warehouseType = stock?.warehouse?.warehouseType;
+  const isEmanetDepo = warehouseType === 'EMANET_DEPO' || warehouseType === 'EmanetDepo' || warehouseType === 'emanetDepo';
 
   useEffect(() => {
     if (stock) {
       setSettings({
         consignedQuantity: stock.consignedQuantity || 0,
-        minStockLevel: stock.minStockLevel || 10
+        minStockLevel: stock.minStockLevel || 10,
+        customerName: stock.customerName || '',
+        customerPhone: stock.customerPhone ? extractPhoneDigits(stock.customerPhone) : ''
       });
     }
   }, [stock]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setSettings(prev => ({
-      ...prev,
-      [name]: parseInt(value) || 0
-    }));
+    if (name === 'customerPhone') {
+      const digits = extractPhoneDigits(value);
+      setSettings(prev => ({
+        ...prev,
+        [name]: digits
+      }));
+      if (errors.customerPhone) {
+        setErrors(prev => ({ ...prev, customerPhone: null }));
+      }
+    } else if (name === 'customerName') {
+      setSettings(prev => ({
+        ...prev,
+        [name]: value
+      }));
+      if (errors.customerName) {
+        setErrors(prev => ({ ...prev, customerName: null }));
+      }
+    } else {
+      setSettings(prev => ({
+        ...prev,
+        [name]: parseInt(value) || 0
+      }));
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -39,10 +75,34 @@ const StockSettingsModal = ({ stock, onSuccess, onClose }) => {
       return;
     }
 
+    // Validate EMANET_DEPO fields
+    if (isEmanetDepo) {
+      const newErrors = {};
+      if (!settings.customerName || !settings.customerName.trim()) {
+        newErrors.customerName = 'Müşteri adı gereklidir';
+      }
+      if (!settings.customerPhone || !settings.customerPhone.trim()) {
+        newErrors.customerPhone = 'Müşteri telefon numarası gereklidir';
+      } else if (!isPhoneComplete(settings.customerPhone)) {
+        newErrors.customerPhone = 'Telefon numarası 10 haneli olmalıdır';
+      }
+      if (Object.keys(newErrors).length > 0) {
+        setErrors(newErrors);
+        setError('Lütfen tüm alanları doldurun');
+        return;
+      }
+    }
+
     // Check if any change was made
+    const originalCustomerName = stock.customerName || '';
+    const originalCustomerPhone = stock.customerPhone ? extractPhoneDigits(stock.customerPhone) : '';
     const hasChanges = 
       settings.consignedQuantity !== (stock.consignedQuantity || 0) ||
-      settings.minStockLevel !== (stock.minStockLevel || 10);
+      settings.minStockLevel !== (stock.minStockLevel || 10) ||
+      (isEmanetDepo && (
+        settings.customerName.trim() !== originalCustomerName ||
+        settings.customerPhone.trim() !== originalCustomerPhone
+      ));
 
     if (!hasChanges) {
       setError('Herhangi bir değişiklik yapılmadı');
@@ -52,12 +112,23 @@ const StockSettingsModal = ({ stock, onSuccess, onClose }) => {
     setLoading(true);
     setError(null);
     setSuccess(null);
+    setErrors({});
 
     try {
-      await axios.put(`/api/stocks/${stock.id}`, {
+      const updateData = {
         consignedQuantity: settings.consignedQuantity,
         minStockLevel: settings.minStockLevel
-      });
+      };
+      
+      if (isEmanetDepo) {
+        updateData.customerName = settings.customerName.trim();
+        updateData.customerPhone = formatPhoneForSubmit(settings.customerPhone);
+      } else {
+        updateData.customerName = null;
+        updateData.customerPhone = null;
+      }
+
+      await axios.put(`/api/stocks/${stock.id}`, updateData);
 
       setSuccess('✓ Ayarlar başarıyla güncellendi!');
       setTimeout(() => {
@@ -191,6 +262,59 @@ const StockSettingsModal = ({ stock, onSuccess, onClose }) => {
                     Bu seviyenin altına düşünce "Düşük Stok" uyarısı gösterilir
                   </small>
                 </div>
+
+                {isEmanetDepo && (
+                  <>
+                    <hr className="my-4" />
+                    <h6 className="mb-3">
+                      <i className="fas fa-user-tag me-2 text-info"></i>
+                      Müşteri Bilgileri
+                    </h6>
+                    <div className="mb-3">
+                      <label htmlFor="customerName" className="form-label fw-bold">
+                        Müşteri Adı <span className="text-danger">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        className={`form-control form-control-lg ${errors.customerName ? 'is-invalid' : ''}`}
+                        id="customerName"
+                        name="customerName"
+                        value={settings.customerName}
+                        onChange={handleChange}
+                        placeholder="Müşteri adını giriniz"
+                        maxLength="255"
+                      />
+                      {errors.customerName && (
+                        <div className="invalid-feedback">{errors.customerName}</div>
+                      )}
+                    </div>
+                    <div className="mb-3">
+                      <label htmlFor="customerPhone" className="form-label fw-bold">
+                        Müşteri Telefon Numarası <span className="text-danger">*</span>
+                      </label>
+                      <div className="input-group phone-input-group">
+                        <span className="input-group-text">+90</span>
+                        <input
+                          type="tel"
+                          className={`form-control form-control-lg ${errors.customerPhone ? 'is-invalid' : (settings.customerPhone ? (isPhoneComplete(settings.customerPhone) ? 'is-valid' : '') : '')}`}
+                          id="customerPhone"
+                          name="customerPhone"
+                          value={formatPhoneInputValue(settings.customerPhone)}
+                          onChange={handleChange}
+                          placeholder={PHONE_PLACEHOLDER}
+                          maxLength="13"
+                          inputMode="numeric"
+                        />
+                      </div>
+                      {errors.customerPhone && (
+                        <div className="invalid-feedback d-block">{errors.customerPhone}</div>
+                      )}
+                      {!errors.customerPhone && settings.customerPhone && !isPhoneComplete(settings.customerPhone) && (
+                        <small className="text-muted">Telefon 10 haneli olmalıdır</small>
+                      )}
+                    </div>
+                  </>
+                )}
 
                 {/* Preview */}
                 <div className="alert alert-light border">

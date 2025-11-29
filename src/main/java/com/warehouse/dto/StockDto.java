@@ -10,6 +10,8 @@ public class StockDto {
     public Integer availableQuantity;
     public java.time.LocalDateTime lastUpdated;
     public String additionNote;
+    public String customerName;
+    public String customerPhone;
     public ProductDto product;
     public WarehouseDto warehouse;
 
@@ -23,6 +25,7 @@ public class StockDto {
         public Long id;
         public String name;
         public String location;
+        public String warehouseType;
     }
 }
 

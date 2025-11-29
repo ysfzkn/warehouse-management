@@ -14,14 +14,12 @@ import java.time.LocalDateTime;
 @Entity
 @Table(
     name = "stocks",
-    uniqueConstraints = {
-        @UniqueConstraint(columnNames = {"product_id", "warehouse_id"})
-    },
     indexes = {
         @Index(name = "idx_stocks_product_id", columnList = "product_id"),
         @Index(name = "idx_stocks_warehouse_id", columnList = "warehouse_id"),
         @Index(name = "idx_stocks_last_updated", columnList = "last_updated"),
-        @Index(name = "idx_stocks_quantity", columnList = "quantity")
+        @Index(name = "idx_stocks_quantity", columnList = "quantity"),
+        @Index(name = "idx_stocks_customer_name", columnList = "customer_name")
     }
 )
 @NamedEntityGraph(
@@ -84,6 +82,14 @@ public class Stock {
     @Column(name = "addition_note", length = 500)
     private String additionNote;
 
+    @Size(max = 255, message = "Customer name cannot exceed 255 characters")
+    @Column(name = "customer_name", length = 255)
+    private String customerName; // For EMANET_DEPO warehouses
+
+    @Size(max = 20, message = "Customer phone cannot exceed 20 characters")
+    @Column(name = "customer_phone", length = 20)
+    private String customerPhone; // For EMANET_DEPO warehouses
+
     @Column(name = "last_updated", nullable = false)
     private LocalDateTime lastUpdated;
 
@@ -131,6 +137,8 @@ public class Stock {
                 ", minStockLevel=" + minStockLevel +
                 ", reservedQuantity=" + reservedQuantity +
                 ", consignedQuantity=" + consignedQuantity +
+                ", customerName=" + customerName +
+                ", customerPhone=" + customerPhone +
                 ", lastUpdated=" + lastUpdated +
                 '}';
     }

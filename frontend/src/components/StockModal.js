@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
+import { formatPhoneForDisplay } from '../utils/phone';
 import PaginationControls from './PaginationControls';
 
 const StockModal = ({ warehouse, onClose }) => {
@@ -220,6 +221,7 @@ const StockModal = ({ warehouse, onClose }) => {
                         <th>Miktar</th>
                         <th>Kullanılabilir</th>
                         <th>Emanet</th>
+                        <th>Müşteri</th>
                         <th>Min. Stok</th>
                         <th>Durum</th>
                         <th>Not</th>
@@ -244,6 +246,24 @@ const StockModal = ({ warehouse, onClose }) => {
                               </span>
                             </td>
                             <td>{stock.consignedQuantity || 0}</td>
+                            <td>
+                              {stock.customerName ? (
+                                <div>
+                                  <span className="badge bg-info bg-opacity-10 text-info border border-info mb-1 d-block">
+                                    <i className="fas fa-user me-1"></i>
+                                    {stock.customerName}
+                                  </span>
+                                  {stock.customerPhone && (
+                                    <small className="text-muted d-block">
+                                      <i className="fas fa-phone me-1"></i>
+                                      {formatPhoneForDisplay(stock.customerPhone)}
+                                    </small>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-muted">-</span>
+                              )}
+                            </td>
                             <td>{stock.minStockLevel}</td>
                             <td>
                               <span className={`badge bg-${stockStatus.class}`}>
@@ -268,7 +288,7 @@ const StockModal = ({ warehouse, onClose }) => {
                       })}
                       {paginatedStocks.length === 0 && (
                         <tr>
-                          <td colSpan="10" className="text-center py-4 text-muted">
+                          <td colSpan="11" className="text-center py-4 text-muted">
                             Arama kriterine uygun stok bulunamadı.
                           </td>
                         </tr>
@@ -338,6 +358,25 @@ const StockModal = ({ warehouse, onClose }) => {
                                 </div>
                               </div>
                             </div>
+                            {stock.customerName && (
+                              <div className="row g-2 mb-2">
+                                <div className="col-12 d-flex">
+                                  <div className="stat-tile w-100 text-center bg-info bg-opacity-10 border border-info">
+                                    <div className="small text-muted text-uppercase mb-1">
+                                      <i className="fas fa-user me-1"></i>
+                                      Müşteri
+                                    </div>
+                                    <div className="fw-semibold text-info">{stock.customerName}</div>
+                                    {stock.customerPhone && (
+                                      <div className="small text-muted mt-1">
+                                        <i className="fas fa-phone me-1"></i>
+                                        {formatPhoneForDisplay(stock.customerPhone)}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
                             <div className="row g-2 mb-2">
                               <div className="col-6 d-flex">
                                 <div className="stat-tile w-100 text-center bg-light">

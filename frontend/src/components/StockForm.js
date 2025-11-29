@@ -1,5 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
+import {
+  extractPhoneDigits,
+  formatPhoneForSubmit,
+  formatPhoneInputValue,
+  isPhoneComplete,
+  PHONE_PLACEHOLDER
+} from '../utils/phone';
 
 const INITIAL_VISIBLE_PRODUCTS = 12;
 
@@ -25,9 +32,13 @@ const StockForm = ({ products, warehouses, onSuccess, onCancel }) => {
     warehouseId: null,
     items: null,
     additionNote: null,
+    customerName: null,
+    customerPhone: null,
     perItem: {}
   });
   const [additionNote, setAdditionNote] = useState('');
+  const [customerName, setCustomerName] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
   const [feedback, setFeedback] = useState(null);
 
   useEffect(() => {
@@ -69,6 +80,12 @@ const StockForm = ({ products, warehouses, onSuccess, onCancel }) => {
     return map;
   }, [items]);
 
+  const selectedWarehouse = useMemo(() => {
+    return warehouses.find(w => String(w.id) === warehouseId);
+  }, [warehouses, warehouseId]);
+
+  const isEmanetDepo = selectedWarehouse?.warehouseType === 'EMANET_DEPO';
+
   const clearFieldError = (field) => {
     if (!errors[field]) return;
     setErrors(prev => ({ ...prev, [field]: null }));
@@ -99,6 +116,17 @@ const StockForm = ({ products, warehouses, onSuccess, onCancel }) => {
   const handleAdditionNoteChange = (event) => {
     setAdditionNote(event.target.value);
     clearFieldError('additionNote');
+  };
+
+  const handleCustomerNameChange = (event) => {
+    setCustomerName(event.target.value);
+    clearFieldError('customerName');
+  };
+
+  const handleCustomerPhoneChange = (event) => {
+    const digits = extractPhoneDigits(event.target.value);
+    setCustomerPhone(digits);
+    clearFieldError('customerPhone');
   };
 
   const handleAddProduct = (productId) => {
@@ -147,7 +175,7 @@ const StockForm = ({ products, warehouses, onSuccess, onCancel }) => {
   };
 
   const validateForm = () => {
-    const nextErrors = { general: null, warehouseId: null, items: null, perItem: {} };
+    const nextErrors = { general: null, warehouseId: null, items: null, customerName: null, customerPhone: null, perItem: {} };
 
     if (!warehouseId) {
       nextErrors.warehouseId = 'Depo seçiniz';
@@ -159,6 +187,14 @@ const StockForm = ({ products, warehouses, onSuccess, onCancel }) => {
 
     if (additionNote && additionNote.length > 500) {
       nextErrors.additionNote = 'Not en fazla 500 karakter olabilir';
+    }
+
+    if (isEmanetDepo && (!customerName || !customerName.trim())) {
+      nextErrors.customerName = 'Müşteri adı gereklidir';
+    }
+
+    if (isEmanetDepo && (!customerPhone || !customerPhone.trim())) {
+      nextErrors.customerPhone = 'Müşteri telefon numarası gereklidir';
     }
 
     items.forEach(item => {
@@ -189,6 +225,8 @@ const StockForm = ({ products, warehouses, onSuccess, onCancel }) => {
       Boolean(nextErrors.general) ||
       Boolean(nextErrors.warehouseId) ||
       Boolean(nextErrors.items) ||
+      Boolean(nextErrors.customerName) ||
+      Boolean(nextErrors.customerPhone) ||
       Object.keys(nextErrors.perItem).length > 0;
 
     setErrors(nextErrors);
@@ -197,6 +235,8 @@ const StockForm = ({ products, warehouses, onSuccess, onCancel }) => {
 
   const buildPayload = () => {
     const note = additionNote?.trim() || null;
+    const customer = isEmanetDepo && customerName?.trim() ? customerName.trim() : null;
+    const phone = isEmanetDepo && customerPhone?.trim() ? formatPhoneForSubmit(customerPhone) : null;
     return items.map(item => ({
       product: { id: Number(item.productId) },
       warehouse: { id: Number(warehouseId) },
@@ -204,7 +244,9 @@ const StockForm = ({ products, warehouses, onSuccess, onCancel }) => {
       minStockLevel: item.minStockLevel === '' ? null : Number(item.minStockLevel),
       reservedQuantity: item.reservedQuantity === '' ? 0 : Number(item.reservedQuantity),
       consignedQuantity: item.consignedQuantity === '' ? 0 : Number(item.consignedQuantity),
-      additionNote: note
+      additionNote: note,
+      customerName: customer,
+      customerPhone: phone
     }));
   };
 
@@ -228,6 +270,8 @@ const StockForm = ({ products, warehouses, onSuccess, onCancel }) => {
       setItems([]);
       setProductSearchTerm('');
       setAdditionNote('');
+      setCustomerName('');
+      setCustomerPhone('');
       if (onSuccess) {
         onSuccess({ close: false, message: 'Stok kayıtları başarıyla oluşturuldu.' });
       }
@@ -328,6 +372,63 @@ const StockForm = ({ products, warehouses, onSuccess, onCancel }) => {
           <small className="text-muted">{additionNote.length}/500</small>
         </div>
       </div>
+
+      {isEmanetDepo && (
+        <>
+          <div className="mb-4">
+            <label className="form-label fw-semibold">
+              Müşteri Adı <span className="text-danger">*</span>
+            </label>
+            <input
+              type="text"
+              className={`form-control ${errors.customerName ? 'is-invalid' : ''}`}
+              value={customerName}
+              onChange={handleCustomerNameChange}
+              placeholder="Müşteri adını giriniz"
+              maxLength="255"
+            />
+            <div className="d-flex justify-content-between mt-1">
+              {errors.customerName ? (
+                <div className="invalid-feedback d-block">{errors.customerName}</div>
+              ) : (
+                <small className="text-muted">Bu müşteri adı listede oluşturulan tüm stoklara işlenecek.</small>
+              )}
+              <small className="text-muted">{customerName.length}/255</small>
+            </div>
+          </div>
+          <div className="mb-4">
+            <label className="form-label fw-semibold">
+              Müşteri Telefon Numarası <span className="text-danger">*</span>
+            </label>
+            <div className="input-group phone-input-group">
+              <span className="input-group-text">+90</span>
+              <input
+                type="tel"
+                className={`form-control ${errors.customerPhone ? 'is-invalid' : (customerPhone ? (isPhoneComplete(customerPhone) ? 'is-valid' : '') : '')}`}
+                value={formatPhoneInputValue(customerPhone)}
+                onChange={handleCustomerPhoneChange}
+                placeholder={PHONE_PLACEHOLDER}
+                maxLength="13"
+                inputMode="numeric"
+              />
+            </div>
+            <div className="d-flex justify-content-between mt-1">
+              {errors.customerPhone ? (
+                <div className="invalid-feedback d-block">{errors.customerPhone}</div>
+              ) : (
+                <>
+                  {customerPhone && !isPhoneComplete(customerPhone) && (
+                    <small className="text-muted">Telefon 10 haneli olmalıdır</small>
+                  )}
+                  {(!customerPhone || isPhoneComplete(customerPhone)) && (
+                    <small className="text-muted">Bu telefon numarası listede oluşturulan tüm stoklara işlenecek.</small>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </>
+      )}
 
       <div className="row g-4">
         <div className="col-lg-5">

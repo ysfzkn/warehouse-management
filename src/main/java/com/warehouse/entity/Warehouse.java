@@ -8,6 +8,7 @@ import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.warehouse.enums.WarehouseType;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -44,6 +45,10 @@ public class Warehouse {
 
     @Column(name = "is_active", nullable = false)
     private boolean isActive = true;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "warehouse_type", nullable = false)
+    private WarehouseType warehouseType = WarehouseType.STANDART;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -84,6 +89,7 @@ public class Warehouse {
                 ", manager='" + manager + '\'' +
                 ", capacitySqm=" + capacitySqm +
                 ", isActive=" + isActive +
+                ", warehouseType=" + warehouseType +
                 ", createdAt=" + createdAt +
                 ", updatedAt=" + updatedAt +
                 '}';

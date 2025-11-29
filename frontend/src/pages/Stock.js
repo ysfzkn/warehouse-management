@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import axios from 'axios';
+import { formatPhoneForDisplay } from '../utils/phone';
 import StockForm from '../components/StockForm';
 import QuickStockAdjustModal from '../components/QuickStockAdjustModal';
 import StockSettingsModal from '../components/StockSettingsModal';
@@ -1486,6 +1487,51 @@ const Stock = () => {
             width: 100%;
           }
         }
+        .table-actions {
+          white-space: nowrap;
+        }
+        .table-actions .btn-group {
+          gap: 0.125rem;
+        }
+        .table-actions .btn {
+          min-width: 28px;
+          padding: 0.25rem 0.375rem;
+          font-size: 0.75rem;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .table-actions .btn i {
+          margin: 0;
+          line-height: 1;
+        }
+        @media (max-width: 1400px) {
+          .table-actions .btn {
+            min-width: 26px;
+            padding: 0.2rem 0.3rem;
+            font-size: 0.7rem;
+          }
+        }
+        @media (max-width: 1200px) {
+          .table-actions .btn {
+            min-width: 24px;
+            padding: 0.175rem 0.25rem;
+            font-size: 0.65rem;
+          }
+        }
+        .breakpoint-1155-desktop table {
+          font-size: 0.9rem;
+        }
+        @media (max-width: 1400px) {
+          .breakpoint-1155-desktop table {
+            font-size: 0.85rem;
+          }
+        }
+        @media (max-width: 1200px) {
+          .breakpoint-1155-desktop table {
+            font-size: 0.8rem;
+          }
+        }
       `}</style>
       <div className="stock-page-header d-flex flex-column flex-lg-row align-items-lg-center justify-content-between mb-4">
         <div>
@@ -1850,14 +1896,15 @@ const Stock = () => {
                     </th>
                     <th>Depo</th>
                     <th>Ürün</th>
-                    <th>Stok Kodu</th>
+                    <th className="d-none d-md-table-cell">Stok Kodu</th>
                     <th>Miktar</th>
-                    <th>Kullanılabilir</th>
-                    <th>Rezerve</th>
-                    <th>Emanet</th>
-                    <th>Min. Stok</th>
+                    <th className="d-none d-lg-table-cell">Kullanılabilir</th>
+                    <th className="d-none d-xl-table-cell">Rezerve</th>
+                    <th className="d-none d-xl-table-cell">Emanet</th>
+                    <th className="d-none d-md-table-cell" style={{ minWidth: '120px' }}>Müşteri</th>
+                    <th className="d-none d-xl-table-cell">Min. Stok</th>
                     <th>Durum</th>
-                    <th className="text-center">
+                    <th className="text-center d-none d-md-table-cell">
                       <button
                         type="button"
                         className="btn btn-link p-0 text-decoration-none"
@@ -1878,7 +1925,7 @@ const Stock = () => {
                         ></i>
                       </button>
                     </th>
-                    <th className="table-actions text-center">İşlemler</th>
+                    <th className="table-actions text-center" style={{ minWidth: '140px' }}>İşlemler</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1910,6 +1957,13 @@ const Stock = () => {
                         <td>{warehouse?.name || '-'}</td>
                         <td>
                           <div className="fw-semibold">{productName || '-'}</div>
+                          <small className="text-muted d-md-none">{productSku || '-'}</small>
+                          {stock.customerName && (
+                            <small className="badge bg-info bg-opacity-10 text-info border border-info d-lg-none mt-1 d-inline-block">
+                              <i className="fas fa-user me-1"></i>
+                              {stock.customerName}
+                            </small>
+                          )}
                           {categoryPath && (
                             <small className="text-muted d-block">
                               <i className="fas fa-tag me-1"></i>
@@ -1926,29 +1980,52 @@ const Stock = () => {
                             </small>
                           )}
                         </td>
-                        <td>{productSku || '-'}</td>
+                        <td className="d-none d-md-table-cell">{productSku || '-'}</td>
                         <td>
                           <span className="fw-bold">{stock.quantity}</span>
+                          <small className="text-muted d-lg-none d-block">
+                            Kullanılabilir: <span className={stock.availableQuantity < getEffectiveMin(stock) ? 'text-danger' : 'text-success'}>
+                              {stock.availableQuantity}
+                            </span>
+                          </small>
                         </td>
-                        <td>
+                        <td className="d-none d-lg-table-cell">
                           <span className={stock.availableQuantity < getEffectiveMin(stock) ? 'text-danger' : 'text-success'}>
                             {stock.availableQuantity}
                           </span>
                         </td>
-                        <td>
+                        <td className="d-none d-xl-table-cell">
                           <span className={stock.reservedQuantity > 0 ? 'text-warning fw-bold' : 'text-muted'}>
                             <i className="fas fa-lock me-1" style={{ fontSize: '0.75rem' }}></i>
                             {stock.reservedQuantity || 0}
                           </span>
                         </td>
-                        <td>{stock.consignedQuantity || 0}</td>
-                        <td>{stock.minStockLevel}</td>
+                        <td className="d-none d-xl-table-cell">{stock.consignedQuantity || 0}</td>
+                        <td className="d-none d-md-table-cell">
+                          {stock.customerName ? (
+                            <div>
+                              <span className="badge bg-info bg-opacity-10 text-info border border-info mb-1 d-block" title={stock.customerPhone ? `Tel: ${formatPhoneForDisplay(stock.customerPhone)}` : ''}>
+                                <i className="fas fa-user me-1"></i>
+                                <span className="text-truncate d-inline-block" style={{ maxWidth: '100px' }}>{stock.customerName}</span>
+                              </span>
+                              {stock.customerPhone && (
+                                <small className="text-muted d-block text-truncate" style={{ maxWidth: '120px' }} title={formatPhoneForDisplay(stock.customerPhone)}>
+                                  <i className="fas fa-phone me-1"></i>
+                                  {formatPhoneForDisplay(stock.customerPhone)}
+                                </small>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-muted">-</span>
+                          )}
+                        </td>
+                        <td className="d-none d-xl-table-cell">{stock.minStockLevel}</td>
                         <td>
                           <span className={`badge bg-${stockStatus.class}`}>
                             {stockStatus.label}
                           </span>
                         </td>
-                        <td>
+                        <td className="d-none d-md-table-cell">
                           <div className="text-nowrap text-center">
                             {formatDateInTurkeyTimezone(stock.lastUpdated, { year: 'numeric', month: '2-digit', day: '2-digit' })}
                           </div>
@@ -1957,12 +2034,13 @@ const Stock = () => {
                           </small>
                         </td>
                         <td className="table-actions">
-                          <div className="btn-group" role="group">
+                          <div className="btn-group btn-group-sm" role="group" style={{ flexWrap: 'nowrap' }}>
                             {(role === 'ADMIN' || role === 'STOCK_IN') && (
                               <button
                                 className="btn btn-sm btn-success"
                                 onClick={() => handleQuickAdd(stock)}
                                 title="Hızlı Stok Ekle"
+                                style={{ padding: '0.25rem 0.375rem', fontSize: '0.75rem' }}
                               >
                                 <i className="fas fa-plus"></i>
                               </button>
@@ -1972,6 +2050,7 @@ const Stock = () => {
                                 className="btn btn-sm btn-danger"
                                 onClick={() => handleQuickRemove(stock)}
                                 title="Hızlı Stok Çıkar"
+                                style={{ padding: '0.25rem 0.375rem', fontSize: '0.75rem' }}
                               >
                                 <i className="fas fa-minus"></i>
                               </button>
@@ -1980,14 +2059,16 @@ const Stock = () => {
                               className="btn btn-sm btn-outline-primary"
                               onClick={() => handleStockSettings(stock)}
                               title={role === 'ADMIN' ? 'Ayarlar (Emanet, Min Stok)' : 'Stok Detayları'}
+                              style={{ padding: '0.25rem 0.375rem', fontSize: '0.75rem' }}
                             >
                               <i className="fas fa-cog"></i>
                             </button>
                             {canTransfer && (
                               <button
-                                className="btn btn-sm btn-outline-success"
+                                className="btn btn-sm btn-outline-success d-none d-lg-inline-flex"
                                 onClick={() => handleStockTransfer(stock, role !== 'ADMIN')}
                                 title="Transfer Yap"
+                                style={{ padding: '0.25rem 0.375rem', fontSize: '0.75rem' }}
                               >
                                 <i className="fas fa-exchange-alt"></i>
                               </button>
@@ -1995,16 +2076,18 @@ const Stock = () => {
                             {role === 'ADMIN' && (
                               <>
                                 <button
-                                  className="btn btn-sm btn-outline-danger"
+                                  className="btn btn-sm btn-outline-danger d-none d-xl-inline-flex"
                                   onClick={() => handleDeleteStock(stock.id)}
                                   title="Stok Kaydını Sil"
+                                  style={{ padding: '0.25rem 0.375rem', fontSize: '0.75rem' }}
                                 >
                                   <i className="fas fa-trash"></i>
                                 </button>
                                 <button
-                                  className="btn btn-sm btn-outline-secondary"
+                                  className="btn btn-sm btn-outline-secondary d-none d-xl-inline-flex"
                                   onClick={() => setAuditModal({ show: true, entityType: 'Stock', entityId: stock.id })}
                                   title="Hareket Geçmişi"
+                                  style={{ padding: '0.25rem 0.375rem', fontSize: '0.75rem' }}
                                 >
                                   <i className="fas fa-history"></i>
                                 </button>
@@ -2077,6 +2160,20 @@ const Stock = () => {
                             )}
                           </div>
                           <div className="stock-mobile-card__tags-right">
+                            {stock.customerName && (
+                              <>
+                                <span className="mobile-chip bg-info bg-opacity-10 text-info border border-info">
+                                  <i className="fas fa-user me-1"></i>
+                                  {stock.customerName}
+                                </span>
+                                {stock.customerPhone && (
+                                  <span className="mobile-chip bg-info bg-opacity-10 text-info border border-info">
+                                    <i className="fas fa-phone me-1"></i>
+                                    {formatPhoneForDisplay(stock.customerPhone)}
+                                  </span>
+                                )}
+                              </>
+                            )}
                             {stock.additionNote && (
                               <span className="mobile-chip mobile-chip-note" title={stock.additionNote}>
                                 <i className="fas fa-sticky-note me-1"></i>

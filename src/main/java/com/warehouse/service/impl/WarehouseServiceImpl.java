@@ -153,6 +153,9 @@ public class WarehouseServiceImpl implements WarehouseService {
         warehouse.setManager(warehouseDetails.getManager());
         warehouse.setCapacitySqm(warehouseDetails.getCapacitySqm());
         warehouse.setActive(warehouseDetails.isActive());
+        if (warehouseDetails.getWarehouseType() != null) {
+            warehouse.setWarehouseType(warehouseDetails.getWarehouseType());
+        }
     }
 
     private void updateWarehouseStatus(Long id, boolean isActive) {

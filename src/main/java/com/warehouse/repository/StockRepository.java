@@ -25,6 +25,12 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
     @EntityGraph(value = Stock.GRAPH_WITH_PRODUCT_AND_WAREHOUSE, type = EntityGraph.EntityGraphType.LOAD)
     Optional<Stock> findByProductAndWarehouse(Product product, Warehouse warehouse);
 
+    @Query("SELECT s FROM Stock s WHERE s.product = :product AND s.warehouse = :warehouse AND (:customerName IS NULL OR s.customerName = :customerName)")
+    @EntityGraph(value = Stock.GRAPH_WITH_PRODUCT_AND_WAREHOUSE, type = EntityGraph.EntityGraphType.LOAD)
+    Optional<Stock> findByProductAndWarehouseAndCustomerName(@Param("product") Product product, 
+                                                               @Param("warehouse") Warehouse warehouse,
+                                                               @Param("customerName") String customerName);
+
     @Query("SELECT s FROM Stock s WHERE s.product = :product ORDER BY s.warehouse.name")
     @EntityGraph(value = Stock.GRAPH_WITH_PRODUCT_AND_WAREHOUSE, type = EntityGraph.EntityGraphType.LOAD)
     List<Stock> findByProduct(@Param("product") Product product);
