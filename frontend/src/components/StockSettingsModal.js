@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import {
   extractPhoneDigits,
@@ -11,14 +11,16 @@ import {
 /**
  * Stock settings modal - for managing consigned, reserved, and min stock levels
  */
-const StockSettingsModal = ({ stock, onSuccess, onClose }) => {
+const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
   const role = (typeof window !== 'undefined' && localStorage.getItem('auth_role')) || 'ADMIN';
   const [settings, setSettings] = useState({
+    productId: null,
     consignedQuantity: 0,
     minStockLevel: 10,
     customerName: '',
     customerPhone: ''
   });
+  const [productSearchTerm, setProductSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
@@ -32,6 +34,7 @@ const StockSettingsModal = ({ stock, onSuccess, onClose }) => {
   useEffect(() => {
     if (stock) {
       setSettings({
+        productId: stock.product?.id || null,
         consignedQuantity: stock.consignedQuantity || 0,
         minStockLevel: stock.minStockLevel || 10,
         customerName: stock.customerName || '',
@@ -39,6 +42,23 @@ const StockSettingsModal = ({ stock, onSuccess, onClose }) => {
       });
     }
   }, [stock]);
+
+  // Filter products for search
+  const filteredProducts = useMemo(() => {
+    if (!productSearchTerm.trim()) return products;
+    const query = productSearchTerm.trim().toLocaleLowerCase('tr-TR');
+    return products.filter(product => {
+      const haystack = [
+        product.name,
+        product.sku,
+        product.barcode,
+        product.brand?.name
+      ]
+        .filter(Boolean)
+        .map(text => text.toLocaleLowerCase('tr-TR'));
+      return haystack.some(text => text.includes(query));
+    });
+  }, [products, productSearchTerm]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -58,6 +78,14 @@ const StockSettingsModal = ({ stock, onSuccess, onClose }) => {
       }));
       if (errors.customerName) {
         setErrors(prev => ({ ...prev, customerName: null }));
+      }
+    } else if (name === 'productId') {
+      setSettings(prev => ({
+        ...prev,
+        [name]: value ? parseInt(value) : null
+      }));
+      if (errors.productId) {
+        setErrors(prev => ({ ...prev, productId: null }));
       }
     } else {
       setSettings(prev => ({
@@ -96,7 +124,9 @@ const StockSettingsModal = ({ stock, onSuccess, onClose }) => {
     // Check if any change was made
     const originalCustomerName = stock.customerName || '';
     const originalCustomerPhone = stock.customerPhone ? extractPhoneDigits(stock.customerPhone) : '';
+    const originalProductId = stock.product?.id || null;
     const hasChanges = 
+      settings.productId !== originalProductId ||
       settings.consignedQuantity !== (stock.consignedQuantity || 0) ||
       settings.minStockLevel !== (stock.minStockLevel || 10) ||
       (isEmanetDepo && (
@@ -122,6 +152,11 @@ const StockSettingsModal = ({ stock, onSuccess, onClose }) => {
         minStockLevel: settings.minStockLevel
         // Explicitly NOT including quantity field for security
       };
+      
+      // Include product if it changed
+      if (settings.productId && settings.productId !== (stock.product?.id || null)) {
+        updateData.product = { id: settings.productId };
+      }
       
       if (isEmanetDepo) {
         updateData.customerName = settings.customerName.trim();
@@ -227,6 +262,60 @@ const StockSettingsModal = ({ stock, onSuccess, onClose }) => {
                     {success}
                   </div>
                 )}
+
+                <div className="mb-3">
+                  <label htmlFor="productId" className="form-label fw-bold">
+                    <i className="fas fa-box me-1 text-primary"></i>
+                    Ürün
+                  </label>
+                  <div className="position-relative">
+                    <input
+                      type="text"
+                      className="form-control form-control-lg"
+                      placeholder="Ürün ara..."
+                      value={productSearchTerm}
+                      onChange={(e) => setProductSearchTerm(e.target.value)}
+                      onFocus={(e) => e.target.select()}
+                    />
+                    {productSearchTerm && (
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-link position-absolute end-0 top-50 translate-middle-y me-2"
+                        onClick={() => setProductSearchTerm('')}
+                        style={{ zIndex: 10 }}
+                      >
+                        <i className="fas fa-times"></i>
+                      </button>
+                    )}
+                  </div>
+                  <select
+                    className={`form-select form-select-lg mt-2 ${errors.productId ? 'is-invalid' : ''}`}
+                    id="productId"
+                    name="productId"
+                    value={settings.productId || ''}
+                    onChange={handleChange}
+                    style={{ maxHeight: '200px', overflowY: 'auto' }}
+                  >
+                    <option value="">-- Ürün Seçiniz --</option>
+                    {filteredProducts.slice(0, 100).map(product => (
+                      <option key={product.id} value={product.id}>
+                        {product.name} {product.sku ? `(${product.sku})` : ''} {product.brand?.name ? `- ${product.brand.name}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  {filteredProducts.length > 100 && (
+                    <small className="text-muted d-block mt-1">
+                      <i className="fas fa-info-circle me-1"></i>
+                      İlk 100 sonuç gösteriliyor. Daha fazla sonuç için arama yapın.
+                    </small>
+                  )}
+                  {errors.productId && (
+                    <div className="invalid-feedback">{errors.productId}</div>
+                  )}
+                  <small className="text-muted d-block mt-1">
+                    Stok kaydının bağlı olduğu ürünü değiştirebilirsiniz
+                  </small>
+                </div>
 
                 <div className="mb-3">
                   <label htmlFor="consignedQuantity" className="form-label fw-bold">

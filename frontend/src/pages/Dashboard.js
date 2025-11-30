@@ -54,13 +54,14 @@ const Dashboard = () => {
   const [outStocks, setOutStocks] = useState([]);
   const [products, setProducts] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedWarehouseId, setSelectedWarehouseId] = useState(null);
-  const [selectedWarehouseOpt, setSelectedWarehouseOpt] = useState(null);
+  const [selectedWarehouseIds, setSelectedWarehouseIds] = useState([]);
+  const [selectedWarehouseOpts, setSelectedWarehouseOpts] = useState([]);
   const [brandId, setBrandId] = useState(null);
   const [colorId, setColorId] = useState(null);
   const [brandOpt, setBrandOpt] = useState(null);
   const [colorOpt, setColorOpt] = useState(null);
   const [warehouseStats, setWarehouseStats] = useState([]);
+  const [warehouses, setWarehouses] = useState([]);
 
   const fetchDashboardData = useCallback(async () => {
     try {
@@ -101,6 +102,7 @@ const Dashboard = () => {
       ]);
 
       const warehousesData = warehousesRes.data;
+      setWarehouses(warehousesData);
       const productsData = allProducts;
       setProducts(productsData);
       const categories = categoriesRes.data;
@@ -216,10 +218,10 @@ const Dashboard = () => {
         normalizeText(s.warehouse?.location).includes(q);
       const matchesBrand = !brandId || (s.product?.brand?.id === brandId);
       const matchesColor = !colorId || (s.product?.color?.id === colorId);
-      const matchesWarehouse = !selectedWarehouseId || (s.warehouse?.id === selectedWarehouseId);
+      const matchesWarehouse = selectedWarehouseIds.length === 0 || selectedWarehouseIds.includes(s.warehouse?.id);
       return matchesSearch && matchesBrand && matchesColor && matchesWarehouse;
     });
-  }, [searchTerm, brandId, colorId, selectedWarehouseId]);
+  }, [searchTerm, brandId, colorId, selectedWarehouseIds]);
 
   const filteredLow = useMemo(() => filterStockList(lowStocks), [lowStocks, filterStockList]);
   const filteredOut = useMemo(() => filterStockList(outStocks), [outStocks, filterStockList]);
@@ -227,13 +229,13 @@ const Dashboard = () => {
 
   // Filtered warehouse stats
   const filteredWarehouseStats = useMemo(() => {
-    if (!selectedWarehouseId) return warehouseStats;
-    return warehouseStats.filter(w => w.id === selectedWarehouseId);
-  }, [warehouseStats, selectedWarehouseId]);
+    if (selectedWarehouseIds.length === 0) return warehouseStats;
+    return warehouseStats.filter(w => selectedWarehouseIds.includes(w.id));
+  }, [warehouseStats, selectedWarehouseIds]);
 
   // Computed stats based on filters
   const computedStats = useMemo(() => {
-    if (!selectedWarehouseId && !brandId && !colorId && !searchTerm) {
+    if (selectedWarehouseIds.length === 0 && !brandId && !colorId && !searchTerm) {
       return stats;
     }
     
@@ -265,7 +267,7 @@ const Dashboard = () => {
       totalStockValue: totalStockValue,
       totalProducts: uniqueProductIds.size,
     };
-  }, [stats, filteredAllStocks, filteredLow, filteredOut, products, selectedWarehouseId, brandId, colorId, searchTerm]);
+  }, [stats, filteredAllStocks, filteredLow, filteredOut, products, selectedWarehouseIds, brandId, colorId, searchTerm]);
 
   const barChartData = {
     labels: ['Aktif Depolar', 'Toplam Ürünler', 'Kategoriler', 'Düşük Stok', 'Stok Dışı'],
@@ -562,7 +564,7 @@ const Dashboard = () => {
               <i className="fas fa-filter me-2 text-primary"></i>
               Gelişmiş Arama ve Filtreleme
             </h5>
-            {(searchTerm || brandId || colorId || selectedWarehouseId) && (
+            {(searchTerm || brandId || colorId || selectedWarehouseIds.length > 0) && (
               <button 
                 className="btn btn-sm btn-danger"
                 onClick={() => {
@@ -571,8 +573,8 @@ const Dashboard = () => {
                   setColorId(null);
                   setBrandOpt(null);
                   setColorOpt(null);
-                  setSelectedWarehouseId(null);
-                  setSelectedWarehouseOpt(null);
+                  setSelectedWarehouseIds([]);
+                  setSelectedWarehouseOpts([]);
                 }}
                 title="Tüm filtreleri temizle"
               >
@@ -618,20 +620,92 @@ const Dashboard = () => {
           {/* Filter Row */}
           <div className="row g-3">
             <div className="col-lg-3 col-md-6">
-              <SearchableSelect
-                label={<span className="fw-semibold"><i className="fas fa-warehouse me-2 text-primary"></i>Depo Filtresi</span>}
-                value={selectedWarehouseId}
-                onChange={(id, opt) => { 
-                  setSelectedWarehouseId(id); 
-                  setSelectedWarehouseOpt(opt || null); 
-                }}
-                searchEndpoint="/api/warehouses"
-                placeholder="Tüm depolar..."
-                allowClear={true}
-                clearText="Temizle"
-                wrapperClassName="mb-0"
-                renderOption={(w) => w.name}
-              />
+              <div className="mb-0">
+                <div className="d-flex justify-content-between align-items-center mb-1">
+                  <label className="form-label mb-0 fw-semibold">
+                    <i className="fas fa-warehouse me-2 text-primary"></i>Depo Filtresi
+                  </label>
+                  {selectedWarehouseIds.length > 0 && (
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-link p-0"
+                      onClick={() => {
+                        setSelectedWarehouseIds([]);
+                        setSelectedWarehouseOpts([]);
+                      }}
+                    >
+                      Temizle
+                    </button>
+                  )}
+                </div>
+                <div className="dropdown">
+                  <button
+                    className="form-control text-start dropdown-toggle"
+                    type="button"
+                    id="warehouseFilterDropdown"
+                    data-bs-toggle="dropdown"
+                    aria-expanded="false"
+                  >
+                    {selectedWarehouseIds.length === 0 
+                      ? 'Tüm depolar...' 
+                      : selectedWarehouseIds.length === 1
+                        ? selectedWarehouseOpts[0]?.name || '1 depo seçili'
+                        : `${selectedWarehouseIds.length} depo seçili`
+                    }
+                  </button>
+                  <ul className="dropdown-menu w-100" style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                    {warehouses.map(warehouse => {
+                      const isSelected = selectedWarehouseIds.includes(warehouse.id);
+                      return (
+                        <li key={warehouse.id}>
+                          <label className="dropdown-item d-flex align-items-center" style={{ cursor: 'pointer' }}>
+                            <input
+                              type="checkbox"
+                              className="form-check-input me-2"
+                              checked={isSelected}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedWarehouseIds(prev => [...prev, warehouse.id]);
+                                  setSelectedWarehouseOpts(prev => [...prev, warehouse]);
+                                } else {
+                                  setSelectedWarehouseIds(prev => prev.filter(id => id !== warehouse.id));
+                                  setSelectedWarehouseOpts(prev => prev.filter(opt => opt.id !== warehouse.id));
+                                }
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                            <span>{warehouse.name}</span>
+                            {warehouse.location && (
+                              <small className="text-muted ms-2">({warehouse.location})</small>
+                            )}
+                          </label>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+                {selectedWarehouseIds.length > 0 && (
+                  <div className="mt-2">
+                    <div className="d-flex flex-wrap gap-1">
+                      {selectedWarehouseOpts.map(opt => (
+                        <span key={opt.id} className="badge bg-primary">
+                          {opt.name}
+                          <button
+                            type="button"
+                            className="btn-close btn-close-white ms-1"
+                            style={{ fontSize: '0.65rem' }}
+                            onClick={() => {
+                              setSelectedWarehouseIds(prev => prev.filter(id => id !== opt.id));
+                              setSelectedWarehouseOpts(prev => prev.filter(o => o.id !== opt.id));
+                            }}
+                            aria-label="Kaldır"
+                          ></button>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
             <div className="col-lg-3 col-md-6">
               <SearchableSelect
@@ -672,7 +746,7 @@ const Dashboard = () => {
           </div>
           
           {/* Active Filters Display */}
-          {(searchTerm || brandId || colorId || selectedWarehouseId) && (
+          {(searchTerm || brandId || colorId || selectedWarehouseIds.length > 0) && (
             <div className="border-top pt-3">
               <FilterChips
                 chips={[
@@ -681,12 +755,14 @@ const Dashboard = () => {
                     label: `Arama: "${searchTerm}"`, 
                     onClear: () => setSearchTerm('') 
                   } : null,
-                  selectedWarehouseId ? { 
+                  selectedWarehouseIds.length > 0 ? { 
                     icon: 'fas fa-warehouse', 
-                    label: `Depo: ${selectedWarehouseOpt?.name || 'Seçili'}`, 
+                    label: selectedWarehouseIds.length === 1 
+                      ? `Depo: ${selectedWarehouseOpts[0]?.name || 'Seçili'}` 
+                      : `Depo: ${selectedWarehouseIds.length} depo seçili`, 
                     onClear: () => { 
-                      setSelectedWarehouseId(null); 
-                      setSelectedWarehouseOpt(null); 
+                      setSelectedWarehouseIds([]); 
+                      setSelectedWarehouseOpts([]); 
                     } 
                   } : null,
                   brandId ? { 
@@ -706,22 +782,25 @@ const Dashboard = () => {
                   setColorId(null); 
                   setBrandOpt(null); 
                   setColorOpt(null); 
-                  setSelectedWarehouseId(null);
-                  setSelectedWarehouseOpt(null);
+                  setSelectedWarehouseIds([]);
+                  setSelectedWarehouseOpts([]);
                 }}
               />
             </div>
           )}
 
           {/* Search Results Summary */}
-          {(searchTerm || brandId || colorId || selectedWarehouseId) && (
+          {(searchTerm || brandId || colorId || selectedWarehouseIds.length > 0) && (
             <div className="alert alert-info d-flex align-items-center mt-3 mb-0" role="alert">
               <i className="fas fa-info-circle fa-lg me-3"></i>
               <div>
                 <strong>{filteredLow.length + filteredOut.length}</strong> kayıt filtreleme sonuçlarında bulundu
-                {selectedWarehouseId && filteredWarehouseStats.length > 0 && (
+                {selectedWarehouseIds.length > 0 && filteredWarehouseStats.length > 0 && (
                   <span className="ms-2">
-                    ({filteredWarehouseStats[0].name} deposunda)
+                    ({filteredWarehouseStats.length === 1 
+                      ? `${filteredWarehouseStats[0].name} deposunda`
+                      : `${filteredWarehouseStats.length} depoda`
+                    })
                   </span>
                 )}
               </div>
@@ -890,8 +969,13 @@ const Dashboard = () => {
                 <tbody>
                   {filteredWarehouseStats.map((wh, index) => (
                     <tr key={wh.id} style={{cursor: 'pointer'}} onClick={() => {
-                      setSelectedWarehouseId(wh.id);
-                      setSelectedWarehouseOpt({ id: wh.id, name: wh.name });
+                      if (selectedWarehouseIds.includes(wh.id)) {
+                        setSelectedWarehouseIds(prev => prev.filter(id => id !== wh.id));
+                        setSelectedWarehouseOpts(prev => prev.filter(opt => opt.id !== wh.id));
+                      } else {
+                        setSelectedWarehouseIds(prev => [...prev, wh.id]);
+                        setSelectedWarehouseOpts(prev => [...prev, { id: wh.id, name: wh.name }]);
+                      }
                     }}>
                       <td className="ps-4 fw-semibold">
                         <div className="d-flex align-items-center">

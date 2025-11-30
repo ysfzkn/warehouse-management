@@ -301,6 +301,49 @@ public class StockServiceImpl implements StockService {
         // This prevents accidental zeroing or incorrect quantity updates
         // If quantity is provided in the request, it will be ignored for security
         
+        // Update product if provided
+        if (stockDetails.getProduct() != null && stockDetails.getProduct().getId() != null) {
+            Long newProductId = stockDetails.getProduct().getId();
+            Long currentProductId = stock.getProduct().getId();
+            
+            // Only update if product is actually changing
+            if (!newProductId.equals(currentProductId)) {
+                Product newProduct = findProductOrThrow(newProductId);
+                
+                // Validate uniqueness with new product
+                // For EMANET_DEPO, check with customerName
+                // For STANDART, check without customerName
+                String customerNameForValidation = warehouse.getWarehouseType() == WarehouseType.EMANET_DEPO 
+                    ? stock.getCustomerName() 
+                    : null;
+                
+                // Check if another stock exists with the new product, same warehouse, and same customer (if EMANET_DEPO)
+                if (warehouse.getWarehouseType() == WarehouseType.EMANET_DEPO) {
+                    if (customerNameForValidation == null || customerNameForValidation.trim().isEmpty()) {
+                        throw new WarehouseManagementException(ErrorCode.REQUIRED_FIELD_MISSING, 
+                            "Emanet depo için müşteri adı gereklidir.");
+                    }
+                    Optional<Stock> existingStock = stockRepository.findByProductAndWarehouseAndCustomerName(
+                        newProduct, warehouse, customerNameForValidation.trim());
+                    // Allow if it's the same stock (updating itself)
+                    if (existingStock.isPresent() && !existingStock.get().getId().equals(stock.getId())) {
+                        throw new WarehouseManagementException(ErrorCode.STOCK_ALREADY_EXISTS, 
+                            String.format("Bu ürün için %s müşterisi adına zaten bir stok kaydı mevcut.", customerNameForValidation));
+                    }
+                } else {
+                    Optional<Stock> existingStock = stockRepository.findByProductAndWarehouse(newProduct, warehouse);
+                    // Allow if it's the same stock (updating itself)
+                    if (existingStock.isPresent() && !existingStock.get().getId().equals(stock.getId())) {
+                        throw new WarehouseManagementException(ErrorCode.STOCK_ALREADY_EXISTS, 
+                            "Bu ürün için bu depoda zaten bir stok kaydı mevcut.");
+                    }
+                }
+                
+                stock.setProduct(newProduct);
+                logger.info("Product changed from {} to {} for stock id: {}", currentProductId, newProductId, id);
+            }
+        }
+        
         updateMinStockLevel(stock, stockDetails.getMinStockLevel());
         updateReservedQuantity(stock, stockDetails.getReservedQuantity());
         updateConsignedQuantity(stock, stockDetails.getConsignedQuantity());

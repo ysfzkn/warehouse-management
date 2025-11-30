@@ -2421,6 +2421,7 @@ const Stock = () => {
       {showSettingsModal && selectedStock && (
         <StockSettingsModal
           stock={selectedStock}
+          products={products}
           onSuccess={handleSettingsSuccess}
           onClose={() => {
             setShowSettingsModal(false);
