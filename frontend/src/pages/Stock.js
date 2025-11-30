@@ -746,8 +746,33 @@ const Stock = () => {
   const fetchAllData = useCallback(async () => {
     try {
       setLoading(true);
+      
+      // Fetch all products by making multiple requests if needed
+      let allProducts = [];
+      let currentPage = 0;
+      const pageSize = 250; // Maximum allowed by backend
+      let hasMore = true;
+      
+      while (hasMore) {
+        const response = await axios.get('/api/products', { 
+          params: { page: currentPage, size: pageSize } 
+        });
+        const data = response.data || {};
+        const productsList = Array.isArray(data.content) ? data.content : (Array.isArray(data) ? data : []);
+        allProducts = [...allProducts, ...productsList];
+        
+        // Check if there are more pages
+        if (data.totalPages !== undefined) {
+          hasMore = currentPage + 1 < data.totalPages;
+          currentPage++;
+        } else {
+          // Non-paginated response or single page
+          hasMore = false;
+        }
+      }
+      
       const calls = [
-        axios.get('/api/products'),
+        Promise.resolve({ data: allProducts }), // Use fetched products
         axios.get('/api/warehouses')
       ];
 
