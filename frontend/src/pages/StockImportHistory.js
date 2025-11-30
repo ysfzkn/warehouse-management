@@ -5,11 +5,39 @@ import ConfirmModal from '../components/ConfirmModal';
 const StockImportHistory = () => {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [showFailedRowsModal, setShowFailedRowsModal] = useState(false);
   const [failedRows, setFailedRows] = useState([]);
   const [selectedItems, setSelectedItems] = useState([]);
   const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null });
+
+  const showToast = (message, type = 'success') => {
+    const toast = document.createElement('div');
+    const bgClass = type === 'success' ? 'text-bg-success' : 'text-bg-danger';
+    const icon = type === 'success' ? 'fa-check-circle' : 'fa-times-circle';
+    toast.className = `toast align-items-center ${bgClass} border-0 position-fixed top-0 end-0 m-3 show fs-6`;
+    toast.style.minWidth = '360px';
+    toast.style.padding = '0.5rem 0.75rem';
+    toast.style.zIndex = '9999';
+    toast.setAttribute('role', 'alert');
+    toast.innerHTML = `
+      <div class="d-flex align-items-center">
+        <div class="toast-body d-flex align-items-center fw-semibold">
+          <i class="fas ${icon} me-2"></i>
+          <span>${message}</span>
+        </div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button>
+      </div>
+    `;
+    document.body.appendChild(toast);
+    setTimeout(() => {
+      try {
+        toast.classList.remove('show');
+        setTimeout(() => {
+          try { document.body.removeChild(toast); } catch {}
+        }, 300);
+      } catch {}
+    }, type === 'success' ? 3000 : 5000);
+  };
 
   const fetchData = async () => {
     try {
@@ -17,9 +45,8 @@ const StockImportHistory = () => {
       const res = await axios.get('/api/stock-imports');
       const list = Array.isArray(res.data) ? res.data : [];
       setItems(list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
-      setError(null);
     } catch (e) {
-      setError('Stok aktarım geçmişi yüklenirken hata oluştu');
+      showToast('Stok aktarım geçmişi yüklenirken hata oluştu.', 'error');
     } finally {
       setLoading(false);
     }
@@ -69,14 +96,29 @@ const StockImportHistory = () => {
       title: 'Kaydı Sil',
       message: 'Bu aktarım geçmişi kaydını silmek istediğinizden emin misiniz?',
       onConfirm: async () => {
+        setConfirmModal({ show: false, title: '', message: '', onConfirm: null });
         try {
           await axios.delete(`/api/stock-imports/${id}`);
+          showToast('Aktarım geçmişi kaydı başarıyla silindi.', 'success');
           await fetchData();
           setSelectedItems(prev => prev.filter(itemId => itemId !== id));
-          setConfirmModal({ show: false, title: '', message: '', onConfirm: null });
         } catch (e) {
-          setError('Kayıt silinirken hata oluştu: ' + (e.response?.data?.message || e.message));
-          setConfirmModal({ show: false, title: '', message: '', onConfirm: null });
+          const errorData = e?.response?.data;
+          let errorMessage = 'Aktarım geçmişi kaydı silinirken hata oluştu.';
+          
+          if (errorData) {
+            if (typeof errorData === 'string') {
+              errorMessage = errorData;
+            } else if (errorData.message) {
+              errorMessage = errorData.message;
+            } else if (errorData.error) {
+              errorMessage = errorData.error;
+            }
+          } else if (e.message) {
+            errorMessage = e.message;
+          }
+          
+          showToast(errorMessage, 'error');
         }
       }
     });
@@ -90,20 +132,55 @@ const StockImportHistory = () => {
       title: 'Toplu Silme',
       message: `${selectedItems.length} adet aktarım geçmişi kaydını silmek istediğinizden emin misiniz?`,
       onConfirm: async () => {
+        setConfirmModal({ show: false, title: '', message: '', onConfirm: null });
         try {
           const response = await axios.delete('/api/stock-imports/bulk', { data: selectedItems });
           const result = response.data;
+          
           if (result.errorCount > 0) {
-            setError(`${result.successCount} kayıt silindi, ${result.errorCount} kayıt silinemedi.`);
+            // Kısmi başarı durumu
+            const errorMessages = result.errors?.map(err => 
+              err.errorMessage || `Kayıt #${err.id}: ${err.errorCode || 'Bilinmeyen hata'}`
+            ).join(', ') || '';
+            
+            if (result.successCount > 0) {
+              showToast(
+                `${result.successCount} kayıt başarıyla silindi. ${result.errorCount} kayıt silinemedi.${errorMessages ? ' ' + errorMessages : ''}`,
+                'error'
+              );
+            } else {
+              showToast(
+                `Hiçbir kayıt silinemedi.${errorMessages ? ' ' + errorMessages : ''}`,
+                'error'
+              );
+            }
           } else {
-            setError(null);
+            // Tam başarı
+            showToast(
+              `${result.successCount} aktarım geçmişi kaydı başarıyla silindi.`,
+              'success'
+            );
           }
+          
           await fetchData();
           setSelectedItems([]);
-          setConfirmModal({ show: false, title: '', message: '', onConfirm: null });
         } catch (e) {
-          setError('Kayıtlar silinirken hata oluştu: ' + (e.response?.data?.message || e.message));
-          setConfirmModal({ show: false, title: '', message: '', onConfirm: null });
+          const errorData = e?.response?.data;
+          let errorMessage = 'Kayıtlar silinirken hata oluştu.';
+          
+          if (errorData) {
+            if (typeof errorData === 'string') {
+              errorMessage = errorData;
+            } else if (errorData.message) {
+              errorMessage = errorData.message;
+            } else if (errorData.error) {
+              errorMessage = errorData.error;
+            }
+          } else if (e.message) {
+            errorMessage = e.message;
+          }
+          
+          showToast(errorMessage, 'error');
         }
       }
     });
@@ -119,12 +196,6 @@ const StockImportHistory = () => {
           <span className="visually-hidden">Yükleniyor...</span>
         </div>
       </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="alert alert-danger" role="alert">{error}</div>
     );
   }
 
