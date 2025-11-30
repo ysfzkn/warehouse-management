@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
+import ConfirmModal from '../components/ConfirmModal';
 
 const StockImportHistory = () => {
   const [items, setItems] = useState([]);
@@ -7,20 +8,24 @@ const StockImportHistory = () => {
   const [error, setError] = useState(null);
   const [showFailedRowsModal, setShowFailedRowsModal] = useState(false);
   const [failedRows, setFailedRows] = useState([]);
+  const [selectedItems, setSelectedItems] = useState([]);
+  const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null });
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const res = await axios.get('/api/stock-imports');
+      const list = Array.isArray(res.data) ? res.data : [];
+      setItems(list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
+      setError(null);
+    } catch (e) {
+      setError('Stok aktarım geçmişi yüklenirken hata oluştu');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        const res = await axios.get('/api/stock-imports');
-        const list = Array.isArray(res.data) ? res.data : [];
-        setItems(list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
-      } catch (e) {
-        setError('Stok aktarım geçmişi yüklenirken hata oluştu');
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchData();
   }, []);
 
@@ -39,6 +44,73 @@ const StockImportHistory = () => {
     if (s === 'PARTIAL') return 'KISMEN';
     return status || '—';
   };
+
+  const toggleItemSelection = (id) => {
+    setSelectedItems(prev =>
+      prev.includes(id) ? prev.filter(itemId => itemId !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedItems.length === items.length) {
+      setSelectedItems([]);
+    } else {
+      setSelectedItems(items.map(item => item.id));
+    }
+  };
+
+  const clearSelection = () => {
+    setSelectedItems([]);
+  };
+
+  const handleDelete = (id) => {
+    setConfirmModal({
+      show: true,
+      title: 'Kaydı Sil',
+      message: 'Bu aktarım geçmişi kaydını silmek istediğinizden emin misiniz?',
+      onConfirm: async () => {
+        try {
+          await axios.delete(`/api/stock-imports/${id}`);
+          await fetchData();
+          setSelectedItems(prev => prev.filter(itemId => itemId !== id));
+          setConfirmModal({ show: false, title: '', message: '', onConfirm: null });
+        } catch (e) {
+          setError('Kayıt silinirken hata oluştu: ' + (e.response?.data?.message || e.message));
+          setConfirmModal({ show: false, title: '', message: '', onConfirm: null });
+        }
+      }
+    });
+  };
+
+  const handleBatchDelete = () => {
+    if (selectedItems.length === 0) return;
+    
+    setConfirmModal({
+      show: true,
+      title: 'Toplu Silme',
+      message: `${selectedItems.length} adet aktarım geçmişi kaydını silmek istediğinizden emin misiniz?`,
+      onConfirm: async () => {
+        try {
+          const response = await axios.delete('/api/stock-imports/bulk', { data: selectedItems });
+          const result = response.data;
+          if (result.errorCount > 0) {
+            setError(`${result.successCount} kayıt silindi, ${result.errorCount} kayıt silinemedi.`);
+          } else {
+            setError(null);
+          }
+          await fetchData();
+          setSelectedItems([]);
+          setConfirmModal({ show: false, title: '', message: '', onConfirm: null });
+        } catch (e) {
+          setError('Kayıtlar silinirken hata oluştu: ' + (e.response?.data?.message || e.message));
+          setConfirmModal({ show: false, title: '', message: '', onConfirm: null });
+        }
+      }
+    });
+  };
+
+  const selectedCount = selectedItems.length;
+  const areAllSelected = items.length > 0 && selectedItems.length === items.length;
 
   if (loading) {
     return (
@@ -68,8 +140,26 @@ const StockImportHistory = () => {
           font-size: 0.78rem;
         }
       `}</style>
-      <div className="d-flex justify-content-between align-items-center mb-4">
+      <div className="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
         <h2>Excel Stok Aktarım Geçmişi</h2>
+        {selectedCount > 0 && (
+          <div className="d-flex gap-2 align-items-center">
+            <span className="badge bg-primary">{selectedCount} seçili</span>
+            <button
+              className="btn btn-sm btn-outline-secondary"
+              onClick={clearSelection}
+            >
+              Seçimi Temizle
+            </button>
+            <button
+              className="btn btn-sm btn-danger"
+              onClick={handleBatchDelete}
+            >
+              <i className="fas fa-trash me-1"></i>
+              Seçilileri Sil
+            </button>
+          </div>
+        )}
       </div>
       <div className="card">
         <div className="card-body">
@@ -78,6 +168,18 @@ const StockImportHistory = () => {
             <table className="table table-hover align-middle">
               <thead>
                 <tr>
+                  <th style={{ width: '40px' }}>
+                    <div className="form-check">
+                      <input
+                        className="form-check-input"
+                        type="checkbox"
+                        checked={areAllSelected}
+                        onChange={toggleSelectAll}
+                        disabled={items.length === 0}
+                        aria-label="Tümünü seç"
+                      />
+                    </div>
+                  </th>
                   <th>Tarih</th>
                   <th>Depo</th>
                   <th>Dosya</th>
@@ -89,8 +191,21 @@ const StockImportHistory = () => {
                 </tr>
               </thead>
               <tbody>
-                {items.map(item => (
-                  <tr key={item.id}>
+                {items.map(item => {
+                  const isSelected = selectedItems.includes(item.id);
+                  return (
+                  <tr key={item.id} className={isSelected ? 'table-active' : ''}>
+                    <td>
+                      <div className="form-check">
+                        <input
+                          className="form-check-input"
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleItemSelection(item.id)}
+                          aria-label={`${item.originalFilename} seç`}
+                        />
+                      </div>
+                    </td>
                     <td>{item.createdAt ? new Date(item.createdAt).toLocaleString('tr-TR') : '-'}</td>
                     <td>{item.warehouseName || item.warehouse?.name || '-'}</td>
                     <td>{item.originalFilename}</td>
@@ -106,47 +221,57 @@ const StockImportHistory = () => {
                       <span className={`badge bg-${badgeClass(item.status)}`}>{trStatus(item.status)}</span>
                     </td>
                     <td className="text-end">
-                      {(item.status === 'KISMEN' || item.status === 'PARTIAL' || item.status === 'BAŞARISIZ' || item.status === 'FAILED') && item.failedRows && (
+                      <div className="d-flex gap-2 justify-content-end">
+                        {(item.status === 'KISMEN' || item.status === 'PARTIAL' || item.status === 'BAŞARISIZ' || item.status === 'FAILED') && item.failedRows && (
+                          <button 
+                            className="btn btn-sm btn-outline-warning" 
+                            onClick={() => {
+                              try {
+                                const parsed = JSON.parse(item.failedRows);
+                                setFailedRows(Array.isArray(parsed) ? parsed : []);
+                                setShowFailedRowsModal(true);
+                              } catch (e) {
+                                console.error('Failed rows parse error:', e);
+                              }
+                            }}
+                          >
+                            <i className="fas fa-exclamation-triangle me-1"></i>
+                            Başarısız Satırlar
+                          </button>
+                        )}
                         <button 
-                          className="btn btn-sm btn-outline-warning me-2" 
-                          onClick={() => {
+                          className="btn btn-sm btn-outline-secondary" 
+                          onClick={async () => {
                             try {
-                              const parsed = JSON.parse(item.failedRows);
-                              setFailedRows(Array.isArray(parsed) ? parsed : []);
-                              setShowFailedRowsModal(true);
+                              const res = await axios.get(`/api/stock-imports/${item.id}/file`, { responseType: 'blob' });
+                              const url = window.URL.createObjectURL(new Blob([res.data]));
+                              const link = document.createElement('a');
+                              link.href = url;
+                              link.setAttribute('download', item.originalFilename || 'stok_import.xlsx');
+                              document.body.appendChild(link);
+                              link.click();
+                              link.remove();
+                              window.URL.revokeObjectURL(url);
                             } catch (e) {
-                              console.error('Failed rows parse error:', e);
+                              console.error('Dosya indirme hatası:', e);
                             }
                           }}
                         >
-                          <i className="fas fa-exclamation-triangle me-1"></i>
-                          Başarısız Satırlar
+                          <i className="fas fa-download me-1"></i>
+                          İndir
                         </button>
-                      )}
-                      <button 
-                        className="btn btn-sm btn-outline-secondary" 
-                        onClick={async () => {
-                          try {
-                            const res = await axios.get(`/api/stock-imports/${item.id}/file`, { responseType: 'blob' });
-                            const url = window.URL.createObjectURL(new Blob([res.data]));
-                            const link = document.createElement('a');
-                            link.href = url;
-                            link.setAttribute('download', item.originalFilename || 'stok_import.xlsx');
-                            document.body.appendChild(link);
-                            link.click();
-                            link.remove();
-                            window.URL.revokeObjectURL(url);
-                          } catch (e) {
-                            console.error('Dosya indirme hatası:', e);
-                          }
-                        }}
-                      >
-                        <i className="fas fa-download me-1"></i>
-                        Dosyayı İndir
-                      </button>
+                        <button 
+                          className="btn btn-sm btn-outline-danger" 
+                          onClick={() => handleDelete(item.id)}
+                        >
+                          <i className="fas fa-trash me-1"></i>
+                          Sil
+                        </button>
+                      </div>
                     </td>
                   </tr>
-                ))}
+                );
+                })}
               </tbody>
             </table>
           </div>
@@ -159,8 +284,10 @@ const StockImportHistory = () => {
               </div>
             ) : (
               <div className="d-flex flex-column gap-3">
-                {items.map(item => (
-                  <div key={item.id} className="card import-history-card border shadow-sm">
+                {items.map(item => {
+                  const isSelected = selectedItems.includes(item.id);
+                  return (
+                  <div key={item.id} className={`card import-history-card border shadow-sm ${isSelected ? 'border-primary bg-primary bg-opacity-10' : ''}`}>
                     <div className="card-body p-3">
                       <div className="d-flex justify-content-between align-items-start mb-2">
                         <div>
@@ -171,9 +298,20 @@ const StockImportHistory = () => {
                             {item.createdAt ? new Date(item.createdAt).toLocaleString('tr-TR') : '-'}
                           </small>
                         </div>
-                        <span className={`badge bg-${badgeClass(item.status)}`}>
-                          {trStatus(item.status)}
-                        </span>
+                        <div className="d-flex align-items-center gap-2">
+                          <div className="form-check">
+                            <input
+                              className="form-check-input"
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleItemSelection(item.id)}
+                              aria-label={`${item.originalFilename} seç`}
+                            />
+                          </div>
+                          <span className={`badge bg-${badgeClass(item.status)}`}>
+                            {trStatus(item.status)}
+                          </span>
+                        </div>
                       </div>
                       <div className="mb-2">
                         <div className="small text-muted">Dosya</div>
@@ -238,12 +376,20 @@ const StockImportHistory = () => {
                           }}
                         >
                           <i className="fas fa-download me-1"></i>
-                          Dosyayı İndir
+                          İndir
+                        </button>
+                        <button 
+                          className="btn btn-sm btn-outline-danger flex-fill" 
+                          onClick={() => handleDelete(item.id)}
+                        >
+                          <i className="fas fa-trash me-1"></i>
+                          Sil
                         </button>
                       </div>
                     </div>
                   </div>
-                ))}
+                );
+                })}
               </div>
             )}
           </div>
@@ -297,6 +443,14 @@ const StockImportHistory = () => {
           </div>
         </div>
       )}
+
+      <ConfirmModal
+        show={confirmModal.show}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal({ show: false, title: '', message: '', onConfirm: null })}
+      />
     </div>
   );
 };

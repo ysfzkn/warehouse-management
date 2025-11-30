@@ -6,6 +6,7 @@ import com.warehouse.repository.StockImportHistoryRepository;
 import com.warehouse.service.StockImportService;
 import com.warehouse.dto.StockImportHistoryDto;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
@@ -15,17 +16,21 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import com.warehouse.constants.ImportMessages;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.security.access.prepost.PreAuthorize;
+import com.warehouse.dto.BulkDeleteResponse;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/stock-imports")
 @RequiredArgsConstructor
+@Slf4j
 public class StockImportController {
 
     private final StockImportService stockImportService;
@@ -71,6 +76,70 @@ public class StockImportController {
             else if (ImportMessages.STATUS_PARTIAL.equals(s)) dto.status = ImportMessages.STATUS_TR_PARTIAL;
         }
         return ResponseEntity.ok(result);
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Void> deleteImportHistory(@PathVariable Long id) throws IOException {
+        StockImportHistory history = historyRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Record not found: " + id));
+        
+        // Delete the stored file if it exists
+        Path storageDir = Path.of(importProperties.getStorageDir());
+        Path filePath = storageDir.resolve(history.getStoredFilename());
+        deleteFileIfExists(filePath, history.getStoredFilename());
+        
+        // Delete the database record
+        historyRepository.delete(history);
+        log.info("Deleted import history record with id: {} and file: {}", id, history.getStoredFilename());
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/bulk")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<BulkDeleteResponse> deleteImportHistories(@RequestBody List<Long> ids) throws IOException {
+        if (ids == null || ids.isEmpty()) {
+            return ResponseEntity.badRequest().build();
+        }
+        
+        List<BulkDeleteResponse.DeleteError> errors = new ArrayList<>();
+        int successCount = 0;
+        Path storageDir = Path.of(importProperties.getStorageDir());
+        
+        for (Long id : ids) {
+            try {
+                StockImportHistory history = historyRepository.findById(id)
+                        .orElseThrow(() -> new IllegalArgumentException("Record not found: " + id));
+                
+                // Delete the stored file if it exists
+                Path filePath = storageDir.resolve(history.getStoredFilename());
+                deleteFileIfExists(filePath, history.getStoredFilename());
+                
+                // Delete the database record
+                historyRepository.delete(history);
+                log.debug("Deleted import history record with id: {} and file: {}", id, history.getStoredFilename());
+                successCount++;
+            } catch (IllegalArgumentException e) {
+                errors.add(new BulkDeleteResponse.DeleteError(
+                    id,
+                    "Kayıt #" + id,
+                    null,
+                    "NOT_FOUND",
+                    "Kayıt bulunamadı: " + e.getMessage()
+                ));
+            } catch (Exception e) {
+                errors.add(new BulkDeleteResponse.DeleteError(
+                    id,
+                    "Kayıt #" + id,
+                    null,
+                    "INTERNAL_ERROR",
+                    "Silme işlemi sırasında hata oluştu: " + e.getMessage()
+                ));
+            }
+        }
+        
+        BulkDeleteResponse response = new BulkDeleteResponse(successCount, errors.size(), errors);
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/{id}/file")
@@ -138,6 +207,25 @@ public class StockImportController {
             }
         }
         return dto;
+    }
+
+    /**
+     * Deletes the file if it exists. Logs success or failure but doesn't throw exceptions.
+     * This ensures that database record deletion can proceed even if file deletion fails.
+     */
+    private void deleteFileIfExists(Path filePath, String storedFilename) {
+        try {
+            if (Files.exists(filePath)) {
+                Files.delete(filePath);
+                log.info("Successfully deleted import file: {}", storedFilename);
+            } else {
+                log.warn("Import file not found (may have been already deleted): {}", storedFilename);
+            }
+        } catch (IOException e) {
+            // Log but don't fail if file deletion fails
+            // This allows database record deletion to proceed even if file is missing or locked
+            log.error("Failed to delete import file: {} - Error: {}", storedFilename, e.getMessage(), e);
+        }
     }
 }
 
