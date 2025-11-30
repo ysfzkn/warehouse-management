@@ -21,6 +21,8 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
     customerPhone: ''
   });
   const [productSearchTerm, setProductSearchTerm] = useState('');
+  const [showProductDropdown, setShowProductDropdown] = useState(false);
+  const [highlightedProductIndex, setHighlightedProductIndex] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
@@ -40,12 +42,21 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
         customerName: stock.customerName || '',
         customerPhone: stock.customerPhone ? extractPhoneDigits(stock.customerPhone) : ''
       });
+      // Set initial product search term to current product name
+      if (stock.product?.name) {
+        setProductSearchTerm(stock.product.name);
+      }
     }
   }, [stock]);
 
+  // Reset highlighted index when search term changes
+  useEffect(() => {
+    setHighlightedProductIndex(0);
+  }, [productSearchTerm]);
+
   // Filter products for search
   const filteredProducts = useMemo(() => {
-    if (!productSearchTerm.trim()) return products;
+    if (!productSearchTerm.trim()) return [];
     const query = productSearchTerm.trim().toLocaleLowerCase('tr-TR');
     return products.filter(product => {
       const haystack = [
@@ -57,8 +68,48 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
         .filter(Boolean)
         .map(text => text.toLocaleLowerCase('tr-TR'));
       return haystack.some(text => text.includes(query));
-    });
+    }).slice(0, 10); // Limit to 10 results for better UX
   }, [products, productSearchTerm]);
+
+  // Get selected product name for display
+  const selectedProduct = useMemo(() => {
+    if (!settings.productId) return null;
+    return products.find(p => p.id === settings.productId);
+  }, [products, settings.productId]);
+
+  // Handle product selection
+  const handleProductSelect = (product) => {
+    setSettings(prev => ({
+      ...prev,
+      productId: product.id
+    }));
+    setProductSearchTerm(product.name);
+    setShowProductDropdown(false);
+    setHighlightedProductIndex(0);
+    if (errors.productId) {
+      setErrors(prev => ({ ...prev, productId: null }));
+    }
+  };
+
+  // Handle keyboard navigation
+  const handleProductSearchKeyDown = (e) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlightedProductIndex(prev => 
+        Math.min(prev + 1, filteredProducts.length - 1)
+      );
+      setShowProductDropdown(true);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightedProductIndex(prev => Math.max(prev - 1, 0));
+      setShowProductDropdown(true);
+    } else if (e.key === 'Enter' && filteredProducts.length > 0) {
+      e.preventDefault();
+      handleProductSelect(filteredProducts[highlightedProductIndex]);
+    } else if (e.key === 'Escape') {
+      setShowProductDropdown(false);
+    }
+  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -78,14 +129,6 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
       }));
       if (errors.customerName) {
         setErrors(prev => ({ ...prev, customerName: null }));
-      }
-    } else if (name === 'productId') {
-      setSettings(prev => ({
-        ...prev,
-        [name]: value ? parseInt(value) : null
-      }));
-      if (errors.productId) {
-        setErrors(prev => ({ ...prev, productId: null }));
       }
     } else {
       setSettings(prev => ({
@@ -268,52 +311,154 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
                     <i className="fas fa-box me-1 text-primary"></i>
                     Ürün
                   </label>
-                  <div className="position-relative">
+                  <div className="position-relative" style={{ zIndex: showProductDropdown ? 1055 : 'auto' }}>
                     <input
                       type="text"
-                      className="form-control form-control-lg"
-                      placeholder="Ürün ara..."
+                      className={`form-control form-control-lg ${errors.productId ? 'is-invalid' : ''} ${showProductDropdown ? 'border-primary' : ''}`}
+                      id="productId"
+                      placeholder="Ürün adı veya stok kodu yazın..."
                       value={productSearchTerm}
-                      onChange={(e) => setProductSearchTerm(e.target.value)}
-                      onFocus={(e) => e.target.select()}
+                      onChange={(e) => {
+                        setProductSearchTerm(e.target.value);
+                        setShowProductDropdown(true);
+                        if (e.target.value.trim() === '') {
+                          setSettings(prev => ({ ...prev, productId: null }));
+                        }
+                      }}
+                      onFocus={() => {
+                        if (productSearchTerm.trim()) {
+                          setShowProductDropdown(true);
+                        }
+                      }}
+                      onBlur={(e) => {
+                        // Delay to allow click events on dropdown items
+                        setTimeout(() => {
+                          setShowProductDropdown(false);
+                        }, 200);
+                      }}
+                      onKeyDown={handleProductSearchKeyDown}
+                      style={{
+                        borderWidth: showProductDropdown ? '2px' : '1px'
+                      }}
                     />
                     {productSearchTerm && (
                       <button
                         type="button"
                         className="btn btn-sm btn-link position-absolute end-0 top-50 translate-middle-y me-2"
-                        onClick={() => setProductSearchTerm('')}
-                        style={{ zIndex: 10 }}
+                        onClick={() => {
+                          setProductSearchTerm('');
+                          setSettings(prev => ({ ...prev, productId: null }));
+                          setShowProductDropdown(false);
+                        }}
+                        style={{ zIndex: 1056 }}
                       >
                         <i className="fas fa-times"></i>
                       </button>
                     )}
+                    {showProductDropdown && filteredProducts.length > 0 && (
+                      <div 
+                        className="list-group position-absolute w-100"
+                        style={{
+                          zIndex: 1055,
+                          maxHeight: '280px',
+                          overflowY: 'auto',
+                          marginTop: '4px',
+                          backgroundColor: '#fff',
+                          border: '2px solid #0d6efd',
+                          borderRadius: '0.375rem',
+                          boxShadow: '0 0.5rem 1rem rgba(0, 0, 0, 0.15)',
+                          top: '100%',
+                          left: 0
+                        }}
+                      >
+                        <div className="list-group-item bg-light border-bottom fw-semibold small text-muted py-2 px-3" style={{ position: 'sticky', top: 0, zIndex: 1 }}>
+                          <i className="fas fa-list me-2"></i>
+                          {filteredProducts.length} sonuç bulundu
+                        </div>
+                        {filteredProducts.map((product, index) => (
+                          <button
+                            key={product.id}
+                            type="button"
+                            className={`list-group-item list-group-item-action border-0 ${
+                              index === highlightedProductIndex ? 'active bg-primary text-white' : ''
+                            } ${settings.productId === product.id ? 'bg-success bg-opacity-10 border-start border-success border-3' : ''}`}
+                            style={{
+                              transition: 'all 0.15s ease',
+                              cursor: 'pointer'
+                            }}
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              handleProductSelect(product);
+                            }}
+                            onMouseEnter={() => setHighlightedProductIndex(index)}
+                          >
+                            <div className="d-flex justify-content-between align-items-center">
+                              <div className="flex-grow-1">
+                                <div className={`fw-bold ${index === highlightedProductIndex ? 'text-white' : ''}`}>
+                                  {product.name}
+                                </div>
+                                <small className={index === highlightedProductIndex ? 'text-white text-opacity-75' : 'text-muted'}>
+                                  {product.sku && <span>SKU: {product.sku}</span>}
+                                  {product.sku && product.brand?.name && ' • '}
+                                  {product.brand?.name && <span>Marka: {product.brand.name}</span>}
+                                </small>
+                              </div>
+                              {settings.productId === product.id && (
+                                <i className={`fas fa-check-circle ${index === highlightedProductIndex ? 'text-white' : 'text-success'} ms-2`}></i>
+                              )}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {showProductDropdown && productSearchTerm.trim() && filteredProducts.length === 0 && (
+                      <div 
+                        className="position-absolute w-100"
+                        style={{
+                          zIndex: 1055,
+                          marginTop: '4px',
+                          padding: '1.5rem',
+                          backgroundColor: '#fff',
+                          border: '2px solid #dc3545',
+                          borderRadius: '0.375rem',
+                          boxShadow: '0 0.5rem 1rem rgba(0, 0, 0, 0.15)',
+                          top: '100%',
+                          left: 0
+                        }}
+                      >
+                        <div className="text-muted text-center">
+                          <i className="fas fa-search me-2 text-danger"></i>
+                          <strong>Arama kriterlerine uygun ürün bulunamadı.</strong>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <select
-                    className={`form-select form-select-lg mt-2 ${errors.productId ? 'is-invalid' : ''}`}
-                    id="productId"
-                    name="productId"
-                    value={settings.productId || ''}
-                    onChange={handleChange}
-                    style={{ maxHeight: '200px', overflowY: 'auto' }}
-                  >
-                    <option value="">-- Ürün Seçiniz --</option>
-                    {filteredProducts.slice(0, 100).map(product => (
-                      <option key={product.id} value={product.id}>
-                        {product.name} {product.sku ? `(${product.sku})` : ''} {product.brand?.name ? `- ${product.brand.name}` : ''}
-                      </option>
-                    ))}
-                  </select>
-                  {filteredProducts.length > 100 && (
-                    <small className="text-muted d-block mt-1">
-                      <i className="fas fa-info-circle me-1"></i>
-                      İlk 100 sonuç gösteriliyor. Daha fazla sonuç için arama yapın.
-                    </small>
+                  {selectedProduct && (
+                    <div className="mt-2">
+                      <div className="alert alert-light border d-flex justify-content-between align-items-center py-2">
+                        <div>
+                          <strong>Seçili Ürün:</strong> {selectedProduct.name}
+                          {selectedProduct.sku && <span className="text-muted ms-2">({selectedProduct.sku})</span>}
+                        </div>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-outline-danger"
+                          onClick={() => {
+                            setProductSearchTerm('');
+                            setSettings(prev => ({ ...prev, productId: null }));
+                          }}
+                        >
+                          <i className="fas fa-times me-1"></i>
+                          Kaldır
+                        </button>
+                      </div>
+                    </div>
                   )}
                   {errors.productId && (
-                    <div className="invalid-feedback">{errors.productId}</div>
+                    <div className="invalid-feedback d-block">{errors.productId}</div>
                   )}
                   <small className="text-muted d-block mt-1">
-                    Stok kaydının bağlı olduğu ürünü değiştirebilirsiniz
+                    Ürün adı veya stok kodunu yazarak arama yapın ve listeden seçin. Enter tuşu ile ilk sonucu seçebilirsiniz.
                   </small>
                 </div>
 
