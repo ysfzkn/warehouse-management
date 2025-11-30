@@ -52,6 +52,7 @@ const Dashboard = () => {
   const [allStocks, setAllStocks] = useState([]);
   const [lowStocks, setLowStocks] = useState([]);
   const [outStocks, setOutStocks] = useState([]);
+  const [products, setProducts] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedWarehouseId, setSelectedWarehouseId] = useState(null);
   const [selectedWarehouseOpt, setSelectedWarehouseOpt] = useState(null);
@@ -100,7 +101,8 @@ const Dashboard = () => {
       ]);
 
       const warehousesData = warehousesRes.data;
-      const products = allProducts;
+      const productsData = allProducts;
+      setProducts(productsData);
       const categories = categoriesRes.data;
       const lowStockItems = Array.isArray(lowStockRes.data) ? lowStockRes.data : (lowStockRes.data?.content || []);
       const outOfStockItems = Array.isArray(outOfStockRes.data) ? outOfStockRes.data : (outOfStockRes.data?.content || []);
@@ -135,7 +137,7 @@ const Dashboard = () => {
         warehouseStatsMap[whId].consigned += stock.consignedQuantity || 0;
         warehouseStatsMap[whId].productCount += 1;
         
-        const product = products.find(p => p.id === stock.product?.id);
+        const product = productsData.find(p => p.id === stock.product?.id);
         if (product) {
           warehouseStatsMap[whId].totalValue += (product.price || 0) * (stock.quantity || 0);
         }
@@ -153,7 +155,7 @@ const Dashboard = () => {
         totalReserved += stock.reservedQuantity || 0;
         totalConsigned += stock.consignedQuantity || 0;
         
-        const product = products.find(p => p.id === stock.product?.id);
+        const product = productsData.find(p => p.id === stock.product?.id);
         if (product) {
           totalStockValue += (product.price || 0) * (stock.quantity || 0);
         }
@@ -179,7 +181,7 @@ const Dashboard = () => {
 
       setStats({
         totalWarehouses: warehousesData.length,
-        totalProducts: products.length,
+        totalProducts: productsData.length,
         totalCategories: categories.length,
         lowStockItems: lowStockItems.length,
         outOfStockItems: outOfStockItems.length,
@@ -236,6 +238,23 @@ const Dashboard = () => {
     }
     
     const filtered = filteredAllStocks;
+    
+    // Calculate total stock value and unique product count from filtered stocks
+    let totalStockValue = 0;
+    const uniqueProductIds = new Set();
+    
+    filtered.forEach(stock => {
+      if (stock.product?.id) {
+        uniqueProductIds.add(stock.product.id);
+        
+        // Get product price from products array
+        const product = products.find(p => p.id === stock.product.id);
+        const productPrice = product?.price || stock.product?.price || 0;
+        const quantity = stock.quantity || 0;
+        totalStockValue += productPrice * quantity;
+      }
+    });
+    
     return {
       ...stats,
       lowStockItems: filteredLow.length,
@@ -243,8 +262,10 @@ const Dashboard = () => {
       totalStockQuantity: filtered.reduce((sum, s) => sum + (s.quantity || 0), 0),
       totalReserved: filtered.reduce((sum, s) => sum + (s.reservedQuantity || 0), 0),
       totalConsigned: filtered.reduce((sum, s) => sum + (s.consignedQuantity || 0), 0),
+      totalStockValue: totalStockValue,
+      totalProducts: uniqueProductIds.size,
     };
-  }, [stats, filteredAllStocks, filteredLow, filteredOut, selectedWarehouseId, brandId, colorId, searchTerm]);
+  }, [stats, filteredAllStocks, filteredLow, filteredOut, products, selectedWarehouseId, brandId, colorId, searchTerm]);
 
   const barChartData = {
     labels: ['Aktif Depolar', 'Toplam Ürünler', 'Kategoriler', 'Düşük Stok', 'Stok Dışı'],
@@ -403,7 +424,7 @@ const Dashboard = () => {
               <div className="d-flex justify-content-between align-items-start">
                 <div className="flex-grow-1">
                   <p className="text-muted mb-1 small">Toplam Stok Değeri</p>
-                  <h3 className="mb-0 fw-bold">{stats.totalStockValue.toLocaleString('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} ₺</h3>
+                  <h3 className="mb-0 fw-bold">{computedStats.totalStockValue.toLocaleString('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} ₺</h3>
                   <small className="text-muted">
                     <i className="fas fa-chart-line me-1"></i>
                     Tahmini değer
@@ -478,7 +499,7 @@ const Dashboard = () => {
               <div className="mb-2">
                 <i className="fas fa-box text-info fa-2x"></i>
               </div>
-              <h4 className="mb-0 fw-bold">{stats.totalProducts}</h4>
+              <h4 className="mb-0 fw-bold">{computedStats.totalProducts}</h4>
               <small className="text-muted">Ürün Çeşidi</small>
             </div>
           </div>
