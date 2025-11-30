@@ -64,9 +64,33 @@ const Dashboard = () => {
   const fetchDashboardData = useCallback(async () => {
     try {
       setLoading(true);
-      const [warehousesRes, productsRes, categoriesRes, lowStockRes, outOfStockRes, allStocksRes, brandsRes, colorsRes] = await Promise.all([
+      
+      // Fetch all products by making multiple requests if needed
+      let allProducts = [];
+      let currentPage = 0;
+      const pageSize = 250; // Maximum allowed by backend
+      let hasMore = true;
+      
+      while (hasMore) {
+        const response = await axios.get('/api/products', { 
+          params: { page: currentPage, size: pageSize } 
+        });
+        const data = response.data || {};
+        const productsList = Array.isArray(data.content) ? data.content : (Array.isArray(data) ? data : []);
+        allProducts = [...allProducts, ...productsList];
+        
+        // Check if there are more pages
+        if (data.totalPages !== undefined) {
+          hasMore = currentPage + 1 < data.totalPages;
+          currentPage++;
+        } else {
+          // Non-paginated response or single page
+          hasMore = false;
+        }
+      }
+      
+      const [warehousesRes, categoriesRes, lowStockRes, outOfStockRes, allStocksRes, brandsRes, colorsRes] = await Promise.all([
         axios.get('/api/warehouses'),
-        axios.get('/api/products'),
         axios.get('/api/categories'),
         axios.get('/api/stocks/low-stock'),
         axios.get('/api/stocks/out-of-stock'),
@@ -76,8 +100,7 @@ const Dashboard = () => {
       ]);
 
       const warehousesData = warehousesRes.data;
-      const productsData = productsRes.data;
-      const products = Array.isArray(productsData) ? productsData : (Array.isArray(productsData?.content) ? productsData.content : []);
+      const products = allProducts;
       const categories = categoriesRes.data;
       const lowStockItems = Array.isArray(lowStockRes.data) ? lowStockRes.data : (lowStockRes.data?.content || []);
       const outOfStockItems = Array.isArray(outOfStockRes.data) ? outOfStockRes.data : (outOfStockRes.data?.content || []);
