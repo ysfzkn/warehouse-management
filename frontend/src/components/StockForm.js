@@ -68,11 +68,19 @@ const StockForm = ({ products, warehouses, onSuccess, onCancel }) => {
   }, [products, productSearchTerm]);
 
   const productOptions = useMemo(() => filteredProducts.slice(0), [filteredProducts]);
+  // Arama yapıldığında tüm sonuçları göster, aksi halde pagination uygula
   const limitedProductOptions = useMemo(
-    () => productOptions.slice(0, visibleProductCount),
-    [productOptions, visibleProductCount]
+    () => {
+      if (productSearchTerm.trim()) {
+        // Arama yapıldığında tüm sonuçları göster
+        return productOptions;
+      }
+      // Arama yoksa pagination uygula
+      return productOptions.slice(0, visibleProductCount);
+    },
+    [productOptions, visibleProductCount, productSearchTerm]
   );
-  const hasMoreProducts = productOptions.length > visibleProductCount;
+  const hasMoreProducts = !productSearchTerm.trim() && productOptions.length > visibleProductCount;
 
   const selectedProductMap = useMemo(() => {
     const map = new Map();

@@ -7,6 +7,8 @@ import PaginationControls from '../components/PaginationControls';
 
 const normalizeText = (text) => (text || '').toLocaleLowerCase('tr-TR');
 
+const PAGE_SIZE_OPTIONS = [20, 50, 100, 250];
+
 const Products = () => {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -33,7 +35,7 @@ const Products = () => {
   const [bulkOnlyActive, setBulkOnlyActive] = useState(true);
   const [selectedProducts, setSelectedProducts] = useState([]);
   const [productPage, setProductPage] = useState(0);
-  const [productPageSize, setProductPageSize] = useState(20);
+  const [productPageSize, setProductPageSize] = useState(100);
   const [productTotalPages, setProductTotalPages] = useState(0);
   const [productTotalCount, setProductTotalCount] = useState(0);
   const [filteredProducts, setFilteredProducts] = useState([]);
@@ -102,6 +104,18 @@ const Products = () => {
     fetchProducts(0, productPageSize);
     fetchMainCategories();
   }, [fetchProducts, productPageSize]);
+
+  const handleProductPageSizeChange = async (e) => {
+    const newSize = Number(e.target.value);
+    setProductPageSize(newSize);
+    setProductPage(0);
+    try {
+      await fetchProducts(0, newSize);
+    } catch (error) {
+      console.error('Error changing product page size:', error);
+      setError('Ürün verileri yüklenirken hata oluştu');
+    }
+  };
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -1008,8 +1022,23 @@ const Products = () => {
             </div>
           )}
           {/* Desktop Table View */}
-          <div className="d-none d-lg-block table-responsive">
-            <table className="table table-hover align-middle">
+          <div className="d-none d-lg-block">
+            <div className="d-flex justify-content-end align-items-center mb-2 gap-2 flex-wrap">
+              <div className="page-size-control d-flex align-items-center flex-wrap">
+                <span className="form-label mb-0 small text-muted">Sayfa Boyutu</span>
+                <select
+                  className="form-select form-select-sm page-size-select"
+                  value={productPageSize}
+                  onChange={handleProductPageSizeChange}
+                >
+                  {PAGE_SIZE_OPTIONS.map(size => (
+                    <option key={`product-page-${size}`} value={size}>{size}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="table-responsive">
+              <table className="table table-hover align-middle">
               <thead className="table-light">
                 <tr>
                   <th className="text-center" style={{ width: '40px' }}>
@@ -1199,10 +1228,25 @@ const Products = () => {
                 })}
               </tbody>
             </table>
+            </div>
           </div>
 
           {/* Mobile Card View */}
           <div className="d-lg-none">
+            <div className="d-flex justify-content-end align-items-center mb-2 gap-2 flex-wrap">
+              <div className="page-size-control d-flex align-items-center flex-wrap">
+                <span className="form-label mb-0 small text-muted">Sayfa Boyutu</span>
+                <select
+                  className="form-select form-select-sm page-size-select"
+                  value={productPageSize}
+                  onChange={handleProductPageSizeChange}
+                >
+                  {PAGE_SIZE_OPTIONS.map(size => (
+                    <option key={`product-page-mobile-${size}`} value={size}>{size}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
             <div className="d-flex flex-column gap-3">
               {filteredProducts.slice(productPage * productPageSize, (productPage + 1) * productPageSize).map((product) => {
                 const calculateTotalPrice = () => {
@@ -1393,20 +1437,6 @@ const Products = () => {
                 Toplam {productTotalCount} ürün, Sayfa {productPage + 1} / {productTotalPages}
               </div>
               <div className="d-flex align-items-center gap-2">
-                <select
-                  className="form-select form-select-sm"
-                  style={{ width: 'auto' }}
-                  value={productPageSize}
-                  onChange={(e) => {
-                    setProductPageSize(Number(e.target.value));
-                    setProductPage(0);
-                  }}
-                >
-                  <option value={10}>10</option>
-                  <option value={20}>20</option>
-                  <option value={50}>50</option>
-                  <option value={100}>100</option>
-                </select>
                 <PaginationControls
                   page={productPage}
                   totalPages={productTotalPages}

@@ -44,7 +44,7 @@ public class ProductController {
         if (page != null && size != null) {
             // Paginated response
             int safePage = Math.max(0, page);
-            int safeSize = Math.max(1, Math.min(size, 100));
+            int safeSize = Math.max(1, Math.min(size, 250));
             Sort sort = Sort.by(Sort.Direction.fromString(sortDir), sortBy);
             Pageable pageable = PageRequest.of(safePage, safeSize, sort);
             Page<Product> productPage = productService.getAllProducts(pageable);
