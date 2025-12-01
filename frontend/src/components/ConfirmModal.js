@@ -12,7 +12,7 @@ const ConfirmModal = ({ show, onConfirm, onCancel, title, message, confirmText =
   };
 
   return (
-    <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+    <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 4000 }}>
       <div className="modal-dialog modal-dialog-centered">
         <div className="modal-content shadow-lg border-0">
           <div className="modal-header border-0 pb-0">

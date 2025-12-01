@@ -47,6 +47,11 @@ public class SecurityConfig {
                         .requestMatchers("/api/stock-requests/**").hasAnyRole("ADMIN", "STOCK_IN", "STOCK_OUT")
                         // Stock transfers available to all authenticated warehouse roles
                         .requestMatchers(ApiPaths.STOCK_TRANSFERS).hasAnyRole("ADMIN", "STOCK_IN", "STOCK_OUT")
+                        // Public image viewing for thumbnails/full-size via <img> tags (no auth header)
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/stock-transfer-items/*/photo/view")
+                        .permitAll()
+                        // Stock transfer item photo operations (upload/delete/meta) - same roles as transfers
+                        .requestMatchers("/api/stock-transfer-items/**").hasAnyRole("ADMIN", "STOCK_IN", "STOCK_OUT")
                         // Excel operations only for ADMIN
                         .requestMatchers("/api/stock-imports/**").hasRole("ADMIN")
                         // Read-only supporting data for stock page

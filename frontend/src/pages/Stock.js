@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import axios from 'axios';
+import { compressImage } from '../utils/image';
 import { formatPhoneForDisplay } from '../utils/phone';
 import StockForm from '../components/StockForm';
 import QuickStockAdjustModal from '../components/QuickStockAdjustModal';
@@ -604,6 +605,9 @@ const Stock = () => {
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [showTransferHistory, setShowTransferHistory] = useState(false);
   const [transferDetailModal, setTransferDetailModal] = useState({ show: false, transfer: null });
+  const [transferDetailPhotos, setTransferDetailPhotos] = useState({});
+  const [photoUpdateTimestamps, setPhotoUpdateTimestamps] = useState({});
+  const [transferLightbox, setTransferLightbox] = useState({ show: false, images: [], index: 0 });
   const [selectedStock, setSelectedStock] = useState(null);
   const [transfers, setTransfers] = useState([]);
   const [transferPage, setTransferPage] = useState(0);
@@ -832,8 +836,130 @@ const Stock = () => {
     }
   };
 
+  const loadTransferDetailPhotos = async (transfer) => {
+    if (!transfer || !Array.isArray(transfer.items)) {
+      setTransferDetailPhotos({});
+      return;
+    }
+    try {
+      const photos = {};
+      await Promise.all(
+        transfer.items.map(async (item) => {
+          if (!item.id) return;
+          try {
+            const resp = await axios.get(`/api/stock-transfer-items/${item.id}/photo`);
+            photos[item.id] = resp.data;
+          } catch {
+            // no photo for this item
+          }
+        })
+      );
+      setTransferDetailPhotos(photos);
+    } catch (e) {
+      console.error('Error loading transfer item photos for detail modal', e);
+      setTransferDetailPhotos({});
+    }
+  };
+
+  const handleDetailPhotoChange = async (transfer, item, file) => {
+    if (!file || !item?.id) return;
+    try {
+      const optimizedFile = await compressImage(file, {
+        maxWidth: 1920,
+        maxHeight: 1920,
+        quality: 0.75,
+        mimeType: 'image/jpeg'
+      });
+
+      const formData = new FormData();
+      formData.append('file', optimizedFile);
+
+      await axios.post(`/api/stock-transfer-items/${item.id}/photo`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      // Fotoğraf güncellendikten sonra o item için metadata'yı tekrar fetch et
+      try {
+        const metaResp = await axios.get(`/api/stock-transfer-items/${item.id}/photo`);
+        setTransferDetailPhotos(prev => ({
+          ...prev,
+          [item.id]: metaResp.data
+        }));
+        // Cache-busting için timestamp ekle
+        setPhotoUpdateTimestamps(prev => ({
+          ...prev,
+          [item.id]: Date.now()
+        }));
+      } catch (metaError) {
+        // Metadata fetch başarısız olursa tüm transfer için yeniden yükle
+        await loadTransferDetailPhotos(transfer);
+      }
+
+      showSuccessToast('Fotoğraf başarıyla güncellendi.');
+    } catch (error) {
+      console.error('Error updating transfer item photo from detail modal', error);
+      setErrorModal({
+        show: true,
+        title: 'Fotoğraf Güncellenemedi',
+        message: 'Transfer satırı fotoğrafı güncellenirken bir hata oluştu. Lütfen tekrar deneyin.'
+      });
+    }
+  };
+
+  const handleDetailPhotoRemove = async (transfer, item) => {
+    if (!item?.id) return;
+    try {
+      await axios.delete(`/api/stock-transfer-items/${item.id}/photo`);
+      // Fotoğraf silindikten sonra state'ten kaldır
+      setTransferDetailPhotos(prev => {
+        const updated = { ...prev };
+        delete updated[item.id];
+        return updated;
+      });
+      showSuccessToast('Fotoğraf kaldırıldı.');
+    } catch (error) {
+      console.error('Error removing transfer item photo from detail modal', error);
+      setErrorModal({
+        show: true,
+        title: 'Fotoğraf Kaldırılamadı',
+        message: 'Transfer satırı fotoğrafı silinirken bir hata oluştu. Lütfen tekrar deneyin.'
+      });
+    }
+  };
+
   const openTransferDetailModal = (transfer) => {
     setTransferDetailModal({ show: true, transfer });
+    loadTransferDetailPhotos(transfer);
+  };
+
+  const openTransferLightbox = (transfer, items, photos, activeItemId) => {
+    const images = (items || [])
+      .map((item) => {
+        const meta = photos[item.id];
+        if (!meta) return null;
+        const src = meta.viewUrl || meta.thumbnailUrl;
+        if (!src) return null;
+        return {
+          src,
+          title: `${item.product?.name || 'Ürün'} • ${item.product?.sku || ''}`.trim()
+        };
+      })
+      .filter(Boolean);
+
+    if (images.length === 0) return;
+
+    const activeMeta = photos[activeItemId];
+    const activeSrc = activeMeta?.viewUrl || activeMeta?.thumbnailUrl;
+    const startIndex = Math.max(
+      0,
+      images.findIndex((img) => img.src === activeSrc)
+    );
+
+    setTransferLightbox({
+      show: true,
+      images,
+      index: startIndex === -1 ? 0 : startIndex
+    });
   };
 
   const closeTransferDetailModal = () => {
@@ -1705,7 +1831,7 @@ const Stock = () => {
       )}
 
       {successToast.show && (
-        <div className="toast-container position-fixed top-0 end-0 p-3" style={{ zIndex: 2000 }}>
+        <div className="toast-container position-fixed top-0 end-0 p-3" style={{ zIndex: 4000 }}>
           <div className="toast show text-bg-success border-0 shadow" role="alert">
             <div className="d-flex align-items-center">
               <div className="toast-body">
@@ -2537,9 +2663,14 @@ const Stock = () => {
                           </div>
                         </div>
                       </div>
-                      <h6 className="fw-bold mb-2">
-                        <i className="fas fa-box me-2"></i>
-                        Ürünler
+                      <h6 className="fw-bold mb-2 d-flex align-items-center justify-content-between">
+                        <span>
+                          <i className="fas fa-box me-2"></i>
+                          Ürünler
+                        </span>
+                        <small className="text-muted">
+                          Ürün başına 1 fotoğraf eklenebilir (varsa aşağıda küçük önizleme olarak gösterilir).
+                        </small>
                       </h6>
                       {items.length === 0 ? (
                         <p className="text-muted small mb-4">Ürün bilgisi bulunamadı.</p>
@@ -2550,17 +2681,83 @@ const Stock = () => {
                               <tr>
                                 <th>Ürün</th>
                                 <th>SKU</th>
+                                <th className="text-center">Fotoğraf</th>
                                 <th className="text-end">Miktar</th>
                               </tr>
                             </thead>
                             <tbody>
-                              {items.map((item, idx) => (
-                                <tr key={`${t.id}-detail-${item.id || idx}`}>
-                                  <td>{item.product?.name || '-'}</td>
-                                  <td>{item.product?.sku || '-'}</td>
-                                  <td className="text-end">{item.quantity}</td>
-                                </tr>
-                              ))}
+                              {items.map((item, idx) => {
+                                const photoMeta = transferDetailPhotos[item.id];
+                                const hasPhoto = !!photoMeta && photoMeta.hasPhoto !== false;
+                                const baseThumbUrl = photoMeta?.thumbnailUrl || photoMeta?.viewUrl;
+                                // Cache-busting için timestamp ekle (sadece fotoğraf güncellendiğinde)
+                                const updateTimestamp = photoUpdateTimestamps[item.id];
+                                const thumbUrl = baseThumbUrl 
+                                  ? `${baseThumbUrl}${baseThumbUrl.includes('?') ? '&' : '?'}_t=${updateTimestamp || Date.now()}` 
+                                  : null;
+                                return (
+                                  <tr key={`${t.id}-detail-${item.id || idx}`}>
+                                    <td>{item.product?.name || '-'}</td>
+                                    <td>{item.product?.sku || '-'}</td>
+                                    <td className="text-center" style={{ minWidth: '110px' }}>
+                                      <div className="d-flex flex-column align-items-center gap-1">
+                                        {hasPhoto && thumbUrl ? (
+                                          <div
+                                            className="border rounded shadow-sm bg-white"
+                                            style={{
+                                              width: 48,
+                                              height: 48,
+                                              overflow: 'hidden',
+                                              cursor: 'pointer'
+                                            }}
+                                            title="Fotoğrafı büyüt"
+                                            onClick={() => openTransferLightbox(t, items, transferDetailPhotos, item.id)}
+                                          >
+                                            <img
+                                              key={thumbUrl}
+                                              src={thumbUrl}
+                                              alt="Ürün fotoğrafı"
+                                              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                            />
+                                          </div>
+                                        ) : (
+                                          <span className="text-muted small">Yok</span>
+                                        )}
+                                        <div className="d-flex flex-column align-items-center gap-1">
+                                          <label className="btn btn-link btn-xs p-0" style={{ fontSize: '0.7rem' }}>
+                                            <i className="fas fa-camera me-1"></i>
+                                            {hasPhoto ? 'Değiştir' : 'Ekle'}
+                                            <input
+                                              type="file"
+                                              accept="image/*"
+                                              className="d-none"
+                                              onChange={(e) => {
+                                                const file = e.target.files && e.target.files[0];
+                                                e.target.value = '';
+                                                if (file) {
+                                                  handleDetailPhotoChange(t, item, file);
+                                                }
+                                              }}
+                                            />
+                                          </label>
+                                          {hasPhoto && (
+                                            <button
+                                              type="button"
+                                              className="btn btn-link btn-xs text-danger p-0"
+                                              style={{ fontSize: '0.7rem' }}
+                                              onClick={() => handleDetailPhotoRemove(t, item)}
+                                            >
+                                              <i className="fas fa-trash-alt me-1"></i>
+                                              Kaldır
+                                            </button>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </td>
+                                    <td className="text-end">{item.quantity}</td>
+                                  </tr>
+                                );
+                              })}
                             </tbody>
                           </table>
                         </div>
@@ -2604,6 +2801,81 @@ const Stock = () => {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {transferLightbox.show && transferLightbox.images.length > 0 && (
+        <div
+          className="position-fixed top-0 start-0 w-100 h-100"
+          style={{ backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 3000 }}
+          onClick={() => setTransferLightbox({ show: false, images: [], index: 0 })}
+        >
+          <div
+            className="d-flex flex-column justify-content-center align-items-center h-100"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="btn btn-sm btn-light position-absolute top-0 end-0 m-3"
+              onClick={() => setTransferLightbox({ show: false, images: [], index: 0 })}
+            >
+              <i className="fas fa-times me-1"></i>
+              Kapat
+            </button>
+            <div className="text-white mb-2 small">
+              {transferLightbox.images[transferLightbox.index].title}
+            </div>
+            <div className="d-flex align-items-center justify-content-center w-100 px-3">
+              <button
+                type="button"
+                className="btn btn-outline-light me-3 d-none d-sm-inline-flex"
+                onClick={() =>
+                  setTransferLightbox((prev) => ({
+                    ...prev,
+                    index:
+                      (prev.index - 1 + prev.images.length) % prev.images.length
+                  }))
+                }
+              >
+                <i className="fas fa-chevron-left"></i>
+              </button>
+              <div
+                className="bg-black rounded-3 shadow-lg d-flex justify-content-center align-items-center"
+                style={{
+                  maxWidth: '90vw',
+                  maxHeight: '80vh',
+                  overflow: 'hidden'
+                }}
+              >
+                <img
+                  src={transferLightbox.images[transferLightbox.index].src}
+                  alt={transferLightbox.images[transferLightbox.index].title}
+                  style={{
+                    maxWidth: '100%',
+                    maxHeight: '80vh',
+                    objectFit: 'contain'
+                  }}
+                />
+              </div>
+              <button
+                type="button"
+                className="btn btn-outline-light ms-3 d-none d-sm-inline-flex"
+                onClick={() =>
+                  setTransferLightbox((prev) => ({
+                    ...prev,
+                    index: (prev.index + 1) % prev.images.length
+                  }))
+                }
+              >
+                <i className="fas fa-chevron-right"></i>
+              </button>
+            </div>
+            {transferLightbox.images.length > 1 && (
+              <div className="mt-2 text-white-50 small">
+                {transferLightbox.index + 1} / {transferLightbox.images.length}
+              </div>
+            )}
           </div>
         </div>
       )}

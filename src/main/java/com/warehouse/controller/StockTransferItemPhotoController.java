@@ -1,0 +1,186 @@
+package com.warehouse.controller;
+
+import com.warehouse.entity.StockTransferItem;
+import com.warehouse.entity.StockTransferItemPhoto;
+import com.warehouse.exception.ErrorCode;
+import com.warehouse.exception.WarehouseManagementException;
+import com.warehouse.repository.StockTransferItemPhotoRepository;
+import com.warehouse.repository.StockTransferItemRepository;
+import com.warehouse.service.PhotoStorageService;
+import jakarta.validation.constraints.NotNull;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.InputStream;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Optional;
+
+@RestController
+@RequestMapping("/api/stock-transfer-items")
+@CrossOrigin(origins = "*")
+@Slf4j
+public class StockTransferItemPhotoController {
+
+    private final StockTransferItemPhotoRepository photoRepository;
+    private final StockTransferItemRepository itemRepository;
+    private final PhotoStorageService photoStorageService;
+
+    public StockTransferItemPhotoController(StockTransferItemPhotoRepository photoRepository,
+                                            StockTransferItemRepository itemRepository,
+                                            PhotoStorageService photoStorageService) {
+        this.photoRepository = photoRepository;
+        this.itemRepository = itemRepository;
+        this.photoStorageService = photoStorageService;
+    }
+
+    @PostMapping("/{itemId}/photo")
+    @Transactional
+    public ResponseEntity<?> uploadPhoto(@PathVariable Long itemId,
+                                         @RequestParam("file") @NotNull MultipartFile file) {
+        if (file.isEmpty()) {
+            throw new WarehouseManagementException(ErrorCode.REQUIRED_FIELD_MISSING, "Fotoğraf dosyası boş olamaz");
+        }
+
+        String contentType = file.getContentType();
+        if (contentType == null || !contentType.startsWith("image/")) {
+            throw new WarehouseManagementException(ErrorCode.INVALID_VALUE, "Sadece görüntü dosyalarına izin verilir");
+        }
+
+        StockTransferItem item = findItemOrThrow(itemId);
+
+        try (InputStream is = file.getInputStream()) {
+            // Eğer daha önce fotoğraf varsa eski dosyaları sil ve kaydı güncelle
+            Optional<StockTransferItemPhoto> existingOpt = photoRepository.findByItem(item);
+            StockTransferItemPhoto photo;
+            
+            if (existingOpt.isPresent()) {
+                // Mevcut kaydı güncelle
+                photo = existingOpt.get();
+                // Eski dosyaları sil
+                photoStorageService.deletePhotoFiles(photo.getRelativePath(), photo.getThumbnailPath());
+            } else {
+                // Yeni kayıt oluştur
+                photo = new StockTransferItemPhoto();
+                photo.setItem(item);
+            }
+
+            PhotoStorageService.StoredPhoto stored = photoStorageService.storeItemPhoto(
+                    item.getTransfer().getId(),
+                    item.getId(),
+                    file.getOriginalFilename(),
+                    contentType,
+                    is
+            );
+
+            // Fotoğraf bilgilerini güncelle
+            photo.setFileName(stored.fileName());
+            photo.setRelativePath(stored.relativePath());
+            photo.setThumbnailPath(stored.thumbnailPath());
+            photo.setContentType(stored.contentType());
+            photo.setSizeBytes(stored.sizeBytes());
+            photo.setWidth(stored.width());
+            photo.setHeight(stored.height());
+
+            StockTransferItemPhoto saved = photoRepository.save(photo);
+            item.setPhoto(saved);
+
+            Map<String, Object> body = new HashMap<>();
+            body.put("id", saved.getId());
+            body.put("itemId", item.getId());
+            body.put("contentType", saved.getContentType());
+            body.put("sizeBytes", saved.getSizeBytes());
+            body.put("width", saved.getWidth());
+            body.put("height", saved.getHeight());
+            return ResponseEntity.status(HttpStatus.CREATED).body(body);
+        } catch (Exception e) {
+            log.error("Error uploading photo for stock transfer item {}: {}", itemId, e.getMessage(), e);
+            throw new WarehouseManagementException(ErrorCode.INTERNAL_SERVER_ERROR, "Fotoğraf yüklenirken hata oluştu: " + e.getMessage());
+        }
+    }
+
+    @DeleteMapping("/{itemId}/photo")
+    @Transactional
+    public ResponseEntity<Void> deletePhoto(@PathVariable Long itemId) {
+        StockTransferItem item = findItemOrThrow(itemId);
+        Optional<StockTransferItemPhoto> existingOpt = photoRepository.findByItem(item);
+        if (existingOpt.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        StockTransferItemPhoto existing = existingOpt.get();
+        photoStorageService.deletePhotoFiles(existing.getRelativePath(), existing.getThumbnailPath());
+        photoRepository.delete(existing);
+        item.setPhoto(null);
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/{itemId}/photo")
+    @Transactional(readOnly = true)
+    public ResponseEntity<?> getPhotoMeta(@PathVariable Long itemId) {
+        StockTransferItem item = findItemOrThrow(itemId);
+        Optional<StockTransferItemPhoto> existingOpt = photoRepository.findByItem(item);
+        Map<String, Object> body = new HashMap<>();
+
+        if (existingOpt.isEmpty()) {
+            body.put("itemId", item.getId());
+            body.put("hasPhoto", false);
+            return ResponseEntity.ok(body);
+        }
+
+        StockTransferItemPhoto photo = existingOpt.get();
+        body.put("id", photo.getId());
+        body.put("itemId", item.getId());
+        body.put("hasPhoto", true);
+        body.put("contentType", photo.getContentType());
+        body.put("sizeBytes", photo.getSizeBytes());
+        body.put("width", photo.getWidth());
+        body.put("height", photo.getHeight());
+        body.put("thumbnailUrl", buildViewUrl(itemId, true));
+        body.put("viewUrl", buildViewUrl(itemId, false));
+        return ResponseEntity.ok(body);
+    }
+
+    @GetMapping("/{itemId}/photo/view")
+    @Transactional(readOnly = true)
+    public ResponseEntity<byte[]> viewPhoto(@PathVariable Long itemId,
+                                            @RequestParam(name = "thumbnail", defaultValue = "false") boolean thumbnail) {
+        StockTransferItem item = findItemOrThrow(itemId);
+        StockTransferItemPhoto photo = photoRepository.findByItem(item)
+                .orElseThrow(() -> new WarehouseManagementException(ErrorCode.TRANSFER_NOT_FOUND, "Fotoğraf bulunamadı"));
+
+        String path = thumbnail ? photo.getThumbnailPath() : photo.getRelativePath();
+        try (InputStream is = thumbnail
+                ? photoStorageService.openThumbnailStream(path)
+                : photoStorageService.openPhotoStream(path)) {
+            byte[] bytes = is.readAllBytes();
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.parseMediaType(photo.getContentType()));
+            headers.setContentLength(bytes.length);
+            if (!thumbnail && StringUtils.hasText(photo.getFileName())) {
+                headers.set(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + photo.getFileName() + "\"");
+            }
+            return new ResponseEntity<>(bytes, headers, HttpStatus.OK);
+        } catch (Exception e) {
+            throw new WarehouseManagementException(ErrorCode.INTERNAL_SERVER_ERROR, "Fotoğraf okunamadı");
+        }
+    }
+
+    private StockTransferItem findItemOrThrow(Long itemId) {
+        return itemRepository.findById(itemId)
+                .orElseThrow(() -> new WarehouseManagementException(ErrorCode.TRANSFER_NOT_FOUND, "Transfer satırı bulunamadı"));
+    }
+
+    private String buildViewUrl(Long itemId, boolean thumbnail) {
+        return "/api/stock-transfer-items/" + itemId + "/photo/view" + (thumbnail ? "?thumbnail=true" : "");
+    }
+}
+
+

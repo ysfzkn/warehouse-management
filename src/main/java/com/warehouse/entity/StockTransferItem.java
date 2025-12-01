@@ -15,7 +15,7 @@ import lombok.ToString;
 @NoArgsConstructor
 @AllArgsConstructor
 @EqualsAndHashCode(callSuper = false)
-@ToString(exclude = {"transfer", "product"})
+@ToString(exclude = {"transfer", "product", "photo"})
 public class StockTransferItem {
 
     @Id
@@ -36,6 +36,16 @@ public class StockTransferItem {
     @Min(value = 1, message = "Quantity must be at least 1")
     @Column(nullable = false)
     private Integer quantity;
+
+    @OneToOne(mappedBy = "item", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    private StockTransferItemPhoto photo;
+
+    public void setPhoto(StockTransferItemPhoto photo) {
+        if (photo != null) {
+            photo.setItem(this);
+        }
+        this.photo = photo;
+    }
 }
 
 

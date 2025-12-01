@@ -15,6 +15,38 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
   const [rejectionModal, setRejectionModal] = useState({ show: false, id: null, reason: '', type: 'stock' });
   const [notesModal, setNotesModal] = useState({ show: false, title: '', content: '', type: 'info' });
   const [requestDetailModal, setRequestDetailModal] = useState({ show: false, payload: null, context: 'stock' });
+  const [transferDetailPhotos, setTransferDetailPhotos] = useState({});
+  const [transferLightbox, setTransferLightbox] = useState({ show: false, images: [], index: 0 });
+
+  const openTransferLightbox = (transfer, items, photos, activeItemId) => {
+    const images = (items || [])
+      .map((item) => {
+        const meta = photos[item.id];
+        if (!meta) return null;
+        const src = meta.viewUrl || meta.thumbnailUrl;
+        if (!src) return null;
+        return {
+          src,
+          title: `${item.product?.name || 'Ürün'} • ${item.product?.sku || ''}`.trim()
+        };
+      })
+      .filter(Boolean);
+
+    if (images.length === 0) return;
+
+    const activeMeta = photos[activeItemId];
+    const activeSrc = activeMeta?.viewUrl || activeMeta?.thumbnailUrl;
+    const startIndex = Math.max(
+      0,
+      images.findIndex((img) => img.src === activeSrc)
+    );
+
+    setTransferLightbox({
+      show: true,
+      images,
+      index: startIndex === -1 ? 0 : startIndex
+    });
+  };
   const [filter, setFilter] = useState('PENDING');
   const [allTransferApprovals, setAllTransferApprovals] = useState([]);
   const [transferApprovals, setTransferApprovals] = useState([]);
@@ -978,9 +1010,29 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                                     </button>
                                     <button
                                       className="btn btn-sm btn-outline-primary"
-                                      onClick={() =>
-                                        setRequestDetailModal({ show: true, payload: transfer, context: 'transfer' })
-                                      }
+                                      onClick={async () => {
+                                        setRequestDetailModal({ show: true, payload: transfer, context: 'transfer' });
+                                        try {
+                                          const photos = {};
+                                          if (Array.isArray(transfer.items)) {
+                                            await Promise.all(
+                                              transfer.items.map(async (item) => {
+                                                if (!item.id) return;
+                                                try {
+                                                  const resp = await axios.get(`/api/stock-transfer-items/${item.id}/photo`);
+                                                  photos[item.id] = resp.data;
+                                                } catch {
+                                                  // ignore missing
+                                                }
+                                              })
+                                            );
+                                          }
+                                          setTransferDetailPhotos(photos);
+                                        } catch (e) {
+                                          console.error('Error loading transfer photos for approval detail', e);
+                                          setTransferDetailPhotos({});
+                                        }
+                                      }}
                                     >
                                       <i className="fas fa-eye me-1"></i>
                                       Detay
@@ -1005,9 +1057,29 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                                     )}
                                     <button
                                       className="btn btn-sm btn-outline-primary"
-                                      onClick={() =>
-                                        setRequestDetailModal({ show: true, payload: transfer, context: 'transfer' })
-                                      }
+                                      onClick={async () => {
+                                        setRequestDetailModal({ show: true, payload: transfer, context: 'transfer' });
+                                        try {
+                                          const photos = {};
+                                          if (Array.isArray(transfer.items)) {
+                                            await Promise.all(
+                                              transfer.items.map(async (item) => {
+                                                if (!item.id) return;
+                                                try {
+                                                  const resp = await axios.get(`/api/stock-transfer-items/${item.id}/photo`);
+                                                  photos[item.id] = resp.data;
+                                                } catch {
+                                                  // ignore
+                                                }
+                                              })
+                                            );
+                                          }
+                                          setTransferDetailPhotos(photos);
+                                        } catch (e) {
+                                          console.error('Error loading transfer photos for approval detail', e);
+                                          setTransferDetailPhotos({});
+                                        }
+                                      }}
                                     >
                                       <i className="fas fa-eye me-1"></i>
                                       Detay
@@ -1101,7 +1173,29 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                                 )}
                                 <button
                                   className="btn btn-outline-primary btn-sm w-100 mb-2"
-                                  onClick={() => setRequestDetailModal({ show: true, payload: transfer, context: 'transfer' })}
+                                  onClick={async () => {
+                                    setRequestDetailModal({ show: true, payload: transfer, context: 'transfer' });
+                                    try {
+                                      const photos = {};
+                                      if (Array.isArray(transfer.items)) {
+                                        await Promise.all(
+                                          transfer.items.map(async (item) => {
+                                            if (!item.id) return;
+                                            try {
+                                              const resp = await axios.get(`/api/stock-transfer-items/${item.id}/photo`);
+                                              photos[item.id] = resp.data;
+                                            } catch {
+                                              // ignore missing
+                                            }
+                                          })
+                                        );
+                                      }
+                                      setTransferDetailPhotos(photos);
+                                    } catch (e) {
+                                      console.error('Error loading transfer photos for mobile approval detail', e);
+                                      setTransferDetailPhotos({});
+                                    }
+                                  }}
                                 >
                                   <i className="fas fa-eye me-1"></i>
                                   Detay
@@ -1233,20 +1327,63 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                           </span>
                         </div>
                         <div className="mb-3">
-                          <small className="text-muted text-uppercase d-block">Ürünler</small>
+                          <small className="text-muted text-uppercase d-block mb-1">Ürünler</small>
                           {items.length === 0 ? (
                             <span className="text-muted small">Ürün bilgisi bulunamadı</span>
                           ) : (
                             <ul className="list-group list-group-flush">
-                              {items.map((item, idx) => (
-                                <li key={`${t.id}-detail-${item.id || idx}`} className="list-group-item px-0 d-flex justify-content-between">
-                                  <div>
-                                    <div className="fw-semibold small">{item.product?.name || '-'}</div>
-                                    <small className="text-muted">{item.product?.sku || '-'}</small>
-                                  </div>
-                                  <span className="badge bg-primary d-inline-flex align-items-center justify-content-center" style={{ minWidth: '3.25rem' }}>{item.quantity}</span>
-                                </li>
-                              ))}
+                              {items.map((item, idx) => {
+                                const photoMeta = transferDetailPhotos[item.id];
+                                const thumbUrl = photoMeta?.thumbnailUrl || photoMeta?.viewUrl;
+                                const hasPhoto = !!thumbUrl;
+                                return (
+                                  <li
+                                    key={`${t.id}-detail-${item.id || idx}`}
+                                    className="list-group-item px-0 d-flex justify-content-between align-items-center"
+                                  >
+                                    <div className="d-flex align-items-center gap-2">
+                                      <div className="flex-shrink-0">
+                                        {hasPhoto ? (
+                                          <div
+                                            className="border rounded bg-white shadow-sm"
+                                            style={{
+                                              width: 40,
+                                              height: 40,
+                                              overflow: 'hidden',
+                                              cursor: 'pointer'
+                                            }}
+                                            title="Fotoğrafı büyüt"
+                                            onClick={() => openTransferLightbox(t, items, transferDetailPhotos, item.id)}
+                                          >
+                                            <img
+                                              src={thumbUrl}
+                                              alt="Ürün fotoğrafı"
+                                              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                            />
+                                          </div>
+                                        ) : (
+                                          <div
+                                            className="border rounded bg-light d-flex align-items-center justify-content-center text-muted"
+                                            style={{ width: 40, height: 40, fontSize: '0.65rem' }}
+                                          >
+                                            Yok
+                                          </div>
+                                        )}
+                                      </div>
+                                      <div>
+                                        <div className="fw-semibold small">{item.product?.name || '-'}</div>
+                                        <small className="text-muted">{item.product?.sku || '-'}</small>
+                                      </div>
+                                    </div>
+                                    <span
+                                      className="badge bg-primary d-inline-flex align-items-center justify-content-center"
+                                      style={{ minWidth: '3.25rem' }}
+                                    >
+                                      {item.quantity}
+                                    </span>
+                                  </li>
+                                );
+                              })}
                             </ul>
                           )}
                         </div>
@@ -1324,6 +1461,81 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {transferLightbox.show && transferLightbox.images.length > 0 && (
+        <div
+          className="position-fixed top-0 start-0 w-100 h-100"
+          style={{ backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 3000 }}
+          onClick={() => setTransferLightbox({ show: false, images: [], index: 0 })}
+        >
+          <div
+            className="d-flex flex-column justify-content-center align-items-center h-100"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="btn btn-sm btn-light position-absolute top-0 end-0 m-3"
+              onClick={() => setTransferLightbox({ show: false, images: [], index: 0 })}
+            >
+              <i className="fas fa-times me-1"></i>
+              Kapat
+            </button>
+            <div className="text-white mb-2 small">
+              {transferLightbox.images[transferLightbox.index].title}
+            </div>
+            <div className="d-flex align-items-center justify-content-center w-100 px-3">
+              <button
+                type="button"
+                className="btn btn-outline-light me-3 d-none d-sm-inline-flex"
+                onClick={() =>
+                  setTransferLightbox((prev) => ({
+                    ...prev,
+                    index:
+                      (prev.index - 1 + prev.images.length) % prev.images.length
+                  }))
+                }
+              >
+                <i className="fas fa-chevron-left"></i>
+              </button>
+              <div
+                className="bg-black rounded-3 shadow-lg d-flex justify-content-center align-items-center"
+                style={{
+                  maxWidth: '90vw',
+                  maxHeight: '80vh',
+                  overflow: 'hidden'
+                }}
+              >
+                <img
+                  src={transferLightbox.images[transferLightbox.index].src}
+                  alt={transferLightbox.images[transferLightbox.index].title}
+                  style={{
+                    maxWidth: '100%',
+                    maxHeight: '80vh',
+                    objectFit: 'contain'
+                  }}
+                />
+              </div>
+              <button
+                type="button"
+                className="btn btn-outline-light ms-3 d-none d-sm-inline-flex"
+                onClick={() =>
+                  setTransferLightbox((prev) => ({
+                    ...prev,
+                    index: (prev.index + 1) % prev.images.length
+                  }))
+                }
+              >
+                <i className="fas fa-chevron-right"></i>
+              </button>
+            </div>
+            {transferLightbox.images.length > 1 && (
+              <div className="mt-2 text-white-50 small">
+                {transferLightbox.index + 1} / {transferLightbox.images.length}
+              </div>
+            )}
           </div>
         </div>
       )}

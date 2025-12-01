@@ -5,7 +5,10 @@ import com.warehouse.dto.BulkDeleteResponse;
 import com.warehouse.dto.BulkPriceUpdateRequest;
 import com.warehouse.dto.ProductDto;
 import com.warehouse.service.ProductService;
+import com.warehouse.service.ProductImageService;
+import com.warehouse.entity.ProductImage;
 import com.warehouse.service.StockService;
+import com.warehouse.service.PhotoStorageService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import com.warehouse.dto.PagedResponse;
@@ -17,6 +20,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import java.util.List;
 import java.util.Map;
 
@@ -27,11 +33,18 @@ public class ProductController {
 
     private final ProductService productService;
     private final StockService stockService;
+    private final ProductImageService productImageService;
+    private final PhotoStorageService photoStorageService;
 
     @Autowired
-    public ProductController(ProductService productService, StockService stockService) {
+    public ProductController(ProductService productService,
+                             StockService stockService,
+                             ProductImageService productImageService,
+                             PhotoStorageService photoStorageService) {
         this.productService = productService;
         this.stockService = stockService;
+        this.productImageService = productImageService;
+        this.photoStorageService = photoStorageService;
     }
 
     @GetMapping
@@ -143,6 +156,63 @@ public class ProductController {
                     return ResponseEntity.ok(resp);
                 })
                 .orElse(ResponseEntity.notFound().build());
+    }
+
+    @GetMapping("/{id}/images")
+    @Transactional(readOnly = true)
+    public ResponseEntity<List<ProductImage>> getProductImages(@PathVariable Long id) {
+        List<ProductImage> images = productImageService.getImagesForProduct(id);
+        return ResponseEntity.ok(images);
+    }
+
+    @PostMapping("/{id}/images")
+    public ResponseEntity<ProductImage> uploadProductImage(@PathVariable Long id,
+                                                           @RequestParam("file") MultipartFile file,
+                                                           @RequestParam(name = "primary", defaultValue = "false") boolean primary) {
+        if (file.isEmpty()) {
+            return ResponseEntity.badRequest().build();
+        }
+        if (file.getContentType() == null || !file.getContentType().startsWith("image/")) {
+            return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE).build();
+        }
+        try {
+            ProductImage image = productImageService.addImageToProduct(
+                    id,
+                    file.getOriginalFilename(),
+                    file.getContentType(),
+                    file.getInputStream(),
+                    primary
+            );
+            return ResponseEntity.status(HttpStatus.CREATED).body(image);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @DeleteMapping("/images/{imageId}")
+    public ResponseEntity<Void> deleteProductImage(@PathVariable Long imageId) {
+        productImageService.deleteImage(imageId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/images/{imageId}/view")
+    @Transactional(readOnly = true)
+    public ResponseEntity<byte[]> viewProductImage(@PathVariable Long imageId,
+                                                   @RequestParam(name = "thumbnail", defaultValue = "false") boolean thumbnail) {
+        ProductImage image = productImageService.getImageOrThrow(imageId);
+        String path = thumbnail ? image.getThumbnailPath() : image.getRelativePath();
+        try (java.io.InputStream is = thumbnail
+                ? photoStorageService.openThumbnailStream(path)
+                : photoStorageService.openPhotoStream(path)) {
+            byte[] bytes = is.readAllBytes();
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.parseMediaType(image.getContentType()));
+            headers.setContentLength(bytes.length);
+            headers.set(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + image.getFileName() + "\"");
+            return new ResponseEntity<>(bytes, headers, HttpStatus.OK);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
     }
 
     @PostMapping

@@ -8,6 +8,7 @@ import {
   formatPhoneInputValue,
   PHONE_PLACEHOLDER
 } from '../utils/phone';
+import { compressImage } from '../utils/image';
 
 const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery = false }) => {
   const [currentStep, setCurrentStep] = useState(1);
@@ -57,6 +58,11 @@ const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery 
   const [stockSearchTerm, setStockSearchTerm] = useState('');
   const INITIAL_VISIBLE_STOCKS = 12;
   const [visibleStockCount, setVisibleStockCount] = useState(INITIAL_VISIBLE_STOCKS);
+
+  // Per-item photo state: keyed by productId
+  const [itemPhotos, setItemPhotos] = useState({});
+  const [photoUploads, setPhotoUploads] = useState({});
+  const [pendingItemPhotos, setPendingItemPhotos] = useState({});
   const transferTypeOptions = [
     { key: 'WAREHOUSE', label: 'Depo Transferi', icon: 'fa-warehouse', accent: 'primary', hint: 'Şubeler arası stok taşıma' },
     { key: 'CUSTOMER_DELIVERY', label: 'Müşteri Sevkiyatı', icon: 'fa-shipping-fast', accent: 'info', hint: 'Depodan müşteriye sevk' }
@@ -66,6 +72,49 @@ const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery 
     if (error) return 'is-invalid';
     if (isPhoneComplete(value)) return 'is-valid';
     return '';
+  };
+
+  const showToast = (message, type = 'success') => {
+    if (typeof document === 'undefined') return;
+    const toast = document.createElement('div');
+    const bgClass =
+      type === 'success'
+        ? 'text-bg-success'
+        : type === 'warning'
+        ? 'text-bg-warning'
+        : 'text-bg-danger';
+    const icon =
+      type === 'success'
+        ? 'fa-check-circle'
+        : type === 'warning'
+        ? 'fa-exclamation-triangle'
+        : 'fa-times-circle';
+    toast.className = `toast align-items-center ${bgClass} border-0 position-fixed top-0 end-0 m-3 show`;
+    toast.setAttribute('role', 'alert');
+    toast.style.zIndex = '9999';
+    toast.innerHTML = `
+      <div class="d-flex align-items-center">
+        <div class="toast-body d-flex align-items-center">
+          <i class="fas ${icon} me-2"></i>
+          <span>${message}</span>
+        </div>
+        <button type="button" class="btn-close ${
+          type === 'success' ? 'btn-close-white' : ''
+        } me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button>
+      </div>
+    `;
+    document.body.appendChild(toast);
+    const timeout = type === 'success' ? 4000 : 7000;
+    setTimeout(() => {
+      try {
+        toast.classList.remove('show');
+        setTimeout(() => {
+          try {
+            document.body.removeChild(toast);
+          } catch {}
+        }, 300);
+      } catch {}
+    }, timeout);
   };
 
   const handlePhoneInput = (field, rawValue) => {
@@ -78,6 +127,37 @@ const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery 
       setValidationErrors(prev => ({ ...prev, [field]: '' }));
     }
   };
+
+  const loadItemPhotoMeta = useCallback(async (transferId) => {
+    if (!transferId) return;
+    try {
+      const response = await axios.get(`/api/stock-transfers/${transferId}`);
+      const transfer = response.data;
+      if (!transfer || !Array.isArray(transfer.items)) return;
+
+      const photoState = {};
+      await Promise.all(
+        transfer.items.map(async (item) => {
+          try {
+            const metaResp = await axios.get(`/api/stock-transfer-items/${item.id}/photo`);
+            photoState[item.product.id] = {
+              itemId: item.id,
+              meta: metaResp.data,
+              loading: false,
+              error: null
+            };
+          } catch {
+            // no photo for this item – ignore
+          }
+        })
+      );
+      if (Object.keys(photoState).length > 0) {
+        setItemPhotos(photoState);
+      }
+    } catch (e) {
+      console.warn('Failed to load transfer item photos', e);
+    }
+  }, []);
 
   useEffect(() => {
     if (lockToCustomerDelivery) {
@@ -369,6 +449,149 @@ useEffect(() => {
 
   const handleRemoveItem = (productId) => {
     setTransferItems(prev => prev.filter(item => item.productId !== productId));
+    setItemPhotos(prev => {
+      if (!prev[productId]) return prev;
+      const copy = { ...prev };
+      delete copy[productId];
+      return copy;
+    });
+    setPhotoUploads(prev => {
+      if (!prev[productId]) return prev;
+      const copy = { ...prev };
+      delete copy[productId];
+      return copy;
+    });
+    setPendingItemPhotos(prev => {
+      if (!prev[productId]) return prev;
+      const copy = { ...prev };
+      delete copy[productId];
+      return copy;
+    });
+  };
+
+  const handleRemovePhoto = async (productId) => {
+    const photoInfo = itemPhotos[productId];
+    if (!photoInfo) {
+      return;
+    }
+
+    // Eğer henüz transfer oluşmadıysa veya fotoğraf pending durumdaysa sadece local state temizle
+    if (!photoInfo.itemId || photoInfo.pending) {
+      setItemPhotos(prev => {
+        const copy = { ...prev };
+        delete copy[productId];
+        return copy;
+      });
+      setPendingItemPhotos(prev => {
+        const copy = { ...prev };
+        delete copy[productId];
+        return copy;
+      });
+      showToast('Fotoğraf kaldırıldı.', 'warning');
+      return;
+    }
+
+    try {
+      await axios.delete(`/api/stock-transfer-items/${photoInfo.itemId}/photo`);
+      setItemPhotos(prev => {
+        const copy = { ...prev };
+        delete copy[productId];
+        return copy;
+      });
+      showToast('Fotoğraf kaldırıldı.', 'success');
+    } catch (e) {
+      console.error('Failed to delete transfer item photo', e);
+      showToast('Fotoğraf silinirken hata oluştu.', 'error');
+    }
+  };
+
+  const handlePhotoFileChange = async (productId, file) => {
+    if (!file) {
+      return;
+    }
+
+    setPhotoUploads(prev => ({
+      ...prev,
+      [productId]: { loading: true, error: null, optimizing: true }
+    }));
+
+    try {
+      const optimizedFile = await compressImage(file, {
+        maxWidth: 1920,
+        maxHeight: 1920,
+        quality: 0.75,
+        mimeType: file.type && file.type.startsWith('image/') ? file.type : 'image/jpeg'
+      });
+
+      // Eğer transfer henüz oluşturulmadıysa, dosyayı geçici olarak sakla
+      const localUrl = URL.createObjectURL(optimizedFile);
+
+      if (!createdTransferId) {
+        setPendingItemPhotos(prev => ({
+          ...prev,
+          [productId]: optimizedFile
+        }));
+        setItemPhotos(prev => ({
+          ...prev,
+          [productId]: {
+            itemId: null,
+            meta: { localUrl },
+            pending: true
+          }
+        }));
+        setPhotoUploads(prev => ({
+          ...prev,
+          [productId]: { loading: false, error: null, optimizing: false }
+        }));
+        showToast(
+          'Fotoğraf seçildi, transfer oluşturulduğunda otomatik yüklenecek.',
+          'warning'
+        );
+        return;
+      }
+
+      // Transfer oluşturulmuşsa doğrudan upload et
+      const transferResp = await axios.get(`/api/stock-transfers/${createdTransferId}`);
+      const transfer = transferResp.data;
+      const item = (transfer.items || []).find(i => i.product?.id === productId);
+      if (!item) {
+        throw new Error('Fotoğraf eklenecek transfer satırı bulunamadı');
+      }
+
+      const formData = new FormData();
+      formData.append('file', optimizedFile);
+
+      await axios.post(
+        `/api/stock-transfer-items/${item.id}/photo`,
+        formData,
+        { headers: { 'Content-Type': 'multipart/form-data' } }
+      );
+
+      const metaResp = await axios.get(`/api/stock-transfer-items/${item.id}/photo`);
+
+      setItemPhotos(prev => ({
+        ...prev,
+        [productId]: {
+          itemId: item.id,
+          meta: metaResp.data,
+          loading: false,
+          error: null
+        }
+      }));
+
+      setPhotoUploads(prev => ({
+        ...prev,
+        [productId]: { loading: false, error: null, optimizing: false }
+      }));
+      showToast('Fotoğraf başarıyla yüklendi.', 'success');
+    } catch (e) {
+      console.error('Photo upload failed', e);
+      setPhotoUploads(prev => ({
+        ...prev,
+        [productId]: { loading: false, error: 'Fotoğraf yüklenirken hata oluştu', optimizing: false }
+      }));
+      showToast('Fotoğraf yüklenemedi. Lütfen tekrar deneyin.', 'error');
+    }
   };
 
   const handleItemQuantityUpdate = (productId, value) => {
@@ -502,7 +725,7 @@ useEffect(() => {
     // Show loading state for at least 1.5 seconds to let user see the summary
     await new Promise(resolve => setTimeout(resolve, 1500));
 
-    try {
+      try {
       // Parse the datetime-local value as Turkey time and convert to ISO
       const parseDateInTurkeyTimezone = (dateTimeString) => {
         // dateTimeString format: "2024-10-23T10:28"
@@ -550,15 +773,49 @@ useEffect(() => {
       }
 
       const response = await axios.post('/api/stock-transfers', transferData);
-      setCreatedTransferId(response.data.id);
+      const newTransferId = response.data.id;
+      setCreatedTransferId(newTransferId);
       const isApprovalRequest = response.data.approvalStatus === 'PENDING';
-      setSubmitSuccess({ isApprovalRequest });
       
       // Wait another moment before transitioning to success (ensure smooth transition)
       await new Promise(resolve => setTimeout(resolve, 800));
       
-      setSubmitSuccess({ isApprovalRequest, id: response.data.id });
+      setSubmitSuccess({ isApprovalRequest, id: newTransferId });
       setCurrentStep(4); // Move to success step
+
+      // Eğer bekleyen fotoğraflar varsa, transfer oluşturulduktan sonra bunları yükle
+      if (Object.keys(pendingItemPhotos).length > 0) {
+        try {
+          const transferResp = await axios.get(`/api/stock-transfers/${newTransferId}`);
+          const transfer = transferResp.data;
+          const items = transfer.items || [];
+
+          for (const [productIdStr, file] of Object.entries(pendingItemPhotos)) {
+            const productId = Number(productIdStr);
+            const item = items.find(i => i.product?.id === productId);
+            if (!item) continue;
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            await axios.post(
+              `/api/stock-transfer-items/${item.id}/photo`,
+              formData,
+              { headers: { 'Content-Type': 'multipart/form-data' } }
+            );
+          }
+
+          // Bekleyenleri temizle ve meta veriyi yükle
+          setPendingItemPhotos({});
+          await loadItemPhotoMeta(newTransferId);
+        } catch (photoErr) {
+          console.error('Pending transfer photos could not be uploaded', photoErr);
+        }
+      } else {
+        // Yine de meta veriyi yükleyelim (ileride eklenmiş fotoğraflar için)
+        await loadItemPhotoMeta(newTransferId);
+      }
+
       setLoading(false);
       // Don't call onSuccess() immediately - let user see success message
     } catch (error) {
@@ -1235,40 +1492,137 @@ useEffect(() => {
                                             <th>SKU</th>
                                             <th className="text-center">Mevcut</th>
                                             <th className="text-center">Miktar</th>
+                                    <th className="text-center">Fotoğraf</th>
                                             <th className="text-center">İşlem</th>
                                           </tr>
                                         </thead>
                                         <tbody>
-                                          {transferItems.map(item => (
-                                            <tr key={item.productId}>
-                                              <td>{item.productName}</td>
-                                              <td><span className="badge bg-light text-dark">{item.sku}</span></td>
-                                              <td className="text-center">
-                                                <span className={`badge ${item.availableQuantity > 0 ? 'bg-success' : 'bg-danger'} bg-opacity-10 text-${item.availableQuantity > 0 ? 'success' : 'danger'}`}>
-                                                  {item.availableQuantity ?? 0}
-                                                </span>
-                                              </td>
-                                              <td className="text-center" style={{ maxWidth: '120px' }}>
-                                                <input
-                                                  type="number"
-                                                  className="form-control form-control-sm text-center"
-                                                  value={item.quantity}
-                                                  min="0"
-                                                  max={item.availableQuantity || undefined}
-                                                  onChange={(e) => handleItemQuantityUpdate(item.productId, e.target.value)}
-                                                />
-                                              </td>
-                                              <td className="text-center">
-                                                <button
-                                                  type="button"
-                                                  className="btn btn-link text-danger btn-sm"
-                                                  onClick={() => handleRemoveItem(item.productId)}
+                                  {transferItems.map(item => {
+                                    const photoInfo = itemPhotos[item.productId];
+                                    const uploadState = photoUploads[item.productId] || { loading: false, error: null };
+                                    return (
+                                      <tr key={item.productId}>
+                                        <td>{item.productName}</td>
+                                        <td><span className="badge bg-light text-dark">{item.sku}</span></td>
+                                        <td className="text-center">
+                                          <span className={`badge ${item.availableQuantity > 0 ? 'bg-success' : 'bg-danger'} bg-opacity-10 text-${item.availableQuantity > 0 ? 'success' : 'danger'}`}>
+                                            {item.availableQuantity ?? 0}
+                                          </span>
+                                        </td>
+                                        <td className="text-center" style={{ maxWidth: '120px' }}>
+                                          <input
+                                            type="number"
+                                            className="form-control form-control-sm text-center"
+                                            value={item.quantity}
+                                            min="0"
+                                            max={item.availableQuantity || undefined}
+                                            onChange={(e) => handleItemQuantityUpdate(item.productId, e.target.value)}
+                                          />
+                                        </td>
+                                        <td className="text-center" style={{ minWidth: '130px' }}>
+                                          <div className="d-flex flex-column align-items-center gap-1">
+                                            {photoInfo?.meta ? (
+                                              <>
+                                                <div
+                                                  className="rounded border"
+                                                  style={{
+                                                    width: 64,
+                                                    height: 64,
+                                                    overflow: 'hidden',
+                                                    cursor: 'pointer'
+                                                  }}
+                                                  title="Fotoğrafı görüntüle"
+                                                  onClick={() => {
+                                                    const url = photoInfo.meta.viewUrl || photoInfo.meta.thumbnailUrl;
+                                                    if (url) {
+                                                      window.open(url, '_blank', 'noopener');
+                                                    }
+                                                  }}
                                                 >
-                                                  <i className="fas fa-trash-alt"></i>
-                                                </button>
-                                              </td>
-                                            </tr>
-                                          ))}
+                                                  <img
+                                                    src={
+                                                      photoInfo.meta.localUrl ||
+                                                      photoInfo.meta.thumbnailUrl ||
+                                                      photoInfo.meta.viewUrl
+                                                    }
+                                                    alt="Ürün fotoğrafı"
+                                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                                  />
+                                                </div>
+                                                <div className="d-flex flex-column align-items-center gap-1 mt-1">
+                                                  <label className="btn btn-link btn-sm p-0">
+                                                    <i className="fas fa-sync-alt me-1"></i>
+                                                    Değiştir
+                                                    <input
+                                                      type="file"
+                                                      accept="image/*"
+                                                      className="d-none"
+                                                      disabled={uploadState.loading}
+                                                      onChange={(e) => {
+                                                        const file = e.target.files && e.target.files[0];
+                                                        e.target.value = '';
+                                                        if (file) {
+                                                          handlePhotoFileChange(item.productId, file);
+                                                        }
+                                                      }}
+                                                    />
+                                                  </label>
+                                                  <button
+                                                    type="button"
+                                                    className="btn btn-link btn-sm text-danger p-0"
+                                                    onClick={() => handleRemovePhoto(item.productId)}
+                                                  >
+                                                    <i className="fas fa-trash-alt me-1"></i>
+                                                    Kaldır
+                                                  </button>
+                                                </div>
+                                              </>
+                                            ) : (
+                                              <>
+                                                <label className="btn btn-outline-secondary btn-sm mb-0">
+                                                  <i className="fas fa-camera me-1"></i>
+                                                  Ekle
+                                                  <input
+                                                    type="file"
+                                                    accept="image/*"
+                                                    className="d-none"
+                                                    disabled={uploadState.loading}
+                                                    onChange={(e) => {
+                                                      const file = e.target.files && e.target.files[0];
+                                                      e.target.value = '';
+                                                      if (file) {
+                                                        handlePhotoFileChange(item.productId, file);
+                                                      }
+                                                    }}
+                                                  />
+                                                </label>
+                                                {uploadState.loading && (
+                                                  <small className="text-muted d-block">
+                                                    <span className="spinner-border spinner-border-sm me-1" role="status" />
+                                                    Yükleniyor...
+                                                  </small>
+                                                )}
+                                                {uploadState.error && (
+                                                  <small className="text-danger d-block">
+                                                    {uploadState.error}
+                                                  </small>
+                                                )}
+                                              </>
+                                            )}
+                                          </div>
+                                        </td>
+                                        <td className="text-center">
+                                          <button
+                                            type="button"
+                                            className="btn btn-link text-danger btn-sm"
+                                            onClick={() => handleRemoveItem(item.productId)}
+                                          >
+                                            <i className="fas fa-trash-alt"></i>
+                                          </button>
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
                                         </tbody>
                                       </table>
                                     </div>

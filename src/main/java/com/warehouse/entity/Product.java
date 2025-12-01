@@ -124,6 +124,10 @@ public class Product {
     @JsonIgnore
     private List<Stock> stocks;
 
+    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @JsonIgnore
+    private List<ProductImage> images;
+
     // Constructor with basic fields
     public Product(String name, String sku, BigDecimal price, Category category) {
         this.name = name;
