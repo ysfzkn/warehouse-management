@@ -3672,6 +3672,23 @@ const Stock = () => {
                               </button>
 
                               <div className="transfer-mobile-card__primary-actions d-flex justify-content-center gap-3 flex-wrap mb-2">
+                                {transfer.status === 'PENDING' && awaitingApproval && (
+                                  <div className="w-100 text-center">
+                                    <span className="badge bg-warning text-dark d-inline-flex align-items-center justify-content-center w-100 mb-2">
+                                      <i className="fas fa-hourglass-half me-2"></i>
+                                      Onay Bekleniyor
+                                    </span>
+                                    {isAdmin && (
+                                      <button
+                                        className="btn btn-outline-primary w-100"
+                                        onClick={() => setShowApprovalModal(true)}
+                                      >
+                                        <i className="fas fa-tasks me-1"></i>
+                                        Onayları Aç
+                                      </button>
+                                    )}
+                                  </div>
+                                )}
                                 {transfer.status === 'PENDING' && !awaitingApproval && (
                                   <>
                                     <button
@@ -3706,16 +3723,72 @@ const Stock = () => {
                                       <i className="fas fa-check me-1"></i>
                                       Tamamla
                                     </button>
+                                    <button
+                                      className="btn btn-danger"
+                                      onClick={() =>
+                                        setCancellationModal({
+                                          show: true,
+                                          transferId: transfer.id,
+                                          reason: ''
+                                        })
+                                      }
+                                    >
+                                      <i className="fas fa-ban me-1"></i>
+                                      İptal
+                                    </button>
                                   </>
                                 )}
-                                {approvalRejected && transfer.rejectionReason && (
+                                {transfer.status === 'IN_TRANSIT' && (
+                                  <>
+                                    <button
+                                      className="btn btn-success"
+                                      onClick={() =>
+                                        openCompletionFlow(
+                                          transfer,
+                                          'Transfer tamamlanacak ve stok rezervasyonu kapatılacak. Onaylıyor musunuz?'
+                                        )
+                                      }
+                                    >
+                                      <i className="fas fa-check-double me-1"></i>
+                                      Tamamla
+                                    </button>
+                                    <button
+                                      className="btn btn-warning"
+                                      onClick={() =>
+                                        setCancellationModal({
+                                          show: true,
+                                          transferId: transfer.id,
+                                          reason: ''
+                                        })
+                                      }
+                                    >
+                                      <i className="fas fa-ban me-1"></i>
+                                      İptal Et
+                                    </button>
+                                  </>
+                                )}
+                                {transfer.status === 'CANCELLED' && transfer.cancellationReason && (
                                   <button
-                                    className="btn btn-outline-danger"
+                                    className="btn btn-outline-danger w-100"
                                     onClick={() => setNotesModal({
                                       show: true,
-                                      notes: transfer.rejectionReason,
+                                      notes: transfer.cancellationReason,
                                       transferId: transfer.id,
-                                      title: 'Onay Notu'
+                                      title: 'İptal Nedeni'
+                                    })}
+                                  >
+                                    <i className="fas fa-exclamation-circle me-1"></i>
+                                    İptal Nedeni
+                                  </button>
+                                )}
+                                {approvalRejected && transfer.approvalNote && (
+                                  <button
+                                    className="btn btn-outline-danger w-100"
+                                    onClick={() => setNotesModal({
+                                      show: true,
+                                      notes: transfer.approvalNote,
+                                      transferId: transfer.id,
+                                      title: 'Onay Red Notu'
                                     })}
                                   >
                                     <i className="fas fa-exclamation-circle me-1"></i>
