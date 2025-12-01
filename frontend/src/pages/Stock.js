@@ -1210,10 +1210,23 @@ const Stock = () => {
       return;
     }
 
+    // Statü bazlı daha güçlü uyarı metni
+    const transfersById = new Map(transfers.map(t => [t.id, t]));
+    const hasSensitiveStatusInBatch = ids.some(id => {
+      const t = transfersById.get(id);
+      return t && (t.status === 'IN_TRANSIT' || t.status === 'PENDING');
+    });
+
+    const baseMessage = `${ids.length} transferi silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.`;
+    const sensitiveMessage =
+      'Seçili transferler arasında hâlâ aktif süreçte (yolda veya beklemede) olanlar var. ' +
+      'Bu kayıtları silmeniz durumunda stok ve takip bilgileriniz kalıcı olarak kaybolacaktır.\n\n' +
+      baseMessage;
+
     setConfirmModal({
       show: true,
       title: 'Seçili Transferleri Sil',
-      message: `${ids.length} transferi silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.`,
+      message: hasSensitiveStatusInBatch ? sensitiveMessage : baseMessage,
       confirmText: 'Evet, Sil',
       confirmVariant: 'danger',
       icon: 'trash',
@@ -1358,11 +1371,15 @@ const Stock = () => {
     }
   };
 
-  const handleDeleteTransfer = async (transferId) => {
+  const handleDeleteTransfer = async (transferId, status) => {
+    const isSensitiveStatus = status === 'IN_TRANSIT' || status === 'PENDING';
+
     setConfirmModal({
       show: true,
       title: 'Transfer Kaydını Sil',
-      message: 'Bu transfer kaydını silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.',
+      message: isSensitiveStatus
+        ? 'Bu transfer hâlâ aktif bir süreçte (yolda veya beklemede). Silme işlemi geri alınamaz ve stok/takip bilgileriniz kalıcı olarak kaybolacaktır. Emin misiniz?'
+        : 'Bu transfer kaydını silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.',
       confirmText: 'Evet, Sil',
       confirmVariant: 'danger',
       icon: 'trash',
@@ -2896,15 +2913,13 @@ const Stock = () => {
                       >
                         Seçimi Temizle
                       </button>
-                      {isAdmin && (
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-danger"
-                          onClick={() => handleBatchDeleteTransfers([...selectedTransfers])}
-                        >
-                          Seçilileri Sil
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-danger"
+                        onClick={() => handleBatchDeleteTransfers([...selectedTransfers])}
+                      >
+                        Seçilileri Sil
+                      </button>
                     </>
                   )}
                 </div>
@@ -3363,17 +3378,15 @@ const Stock = () => {
                                       </button>
                                     </>
                                   )}
-                                  {(transfer.status === 'CANCELLED' || transfer.status === 'PENDING') && (
-                                    <button
-                                      className="btn btn-sm btn-outline-danger w-100 py-1 px-2"
-                                      style={{ fontSize: 'clamp(0.7rem, 2vw, 0.8rem)', whiteSpace: 'nowrap' }}
-                                      onClick={() => handleDeleteTransfer(transfer.id)}
-                                      title="Transfer kaydını sil"
-                                    >
-                                      <i className="fas fa-trash me-1"></i>
-                                      Sil
-                                    </button>
-                                  )}
+                                  <button
+                                    className="btn btn-sm btn-outline-danger w-100 py-1 px-2"
+                                    style={{ fontSize: 'clamp(0.7rem, 2vw, 0.8rem)', whiteSpace: 'nowrap' }}
+                                    onClick={() => handleDeleteTransfer(transfer.id, transfer.status)}
+                                    title="Transfer kaydını sil"
+                                  >
+                                    <i className="fas fa-trash me-1"></i>
+                                    Sil
+                                  </button>
                                   {transfer.status === 'CANCELLED' && transfer.cancellationReason && (
                                     <button
                                       className="btn btn-sm btn-outline-danger w-100 py-1 px-2"
@@ -3484,7 +3497,6 @@ const Stock = () => {
                         const awaitingApproval = (transfer.approvalStatus || '').toUpperCase() === 'PENDING';
                         const approvalRejected = (transfer.approvalStatus || '').toUpperCase() === 'REJECTED';
                         const isSelected = selectedTransfers.includes(transfer.id);
-                        const canDelete = transfer.status !== 'IN_TRANSIT' && transfer.status !== 'COMPLETED';
                         const routeLabel =
                           (transfer.transferType || 'WAREHOUSE') === 'CUSTOMER_DELIVERY'
                             ? `${transfer.sourceWarehouse?.name || '-'} → ${transfer.customerFullName || 'Müşteri'}`
@@ -3524,7 +3536,6 @@ const Stock = () => {
                                             type="checkbox"
                                             checked={isSelected}
                                             onChange={() => toggleTransferSelection(transfer.id)}
-                                            disabled={!canDelete}
                                             aria-label="Transfer seç"
                                           />
                                           <label className="small text-muted ms-2">Seç</label>
@@ -3835,15 +3846,13 @@ const Stock = () => {
                                     <i className="fas fa-history"></i>
                                   </button>
                                 )}
-                                {role === 'ADMIN' && canDelete && (
-                                  <button
-                                    className="btn btn-outline-danger mobile-action-btn"
-                                    onClick={() => handleDeleteTransfer(transfer.id)}
-                                    title="Transferi sil"
-                                  >
-                                    <i className="fas fa-trash"></i>
-                                  </button>
-                                )}
+                                <button
+                                  className="btn btn-outline-danger mobile-action-btn"
+                                  onClick={() => handleDeleteTransfer(transfer.id, transfer.status)}
+                                  title="Transferi sil"
+                                >
+                                  <i className="fas fa-trash"></i>
+                                </button>
                               </div>
                             </div>
                           </div>
