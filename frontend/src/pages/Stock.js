@@ -755,21 +755,21 @@ const Stock = () => {
   const fetchAllData = useCallback(async () => {
     try {
       setLoading(true);
-      
+
       // Fetch all products by making multiple requests if needed
       let allProducts = [];
       let currentPage = 0;
       const pageSize = 250; // Maximum allowed by backend
       let hasMore = true;
-      
+
       while (hasMore) {
-        const response = await axios.get('/api/products', { 
-          params: { page: currentPage, size: pageSize } 
+        const response = await axios.get('/api/products', {
+          params: { page: currentPage, size: pageSize }
         });
         const data = response.data || {};
         const productsList = Array.isArray(data.content) ? data.content : (Array.isArray(data) ? data : []);
         allProducts = [...allProducts, ...productsList];
-        
+
         // Check if there are more pages
         if (data.totalPages !== undefined) {
           hasMore = currentPage + 1 < data.totalPages;
@@ -779,7 +779,7 @@ const Stock = () => {
           hasMore = false;
         }
       }
-      
+
       const calls = [
         Promise.resolve({ data: allProducts }), // Use fetched products
         axios.get('/api/warehouses')
@@ -1280,17 +1280,17 @@ const Stock = () => {
       icon: 'trash',
       onConfirm: async () => {
         setConfirmModal({ show: false });
-        
+
         try {
           // Backend'den toplu silme endpoint'ini kullan
           const response = await axios.delete('/api/stocks/bulk', { data: ids });
           const result = response.data;
-          
+
           // Başarılı silinen stoklar için toast göster
           if (result.successCount > 0) {
             showSuccessToast(`${result.successCount} stok kaydı başarıyla silindi.`);
           }
-          
+
           // Hata alan stoklar varsa detaylı hata listesi göster
           if (result.errors && result.errors.length > 0) {
             const formattedErrors = result.errors.map(err => ({
@@ -1300,14 +1300,14 @@ const Stock = () => {
               errorCode: err.errorCode || null,
               sku: err.sku || null
             }));
-            
+
             setErrorDetailsModal({
               show: true,
               title: 'Silinemeyen Stoklar',
               errors: formattedErrors
             });
           }
-          
+
           // Seçili stokları temizle (sadece başarıyla silinenleri kaldır)
           const errorIds = new Set((result.errors || []).map(err => err.id));
           setSelectedStocks(prev => prev.filter(id => {
@@ -1363,17 +1363,17 @@ const Stock = () => {
       icon: 'trash',
       onConfirm: async () => {
         setConfirmModal({ show: false });
-        
+
         try {
           // Backend'den toplu silme endpoint'ini kullan
           const response = await axios.delete('/api/stock-transfers/bulk', { data: ids });
           const result = response.data;
-          
+
           // Başarılı silinen transferler için toast göster
           if (result.successCount > 0) {
             showSuccessToast(`${result.successCount} transfer başarıyla silindi.`);
           }
-          
+
           // Hata alan transferler varsa detaylı hata listesi göster
           if (result.errors && result.errors.length > 0) {
             const formattedErrors = result.errors.map(err => ({
@@ -1382,14 +1382,14 @@ const Stock = () => {
               error: err.errorMessage || 'Bilinmeyen hata',
               errorCode: err.errorCode || null
             }));
-            
+
             setErrorDetailsModal({
               show: true,
               title: 'Silinemeyen Transferler',
               errors: formattedErrors
             });
           }
-          
+
           // Seçili transferleri temizle (sadece başarıyla silinenleri kaldır)
           const errorIds = new Set((result.errors || []).map(err => err.id));
           setSelectedTransfers(prev => prev.filter(id => {
@@ -2132,7 +2132,7 @@ const Stock = () => {
                           <div className="fw-semibold">{productName || '-'}</div>
                           <small className="text-muted d-md-none">{productSku || '-'}</small>
                           {stock.customerName && (
-                            <small 
+                            <small
                               className="badge bg-info bg-opacity-10 text-info border border-info d-lg-none mt-1 d-inline-block"
                               title={stock.customerName}
                               style={{ fontSize: '0.7rem' }}
@@ -2190,8 +2190,8 @@ const Stock = () => {
                         <td className="d-none d-md-table-cell">
                           {stock.customerName ? (
                             <div style={{ maxWidth: '150px' }}>
-                              <span 
-                                className="badge bg-info bg-opacity-10 text-info border border-info mb-1 d-block" 
+                              <span
+                                className="badge bg-info bg-opacity-10 text-info border border-info mb-1 d-block"
                                 title={stock.customerName + (stock.customerPhone ? `\nTel: ${formatPhoneForDisplay(stock.customerPhone)}` : '')}
                                 style={{ fontSize: '0.75rem', whiteSpace: 'normal', wordWrap: 'break-word', lineHeight: '1.3' }}
                               >
@@ -2352,7 +2352,7 @@ const Stock = () => {
                           <div className="stock-mobile-card__tags-right">
                             {stock.customerName && (
                               <>
-                                <span 
+                                <span
                                   className="mobile-chip bg-info bg-opacity-10 text-info border border-info"
                                   title={stock.customerName}
                                   style={{ fontSize: '0.7rem' }}
@@ -2361,7 +2361,7 @@ const Stock = () => {
                                   {stock.customerName}
                                 </span>
                                 {stock.customerPhone && (
-                                  <span 
+                                  <span
                                     className="mobile-chip bg-info bg-opacity-10 text-info border border-info"
                                     title={formatPhoneForDisplay(stock.customerPhone)}
                                     style={{ fontSize: '0.7rem' }}
@@ -2706,10 +2706,10 @@ const Stock = () => {
                                 const baseThumbUrl = photoMeta?.thumbnailUrl || photoMeta?.viewUrl;
                                 // Cache-busting için timestamp ekle (sadece fotoğraf güncellendiğinde)
                                 const updateTimestamp = photoUpdateTimestamps[item.id];
-                                const thumbUrl = baseThumbUrl 
-                                  ? (updateTimestamp 
-                                      ? `${baseThumbUrl}${baseThumbUrl.includes('?') ? '&' : '?'}_t=${updateTimestamp}` 
-                                      : baseThumbUrl)
+                                const thumbUrl = baseThumbUrl
+                                  ? (updateTimestamp
+                                    ? `${baseThumbUrl}${baseThumbUrl.includes('?') ? '&' : '?'}_t=${updateTimestamp}`
+                                    : baseThumbUrl)
                                   : null;
                                 return (
                                   <tr key={`${t.id}-detail-${item.id || idx}`}>

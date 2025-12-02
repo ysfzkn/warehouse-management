@@ -13,7 +13,7 @@ import { compressImage } from '../utils/image';
 const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery = false }) => {
   const [currentStep, setCurrentStep] = useState(1);
   const initialTransferType = lockToCustomerDelivery ? 'CUSTOMER_DELIVERY' : 'WAREHOUSE';
-  
+
   // Get current date/time in Turkey timezone (GMT+3)
   const getTurkeyDateTime = () => {
     const now = new Date();
@@ -27,7 +27,7 @@ const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery 
     const minutes = String(turkeyTime.getMinutes()).padStart(2, '0');
     return `${year}-${month}-${day}T${hours}:${minutes}`;
   };
-  
+
   const [formData, setFormData] = useState({
     sourceWarehouseId: stock?.warehouse?.id || '',
     destinationWarehouseId: '',
@@ -81,14 +81,14 @@ const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery 
       type === 'success'
         ? 'text-bg-success'
         : type === 'warning'
-        ? 'text-bg-warning'
-        : 'text-bg-danger';
+          ? 'text-bg-warning'
+          : 'text-bg-danger';
     const icon =
       type === 'success'
         ? 'fa-check-circle'
         : type === 'warning'
-        ? 'fa-exclamation-triangle'
-        : 'fa-times-circle';
+          ? 'fa-exclamation-triangle'
+          : 'fa-times-circle';
     toast.className = `toast align-items-center ${bgClass} border-0 position-fixed top-0 end-0 m-3 show`;
     toast.setAttribute('role', 'alert');
     toast.style.zIndex = '9999';
@@ -98,9 +98,8 @@ const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery 
           <i class="fas ${icon} me-2"></i>
           <span>${message}</span>
         </div>
-        <button type="button" class="btn-close ${
-          type === 'success' ? 'btn-close-white' : ''
-        } me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button>
+        <button type="button" class="btn-close ${type === 'success' ? 'btn-close-white' : ''
+      } me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button>
       </div>
     `;
     document.body.appendChild(toast);
@@ -111,9 +110,9 @@ const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery 
         setTimeout(() => {
           try {
             document.body.removeChild(toast);
-          } catch {}
+          } catch { }
         }, 300);
-      } catch {}
+      } catch { }
     }, timeout);
   };
 
@@ -219,7 +218,7 @@ const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery 
     }
   }, [syncItemsWithStocks]);
 
-useEffect(() => {
+  useEffect(() => {
     console.log('StockTransferModal mounted, fetching data...');
     const fetchData = async () => {
       setLoadingData(true);
@@ -230,7 +229,7 @@ useEffect(() => {
       setLoadingData(false);
     };
     fetchData();
-}, [stock]);
+  }, [stock]);
 
   useEffect(() => {
     if (stock?.product?.id && stock?.warehouse?.id) {
@@ -267,7 +266,7 @@ useEffect(() => {
       console.log('Fetching warehouses from /api/warehouses...');
       const response = await axios.get('/api/warehouses');
       console.log('Warehouses API response:', response.data);
-      
+
       if (!response.data || !Array.isArray(response.data)) {
         console.error('Invalid warehouses response format:', response.data);
         setError('Depo verisi hatalı formatta');
@@ -292,15 +291,15 @@ useEffect(() => {
         type: typeof w.isActive,
         raw: JSON.stringify(w.isActive)
       })));
-      
+
       console.log('🔍 Full warehouse objects:', response.data);
 
       // TEMPORARY FIX: Show ALL warehouses for now (no filtering)
       // TODO: Fix isActive filtering logic after testing
       console.log('⚠️ TEMPORARILY SHOWING ALL WAREHOUSES (active filtering disabled for testing)');
-      
+
       const activeWarehouses = response.data; // Show all warehouses temporarily
-      
+
       /* ORIGINAL FILTERING (commented out for debugging):
       const activeWarehouses = response.data.filter(w => {
         const shouldExclude = w.isActive === false;
@@ -309,18 +308,18 @@ useEffect(() => {
         return shouldInclude;
       });
       */
-      
+
       console.log(`✅ Total warehouses: ${response.data.length}, Showing: ${activeWarehouses.length}`);
       console.log('Warehouses to display:', activeWarehouses);
       setWarehouses(activeWarehouses);
-      
+
       if (activeWarehouses.length === 0) {
         setError('Sistemde hiç depo bulunamadı. Lütfen Depolar sayfasından depo ekleyin.');
       }
     } catch (error) {
       console.error('❌ Error fetching warehouses:', error);
       console.error('Error details:', error.response?.data, error.response?.status, error.message);
-      
+
       let errorMessage = 'Depolar yüklenirken hata oluştu';
       if (error.response) {
         errorMessage += `: ${error.response.status} - ${error.response.data || error.response.statusText}`;
@@ -329,7 +328,7 @@ useEffect(() => {
       } else {
         errorMessage += `: ${error.message}`;
       }
-      
+
       setError(errorMessage);
       setWarehouses([]);
     }
@@ -610,7 +609,7 @@ useEffect(() => {
       setValidationErrors(prev => ({ ...prev, transferItems: '' }));
     }
   };
-  
+
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -619,7 +618,7 @@ useEffect(() => {
       handlePhoneInput(name, value);
       return;
     }
-    
+
     // If source warehouse changes, clear destination warehouse if it's the same
     if (name === 'sourceWarehouseId') {
       setFormData(prev => {
@@ -638,7 +637,7 @@ useEffect(() => {
         [name]: value
       }));
     }
-    
+
     if (validationErrors[name]) {
       setValidationErrors(prev => ({ ...prev, [name]: '' }));
     }
@@ -716,38 +715,38 @@ useEffect(() => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!validateStep(2)) return;
-    
+
     setError(null);
     setLoading(true);
 
     // Show loading state for at least 1.5 seconds to let user see the summary
     await new Promise(resolve => setTimeout(resolve, 1500));
 
-      try {
+    try {
       // Parse the datetime-local value as Turkey time and convert to ISO
       const parseDateInTurkeyTimezone = (dateTimeString) => {
         // dateTimeString format: "2024-10-23T10:28"
         // This is already in Turkey local time from the datetime-local input
-        
+
         // Split the datetime string
         const [datePart, timePart] = dateTimeString.split('T');
         const [year, month, day] = datePart.split('-');
         const [hours, minutes] = timePart.split(':');
-        
+
         // Since backend timezone is set to Europe/Istanbul (GMT+3),
         // we send the datetime as-is (without timezone offset)
         // Backend will interpret this as Turkey local time
         const isoString = `${year}-${month}-${day}T${hours}:${minutes}:00`;
-        
+
         console.log('🕐 Datetime Conversion:');
         console.log('  Input (Turkey local):', dateTimeString);
         console.log('  Output (ISO for backend):', isoString);
-        
+
         return isoString;
       };
-      
+
       const transferData = {
         sourceWarehouseId: parseInt(formData.sourceWarehouseId),
         destinationWarehouseId: formData.transferType === 'WAREHOUSE' && formData.destinationWarehouseId
@@ -776,10 +775,10 @@ useEffect(() => {
       const newTransferId = response.data.id;
       setCreatedTransferId(newTransferId);
       const isApprovalRequest = response.data.approvalStatus === 'PENDING';
-      
+
       // Wait another moment before transitioning to success (ensure smooth transition)
       await new Promise(resolve => setTimeout(resolve, 800));
-      
+
       setSubmitSuccess({ isApprovalRequest, id: newTransferId });
       setCurrentStep(4); // Move to success step
 
@@ -895,28 +894,26 @@ useEffect(() => {
           <div className="px-4 pt-4 pb-2">
             <div className="d-flex justify-content-between align-items-center position-relative mb-3">
               <div className="position-absolute w-100 top-50 start-0" style={{ height: '2px', background: '#e9ecef', zIndex: 0 }}>
-                <div 
+                <div
                   className={`h-100 transition-all ${submitSuccess ? 'bg-success' : 'bg-primary'}`}
                   style={{ width: `${((currentStep - 1) / (steps.length - 1)) * 100}%`, transition: 'width 0.3s ease' }}
                 ></div>
               </div>
               {steps.map((step) => (
                 <div key={step.number} className="text-center position-relative" style={{ zIndex: 1, flex: 1 }}>
-                  <div 
-                    className={`mx-auto rounded-circle d-flex align-items-center justify-content-center ${
-                      currentStep >= step.number 
+                  <div
+                    className={`mx-auto rounded-circle d-flex align-items-center justify-content-center ${currentStep >= step.number
                         ? (submitSuccess && step.number === 4 ? 'bg-success text-white' : 'bg-primary text-white')
                         : 'bg-light text-muted'
-                    }`}
+                      }`}
                     style={{ width: '50px', height: '50px', transition: 'all 0.3s ease', border: '3px solid white' }}
                   >
                     <i className={`fas ${step.icon} fa-lg`}></i>
                   </div>
-                  <div className={`mt-2 small fw-bold ${
-                    currentStep >= step.number 
+                  <div className={`mt-2 small fw-bold ${currentStep >= step.number
                       ? (submitSuccess && step.number === 4 ? 'text-success' : 'text-primary')
                       : 'text-muted'
-                  }`}>
+                    }`}>
                     {step.title}
                   </div>
                 </div>
@@ -936,7 +933,7 @@ useEffect(() => {
                   </div>
                 </div>
               )}
-              
+
               {error && (
                 <div className="alert alert-danger alert-dismissible fade show" role="alert">
                   <i className="fas fa-exclamation-triangle me-2"></i>
@@ -945,9 +942,9 @@ useEffect(() => {
                 </div>
               )}
 
-               {/* Step 1: Transfer Details */}
-               {currentStep === 1 && (
-                 <div style={{ animation: 'fadeIn 0.3s ease-in' }}>
+              {/* Step 1: Transfer Details */}
+              {currentStep === 1 && (
+                <div style={{ animation: 'fadeIn 0.3s ease-in' }}>
                   <h5 className="mb-3 text-primary">
                     <i className="fas fa-boxes me-2"></i>
                     Transfer Detaylarını Belirleyin
@@ -984,7 +981,7 @@ useEffect(() => {
                       Rolünüz gereği sadece müşteri sevkiyat transferi oluşturabilirsiniz.
                     </div>
                   )}
-                  
+
                   <div className="row g-3">
                     <div className="col-md-6">
                       <label className="form-label fw-bold">
@@ -1042,9 +1039,9 @@ useEffect(() => {
                           disabled={!formData.sourceWarehouseId || warehouses.length === 0}
                         >
                           <option value="">
-                            {!formData.sourceWarehouseId 
-                              ? '-- Önce kaynak depo seçiniz --' 
-                              : warehouses.length === 0 
+                            {!formData.sourceWarehouseId
+                              ? '-- Önce kaynak depo seçiniz --'
+                              : warehouses.length === 0
                                 ? '-- Depo bulunamadı --'
                                 : '-- Hedef depo seçiniz --'}
                           </option>
@@ -1364,7 +1361,7 @@ useEffect(() => {
                                                           )}
                                                         </div>
                                                       </div>
-                                                      
+
                                                       <div className="row g-1 mb-1">
                                                         <div className="col-6">
                                                           <div className="text-center p-2 bg-light rounded" style={{ border: '1px solid #dee2e6' }}>
@@ -1389,7 +1386,7 @@ useEffect(() => {
                                                           </div>
                                                         </div>
                                                       </div>
-                                                      
+
                                                       <div className="row g-1">
                                                         <div className="col-6">
                                                           <div className="text-center p-1 bg-light rounded" style={{ border: '1px solid #dee2e6' }}>
@@ -1492,137 +1489,137 @@ useEffect(() => {
                                             <th>SKU</th>
                                             <th className="text-center">Mevcut</th>
                                             <th className="text-center">Miktar</th>
-                                    <th className="text-center">Fotoğraf</th>
+                                            <th className="text-center">Fotoğraf</th>
                                             <th className="text-center">İşlem</th>
                                           </tr>
                                         </thead>
                                         <tbody>
-                                  {transferItems.map(item => {
-                                    const photoInfo = itemPhotos[item.productId];
-                                    const uploadState = photoUploads[item.productId] || { loading: false, error: null };
-                                    return (
-                                      <tr key={item.productId}>
-                                        <td>{item.productName}</td>
-                                        <td><span className="badge bg-light text-dark">{item.sku}</span></td>
-                                        <td className="text-center">
-                                          <span className={`badge ${item.availableQuantity > 0 ? 'bg-success' : 'bg-danger'} bg-opacity-10 text-${item.availableQuantity > 0 ? 'success' : 'danger'}`}>
-                                            {item.availableQuantity ?? 0}
-                                          </span>
-                                        </td>
-                                        <td className="text-center" style={{ maxWidth: '120px' }}>
-                                          <input
-                                            type="number"
-                                            className="form-control form-control-sm text-center"
-                                            value={item.quantity}
-                                            min="0"
-                                            max={item.availableQuantity || undefined}
-                                            onChange={(e) => handleItemQuantityUpdate(item.productId, e.target.value)}
-                                          />
-                                        </td>
-                                        <td className="text-center" style={{ minWidth: '130px' }}>
-                                          <div className="d-flex flex-column align-items-center gap-1">
-                                            {photoInfo?.meta ? (
-                                              <>
-                                                <div
-                                                  className="rounded border"
-                                                  style={{
-                                                    width: 64,
-                                                    height: 64,
-                                                    overflow: 'hidden',
-                                                    cursor: 'pointer'
-                                                  }}
-                                                  title="Fotoğrafı görüntüle"
-                                                  onClick={() => {
-                                                    const url = photoInfo.meta.viewUrl || photoInfo.meta.thumbnailUrl;
-                                                    if (url) {
-                                                      window.open(url, '_blank', 'noopener');
-                                                    }
-                                                  }}
-                                                >
-                                                  <img
-                                                    src={
-                                                      photoInfo.meta.localUrl ||
-                                                      photoInfo.meta.thumbnailUrl ||
-                                                      photoInfo.meta.viewUrl
-                                                    }
-                                                    alt="Ürün fotoğrafı"
-                                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                          {transferItems.map(item => {
+                                            const photoInfo = itemPhotos[item.productId];
+                                            const uploadState = photoUploads[item.productId] || { loading: false, error: null };
+                                            return (
+                                              <tr key={item.productId}>
+                                                <td>{item.productName}</td>
+                                                <td><span className="badge bg-light text-dark">{item.sku}</span></td>
+                                                <td className="text-center">
+                                                  <span className={`badge ${item.availableQuantity > 0 ? 'bg-success' : 'bg-danger'} bg-opacity-10 text-${item.availableQuantity > 0 ? 'success' : 'danger'}`}>
+                                                    {item.availableQuantity ?? 0}
+                                                  </span>
+                                                </td>
+                                                <td className="text-center" style={{ maxWidth: '120px' }}>
+                                                  <input
+                                                    type="number"
+                                                    className="form-control form-control-sm text-center"
+                                                    value={item.quantity}
+                                                    min="0"
+                                                    max={item.availableQuantity || undefined}
+                                                    onChange={(e) => handleItemQuantityUpdate(item.productId, e.target.value)}
                                                   />
-                                                </div>
-                                                <div className="d-flex flex-column align-items-center gap-1 mt-1">
-                                                  <label className="btn btn-link btn-sm p-0">
-                                                    <i className="fas fa-sync-alt me-1"></i>
-                                                    Değiştir
-                                                    <input
-                                                      type="file"
-                                                      accept="image/*"
-                                                      className="d-none"
-                                                      disabled={uploadState.loading}
-                                                      onChange={(e) => {
-                                                        const file = e.target.files && e.target.files[0];
-                                                        e.target.value = '';
-                                                        if (file) {
-                                                          handlePhotoFileChange(item.productId, file);
-                                                        }
-                                                      }}
-                                                    />
-                                                  </label>
+                                                </td>
+                                                <td className="text-center" style={{ minWidth: '130px' }}>
+                                                  <div className="d-flex flex-column align-items-center gap-1">
+                                                    {photoInfo?.meta ? (
+                                                      <>
+                                                        <div
+                                                          className="rounded border"
+                                                          style={{
+                                                            width: 64,
+                                                            height: 64,
+                                                            overflow: 'hidden',
+                                                            cursor: 'pointer'
+                                                          }}
+                                                          title="Fotoğrafı görüntüle"
+                                                          onClick={() => {
+                                                            const url = photoInfo.meta.viewUrl || photoInfo.meta.thumbnailUrl;
+                                                            if (url) {
+                                                              window.open(url, '_blank', 'noopener');
+                                                            }
+                                                          }}
+                                                        >
+                                                          <img
+                                                            src={
+                                                              photoInfo.meta.localUrl ||
+                                                              photoInfo.meta.thumbnailUrl ||
+                                                              photoInfo.meta.viewUrl
+                                                            }
+                                                            alt="Ürün fotoğrafı"
+                                                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                                          />
+                                                        </div>
+                                                        <div className="d-flex flex-column align-items-center gap-1 mt-1">
+                                                          <label className="btn btn-link btn-sm p-0">
+                                                            <i className="fas fa-sync-alt me-1"></i>
+                                                            Değiştir
+                                                            <input
+                                                              type="file"
+                                                              accept="image/*"
+                                                              className="d-none"
+                                                              disabled={uploadState.loading}
+                                                              onChange={(e) => {
+                                                                const file = e.target.files && e.target.files[0];
+                                                                e.target.value = '';
+                                                                if (file) {
+                                                                  handlePhotoFileChange(item.productId, file);
+                                                                }
+                                                              }}
+                                                            />
+                                                          </label>
+                                                          <button
+                                                            type="button"
+                                                            className="btn btn-link btn-sm text-danger p-0"
+                                                            onClick={() => handleRemovePhoto(item.productId)}
+                                                          >
+                                                            <i className="fas fa-trash-alt me-1"></i>
+                                                            Kaldır
+                                                          </button>
+                                                        </div>
+                                                      </>
+                                                    ) : (
+                                                      <>
+                                                        <label className="btn btn-outline-secondary btn-sm mb-0">
+                                                          <i className="fas fa-camera me-1"></i>
+                                                          Ekle
+                                                          <input
+                                                            type="file"
+                                                            accept="image/*"
+                                                            className="d-none"
+                                                            disabled={uploadState.loading}
+                                                            onChange={(e) => {
+                                                              const file = e.target.files && e.target.files[0];
+                                                              e.target.value = '';
+                                                              if (file) {
+                                                                handlePhotoFileChange(item.productId, file);
+                                                              }
+                                                            }}
+                                                          />
+                                                        </label>
+                                                        {uploadState.loading && (
+                                                          <small className="text-muted d-block">
+                                                            <span className="spinner-border spinner-border-sm me-1" role="status" />
+                                                            Yükleniyor...
+                                                          </small>
+                                                        )}
+                                                        {uploadState.error && (
+                                                          <small className="text-danger d-block">
+                                                            {uploadState.error}
+                                                          </small>
+                                                        )}
+                                                      </>
+                                                    )}
+                                                  </div>
+                                                </td>
+                                                <td className="text-center">
                                                   <button
                                                     type="button"
-                                                    className="btn btn-link btn-sm text-danger p-0"
-                                                    onClick={() => handleRemovePhoto(item.productId)}
+                                                    className="btn btn-link text-danger btn-sm"
+                                                    onClick={() => handleRemoveItem(item.productId)}
                                                   >
-                                                    <i className="fas fa-trash-alt me-1"></i>
-                                                    Kaldır
+                                                    <i className="fas fa-trash-alt"></i>
                                                   </button>
-                                                </div>
-                                              </>
-                                            ) : (
-                                              <>
-                                                <label className="btn btn-outline-secondary btn-sm mb-0">
-                                                  <i className="fas fa-camera me-1"></i>
-                                                  Ekle
-                                                  <input
-                                                    type="file"
-                                                    accept="image/*"
-                                                    className="d-none"
-                                                    disabled={uploadState.loading}
-                                                    onChange={(e) => {
-                                                      const file = e.target.files && e.target.files[0];
-                                                      e.target.value = '';
-                                                      if (file) {
-                                                        handlePhotoFileChange(item.productId, file);
-                                                      }
-                                                    }}
-                                                  />
-                                                </label>
-                                                {uploadState.loading && (
-                                                  <small className="text-muted d-block">
-                                                    <span className="spinner-border spinner-border-sm me-1" role="status" />
-                                                    Yükleniyor...
-                                                  </small>
-                                                )}
-                                                {uploadState.error && (
-                                                  <small className="text-danger d-block">
-                                                    {uploadState.error}
-                                                  </small>
-                                                )}
-                                              </>
-                                            )}
-                                          </div>
-                                        </td>
-                                        <td className="text-center">
-                                          <button
-                                            type="button"
-                                            className="btn btn-link text-danger btn-sm"
-                                            onClick={() => handleRemoveItem(item.productId)}
-                                          >
-                                            <i className="fas fa-trash-alt"></i>
-                                          </button>
-                                        </td>
-                                      </tr>
-                                    );
-                                  })}
+                                                </td>
+                                              </tr>
+                                            );
+                                          })}
                                         </tbody>
                                       </table>
                                     </div>
@@ -1674,14 +1671,14 @@ useEffect(() => {
                 </div>
               )}
 
-               {/* Step 2: Driver & Vehicle Info */}
-               {currentStep === 2 && (
-                 <div style={{ animation: 'fadeIn 0.3s ease-in' }}>
+              {/* Step 2: Driver & Vehicle Info */}
+              {currentStep === 2 && (
+                <div style={{ animation: 'fadeIn 0.3s ease-in' }}>
                   <h5 className="mb-3 text-primary">
                     <i className="fas fa-truck me-2"></i>
                     Taşıma Bilgilerini Girin
                   </h5>
-                  
+
                   <div className="row g-3">
                     <div className="col-md-6">
                       <label className="form-label fw-bold">
@@ -1808,9 +1805,9 @@ useEffect(() => {
                 </div>
               )}
 
-               {/* Step 3: Summary & Confirm */}
-               {currentStep === 3 && !submitSuccess && (
-                 <div style={{ animation: 'fadeIn 0.3s ease-in' }}>
+              {/* Step 3: Summary & Confirm */}
+              {currentStep === 3 && !submitSuccess && (
+                <div style={{ animation: 'fadeIn 0.3s ease-in' }}>
                   {loading ? (
                     <div className="py-4">
                       <div className="text-center mb-4">
@@ -1825,9 +1822,9 @@ useEffect(() => {
                           Transfer kaydı sisteme ekleniyor, lütfen bekleyin.
                         </p>
                         <div className="progress mx-auto" style={{ maxWidth: '500px', height: '8px' }}>
-                          <div className="progress-bar progress-bar-striped progress-bar-animated bg-primary" 
-                               role="progressbar" 
-                               style={{ width: '100%' }}>
+                          <div className="progress-bar progress-bar-striped progress-bar-animated bg-primary"
+                            role="progressbar"
+                            style={{ width: '100%' }}>
                           </div>
                         </div>
                       </div>
@@ -1857,7 +1854,7 @@ useEffect(() => {
                             <div className="card-body text-center py-3">
                               <i className="fas fa-boxes text-primary fa-2x mb-2"></i>
                               <div className="small text-muted">Miktar</div>
-                          <div className="fw-bold fs-5">{totalTransferQuantity} Adet</div>
+                              <div className="fw-bold fs-5">{totalTransferQuantity} Adet</div>
                             </div>
                           </div>
                         </div>
@@ -1879,143 +1876,143 @@ useEffect(() => {
                           </p>
                         </div>
                       </div>
-                  
-                  <div className="row g-3">
-                    <div className="col-md-6">
-                      <div className="card h-100 border-danger">
-                        <div className="card-header bg-danger text-white">
-                          <i className="fas fa-warehouse me-2"></i>
-                          Kaynak Depo
-                        </div>
-                        <div className="card-body">
-                          <h6 className="fw-bold">{sourceWarehouse?.name}</h6>
-                          <p className="mb-0 text-muted small">
-                            <i className="fas fa-map-marker-alt me-1"></i>
-                            {sourceWarehouse?.location}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
 
-                    <div className="col-md-6">
-                      <div className={`card h-100 border-${isCustomerTransfer ? 'info' : 'success'}`}>
-                        <div className={`card-header text-white bg-${isCustomerTransfer ? 'info' : 'success'}`}>
-                          <i className={`fas ${isCustomerTransfer ? 'fa-user-tag' : 'fa-warehouse'} me-2`}></i>
-                          {isCustomerTransfer ? 'Müşteri Bilgileri' : 'Hedef Depo'}
-                        </div>
-                        <div className="card-body">
-                          {isCustomerTransfer ? (
-                            <>
-                              <h6 className="fw-bold">{formData.customerFullName}</h6>
-                              <p className="mb-1 text-muted small">
-                                <i className="fas fa-phone me-1"></i>
-                                {formattedCustomerPhone || '-'}
-                              </p>
+                      <div className="row g-3">
+                        <div className="col-md-6">
+                          <div className="card h-100 border-danger">
+                            <div className="card-header bg-danger text-white">
+                              <i className="fas fa-warehouse me-2"></i>
+                              Kaynak Depo
+                            </div>
+                            <div className="card-body">
+                              <h6 className="fw-bold">{sourceWarehouse?.name}</h6>
                               <p className="mb-0 text-muted small">
                                 <i className="fas fa-map-marker-alt me-1"></i>
-                                {formData.customerAddress}
+                                {sourceWarehouse?.location}
                               </p>
-                            </>
-                          ) : (
-                            <>
-                              <h6 className="fw-bold">{destinationWarehouse?.name}</h6>
-                              <p className="mb-0 text-muted small">
-                                <i className="fas fa-map-marker-alt me-1"></i>
-                                {destinationWarehouse?.location}
-                              </p>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="col-12">
-                      <div className="card border-primary">
-                        <div className="card-header bg-primary text-white">
-                          <i className="fas fa-box me-2"></i>
-                          Ürün Detayları
-                        </div>
-                        <div className="card-body">
-                          {transferItems.length === 0 ? (
-                            <div className="text-muted">
-                              <i className="fas fa-box-open me-2"></i>
-                              Ürün seçimi yapılmadı.
                             </div>
-                          ) : (
-                            <div className="table-responsive">
-                              <table className="table table-sm align-middle mb-0">
-                                <thead className="table-light">
-                                  <tr>
-                                    <th>Ürün</th>
-                                    <th>SKU</th>
-                                    <th className="text-center">Miktar</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {transferItems.map(item => (
-                                    <tr key={item.productId}>
-                                      <td>{item.productName}</td>
-                                      <td><span className="badge bg-light text-dark">{item.sku}</span></td>
-                                      <td className="text-center">
-                                        <span className="badge bg-primary">{item.quantity}</span>
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                              <div className="text-end mt-2">
-                                <strong>Toplam: {totalTransferQuantity} adet</strong>
+                          </div>
+                        </div>
+
+                        <div className="col-md-6">
+                          <div className={`card h-100 border-${isCustomerTransfer ? 'info' : 'success'}`}>
+                            <div className={`card-header text-white bg-${isCustomerTransfer ? 'info' : 'success'}`}>
+                              <i className={`fas ${isCustomerTransfer ? 'fa-user-tag' : 'fa-warehouse'} me-2`}></i>
+                              {isCustomerTransfer ? 'Müşteri Bilgileri' : 'Hedef Depo'}
+                            </div>
+                            <div className="card-body">
+                              {isCustomerTransfer ? (
+                                <>
+                                  <h6 className="fw-bold">{formData.customerFullName}</h6>
+                                  <p className="mb-1 text-muted small">
+                                    <i className="fas fa-phone me-1"></i>
+                                    {formattedCustomerPhone || '-'}
+                                  </p>
+                                  <p className="mb-0 text-muted small">
+                                    <i className="fas fa-map-marker-alt me-1"></i>
+                                    {formData.customerAddress}
+                                  </p>
+                                </>
+                              ) : (
+                                <>
+                                  <h6 className="fw-bold">{destinationWarehouse?.name}</h6>
+                                  <p className="mb-0 text-muted small">
+                                    <i className="fas fa-map-marker-alt me-1"></i>
+                                    {destinationWarehouse?.location}
+                                  </p>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="col-12">
+                          <div className="card border-primary">
+                            <div className="card-header bg-primary text-white">
+                              <i className="fas fa-box me-2"></i>
+                              Ürün Detayları
+                            </div>
+                            <div className="card-body">
+                              {transferItems.length === 0 ? (
+                                <div className="text-muted">
+                                  <i className="fas fa-box-open me-2"></i>
+                                  Ürün seçimi yapılmadı.
+                                </div>
+                              ) : (
+                                <div className="table-responsive">
+                                  <table className="table table-sm align-middle mb-0">
+                                    <thead className="table-light">
+                                      <tr>
+                                        <th>Ürün</th>
+                                        <th>SKU</th>
+                                        <th className="text-center">Miktar</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {transferItems.map(item => (
+                                        <tr key={item.productId}>
+                                          <td>{item.productName}</td>
+                                          <td><span className="badge bg-light text-dark">{item.sku}</span></td>
+                                          <td className="text-center">
+                                            <span className="badge bg-primary">{item.quantity}</span>
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                  <div className="text-end mt-2">
+                                    <strong>Toplam: {totalTransferQuantity} adet</strong>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="col-12">
+                          <div className="card border-info">
+                            <div className="card-header bg-info text-white">
+                              <i className="fas fa-truck me-2"></i>
+                              Taşıma Bilgileri
+                            </div>
+                            <div className="card-body">
+                              <div className="row">
+                                <div className="col-md-6 mb-2">
+                                  <i className="fas fa-user me-2 text-muted"></i>
+                                  <strong>Şoför:</strong> {formData.driverName}
+                                </div>
+                                <div className="col-md-6 mb-2">
+                                  <i className="fas fa-id-card me-2 text-muted"></i>
+                                  <strong>TC:</strong> {formData.driverTcId}
+                                </div>
+                                <div className="col-md-6 mb-2">
+                                  <i className="fas fa-phone me-2 text-muted"></i>
+                                  <strong>Telefon:</strong> {formattedDriverPhone || '-'}
+                                </div>
+                                <div className="col-md-6 mb-2">
+                                  <i className="fas fa-car me-2 text-muted"></i>
+                                  <strong>Plaka:</strong> {formData.vehiclePlate.toUpperCase()}
+                                </div>
+                                {formData.notes && (
+                                  <div className="col-12 mt-2">
+                                    <i className="fas fa-sticky-note me-2 text-muted"></i>
+                                    <strong>Notlar:</strong>
+                                    <p className="mb-0 text-muted">{formData.notes}</p>
+                                  </div>
+                                )}
                               </div>
                             </div>
-                          )}
+                          </div>
                         </div>
-                      </div>
-                    </div>
 
-                    <div className="col-12">
-                      <div className="card border-info">
-                        <div className="card-header bg-info text-white">
-                          <i className="fas fa-truck me-2"></i>
-                          Taşıma Bilgileri
-                        </div>
-                        <div className="card-body">
-                          <div className="row">
-                            <div className="col-md-6 mb-2">
-                              <i className="fas fa-user me-2 text-muted"></i>
-                              <strong>Şoför:</strong> {formData.driverName}
-                            </div>
-                            <div className="col-md-6 mb-2">
-                              <i className="fas fa-id-card me-2 text-muted"></i>
-                              <strong>TC:</strong> {formData.driverTcId}
-                            </div>
-                            <div className="col-md-6 mb-2">
-                              <i className="fas fa-phone me-2 text-muted"></i>
-                              <strong>Telefon:</strong> {formattedDriverPhone || '-'}
-                            </div>
-                            <div className="col-md-6 mb-2">
-                              <i className="fas fa-car me-2 text-muted"></i>
-                              <strong>Plaka:</strong> {formData.vehiclePlate.toUpperCase()}
-                            </div>
-                            {formData.notes && (
-                              <div className="col-12 mt-2">
-                                <i className="fas fa-sticky-note me-2 text-muted"></i>
-                                <strong>Notlar:</strong>
-                                <p className="mb-0 text-muted">{formData.notes}</p>
-                              </div>
-                            )}
+                        <div className="col-12">
+                          <div className="alert alert-warning">
+                            <i className="fas fa-exclamation-triangle me-2"></i>
+                            <strong>Dikkat:</strong> Transfer onaylandığında, kaynak depodaki stok rezerve edilecektir.
                           </div>
                         </div>
                       </div>
-                    </div>
-
-                    <div className="col-12">
-                      <div className="alert alert-warning">
-                        <i className="fas fa-exclamation-triangle me-2"></i>
-                        <strong>Dikkat:</strong> Transfer onaylandığında, kaynak depodaki stok rezerve edilecektir.
-                      </div>
-                    </div>
-                  </div>
-                  </>
+                    </>
                   )}
                 </div>
               )}
@@ -2024,17 +2021,17 @@ useEffect(() => {
               {currentStep === 4 && submitSuccess && (
                 <div style={{ animation: 'fadeIn 0.3s ease-in' }} className="text-center py-5">
                   <div className="mb-4">
-                    <div className="mx-auto rounded-circle bg-success bg-opacity-10 d-inline-flex align-items-center justify-content-center" 
-                         style={{ width: '120px', height: '120px' }}>
+                    <div className="mx-auto rounded-circle bg-success bg-opacity-10 d-inline-flex align-items-center justify-content-center"
+                      style={{ width: '120px', height: '120px' }}>
                       <i className="fas fa-check-circle text-success" style={{ fontSize: '4rem' }}></i>
                     </div>
                   </div>
-                  
+
                   <h3 className="text-success mb-3">
                     <i className="fas fa-check-double me-2"></i>
                     {submitSuccess?.isApprovalRequest ? 'Transfer Talebi Başarıyla Oluşturuldu!' : 'Transfer Başarıyla Oluşturuldu!'}
                   </h3>
-                  
+
                   <p className="text-muted mb-4">
                     {submitSuccess?.isApprovalRequest ? (
                       <>
@@ -2158,7 +2155,7 @@ useEffect(() => {
                       Geri
                     </button>
                   )}
-                  
+
                   <button
                     type="button"
                     className="btn btn-secondary"

@@ -33,36 +33,35 @@ public class LocalPhotoStorageService implements PhotoStorageService {
     private final PhotoStorageProperties properties;
 
     /**
-     * Resolves the base directory path, converting relative paths to absolute paths.
-     * This is important for Railway and other cloud platforms where relative paths may not work.
+     * Resolves the base directory path, similar to how Excel imports work.
+     * Uses the configured baseDir directly (which should be absolute in production,
+     * e.g., /tmp/warehouse-uploads/shipments).
+     * This matches the pattern used in StockImportServiceImpl.storeFile().
      */
     private Path resolveBaseDir() {
         String baseDir = properties.getBaseDir();
         Path basePath = Paths.get(baseDir);
-        
-        // If it's already absolute, use it as-is
+
+        // If it's already absolute (like /tmp/warehouse-uploads/shipments), use it
+        // as-is
         if (basePath.isAbsolute()) {
+            log.debug("Using absolute base directory: {}", basePath);
             return basePath;
         }
-        
-        // Otherwise, resolve relative to the current working directory or temp directory
-        // For Railway/cloud platforms, use system temp directory as fallback
-        try {
-            Path resolved = Paths.get(System.getProperty("user.dir", System.getProperty("java.io.tmpdir"))).resolve(basePath);
-            log.info("Resolved base directory: {} -> {}", baseDir, resolved.toAbsolutePath());
-            return resolved.toAbsolutePath();
-        } catch (Exception e) {
-            log.warn("Failed to resolve base directory, using temp directory: {}", e.getMessage());
-            return Paths.get(System.getProperty("java.io.tmpdir", "/tmp")).resolve(basePath).toAbsolutePath();
-        }
+
+        // For relative paths (local development), resolve relative to current working
+        // directory
+        Path resolved = Paths.get(System.getProperty("user.dir", ".")).resolve(basePath).toAbsolutePath();
+        log.info("Resolved relative base directory: {} -> {}", baseDir, resolved);
+        return resolved;
     }
 
     @Override
     public StoredPhoto storeItemPhoto(Long transferId,
-                                      Long itemId,
-                                      String originalFileName,
-                                      String contentType,
-                                      InputStream inputStream) {
+            Long itemId,
+            String originalFileName,
+            String contentType,
+            InputStream inputStream) {
         try {
             byte[] originalBytes = inputStream.readAllBytes();
             if (originalBytes.length == 0) {
@@ -117,24 +116,23 @@ public class LocalPhotoStorageService implements PhotoStorageService {
                     resolveContentType(extension),
                     sizeBytes,
                     optimized.getWidth(),
-                    optimized.getHeight()
-            );
+                    optimized.getHeight());
         } catch (IOException e) {
-            log.error("Failed to store item photo for transferId={}, itemId={}, baseDir={}", 
-                transferId, itemId, properties.getBaseDir(), e);
+            log.error("Failed to store item photo for transferId={}, itemId={}, baseDir={}",
+                    transferId, itemId, properties.getBaseDir(), e);
             throw new RuntimeException("Failed to store item photo: " + e.getMessage(), e);
         } catch (Exception e) {
-            log.error("Unexpected error storing item photo for transferId={}, itemId={}", 
-                transferId, itemId, e);
+            log.error("Unexpected error storing item photo for transferId={}, itemId={}",
+                    transferId, itemId, e);
             throw new RuntimeException("Failed to store item photo: " + e.getMessage(), e);
         }
     }
 
     @Override
     public StoredPhoto storeProductImage(Long productId,
-                                         String originalFileName,
-                                         String contentType,
-                                         InputStream inputStream) {
+            String originalFileName,
+            String contentType,
+            InputStream inputStream) {
         try {
             byte[] originalBytes = inputStream.readAllBytes();
             if (originalBytes.length == 0) {
@@ -184,8 +182,7 @@ public class LocalPhotoStorageService implements PhotoStorageService {
                     resolveContentType(extension),
                     sizeBytes,
                     optimized.getWidth(),
-                    optimized.getHeight()
-            );
+                    optimized.getHeight());
         } catch (IOException e) {
             log.error("Failed to store product image", e);
             throw new RuntimeException("Failed to store product image", e);
@@ -237,9 +234,12 @@ public class LocalPhotoStorageService implements PhotoStorageService {
             }
         }
         if (contentType != null) {
-            if (contentType.contains("jpeg")) return "jpg";
-            if (contentType.contains("png")) return "png";
-            if (contentType.contains("webp")) return "webp";
+            if (contentType.contains("jpeg"))
+                return "jpg";
+            if (contentType.contains("png"))
+                return "png";
+            if (contentType.contains("webp"))
+                return "webp";
         }
         return "jpg";
     }
@@ -278,7 +278,8 @@ public class LocalPhotoStorageService implements PhotoStorageService {
         return resized;
     }
 
-    private void writeCompressedImage(BufferedImage image, String extension, Path target, float quality) throws IOException {
+    private void writeCompressedImage(BufferedImage image, String extension, Path target, float quality)
+            throws IOException {
         try {
             Path parentDir = target.getParent();
             if (parentDir != null) {
@@ -306,7 +307,7 @@ public class LocalPhotoStorageService implements PhotoStorageService {
 
         ImageWriter writer = writers.next();
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
-             ImageOutputStream ios = ImageIO.createImageOutputStream(baos)) {
+                ImageOutputStream ios = ImageIO.createImageOutputStream(baos)) {
             writer.setOutput(ios);
 
             ImageWriteParam param = writer.getDefaultWriteParam();
@@ -329,5 +330,3 @@ public class LocalPhotoStorageService implements PhotoStorageService {
         }
     }
 }
-
-
