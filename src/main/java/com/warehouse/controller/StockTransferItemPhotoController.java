@@ -177,6 +177,11 @@ public class StockTransferItemPhotoController {
             log.debug("Successfully read photo for itemId={}, size={} bytes", itemId, bytes.length);
             return new ResponseEntity<>(bytes, headers, HttpStatus.OK);
         } catch (RuntimeException e) {
+            // If it's a WarehouseManagementException, rethrow it
+            if (e instanceof WarehouseManagementException) {
+                log.error("Error viewing photo for itemId={}, path={}: {}", itemId, path, e.getMessage(), e);
+                throw e;
+            }
             // Check if it's a "file does not exist" error
             if (e.getMessage() != null && e.getMessage().contains("does not exist")) {
                 log.warn("Photo file not found for itemId={}, path={}. This may happen if the server was restarted and files were lost (Railway /tmp is ephemeral). Error: {}", 
@@ -188,9 +193,6 @@ public class StockTransferItemPhotoController {
             }
             log.error("Error viewing photo for itemId={}, path={}: {}", itemId, path, e.getMessage(), e);
             throw new WarehouseManagementException(ErrorCode.INTERNAL_SERVER_ERROR, "Fotoğraf okunamadı: " + e.getMessage());
-        } catch (WarehouseManagementException e) {
-            log.error("Error viewing photo for itemId={}, path={}: {}", itemId, path, e.getMessage(), e);
-            throw e;
         } catch (Exception e) {
             log.error("Unexpected error viewing photo for itemId={}, path={}: {}", itemId, path, e.getMessage(), e);
             throw new WarehouseManagementException(ErrorCode.INTERNAL_SERVER_ERROR, "Fotoğraf okunamadı: " + e.getMessage());
