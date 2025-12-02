@@ -23,14 +23,26 @@ RUN apk add --no-cache curl
 # Copy built jar (use wildcard to keep version-independent)
 COPY --from=build /app/target/warehouse-management-*.jar app.jar
 
-## IMPORTANT (Railway + Volumes):
-## Railway volume'ları genellikle root:root sahipliği ile ve sadece root yazabilir şekilde mount ediyor.
-## Önceki konfigürasyonda uygulama non-root (appuser) ile çalıştığı için
-## volume üzerinde klasör oluştururken AccessDeniedException alıyorduk.
+## IMPORTANT (Railway + Volumes)
+## Railway volumes are typically mounted as root:root and only writable by root.
+## In the previous configuration the app was running as a non-root user (appuser),
+## so it could not create directories under the mounted volume and we were getting
+## AccessDeniedException during photo uploads.
 ##
-## Bu sorunu çözmek için container'ı root olarak çalıştırıyoruz.
-## Güvenlik açısından daha sıkı bir yapı istersen, ayrı bir entrypoint script'i ile
-## runtime'da volume path'ini chown edip sonrasında appuser'a düşecek şekilde yeniden düzenleyebiliriz.
+## To make this feature work reliably on Railway with volumes, we currently run
+## the container as root. This is a pragmatic choice specific to this environment.
+##
+## If you want a stricter, best-practice setup (non-root runtime), you can:
+## - Mount the volume as usual (root:root)
+## - Use an entrypoint script to chown the volume paths at startup
+## - Then drop privileges to a non-root user (e.g. appuser) before starting the app.
+##
+## Example of the old non-root setup (kept here for reference):
+##
+## RUN addgroup -g 1001 -S appuser && \
+##     adduser -S appuser -u 1001 -G appuser
+##
+## USER appuser
 
 EXPOSE 8080
 
