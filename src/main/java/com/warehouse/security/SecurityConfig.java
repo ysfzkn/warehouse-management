@@ -11,8 +11,13 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 @Configuration
 @EnableMethodSecurity
@@ -66,8 +71,25 @@ public class SecurityConfig {
                         .requestMatchers(ApiPaths.ANY_API).hasRole("ADMIN")
                         .anyRequest().permitAll()
                 )
+                .exceptionHandling(exceptions -> exceptions
+                        .accessDeniedHandler(new SilentAccessDeniedHandler())
+                )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
+    }
+
+    /**
+     * AccessDeniedException'ları sessizce handle eder, log'lara yazmaz.
+     * Bu, production'da rutin istekler (health check, bot istekleri, vb.) için
+     * gereksiz hata log'larını önler.
+     */
+    private static class SilentAccessDeniedHandler implements AccessDeniedHandler {
+        @Override
+        public void handle(HttpServletRequest request, HttpServletResponse response,
+                          AccessDeniedException accessDeniedException) {
+            // Sessizce 403 döndür, log'lama yapma
+            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+        }
     }
 
     @Bean

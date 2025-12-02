@@ -233,12 +233,17 @@ const StockFiltersBar = ({
           .mobile-chip-note {
             background: rgba(15,23,42,0.06);
             color: #475569;
-            max-width: 180px;
-            text-overflow: ellipsis;
-            overflow: hidden;
-            display: inline-flex;
-            align-items: center;
-            white-space: nowrap;
+            max-width: 100%;
+            max-height: 80px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            display: block;
+            word-wrap: break-word;
+            white-space: normal;
+            padding: 0.375rem 0.5rem;
+            border-radius: 0.375rem;
+            line-height: 1.4;
+            font-size: 0.875rem;
           }
           .mobile-stat-grid .mobile-stat-tile {
             border-radius: 16px;
@@ -2143,13 +2148,22 @@ const Stock = () => {
                             </small>
                           )}
                           {stock.additionNote && (
-                            <small
-                              className="text-muted fst-italic d-block mt-1 text-truncate"
+                            <div
+                              className="text-muted fst-italic d-block mt-1"
+                              style={{
+                                maxHeight: '60px',
+                                overflowY: 'auto',
+                                overflowX: 'hidden',
+                                wordWrap: 'break-word',
+                                fontSize: '0.875rem',
+                                lineHeight: '1.4',
+                                paddingRight: '4px'
+                              }}
                               title={stock.additionNote}
                             >
                               <i className="fas fa-sticky-note me-1"></i>
                               {stock.additionNote}
-                            </small>
+                            </div>
                           )}
                         </td>
                         <td className="d-none d-md-table-cell">{productSku || '-'}</td>
@@ -2359,10 +2373,10 @@ const Stock = () => {
                               </>
                             )}
                             {stock.additionNote && (
-                              <span className="mobile-chip mobile-chip-note" title={stock.additionNote}>
+                              <div className="mobile-chip mobile-chip-note" title={stock.additionNote}>
                                 <i className="fas fa-sticky-note me-1"></i>
-                                {stock.additionNote.length > 60 ? `${stock.additionNote.substring(0, 60)}…` : stock.additionNote}
-                              </span>
+                                {stock.additionNote}
+                              </div>
                             )}
                           </div>
                         </div>
@@ -2693,7 +2707,9 @@ const Stock = () => {
                                 // Cache-busting için timestamp ekle (sadece fotoğraf güncellendiğinde)
                                 const updateTimestamp = photoUpdateTimestamps[item.id];
                                 const thumbUrl = baseThumbUrl 
-                                  ? `${baseThumbUrl}${baseThumbUrl.includes('?') ? '&' : '?'}_t=${updateTimestamp || Date.now()}` 
+                                  ? (updateTimestamp 
+                                      ? `${baseThumbUrl}${baseThumbUrl.includes('?') ? '&' : '?'}_t=${updateTimestamp}` 
+                                      : baseThumbUrl)
                                   : null;
                                 return (
                                   <tr key={`${t.id}-detail-${item.id || idx}`}>

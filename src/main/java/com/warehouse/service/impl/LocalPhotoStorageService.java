@@ -32,6 +32,31 @@ public class LocalPhotoStorageService implements PhotoStorageService {
 
     private final PhotoStorageProperties properties;
 
+    /**
+     * Resolves the base directory path, converting relative paths to absolute paths.
+     * This is important for Railway and other cloud platforms where relative paths may not work.
+     */
+    private Path resolveBaseDir() {
+        String baseDir = properties.getBaseDir();
+        Path basePath = Paths.get(baseDir);
+        
+        // If it's already absolute, use it as-is
+        if (basePath.isAbsolute()) {
+            return basePath;
+        }
+        
+        // Otherwise, resolve relative to the current working directory or temp directory
+        // For Railway/cloud platforms, use system temp directory as fallback
+        try {
+            Path resolved = Paths.get(System.getProperty("user.dir", System.getProperty("java.io.tmpdir"))).resolve(basePath);
+            log.info("Resolved base directory: {} -> {}", baseDir, resolved.toAbsolutePath());
+            return resolved.toAbsolutePath();
+        } catch (Exception e) {
+            log.warn("Failed to resolve base directory, using temp directory: {}", e.getMessage());
+            return Paths.get(System.getProperty("java.io.tmpdir", "/tmp")).resolve(basePath).toAbsolutePath();
+        }
+    }
+
     @Override
     public StoredPhoto storeItemPhoto(Long transferId,
                                       Long itemId,
@@ -59,12 +84,18 @@ public class LocalPhotoStorageService implements PhotoStorageService {
             String baseName = UUID.randomUUID().toString();
 
             LocalDate today = LocalDate.now();
-            Path baseDir = Paths.get(properties.getBaseDir(),
+            Path baseDir = resolveBaseDir().resolve(
                     String.valueOf(today.getYear()),
                     String.format("%02d", today.getMonthValue()),
                     String.valueOf(transferId));
 
-            Files.createDirectories(baseDir);
+            try {
+                Files.createDirectories(baseDir);
+                log.debug("Created directory: {}", baseDir);
+            } catch (IOException e) {
+                log.error("Failed to create directory: {}", baseDir, e);
+                throw new RuntimeException("Failed to create photo storage directory: " + baseDir, e);
+            }
 
             String optimizedFileName = itemId + "_" + baseName + "_orig." + extension;
             String thumbFileName = itemId + "_" + baseName + "_thumb." + extension;
@@ -72,7 +103,9 @@ public class LocalPhotoStorageService implements PhotoStorageService {
             Path optimizedPath = baseDir.resolve(optimizedFileName);
             Path thumbPath = baseDir.resolve(thumbFileName);
 
+            log.debug("Writing optimized image to: {}", optimizedPath);
             writeCompressedImage(optimized, extension, optimizedPath, properties.getQuality());
+            log.debug("Writing thumbnail to: {}", thumbPath);
             writeCompressedImage(thumbnail, extension, thumbPath, properties.getQuality());
 
             long sizeBytes = Files.size(optimizedPath);
@@ -87,8 +120,13 @@ public class LocalPhotoStorageService implements PhotoStorageService {
                     optimized.getHeight()
             );
         } catch (IOException e) {
-            log.error("Failed to store item photo", e);
-            throw new RuntimeException("Failed to store item photo", e);
+            log.error("Failed to store item photo for transferId={}, itemId={}, baseDir={}", 
+                transferId, itemId, properties.getBaseDir(), e);
+            throw new RuntimeException("Failed to store item photo: " + e.getMessage(), e);
+        } catch (Exception e) {
+            log.error("Unexpected error storing item photo for transferId={}, itemId={}", 
+                transferId, itemId, e);
+            throw new RuntimeException("Failed to store item photo: " + e.getMessage(), e);
         }
     }
 
@@ -119,8 +157,9 @@ public class LocalPhotoStorageService implements PhotoStorageService {
 
             LocalDate today = LocalDate.now();
             // Use a separate root folder for product images to keep things organized
-            Path baseDir = Paths.get(
-                    properties.getBaseDir().replace("shipments", "products"),
+            Path resolvedBase = resolveBaseDir();
+            Path productsBase = resolvedBase.getParent().resolve("products");
+            Path baseDir = productsBase.resolve(
                     String.valueOf(today.getYear()),
                     String.format("%02d", today.getMonthValue()),
                     String.valueOf(productId)
@@ -241,14 +280,29 @@ public class LocalPhotoStorageService implements PhotoStorageService {
     }
 
     private void writeCompressedImage(BufferedImage image, String extension, Path target, float quality) throws IOException {
-        Files.createDirectories(target.getParent());
+        try {
+            Path parentDir = target.getParent();
+            if (parentDir != null) {
+                Files.createDirectories(parentDir);
+                log.debug("Created parent directory: {}", parentDir);
+            }
+        } catch (IOException e) {
+            log.error("Failed to create parent directory for: {}", target, e);
+            throw new IOException("Failed to create directory for photo: " + target.getParent(), e);
+        }
 
         String format = extension.equalsIgnoreCase("jpg") ? "jpeg" : extension.toLowerCase();
 
         Iterator<ImageWriter> writers = ImageIO.getImageWritersByFormatName(format);
         if (!writers.hasNext()) {
-            ImageIO.write(image, format, target.toFile());
-            return;
+            try {
+                ImageIO.write(image, format, target.toFile());
+                log.debug("Wrote image using ImageIO.write to: {}", target);
+                return;
+            } catch (IOException e) {
+                log.error("Failed to write image to: {}", target, e);
+                throw new IOException("Failed to write image file: " + target, e);
+            }
         }
 
         ImageWriter writer = writers.next();
@@ -264,7 +318,13 @@ public class LocalPhotoStorageService implements PhotoStorageService {
 
             writer.write(null, new IIOImage(image, null, null), param);
             ios.flush();
-            Files.write(target, baos.toByteArray());
+            byte[] imageBytes = baos.toByteArray();
+            log.debug("Writing {} bytes to: {}", imageBytes.length, target);
+            Files.write(target, imageBytes);
+            log.debug("Successfully wrote image to: {}", target);
+        } catch (IOException e) {
+            log.error("Failed to write compressed image to: {}", target, e);
+            throw new IOException("Failed to write compressed image file: " + target, e);
         } finally {
             writer.dispose();
         }

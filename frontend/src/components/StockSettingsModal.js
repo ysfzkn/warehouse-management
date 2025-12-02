@@ -18,7 +18,8 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
     consignedQuantity: 0,
     minStockLevel: 10,
     customerName: '',
-    customerPhone: ''
+    customerPhone: '',
+    additionNote: ''
   });
   const [productSearchTerm, setProductSearchTerm] = useState('');
   const [showProductDropdown, setShowProductDropdown] = useState(false);
@@ -40,7 +41,8 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
         consignedQuantity: stock.consignedQuantity || 0,
         minStockLevel: stock.minStockLevel || 10,
         customerName: stock.customerName || '',
-        customerPhone: stock.customerPhone ? extractPhoneDigits(stock.customerPhone) : ''
+        customerPhone: stock.customerPhone ? extractPhoneDigits(stock.customerPhone) : '',
+        additionNote: stock.additionNote || ''
       });
       // Set initial product search term to current product name
       if (stock.product?.name) {
@@ -122,13 +124,13 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
       if (errors.customerPhone) {
         setErrors(prev => ({ ...prev, customerPhone: null }));
       }
-    } else if (name === 'customerName') {
+    } else if (name === 'customerName' || name === 'additionNote') {
       setSettings(prev => ({
         ...prev,
         [name]: value
       }));
-      if (errors.customerName) {
-        setErrors(prev => ({ ...prev, customerName: null }));
+      if (errors[name]) {
+        setErrors(prev => ({ ...prev, [name]: null }));
       }
     } else {
       setSettings(prev => ({
@@ -168,10 +170,12 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
     const originalCustomerName = stock.customerName || '';
     const originalCustomerPhone = stock.customerPhone ? extractPhoneDigits(stock.customerPhone) : '';
     const originalProductId = stock.product?.id || null;
+    const originalAdditionNote = stock.additionNote || '';
     const hasChanges = 
       settings.productId !== originalProductId ||
       settings.consignedQuantity !== (stock.consignedQuantity || 0) ||
       settings.minStockLevel !== (stock.minStockLevel || 10) ||
+      settings.additionNote.trim() !== originalAdditionNote ||
       (isEmanetDepo && (
         settings.customerName.trim() !== originalCustomerName ||
         settings.customerPhone.trim() !== originalCustomerPhone
@@ -192,7 +196,8 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
       // Quantity can ONLY be changed via add/remove endpoints
       const updateData = {
         consignedQuantity: settings.consignedQuantity,
-        minStockLevel: settings.minStockLevel
+        minStockLevel: settings.minStockLevel,
+        additionNote: settings.additionNote.trim() || null
         // Explicitly NOT including quantity field for security
       };
       
@@ -555,6 +560,30 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
                     </div>
                   </>
                 )}
+
+                <div className="mb-3">
+                  <label htmlFor="additionNote" className="form-label fw-bold">
+                    <i className="fas fa-sticky-note me-1 text-info"></i>
+                    Stok Notu
+                  </label>
+                  <textarea
+                    className="form-control"
+                    id="additionNote"
+                    name="additionNote"
+                    rows="3"
+                    value={settings.additionNote}
+                    onChange={handleChange}
+                    placeholder="Stok ile ilgili notlarınızı buraya yazabilirsiniz..."
+                    style={{
+                      resize: 'vertical',
+                      minHeight: '80px',
+                      maxHeight: '200px'
+                    }}
+                  />
+                  <small className="text-muted">
+                    Bu not stok listesinde görüntülenir ve stok'u oluşturan kişi veya adminler tarafından düzenlenebilir.
+                  </small>
+                </div>
 
                 {/* Preview */}
                 <div className="alert alert-light border">
