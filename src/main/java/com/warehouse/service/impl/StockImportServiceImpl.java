@@ -30,6 +30,7 @@ import java.io.InputStream;
 import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -155,7 +156,7 @@ public class StockImportServiceImpl implements StockImportService {
     }
 
     private Path storeFile(MultipartFile file, String storedFilename) throws IOException {
-        Path dir = Path.of(importProperties.getStorageDir());
+        Path dir = resolveImportDir();
         Files.createDirectories(dir);
         Path target = dir.resolve(storedFilename);
         try (InputStream is = file.getInputStream()) {
@@ -163,6 +164,38 @@ public class StockImportServiceImpl implements StockImportService {
         }
         logger.debug("File stored: {}", target);
         return target;
+    }
+
+    private Path resolveImportDir() {
+        String configuredDir = importProperties.getStorageDir();
+
+        // Highest priority: Railway persistent volume mount
+        String railwayVolumePath = System.getenv("RAILWAY_VOLUME_MOUNT_PATH");
+        if (railwayVolumePath != null && !railwayVolumePath.trim().isEmpty()) {
+            Path railwayPath = Paths.get(railwayVolumePath).resolve("warehouse-imports");
+            logger.info("Using Railway volume mount for Excel imports: {} (from RAILWAY_VOLUME_MOUNT_PATH={})",
+                    railwayPath.toAbsolutePath(), railwayVolumePath);
+            return railwayPath.toAbsolutePath();
+        }
+
+        // Next priority: Custom IMPORT_STORAGE_DIR env variable
+        String customImportDir = System.getenv("IMPORT_STORAGE_DIR");
+        if (customImportDir != null && !customImportDir.trim().isEmpty()) {
+            Path customPath = Paths.get(customImportDir);
+            logger.info("Using custom import storage directory from IMPORT_STORAGE_DIR: {}",
+                    customPath.toAbsolutePath());
+            return customPath.toAbsolutePath();
+        }
+
+        Path basePath = Paths.get(configuredDir);
+        if (basePath.isAbsolute()) {
+            logger.debug("Using absolute import directory: {}", basePath);
+            return basePath;
+        }
+
+        Path resolved = Paths.get(System.getProperty("user.dir", ".")).resolve(basePath).toAbsolutePath();
+        logger.info("Resolved relative import directory: {} -> {}", configuredDir, resolved);
+        return resolved;
     }
 
     private com.warehouse.entity.StockImportHistory createImportHistory(MultipartFile file, Warehouse warehouse, String storedFilename) {

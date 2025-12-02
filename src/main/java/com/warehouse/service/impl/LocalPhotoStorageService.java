@@ -34,23 +34,48 @@ public class LocalPhotoStorageService implements PhotoStorageService {
 
     /**
      * Resolves the base directory path, similar to how Excel imports work.
-     * Uses the configured baseDir directly (which should be absolute in production,
-     * e.g., /tmp/warehouse-uploads/shipments).
+     * Priority:
+     * 1. RAILWAY_VOLUME_MOUNT_PATH environment variable (if set, for persistent storage)
+     * 2. PHOTO_STORAGE_DIR environment variable (if set)
+     * 3. Configured baseDir from properties (absolute or relative)
+     * 
      * This matches the pattern used in StockImportServiceImpl.storeFile().
      */
     private Path resolveBaseDir() {
         String baseDir = properties.getBaseDir();
+        
+        // Check for Railway persistent volume mount path (highest priority)
+        String railwayVolumePath = System.getenv("RAILWAY_VOLUME_MOUNT_PATH");
+        if (railwayVolumePath != null && !railwayVolumePath.trim().isEmpty()) {
+            // Extract the relative part from baseDir (e.g., "shipments" from "/tmp/warehouse-uploads/shipments")
+            String relativePart = baseDir;
+            if (baseDir.contains("/")) {
+                // Get the last part (e.g., "shipments")
+                relativePart = baseDir.substring(baseDir.lastIndexOf("/") + 1);
+            }
+            Path railwayPath = Paths.get(railwayVolumePath).resolve("warehouse-uploads").resolve(relativePart);
+            log.info("Using Railway volume mount path: {} (from RAILWAY_VOLUME_MOUNT_PATH={})", 
+                    railwayPath.toAbsolutePath(), railwayVolumePath);
+            return railwayPath.toAbsolutePath();
+        }
+        
+        // Check for custom photo storage directory from environment variable
+        String customPhotoDir = System.getenv("PHOTO_STORAGE_DIR");
+        if (customPhotoDir != null && !customPhotoDir.trim().isEmpty()) {
+            Path customPath = Paths.get(customPhotoDir);
+            log.info("Using custom photo storage directory from PHOTO_STORAGE_DIR: {}", customPath.toAbsolutePath());
+            return customPath.toAbsolutePath();
+        }
+        
         Path basePath = Paths.get(baseDir);
 
-        // If it's already absolute (like /tmp/warehouse-uploads/shipments), use it
-        // as-is
+        // If it's already absolute (like /tmp/warehouse-uploads/shipments), use it as-is
         if (basePath.isAbsolute()) {
             log.debug("Using absolute base directory: {}", basePath);
             return basePath;
         }
 
-        // For relative paths (local development), resolve relative to current working
-        // directory
+        // For relative paths (local development), resolve relative to current working directory
         Path resolved = Paths.get(System.getProperty("user.dir", ".")).resolve(basePath).toAbsolutePath();
         log.info("Resolved relative base directory: {} -> {}", baseDir, resolved);
         return resolved;

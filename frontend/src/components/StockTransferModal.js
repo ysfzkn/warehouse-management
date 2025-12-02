@@ -13,7 +13,7 @@ import { compressImage } from '../utils/image';
 const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery = false }) => {
   const [currentStep, setCurrentStep] = useState(1);
   const initialTransferType = lockToCustomerDelivery ? 'CUSTOMER_DELIVERY' : 'WAREHOUSE';
-
+  
   // Get current date/time in Turkey timezone (GMT+3)
   const getTurkeyDateTime = () => {
     const now = new Date();
@@ -27,7 +27,7 @@ const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery 
     const minutes = String(turkeyTime.getMinutes()).padStart(2, '0');
     return `${year}-${month}-${day}T${hours}:${minutes}`;
   };
-
+  
   const [formData, setFormData] = useState({
     sourceWarehouseId: stock?.warehouse?.id || '',
     destinationWarehouseId: '',
@@ -218,7 +218,7 @@ const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery 
     }
   }, [syncItemsWithStocks]);
 
-  useEffect(() => {
+useEffect(() => {
     console.log('StockTransferModal mounted, fetching data...');
     const fetchData = async () => {
       setLoadingData(true);
@@ -229,7 +229,7 @@ const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery 
       setLoadingData(false);
     };
     fetchData();
-  }, [stock]);
+}, [stock]);
 
   useEffect(() => {
     if (stock?.product?.id && stock?.warehouse?.id) {
@@ -266,7 +266,7 @@ const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery 
       console.log('Fetching warehouses from /api/warehouses...');
       const response = await axios.get('/api/warehouses');
       console.log('Warehouses API response:', response.data);
-
+      
       if (!response.data || !Array.isArray(response.data)) {
         console.error('Invalid warehouses response format:', response.data);
         setError('Depo verisi hatalı formatta');
@@ -291,15 +291,15 @@ const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery 
         type: typeof w.isActive,
         raw: JSON.stringify(w.isActive)
       })));
-
+      
       console.log('🔍 Full warehouse objects:', response.data);
 
       // TEMPORARY FIX: Show ALL warehouses for now (no filtering)
       // TODO: Fix isActive filtering logic after testing
       console.log('⚠️ TEMPORARILY SHOWING ALL WAREHOUSES (active filtering disabled for testing)');
-
+      
       const activeWarehouses = response.data; // Show all warehouses temporarily
-
+      
       /* ORIGINAL FILTERING (commented out for debugging):
       const activeWarehouses = response.data.filter(w => {
         const shouldExclude = w.isActive === false;
@@ -308,18 +308,18 @@ const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery 
         return shouldInclude;
       });
       */
-
+      
       console.log(`✅ Total warehouses: ${response.data.length}, Showing: ${activeWarehouses.length}`);
       console.log('Warehouses to display:', activeWarehouses);
       setWarehouses(activeWarehouses);
-
+      
       if (activeWarehouses.length === 0) {
         setError('Sistemde hiç depo bulunamadı. Lütfen Depolar sayfasından depo ekleyin.');
       }
     } catch (error) {
       console.error('❌ Error fetching warehouses:', error);
       console.error('Error details:', error.response?.data, error.response?.status, error.message);
-
+      
       let errorMessage = 'Depolar yüklenirken hata oluştu';
       if (error.response) {
         errorMessage += `: ${error.response.status} - ${error.response.data || error.response.statusText}`;
@@ -328,7 +328,7 @@ const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery 
       } else {
         errorMessage += `: ${error.message}`;
       }
-
+      
       setError(errorMessage);
       setWarehouses([]);
     }
@@ -609,7 +609,7 @@ const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery 
       setValidationErrors(prev => ({ ...prev, transferItems: '' }));
     }
   };
-
+  
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -618,7 +618,7 @@ const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery 
       handlePhoneInput(name, value);
       return;
     }
-
+    
     // If source warehouse changes, clear destination warehouse if it's the same
     if (name === 'sourceWarehouseId') {
       setFormData(prev => {
@@ -637,7 +637,7 @@ const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery 
         [name]: value
       }));
     }
-
+    
     if (validationErrors[name]) {
       setValidationErrors(prev => ({ ...prev, [name]: '' }));
     }
@@ -715,9 +715,9 @@ const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery 
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
+    
     if (!validateStep(2)) return;
-
+    
     setError(null);
     setLoading(true);
 
@@ -729,24 +729,24 @@ const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery 
       const parseDateInTurkeyTimezone = (dateTimeString) => {
         // dateTimeString format: "2024-10-23T10:28"
         // This is already in Turkey local time from the datetime-local input
-
+        
         // Split the datetime string
         const [datePart, timePart] = dateTimeString.split('T');
         const [year, month, day] = datePart.split('-');
         const [hours, minutes] = timePart.split(':');
-
+        
         // Since backend timezone is set to Europe/Istanbul (GMT+3),
         // we send the datetime as-is (without timezone offset)
         // Backend will interpret this as Turkey local time
         const isoString = `${year}-${month}-${day}T${hours}:${minutes}:00`;
-
+        
         console.log('🕐 Datetime Conversion:');
         console.log('  Input (Turkey local):', dateTimeString);
         console.log('  Output (ISO for backend):', isoString);
-
+        
         return isoString;
       };
-
+      
       const transferData = {
         sourceWarehouseId: parseInt(formData.sourceWarehouseId),
         destinationWarehouseId: formData.transferType === 'WAREHOUSE' && formData.destinationWarehouseId
@@ -775,10 +775,10 @@ const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery 
       const newTransferId = response.data.id;
       setCreatedTransferId(newTransferId);
       const isApprovalRequest = response.data.approvalStatus === 'PENDING';
-
+      
       // Wait another moment before transitioning to success (ensure smooth transition)
       await new Promise(resolve => setTimeout(resolve, 800));
-
+      
       setSubmitSuccess({ isApprovalRequest, id: newTransferId });
       setCurrentStep(4); // Move to success step
 
@@ -947,18 +947,18 @@ const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery 
           <div className="px-4 pt-4 pb-2">
             <div className="d-flex justify-content-between align-items-center position-relative mb-3">
               <div className="position-absolute w-100 top-50 start-0" style={{ height: '2px', background: '#e9ecef', zIndex: 0 }}>
-                <div
+                <div 
                   className={`h-100 transition-all ${submitSuccess ? 'bg-success' : 'bg-primary'}`}
                   style={{ width: `${((currentStep - 1) / (steps.length - 1)) * 100}%`, transition: 'width 0.3s ease' }}
                 ></div>
               </div>
               {steps.map((step) => (
                 <div key={step.number} className="text-center position-relative" style={{ zIndex: 1, flex: 1 }}>
-                  <div
+                  <div 
                     className={`mx-auto rounded-circle d-flex align-items-center justify-content-center ${currentStep >= step.number
                         ? (submitSuccess && step.number === 4 ? 'bg-success text-white' : 'bg-primary text-white')
                         : 'bg-light text-muted'
-                      }`}
+                    }`}
                     style={{ width: '50px', height: '50px', transition: 'all 0.3s ease', border: '3px solid white' }}
                   >
                     <i className={`fas ${step.icon} fa-lg`}></i>
@@ -966,7 +966,7 @@ const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery 
                   <div className={`mt-2 small fw-bold ${currentStep >= step.number
                       ? (submitSuccess && step.number === 4 ? 'text-success' : 'text-primary')
                       : 'text-muted'
-                    }`}>
+                  }`}>
                     {step.title}
                   </div>
                 </div>
@@ -986,7 +986,7 @@ const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery 
                   </div>
                 </div>
               )}
-
+              
               {error && (
                 <div className="alert alert-danger alert-dismissible fade show" role="alert">
                   <i className="fas fa-exclamation-triangle me-2"></i>
@@ -995,9 +995,9 @@ const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery 
                 </div>
               )}
 
-              {/* Step 1: Transfer Details */}
-              {currentStep === 1 && (
-                <div style={{ animation: 'fadeIn 0.3s ease-in' }}>
+               {/* Step 1: Transfer Details */}
+               {currentStep === 1 && (
+                 <div style={{ animation: 'fadeIn 0.3s ease-in' }}>
                   <h5 className="mb-3 text-primary">
                     <i className="fas fa-boxes me-2"></i>
                     Transfer Detaylarını Belirleyin
@@ -1034,7 +1034,7 @@ const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery 
                       Rolünüz gereği sadece müşteri sevkiyat transferi oluşturabilirsiniz.
                     </div>
                   )}
-
+                  
                   <div className="row g-3">
                     <div className="col-md-6">
                       <label className="form-label fw-bold">
@@ -1092,9 +1092,9 @@ const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery 
                           disabled={!formData.sourceWarehouseId || warehouses.length === 0}
                         >
                           <option value="">
-                            {!formData.sourceWarehouseId
-                              ? '-- Önce kaynak depo seçiniz --'
-                              : warehouses.length === 0
+                            {!formData.sourceWarehouseId 
+                              ? '-- Önce kaynak depo seçiniz --' 
+                              : warehouses.length === 0 
                                 ? '-- Depo bulunamadı --'
                                 : '-- Hedef depo seçiniz --'}
                           </option>
@@ -1414,7 +1414,7 @@ const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery 
                                                           )}
                                                         </div>
                                                       </div>
-
+                                                      
                                                       <div className="row g-1 mb-1">
                                                         <div className="col-6">
                                                           <div className="text-center p-2 bg-light rounded" style={{ border: '1px solid #dee2e6' }}>
@@ -1439,7 +1439,7 @@ const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery 
                                                           </div>
                                                         </div>
                                                       </div>
-
+                                                      
                                                       <div className="row g-1">
                                                         <div className="col-6">
                                                           <div className="text-center p-1 bg-light rounded" style={{ border: '1px solid #dee2e6' }}>
@@ -1551,24 +1551,24 @@ const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery 
                                             const photoInfo = itemPhotos[item.productId];
                                             const uploadState = photoUploads[item.productId] || { loading: false, error: null };
                                             return (
-                                              <tr key={item.productId}>
-                                                <td>{item.productName}</td>
-                                                <td><span className="badge bg-light text-dark">{item.sku}</span></td>
-                                                <td className="text-center">
-                                                  <span className={`badge ${item.availableQuantity > 0 ? 'bg-success' : 'bg-danger'} bg-opacity-10 text-${item.availableQuantity > 0 ? 'success' : 'danger'}`}>
-                                                    {item.availableQuantity ?? 0}
-                                                  </span>
-                                                </td>
-                                                <td className="text-center" style={{ maxWidth: '120px' }}>
-                                                  <input
-                                                    type="number"
-                                                    className="form-control form-control-sm text-center"
-                                                    value={item.quantity}
-                                                    min="0"
-                                                    max={item.availableQuantity || undefined}
-                                                    onChange={(e) => handleItemQuantityUpdate(item.productId, e.target.value)}
-                                                  />
-                                                </td>
+                                            <tr key={item.productId}>
+                                              <td>{item.productName}</td>
+                                              <td><span className="badge bg-light text-dark">{item.sku}</span></td>
+                                              <td className="text-center">
+                                                <span className={`badge ${item.availableQuantity > 0 ? 'bg-success' : 'bg-danger'} bg-opacity-10 text-${item.availableQuantity > 0 ? 'success' : 'danger'}`}>
+                                                  {item.availableQuantity ?? 0}
+                                                </span>
+                                              </td>
+                                              <td className="text-center" style={{ maxWidth: '120px' }}>
+                                                <input
+                                                  type="number"
+                                                  className="form-control form-control-sm text-center"
+                                                  value={item.quantity}
+                                                  min="0"
+                                                  max={item.availableQuantity || undefined}
+                                                  onChange={(e) => handleItemQuantityUpdate(item.productId, e.target.value)}
+                                                />
+                                              </td>
                                                 <td className="text-center" style={{ minWidth: '130px' }}>
                                                   <div className="d-flex flex-column align-items-center gap-1">
                                                     {photoInfo?.meta ? (
@@ -1661,16 +1661,16 @@ const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery 
                                                     )}
                                                   </div>
                                                 </td>
-                                                <td className="text-center">
-                                                  <button
-                                                    type="button"
-                                                    className="btn btn-link text-danger btn-sm"
-                                                    onClick={() => handleRemoveItem(item.productId)}
-                                                  >
-                                                    <i className="fas fa-trash-alt"></i>
-                                                  </button>
-                                                </td>
-                                              </tr>
+                                              <td className="text-center">
+                                                <button
+                                                  type="button"
+                                                  className="btn btn-link text-danger btn-sm"
+                                                  onClick={() => handleRemoveItem(item.productId)}
+                                                >
+                                                  <i className="fas fa-trash-alt"></i>
+                                                </button>
+                                              </td>
+                                            </tr>
                                             );
                                           })}
                                         </tbody>
@@ -1724,14 +1724,14 @@ const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery 
                 </div>
               )}
 
-              {/* Step 2: Driver & Vehicle Info */}
-              {currentStep === 2 && (
-                <div style={{ animation: 'fadeIn 0.3s ease-in' }}>
+               {/* Step 2: Driver & Vehicle Info */}
+               {currentStep === 2 && (
+                 <div style={{ animation: 'fadeIn 0.3s ease-in' }}>
                   <h5 className="mb-3 text-primary">
                     <i className="fas fa-truck me-2"></i>
                     Taşıma Bilgilerini Girin
                   </h5>
-
+                  
                   <div className="row g-3">
                     <div className="col-md-6">
                       <label className="form-label fw-bold">
@@ -1858,9 +1858,9 @@ const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery 
                 </div>
               )}
 
-              {/* Step 3: Summary & Confirm */}
-              {currentStep === 3 && !submitSuccess && (
-                <div style={{ animation: 'fadeIn 0.3s ease-in' }}>
+               {/* Step 3: Summary & Confirm */}
+               {currentStep === 3 && !submitSuccess && (
+                 <div style={{ animation: 'fadeIn 0.3s ease-in' }}>
                   {loading ? (
                     <div className="py-4">
                       <div className="text-center mb-4">
@@ -1875,9 +1875,9 @@ const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery 
                           Transfer kaydı sisteme ekleniyor, lütfen bekleyin.
                         </p>
                         <div className="progress mx-auto" style={{ maxWidth: '500px', height: '8px' }}>
-                          <div className="progress-bar progress-bar-striped progress-bar-animated bg-primary"
-                            role="progressbar"
-                            style={{ width: '100%' }}>
+                          <div className="progress-bar progress-bar-striped progress-bar-animated bg-primary" 
+                               role="progressbar" 
+                               style={{ width: '100%' }}>
                           </div>
                         </div>
                       </div>
@@ -1907,7 +1907,7 @@ const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery 
                             <div className="card-body text-center py-3">
                               <i className="fas fa-boxes text-primary fa-2x mb-2"></i>
                               <div className="small text-muted">Miktar</div>
-                              <div className="fw-bold fs-5">{totalTransferQuantity} Adet</div>
+                          <div className="fw-bold fs-5">{totalTransferQuantity} Adet</div>
                             </div>
                           </div>
                         </div>
@@ -1929,143 +1929,143 @@ const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery 
                           </p>
                         </div>
                       </div>
+                  
+                  <div className="row g-3">
+                    <div className="col-md-6">
+                      <div className="card h-100 border-danger">
+                        <div className="card-header bg-danger text-white">
+                          <i className="fas fa-warehouse me-2"></i>
+                          Kaynak Depo
+                        </div>
+                        <div className="card-body">
+                          <h6 className="fw-bold">{sourceWarehouse?.name}</h6>
+                          <p className="mb-0 text-muted small">
+                            <i className="fas fa-map-marker-alt me-1"></i>
+                            {sourceWarehouse?.location}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
 
-                      <div className="row g-3">
-                        <div className="col-md-6">
-                          <div className="card h-100 border-danger">
-                            <div className="card-header bg-danger text-white">
-                              <i className="fas fa-warehouse me-2"></i>
-                              Kaynak Depo
-                            </div>
-                            <div className="card-body">
-                              <h6 className="fw-bold">{sourceWarehouse?.name}</h6>
+                    <div className="col-md-6">
+                      <div className={`card h-100 border-${isCustomerTransfer ? 'info' : 'success'}`}>
+                        <div className={`card-header text-white bg-${isCustomerTransfer ? 'info' : 'success'}`}>
+                          <i className={`fas ${isCustomerTransfer ? 'fa-user-tag' : 'fa-warehouse'} me-2`}></i>
+                          {isCustomerTransfer ? 'Müşteri Bilgileri' : 'Hedef Depo'}
+                        </div>
+                        <div className="card-body">
+                          {isCustomerTransfer ? (
+                            <>
+                              <h6 className="fw-bold">{formData.customerFullName}</h6>
+                              <p className="mb-1 text-muted small">
+                                <i className="fas fa-phone me-1"></i>
+                                {formattedCustomerPhone || '-'}
+                              </p>
                               <p className="mb-0 text-muted small">
                                 <i className="fas fa-map-marker-alt me-1"></i>
-                                {sourceWarehouse?.location}
+                                {formData.customerAddress}
                               </p>
-                            </div>
-                          </div>
+                            </>
+                          ) : (
+                            <>
+                              <h6 className="fw-bold">{destinationWarehouse?.name}</h6>
+                              <p className="mb-0 text-muted small">
+                                <i className="fas fa-map-marker-alt me-1"></i>
+                                {destinationWarehouse?.location}
+                              </p>
+                            </>
+                          )}
                         </div>
+                      </div>
+                    </div>
 
-                        <div className="col-md-6">
-                          <div className={`card h-100 border-${isCustomerTransfer ? 'info' : 'success'}`}>
-                            <div className={`card-header text-white bg-${isCustomerTransfer ? 'info' : 'success'}`}>
-                              <i className={`fas ${isCustomerTransfer ? 'fa-user-tag' : 'fa-warehouse'} me-2`}></i>
-                              {isCustomerTransfer ? 'Müşteri Bilgileri' : 'Hedef Depo'}
-                            </div>
-                            <div className="card-body">
-                              {isCustomerTransfer ? (
-                                <>
-                                  <h6 className="fw-bold">{formData.customerFullName}</h6>
-                                  <p className="mb-1 text-muted small">
-                                    <i className="fas fa-phone me-1"></i>
-                                    {formattedCustomerPhone || '-'}
-                                  </p>
-                                  <p className="mb-0 text-muted small">
-                                    <i className="fas fa-map-marker-alt me-1"></i>
-                                    {formData.customerAddress}
-                                  </p>
-                                </>
-                              ) : (
-                                <>
-                                  <h6 className="fw-bold">{destinationWarehouse?.name}</h6>
-                                  <p className="mb-0 text-muted small">
-                                    <i className="fas fa-map-marker-alt me-1"></i>
-                                    {destinationWarehouse?.location}
-                                  </p>
-                                </>
-                              )}
-                            </div>
-                          </div>
+                    <div className="col-12">
+                      <div className="card border-primary">
+                        <div className="card-header bg-primary text-white">
+                          <i className="fas fa-box me-2"></i>
+                          Ürün Detayları
                         </div>
-
-                        <div className="col-12">
-                          <div className="card border-primary">
-                            <div className="card-header bg-primary text-white">
-                              <i className="fas fa-box me-2"></i>
-                              Ürün Detayları
+                        <div className="card-body">
+                          {transferItems.length === 0 ? (
+                            <div className="text-muted">
+                              <i className="fas fa-box-open me-2"></i>
+                              Ürün seçimi yapılmadı.
                             </div>
-                            <div className="card-body">
-                              {transferItems.length === 0 ? (
-                                <div className="text-muted">
-                                  <i className="fas fa-box-open me-2"></i>
-                                  Ürün seçimi yapılmadı.
-                                </div>
-                              ) : (
-                                <div className="table-responsive">
-                                  <table className="table table-sm align-middle mb-0">
-                                    <thead className="table-light">
-                                      <tr>
-                                        <th>Ürün</th>
-                                        <th>SKU</th>
-                                        <th className="text-center">Miktar</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody>
-                                      {transferItems.map(item => (
-                                        <tr key={item.productId}>
-                                          <td>{item.productName}</td>
-                                          <td><span className="badge bg-light text-dark">{item.sku}</span></td>
-                                          <td className="text-center">
-                                            <span className="badge bg-primary">{item.quantity}</span>
-                                          </td>
-                                        </tr>
-                                      ))}
-                                    </tbody>
-                                  </table>
-                                  <div className="text-end mt-2">
-                                    <strong>Toplam: {totalTransferQuantity} adet</strong>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="col-12">
-                          <div className="card border-info">
-                            <div className="card-header bg-info text-white">
-                              <i className="fas fa-truck me-2"></i>
-                              Taşıma Bilgileri
-                            </div>
-                            <div className="card-body">
-                              <div className="row">
-                                <div className="col-md-6 mb-2">
-                                  <i className="fas fa-user me-2 text-muted"></i>
-                                  <strong>Şoför:</strong> {formData.driverName}
-                                </div>
-                                <div className="col-md-6 mb-2">
-                                  <i className="fas fa-id-card me-2 text-muted"></i>
-                                  <strong>TC:</strong> {formData.driverTcId}
-                                </div>
-                                <div className="col-md-6 mb-2">
-                                  <i className="fas fa-phone me-2 text-muted"></i>
-                                  <strong>Telefon:</strong> {formattedDriverPhone || '-'}
-                                </div>
-                                <div className="col-md-6 mb-2">
-                                  <i className="fas fa-car me-2 text-muted"></i>
-                                  <strong>Plaka:</strong> {formData.vehiclePlate.toUpperCase()}
-                                </div>
-                                {formData.notes && (
-                                  <div className="col-12 mt-2">
-                                    <i className="fas fa-sticky-note me-2 text-muted"></i>
-                                    <strong>Notlar:</strong>
-                                    <p className="mb-0 text-muted">{formData.notes}</p>
-                                  </div>
-                                )}
+                          ) : (
+                            <div className="table-responsive">
+                              <table className="table table-sm align-middle mb-0">
+                                <thead className="table-light">
+                                  <tr>
+                                    <th>Ürün</th>
+                                    <th>SKU</th>
+                                    <th className="text-center">Miktar</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {transferItems.map(item => (
+                                    <tr key={item.productId}>
+                                      <td>{item.productName}</td>
+                                      <td><span className="badge bg-light text-dark">{item.sku}</span></td>
+                                      <td className="text-center">
+                                        <span className="badge bg-primary">{item.quantity}</span>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                              <div className="text-end mt-2">
+                                <strong>Toplam: {totalTransferQuantity} adet</strong>
                               </div>
                             </div>
-                          </div>
+                          )}
                         </div>
+                      </div>
+                    </div>
 
-                        <div className="col-12">
-                          <div className="alert alert-warning">
-                            <i className="fas fa-exclamation-triangle me-2"></i>
-                            <strong>Dikkat:</strong> Transfer onaylandığında, kaynak depodaki stok rezerve edilecektir.
+                    <div className="col-12">
+                      <div className="card border-info">
+                        <div className="card-header bg-info text-white">
+                          <i className="fas fa-truck me-2"></i>
+                          Taşıma Bilgileri
+                        </div>
+                        <div className="card-body">
+                          <div className="row">
+                            <div className="col-md-6 mb-2">
+                              <i className="fas fa-user me-2 text-muted"></i>
+                              <strong>Şoför:</strong> {formData.driverName}
+                            </div>
+                            <div className="col-md-6 mb-2">
+                              <i className="fas fa-id-card me-2 text-muted"></i>
+                              <strong>TC:</strong> {formData.driverTcId}
+                            </div>
+                            <div className="col-md-6 mb-2">
+                              <i className="fas fa-phone me-2 text-muted"></i>
+                              <strong>Telefon:</strong> {formattedDriverPhone || '-'}
+                            </div>
+                            <div className="col-md-6 mb-2">
+                              <i className="fas fa-car me-2 text-muted"></i>
+                              <strong>Plaka:</strong> {formData.vehiclePlate.toUpperCase()}
+                            </div>
+                            {formData.notes && (
+                              <div className="col-12 mt-2">
+                                <i className="fas fa-sticky-note me-2 text-muted"></i>
+                                <strong>Notlar:</strong>
+                                <p className="mb-0 text-muted">{formData.notes}</p>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
-                    </>
+                    </div>
+
+                    <div className="col-12">
+                      <div className="alert alert-warning">
+                        <i className="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Dikkat:</strong> Transfer onaylandığında, kaynak depodaki stok rezerve edilecektir.
+                      </div>
+                    </div>
+                  </div>
+                  </>
                   )}
                 </div>
               )}
@@ -2074,17 +2074,17 @@ const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery 
               {currentStep === 4 && submitSuccess && (
                 <div style={{ animation: 'fadeIn 0.3s ease-in' }} className="text-center py-5">
                   <div className="mb-4">
-                    <div className="mx-auto rounded-circle bg-success bg-opacity-10 d-inline-flex align-items-center justify-content-center"
-                      style={{ width: '120px', height: '120px' }}>
+                    <div className="mx-auto rounded-circle bg-success bg-opacity-10 d-inline-flex align-items-center justify-content-center" 
+                         style={{ width: '120px', height: '120px' }}>
                       <i className="fas fa-check-circle text-success" style={{ fontSize: '4rem' }}></i>
                     </div>
                   </div>
-
+                  
                   <h3 className="text-success mb-3">
                     <i className="fas fa-check-double me-2"></i>
                     {submitSuccess?.isApprovalRequest ? 'Transfer Talebi Başarıyla Oluşturuldu!' : 'Transfer Başarıyla Oluşturuldu!'}
                   </h3>
-
+                  
                   <p className="text-muted mb-4">
                     {submitSuccess?.isApprovalRequest ? (
                       <>
@@ -2208,7 +2208,7 @@ const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery 
                       Geri
                     </button>
                   )}
-
+                  
                   <button
                     type="button"
                     className="btn btn-secondary"
