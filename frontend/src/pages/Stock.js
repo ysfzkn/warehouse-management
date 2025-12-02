@@ -233,17 +233,30 @@ const StockFiltersBar = ({
           .mobile-chip-note {
             background: rgba(15,23,42,0.06);
             color: #475569;
-            max-width: 100%;
-            max-height: 80px;
+            width: 100%;
+            min-height: 2.5rem;
+            max-height: 120px;
             overflow-y: auto;
             overflow-x: hidden;
-            display: block;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
             word-wrap: break-word;
             white-space: normal;
-            padding: 0.375rem 0.5rem;
-            border-radius: 0.375rem;
-            line-height: 1.4;
+            padding: 0.75rem 1rem;
+            border-radius: 16px;
+            line-height: 1.5;
             font-size: 0.875rem;
+            text-align: center;
+            box-sizing: border-box;
+          }
+          .mobile-chip-note i {
+            flex-shrink: 0;
+            margin-right: 0.5rem;
+          }
+          .mobile-stat-grid {
+            gap: 0.5rem;
           }
           .mobile-stat-grid .mobile-stat-tile {
             border-radius: 16px;

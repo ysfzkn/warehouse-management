@@ -789,26 +789,79 @@ const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery 
           const transfer = transferResp.data;
           const items = transfer.items || [];
 
+          const photoUploadErrors = [];
           for (const [productIdStr, file] of Object.entries(pendingItemPhotos)) {
             const productId = Number(productIdStr);
             const item = items.find(i => i.product?.id === productId);
-            if (!item) continue;
+            if (!item) {
+              photoUploadErrors.push(`Ürün ID ${productId} için transfer satırı bulunamadı`);
+              continue;
+            }
 
-            const formData = new FormData();
-            formData.append('file', file);
+            try {
+              const optimizedFile = await compressImage(file, {
+                maxWidth: 1920,
+                maxHeight: 1920,
+                quality: 0.75,
+                mimeType: 'image/jpeg'
+              });
 
-            await axios.post(
-              `/api/stock-transfer-items/${item.id}/photo`,
-              formData,
-              { headers: { 'Content-Type': 'multipart/form-data' } }
-            );
+              const formData = new FormData();
+              formData.append('file', optimizedFile);
+
+              await axios.post(
+                `/api/stock-transfer-items/${item.id}/photo`,
+                formData,
+                { headers: { 'Content-Type': 'multipart/form-data' } }
+              );
+            } catch (itemPhotoErr) {
+              const productName = item.product?.name || `Ürün ID ${productId}`;
+              const errorMsg = itemPhotoErr?.response?.data?.message || 
+                              itemPhotoErr?.response?.data?.error || 
+                              itemPhotoErr?.message || 
+                              'Bilinmeyen hata';
+              photoUploadErrors.push(`${productName}: ${errorMsg}`);
+              console.error(`Error uploading photo for product ${productId} (item ${item.id}):`, itemPhotoErr);
+            }
           }
 
           // Bekleyenleri temizle ve meta veriyi yükle
           setPendingItemPhotos({});
           await loadItemPhotoMeta(newTransferId);
+
+          // Hata varsa kullanıcıya bilgilendir
+          if (photoUploadErrors.length > 0) {
+            const errorCount = photoUploadErrors.length;
+            const totalPhotos = Object.keys(pendingItemPhotos).length;
+            const successCount = totalPhotos - errorCount;
+            
+            let message = '';
+            if (successCount > 0) {
+              message = `Transfer başarıyla oluşturuldu. ${successCount} fotoğraf yüklendi. `;
+            } else {
+              message = 'Transfer başarıyla oluşturuldu. ';
+            }
+            
+            if (errorCount > 0) {
+              message += `${errorCount} fotoğraf yüklenirken sorun oluştu: ${photoUploadErrors.join('; ')}`;
+              showToast(message, 'warning', 8000);
+            } else {
+              showToast('Transfer başarıyla oluşturuldu ve tüm fotoğraflar yüklendi.', 'success', 5000);
+            }
+          } else {
+            showToast('Transfer başarıyla oluşturuldu ve tüm fotoğraflar yüklendi.', 'success', 5000);
+          }
         } catch (photoErr) {
           console.error('Pending transfer photos could not be uploaded', photoErr);
+          const errorMsg = photoErr?.response?.data?.message || 
+                          photoErr?.response?.data?.error || 
+                          photoErr?.message || 
+                          'Bilinmeyen hata';
+          showToast(
+            `Transfer başarıyla oluşturuldu, ancak fotoğraflar yüklenirken bir sorun oluştu: ${errorMsg}`,
+            'warning',
+            8000
+          );
         }
       } else {
         // Yine de meta veriyi yükleyelim (ileride eklenmiş fotoğraflar için)
