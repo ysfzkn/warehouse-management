@@ -176,6 +176,18 @@ public class StockTransferItemPhotoController {
             }
             log.debug("Successfully read photo for itemId={}, size={} bytes", itemId, bytes.length);
             return new ResponseEntity<>(bytes, headers, HttpStatus.OK);
+        } catch (RuntimeException e) {
+            // Check if it's a "file does not exist" error
+            if (e.getMessage() != null && e.getMessage().contains("does not exist")) {
+                log.warn("Photo file not found for itemId={}, path={}. This may happen if the server was restarted and files were lost (Railway /tmp is ephemeral). Error: {}", 
+                        itemId, path, e.getMessage());
+                // Return 404 with a helpful message
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(("Fotoğraf dosyası bulunamadı. Dosya sunucu yeniden başlatıldığında kaybolmuş olabilir. " +
+                                "Lütfen fotoğrafı yeniden yükleyin.").getBytes());
+            }
+            log.error("Error viewing photo for itemId={}, path={}: {}", itemId, path, e.getMessage(), e);
+            throw new WarehouseManagementException(ErrorCode.INTERNAL_SERVER_ERROR, "Fotoğraf okunamadı: " + e.getMessage());
         } catch (WarehouseManagementException e) {
             log.error("Error viewing photo for itemId={}, path={}: {}", itemId, path, e.getMessage(), e);
             throw e;
