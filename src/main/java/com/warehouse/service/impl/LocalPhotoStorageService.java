@@ -107,7 +107,19 @@ public class LocalPhotoStorageService implements PhotoStorageService {
             log.debug("Writing thumbnail to: {}", thumbPath);
             writeCompressedImage(thumbnail, extension, thumbPath, properties.getQuality());
 
+            // Verify files were actually written
+            if (!Files.exists(optimizedPath)) {
+                log.error("Optimized image file was not created: {}", optimizedPath.toAbsolutePath());
+                throw new RuntimeException("Failed to create optimized image file: " + optimizedPath.toAbsolutePath());
+            }
+            if (!Files.exists(thumbPath)) {
+                log.error("Thumbnail file was not created: {}", thumbPath.toAbsolutePath());
+                throw new RuntimeException("Failed to create thumbnail file: " + thumbPath.toAbsolutePath());
+            }
+
             long sizeBytes = Files.size(optimizedPath);
+            log.info("Successfully stored photo: optimized={} ({} bytes), thumbnail={} ({} bytes)", 
+                    optimizedPath.toAbsolutePath(), sizeBytes, thumbPath.toAbsolutePath(), Files.size(thumbPath));
 
             return new StoredPhoto(
                     optimizedFileName,
@@ -263,6 +275,28 @@ public class LocalPhotoStorageService implements PhotoStorageService {
             
             // Check if file exists
             if (!Files.exists(path)) {
+                // Log directory contents for debugging
+                Path parentDir = path.getParent();
+                if (parentDir != null && Files.exists(parentDir)) {
+                    try {
+                        log.warn("Photo file does not exist: {} - Directory exists, listing contents:", path.toAbsolutePath());
+                        Files.list(parentDir).forEach(p -> {
+                            try {
+                                log.warn("  - {} (exists: {}, isFile: {}, size: {} bytes)", 
+                                        p.getFileName(), Files.exists(p), Files.isRegularFile(p), 
+                                        Files.isRegularFile(p) ? Files.size(p) : 0);
+                            } catch (IOException e) {
+                                log.warn("  - {} (error getting info: {})", p.getFileName(), e.getMessage());
+                            }
+                        });
+                    } catch (IOException e) {
+                        log.warn("Could not list directory contents: {}", e.getMessage());
+                    }
+                } else {
+                    log.error("Photo file does not exist and parent directory also does not exist: {} (parent: {})", 
+                            path.toAbsolutePath(), parentDir != null ? parentDir.toAbsolutePath() : "null");
+                }
+                
                 log.error("Photo file does not exist: {} (stored path: {}, absolute path: {})", 
                         relativePath, relativePath, path.toAbsolutePath());
                 throw new RuntimeException("Photo file does not exist: " + path.toAbsolutePath());
