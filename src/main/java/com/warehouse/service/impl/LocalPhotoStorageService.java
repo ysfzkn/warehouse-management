@@ -84,10 +84,10 @@ public class LocalPhotoStorageService implements PhotoStorageService {
             String baseName = UUID.randomUUID().toString();
 
             LocalDate today = LocalDate.now();
-            Path baseDir = resolveBaseDir().resolve(
-                    String.valueOf(today.getYear()),
-                    String.format("%02d", today.getMonthValue()),
-                    String.valueOf(transferId));
+            Path baseDir = resolveBaseDir()
+                    .resolve(String.valueOf(today.getYear()))
+                    .resolve(String.format("%02d", today.getMonthValue()))
+                    .resolve(String.valueOf(transferId));
 
             try {
                 Files.createDirectories(baseDir);
@@ -159,11 +159,10 @@ public class LocalPhotoStorageService implements PhotoStorageService {
             // Use a separate root folder for product images to keep things organized
             Path resolvedBase = resolveBaseDir();
             Path productsBase = resolvedBase.getParent().resolve("products");
-            Path baseDir = productsBase.resolve(
-                    String.valueOf(today.getYear()),
-                    String.format("%02d", today.getMonthValue()),
-                    String.valueOf(productId)
-            );
+            Path baseDir = productsBase
+                    .resolve(String.valueOf(today.getYear()))
+                    .resolve(String.format("%02d", today.getMonthValue()))
+                    .resolve(String.valueOf(productId));
 
             Files.createDirectories(baseDir);
 
