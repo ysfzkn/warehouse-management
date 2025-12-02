@@ -211,10 +211,76 @@ public class LocalPhotoStorageService implements PhotoStorageService {
 
     private InputStream openStream(String relativePath) {
         try {
+            if (relativePath == null || relativePath.trim().isEmpty()) {
+                log.error("Cannot open photo stream: path is null or empty");
+                throw new RuntimeException("Photo path is null or empty");
+            }
+            
             Path path = Paths.get(relativePath);
+            
+            // If path is not absolute, try to resolve it relative to base directory
+            if (!path.isAbsolute()) {
+                log.debug("Path is relative, resolving against base directory: {}", relativePath);
+                Path baseDir = resolveBaseDir();
+                // Extract the relative part (e.g., "2025/12/25/64_xxx_orig.jpg" from "shipments/2025/12/25/64_xxx_orig.jpg")
+                String pathStr = relativePath.replace("\\", "/");
+                if (pathStr.contains("/")) {
+                    // Find the year part (e.g., "2025") to determine the correct subdirectory
+                    String[] parts = pathStr.split("/");
+                    if (parts.length >= 3) {
+                        // Assume format: shipments/2025/12/25/filename or 2025/12/25/filename
+                        int yearIndex = -1;
+                        for (int i = 0; i < parts.length; i++) {
+                            if (parts[i].matches("\\d{4}")) {
+                                yearIndex = i;
+                                break;
+                            }
+                        }
+                        if (yearIndex >= 0) {
+                            // Reconstruct path from year onwards
+                            StringBuilder relativePart = new StringBuilder();
+                            for (int i = yearIndex; i < parts.length; i++) {
+                                if (relativePart.length() > 0) relativePart.append("/");
+                                relativePart.append(parts[i]);
+                            }
+                            path = baseDir.resolve(relativePart.toString());
+                            log.debug("Resolved relative path to: {}", path.toAbsolutePath());
+                        } else {
+                            // Fallback: resolve directly
+                            path = baseDir.resolve(relativePath);
+                        }
+                    } else {
+                        path = baseDir.resolve(relativePath);
+                    }
+                } else {
+                    path = baseDir.resolve(relativePath);
+                }
+            }
+            
+            // Log path resolution for debugging
+            log.debug("Opening photo stream from path: {} (absolute: {}, exists: {})", 
+                    path.toAbsolutePath(), path.isAbsolute(), Files.exists(path));
+            
+            // Check if file exists
+            if (!Files.exists(path)) {
+                log.error("Photo file does not exist: {} (stored path: {}, absolute path: {})", 
+                        relativePath, relativePath, path.toAbsolutePath());
+                throw new RuntimeException("Photo file does not exist: " + path.toAbsolutePath());
+            }
+            
+            // Check if it's a file (not a directory)
+            if (!Files.isRegularFile(path)) {
+                log.error("Photo path is not a regular file: {} (absolute path: {})", relativePath, path.toAbsolutePath());
+                throw new RuntimeException("Photo path is not a regular file: " + path.toAbsolutePath());
+            }
+            
             return Files.newInputStream(path);
         } catch (IOException e) {
-            throw new RuntimeException("Failed to open photo: " + relativePath, e);
+            log.error("Failed to open photo stream from path: {} - Error: {}", relativePath, e.getMessage(), e);
+            throw new RuntimeException("Failed to open photo: " + relativePath + " - " + e.getMessage(), e);
+        } catch (Exception e) {
+            log.error("Unexpected error opening photo stream from path: {} - Error: {}", relativePath, e.getMessage(), e);
+            throw new RuntimeException("Failed to open photo: " + relativePath + " - " + e.getMessage(), e);
         }
     }
 

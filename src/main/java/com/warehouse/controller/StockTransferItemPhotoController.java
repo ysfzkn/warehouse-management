@@ -157,19 +157,31 @@ public class StockTransferItemPhotoController {
                 .orElseThrow(() -> new WarehouseManagementException(ErrorCode.TRANSFER_NOT_FOUND, "Fotoğraf bulunamadı"));
 
         String path = thumbnail ? photo.getThumbnailPath() : photo.getRelativePath();
+        log.debug("Viewing photo for itemId={}, thumbnail={}, path={}", itemId, thumbnail, path);
+        
         try (InputStream is = thumbnail
                 ? photoStorageService.openThumbnailStream(path)
                 : photoStorageService.openPhotoStream(path)) {
             byte[] bytes = is.readAllBytes();
+            if (bytes.length == 0) {
+                log.warn("Photo file is empty for itemId={}, path={}", itemId, path);
+                throw new WarehouseManagementException(ErrorCode.INTERNAL_SERVER_ERROR, "Fotoğraf dosyası boş");
+            }
+            
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.parseMediaType(photo.getContentType()));
             headers.setContentLength(bytes.length);
             if (!thumbnail && StringUtils.hasText(photo.getFileName())) {
                 headers.set(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + photo.getFileName() + "\"");
             }
+            log.debug("Successfully read photo for itemId={}, size={} bytes", itemId, bytes.length);
             return new ResponseEntity<>(bytes, headers, HttpStatus.OK);
+        } catch (WarehouseManagementException e) {
+            log.error("Error viewing photo for itemId={}, path={}: {}", itemId, path, e.getMessage(), e);
+            throw e;
         } catch (Exception e) {
-            throw new WarehouseManagementException(ErrorCode.INTERNAL_SERVER_ERROR, "Fotoğraf okunamadı");
+            log.error("Unexpected error viewing photo for itemId={}, path={}: {}", itemId, path, e.getMessage(), e);
+            throw new WarehouseManagementException(ErrorCode.INTERNAL_SERVER_ERROR, "Fotoğraf okunamadı: " + e.getMessage());
         }
     }
 
