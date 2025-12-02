@@ -35,8 +35,8 @@ public class LocalPhotoStorageService implements PhotoStorageService {
     /**
      * Resolves the base directory path, similar to how Excel imports work.
      * Priority:
-     * 1. PHOTO_STORAGE_DIR environment variable (if set, highest priority)
-     * 2. RAILWAY_VOLUME_MOUNT_PATH environment variable (if set, for persistent storage)
+     * 1. RAILWAY_VOLUME_MOUNT_PATH environment variable (if set, for persistent storage)
+     * 2. PHOTO_STORAGE_DIR environment variable (if set)
      * 3. Configured baseDir from properties (absolute or relative)
      *
      * This matches the pattern used in StockImportServiceImpl.storeFile().
@@ -44,7 +44,27 @@ public class LocalPhotoStorageService implements PhotoStorageService {
     private Path resolveBaseDir() {
         String baseDir = properties.getBaseDir();
 
-        // 1) Explicit PHOTO_STORAGE_DIR always wins
+        // 1) Railway persistent volume mount (highest priority in Railway env)
+        String railwayVolumePath = System.getenv("RAILWAY_VOLUME_MOUNT_PATH");
+        if (railwayVolumePath != null && !railwayVolumePath.trim().isEmpty()) {
+            Path root = Paths.get(railwayVolumePath);
+
+            // Eğer properties'teki baseDir göreli bir yol ise (örn: "uploads/shipments"),
+            // sadece son segmenti (örn: "shipments") volume root'un altına ekleyelim.
+            if (baseDir != null && !baseDir.trim().isEmpty()) {
+                Path basePath = Paths.get(baseDir);
+                if (!basePath.isAbsolute() && basePath.getNameCount() > 0) {
+                    String lastSegment = basePath.getFileName().toString();
+                    root = root.resolve(lastSegment);
+                }
+            }
+
+            log.info("Using Railway volume mount path as photo base directory: {} (from RAILWAY_VOLUME_MOUNT_PATH={})",
+                    root.toAbsolutePath(), railwayVolumePath);
+            return root.toAbsolutePath();
+        }
+
+        // 2) Explicit PHOTO_STORAGE_DIR
         String customPhotoDir = System.getenv("PHOTO_STORAGE_DIR");
         if (customPhotoDir != null && !customPhotoDir.trim().isEmpty()) {
             Path customPath = Paths.get(customPhotoDir);
@@ -52,17 +72,6 @@ public class LocalPhotoStorageService implements PhotoStorageService {
             return customPath.toAbsolutePath();
         }
 
-        // 2) Railway persistent volume mount (if defined)
-        String railwayVolumePath = System.getenv("RAILWAY_VOLUME_MOUNT_PATH");
-        if (railwayVolumePath != null && !railwayVolumePath.trim().isEmpty()) {
-            // Burada baseDir yapısına dokunmadan volume root'u kullanıyoruz.
-            // Örn: RAILWAY_VOLUME_MOUNT_PATH=/tmp/warehouse-uploads  ->  /tmp/warehouse-uploads
-            Path railwayPath = Paths.get(railwayVolumePath);
-            log.info("Using Railway volume mount root for photos: {} (from RAILWAY_VOLUME_MOUNT_PATH={})",
-                    railwayPath.toAbsolutePath(), railwayVolumePath);
-            return railwayPath.toAbsolutePath();
-        }
-        
         // 3) properties içindeki baseDir
         Path basePath = Paths.get(baseDir);
 
