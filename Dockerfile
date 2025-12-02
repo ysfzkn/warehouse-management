@@ -23,10 +23,14 @@ RUN apk add --no-cache curl
 # Copy built jar (use wildcard to keep version-independent)
 COPY --from=build /app/target/warehouse-management-*.jar app.jar
 
-RUN addgroup -g 1001 -S appuser && \
-    adduser -S appuser -u 1001 -G appuser
-
-USER appuser
+## IMPORTANT (Railway + Volumes):
+## Railway volume'ları genellikle root:root sahipliği ile ve sadece root yazabilir şekilde mount ediyor.
+## Önceki konfigürasyonda uygulama non-root (appuser) ile çalıştığı için
+## volume üzerinde klasör oluştururken AccessDeniedException alıyorduk.
+##
+## Bu sorunu çözmek için container'ı root olarak çalıştırıyoruz.
+## Güvenlik açısından daha sıkı bir yapı istersen, ayrı bir entrypoint script'i ile
+## runtime'da volume path'ini chown edip sonrasında appuser'a düşecek şekilde yeniden düzenleyebiliriz.
 
 EXPOSE 8080
 
