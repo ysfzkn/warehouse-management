@@ -97,12 +97,35 @@ public class BrandServiceImpl implements BrandService {
     public void deleteBrand(Long id) {
         logger.info("Deleting brand with id: {}", id);
         Brand brand = getBrandByIdOrThrow(id);
-        EntityValidator.validateEntityHasNoRelations(
-            brand.getProducts() != null && !brand.getProducts().isEmpty(),
-            EntityNames.BRAND, EntityNames.RELATION_PRODUCTS
-        );
+        if (brand.getProducts() != null && !brand.getProducts().isEmpty()) {
+            int total = brand.getProducts().size();
+            var productNames = brand.getProducts().stream()
+                    .map(p -> {
+                        String name = p.getName() != null ? p.getName() : "İsimsiz ürün";
+                        String sku = p.getSku() != null ? p.getSku() : "-";
+                        return name + " (SKU: " + sku + ")";
+                    })
+                    .toList();
+            logger.warn("Cannot delete brand with id={} because it is used by {} products: {}", id, total, productNames);
+            throw new WarehouseManagementException(
+                    ErrorCode.CANNOT_DELETE_WITH_PRODUCTS,
+                    productNames.toArray(new String[0])
+            );
+        }
         brandRepository.delete(brand);
         logger.info("Brand deleted successfully with id: {}", id);
+    }
+
+    @Override
+    public void deleteBrandsBulk(List<Long> ids) {
+        logger.info("Bulk deleting brands with ids: {}", ids);
+        if (ids == null || ids.isEmpty()) {
+            return;
+        }
+        for (Long id : ids) {
+            deleteBrand(id);
+        }
+        logger.info("Bulk brand delete completed for {} items", ids.size());
     }
 
     private void validateNameUniqueness(String name) {

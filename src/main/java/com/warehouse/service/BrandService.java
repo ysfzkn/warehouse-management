@@ -25,4 +25,11 @@ public interface BrandService {
     Brand updateBrand(Long id, Brand details);
 
     void deleteBrand(Long id);
+
+    /**
+     * Deletes multiple brands by their IDs.
+     *
+     * @param ids list of brand IDs to delete
+     */
+    void deleteBrandsBulk(List<Long> ids);
 }

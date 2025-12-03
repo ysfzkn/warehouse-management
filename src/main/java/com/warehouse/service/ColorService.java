@@ -25,4 +25,11 @@ public interface ColorService {
     Color updateColor(Long id, Color details);
 
     void deleteColor(Long id);
+
+    /**
+     * Deletes multiple colors by their IDs.
+     *
+     * @param ids list of color IDs to delete
+     */
+    void deleteColorsBulk(List<Long> ids);
 }

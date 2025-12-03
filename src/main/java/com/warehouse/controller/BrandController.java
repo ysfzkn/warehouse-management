@@ -60,6 +60,12 @@ public class BrandController {
         brandService.deleteBrand(id);
         return ResponseEntity.noContent().build();
     }
+
+    @DeleteMapping("/bulk")
+    public ResponseEntity<Void> deleteBrandsBulk(@RequestBody List<Long> ids) {
+        brandService.deleteBrandsBulk(ids);
+        return ResponseEntity.noContent().build();
+    }
 }
 
 

@@ -60,6 +60,12 @@ public class ColorController {
         colorService.deleteColor(id);
         return ResponseEntity.noContent().build();
     }
+
+    @DeleteMapping("/bulk")
+    public ResponseEntity<Void> deleteColorsBulk(@RequestBody List<Long> ids) {
+        colorService.deleteColorsBulk(ids);
+        return ResponseEntity.noContent().build();
+    }
 }
 
 

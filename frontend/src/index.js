@@ -19,18 +19,18 @@ axios.interceptors.request.use((config) => {
 axios.interceptors.response.use(
   (response) => response,
   (error) => {
-    // Handle session expiration and global error translations
+    // --- Oturum süresi kontrolü ---
     if (error && error.response) {
-      // Session expired or unauthorized
       const status = error.response.status;
       const reqUrl = error?.config?.url ?? '';
       const isAuthEndpoint = reqUrl.includes('/auth/login');
       const isNotifications = reqUrl.includes('/api/notifications');
+
+      // Session expired or unauthorized
       if ((status === 401 || status === 403) && !isAuthEndpoint && !isNotifications) {
         if (!window.__sessionExpiredHandling) {
           window.__sessionExpiredHandling = true;
 
-          // Create a lightweight popup modal
           const modalId = 'session-expired-modal';
           if (!document.getElementById(modalId)) {
             const wrapper = document.createElement('div');
@@ -67,7 +67,6 @@ axios.interceptors.response.use(
             };
 
             const onOk = () => {
-              // Clear auth and redirect to login
               try {
                 localStorage.removeItem('auth_token');
                 localStorage.removeItem('auth_user');
@@ -75,7 +74,6 @@ axios.interceptors.response.use(
                 window.dispatchEvent(new Event('auth-changed'));
               } catch {}
               cleanup();
-              // Force navigation to login
               window.location.replace('/login');
             };
 
@@ -84,15 +82,26 @@ axios.interceptors.response.use(
         }
       }
     }
+
+    // --- Hata mesajı çeviri / normalize ---
     if (error && error.response) {
-      const data = error.response.data;
-      const message = typeof data === 'string' ? data : (data?.message || '');
+      const res = error.response;
+      const data = res.data;
+
+      // Orijinal backend mesajını çıkart
+      let message = '';
+      if (typeof data === 'string') {
+        message = data;
+      } else if (data && typeof data === 'object' && typeof data.message === 'string') {
+        message = data.message;
+      }
+
       let tr = '';
       const m = message;
+
       if (!m) {
         tr = 'Bir hata oluştu';
       } else {
-        // Backend-known messages mapping
         tr = m
           .replace(/Quantity cannot be negative/gi, 'Miktar negatif olamaz')
           .replace(/Minimum stock level cannot be negative/gi, 'Minimum stok seviyesi negatif olamaz')
@@ -119,10 +128,29 @@ axios.interceptors.response.use(
           .replace(/Product is required/gi, 'Ürün zorunludur')
           .replace(/Warehouse is required/gi, 'Depo zorunludur');
       }
-      error.response.data = tr || 'Beklenmeyen bir hata oluştu';
+
+      const finalMessage = tr || message || 'Beklenmeyen bir hata oluştu';
+
+      // *** ÖNEMLİ KISIM: data'yı stringe çevirmiyoruz, objeyi koruyoruz ***
+      if (data && typeof data === 'object') {
+        // errorCode, details vs. korunuyor
+        res.data = {
+          ...data,
+          message: finalMessage
+        };
+      } else {
+        // Backend düz string yolladıysa en azından objeye sar
+        res.data = {
+          message: finalMessage
+        };
+      }
     } else if (error && error.message === 'Network Error') {
+      // Network hataları için genel mesaj
       error.message = 'Ağ hatası: Sunucuya ulaşılamıyor';
+      // İstersen:
+      // error.response = { data: { message: error.message } };
     }
+
     return Promise.reject(error);
   }
 );

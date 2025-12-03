@@ -97,12 +97,35 @@ public class ColorServiceImpl implements ColorService {
     public void deleteColor(Long id) {
         logger.info("Deleting color with id: {}", id);
         Color color = getColorByIdOrThrow(id);
-        EntityValidator.validateEntityHasNoRelations(
-            color.getProducts() != null && !color.getProducts().isEmpty(),
-            EntityNames.COLOR, EntityNames.RELATION_PRODUCTS
-        );
+        if (color.getProducts() != null && !color.getProducts().isEmpty()) {
+            int total = color.getProducts().size();
+            var productNames = color.getProducts().stream()
+                    .map(p -> {
+                        String name = p.getName() != null ? p.getName() : "İsimsiz ürün";
+                        String sku = p.getSku() != null ? p.getSku() : "-";
+                        return name + " (SKU: " + sku + ")";
+                    })
+                    .toList();
+            logger.warn("Cannot delete color with id={} because it is used by {} products: {}", id, total, productNames);
+            throw new WarehouseManagementException(
+                    ErrorCode.CANNOT_DELETE_WITH_PRODUCTS,
+                    productNames.toArray(new String[0])
+            );
+        }
         colorRepository.delete(color);
         logger.info("Color deleted successfully with id: {}", id);
+    }
+
+    @Override
+    public void deleteColorsBulk(List<Long> ids) {
+        logger.info("Bulk deleting colors with ids: {}", ids);
+        if (ids == null || ids.isEmpty()) {
+            return;
+        }
+        for (Long id : ids) {
+            deleteColor(id);
+        }
+        logger.info("Bulk color delete completed for {} items", ids.size());
     }
 
     private void validateNameUniqueness(String name) {

@@ -15,8 +15,10 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.async.AsyncRequestTimeoutException;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -31,6 +33,7 @@ public class GlobalExceptionHandler {
         
         ErrorCode errorCode = ex.getErrorCode();
         String message = errorCode.getMessage();
+        List<String> details = null;
         // Özel bazı doğrulama kodları için alan adı ekleyerek Türkçe mesaj üret
         if (errorCode == ErrorCode.REQUIRED_FIELD_MISSING && ex.getMessage() != null) {
             message = ex.getMessage() + " alanı zorunludur";
@@ -40,12 +43,23 @@ public class GlobalExceptionHandler {
             message = ex.getMessage() + " negatif olamaz";
         }
 
+        // For some business errors, include detailed info from exception args (e.g. related products)
+        if (errorCode == ErrorCode.CANNOT_DELETE_WITH_PRODUCTS && ex.getArgs() != null && ex.getArgs().length > 0) {
+            // User-friendly generic message + per-item details
+            message = "Bu kayıt ilişkili ürünler tarafından kullanıldığı için silinemez. Detaylar listelenmiştir.";
+            details = java.util.Arrays.stream(ex.getArgs())
+                    .map(arg -> arg != null ? arg.toString() : "")
+                    .filter(s -> !s.isEmpty())
+                    .toList();
+        }
+
         ErrorResponse errorResponse = new ErrorResponse(
                 errorCode.getCode(),
                 errorCode.getHttpStatus().value(),
                 errorCode.getHttpStatus().name(),
                 message,
-                request.getRequestURI()
+                request.getRequestURI(),
+                details
         );
         // Log domain exception with context
         logger.warn("Domain error: code={}, path={}, message={}", errorCode.getCode(), request.getRequestURI(), message);
@@ -144,6 +158,28 @@ public class GlobalExceptionHandler {
                 request.getRequestURI()
         );
         return new ResponseEntity<>(errorResponse, HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+
+    /**
+     * Handles timeout events for async/SSE requests.
+     * For the SSE stream (/api/stream), this is considered a normal situation
+     * (client closed tab, network idle vs.), bu yüzden stack trace loglamıyoruz.
+     */
+    @ExceptionHandler(AsyncRequestTimeoutException.class)
+    public ResponseEntity<Void> handleAsyncTimeout(
+            AsyncRequestTimeoutException ex, HttpServletRequest request) {
+
+        String uri = request.getRequestURI();
+        if (uri != null && uri.startsWith("/api/stream")) {
+            // Tek satırlık, düşük seviye log – hata gibi görünmesin
+            logger.debug("SSE connection timeout/closed at path={}", uri);
+            // SSE connection zaten kapanmış olacağı için body dönmeye gerek yok
+            return ResponseEntity.noContent().build();
+        }
+
+        // Diğer async istekler için uyarı seviyesinde kısa log
+        logger.warn("Async request timed out at path={}", uri);
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).build();
     }
 
     @ExceptionHandler(Exception.class)
