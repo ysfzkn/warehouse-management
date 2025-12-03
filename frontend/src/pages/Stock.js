@@ -263,40 +263,58 @@ const StockFiltersBar = ({
             flex-shrink: 0;
             margin-right: 0.5rem;
           }
-          .mobile-stat-grid {
-            gap: 0.5rem;
-          }
-          .mobile-stat-grid .mobile-stat-tile {
-            border-radius: 16px;
-            padding: 0.8rem;
-            border: 1px solid rgba(15,23,42,0.08);
-            background: #fff;
-            text-align: center;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-          }
-          .mobile-stat-grid .col-6,
-          .mobile-stat-grid .col-4 {
-            display: flex;
-          }
+        .mobile-stat-grid {
+          row-gap: 0.75rem;
+          align-items: stretch;
+          text-align: center;
+        }
+        .mobile-stat-grid .mobile-stat-tile {
+          border-radius: 16px;
+          padding: 0.9rem;
+          border: 1px solid rgba(15,23,42,0.08);
+          background: #fff;
+          text-align: center;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          align-items: center;
+          gap: 0.35rem;
+          min-height: 96px;
+        }
+        .mobile-stat-grid .col-6,
+        .mobile-stat-grid .col-4 {
+          display: flex;
+          align-items: stretch;
+          text-align: center;
+        }
           .mobile-stat-grid .col-6 .mobile-stat-tile,
           .mobile-stat-grid .col-4 .mobile-stat-tile {
             width: 100%;
             height: 100%;
           }
-          .mobile-stat-tile .label {
-            font-size: 0.7rem;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            color: #94a3b8;
-            white-space: nowrap;
-          }
-          .mobile-stat-tile .value {
-            font-size: 1.15rem;
-            font-weight: 600;
-            color: #0f172a;
-          }
+        .mobile-stat-tile .label {
+          font-size: 0.7rem;
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          color: #94a3b8;
+          white-space: nowrap;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.3rem;
+        }
+        .mobile-stat-tile .label i {
+          font-size: 0.85rem;
+        }
+        .mobile-stat-tile .value {
+          font-size: 1.15rem;
+          font-weight: 600;
+          color: #0f172a;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 100%;
+        }
           .stock-mobile-card__footer,
           .transfer-mobile-card__footer {
             display: flex;
@@ -2454,7 +2472,7 @@ const Stock = () => {
                           </div>
                         </div>
 
-                        <div className="row g-2 mb-3 mobile-stat-grid">
+                        <div className="row g-2 mb-2 mobile-stat-grid">
                           <div className="col-6">
                             <div className="mobile-stat-tile">
                               <div className="label">
@@ -2475,6 +2493,9 @@ const Stock = () => {
                               </div>
                             </div>
                           </div>
+                        </div>
+
+                        <div className="row g-2 mb-3 mobile-stat-grid">
                           <div className="col-4">
                             <div className="mobile-stat-tile">
                               <div className="label">
