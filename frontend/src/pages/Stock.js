@@ -32,6 +32,14 @@ const formatDateInTurkeyTimezone = (isoDateString, options = {}) => {
   }
 };
 
+const getTotalElementsFromResponse = (data) => {
+  if (!data) return 0;
+  if (typeof data.totalElements === 'number') return data.totalElements;
+  if (Array.isArray(data.content)) return data.content.length;
+  if (Array.isArray(data)) return data.length;
+  return 0;
+};
+
 const PAGE_SIZE_OPTIONS = [20, 50, 100, 250];
 
 // Stable filters bar component to prevent input remount/focus loss
@@ -613,6 +621,7 @@ const Stock = () => {
   const [stockPageSize, setStockPageSize] = useState(100);
   const [stockTotalPages, setStockTotalPages] = useState(0);
   const [totalStockCount, setTotalStockCount] = useState(0);
+  const [stockStatusCounts, setStockStatusCounts] = useState({ all: 0, low: 0, out: 0 });
   const [products, setProducts] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -685,16 +694,12 @@ const Stock = () => {
   const [successToast, setSuccessToast] = useState({ show: false, message: '' });
   const toastTimeoutRef = useRef(null);
 
-  const fetchStocks = useCallback(async (pageOverride = 0, pageSizeOverride) => {
-    const size = pageSizeOverride ?? stockPageSize;
+  const buildStockFilterParams = useCallback(() => {
     const categoryId = selectedCategory ? Number(selectedCategory) : undefined;
     const subCategoryId = selectedSubcategory ? Number(selectedSubcategory) : undefined;
-    const sortByParam = stockSortBy === 'lastUpdated'
-      ? 'lastUpdated'
-      : (stockSortBy === 'quantity' ? 'quantity' : 'warehouse');
-    const params = {
-      page: pageOverride,
-      size,
+    const normalizedSearch = searchTerm ? searchTerm.trim() : undefined;
+
+    return {
       brandId: brandId || undefined,
       colorId: colorId || undefined,
       warehouseId: selectedWarehouseId || undefined,
@@ -702,8 +707,20 @@ const Stock = () => {
       subCategoryId: Number.isNaN(subCategoryId) ? undefined : subCategoryId,
       reservedOnly: showReserved || undefined,
       consignedOnly: showConsigned || undefined,
+      search: normalizedSearch || undefined
+    };
+  }, [brandId, colorId, selectedWarehouseId, selectedCategory, selectedSubcategory, showReserved, showConsigned, searchTerm]);
+
+  const fetchStocks = useCallback(async (pageOverride = 0, pageSizeOverride) => {
+    const size = pageSizeOverride ?? stockPageSize;
+    const sortByParam = stockSortBy === 'lastUpdated'
+      ? 'lastUpdated'
+      : (stockSortBy === 'quantity' ? 'quantity' : 'warehouse');
+    const params = {
+      ...buildStockFilterParams(),
+      page: pageOverride,
+      size,
       status: filter,
-      search: searchTerm ? searchTerm.trim() : undefined,
       sortBy: sortByParam,
       sortDir: stockSortDir
     };
@@ -717,7 +734,33 @@ const Stock = () => {
     setTotalStockCount(typeof data.totalElements === 'number' ? data.totalElements : content.length);
     setStockTotalPages(typeof data.totalPages === 'number' ? data.totalPages : 0);
     return data;
-  }, [stockPageSize, brandId, colorId, selectedWarehouseId, selectedCategory, selectedSubcategory, showReserved, showConsigned, filter, searchTerm, stockSortBy, stockSortDir]);
+  }, [stockPageSize, filter, stockSortBy, stockSortDir, buildStockFilterParams]);
+
+  const fetchStockStatusCounts = useCallback(async () => {
+    const baseParams = buildStockFilterParams();
+    const createParams = (status) => ({
+      ...baseParams,
+      status,
+      page: 0,
+      size: 1,
+      sortBy: 'lastUpdated',
+      sortDir: 'desc'
+    });
+    try {
+      const [allRes, lowRes, outRes] = await Promise.all([
+        axios.get('/api/stocks', { params: createParams('all') }),
+        axios.get('/api/stocks', { params: createParams('low-stock') }),
+        axios.get('/api/stocks', { params: createParams('out-of-stock') })
+      ]);
+      setStockStatusCounts({
+        all: getTotalElementsFromResponse(allRes.data),
+        low: getTotalElementsFromResponse(lowRes.data),
+        out: getTotalElementsFromResponse(outRes.data)
+      });
+    } catch (error) {
+      console.error('Error fetching stock status counts:', error);
+    }
+  }, [buildStockFilterParams]);
 
   const fetchTransfers = useCallback(async (page = 0, append = false, pageSizeOverride) => {
     const size = pageSizeOverride ?? transferPageSize;
@@ -1006,6 +1049,10 @@ const Stock = () => {
   }, [fetchStocks, stockPage]);
 
   useEffect(() => {
+    fetchStockStatusCounts();
+  }, [fetchStockStatusCounts]);
+
+  useEffect(() => {
     fetchAllData();
   }, [fetchAllData]);
 
@@ -1172,6 +1219,19 @@ const Stock = () => {
   const allVisibleStockIds = useMemo(() => stocks.map(stock => stock.id), [stocks]);
   const areAllVisibleSelected = stocks.length > 0 && allVisibleStockIds.every(id => selectedStocks.includes(id));
   const selectedStockCount = selectedStocks.length;
+  const localLowStockCount = useMemo(
+    () => stocks.filter(s => s.quantity <= getEffectiveMin(s) && s.quantity > 0).length,
+    [stocks, getEffectiveMin]
+  );
+  const localOutOfStockCount = useMemo(
+    () => stocks.filter(s => s.quantity === 0).length,
+    [stocks]
+  );
+  const safeAllCount = Number.isFinite(stockStatusCounts.all)
+    ? stockStatusCounts.all
+    : (totalStockCount || stocks.length);
+  const safeLowCount = Number.isFinite(stockStatusCounts.low) ? stockStatusCounts.low : localLowStockCount;
+  const safeOutCount = Number.isFinite(stockStatusCounts.out) ? stockStatusCounts.out : localOutOfStockCount;
 
   const toggleSelectAllVisible = () => {
     if (!stocks.length) return;
@@ -1880,7 +1940,7 @@ const Stock = () => {
               onChange={(e) => setFilter(e.target.value)}
             />
             <label className="btn btn-outline-primary" htmlFor="all">
-              Tüm Stok ({stocks.length})
+              Tüm Stok ({safeAllCount})
             </label>
 
             <input
@@ -1893,7 +1953,7 @@ const Stock = () => {
               onChange={(e) => setFilter(e.target.value)}
             />
             <label className="btn btn-outline-warning" htmlFor="low-stock">
-              Düşük Stok ({stocks.filter(s => s.quantity <= getEffectiveMin(s) && s.quantity > 0).length})
+              Düşük Stok ({safeLowCount})
             </label>
 
             <input
@@ -1906,7 +1966,7 @@ const Stock = () => {
               onChange={(e) => setFilter(e.target.value)}
             />
             <label className="btn btn-outline-danger" htmlFor="out-of-stock">
-              Stok Dışı ({stocks.filter(s => s.quantity === 0).length})
+              Stok Dışı ({safeOutCount})
             </label>
           </div>
         </div>
