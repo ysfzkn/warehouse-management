@@ -15,5 +15,10 @@ public class StockImportHistoryDto {
     public Integer createdStocks;
     public Integer updatedStocks;
     public String status;
+    public String errorMessage;
+    /**
+     * JSON string of failed rows (array of FailedRowInfo)
+     */
+    public String failedRows;
     public LocalDateTime createdAt;
 }

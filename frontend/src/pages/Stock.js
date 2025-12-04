@@ -1301,6 +1301,188 @@ const Stock = () => {
     }, 4000);
   };
 
+  // Toast bildirimi fonksiyonu (hata, uyarı, başarı için)
+  const showToast = (message, type = 'success', duration) => {
+    const displayDuration = typeof duration === 'number'
+      ? duration
+      : (type === 'success' ? 4000 : 10000);
+    const toast = document.createElement('div');
+    const bgClass =
+      type === 'success'
+        ? 'text-bg-success'
+        : type === 'warning'
+        ? 'text-bg-warning'
+        : 'text-bg-danger';
+    const icon =
+      type === 'success'
+        ? 'fa-check-circle'
+        : type === 'warning'
+        ? 'fa-exclamation-triangle'
+        : 'fa-times-circle';
+    toast.className = `toast align-items-center ${bgClass} border-0 position-fixed top-0 end-0 m-3 show`;
+    toast.setAttribute('role', 'alert');
+    toast.style.zIndex = '9999';
+    toast.style.minWidth = '400px';
+    toast.style.maxWidth = '600px';
+    toast.innerHTML = `
+      <div class="d-flex align-items-center">
+        <div class="toast-body d-flex align-items-start">
+          <i class="fas ${icon} me-2 mt-1"></i>
+          <div class="flex-grow-1">${message}</div>
+        </div>
+        <button type="button" class="btn-close ${
+          type === 'success' ? 'btn-close-white' : ''
+        } me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button>
+      </div>
+    `;
+    document.body.appendChild(toast);
+    setTimeout(() => {
+      try {
+        toast.classList.remove('show');
+        setTimeout(() => {
+          try {
+            document.body.removeChild(toast);
+          } catch {}
+        }, 300);
+      } catch {}
+    }, displayDuration);
+  };
+
+  const normalizeFailedRowsPayload = (failedRowsPayload) => {
+    if (!failedRowsPayload) return [];
+    if (Array.isArray(failedRowsPayload)) return failedRowsPayload;
+    if (typeof failedRowsPayload === 'string') {
+      try {
+        const parsed = JSON.parse(failedRowsPayload);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (err) {
+        console.warn('Failed rows JSON parse error:', err);
+        return [];
+      }
+    }
+    return [];
+  };
+
+  const showMissingFieldsToast = (failedRowsPayload) => {
+    const missingRows = normalizeFailedRowsPayload(failedRowsPayload).filter(
+      (row) => row?.reason && row.reason.toLowerCase().includes('eksik zorunlu alan')
+    );
+    if (missingRows.length === 0) return;
+
+    const maxRowsToDisplay = 8;
+    const rowsToDisplay = missingRows.slice(0, maxRowsToDisplay);
+    const listItems = rowsToDisplay
+      .map((row) => {
+        const rowNumber = row?.rowNumber ?? '-';
+        const productName = row?.productName || 'Ürün adı yok';
+        const sku = row?.sku || '-';
+        const reason = row?.reason || '';
+        return `<li class="mb-2"><span class="fw-semibold">Satır ${rowNumber}</span> - ${productName} (SKU: ${sku})<br/><span class="text-muted">${reason}</span></li>`;
+      })
+      .join('');
+
+    const toast = document.createElement('div');
+    toast.className = 'toast align-items-start text-bg-warning border-0 position-fixed top-0 end-0 m-3 show';
+    toast.style.zIndex = '10001';
+    toast.style.minWidth = '420px';
+    toast.style.maxWidth = '700px';
+    toast.style.whiteSpace = 'normal';
+    toast.innerHTML = `
+      <div class="d-flex align-items-start">
+        <div class="toast-body">
+          <div class="fw-bold mb-2"><i class="fas fa-exclamation-triangle me-2"></i>Zorunlu alanları eksik olan satırlar</div>
+          <ul class="mb-2 ps-3 small">${listItems}</ul>
+          ${
+            missingRows.length > maxRowsToDisplay
+              ? `<div class="small text-muted">Toplam ${missingRows.length} satırda zorunlu alan eksik. Tüm listeyi "Başarısız Satırlar" üzerinden görüntüleyebilirsiniz.</div>`
+              : '<div class="small text-muted">Lütfen bu satırlardaki zorunlu alanları doldurup yüklemeyi tekrar deneyin.</div>'
+          }
+        </div>
+        <button type="button" class="btn-close me-2 mt-2" data-bs-dismiss="toast" aria-label="Kapat"></button>
+      </div>
+    `;
+
+    document.body.appendChild(toast);
+    const removeToast = () => {
+      try {
+        toast.classList.remove('show');
+        setTimeout(() => {
+          try {
+            document.body.removeChild(toast);
+          } catch {}
+        }, 300);
+      } catch {}
+    };
+    toast.querySelector('.btn-close')?.addEventListener('click', removeToast);
+    setTimeout(removeToast, 20000);
+  };
+
+  // Excel yükleme hatası için detaylı mesaj oluşturma fonksiyonu
+  const getExcelUploadErrorMessage = (error) => {
+    // Network hatası (internet bağlantısı yok veya sunucuya ulaşılamıyor)
+    if (!error.response) {
+      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        return 'İstek zaman aşımına uğradı. Dosya çok büyük olabilir veya internet bağlantınız yavaş olabilir. Lütfen daha küçük bir dosya deneyin veya internet bağlantınızı kontrol edin.';
+      }
+      if (error.message?.includes('Network Error') || error.code === 'ERR_NETWORK') {
+        return 'Sunucuya bağlanılamıyor. Lütfen internet bağlantınızı kontrol edin ve tekrar deneyin.';
+      }
+      return 'Bilinmeyen bir hata oluştu. Lütfen internet bağlantınızı kontrol edin ve tekrar deneyin.';
+    }
+
+    const status = error.response?.status;
+    const data = error.response?.data;
+    const errorMessage = typeof data === 'string' ? data : (data?.message || data?.error || '');
+
+    // HTTP durum kodlarına göre hata mesajları
+    switch (status) {
+      case 400:
+        if (errorMessage.includes('Warehouse not found') || errorMessage.includes('Depo bulunamadı')) {
+          return 'Seçilen depo bulunamadı. Lütfen geçerli bir depo seçtiğinizden emin olun.';
+        }
+        if (errorMessage.includes('file') || errorMessage.includes('dosya') || errorMessage.includes('format')) {
+          return 'Dosya formatı geçersiz. Lütfen .xlsx uzantılı bir Excel dosyası yüklediğinizden emin olun.';
+        }
+        if (errorMessage.includes('empty') || errorMessage.includes('boş')) {
+          return 'Yüklenen dosya boş görünüyor. Lütfen veri içeren bir Excel dosyası yükleyin.';
+        }
+        if (errorMessage.includes('validation') || errorMessage.includes('doğrulama')) {
+          return `Doğrulama hatası: ${errorMessage}. Lütfen Excel dosyanızdaki verileri kontrol edin ve şablonu doğru şekilde doldurduğunuzdan emin olun.`;
+        }
+        return `Geçersiz istek: ${errorMessage || 'Lütfen Excel dosyanızı kontrol edin ve şablonu doğru şekilde doldurduğunuzdan emin olun.'}`;
+
+      case 401:
+        return 'Oturum süreniz dolmuş olabilir. Lütfen sayfayı yenileyin ve tekrar giriş yapın.';
+
+      case 403:
+        return 'Bu işlemi yapmak için yetkiniz bulunmuyor. Lütfen yöneticinizle iletişime geçin.';
+
+      case 404:
+        return 'İstenen kaynak bulunamadı. Lütfen sayfayı yenileyin ve tekrar deneyin.';
+
+      case 413:
+        return 'Yüklenen dosya çok büyük. Lütfen daha küçük bir dosya yükleyin veya dosyanızdaki satır sayısını azaltın.';
+
+      case 415:
+        return 'Dosya türü desteklenmiyor. Lütfen sadece .xlsx uzantılı Excel dosyaları yükleyin.';
+
+      case 500:
+      case 502:
+      case 503:
+      case 504:
+        if (errorMessage.includes('Excel') || errorMessage.includes('workbook') || errorMessage.includes('sheet')) {
+          return `Excel dosyası işlenirken hata oluştu: ${errorMessage || 'Dosya bozuk veya geçersiz format olabilir. Lütfen dosyanızı kontrol edin ve şablonu kullanarak yeniden oluşturun.'}`;
+        }
+        if (errorMessage.includes('IOException') || errorMessage.includes('dosya')) {
+          return 'Dosya okunurken hata oluştu. Lütfen dosyanın bozuk olmadığından emin olun ve tekrar deneyin.';
+        }
+        return `Sunucu hatası: ${errorMessage || 'Sunucuda bir hata oluştu. Lütfen daha sonra tekrar deneyin veya yöneticinizle iletişime geçin.'}`;
+
+      default:
+        return errorMessage || `Beklenmeyen bir hata oluştu (${status}). Lütfen tekrar deneyin veya yöneticinizle iletişime geçin.`;
+    }
+  };
+
   useEffect(() => {
     return () => {
       if (toastTimeoutRef.current) {
@@ -2028,18 +2210,65 @@ const Stock = () => {
                   try {
                     setExcelUploading(true);
                     setExcelResult(null);
+                    
+                    // Dosya validasyonu
+                    if (!excelFile) {
+                      showToast('Lütfen bir Excel dosyası seçin.', 'error');
+                      setExcelUploading(false);
+                      return;
+                    }
+                    
+                    // Dosya uzantısı kontrolü
+                    const fileName = excelFile.name.toLowerCase();
+                    if (!fileName.endsWith('.xlsx') && !fileName.endsWith('.xls')) {
+                      showToast('Sadece Excel dosyaları (.xlsx veya .xls) yüklenebilir. Lütfen doğru formatta bir dosya seçin.', 'error');
+                      setExcelUploading(false);
+                      return;
+                    }
+                    
+                    // Dosya boyutu kontrolü (50MB limit)
+                    const maxSize = 50 * 1024 * 1024; // 50MB
+                    if (excelFile.size > maxSize) {
+                      showToast('Dosya boyutu çok büyük. Maksimum dosya boyutu 50MB\'dır. Lütfen daha küçük bir dosya yükleyin veya dosyanızdaki satır sayısını azaltın.', 'error');
+                      setExcelUploading(false);
+                      return;
+                    }
+                    
                     const form = new FormData();
                     form.append('warehouseId', String(excelWarehouseId));
                     form.append('file', excelFile);
-                    const res = await axios.post('/api/stock-imports/upload', form, { headers: { 'Content-Type': 'multipart/form-data' } });
+                    const res = await axios.post('/api/stock-imports/upload', form, { 
+                      headers: { 'Content-Type': 'multipart/form-data' },
+                      timeout: 300000 // 5 dakika timeout
+                    });
                     setExcelResult(res.data);
+                    if (res.data?.failedRows || res.data?.failedRowsJson) {
+                      showMissingFieldsToast(res.data.failedRows || res.data.failedRowsJson);
+                    }
+                    
                     // Başarılı yükleme sonrası tüm verileri yenile
                     if (res.data && (res.data.status === 'BAŞARILI' || res.data.status === 'SUCCESS' || res.data.status === 'KISMEN' || res.data.status === 'PARTIAL')) {
                       await Promise.all([fetchAllData(), fetchStocks(0)]);
+                      if (res.data.status === 'BAŞARILI' || res.data.status === 'SUCCESS') {
+                        showToast('Excel dosyası başarıyla yüklendi ve stoklar aktarıldı.', 'success');
+                      } else if (res.data.status === 'KISMEN' || res.data.status === 'PARTIAL') {
+                        const failedCount = res.data.totalRows - (res.data.createdStocks + res.data.updatedStocks);
+                        showToast(`Excel dosyası kısmen yüklendi. Bazı satırlar atlandı. Detaylar için sonuçları kontrol edin.`, 'warning');
+                      }
+                    } else if (res.data && (res.data.status === 'BAŞARISIZ' || res.data.status === 'FAILED')) {
+                      const errorMsg = res.data.errorMessage || 'Yükleme başarısız oldu.';
+                      showToast(`Excel yükleme başarısız: ${errorMsg}`, 'error');
                     }
                   } catch (e) {
+                    const errorMessage = getExcelUploadErrorMessage(e);
                     const data = e?.response?.data;
-                    setExcelResult({ status: 'FAILED', errorMessage: typeof data === 'string' ? data : (data?.message || 'Yükleme hatası') });
+                    if (data && (data.failedRows || data.failedRowsJson)) {
+                      showMissingFieldsToast(data.failedRows || data.failedRowsJson);
+                    }
+                    const errorMsg = typeof data === 'string' ? data : (data?.message || data?.error || errorMessage);
+                    setExcelResult({ status: 'FAILED', errorMessage: errorMsg });
+                    // Toast bildirimi ile detaylı hata mesajı göster
+                    showToast(errorMessage, 'error');
                   } finally {
                     setExcelUploading(false);
                   }

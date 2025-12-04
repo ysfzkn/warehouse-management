@@ -196,6 +196,8 @@ public class StockImportController {
         dto.createdStocks = h.getCreatedStocks();
         dto.updatedStocks = h.getUpdatedStocks();
         dto.status = h.getStatus();
+        dto.errorMessage = h.getErrorMessage();
+        dto.failedRows = h.getFailedRows();
         dto.createdAt = h.getCreatedAt();
         if (h.getWarehouse() != null) {
             dto.warehouseId = h.getWarehouse().getId();
