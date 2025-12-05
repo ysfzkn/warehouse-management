@@ -1,6 +1,8 @@
 package com.warehouse.service.impl;
 
+import com.warehouse.dto.AuditMetadata;
 import com.warehouse.dto.BulkDeleteResponse;
+import com.warehouse.dto.NotificationRequest;
 import com.warehouse.dto.StockTransferFilter;
 import com.warehouse.dto.StockTransferSummary;
 import com.warehouse.entity.Product;
@@ -257,26 +259,27 @@ public class StockTransferServiceImpl implements StockTransferService {
         }
 
         StockTransfer saved = stockTransferRepository.save(transfer);
+        AuditMetadata metadata = buildTransferMetadata(saved);
         auditService.log(AuditAction.TRANSFER_CREATE, DomainEntityType.StockTransfer.name(), saved.getId(), username,
                 String.format("Transfer oluşturuldu: %s | Ürünler=%s",
-                        describeRoute(saved), describeItems(saved)));
+                        describeRoute(saved), describeItems(saved)),
+                metadata);
         
         if (isAdminUser) {
-            notificationService.create(NotificationMessages.TRANSFER_CREATED_TITLE,
+            notificationService.create(buildTransferNotification(
+                    NotificationMessages.TRANSFER_CREATED_TITLE,
                     String.format("Kullanıcı %s, %s yönünde %s transferi oluşturdu. Ürünler: %s", username,
                             describeRoute(saved), transferType == TransferType.CUSTOMER_DELIVERY ? "müşteri sevkiyatı" : "depo", describeItems(saved)),
-                    DomainEntityType.StockTransfer.name(), saved.getId());
+                    saved));
         } else {
             // Notify admins about the transfer approval request
-            notificationService.create(
+            notificationService.create(buildTransferNotification(
                     NotificationMessages.TRANSFER_APPROVAL_REQUESTED_TITLE,
                     String.format("Kullanıcı %s, %s yönünde %s transferi için onay talep etti. Ürünler: %s",
                             username, describeRoute(saved),
                             transferType == TransferType.CUSTOMER_DELIVERY ? "müşteri sevkiyatı" : "depo",
                             describeItems(saved)),
-                    DomainEntityType.StockTransfer.name(),
-                    saved.getId()
-            );
+                    saved));
         }
         logger.info("Transfer created successfully with id: {}", saved.getId());
         
@@ -327,13 +330,16 @@ public class StockTransferServiceImpl implements StockTransferService {
         transfer.setStatus(TransferStatus.IN_TRANSIT);
         StockTransfer saved = stockTransferRepository.save(transfer);
         String username = CurrentUser.usernameOrSystem();
+        AuditMetadata metadata = buildTransferMetadata(saved);
         auditService.log(AuditAction.TRANSFER_START, DomainEntityType.StockTransfer.name(), saved.getId(), username,
                 String.format("Transfer yola çıkarıldı: %s | Ürünler=%s (Stok rezerve edildi)",
-                        describeRoute(saved), describeItems(saved)));
+                        describeRoute(saved), describeItems(saved)),
+                metadata);
         if (isAdminUser) {
-            notificationService.create(NotificationMessages.TRANSFER_STARTED_TITLE,
+            notificationService.create(buildTransferNotification(
+                    NotificationMessages.TRANSFER_STARTED_TITLE,
                     String.format("Kullanıcı %s, #%d numaralı transferi yola çıkardı. Ürünler: %s", username, saved.getId(), describeItems(saved)),
-                    DomainEntityType.Stock.name(), saved.getId());
+                    saved));
         }
         notifyAdminIfNonAdmin(saved, "yola çıkardı");
         logger.info("Transfer started successfully with id: {}", saved.getId());
@@ -386,13 +392,16 @@ public class StockTransferServiceImpl implements StockTransferService {
         StockTransfer saved = stockTransferRepository.save(transfer);
         String username = CurrentUser.usernameOrSystem();
         boolean isAdminUser = isCurrentUserAdmin();
+        AuditMetadata metadata = buildTransferMetadata(saved);
         auditService.log(AuditAction.TRANSFER_COMPLETE, DomainEntityType.StockTransfer.name(), saved.getId(), username,
                 String.format("Transfer tamamlandı: %s | Ürünler=%s",
-                        describeRoute(saved), describeItems(saved)));
+                        describeRoute(saved), describeItems(saved)),
+                metadata);
         if (isAdminUser) {
-            notificationService.create(NotificationMessages.TRANSFER_COMPLETED_TITLE,
+            notificationService.create(buildTransferNotification(
+                    NotificationMessages.TRANSFER_COMPLETED_TITLE,
                     String.format("Kullanıcı %s, #%d numaralı transferi tamamladı. Ürünler: %s", username, saved.getId(), describeItems(saved)),
-                    DomainEntityType.Stock.name(), saved.getId());
+                    saved));
         }
         notifyAdminIfNonAdmin(saved, "tamamladı");
         logger.info("Transfer completed successfully with id: {}", saved.getId());
@@ -431,12 +440,15 @@ public class StockTransferServiceImpl implements StockTransferService {
         StockTransfer saved = stockTransferRepository.save(transfer);
         String username = CurrentUser.usernameOrSystem();
         boolean isAdminUser = isCurrentUserAdmin();
+        AuditMetadata metadata = buildTransferMetadata(saved);
         auditService.log(AuditAction.TRANSFER_CANCEL, DomainEntityType.StockTransfer.name(), saved.getId(), username,
-                String.format("Transfer iptal edildi: Sebep=%s", cancellationReason));
+                String.format("Transfer iptal edildi: Sebep=%s", cancellationReason),
+                metadata);
         if (isAdminUser) {
-            notificationService.create(NotificationMessages.TRANSFER_CANCELLED_TITLE,
+            notificationService.create(buildTransferNotification(
+                    NotificationMessages.TRANSFER_CANCELLED_TITLE,
                     String.format("Kullanıcı %s, #%d numaralı transferi iptal etti. Sebep: %s", username, saved.getId(), cancellationReason),
-                    DomainEntityType.Stock.name(), saved.getId());
+                    saved));
         }
         logger.info("Transfer cancelled successfully with id: {}", saved.getId());
         
@@ -459,11 +471,13 @@ public class StockTransferServiceImpl implements StockTransferService {
 
         StockTransfer saved = stockTransferRepository.save(transfer);
         String username = CurrentUser.usernameOrSystem();
+        AuditMetadata metadata = buildTransferMetadata(saved);
         auditService.log(AuditAction.TRANSFER_UPDATE, DomainEntityType.StockTransfer.name(), saved.getId(), username,
-                "Transfer güncellendi");
-        notificationService.create(NotificationMessages.TRANSFER_UPDATED_TITLE,
+                "Transfer güncellendi", metadata);
+        notificationService.create(buildTransferNotification(
+                NotificationMessages.TRANSFER_UPDATED_TITLE,
                 String.format("Kullanıcı %s, #%d numaralı transferi güncelledi.", username, saved.getId()),
-                DomainEntityType.Stock.name(), saved.getId());
+                saved));
         logger.info("Transfer updated successfully with id: {}", saved.getId());
         
         // Fetch with relations again to avoid LazyInitializationException in mapper
@@ -477,13 +491,15 @@ public class StockTransferServiceImpl implements StockTransferService {
         StockTransfer transfer = getTransferByIdOrThrow(transferId);
 
         // Tüm transfer durumlarının (yolda, tamamlanan, beklemede) silinmesine izin veriyoruz
+        AuditMetadata metadata = buildTransferMetadata(transfer);
         stockTransferRepository.delete(transfer);
         String username = CurrentUser.usernameOrSystem();
         auditService.log(AuditAction.TRANSFER_DELETE, DomainEntityType.StockTransfer.name(), transferId, username,
-                "Transfer silindi");
-        notificationService.create(NotificationMessages.TRANSFER_DELETED_TITLE,
-                String.format("Kullanıcı %s, #%d numaralı transferi sildi.", username, transferId),
-                DomainEntityType.Stock.name(), transferId);
+                String.format("Transfer silindi: %s | Ürünler=%s", describeRoute(transfer), describeItems(transfer)), metadata);
+        notificationService.create(buildTransferNotification(
+                NotificationMessages.TRANSFER_DELETED_TITLE,
+                String.format("Kullanıcı %s, #%d numaralı transferi sildi. Rota: %s | Ürünler: %s", username, transferId, describeRoute(transfer), describeItems(transfer)),
+                transfer));
         logger.info("Transfer deleted successfully with id: {}", transferId);
     }
 
@@ -516,9 +532,10 @@ public class StockTransferServiceImpl implements StockTransferService {
                 StockTransfer transfer = getTransferByIdOrThrow(transferId);
                 
                 // Tüm transfer durumlarının (yolda, tamamlanan, beklemede) silinmesine izin veriyoruz
+                AuditMetadata metadata = buildTransferMetadata(transfer);
                 stockTransferRepository.delete(transfer);
                 auditService.log(AuditAction.TRANSFER_DELETE, DomainEntityType.StockTransfer.name(), transferId, username,
-                        "Transfer silindi");
+                        String.format("Transfer silindi: %s | Ürünler=%s", describeRoute(transfer), describeItems(transfer)), metadata);
                 successCount++;
                 logger.debug("Transfer deleted successfully with id: {}", transferId);
             } catch (WarehouseManagementException e) {
@@ -571,9 +588,10 @@ public class StockTransferServiceImpl implements StockTransferService {
         }
         
         if (successCount > 0) {
-            notificationService.create(NotificationMessages.TRANSFER_DELETED_TITLE,
+            notificationService.create(buildTransferNotification(
+                    NotificationMessages.TRANSFER_DELETED_TITLE,
                     String.format("Kullanıcı %s, %d adet transferi sildi.", username, successCount),
-                    DomainEntityType.Stock.name(), null);
+                    null));
         }
         
         logger.info("Batch delete completed: {} successful, {} errors", successCount, errors.size());
@@ -616,18 +634,18 @@ public class StockTransferServiceImpl implements StockTransferService {
         StockTransfer started = startTransfer(transferId);
         
         // Notify admins
-        notificationService.create(
+        notificationService.create(buildTransferNotification(
                 NotificationMessages.TRANSFER_APPROVAL_APPROVED_TITLE,
                 String.format("Yönetici %s, #%d numaralı transferi onayladı ve başlattı. Rota: %s",
                         username, started.getId(), describeRoute(started)),
-                DomainEntityType.StockTransfer.name(),
-                started.getId()
-        );
+                started));
         
         // Notify the user who created the transfer (notification will be visible to all admins and the user can see it in their requests)
+        AuditMetadata metadata = buildTransferMetadata(started);
         auditService.log(AuditAction.TRANSFER_APPROVE, DomainEntityType.StockTransfer.name(), started.getId(), username,
                 String.format("Transfer onaylandı ve başlatıldı: %s | Ürünler=%s",
-                        describeRoute(started), describeItems(started)));
+                        describeRoute(started), describeItems(started)),
+                metadata);
         
         return started;
     }
@@ -647,21 +665,21 @@ public class StockTransferServiceImpl implements StockTransferService {
         StockTransfer saved = stockTransferRepository.save(transfer);
         
         // Notify admins
-        notificationService.create(
+        notificationService.create(buildTransferNotification(
                 NotificationMessages.TRANSFER_APPROVAL_REJECTED_TITLE,
                 String.format("Yönetici %s, #%d numaralı transferi reddetti.%s",
                         username,
                         saved.getId(),
                         trimmedReason != null ? " Not: " + trimmedReason : ""),
-                DomainEntityType.StockTransfer.name(),
-                saved.getId()
-        );
+                saved));
         
         // Log rejection for audit trail
+        AuditMetadata metadata = buildTransferMetadata(saved);
         auditService.log(AuditAction.TRANSFER_REJECT, DomainEntityType.StockTransfer.name(), saved.getId(), username,
                 String.format("Transfer reddedildi: %s | Ürünler=%s%s",
                         describeRoute(saved), describeItems(saved),
-                        trimmedReason != null ? " | Not: " + trimmedReason : ""));
+                        trimmedReason != null ? " | Not: " + trimmedReason : ""),
+                metadata);
         
         return stockTransferRepository.findByIdWithRelations(saved.getId()).orElse(saved);
     }
@@ -709,7 +727,7 @@ public class StockTransferServiceImpl implements StockTransferService {
         }
         String username = CurrentUser.usernameOrSystem();
         String verb = actionVerb != null ? actionVerb : "işledi";
-        notificationService.create(
+        notificationService.create(buildTransferNotification(
                 NotificationMessages.TRANSFER_ADMIN_ALERT_TITLE,
                 String.format("Kullanıcı %s, #%d numaralı (%s) %s transferini %s.",
                         username,
@@ -717,8 +735,7 @@ public class StockTransferServiceImpl implements StockTransferService {
                         describeRoute(transfer),
                         transfer.getTransferType() == TransferType.CUSTOMER_DELIVERY ? "müşteri sevkiyat" : "depo",
                         verb),
-                DomainEntityType.StockTransfer.name(),
-                transfer.getId());
+                transfer));
     }
 
     private boolean isCurrentUserAdmin() {
@@ -948,12 +965,10 @@ public class StockTransferServiceImpl implements StockTransferService {
         transfer.setApprovalDecisionAt(null);
         transfer.setApprovalNote(null);
         StockTransfer saved = stockTransferRepository.save(transfer);
-        notificationService.create(
+        notificationService.create(buildTransferNotification(
                 NotificationMessages.TRANSFER_START_APPROVAL_REQUEST_TITLE,
                 String.format("Kullanıcı %s, #%d numaralı transferi başlatmak için onay istedi.", username, saved.getId()),
-                DomainEntityType.StockTransfer.name(),
-                saved.getId()
-        );
+                saved));
         notifyAdminIfNonAdmin(saved, "için transfer başlatma onayı oluşturdu");
         return saved;
     }
@@ -980,6 +995,67 @@ public class StockTransferServiceImpl implements StockTransferService {
         }
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private AuditMetadata buildTransferMetadata(StockTransfer transfer) {
+        if (transfer == null) {
+            return null;
+        }
+        Product primaryProduct = resolvePrimaryProduct(transfer);
+        Warehouse source = transfer.getSourceWarehouse();
+        Warehouse destination = transfer.getDestinationWarehouse();
+        Long primaryWarehouseId = source != null ? source.getId() : null;
+        String primaryWarehouseName = source != null ? source.getName() : null;
+
+        return AuditMetadata.builder()
+                .warehouseId(primaryWarehouseId)
+                .warehouseName(primaryWarehouseName)
+                .sourceWarehouseId(source != null ? source.getId() : null)
+                .sourceWarehouseName(source != null ? source.getName() : null)
+                .destinationWarehouseId(destination != null ? destination.getId() : null)
+                .destinationWarehouseName(destination != null ? destination.getName() : null)
+                .productId(primaryProduct != null ? primaryProduct.getId() : null)
+                .productName(primaryProduct != null ? primaryProduct.getName() : null)
+                .productSku(primaryProduct != null ? primaryProduct.getSku() : null)
+                .quantity(transfer.getQuantity())
+                .build();
+    }
+
+    private NotificationRequest buildTransferNotification(String title, String message, StockTransfer transfer) {
+        Product primaryProduct = resolvePrimaryProduct(transfer);
+        Warehouse source = transfer != null ? transfer.getSourceWarehouse() : null;
+        Warehouse destination = transfer != null ? transfer.getDestinationWarehouse() : null;
+        return NotificationRequest.builder()
+                .title(title)
+                .message(message)
+                .entityType(DomainEntityType.StockTransfer.name())
+                .entityId(transfer != null ? transfer.getId() : null)
+                .actor(CurrentUser.usernameOrSystem())
+                .warehouseId(source != null ? source.getId() : null)
+                .warehouseName(source != null ? source.getName() : null)
+                .sourceWarehouseId(source != null ? source.getId() : null)
+                .sourceWarehouseName(source != null ? source.getName() : null)
+                .destinationWarehouseId(destination != null ? destination.getId() : null)
+                .destinationWarehouseName(destination != null ? destination.getName() : null)
+                .productId(primaryProduct != null ? primaryProduct.getId() : null)
+                .productName(primaryProduct != null ? primaryProduct.getName() : null)
+                .productSku(primaryProduct != null ? primaryProduct.getSku() : null)
+                .quantity(transfer != null ? transfer.getQuantity() : null)
+                .build();
+    }
+
+    private Product resolvePrimaryProduct(StockTransfer transfer) {
+        if (transfer == null) {
+            return null;
+        }
+        if (transfer.getProduct() != null) {
+            return transfer.getProduct();
+        }
+        if (transfer.getItems() != null && !transfer.getItems().isEmpty()) {
+            StockTransferItem first = transfer.getItems().get(0);
+            return first != null ? first.getProduct() : null;
+        }
+        return null;
     }
 
     private static class TransferFilterParams {

@@ -1,5 +1,6 @@
 package com.warehouse.service.impl;
 
+import com.warehouse.dto.AuditMetadata;
 import com.warehouse.entity.AuditLog;
 import com.warehouse.enums.AuditAction;
 import com.warehouse.repository.AuditLogRepository;
@@ -28,6 +29,11 @@ public class AuditServiceImpl implements AuditService {
 
     @Override
     public void log(AuditAction action, String entityType, Long entityId, String username, String details) {
+        log(action, entityType, entityId, username, details, null);
+    }
+
+    @Override
+    public void log(AuditAction action, String entityType, Long entityId, String username, String details, AuditMetadata metadata) {
         logger.debug("Creating audit log: action={}, entityType={}, entityId={}, username={}", 
                 action, entityType, entityId, username);
         AuditLog log = new AuditLog();
@@ -36,6 +42,18 @@ public class AuditServiceImpl implements AuditService {
         log.setEntityId(entityId);
         log.setUsername(username);
         log.setDetails(details);
+        if (metadata != null) {
+            log.setWarehouseId(metadata.getWarehouseId());
+            log.setWarehouseName(metadata.getWarehouseName());
+            log.setSourceWarehouseId(metadata.getSourceWarehouseId());
+            log.setSourceWarehouseName(metadata.getSourceWarehouseName());
+            log.setDestinationWarehouseId(metadata.getDestinationWarehouseId());
+            log.setDestinationWarehouseName(metadata.getDestinationWarehouseName());
+            log.setProductId(metadata.getProductId());
+            log.setProductName(metadata.getProductName());
+            log.setProductSku(metadata.getProductSku());
+            log.setQuantity(metadata.getQuantity());
+        }
         auditLogRepository.save(log);
     }
 

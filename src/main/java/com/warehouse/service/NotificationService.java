@@ -1,6 +1,8 @@
 package com.warehouse.service;
 
 import com.warehouse.entity.Notification;
+import com.warehouse.dto.NotificationFilter;
+import com.warehouse.dto.NotificationRequest;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -10,6 +12,8 @@ import java.util.List;
  * Service interface for managing notifications.
  */
 public interface NotificationService {
+
+    Notification create(NotificationRequest request);
 
     Notification create(String title, String message);
 
@@ -22,6 +26,8 @@ public interface NotificationService {
     List<Notification> recent();
 
     Page<Notification> page(Pageable pageable);
+
+    Page<Notification> search(NotificationFilter filter, Pageable pageable);
 
     /**
      * Returns the total number of unread notifications.

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import WarehouseForm from '../components/WarehouseForm';
 import StockModal from '../components/StockModal';
@@ -9,6 +10,7 @@ import ConfirmModal from '../components/ConfirmModal';
 const normalizeText = (text) => (text || '').toLocaleLowerCase('tr-TR');
 
 const Warehouses = () => {
+  const navigate = useNavigate();
   const [warehouses, setWarehouses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -129,6 +131,10 @@ const Warehouses = () => {
 
   const getTotalStockQuantity = (warehouse) => {
     return warehouse.stocks ? warehouse.stocks.reduce((total, stock) => total + stock.quantity, 0) : 0;
+  };
+
+  const handleViewActivity = (id) => {
+    navigate(`/warehouses/${id}/activity`);
   };
 
   if (loading) {
@@ -269,6 +275,13 @@ const Warehouses = () => {
                   >
                     <i className="fas fa-eye me-1"></i>
                     Stok Görüntüle
+                  </button>
+                  <button
+                    className="btn btn-outline-info btn-sm"
+                    onClick={() => handleViewActivity(warehouse.id)}
+                  >
+                    <i className="fas fa-route me-1"></i>
+                    Depo Hareketleri
                   </button>
                   <button
                     className="btn btn-outline-secondary btn-sm"

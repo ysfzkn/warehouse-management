@@ -439,7 +439,7 @@ const StockForm = ({ products, warehouses, onSuccess, onCancel }) => {
       )}
 
       <div className="row g-4">
-        <div className="col-lg-5">
+        <div className="col-lg-8">
           <div className="card border-0 shadow-sm h-100">
             <div className="card-header bg-white border-0 pb-0">
               <h5 className="card-title mb-1">
@@ -489,94 +489,129 @@ const StockForm = ({ products, warehouses, onSuccess, onCancel }) => {
                 </div>
               ) : (
                 <>
-                  {/* Optimized Card View for All Devices */}
-                  <div className="d-flex flex-column gap-2" style={{ maxHeight: '65vh', overflowY: 'auto' }}>
+                  {/* Wide table view similar to transfer selection */}
+                  <div className="d-none d-md-block table-responsive border rounded shadow-sm bg-white" style={{ maxHeight: '65vh', overflowY: 'auto' }}>
+                    <table className="table table-hover table-sm mb-0">
+                      <thead className="table-light">
+                        <tr>
+                          <th style={{ width: 40 }}></th>
+                          <th>Ürün Adı</th>
+                          <th>Stok Kodu</th>
+                          <th>Marka</th>
+                          <th>Kategori</th>
+                          <th>Renk</th>
+                          <th>Açıklama</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {limitedProductOptions.map(product => {
+                          const productId = String(product.id);
+                          const isSelected = selectedProductMap.has(productId);
+                          return (
+                            <tr
+                              key={product.id}
+                              className={isSelected ? 'table-success' : ''}
+                              style={{ cursor: isSelected ? 'default' : 'pointer' }}
+                              onClick={() => !isSelected && handleAddProduct(productId)}
+                            >
+                              <td className="text-center">
+                                {isSelected && <i className="fas fa-check text-success"></i>}
+                              </td>
+                              <td>
+                                <div className="fw-semibold">{product.name}</div>
+                              </td>
+                              <td>
+                                <span className="badge text-bg-light border">{product.sku}</span>
+                              </td>
+                              <td>{product.brand?.name || '-'}</td>
+                              <td>
+                                {product.category?.name ? (
+                                  <span className="badge bg-info bg-opacity-10 text-info border border-info">
+                                    {product.category.parentName ? `${product.category.parentName} > ` : ''}{product.category.name}
+                                  </span>
+                                ) : '-'}
+                              </td>
+                              <td>
+                                {product.color?.name ? (
+                                  <span className="badge bg-light text-dark border">
+                                    <i className="fas fa-palette me-1"></i>
+                                    {product.color.name}
+                                  </span>
+                                ) : '-'}
+                              </td>
+                              <td className="text-muted small">
+                                {product.description
+                                  ? (product.description.length > 90
+                                    ? `${product.description.substring(0, 90)}...`
+                                    : product.description)
+                                  : '-'}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Mobile: stacked list */}
+                  <div className="d-md-none d-flex flex-column gap-2" style={{ maxHeight: '65vh', overflowY: 'auto' }}>
                     {limitedProductOptions.map(product => {
                       const productId = String(product.id);
                       const isSelected = selectedProductMap.has(productId);
                       return (
                         <div
                           key={product.id}
-                          className={`card border shadow-sm ${isSelected ? 'border-success bg-success bg-opacity-10' : 'border-light'}`}
-                          style={{
-                            cursor: isSelected ? 'default' : 'pointer',
-                            transition: 'all 0.2s ease',
-                          }}
+                          className={`card border ${isSelected ? 'border-success bg-success bg-opacity-10' : 'border-light'}`}
+                          style={{ cursor: isSelected ? 'default' : 'pointer' }}
                           onClick={() => !isSelected && handleAddProduct(productId)}
                         >
                           <div className="card-body p-3">
-                            <div className="row g-2 align-items-center">
-                              {/* Status Indicator */}
-                              <div className="col-auto">
-                                {isSelected ? (
-                                  <div className="text-center">
-                                    <i className="fas fa-check-circle text-success" style={{ fontSize: '1.5rem' }}></i>
-                                    <div className="small text-success mt-1 fw-bold">Seçildi</div>
-                                  </div>
-                                ) : (
-                                  <div className="text-center">
-                                    <i className="fas fa-circle text-muted" style={{ fontSize: '1.2rem', opacity: 0.3 }}></i>
+                            <div className="d-flex justify-content-between align-items-start">
+                              <div className="flex-grow-1">
+                                <div className="fw-bold">{product.name}</div>
+                                <div className="d-flex flex-wrap gap-2 mt-1">
+                                  <span className="badge bg-light text-dark border">
+                                    <i className="fas fa-barcode me-1"></i>{product.sku}
+                                  </span>
+                                  {product.brand?.name && (
+                                  <span className="badge bg-light text-dark border">
+                                    <i className="fas fa-copyright me-1"></i>{product.brand.name}
+                                  </span>
+                                  )}
+                                {product.category?.name && (
+                                  <span className="badge bg-info bg-opacity-10 text-info border border-info">
+                                    <i className="fas fa-tag me-1"></i>
+                                    {product.category.parentName ? `${product.category.parentName} > ` : ''}{product.category.name}
+                                  </span>
+                                )}
+                                {product.color?.name && (
+                                  <span className="badge bg-light text-dark border">
+                                    <i className="fas fa-palette me-1"></i>
+                                    {product.color.name}
+                                  </span>
+                                )}
+                                </div>
+                                {product.description && (
+                                  <div className="text-muted small mt-1">
+                                    {product.description.length > 90 ? `${product.description.substring(0, 90)}...` : product.description}
                                   </div>
                                 )}
                               </div>
-
-                              {/* Product Info */}
-                              <div className="col">
-                                <div className="d-flex flex-column">
-                                  <div className="fw-bold mb-1" style={{ fontSize: '1rem' }}>
-                                    {product.name}
-                                  </div>
-                                  <div className="d-flex flex-wrap gap-1 align-items-center mb-1">
-                                    <span className="badge bg-light text-dark border" style={{ fontSize: '0.75rem' }}>
-                                      <i className="fas fa-barcode me-1"></i>
-                                      {product.sku}
-                                    </span>
-                                    {product.brand?.name && (
-                                      <span className="badge bg-light text-dark border" style={{ fontSize: '0.75rem' }}>
-                                        <i className="fas fa-copyright me-1"></i>
-                                        {product.brand.name}
-                                      </span>
-                                    )}
-                                    {product.category?.name && (
-                                      <span className="badge bg-info bg-opacity-10 text-info border border-info" style={{ fontSize: '0.7rem' }}>
-                                        <i className="fas fa-tag me-1"></i>
-                                        {product.category.parentName ? `${product.category.parentName.substring(0, 10)}${product.category.parentName.length > 10 ? '...' : ''} > ` : ''}
-                                        {product.category.name.length > 15 ? `${product.category.name.substring(0, 15)}...` : product.category.name}
-                                      </span>
-                                    )}
-                                  </div>
-                                  {product.description && (
-                                    <small className="text-muted" style={{ fontSize: '0.75rem' }}>
-                                      {product.description.length > 60 ? `${product.description.substring(0, 60)}...` : product.description}
-                                    </small>
-                                  )}
-                                </div>
-                              </div>
-
-                              {/* Action Button */}
-                              <div className="col-auto">
-                                {!isSelected ? (
+                              <div className="ms-2">
+                                {isSelected ? (
+                                  <span className="badge bg-success text-white">
+                                    <i className="fas fa-check me-1"></i>Seçildi
+                                  </span>
+                                ) : (
                                   <button
                                     type="button"
                                     className="btn btn-primary btn-sm"
-                                    style={{ minWidth: '80px', minHeight: '38px' }}
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       handleAddProduct(productId);
                                     }}
                                   >
-                                    <i className="fas fa-plus me-1"></i>
-                                    <span className="d-none d-sm-inline">Ekle</span>
-                                  </button>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    className="btn btn-success btn-sm"
-                                    disabled
-                                    style={{ minWidth: '80px', minHeight: '38px' }}
-                                  >
-                                    <i className="fas fa-check me-1"></i>
-                                    <span className="d-none d-sm-inline">Eklendi</span>
+                                    <i className="fas fa-plus me-1"></i>Ekle
                                   </button>
                                 )}
                               </div>
@@ -605,7 +640,7 @@ const StockForm = ({ products, warehouses, onSuccess, onCancel }) => {
           </div>
         </div>
 
-        <div className="col-lg-7">
+        <div className="col-lg-4">
           <div className="card border-0 shadow-sm h-100">
             <div className="card-header bg-white border-0 pb-0 d-flex justify-content-between align-items-center">
               <div>

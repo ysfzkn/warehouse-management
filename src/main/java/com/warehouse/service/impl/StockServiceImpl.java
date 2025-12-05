@@ -1,7 +1,9 @@
 package com.warehouse.service.impl;
 
 import com.warehouse.constants.NotificationMessages;
+import com.warehouse.dto.AuditMetadata;
 import com.warehouse.dto.BulkDeleteResponse;
+import com.warehouse.dto.NotificationRequest;
 import com.warehouse.dto.StockFilter;
 import com.warehouse.entity.Product;
 import com.warehouse.entity.Stock;
@@ -267,13 +269,17 @@ public class StockServiceImpl implements StockService {
         Stock saved = stockRepository.save(stock);
         String username = CurrentUser.usernameOrSystem();
         String customerInfo = saved.getCustomerName() != null ? " (Müşteri: " + saved.getCustomerName() + ")" : "";
+        AuditMetadata metadata = buildStockMetadata(saved, saved.getQuantity());
         auditService.log(AuditAction.STOCK_CREATE, DomainEntityType.Stock.name(), saved.getId(), username,
                 String.format("Stok oluşturuldu: Depo=%s, Ürün=%s, Miktar=%s%s", 
-                        warehouse.getName(), product.getName(), String.valueOf(saved.getQuantity()), customerInfo));
-        notificationService.create(NotificationMessages.STOCK_CREATED_TITLE,
+                        warehouse.getName(), product.getName(), String.valueOf(saved.getQuantity()), customerInfo),
+                metadata);
+        notificationService.create(buildNotificationRequest(
+                NotificationMessages.STOCK_CREATED_TITLE,
                 String.format("Kullanıcı %s, %s/%s için %d adet stok oluşturdu.%s", username,
                         warehouse.getName(), product.getName(), saved.getQuantity(), customerInfo),
-                DomainEntityType.Stock.name(), saved.getId());
+                saved,
+                saved.getQuantity()));
         logger.info("Stock created successfully with id: {}", saved.getId());
         return saved;
     }
@@ -379,13 +385,17 @@ public class StockServiceImpl implements StockService {
 
         Stock saved = stockRepository.save(stock);
         String username = CurrentUser.usernameOrSystem();
+        AuditMetadata metadata = buildStockMetadata(saved, saved.getQuantity());
         auditService.log(AuditAction.STOCK_UPDATE, DomainEntityType.Stock.name(), saved.getId(), username,
                 String.format("Stok güncellendi: Depo=%s, Ürün=%s",
-                        saved.getWarehouse().getName(), saved.getProduct().getName()));
-        notificationService.create(NotificationMessages.STOCK_UPDATED_TITLE,
+                        saved.getWarehouse().getName(), saved.getProduct().getName()),
+                metadata);
+        notificationService.create(buildNotificationRequest(
+                NotificationMessages.STOCK_UPDATED_TITLE,
                 String.format("Kullanıcı %s, %s/%s stok kaydını güncelledi.", username,
                         saved.getWarehouse().getName(), saved.getProduct().getName()),
-                DomainEntityType.Stock.name(), saved.getId());
+                saved,
+                saved.getQuantity()));
         logger.info("Stock updated successfully with id: {}", saved.getId());
         return saved;
     }
@@ -398,14 +408,18 @@ public class StockServiceImpl implements StockService {
         stock.setQuantity(stock.getQuantity() + quantity);
         Stock saved = stockRepository.save(stock);
         String username = CurrentUser.usernameOrSystem();
+        AuditMetadata metadata = buildStockMetadata(saved, quantity);
         auditService.log(AuditAction.STOCK_ADD, DomainEntityType.Stock.name(), saved.getId(), username,
                 String.format("Stok artırıldı: +%s adet → Yeni=%s | Depo=%s, Ürün=%s", 
                         String.valueOf(quantity), String.valueOf(saved.getQuantity()),
-                        saved.getWarehouse().getName(), saved.getProduct().getName()));
-        notificationService.create(NotificationMessages.STOCK_INCREASED_TITLE,
+                        saved.getWarehouse().getName(), saved.getProduct().getName()),
+                metadata);
+        notificationService.create(buildNotificationRequest(
+                NotificationMessages.STOCK_INCREASED_TITLE,
                 String.format("Kullanıcı %s, %s/%s stokuna %s adet ekledi (Yeni toplam: %s).", username,
                         saved.getWarehouse().getName(), saved.getProduct().getName(), String.valueOf(quantity), String.valueOf(saved.getQuantity())),
-                DomainEntityType.Stock.name(), saved.getId());
+                saved,
+                quantity));
         logger.info("Stock increased successfully. Stock id: {}, New quantity: {}", saved.getId(), saved.getQuantity());
         return saved;
     }
@@ -423,14 +437,18 @@ public class StockServiceImpl implements StockService {
         stock.setQuantity(stock.getQuantity() - quantity);
         Stock saved = stockRepository.save(stock);
         String username = CurrentUser.usernameOrSystem();
+        AuditMetadata metadata = buildStockMetadata(saved, -quantity);
         auditService.log(AuditAction.STOCK_REMOVE, DomainEntityType.Stock.name(), saved.getId(), username,
                 String.format("Stok azaltıldı: -%s adet → Yeni=%s | Depo=%s, Ürün=%s", 
                         String.valueOf(quantity), String.valueOf(saved.getQuantity()),
-                        saved.getWarehouse().getName(), saved.getProduct().getName()));
-        notificationService.create(NotificationMessages.STOCK_DECREASED_TITLE,
+                        saved.getWarehouse().getName(), saved.getProduct().getName()),
+                metadata);
+        notificationService.create(buildNotificationRequest(
+                NotificationMessages.STOCK_DECREASED_TITLE,
                 String.format("Kullanıcı %s, %s/%s stokundan %s adet çıkardı (Yeni toplam: %s).", username,
                         saved.getWarehouse().getName(), saved.getProduct().getName(), String.valueOf(quantity), String.valueOf(saved.getQuantity())),
-                DomainEntityType.Stock.name(), saved.getId());
+                saved,
+                -quantity));
         logger.info("Stock decreased successfully. Stock id: {}, New quantity: {}", saved.getId(), saved.getQuantity());
         return saved;
     }
@@ -441,14 +459,19 @@ public class StockServiceImpl implements StockService {
         Stock stock = getStockByIdOrThrow(id);
         String warehouseName = stock.getWarehouse().getName();
         String productName = stock.getProduct().getName();
-        stockRepository.delete(stock);
+        String productSku = stock.getProduct().getSku();
         String username = CurrentUser.usernameOrSystem();
+        AuditMetadata metadata = buildStockMetadata(stock, stock.getQuantity());
+        stockRepository.delete(stock);
         auditService.log(AuditAction.STOCK_DELETE, DomainEntityType.Stock.name(), id, username,
-                String.format("Stok silindi: Depo=%s, Ürün=%s",
-                        warehouseName, productName));
-        notificationService.create(NotificationMessages.STOCK_DELETED_TITLE,
-                String.format("Kullanıcı %s, %s/%s stok kaydını sildi.", username, warehouseName, productName),
-                DomainEntityType.Stock.name(), id);
+                String.format("Stok silindi: Depo=%s, Ürün=%s (SKU=%s, Miktar=%s)",
+                        warehouseName, productName, productSku, String.valueOf(stock.getQuantity())),
+                metadata);
+        notificationService.create(buildNotificationRequest(
+                NotificationMessages.STOCK_DELETED_TITLE,
+                String.format("Kullanıcı %s, %s/%s (SKU: %s) stok kaydını sildi. Son miktar: %s.", username, warehouseName, productName, productSku, String.valueOf(stock.getQuantity())),
+                stock,
+                stock.getQuantity()));
         logger.info("Stock deleted successfully with id: {}", id);
     }
 
@@ -471,9 +494,11 @@ public class StockServiceImpl implements StockService {
                 String productName = stock.getProduct().getName();
                 String productSku = stock.getProduct().getSku();
                 
+                AuditMetadata metadata = buildStockMetadata(stock, stock.getQuantity());
                 stockRepository.delete(stock);
                 auditService.log(AuditAction.STOCK_DELETE, DomainEntityType.Stock.name(), id, username,
-                        String.format("Stok silindi: Depo=%s, Ürün=%s", warehouseName, productName));
+                        String.format("Stok silindi: Depo=%s, Ürün=%s (SKU=%s, Miktar=%s)", warehouseName, productName, productSku, String.valueOf(stock.getQuantity())),
+                        metadata);
                 successCount++;
                 logger.debug("Stock deleted successfully with id: {}", id);
             } catch (WarehouseManagementException e) {
@@ -546,14 +571,18 @@ public class StockServiceImpl implements StockService {
         stock.setReservedQuantity(stock.getReservedQuantity() + quantity);
         Stock saved = stockRepository.save(stock);
         String username = CurrentUser.usernameOrSystem();
+        AuditMetadata metadata = buildStockMetadata(saved, quantity);
         auditService.log(AuditAction.STOCK_RESERVE, DomainEntityType.Stock.name(), saved.getId(), username,
                 String.format("Stok rezerve edildi: %s adet rezerve edildi (Toplam Rezerv=%s) | Depo=%s, Ürün=%s", 
                         String.valueOf(quantity), String.valueOf(saved.getReservedQuantity()), 
-                        saved.getWarehouse().getName(), saved.getProduct().getName()));
-        notificationService.create(NotificationMessages.STOCK_RESERVED_TITLE,
+                        saved.getWarehouse().getName(), saved.getProduct().getName()),
+                metadata);
+        notificationService.create(buildNotificationRequest(
+                NotificationMessages.STOCK_RESERVED_TITLE,
                 String.format("Kullanıcı %s, %s/%s stoktan %s adet rezerve etti.", username,
                         saved.getWarehouse().getName(), saved.getProduct().getName(), String.valueOf(quantity)),
-                DomainEntityType.Stock.name(), saved.getId());
+                saved,
+                quantity));
         logger.info("Stock reserved successfully. Stock id: {}, Reserved quantity: {}", saved.getId(), saved.getReservedQuantity());
         return saved;
     }
@@ -569,14 +598,18 @@ public class StockServiceImpl implements StockService {
         stock.setReservedQuantity(stock.getReservedQuantity() - quantity);
         Stock saved = stockRepository.save(stock);
         String username = CurrentUser.usernameOrSystem();
+        AuditMetadata metadata = buildStockMetadata(saved, -quantity);
         auditService.log(AuditAction.STOCK_RELEASE, DomainEntityType.Stock.name(), saved.getId(), username,
                 String.format("Rezervasyon bırakıldı: %s adet bırakıldı (Kalan Rezerv=%s) | Depo=%s, Ürün=%s", 
                         String.valueOf(quantity), String.valueOf(saved.getReservedQuantity()),
-                        saved.getWarehouse().getName(), saved.getProduct().getName()));
-        notificationService.create(NotificationMessages.RESERVATION_RELEASED_TITLE,
+                        saved.getWarehouse().getName(), saved.getProduct().getName()),
+                metadata);
+        notificationService.create(buildNotificationRequest(
+                NotificationMessages.RESERVATION_RELEASED_TITLE,
                 String.format("Kullanıcı %s, %s/%s stoktan rezerve %s adedi bıraktı.", username,
                         saved.getWarehouse().getName(), saved.getProduct().getName(), String.valueOf(quantity)),
-                DomainEntityType.Stock.name(), saved.getId());
+                saved,
+                -quantity));
         logger.info("Reservation released successfully. Stock id: {}, Remaining reserved: {}", saved.getId(), saved.getReservedQuantity());
         return saved;
     }
@@ -672,6 +705,40 @@ public class StockServiceImpl implements StockService {
         }
         String trimmed = additionNote.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private AuditMetadata buildStockMetadata(Stock stock, Integer quantityContext) {
+        if (stock == null) {
+            return null;
+        }
+        Product product = stock.getProduct();
+        Warehouse warehouse = stock.getWarehouse();
+        return AuditMetadata.builder()
+                .warehouseId(warehouse != null ? warehouse.getId() : null)
+                .warehouseName(warehouse != null ? warehouse.getName() : null)
+                .productId(product != null ? product.getId() : null)
+                .productName(product != null ? product.getName() : null)
+                .productSku(product != null ? product.getSku() : null)
+                .quantity(quantityContext)
+                .build();
+    }
+
+    private NotificationRequest buildNotificationRequest(String title, String message, Stock stock, Integer quantityContext) {
+        Product product = stock != null ? stock.getProduct() : null;
+        Warehouse warehouse = stock != null ? stock.getWarehouse() : null;
+        return NotificationRequest.builder()
+                .title(title)
+                .message(message)
+                .entityType(DomainEntityType.Stock.name())
+                .entityId(stock != null ? stock.getId() : null)
+                .actor(CurrentUser.usernameOrSystem())
+                .warehouseId(warehouse != null ? warehouse.getId() : null)
+                .warehouseName(warehouse != null ? warehouse.getName() : null)
+                .productId(product != null ? product.getId() : null)
+                .productName(product != null ? product.getName() : null)
+                .productSku(product != null ? product.getSku() : null)
+                .quantity(quantityContext)
+                .build();
     }
 
 }

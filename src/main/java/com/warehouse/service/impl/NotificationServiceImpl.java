@@ -1,8 +1,12 @@
 package com.warehouse.service.impl;
 
+import com.warehouse.dto.NotificationFilter;
+import com.warehouse.dto.NotificationRequest;
 import com.warehouse.entity.Notification;
 import com.warehouse.repository.NotificationRepository;
+import com.warehouse.repository.specification.NotificationSpecifications;
 import com.warehouse.service.NotificationService;
+import com.warehouse.util.CurrentUser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
@@ -10,6 +14,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.util.List;
 import com.warehouse.service.SsePushService;
@@ -32,11 +37,31 @@ public class NotificationServiceImpl implements NotificationService {
     }
 
     @Override
-    public Notification create(String title, String message) {
-        logger.debug("Creating notification: {}", title);
+    public Notification create(NotificationRequest request) {
+        logger.debug("Creating notification with metadata: {}", request != null ? request.getTitle() : "null");
         Notification notification = new Notification();
-        notification.setTitle(title);
-        notification.setMessage(message);
+        if (request != null) {
+            notification.setTitle(request.getTitle());
+            notification.setMessage(request.getMessage());
+            notification.setEntityType(request.getEntityType());
+            notification.setEntityId(request.getEntityId());
+            String actor = StringUtils.hasText(request.getActor())
+                    ? request.getActor()
+                    : CurrentUser.usernameOrSystem();
+            notification.setActor(actor);
+            notification.setWarehouseId(request.getWarehouseId());
+            notification.setWarehouseName(request.getWarehouseName());
+            notification.setSourceWarehouseId(request.getSourceWarehouseId());
+            notification.setSourceWarehouseName(request.getSourceWarehouseName());
+            notification.setDestinationWarehouseId(request.getDestinationWarehouseId());
+            notification.setDestinationWarehouseName(request.getDestinationWarehouseName());
+            notification.setProductId(request.getProductId());
+            notification.setProductName(request.getProductName());
+            notification.setProductSku(request.getProductSku());
+            notification.setQuantity(request.getQuantity());
+        } else {
+            notification.setActor(CurrentUser.usernameOrSystem());
+        }
         Notification saved = notificationRepository.save(notification);
         logger.debug("Notification created with id: {}", saved.getId());
         try {
@@ -49,22 +74,23 @@ public class NotificationServiceImpl implements NotificationService {
     }
 
     @Override
+    public Notification create(String title, String message) {
+        return create(NotificationRequest.builder()
+                .title(title)
+                .message(message)
+                .actor(CurrentUser.usernameOrSystem())
+                .build());
+    }
+
+    @Override
     public Notification create(String title, String message, String entityType, Long entityId) {
-        logger.debug("Creating notification: {} for entity {}:{}", title, entityType, entityId);
-        Notification notification = new Notification();
-        notification.setTitle(title);
-        notification.setMessage(message);
-        notification.setEntityType(entityType);
-        notification.setEntityId(entityId);
-        Notification saved = notificationRepository.save(notification);
-        logger.debug("Notification created with id: {}", saved.getId());
-        try {
-            ssePushService.broadcastCounts();
-            logger.debug("SSE counts broadcasted after notification create. notifId={}", saved.getId());
-        } catch (Exception e) {
-            logger.warn("SSE broadcast failed after notification create. notifId={}", saved.getId(), e);
-        }
-        return saved;
+        return create(NotificationRequest.builder()
+                .title(title)
+                .message(message)
+                .entityType(entityType)
+                .entityId(entityId)
+                .actor(CurrentUser.usernameOrSystem())
+                .build());
     }
 
     @Override
@@ -102,6 +128,13 @@ public class NotificationServiceImpl implements NotificationService {
     public Page<Notification> page(Pageable pageable) {
         logger.debug("Fetching notifications page");
         return notificationRepository.findAllByOrderByCreatedAtDesc(pageable);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<Notification> search(NotificationFilter filter, Pageable pageable) {
+        logger.debug("Searching notifications with filters");
+        return notificationRepository.findAll(NotificationSpecifications.withFilter(filter), pageable);
     }
 
     /**

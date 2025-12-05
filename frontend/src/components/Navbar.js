@@ -183,6 +183,15 @@ const Navbar = () => {
     minHeight: '48px'
   };
 
+  const formatDateTime = useCallback((value) => {
+    if (!value) return '-';
+    try {
+      return new Date(value).toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' });
+    } catch {
+      return value;
+    }
+  }, []);
+
   const updateUserDropdownCoords = useCallback(() => {
     if (!userBadgeRef.current) return;
     const rect = userBadgeRef.current.getBoundingClientRect();
@@ -246,6 +255,21 @@ const Navbar = () => {
                 <div className="flex-grow-1" style={{minWidth: 0}}>
                   <div className="fw-semibold" style={{fontSize: '0.95rem', lineHeight: '1.3'}}>{n.title}</div>
                   <div className="text-muted" style={{fontSize: '0.85rem', lineHeight: '1.4', wordBreak: 'break-word'}}>{n.message}</div>
+                  <div className="text-muted small mt-1 d-flex flex-wrap align-items-center gap-2">
+                    <span><i className="far fa-clock me-1"></i>{formatDateTime(n.createdAt)}</span>
+                    {n.actor && <span className="badge bg-primary">{n.actor}</span>}
+                    {n.warehouseName && (
+                      <span className="badge bg-light text-dark"><i className="fas fa-warehouse me-1"></i>{n.warehouseName}</span>
+                    )}
+                    {n.sourceWarehouseName && (
+                      <span className="badge bg-light text-dark"><i className="fas fa-arrow-right me-1"></i>{n.sourceWarehouseName}</span>
+                    )}
+                    {n.destinationWarehouseName && (
+                      <span className="badge bg-light text-dark"><i className="fas fa-arrow-right me-1"></i>{n.destinationWarehouseName}</span>
+                    )}
+                    {n.productSku && <span className="badge bg-secondary">SKU: {n.productSku}</span>}
+                    {typeof n.quantity === 'number' && <span className="badge bg-info text-dark">Adet: {n.quantity}</span>}
+                  </div>
                 </div>
                 <div className="d-flex gap-1 w-100 mt-2" style={{flexWrap: 'wrap'}}>
                   {n.entityType && n.entityId && (
@@ -703,7 +727,7 @@ const Navbar = () => {
                   data-bs-toggle="dropdown" 
                   style={{
                     ...navLinkStyle(null),
-                    background: ['/warehouses', '/products', '/categories'].includes(location.pathname) 
+                    background: ['/products', '/categories', '/admin-settings'].includes(location.pathname) 
                       ? 'rgba(255,255,255,0.2)' 
                       : 'transparent'
                   }}
@@ -712,12 +736,6 @@ const Navbar = () => {
                   Envanter
                 </button>
                 <ul className="dropdown-menu border-0 shadow-lg" style={{borderRadius: '12px', marginTop: '0.5rem'}}>
-                  <li>
-                    <Link className="dropdown-item" to="/warehouses">
-                      <i className="fas fa-building me-2 text-primary"></i>
-                      Depolar
-                    </Link>
-                  </li>
                   <li>
                     <Link className="dropdown-item" to="/products">
                       <i className="fas fa-box me-2 text-success"></i>
@@ -741,6 +759,19 @@ const Navbar = () => {
               </li>
               )}
               
+              {role === 'ADMIN' && (
+              <li className="nav-item">
+                <Link 
+                  className="nav-link nav-link-custom text-white" 
+                  to="/warehouses" 
+                  style={navLinkStyle('/warehouses')}
+                >
+                  <i className="fas fa-building me-2"></i>
+                  Depolar
+                </Link>
+              </li>
+              )}
+
               <li className="nav-item">
                 <Link 
                   className="nav-link nav-link-custom text-white position-relative d-inline-flex align-items-center" 
@@ -780,9 +811,16 @@ const Navbar = () => {
                   </li>
                   <li><hr className="dropdown-divider" /></li>
                   <li>
-                    <Link className="dropdown-item" to="/admin-settings">
+                    <Link className="dropdown-item" to="/admin/notifications">
+                      <i className="fas fa-bell me-2 text-warning"></i>
+                      Bildirimler
+                    </Link>
+                  </li>
+                  <li><hr className="dropdown-divider" /></li>
+                  <li>
+                    <Link className="dropdown-item" to="/admin-settings?tab=users">
                       <i className="fas fa-tools me-2 text-danger"></i>
-                      Yönetici Ayarları
+                      Kullanıcı Ayarları
                     </Link>
                   </li>
                 </ul>

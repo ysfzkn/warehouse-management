@@ -1887,7 +1887,9 @@ const Stock = () => {
     return { status: 'normal', label: 'Normal', class: 'success' };
   };
 
-  const totalTransfers = typeof transferTotalCount === 'number' ? transferTotalCount : transfers.length;
+  const totalTransfers = (typeof transferTotalCount === 'number' && transferTotalCount > 0)
+    ? transferTotalCount
+    : transfers.length;
   const warehouseTransferCount = getTransferTypeCount('WAREHOUSE');
   const customerTransferCount = getTransferTypeCount('CUSTOMER_DELIVERY');
 
@@ -2050,12 +2052,12 @@ const Stock = () => {
               </div>
               <div className="d-flex justify-content-between align-items-center px-3 py-2 flex-wrap gap-2">
                 <small className="text-muted">
-                  Gösterilen kayıt: {transfers.length}/{totalTransfers || transfers.length}
+                  Gösterilen kayıt: {stocks.length}/{(typeof totalStockCount === 'number' && totalStockCount > 0) ? totalStockCount : stocks.length}
                 </small>
                 <PaginationControls
-                  page={transferPage}
-                  totalPages={transferTotalPages}
-                  onPageChange={handleTransferPageChange}
+                  page={stockPage}
+                  totalPages={stockTotalPages}
+                  onPageChange={handleStockPageChange}
                 />
               </div>
               <div className="d-flex flex-wrap gap-2 justify-content-lg-end">
@@ -2864,7 +2866,7 @@ const Stock = () => {
       {/* Stock Form Modal */}
       {showForm && (
         <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <div className="modal-dialog modal-lg">
+          <div className="modal-dialog modal-xl" style={{ maxWidth: '1200px' }}>
             <div className="modal-content">
               <div className="modal-header">
                 <h5 className="modal-title">Yeni Stok Kaydı</h5>

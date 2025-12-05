@@ -12,6 +12,8 @@ import AdminSettings from './pages/AdminSettings';
 import DesiCalculator from './pages/DesiCalculator';
 import AdminAuditDetails from './pages/AdminAuditDetails';
 import StockImportHistory from './pages/StockImportHistory';
+import AdminNotifications from './pages/AdminNotifications';
+import WarehouseActivity from './pages/WarehouseActivity';
 import './App.css';
 
 function App() {
@@ -45,6 +47,8 @@ function App() {
           <Route path="/admin-settings" element={authed && role === 'ADMIN' ? <AdminSettings /> : <Navigate to={authed ? '/stock' : '/login'} replace />} />
           <Route path="/desi" element={authed && role === 'ADMIN' ? <DesiCalculator /> : <Navigate to={authed ? '/stock' : '/login'} replace />} />
           <Route path="/admin/audit/:entityType/:entityId" element={authed && role === 'ADMIN' ? <AdminAuditDetails /> : <Navigate to={authed ? '/stock' : '/login'} replace />} />
+          <Route path="/admin/notifications" element={authed && role === 'ADMIN' ? <AdminNotifications /> : <Navigate to={authed ? '/stock' : '/login'} replace />} />
+          <Route path="/warehouses/:warehouseId/activity" element={authed && role === 'ADMIN' ? <WarehouseActivity /> : <Navigate to={authed ? '/stock' : '/login'} replace />} />
         </Routes>
       </div>
     </div>

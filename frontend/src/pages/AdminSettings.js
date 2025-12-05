@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import axios from 'axios';
 import ConfirmModal from '../components/ConfirmModal';
 
@@ -291,6 +292,7 @@ const UserModal = ({ user, onClose, onSave, saving, error }) => {
 };
 
 const AdminSettings = () => {
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState('brand');
   const [brands, setBrands] = useState([]);
   const [colors, setColors] = useState([]);
@@ -414,6 +416,15 @@ const AdminSettings = () => {
   };
 
   useEffect(() => { load(); }, []);
+
+  // Initialize tab from query string (e.g. ?tab=color or ?tab=users)
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const tab = params.get('tab');
+    if (tab === 'brand' || tab === 'color' || tab === 'users') {
+      setActiveTab(tab);
+    }
+  }, [location.search]);
 
   const handleSave = async (data) => {
     try {

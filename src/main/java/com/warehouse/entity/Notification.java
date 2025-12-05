@@ -9,7 +9,12 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "notifications", indexes = {
         @Index(name = "idx_notif_created_at", columnList = "created_at"),
-        @Index(name = "idx_notif_read", columnList = "is_read")
+        @Index(name = "idx_notif_read", columnList = "is_read"),
+        @Index(name = "idx_notif_actor", columnList = "actor"),
+        @Index(name = "idx_notif_warehouse_id", columnList = "warehouse_id"),
+        @Index(name = "idx_notif_source_warehouse_id", columnList = "source_warehouse_id"),
+        @Index(name = "idx_notif_destination_warehouse_id", columnList = "destination_warehouse_id"),
+        @Index(name = "idx_notif_product_sku", columnList = "product_sku")
 })
 @Data
 @NoArgsConstructor
@@ -38,6 +43,39 @@ public class Notification {
 
     @Column(name = "entity_id")
     private Long entityId;
+
+    @Column(name = "actor", length = 100)
+    private String actor;
+
+    @Column(name = "warehouse_id")
+    private Long warehouseId;
+
+    @Column(name = "warehouse_name", length = 150)
+    private String warehouseName;
+
+    @Column(name = "source_warehouse_id")
+    private Long sourceWarehouseId;
+
+    @Column(name = "source_warehouse_name", length = 150)
+    private String sourceWarehouseName;
+
+    @Column(name = "destination_warehouse_id")
+    private Long destinationWarehouseId;
+
+    @Column(name = "destination_warehouse_name", length = 150)
+    private String destinationWarehouseName;
+
+    @Column(name = "product_id")
+    private Long productId;
+
+    @Column(name = "product_name", length = 200)
+    private String productName;
+
+    @Column(name = "product_sku", length = 100)
+    private String productSku;
+
+    @Column(name = "quantity")
+    private Integer quantity;
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
