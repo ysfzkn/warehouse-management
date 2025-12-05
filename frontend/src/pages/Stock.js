@@ -1695,11 +1695,17 @@ const Stock = () => {
     const shouldClose = options.close !== false;
     if (shouldClose) {
       setShowForm(false);
+      clearUrlQuery();
     }
     await Promise.all([fetchAllData(), fetchStocks(0)]);
     if (options.message) {
       showSuccessToast(options.message);
     }
+  };
+
+  const handleFormCancel = () => {
+    setShowForm(false);
+    clearUrlQuery();
   };
 
   const handleQuickAdjustSuccess = async () => {
@@ -1878,6 +1884,12 @@ const Stock = () => {
       return transfers.filter(t => t.transferType === 'CUSTOMER_DELIVERY').length;
     }
     return transfers.filter(t => (t.transferType || 'WAREHOUSE') === 'WAREHOUSE').length;
+  };
+
+  const clearUrlQuery = () => {
+    if (typeof window === 'undefined') return;
+    const newUrl = `${window.location.pathname}${window.location.hash || ''}`;
+    window.history.replaceState({}, '', newUrl);
   };
 
   const getStockStatus = (stock) => {
@@ -2881,7 +2893,7 @@ const Stock = () => {
                   products={products}
                   warehouses={warehouses}
                   onSuccess={handleFormSuccess}
-                  onCancel={() => setShowForm(false)}
+                  onCancel={handleFormCancel}
                 />
               </div>
             </div>

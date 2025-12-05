@@ -44,7 +44,9 @@ function App() {
           <Route path="/categories" element={authed && role === 'ADMIN' ? <Categories /> : <Navigate to={authed ? '/stock' : '/login'} replace />} />
           <Route path="/stock" element={authed && (role === 'ADMIN' || role === 'STOCK_IN' || role === 'STOCK_OUT') ? <Stock /> : <Navigate to="/login" replace />} />
           <Route path="/stock-imports" element={authed && role === 'ADMIN' ? <StockImportHistory /> : <Navigate to={authed ? '/stock' : '/login'} replace />} />
-          <Route path="/admin-settings" element={authed && role === 'ADMIN' ? <AdminSettings /> : <Navigate to={authed ? '/stock' : '/login'} replace />} />
+          <Route path="/admin-settings" element={authed && role === 'ADMIN' ? <AdminSettings allowedTabs={['users']} /> : <Navigate to={authed ? '/stock' : '/login'} replace />} />
+          <Route path="/admin/brands" element={authed && role === 'ADMIN' ? <AdminSettings allowedTabs={['brand']} /> : <Navigate to={authed ? '/stock' : '/login'} replace />} />
+          <Route path="/admin/colors" element={authed && role === 'ADMIN' ? <AdminSettings allowedTabs={['color']} /> : <Navigate to={authed ? '/stock' : '/login'} replace />} />
           <Route path="/desi" element={authed && role === 'ADMIN' ? <DesiCalculator /> : <Navigate to={authed ? '/stock' : '/login'} replace />} />
           <Route path="/admin/audit/:entityType/:entityId" element={authed && role === 'ADMIN' ? <AdminAuditDetails /> : <Navigate to={authed ? '/stock' : '/login'} replace />} />
           <Route path="/admin/notifications" element={authed && role === 'ADMIN' ? <AdminNotifications /> : <Navigate to={authed ? '/stock' : '/login'} replace />} />

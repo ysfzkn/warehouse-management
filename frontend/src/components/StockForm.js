@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
+import ProductForm from './ProductForm';
 import {
   extractPhoneDigits,
   formatPhoneForSubmit,
@@ -40,6 +41,8 @@ const StockForm = ({ products, warehouses, onSuccess, onCancel }) => {
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [feedback, setFeedback] = useState(null);
+  const [showProductModal, setShowProductModal] = useState(false);
+  const [localProducts, setLocalProducts] = useState(products || []);
 
   useEffect(() => {
     if (!warehouseId && warehouses.length > 0) {
@@ -48,13 +51,17 @@ const StockForm = ({ products, warehouses, onSuccess, onCancel }) => {
   }, [warehouses, warehouseId]);
 
   useEffect(() => {
+    setLocalProducts(products || []);
+  }, [products]);
+
+  useEffect(() => {
     setVisibleProductCount(INITIAL_VISIBLE_PRODUCTS);
-  }, [productSearchTerm, products.length]);
+  }, [productSearchTerm, localProducts.length]);
 
   const filteredProducts = useMemo(() => {
-    if (!productSearchTerm.trim()) return products;
+    if (!productSearchTerm.trim()) return localProducts;
     const query = productSearchTerm.trim().toLocaleLowerCase('tr-TR');
-    return products.filter(product => {
+    return localProducts.filter(product => {
       const haystack = [
         product.name,
         product.sku,
@@ -87,6 +94,62 @@ const StockForm = ({ products, warehouses, onSuccess, onCancel }) => {
     items.forEach(item => map.set(String(item.productId), true));
     return map;
   }, [items]);
+
+  const showToast = (message, type = 'success') => {
+    const toast = document.createElement('div');
+    const bgClass =
+      type === 'success'
+        ? 'text-bg-success'
+        : type === 'warning'
+        ? 'text-bg-warning'
+        : 'text-bg-danger';
+    const icon =
+      type === 'success'
+        ? 'fa-check-circle'
+        : type === 'warning'
+        ? 'fa-exclamation-triangle'
+        : 'fa-times-circle';
+    toast.className = `toast align-items-center ${bgClass} border-0 position-fixed top-0 end-0 m-3 show`;
+    toast.setAttribute('role', 'alert');
+    toast.style.zIndex = '9999';
+    toast.innerHTML = `
+      <div class="d-flex align-items-center">
+        <div class="toast-body d-flex align-items-start">
+          <i class="fas ${icon} me-2 mt-1"></i>
+          <div class="flex-grow-1">${message}</div>
+        </div>
+        <button type="button" class="btn-close ${type === 'success' ? 'btn-close-white' : ''} me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button>
+      </div>
+    `;
+    document.body.appendChild(toast);
+    setTimeout(() => {
+      try {
+        toast.classList.remove('show');
+        setTimeout(() => {
+          try {
+            document.body.removeChild(toast);
+          } catch {}
+        }, 300);
+      } catch {}
+    }, type === 'success' ? 4000 : 7000);
+  };
+
+  const handleProductCreateSuccess = (created) => {
+    if (!created) return;
+    if (created.error) {
+      showToast(created.message || 'Ürün kaydedilemedi', 'danger');
+      return;
+    }
+    const newProduct = Array.isArray(created) ? created[0] : created;
+    setLocalProducts(prev => [newProduct, ...prev]);
+    setShowProductModal(false);
+    showToast('Ürün eklendi ve listeye alındı.', 'success');
+    // Otomatik seç ve formu koru
+    if (newProduct?.id) {
+      handleAddProduct(String(newProduct.id));
+      // form alanları korunuyor, sadece liste güncellendi
+    }
+  };
 
   const selectedWarehouse = useMemo(() => {
     return warehouses.find(w => String(w.id) === warehouseId);
@@ -142,7 +205,7 @@ const StockForm = ({ products, warehouses, onSuccess, onCancel }) => {
       setErrors(prev => ({ ...prev, warehouseId: 'Depo seçiniz' }));
       return;
     }
-    const product = products.find(p => String(p.id) === productId);
+    const product = localProducts.find(p => String(p.id) === productId);
     if (!product) return;
     setItems(prev => {
       if (prev.some(item => String(item.productId) === productId)) {
@@ -290,6 +353,7 @@ const StockForm = ({ products, warehouses, onSuccess, onCancel }) => {
         (typeof error?.response?.data === 'string' ? error.response.data : null) ||
         'Stok kaydedilirken hata oluştu';
       setErrors(prev => ({ ...prev, general: message }));
+      showToast(message, 'danger');
     } finally {
       setLoading(false);
     }
@@ -300,14 +364,29 @@ const StockForm = ({ products, warehouses, onSuccess, onCancel }) => {
 
   return (
     <form onSubmit={handleSubmit} className="stock-form">
-      {errors.general && (
-        <div className="alert alert-danger" role="alert">
-          {errors.general}
-        </div>
-      )}
       {feedback && (
         <div className={`alert alert-${feedback.type}`} role="alert">
           {feedback.message}
+        </div>
+      )}
+
+      {showProductModal && (
+        <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <div className="modal-dialog modal-lg">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">Yeni Ürün Ekle</h5>
+                <button type="button" className="btn-close" onClick={() => setShowProductModal(false)}></button>
+              </div>
+              <div className="modal-body">
+                <ProductForm
+                  product={null}
+                  onSuccess={handleProductCreateSuccess}
+                  onCancel={() => setShowProductModal(false)}
+                />
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -345,7 +424,7 @@ const StockForm = ({ products, warehouses, onSuccess, onCancel }) => {
                 </span>
                 <span className="badge bg-secondary bg-opacity-10 text-secondary px-3 py-2">
                   <i className="fas fa-layer-group me-2"></i>
-                  {products.length} ürün içinde arama
+                  {localProducts.length} ürün içinde arama
                 </span>
                 {feedback && (
                   <span className="badge bg-success bg-opacity-10 text-success px-3 py-2">
@@ -446,9 +525,19 @@ const StockForm = ({ products, warehouses, onSuccess, onCancel }) => {
                 <i className="fas fa-search me-2 text-muted"></i>
                 Ürün Seçimi
               </h5>
-              <p className="text-muted small mb-0">
-                Kartlara tıklayarak ürünleri listeye ekleyin.
-              </p>
+              <div className="d-flex flex-column flex-lg-row align-items-lg-center justify-content-lg-between gap-2">
+                <p className="text-muted small mb-0">
+                  Kartlara tıklayarak ürünleri listeye ekleyin.
+                </p>
+                <button
+                  type="button"
+                  className="btn btn-outline-primary btn-sm"
+                  onClick={() => setShowProductModal(true)}
+                >
+                  <i className="fas fa-plus me-2"></i>
+                  Yeni Ürün Ekle
+                </button>
+              </div>
             </div>
             <div className="card-body">
               <div className="input-group mb-2">

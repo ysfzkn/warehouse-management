@@ -544,7 +544,12 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
+    if (e && typeof e.preventDefault === 'function') {
+      e.preventDefault();
+    }
+    if (e && typeof e.stopPropagation === 'function') {
+      e.stopPropagation();
+    }
 
     if (!validateForm()) {
       return;
@@ -574,14 +579,17 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
 
       let savedProductId = product?.id;
 
+      let createdData = null;
       if (product) {
-        await axios.put(`/api/products/${product.id}`, dataToSend);
+        const resp = await axios.put(`/api/products/${product.id}`, dataToSend);
+        createdData = resp?.data;
       } else {
         const resp = await axios.post('/api/products', dataToSend);
         savedProductId = resp.data?.id;
+        createdData = resp?.data;
       }
 
-      onSuccess();
+      if (onSuccess) onSuccess(createdData || { id: savedProductId });
     } catch (error) {
       console.error('Error saving product:', error);
       const errorData = error?.response?.data;
@@ -590,6 +598,10 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
         || (typeof errorData === 'string' ? errorData : null)
         || 'Ürün kaydedilirken beklenmeyen bir hata oluştu. Lütfen tekrar deneyin.';
       setErrors({ general: friendlyMessage });
+      if (onSuccess) {
+        // Bildirim için hata da iletilsin
+        onSuccess({ error: true, message: friendlyMessage });
+      }
     } finally {
       setLoading(false);
     }
@@ -597,7 +609,7 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
 
   return (
     <div className="product-form-container">
-    <form onSubmit={handleSubmit}>
+    <form onSubmit={(e) => e.preventDefault()}>
       {errors.general && (
         <div className="alert alert-danger" role="alert">
           {errors.general}
@@ -1259,9 +1271,10 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
           İptal
         </button>
         <button
-          type="submit"
+          type="button"
           className="btn btn-primary"
           disabled={loading}
+          onClick={handleSubmit}
         >
           {loading ? (
             <>

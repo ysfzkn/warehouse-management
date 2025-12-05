@@ -750,6 +750,19 @@ const Navbar = () => {
                   </li>
                   <li><hr className="dropdown-divider" /></li>
                   <li>
+                    <Link className="dropdown-item" to="/admin/brands">
+                      <i className="fas fa-industry me-2 text-primary"></i>
+                      Markalar
+                    </Link>
+                  </li>
+                  <li>
+                    <Link className="dropdown-item" to="/admin/colors">
+                      <i className="fas fa-palette me-2 text-info"></i>
+                      Renkler
+                    </Link>
+                  </li>
+                  <li><hr className="dropdown-divider" /></li>
+                  <li>
                     <Link className="dropdown-item" to="/stock-imports">
                       <i className="fas fa-file-excel me-2 text-success"></i>
                       Excel Stok Aktarım Geçmişi
@@ -818,7 +831,7 @@ const Navbar = () => {
                   </li>
                   <li><hr className="dropdown-divider" /></li>
                   <li>
-                    <Link className="dropdown-item" to="/admin-settings?tab=users">
+                    <Link className="dropdown-item" to="/admin-settings">
                       <i className="fas fa-tools me-2 text-danger"></i>
                       Kullanıcı Ayarları
                     </Link>

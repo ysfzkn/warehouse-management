@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import axios from 'axios';
 import ConfirmModal from '../components/ConfirmModal';
@@ -291,9 +291,13 @@ const UserModal = ({ user, onClose, onSave, saving, error }) => {
   );
 };
 
-const AdminSettings = () => {
+const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
   const location = useLocation();
-  const [activeTab, setActiveTab] = useState('brand');
+  const allowedTabs = useMemo(
+    () => (Array.isArray(allowedTabsProp) && allowedTabsProp.length ? allowedTabsProp : ['brand', 'color', 'users']),
+    [allowedTabsProp]
+  );
+  const [activeTab, setActiveTab] = useState(allowedTabs[0] || 'users');
   const [brands, setBrands] = useState([]);
   const [colors, setColors] = useState([]);
   const [users, setUsers] = useState([]);
@@ -419,12 +423,19 @@ const AdminSettings = () => {
 
   // Initialize tab from query string (e.g. ?tab=color or ?tab=users)
   useEffect(() => {
+    // if allowed tabs change ensure activeTab valid
+    if (!allowedTabs.includes(activeTab)) {
+      setActiveTab(allowedTabs[0] || 'users');
+    }
+  }, [allowedTabs]);
+
+  useEffect(() => {
     const params = new URLSearchParams(location.search);
     const tab = params.get('tab');
-    if (tab === 'brand' || tab === 'color' || tab === 'users') {
+    if (tab && allowedTabs.includes(tab)) {
       setActiveTab(tab);
     }
-  }, [location.search]);
+  }, [location.search, allowedTabs]);
 
   const handleSave = async (data) => {
     try {
@@ -561,19 +572,25 @@ const AdminSettings = () => {
       <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-md-between mb-4 gap-2">
         <h2 className="mb-0">Yönetici Ayarları</h2>
         <ul className="nav nav-pills flex-wrap">
-          <li className="nav-item mb-1">
-            <button className={`nav-link ${activeTab === 'brand' ? 'active' : ''}`} onClick={() => setActiveTab('brand')}>Marka</button>
-          </li>
-          <li className="nav-item ms-0 ms-md-2 mb-1">
-            <button className={`nav-link ${activeTab === 'color' ? 'active' : ''}`} onClick={() => setActiveTab('color')}>Renk</button>
-          </li>
-          <li className="nav-item ms-0 ms-md-2 mb-1">
-            <button className={`nav-link ${activeTab === 'users' ? 'active' : ''}`} onClick={() => setActiveTab('users')}>Kullanıcılar</button>
-          </li>
+          {allowedTabs.includes('brand') && (
+            <li className="nav-item mb-1">
+              <button className={`nav-link ${activeTab === 'brand' ? 'active' : ''}`} onClick={() => setActiveTab('brand')}>Marka</button>
+            </li>
+          )}
+          {allowedTabs.includes('color') && (
+            <li className="nav-item ms-0 ms-md-2 mb-1">
+              <button className={`nav-link ${activeTab === 'color' ? 'active' : ''}`} onClick={() => setActiveTab('color')}>Renk</button>
+            </li>
+          )}
+          {allowedTabs.includes('users') && (
+            <li className="nav-item ms-0 ms-md-2 mb-1">
+              <button className={`nav-link ${activeTab === 'users' ? 'active' : ''}`} onClick={() => setActiveTab('users')}>Kullanıcılar</button>
+            </li>
+          )}
         </ul>
       </div>
 
-      {activeTab === 'brand' && (
+      {activeTab === 'brand' && allowedTabs.includes('brand') && (
         <CrudTable
           title="Markalar"
           columns={[
@@ -615,7 +632,7 @@ const AdminSettings = () => {
         />
       )}
 
-      {activeTab === 'color' && (
+      {activeTab === 'color' && allowedTabs.includes('color') && (
         <CrudTable
           title="Renkler"
           columns={[
@@ -675,7 +692,7 @@ const AdminSettings = () => {
         />
       )}
 
-      {activeTab === 'users' && (
+      {activeTab === 'users' && allowedTabs.includes('users') && (
         <div className="card mb-4">
           <div className="card-header">
             <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-md-between gap-2">
