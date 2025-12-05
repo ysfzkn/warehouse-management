@@ -211,7 +211,7 @@ const StockForm = ({ products, warehouses, onSuccess, onCancel }) => {
       if (prev.some(item => String(item.productId) === productId)) {
         return prev;
       }
-      return [...prev, buildItemFromProduct(product)];
+      return [buildItemFromProduct(product), ...prev];
     });
     setErrors(prev => ({ ...prev, items: null }));
   };

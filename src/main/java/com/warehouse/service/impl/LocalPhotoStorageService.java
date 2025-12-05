@@ -35,7 +35,8 @@ public class LocalPhotoStorageService implements PhotoStorageService {
     /**
      * Resolves the base directory path, similar to how Excel imports work.
      * Priority:
-     * 1. RAILWAY_VOLUME_MOUNT_PATH environment variable (if set, for persistent storage)
+     * 1. RAILWAY_VOLUME_MOUNT_PATH environment variable (if set, for persistent
+     * storage)
      * 2. PHOTO_STORAGE_DIR environment variable (if set)
      * 3. Configured baseDir from properties (absolute or relative)
      *
@@ -75,13 +76,15 @@ public class LocalPhotoStorageService implements PhotoStorageService {
         // 3) properties içindeki baseDir
         Path basePath = Paths.get(baseDir);
 
-        // If it's already absolute (like /tmp/warehouse-uploads/shipments), use it as-is
+        // If it's already absolute (like /tmp/warehouse-uploads/shipments), use it
+        // as-is
         if (basePath.isAbsolute()) {
             log.debug("Using absolute base directory: {}", basePath);
             return basePath;
         }
 
-        // For relative paths (local development), resolve relative to current working directory
+        // For relative paths (local development), resolve relative to current working
+        // directory
         Path resolved = Paths.get(System.getProperty("user.dir", ".")).resolve(basePath).toAbsolutePath();
         log.info("Resolved relative base directory: {} -> {}", baseDir, resolved);
         return resolved;
@@ -149,7 +152,7 @@ public class LocalPhotoStorageService implements PhotoStorageService {
             }
 
             long sizeBytes = Files.size(optimizedPath);
-            log.info("Successfully stored photo: optimized={} ({} bytes), thumbnail={} ({} bytes)", 
+            log.info("Successfully stored photo: optimized={} ({} bytes), thumbnail={} ({} bytes)",
                     optimizedPath.toAbsolutePath(), sizeBytes, thumbPath.toAbsolutePath(), Files.size(thumbPath));
 
             return new StoredPhoto(
@@ -258,14 +261,15 @@ public class LocalPhotoStorageService implements PhotoStorageService {
                 log.error("Cannot open photo stream: path is null or empty");
                 throw new RuntimeException("Photo path is null or empty");
             }
-            
+
             Path path = Paths.get(relativePath);
-            
+
             // If path is not absolute, try to resolve it relative to base directory
             if (!path.isAbsolute()) {
                 log.debug("Path is relative, resolving against base directory: {}", relativePath);
                 Path baseDir = resolveBaseDir();
-                // Extract the relative part (e.g., "2025/12/25/64_xxx_orig.jpg" from "shipments/2025/12/25/64_xxx_orig.jpg")
+                // Extract the relative part (e.g., "2025/12/25/64_xxx_orig.jpg" from
+                // "shipments/2025/12/25/64_xxx_orig.jpg")
                 String pathStr = relativePath.replace("\\", "/");
                 if (pathStr.contains("/")) {
                     // Find the year part (e.g., "2025") to determine the correct subdirectory
@@ -283,7 +287,8 @@ public class LocalPhotoStorageService implements PhotoStorageService {
                             // Reconstruct path from year onwards
                             StringBuilder relativePart = new StringBuilder();
                             for (int i = yearIndex; i < parts.length; i++) {
-                                if (relativePart.length() > 0) relativePart.append("/");
+                                if (relativePart.length() > 0)
+                                    relativePart.append("/");
                                 relativePart.append(parts[i]);
                             }
                             path = baseDir.resolve(relativePart.toString());
@@ -299,22 +304,23 @@ public class LocalPhotoStorageService implements PhotoStorageService {
                     path = baseDir.resolve(relativePath);
                 }
             }
-            
+
             // Log path resolution for debugging
-            log.debug("Opening photo stream from path: {} (absolute: {}, exists: {})", 
+            log.debug("Opening photo stream from path: {} (absolute: {}, exists: {})",
                     path.toAbsolutePath(), path.isAbsolute(), Files.exists(path));
-            
+
             // Check if file exists
             if (!Files.exists(path)) {
                 // Log directory contents for debugging
                 Path parentDir = path.getParent();
                 if (parentDir != null && Files.exists(parentDir)) {
                     try {
-                        log.warn("Photo file does not exist: {} - Directory exists, listing contents:", path.toAbsolutePath());
+                        log.warn("Photo file does not exist: {} - Directory exists, listing contents:",
+                                path.toAbsolutePath());
                         Files.list(parentDir).forEach(p -> {
                             try {
-                                log.warn("  - {} (exists: {}, isFile: {}, size: {} bytes)", 
-                                        p.getFileName(), Files.exists(p), Files.isRegularFile(p), 
+                                log.warn("  - {} (exists: {}, isFile: {}, size: {} bytes)",
+                                        p.getFileName(), Files.exists(p), Files.isRegularFile(p),
                                         Files.isRegularFile(p) ? Files.size(p) : 0);
                             } catch (IOException e) {
                                 log.warn("  - {} (error getting info: {})", p.getFileName(), e.getMessage());
@@ -324,27 +330,29 @@ public class LocalPhotoStorageService implements PhotoStorageService {
                         log.warn("Could not list directory contents: {}", e.getMessage());
                     }
                 } else {
-                    log.error("Photo file does not exist and parent directory also does not exist: {} (parent: {})", 
+                    log.error("Photo file does not exist and parent directory also does not exist: {} (parent: {})",
                             path.toAbsolutePath(), parentDir != null ? parentDir.toAbsolutePath() : "null");
                 }
-                
-                log.error("Photo file does not exist: {} (stored path: {}, absolute path: {})", 
+
+                log.error("Photo file does not exist: {} (stored path: {}, absolute path: {})",
                         relativePath, relativePath, path.toAbsolutePath());
                 throw new RuntimeException("Photo file does not exist: " + path.toAbsolutePath());
             }
-            
+
             // Check if it's a file (not a directory)
             if (!Files.isRegularFile(path)) {
-                log.error("Photo path is not a regular file: {} (absolute path: {})", relativePath, path.toAbsolutePath());
+                log.error("Photo path is not a regular file: {} (absolute path: {})", relativePath,
+                        path.toAbsolutePath());
                 throw new RuntimeException("Photo path is not a regular file: " + path.toAbsolutePath());
             }
-            
+
             return Files.newInputStream(path);
         } catch (IOException e) {
             log.error("Failed to open photo stream from path: {} - Error: {}", relativePath, e.getMessage(), e);
             throw new RuntimeException("Failed to open photo: " + relativePath + " - " + e.getMessage(), e);
         } catch (Exception e) {
-            log.error("Unexpected error opening photo stream from path: {} - Error: {}", relativePath, e.getMessage(), e);
+            log.error("Unexpected error opening photo stream from path: {} - Error: {}", relativePath, e.getMessage(),
+                    e);
             throw new RuntimeException("Failed to open photo: " + relativePath + " - " + e.getMessage(), e);
         }
     }
