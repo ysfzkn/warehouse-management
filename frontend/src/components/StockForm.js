@@ -101,14 +101,14 @@ const StockForm = ({ products, warehouses, onSuccess, onCancel }) => {
       type === 'success'
         ? 'text-bg-success'
         : type === 'warning'
-        ? 'text-bg-warning'
-        : 'text-bg-danger';
+          ? 'text-bg-warning'
+          : 'text-bg-danger';
     const icon =
       type === 'success'
         ? 'fa-check-circle'
         : type === 'warning'
-        ? 'fa-exclamation-triangle'
-        : 'fa-times-circle';
+          ? 'fa-exclamation-triangle'
+          : 'fa-times-circle';
     toast.className = `toast align-items-center ${bgClass} border-0 position-fixed top-0 end-0 m-3 show`;
     toast.setAttribute('role', 'alert');
     toast.style.zIndex = '9999';
@@ -128,9 +128,9 @@ const StockForm = ({ products, warehouses, onSuccess, onCancel }) => {
         setTimeout(() => {
           try {
             document.body.removeChild(toast);
-          } catch {}
+          } catch { }
         }, 300);
-      } catch {}
+      } catch { }
     }, type === 'success' ? 4000 : 7000);
   };
 
@@ -663,22 +663,22 @@ const StockForm = ({ products, warehouses, onSuccess, onCancel }) => {
                                     <i className="fas fa-barcode me-1"></i>{product.sku}
                                   </span>
                                   {product.brand?.name && (
-                                  <span className="badge bg-light text-dark border">
-                                    <i className="fas fa-copyright me-1"></i>{product.brand.name}
-                                  </span>
+                                    <span className="badge bg-light text-dark border">
+                                      <i className="fas fa-copyright me-1"></i>{product.brand.name}
+                                    </span>
                                   )}
-                                {product.category?.name && (
-                                  <span className="badge bg-info bg-opacity-10 text-info border border-info">
-                                    <i className="fas fa-tag me-1"></i>
-                                    {product.category.parentName ? `${product.category.parentName} > ` : ''}{product.category.name}
-                                  </span>
-                                )}
-                                {product.color?.name && (
-                                  <span className="badge bg-light text-dark border">
-                                    <i className="fas fa-palette me-1"></i>
-                                    {product.color.name}
-                                  </span>
-                                )}
+                                  {product.category?.name && (
+                                    <span className="badge bg-info bg-opacity-10 text-info border border-info">
+                                      <i className="fas fa-tag me-1"></i>
+                                      {product.category.parentName ? `${product.category.parentName} > ` : ''}{product.category.name}
+                                    </span>
+                                  )}
+                                  {product.color?.name && (
+                                    <span className="badge bg-light text-dark border">
+                                      <i className="fas fa-palette me-1"></i>
+                                      {product.color.name}
+                                    </span>
+                                  )}
                                 </div>
                                 {product.description && (
                                   <div className="text-muted small mt-1">
@@ -791,9 +791,8 @@ const StockForm = ({ products, warehouses, onSuccess, onCancel }) => {
                             <input
                               type="number"
                               min="1"
-                              className={`form-control form-control-sm ${
-                                getItemError(item.productId, 'quantity') ? 'is-invalid' : ''
-                              }`}
+                              className={`form-control form-control-sm ${getItemError(item.productId, 'quantity') ? 'is-invalid' : ''
+                                }`}
                               value={item.quantity}
                               onChange={(e) =>
                                 updateItemField(item.productId, 'quantity', e.target.value)
@@ -812,9 +811,8 @@ const StockForm = ({ products, warehouses, onSuccess, onCancel }) => {
                             <input
                               type="number"
                               min="0"
-                              className={`form-control form-control-sm ${
-                                getItemError(item.productId, 'minStockLevel') ? 'is-invalid' : ''
-                              }`}
+                              className={`form-control form-control-sm ${getItemError(item.productId, 'minStockLevel') ? 'is-invalid' : ''
+                                }`}
                               placeholder="Opsiyonel"
                               value={item.minStockLevel}
                               onChange={(e) =>
@@ -834,9 +832,8 @@ const StockForm = ({ products, warehouses, onSuccess, onCancel }) => {
                             <input
                               type="number"
                               min="0"
-                              className={`form-control form-control-sm ${
-                                getItemError(item.productId, 'reservedQuantity') ? 'is-invalid' : ''
-                              }`}
+                              className={`form-control form-control-sm ${getItemError(item.productId, 'reservedQuantity') ? 'is-invalid' : ''
+                                }`}
                               placeholder="0"
                               value={item.reservedQuantity}
                               onChange={(e) =>
@@ -856,9 +853,8 @@ const StockForm = ({ products, warehouses, onSuccess, onCancel }) => {
                             <input
                               type="number"
                               min="0"
-                              className={`form-control form-control-sm ${
-                                getItemError(item.productId, 'consignedQuantity') ? 'is-invalid' : ''
-                              }`}
+                              className={`form-control form-control-sm ${getItemError(item.productId, 'consignedQuantity') ? 'is-invalid' : ''
+                                }`}
                               placeholder="0"
                               value={item.consignedQuantity}
                               onChange={(e) =>
