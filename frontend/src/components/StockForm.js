@@ -43,6 +43,7 @@ const StockForm = ({ products, warehouses, onSuccess, onCancel }) => {
   const [feedback, setFeedback] = useState(null);
   const [showProductModal, setShowProductModal] = useState(false);
   const [localProducts, setLocalProducts] = useState(products || []);
+  const [selectedSearchTerm, setSelectedSearchTerm] = useState('');
 
   useEffect(() => {
     if (!warehouseId && warehouses.length > 0) {
@@ -94,6 +95,17 @@ const StockForm = ({ products, warehouses, onSuccess, onCancel }) => {
     items.forEach(item => map.set(String(item.productId), true));
     return map;
   }, [items]);
+
+  const filteredSelectedItems = useMemo(() => {
+    const query = selectedSearchTerm.trim().toLocaleLowerCase('tr-TR');
+    if (!query) return items;
+    return items.filter(item => {
+      const haystack = [item.name, item.sku, item.brand]
+        .filter(Boolean)
+        .map(text => text.toLocaleLowerCase('tr-TR'));
+      return haystack.some(text => text.includes(query));
+    });
+  }, [items, selectedSearchTerm]);
 
   const showToast = (message, type = 'success') => {
     const toast = document.createElement('div');
@@ -214,6 +226,34 @@ const StockForm = ({ products, warehouses, onSuccess, onCancel }) => {
       return [buildItemFromProduct(product), ...prev];
     });
     setErrors(prev => ({ ...prev, items: null }));
+  };
+
+  const handleAddAllProducts = () => {
+    if (!warehouseId) {
+      setErrors(prev => ({ ...prev, warehouseId: 'Depo seçiniz' }));
+      return;
+    }
+
+    if (productOptions.length === 0) return;
+
+    setItems(prev => {
+      const existing = new Set(prev.map(item => String(item.productId)));
+      const newItems = productOptions
+        .filter(product => !existing.has(String(product.id)))
+        .map(product => buildItemFromProduct(product));
+
+      if (newItems.length === 0) {
+        return prev;
+      }
+
+      return [...newItems, ...prev];
+    });
+    setErrors(prev => ({ ...prev, items: null }));
+  };
+
+  const handleClearSelectedItems = () => {
+    setItems([]);
+    setErrors(prev => ({ ...prev, perItem: {}, items: null }));
   };
 
   const handleRemoveItem = (productId) => {
@@ -562,11 +602,33 @@ const StockForm = ({ products, warehouses, onSuccess, onCancel }) => {
                   </button>
                 )}
               </div>
-              <div className="d-flex justify-content-between small text-muted mb-3">
-                <span>{products.length} ürün</span>
-                {productSearchTerm && (
-                  <span>{productOptions.length} sonuç</span>
-                )}
+              <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                <div className="d-flex small text-muted gap-3">
+                  <span>{products.length} ürün</span>
+                  {productSearchTerm && (
+                    <span>{productOptions.length} sonuç</span>
+                  )}
+                </div>
+                <div className="d-flex gap-2">
+                  <button
+                    type="button"
+                    className="btn btn-outline-success btn-sm"
+                    onClick={handleAddAllProducts}
+                    disabled={productOptions.length === 0}
+                  >
+                    <i className="fas fa-angle-double-right me-2"></i>
+                    Tümünü Ekle
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-outline-secondary btn-sm"
+                    onClick={handleClearSelectedItems}
+                    disabled={items.length === 0}
+                  >
+                    <i className="fas fa-undo me-2"></i>
+                    Seçilileri Temizle
+                  </button>
+                </div>
               </div>
 
               {productOptions.length === 0 ? (
@@ -745,25 +807,51 @@ const StockForm = ({ products, warehouses, onSuccess, onCancel }) => {
                 <button
                   type="button"
                   className="btn btn-link text-danger text-decoration-none"
-                  onClick={() => {
-                    setItems([]);
-                    setErrors(prev => ({ ...prev, perItem: {}, items: null }));
-                  }}
+                  onClick={handleClearSelectedItems}
                 >
                   <i className="fas fa-trash me-1"></i>
-                  Listeyi Temizle
+                  Seçilileri Temizle
                 </button>
               )}
             </div>
             <div className="card-body">
+              {items.length > 0 && (
+                <div className="input-group input-group-sm mb-3">
+                  <span className="input-group-text bg-light">
+                    <i className="fas fa-search text-muted"></i>
+                  </span>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="Seçili ürünlerde ara..."
+                    value={selectedSearchTerm}
+                    onChange={(e) => setSelectedSearchTerm(e.target.value)}
+                  />
+                  {selectedSearchTerm && (
+                    <button
+                      type="button"
+                      className="btn btn-outline-secondary"
+                      onClick={() => setSelectedSearchTerm('')}
+                    >
+                      Temizle
+                    </button>
+                  )}
+                </div>
+              )}
+
               {items.length === 0 ? (
                 <div className="alert alert-light border mb-0">
                   <i className="fas fa-box-open me-2"></i>
                   Henüz ürün seçmediniz. Sol taraftan ürün ekleyin.
                 </div>
+              ) : filteredSelectedItems.length === 0 ? (
+                <div className="alert alert-warning border mb-0">
+                  <i className="fas fa-search me-2"></i>
+                  Aramanızla eşleşen seçili ürün bulunamadı.
+                </div>
               ) : (
-                <div className="d-flex flex-column gap-3">
-                  {items.map(item => (
+                <div className="d-flex flex-column gap-3" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+                  {filteredSelectedItems.map(item => (
                     <div className="card border shadow-sm" key={item.productId}>
                       <div className="card-body">
                         <div className="d-flex justify-content-between align-items-start flex-wrap gap-2">

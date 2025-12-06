@@ -23,6 +23,9 @@ import com.warehouse.util.CurrentUser;
 import com.warehouse.util.EntityValidator;
 import com.warehouse.util.StockQuantityValidator;
 import com.warehouse.util.ValidationUtil;
+
+import lombok.RequiredArgsConstructor;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
@@ -46,6 +49,7 @@ import java.util.stream.Collectors;
  */
 @Service
 @Transactional
+@RequiredArgsConstructor
 public class StockServiceImpl implements StockService {
 
     private static final Logger logger = LoggerFactory.getLogger(StockServiceImpl.class);
@@ -55,18 +59,6 @@ public class StockServiceImpl implements StockService {
     private final WarehouseRepository warehouseRepository;
     private final AuditService auditService;
     private final NotificationService notificationService;
-
-    public StockServiceImpl(StockRepository stockRepository,
-                           ProductRepository productRepository,
-                           WarehouseRepository warehouseRepository,
-                           AuditService auditService,
-                           NotificationService notificationService) {
-        this.stockRepository = stockRepository;
-        this.productRepository = productRepository;
-        this.warehouseRepository = warehouseRepository;
-        this.auditService = auditService;
-        this.notificationService = notificationService;
-    }
 
     @Override
     @Transactional(readOnly = true)
@@ -86,14 +78,16 @@ public class StockServiceImpl implements StockService {
     @Transactional(readOnly = true)
     public Page<Stock> getStocks(StockFilter filter, Pageable pageable) {
         StockFilter appliedFilter = filter != null ? filter : new StockFilter();
-        StockFilter.Status status = appliedFilter.getStatus() != null ? appliedFilter.getStatus() : StockFilter.Status.ALL;
+        StockFilter.Status status = appliedFilter.getStatus() != null ? appliedFilter.getStatus()
+                : StockFilter.Status.ALL;
         String statusValue = status.name();
         String search = appliedFilter.getSearch();
         boolean searchEnabled = search != null && !search.isBlank();
         // Use Turkish locale for proper case-insensitive search with Turkish characters
         String searchPattern = searchEnabled ? "%" + search.toLowerCase(Locale.forLanguageTag("tr-TR")) + "%" : "%";
 
-        logger.debug("Fetching stocks with advanced filters - page: {}, size: {}", pageable.getPageNumber(), pageable.getPageSize());
+        logger.debug("Fetching stocks with advanced filters - page: {}, size: {}", pageable.getPageNumber(),
+                pageable.getPageSize());
         return stockRepository.findByFilters(
                 appliedFilter.getBrandId(),
                 appliedFilter.getColorId(),
@@ -105,8 +99,7 @@ public class StockServiceImpl implements StockService {
                 appliedFilter.isReservedOnly(),
                 appliedFilter.isConsignedOnly(),
                 statusValue,
-                pageable
-        );
+                pageable);
     }
 
     @Override
@@ -218,8 +211,8 @@ public class StockServiceImpl implements StockService {
             return Map.of();
         }
 
-        List<StockRepository.ProductQuantityAggregate> aggregates =
-                stockRepository.getTotalQuantitiesByProductIds(distinctIds);
+        List<StockRepository.ProductQuantityAggregate> aggregates = stockRepository
+                .getTotalQuantitiesByProductIds(distinctIds);
 
         Map<Long, Long> result = new HashMap<>();
         distinctIds.forEach(id -> result.put(id, 0L));
@@ -237,7 +230,7 @@ public class StockServiceImpl implements StockService {
 
     @Override
     public Stock createStock(Stock stock) {
-        logger.info("Creating new stock for product id: {} and warehouse id: {}", 
+        logger.info("Creating new stock for product id: {} and warehouse id: {}",
                 stock.getProduct().getId(), stock.getWarehouse().getId());
         EntityValidator.validateStockForCreation(stock);
 
@@ -249,7 +242,7 @@ public class StockServiceImpl implements StockService {
         stock.setProduct(product);
         stock.setWarehouse(warehouse);
         stock.setAdditionNote(normalizeAdditionNote(stock.getAdditionNote()));
-        
+
         // For STANDART warehouses, customerName and customerPhone should be null
         if (warehouse.getWarehouseType() == WarehouseType.STANDART) {
             stock.setCustomerName(null);
@@ -257,12 +250,12 @@ public class StockServiceImpl implements StockService {
         } else if (warehouse.getWarehouseType() == WarehouseType.EMANET_DEPO) {
             // For EMANET_DEPO, customerPhone is required
             if (stock.getCustomerName() == null || stock.getCustomerName().trim().isEmpty()) {
-                throw new WarehouseManagementException(ErrorCode.REQUIRED_FIELD_MISSING, 
-                    "Emanet depo için müşteri adı gereklidir.");
+                throw new WarehouseManagementException(ErrorCode.REQUIRED_FIELD_MISSING,
+                        "Emanet depo için müşteri adı gereklidir.");
             }
             if (stock.getCustomerPhone() == null || stock.getCustomerPhone().trim().isEmpty()) {
-                throw new WarehouseManagementException(ErrorCode.REQUIRED_FIELD_MISSING, 
-                    "Emanet depo için müşteri telefon numarası gereklidir.");
+                throw new WarehouseManagementException(ErrorCode.REQUIRED_FIELD_MISSING,
+                        "Emanet depo için müşteri telefon numarası gereklidir.");
             }
         }
 
@@ -271,7 +264,7 @@ public class StockServiceImpl implements StockService {
         String customerInfo = saved.getCustomerName() != null ? " (Müşteri: " + saved.getCustomerName() + ")" : "";
         AuditMetadata metadata = buildStockMetadata(saved, saved.getQuantity());
         auditService.log(AuditAction.STOCK_CREATE, DomainEntityType.Stock.name(), saved.getId(), username,
-                String.format("Stok oluşturuldu: Depo=%s, Ürün=%s, Miktar=%s%s", 
+                String.format("Stok oluşturuldu: Depo=%s, Ürün=%s, Miktar=%s%s",
                         warehouse.getName(), product.getName(), String.valueOf(saved.getQuantity()), customerInfo),
                 metadata);
         notificationService.create(buildNotificationRequest(
@@ -287,7 +280,8 @@ public class StockServiceImpl implements StockService {
     @Override
     public List<Stock> createStocks(List<Stock> stocks) {
         if (stocks == null || stocks.isEmpty()) {
-            throw new WarehouseManagementException(ErrorCode.REQUIRED_FIELD_MISSING, "At least one stock entry is required");
+            throw new WarehouseManagementException(ErrorCode.REQUIRED_FIELD_MISSING,
+                    "At least one stock entry is required");
         }
         List<Stock> created = new ArrayList<>();
         for (Stock stock : stocks) {
@@ -306,63 +300,65 @@ public class StockServiceImpl implements StockService {
         // Quantity can ONLY be changed via add/remove endpoints (/add, /remove)
         // This prevents accidental zeroing or incorrect quantity updates
         // If quantity is provided in the request, it will be ignored for security
-        
+
         // Update product if provided
         if (stockDetails.getProduct() != null && stockDetails.getProduct().getId() != null) {
             Long newProductId = stockDetails.getProduct().getId();
             Long currentProductId = stock.getProduct().getId();
-            
+
             // Only update if product is actually changing
             if (!newProductId.equals(currentProductId)) {
                 Product newProduct = findProductOrThrow(newProductId);
-                
+
                 // Validate uniqueness with new product
                 // For EMANET_DEPO, check with customerName
                 // For STANDART, check without customerName
-                String customerNameForValidation = warehouse.getWarehouseType() == WarehouseType.EMANET_DEPO 
-                    ? stock.getCustomerName() 
-                    : null;
-                
-                // Check if another stock exists with the new product, same warehouse, and same customer (if EMANET_DEPO)
+                String customerNameForValidation = warehouse.getWarehouseType() == WarehouseType.EMANET_DEPO
+                        ? stock.getCustomerName()
+                        : null;
+
+                // Check if another stock exists with the new product, same warehouse, and same
+                // customer (if EMANET_DEPO)
                 if (warehouse.getWarehouseType() == WarehouseType.EMANET_DEPO) {
                     if (customerNameForValidation == null || customerNameForValidation.trim().isEmpty()) {
-                        throw new WarehouseManagementException(ErrorCode.REQUIRED_FIELD_MISSING, 
-                            "Emanet depo için müşteri adı gereklidir.");
+                        throw new WarehouseManagementException(ErrorCode.REQUIRED_FIELD_MISSING,
+                                "Emanet depo için müşteri adı gereklidir.");
                     }
                     Optional<Stock> existingStock = stockRepository.findByProductAndWarehouseAndCustomerName(
-                        newProduct, warehouse, customerNameForValidation.trim());
+                            newProduct, warehouse, customerNameForValidation.trim());
                     // Allow if it's the same stock (updating itself)
                     if (existingStock.isPresent() && !existingStock.get().getId().equals(stock.getId())) {
-                        throw new WarehouseManagementException(ErrorCode.STOCK_ALREADY_EXISTS, 
-                            String.format("Bu ürün için %s müşterisi adına zaten bir stok kaydı mevcut.", customerNameForValidation));
+                        throw new WarehouseManagementException(ErrorCode.STOCK_ALREADY_EXISTS,
+                                String.format("Bu ürün için %s müşterisi adına zaten bir stok kaydı mevcut.",
+                                        customerNameForValidation));
                     }
                 } else {
                     Optional<Stock> existingStock = stockRepository.findByProductAndWarehouse(newProduct, warehouse);
                     // Allow if it's the same stock (updating itself)
                     if (existingStock.isPresent() && !existingStock.get().getId().equals(stock.getId())) {
-                        throw new WarehouseManagementException(ErrorCode.STOCK_ALREADY_EXISTS, 
-                            "Bu ürün için bu depoda zaten bir stok kaydı mevcut.");
+                        throw new WarehouseManagementException(ErrorCode.STOCK_ALREADY_EXISTS,
+                                "Bu ürün için bu depoda zaten bir stok kaydı mevcut.");
                     }
                 }
-                
+
                 stock.setProduct(newProduct);
                 logger.info("Product changed from {} to {} for stock id: {}", currentProductId, newProductId, id);
             }
         }
-        
+
         updateMinStockLevel(stock, stockDetails.getMinStockLevel());
         updateReservedQuantity(stock, stockDetails.getReservedQuantity());
         updateConsignedQuantity(stock, stockDetails.getConsignedQuantity());
         updateAdditionNote(stock, stockDetails.getAdditionNote());
-        
+
         // Update customer info for EMANET_DEPO warehouses
         if (warehouse.getWarehouseType() == WarehouseType.EMANET_DEPO) {
             // Update customer name if provided
             if (stockDetails.getCustomerName() != null) {
                 String customerName = stockDetails.getCustomerName().trim();
                 if (customerName.isEmpty()) {
-                    throw new WarehouseManagementException(ErrorCode.REQUIRED_FIELD_MISSING, 
-                        "Emanet depo için müşteri adı gereklidir.");
+                    throw new WarehouseManagementException(ErrorCode.REQUIRED_FIELD_MISSING,
+                            "Emanet depo için müşteri adı gereklidir.");
                 }
                 stock.setCustomerName(customerName);
             }
@@ -370,8 +366,8 @@ public class StockServiceImpl implements StockService {
             if (stockDetails.getCustomerPhone() != null) {
                 String customerPhone = stockDetails.getCustomerPhone().trim();
                 if (customerPhone.isEmpty()) {
-                    throw new WarehouseManagementException(ErrorCode.REQUIRED_FIELD_MISSING, 
-                        "Emanet depo için müşteri telefon numarası gereklidir.");
+                    throw new WarehouseManagementException(ErrorCode.REQUIRED_FIELD_MISSING,
+                            "Emanet depo için müşteri telefon numarası gereklidir.");
                 }
                 stock.setCustomerPhone(customerPhone);
             }
@@ -410,14 +406,15 @@ public class StockServiceImpl implements StockService {
         String username = CurrentUser.usernameOrSystem();
         AuditMetadata metadata = buildStockMetadata(saved, quantity);
         auditService.log(AuditAction.STOCK_ADD, DomainEntityType.Stock.name(), saved.getId(), username,
-                String.format("Stok artırıldı: +%s adet → Yeni=%s | Depo=%s, Ürün=%s", 
+                String.format("Stok artırıldı: +%s adet → Yeni=%s | Depo=%s, Ürün=%s",
                         String.valueOf(quantity), String.valueOf(saved.getQuantity()),
                         saved.getWarehouse().getName(), saved.getProduct().getName()),
                 metadata);
         notificationService.create(buildNotificationRequest(
                 NotificationMessages.STOCK_INCREASED_TITLE,
                 String.format("Kullanıcı %s, %s/%s stokuna %s adet ekledi (Yeni toplam: %s).", username,
-                        saved.getWarehouse().getName(), saved.getProduct().getName(), String.valueOf(quantity), String.valueOf(saved.getQuantity())),
+                        saved.getWarehouse().getName(), saved.getProduct().getName(), String.valueOf(quantity),
+                        String.valueOf(saved.getQuantity())),
                 saved,
                 quantity));
         logger.info("Stock increased successfully. Stock id: {}, New quantity: {}", saved.getId(), saved.getQuantity());
@@ -439,14 +436,15 @@ public class StockServiceImpl implements StockService {
         String username = CurrentUser.usernameOrSystem();
         AuditMetadata metadata = buildStockMetadata(saved, -quantity);
         auditService.log(AuditAction.STOCK_REMOVE, DomainEntityType.Stock.name(), saved.getId(), username,
-                String.format("Stok azaltıldı: -%s adet → Yeni=%s | Depo=%s, Ürün=%s", 
+                String.format("Stok azaltıldı: -%s adet → Yeni=%s | Depo=%s, Ürün=%s",
                         String.valueOf(quantity), String.valueOf(saved.getQuantity()),
                         saved.getWarehouse().getName(), saved.getProduct().getName()),
                 metadata);
         notificationService.create(buildNotificationRequest(
                 NotificationMessages.STOCK_DECREASED_TITLE,
                 String.format("Kullanıcı %s, %s/%s stokundan %s adet çıkardı (Yeni toplam: %s).", username,
-                        saved.getWarehouse().getName(), saved.getProduct().getName(), String.valueOf(quantity), String.valueOf(saved.getQuantity())),
+                        saved.getWarehouse().getName(), saved.getProduct().getName(), String.valueOf(quantity),
+                        String.valueOf(saved.getQuantity())),
                 saved,
                 -quantity));
         logger.info("Stock decreased successfully. Stock id: {}, New quantity: {}", saved.getId(), saved.getQuantity());
@@ -469,7 +467,8 @@ public class StockServiceImpl implements StockService {
                 metadata);
         notificationService.create(buildNotificationRequest(
                 NotificationMessages.STOCK_DELETED_TITLE,
-                String.format("Kullanıcı %s, %s/%s (SKU: %s) stok kaydını sildi. Son miktar: %s.", username, warehouseName, productName, productSku, String.valueOf(stock.getQuantity())),
+                String.format("Kullanıcı %s, %s/%s (SKU: %s) stok kaydını sildi. Son miktar: %s.", username,
+                        warehouseName, productName, productSku, String.valueOf(stock.getQuantity())),
                 stock,
                 stock.getQuantity()));
         logger.info("Stock deleted successfully with id: {}", id);
@@ -481,23 +480,24 @@ public class StockServiceImpl implements StockService {
             logger.debug("deleteStocks called with empty ids");
             return new BulkDeleteResponse(0, 0, List.of());
         }
-        
+
         logger.info("Deleting {} stocks", ids.size());
         List<BulkDeleteResponse.DeleteError> errors = new java.util.ArrayList<>();
         int successCount = 0;
         String username = CurrentUser.usernameOrSystem();
-        
+
         for (Long id : ids) {
             try {
                 Stock stock = getStockByIdOrThrow(id);
                 String warehouseName = stock.getWarehouse().getName();
                 String productName = stock.getProduct().getName();
                 String productSku = stock.getProduct().getSku();
-                
+
                 AuditMetadata metadata = buildStockMetadata(stock, stock.getQuantity());
                 stockRepository.delete(stock);
                 auditService.log(AuditAction.STOCK_DELETE, DomainEntityType.Stock.name(), id, username,
-                        String.format("Stok silindi: Depo=%s, Ürün=%s (SKU=%s, Miktar=%s)", warehouseName, productName, productSku, String.valueOf(stock.getQuantity())),
+                        String.format("Stok silindi: Depo=%s, Ürün=%s (SKU=%s, Miktar=%s)", warehouseName, productName,
+                                productSku, String.valueOf(stock.getQuantity())),
                         metadata);
                 successCount++;
                 logger.debug("Stock deleted successfully with id: {}", id);
@@ -510,19 +510,18 @@ public class StockServiceImpl implements StockService {
                     // Stok bulunamadı
                 }
                 String stockInfo = stock != null
-                    ? String.format("%s / %s (SKU: %s)", 
-                        stock.getWarehouse() != null ? stock.getWarehouse().getName() : "Bilinmeyen",
-                        stock.getProduct() != null ? stock.getProduct().getName() : "Bilinmeyen",
-                        stock.getProduct() != null ? stock.getProduct().getSku() : "N/A")
-                    : String.format("Stok #%d", id);
-                
+                        ? String.format("%s / %s (SKU: %s)",
+                                stock.getWarehouse() != null ? stock.getWarehouse().getName() : "Bilinmeyen",
+                                stock.getProduct() != null ? stock.getProduct().getName() : "Bilinmeyen",
+                                stock.getProduct() != null ? stock.getProduct().getSku() : "N/A")
+                        : String.format("Stok #%d", id);
+
                 errors.add(new BulkDeleteResponse.DeleteError(
-                    id,
-                    stockInfo,
-                    stock != null && stock.getProduct() != null ? stock.getProduct().getSku() : null,
-                    e.getErrorCode().getCode(),
-                    e.getMessage()
-                ));
+                        id,
+                        stockInfo,
+                        stock != null && stock.getProduct() != null ? stock.getProduct().getSku() : null,
+                        e.getErrorCode().getCode(),
+                        e.getMessage()));
                 logger.warn("Cannot delete stock with id {}: {}", id, e.getMessage());
             } catch (Exception e) {
                 // Diğer hatalar
@@ -533,29 +532,28 @@ public class StockServiceImpl implements StockService {
                     // Stok bulunamadı
                 }
                 String stockInfo = stock != null
-                    ? String.format("%s / %s (SKU: %s)", 
-                        stock.getWarehouse() != null ? stock.getWarehouse().getName() : "Bilinmeyen",
-                        stock.getProduct() != null ? stock.getProduct().getName() : "Bilinmeyen",
-                        stock.getProduct() != null ? stock.getProduct().getSku() : "N/A")
-                    : String.format("Stok #%d", id);
-                
+                        ? String.format("%s / %s (SKU: %s)",
+                                stock.getWarehouse() != null ? stock.getWarehouse().getName() : "Bilinmeyen",
+                                stock.getProduct() != null ? stock.getProduct().getName() : "Bilinmeyen",
+                                stock.getProduct() != null ? stock.getProduct().getSku() : "N/A")
+                        : String.format("Stok #%d", id);
+
                 errors.add(new BulkDeleteResponse.DeleteError(
-                    id,
-                    stockInfo,
-                    stock != null && stock.getProduct() != null ? stock.getProduct().getSku() : null,
-                    ErrorCode.INTERNAL_SERVER_ERROR.getCode(),
-                    "Stok silinirken beklenmeyen bir hata oluştu: " + e.getMessage()
-                ));
+                        id,
+                        stockInfo,
+                        stock != null && stock.getProduct() != null ? stock.getProduct().getSku() : null,
+                        ErrorCode.INTERNAL_SERVER_ERROR.getCode(),
+                        "Stok silinirken beklenmeyen bir hata oluştu: " + e.getMessage()));
                 logger.error("Error deleting stock {}: {}", id, e.getMessage(), e);
             }
         }
-        
+
         if (successCount > 0) {
             notificationService.create(NotificationMessages.STOCK_DELETED_TITLE,
                     String.format("Kullanıcı %s, %d adet stok kaydını sildi.", username, successCount),
                     DomainEntityType.Stock.name(), null);
         }
-        
+
         logger.info("Batch delete completed: {} successful, {} errors", successCount, errors.size());
         return new BulkDeleteResponse(successCount, errors.size(), errors);
     }
@@ -573,8 +571,8 @@ public class StockServiceImpl implements StockService {
         String username = CurrentUser.usernameOrSystem();
         AuditMetadata metadata = buildStockMetadata(saved, quantity);
         auditService.log(AuditAction.STOCK_RESERVE, DomainEntityType.Stock.name(), saved.getId(), username,
-                String.format("Stok rezerve edildi: %s adet rezerve edildi (Toplam Rezerv=%s) | Depo=%s, Ürün=%s", 
-                        String.valueOf(quantity), String.valueOf(saved.getReservedQuantity()), 
+                String.format("Stok rezerve edildi: %s adet rezerve edildi (Toplam Rezerv=%s) | Depo=%s, Ürün=%s",
+                        String.valueOf(quantity), String.valueOf(saved.getReservedQuantity()),
                         saved.getWarehouse().getName(), saved.getProduct().getName()),
                 metadata);
         notificationService.create(buildNotificationRequest(
@@ -583,7 +581,8 @@ public class StockServiceImpl implements StockService {
                         saved.getWarehouse().getName(), saved.getProduct().getName(), String.valueOf(quantity)),
                 saved,
                 quantity));
-        logger.info("Stock reserved successfully. Stock id: {}, Reserved quantity: {}", saved.getId(), saved.getReservedQuantity());
+        logger.info("Stock reserved successfully. Stock id: {}, Reserved quantity: {}", saved.getId(),
+                saved.getReservedQuantity());
         return saved;
     }
 
@@ -600,7 +599,7 @@ public class StockServiceImpl implements StockService {
         String username = CurrentUser.usernameOrSystem();
         AuditMetadata metadata = buildStockMetadata(saved, -quantity);
         auditService.log(AuditAction.STOCK_RELEASE, DomainEntityType.Stock.name(), saved.getId(), username,
-                String.format("Rezervasyon bırakıldı: %s adet bırakıldı (Kalan Rezerv=%s) | Depo=%s, Ürün=%s", 
+                String.format("Rezervasyon bırakıldı: %s adet bırakıldı (Kalan Rezerv=%s) | Depo=%s, Ürün=%s",
                         String.valueOf(quantity), String.valueOf(saved.getReservedQuantity()),
                         saved.getWarehouse().getName(), saved.getProduct().getName()),
                 metadata);
@@ -610,7 +609,8 @@ public class StockServiceImpl implements StockService {
                         saved.getWarehouse().getName(), saved.getProduct().getName(), String.valueOf(quantity)),
                 saved,
                 -quantity));
-        logger.info("Reservation released successfully. Stock id: {}, Remaining reserved: {}", saved.getId(), saved.getReservedQuantity());
+        logger.info("Reservation released successfully. Stock id: {}, Remaining reserved: {}", saved.getId(),
+                saved.getReservedQuantity());
         return saved;
     }
 
@@ -634,30 +634,28 @@ public class StockServiceImpl implements StockService {
         // For EMANET_DEPO warehouses, check uniqueness with customerName
         if (warehouse.getWarehouseType() == WarehouseType.EMANET_DEPO) {
             if (customerName == null || customerName.trim().isEmpty()) {
-                throw new WarehouseManagementException(ErrorCode.REQUIRED_FIELD_MISSING, 
-                    "Emanet depo için müşteri adı gereklidir.");
+                throw new WarehouseManagementException(ErrorCode.REQUIRED_FIELD_MISSING,
+                        "Emanet depo için müşteri adı gereklidir.");
             }
             Optional<Stock> existingStock = stockRepository.findByProductAndWarehouseAndCustomerName(
-                product, warehouse, customerName.trim());
+                    product, warehouse, customerName.trim());
             if (existingStock.isPresent()) {
-                logger.warn("Stock already exists for product id: {}, warehouse id: {}, customer: {}", 
-                    product.getId(), warehouse.getId(), customerName);
+                logger.warn("Stock already exists for product id: {}, warehouse id: {}, customer: {}",
+                        product.getId(), warehouse.getId(), customerName);
                 String message = String.format(
-                    "Bu ürün için %s müşterisi adına zaten bir stok kaydı mevcut. Lütfen mevcut kaydı düzenleyin.",
-                    customerName
-                );
+                        "Bu ürün için %s müşterisi adına zaten bir stok kaydı mevcut. Lütfen mevcut kaydı düzenleyin.",
+                        customerName);
                 throw new WarehouseManagementException(ErrorCode.STOCK_ALREADY_EXISTS, message);
             }
         } else {
             // For STANDART warehouses, check uniqueness without customerName
             Optional<Stock> existingStock = stockRepository.findByProductAndWarehouse(product, warehouse);
             if (existingStock.isPresent()) {
-                logger.warn("Stock already exists for product id: {} and warehouse id: {}", 
-                    product.getId(), warehouse.getId());
+                logger.warn("Stock already exists for product id: {} and warehouse id: {}",
+                        product.getId(), warehouse.getId());
                 String message = String.format(
-                    "Stock record already exists. Product %s already has a stock record in warehouse %s. Please edit the existing record from Stock Management screen.",
-                    product.getName(), warehouse.getName()
-                );
+                        "Stock record already exists. Product %s already has a stock record in warehouse %s. Please edit the existing record from Stock Management screen.",
+                        product.getName(), warehouse.getName());
                 throw new WarehouseManagementException(ErrorCode.STOCK_ALREADY_EXISTS, message);
             }
         }
@@ -723,7 +721,8 @@ public class StockServiceImpl implements StockService {
                 .build();
     }
 
-    private NotificationRequest buildNotificationRequest(String title, String message, Stock stock, Integer quantityContext) {
+    private NotificationRequest buildNotificationRequest(String title, String message, Stock stock,
+            Integer quantityContext) {
         Product product = stock != null ? stock.getProduct() : null;
         Warehouse warehouse = stock != null ? stock.getWarehouse() : null;
         return NotificationRequest.builder()
@@ -742,4 +741,3 @@ public class StockServiceImpl implements StockService {
     }
 
 }
-
