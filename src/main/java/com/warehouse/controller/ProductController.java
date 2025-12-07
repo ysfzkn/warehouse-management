@@ -53,14 +53,18 @@ public class ProductController {
             @RequestParam(required = false, defaultValue = "0") Integer page,
             @RequestParam(required = false, defaultValue = "20") Integer size,
             @RequestParam(required = false, defaultValue = "name") String sortBy,
-            @RequestParam(required = false, defaultValue = "asc") String sortDir) {
+            @RequestParam(required = false, defaultValue = "asc") String sortDir,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) Long categoryId,
+            @RequestParam(required = false) Long brandId,
+            @RequestParam(required = false) Long colorId) {
         if (page != null && size != null) {
             // Paginated response
             int safePage = Math.max(0, page);
             int safeSize = Math.max(1, Math.min(size, 250));
             Sort sort = Sort.by(Sort.Direction.fromString(sortDir), sortBy);
             Pageable pageable = PageRequest.of(safePage, safeSize, sort);
-            Page<Product> productPage = productService.getAllProducts(pageable);
+            Page<Product> productPage = productService.getAllProducts(pageable, search, categoryId, brandId, colorId);
             List<ProductDto> content = mapProductsWithTotals(productPage.getContent());
             PagedResponse<ProductDto> response = new PagedResponse<>(
                     content,
@@ -74,8 +78,8 @@ public class ProductController {
             return ResponseEntity.ok(response);
         } else {
             // Non-paginated response (backward compatibility)
-            List<Product> products = productService.getAllProducts();
-            return ResponseEntity.ok(mapProductsWithTotals(products));
+            Page<Product> productPage = productService.getAllProducts(Pageable.unpaged(), search, categoryId, brandId, colorId);
+            return ResponseEntity.ok(mapProductsWithTotals(productPage.getContent()));
         }
     }
 

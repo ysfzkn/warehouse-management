@@ -72,6 +72,15 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional(readOnly = true)
+    public Page<Product> getAllProducts(Pageable pageable, String search, Long categoryId, Long brandId, Long colorId) {
+        logger.debug("Fetching paged products with filters - page: {}, size: {}, search: {}, categoryId: {}, brandId: {}, colorId: {}",
+                pageable.getPageNumber(), pageable.getPageSize(), search, categoryId, brandId, colorId);
+        String normalizedSearch = (search != null && !search.trim().isEmpty()) ? search.trim() : null;
+        return productRepository.findByFilters(normalizedSearch, categoryId, brandId, colorId, pageable);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<Product> getAllActiveProducts() {
         logger.debug("Fetching all active products");
         return productRepository.findAllActive();

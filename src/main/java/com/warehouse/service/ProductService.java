@@ -18,6 +18,8 @@ public interface ProductService {
 
     Page<Product> getAllProducts(Pageable pageable);
 
+    Page<Product> getAllProducts(Pageable pageable, String search, Long categoryId, Long brandId, Long colorId);
+
     List<Product> getAllActiveProducts();
 
     Page<Product> getAllActiveProducts(Pageable pageable);

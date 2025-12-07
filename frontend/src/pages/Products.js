@@ -13,6 +13,7 @@ const Products = () => {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [initialLoad, setInitialLoad] = useState(true);
   const [error, setError] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
@@ -38,6 +39,7 @@ const Products = () => {
   const [productPageSize, setProductPageSize] = useState(100);
   const [productTotalPages, setProductTotalPages] = useState(0);
   const [productTotalCount, setProductTotalCount] = useState(0);
+  const [isProductPaginated, setIsProductPaginated] = useState(false);
   const [filteredProducts, setFilteredProducts] = useState([]);
   const [productSortBy, setProductSortBy] = useState('name');
   const [productSortDir, setProductSortDir] = useState('asc');
@@ -69,6 +71,22 @@ const Products = () => {
         sortBy: productSortBy,
         sortDir: productSortDir
       };
+
+      const normalizedSearch = (searchTerm || '').trim();
+      if (normalizedSearch) {
+        params.search = normalizedSearch;
+      }
+      const categoryFilterId = selectedSubcategory || selectedCategory;
+      if (categoryFilterId) {
+        params.categoryId = categoryFilterId;
+      }
+      if (selectedBrand != null) {
+        params.brandId = selectedBrand;
+      }
+      if (selectedColor != null) {
+        params.colorId = selectedColor;
+      }
+
       const response = await axios.get('/api/products', { params });
       const data = response.data || {};
       const list = Array.isArray(data.content) ? data.content : (Array.isArray(data) ? data : []);
@@ -83,11 +101,13 @@ const Products = () => {
       
       // Update pagination state if response is paginated
       if (data.totalElements !== undefined) {
+        setIsProductPaginated(true);
         setProductPage(data.page ?? pageOverride);
         setProductTotalCount(data.totalElements ?? list.length);
         setProductTotalPages(data.totalPages ?? 0);
       } else {
         // Non-paginated response - apply frontend filtering
+        setIsProductPaginated(false);
         setProductPage(0);
         setProductTotalCount(list.length);
         setProductTotalPages(1);
@@ -97,13 +117,17 @@ const Products = () => {
       setError('Ürünler yüklenirken hata oluştu');
     } finally {
       setLoading(false);
+      setInitialLoad(false);
     }
-  }, [productPageSize, productSortBy, productSortDir]);
+  }, [productPageSize, productSortBy, productSortDir, searchTerm, selectedCategory, selectedSubcategory, selectedBrand, selectedColor]);
 
   useEffect(() => {
-    fetchProducts(0, productPageSize);
+    fetchProducts(productPage, productPageSize);
+  }, [fetchProducts, productPage, productPageSize]);
+
+  useEffect(() => {
     fetchMainCategories();
-  }, [fetchProducts, productPageSize]);
+  }, []);
 
   const handleProductPageSizeChange = async (e) => {
     const newSize = Number(e.target.value);
@@ -195,6 +219,11 @@ const Products = () => {
 
   // Apply frontend filtering (since backend doesn't support all filters yet)
   useEffect(() => {
+    if (isProductPaginated) {
+      setFilteredProducts(products);
+      return;
+    }
+
     const normalizedSearch = normalizeText(searchTerm);
     const brandFilterId = selectedBrand != null ? Number(selectedBrand) : null;
     const colorFilterId = selectedColor != null ? Number(selectedColor) : null;
@@ -216,7 +245,7 @@ const Products = () => {
       setProductTotalCount(filtered.length);
       setProductTotalPages(Math.ceil(filtered.length / productPageSize));
     }
-  }, [products, searchTerm, selectedCategory, selectedSubcategory, selectedBrand, selectedColor, productPageSize]);
+  }, [products, searchTerm, selectedCategory, selectedSubcategory, selectedBrand, selectedColor, productPageSize, isProductPaginated]);
 
   const fetchMainCategories = async () => {
     try {
@@ -360,8 +389,12 @@ const Products = () => {
   };
 
   // Selection handlers
-  const allVisibleProductIds = filteredProducts.map(p => p.id);
-  const areAllVisibleSelected = filteredProducts.length > 0 && allVisibleProductIds.every(id => selectedProducts.includes(id));
+  const displayedProducts = isProductPaginated
+    ? filteredProducts
+    : filteredProducts.slice(productPage * productPageSize, (productPage + 1) * productPageSize);
+
+  const allVisibleProductIds = displayedProducts.map(p => p.id);
+  const areAllVisibleSelected = displayedProducts.length > 0 && allVisibleProductIds.every(id => selectedProducts.includes(id));
   const selectedProductCount = selectedProducts.length;
 
   const toggleSelectAllVisible = () => {
@@ -463,7 +496,7 @@ const Products = () => {
     setSelectedProducts(prev => prev.filter(id => products.some(product => product.id === id)));
   }, [products, selectedProducts.length]);
 
-  if (loading) {
+  if (initialLoad && loading) {
     return (
       <div className="text-center">
         <div className="spinner-border" role="status">
@@ -484,6 +517,16 @@ const Products = () => {
   return (
     <div>
       <style>{`
+        .loading-overlay {
+          position: fixed;
+          inset: 0;
+          background: rgba(255,255,255,0.6);
+          backdrop-filter: blur(2px);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 2000;
+        }
         .filter-dropdown-card {
           position: relative;
           border: 1px solid rgba(15, 23, 42, 0.05);
@@ -1075,7 +1118,7 @@ const Products = () => {
                 </tr>
               </thead>
               <tbody>
-                {filteredProducts.slice(productPage * productPageSize, (productPage + 1) * productPageSize).map((product) => {
+                {displayedProducts.map((product) => {
                   const calculateTotalPrice = () => {
                     const sctAmount = product.price * (product.sctRate || 0) / 100;
                     const priceWithSct = product.price + sctAmount;
@@ -1258,7 +1301,7 @@ const Products = () => {
               </div>
             </div>
             <div className="d-flex flex-column gap-3">
-              {filteredProducts.slice(productPage * productPageSize, (productPage + 1) * productPageSize).map((product) => {
+              {displayedProducts.map((product) => {
                 const calculateTotalPrice = () => {
                   const sctAmount = product.price * (product.sctRate || 0) / 100;
                   const priceWithSct = product.price + sctAmount;
