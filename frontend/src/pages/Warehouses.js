@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import WarehouseForm from '../components/WarehouseForm';
 import StockModal from '../components/StockModal';
+import StockTransferModal from '../components/StockTransferModal';
 import FilterChips from '../components/FilterChips';
 import SearchableSelect from '../components/SearchableSelect';
 import ConfirmModal from '../components/ConfirmModal';
@@ -18,6 +19,8 @@ const Warehouses = () => {
   const [editingWarehouse, setEditingWarehouse] = useState(null);
   const [showStockModal, setShowStockModal] = useState(false);
   const [selectedWarehouse, setSelectedWarehouse] = useState(null);
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [transferWarehouse, setTransferWarehouse] = useState(null);
   const [warehouseTotals, setWarehouseTotals] = useState({});
   const [searchTerm, setSearchTerm] = useState('');
   const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null });
@@ -160,25 +163,19 @@ const Warehouses = () => {
       <style>{`
         .warehouse-card-actions {
           display: flex;
-          flex-wrap: nowrap;
+          flex-wrap: wrap;
           gap: 0.4rem;
           width: 100%;
         }
         .warehouse-card-actions .btn {
-          flex: 1 1 0;
+          flex: 1 1 48%;
         }
         @media (max-width: 1199.98px) and (min-width: 768px) {
-          .warehouse-card-actions {
-            flex-wrap: wrap;
-          }
           .warehouse-card-actions .btn {
             flex: 1 1 calc(50% - 0.4rem);
           }
         }
         @media (max-width: 767.98px) {
-          .warehouse-card-actions {
-            flex-wrap: wrap;
-          }
           .warehouse-card-actions .btn {
             flex: 1 1 100%;
           }
@@ -277,6 +274,13 @@ const Warehouses = () => {
                     Stok Görüntüle
                   </button>
                   <button
+                    className="btn btn-outline-success btn-sm"
+                    onClick={() => { setTransferWarehouse(warehouse); setShowTransferModal(true); }}
+                  >
+                    <i className="fas fa-exchange-alt me-1"></i>
+                    Transfer Başlat
+                  </button>
+                  <button
                     className="btn btn-outline-info btn-sm"
                     onClick={() => handleViewActivity(warehouse.id)}
                   >
@@ -351,6 +355,21 @@ const Warehouses = () => {
         <StockModal
           warehouse={selectedWarehouse}
           onClose={() => setShowStockModal(false)}
+        />
+      )}
+
+      {showTransferModal && (
+        <StockTransferModal
+          stock={transferWarehouse ? { warehouse: transferWarehouse } : null}
+          onSuccess={() => {
+            setShowTransferModal(false);
+            setTransferWarehouse(null);
+            fetchWarehouses();
+          }}
+          onClose={() => {
+            setShowTransferModal(false);
+            setTransferWarehouse(null);
+          }}
         />
       )}
 

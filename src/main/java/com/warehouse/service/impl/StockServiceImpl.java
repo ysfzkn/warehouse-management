@@ -198,6 +198,32 @@ public class StockServiceImpl implements StockService {
 
     @Override
     @Transactional(readOnly = true)
+    public Long getTotalQuantityByFilter(StockFilter filter) {
+        StockFilter appliedFilter = filter != null ? filter : new StockFilter();
+        StockFilter.Status status = appliedFilter.getStatus() != null ? appliedFilter.getStatus()
+                : StockFilter.Status.ALL;
+        String statusValue = status.name();
+        String search = appliedFilter.getSearch();
+        boolean searchEnabled = search != null && !search.isBlank();
+        String searchPattern = searchEnabled ? "%" + search.toLowerCase(Locale.forLanguageTag("tr-TR")) + "%" : "%";
+
+        Long total = stockRepository.sumQuantityByFilters(
+                appliedFilter.getBrandId(),
+                appliedFilter.getColorId(),
+                appliedFilter.getWarehouseId(),
+                appliedFilter.getCategoryId(),
+                appliedFilter.getSubCategoryId(),
+                searchEnabled,
+                searchPattern,
+                appliedFilter.isReservedOnly(),
+                appliedFilter.isConsignedOnly(),
+                statusValue
+        );
+        return total != null ? total : 0L;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Map<Long, Long> getTotalQuantitiesByProductIds(List<Long> productIds) {
         if (productIds == null || productIds.isEmpty()) {
             return Map.of();

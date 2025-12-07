@@ -196,6 +196,8 @@ const Products = () => {
   // Apply frontend filtering (since backend doesn't support all filters yet)
   useEffect(() => {
     const normalizedSearch = normalizeText(searchTerm);
+    const brandFilterId = selectedBrand != null ? Number(selectedBrand) : null;
+    const colorFilterId = selectedColor != null ? Number(selectedColor) : null;
     const filtered = products.filter(product => {
       const matchesSearch = !normalizedSearch ||
         normalizeText(product.name).includes(normalizedSearch) ||
@@ -204,8 +206,8 @@ const Products = () => {
       const parentIdStr = product.category?.parent?.id != null ? product.category.parent.id.toString() : '';
       const matchesCategory = !selectedCategory || categoryIdStr === selectedCategory || parentIdStr === selectedCategory;
       const matchesSubcategory = !selectedSubcategory || categoryIdStr === selectedSubcategory;
-      const matchesBrand = !selectedBrand || product.brand?.id === selectedBrand;
-      const matchesColor = !selectedColor || product.color?.id === selectedColor;
+      const matchesBrand = brandFilterId == null || Number(product.brand?.id) === brandFilterId;
+      const matchesColor = colorFilterId == null || Number(product.color?.id) === colorFilterId;
       return matchesSearch && matchesCategory && matchesSubcategory && matchesBrand && matchesColor;
     });
     setFilteredProducts(filtered);
@@ -923,7 +925,11 @@ const Products = () => {
           <SearchableSelect
             label="Marka Filtresi"
             value={selectedBrand}
-            onChange={(id, opt) => { setSelectedBrand(id); setSelectedBrandOpt(opt || null); }}
+            onChange={(id, opt) => {
+              const parsed = id != null ? Number(id) : null;
+              setSelectedBrand(Number.isNaN(parsed) ? null : parsed);
+              setSelectedBrandOpt(opt || null);
+            }}
             searchEndpoint="/api/brands/search"
             placeholder="Marka ara..."
             allowClear={true}
@@ -934,7 +940,11 @@ const Products = () => {
           <SearchableSelect
             label="Renk Filtresi"
             value={selectedColor}
-            onChange={(id, opt) => { setSelectedColor(id); setSelectedColorOpt(opt || null); }}
+            onChange={(id, opt) => {
+              const parsed = id != null ? Number(id) : null;
+              setSelectedColor(Number.isNaN(parsed) ? null : parsed);
+              setSelectedColorOpt(opt || null);
+            }}
             searchEndpoint="/api/colors/search"
             placeholder="Renk ara..."
             allowClear={true}

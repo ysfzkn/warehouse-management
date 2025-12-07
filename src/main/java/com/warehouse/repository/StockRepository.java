@@ -104,6 +104,47 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
                               Pageable pageable);
 
     @Query("""
+        SELECT COALESCE(SUM(s.quantity), 0) FROM Stock s
+        JOIN s.product p
+        JOIN p.category c
+        LEFT JOIN c.parent cp
+        WHERE (:brandId IS NULL OR p.brand.id = :brandId)
+          AND (:colorId IS NULL OR p.color.id = :colorId)
+          AND (:warehouseId IS NULL OR s.warehouse.id = :warehouseId)
+          AND (
+                :categoryId IS NULL
+                OR c.id = :categoryId
+                OR (cp IS NOT NULL AND cp.id = :categoryId)
+          )
+          AND (:subCategoryId IS NULL OR c.id = :subCategoryId)
+          AND (:searchEnabled = false OR (
+                LOWER(p.name) LIKE :searchPattern
+             OR LOWER(p.sku) LIKE :searchPattern
+             OR LOWER(s.warehouse.name) LIKE :searchPattern
+             OR LOWER(COALESCE(s.warehouse.location, '')) LIKE :searchPattern
+             OR LOWER(COALESCE(s.additionNote, '')) LIKE :searchPattern
+             OR LOWER(COALESCE(s.customerName, '')) LIKE :searchPattern
+             OR LOWER(COALESCE(s.customerPhone, '')) LIKE :searchPattern))
+          AND (:reservedOnly = false OR COALESCE(s.reservedQuantity, 0) > 0)
+          AND (:consignedOnly = false OR COALESCE(s.consignedQuantity, 0) > 0)
+          AND (
+                :status = 'ALL'
+                OR (:status = 'LOW' AND s.quantity > 0 AND s.quantity <= (CASE WHEN s.minStockLevel IS NULL OR s.minStockLevel = 0 THEN 10 ELSE s.minStockLevel END))
+                OR (:status = 'OUT' AND s.quantity = 0)
+          )
+    """)
+    Long sumQuantityByFilters(@Param("brandId") Long brandId,
+                              @Param("colorId") Long colorId,
+                              @Param("warehouseId") Long warehouseId,
+                              @Param("categoryId") Long categoryId,
+                              @Param("subCategoryId") Long subCategoryId,
+                              @Param("searchEnabled") boolean searchEnabled,
+                              @Param("searchPattern") String searchPattern,
+                              @Param("reservedOnly") boolean reservedOnly,
+                              @Param("consignedOnly") boolean consignedOnly,
+                              @Param("status") String status);
+
+    @Query("""
         SELECT s FROM Stock s
         WHERE s.warehouse = :warehouse
           AND s.product.id IN :productIds

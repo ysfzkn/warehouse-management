@@ -48,6 +48,8 @@ public interface StockService {
 
     Map<Long, Long> getTotalQuantitiesByProductIds(List<Long> productIds);
 
+    Long getTotalQuantityByFilter(StockFilter filter);
+
     Stock createStock(Stock stock);
 
     List<Stock> createStocks(List<Stock> stocks);

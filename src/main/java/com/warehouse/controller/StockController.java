@@ -172,6 +172,34 @@ public class StockController {
         return ResponseEntity.ok(total);
     }
 
+    @GetMapping("/total-quantity")
+    @Transactional(readOnly = true)
+    public ResponseEntity<Long> getTotalQuantityByFilters(
+            @RequestParam(required = false) Long brandId,
+            @RequestParam(required = false) Long colorId,
+            @RequestParam(required = false) Long warehouseId,
+            @RequestParam(required = false) Long categoryId,
+            @RequestParam(required = false) Long subCategoryId,
+            @RequestParam(required = false) Boolean reservedOnly,
+            @RequestParam(required = false) Boolean consignedOnly,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false, defaultValue = "all") String status
+    ) {
+        StockFilter filter = new StockFilter();
+        filter.setBrandId(brandId);
+        filter.setColorId(colorId);
+        filter.setWarehouseId(warehouseId);
+        filter.setCategoryId(categoryId);
+        filter.setSubCategoryId(subCategoryId);
+        filter.setReservedOnly(Boolean.TRUE.equals(reservedOnly));
+        filter.setConsignedOnly(Boolean.TRUE.equals(consignedOnly));
+        filter.setSearch(search != null && !search.isBlank() ? search.trim() : null);
+        filter.setStatus(StockFilter.Status.from(status));
+
+        Long total = stockService.getTotalQuantityByFilter(filter);
+        return ResponseEntity.ok(total);
+    }
+
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<StockDto> createStock(@Valid @RequestBody Stock stock) {

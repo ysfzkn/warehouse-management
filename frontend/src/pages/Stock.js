@@ -463,7 +463,11 @@ const StockFiltersBar = ({
               <SearchableSelect
                 label=""
                 value={selectedWarehouseId}
-                onChange={(id, opt) => { setSelectedWarehouseId(id); setSelectedWarehouseOpt(opt || null); }}
+                onChange={(id, opt) => {
+                  const parsed = id != null ? Number(id) : null;
+                  setSelectedWarehouseId(Number.isNaN(parsed) ? null : parsed);
+                  setSelectedWarehouseOpt(opt || null);
+                }}
                 searchEndpoint="/api/warehouses"
                 placeholder="Depo ara..."
                 allowClear={true}
@@ -481,7 +485,11 @@ const StockFiltersBar = ({
               <SearchableSelect
                 label=""
                 value={brandId}
-                onChange={(id, opt) => { setBrandId(id); setBrandOpt(opt || null); }}
+                onChange={(id, opt) => {
+                  const parsed = id != null ? Number(id) : null;
+                  setBrandId(Number.isNaN(parsed) ? null : parsed);
+                  setBrandOpt(opt || null);
+                }}
                 searchEndpoint="/api/brands/search"
                 placeholder="Marka ara..."
                 allowClear={true}
@@ -498,7 +506,11 @@ const StockFiltersBar = ({
               <SearchableSelect
                 label=""
                 value={colorId}
-                onChange={(id, opt) => { setColorId(id); setColorOpt(opt || null); }}
+                onChange={(id, opt) => {
+                  const parsed = id != null ? Number(id) : null;
+                  setColorId(Number.isNaN(parsed) ? null : parsed);
+                  setColorOpt(opt || null);
+                }}
                 searchEndpoint="/api/colors/search"
                 placeholder="Renk ara..."
                 allowClear={true}
@@ -640,6 +652,7 @@ const Stock = () => {
   const [stockTotalPages, setStockTotalPages] = useState(0);
   const [totalStockCount, setTotalStockCount] = useState(0);
   const [stockStatusCounts, setStockStatusCounts] = useState({ all: 0, low: 0, out: 0 });
+  const [totalQuantity, setTotalQuantity] = useState(0);
   const [products, setProducts] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -715,12 +728,15 @@ const Stock = () => {
   const buildStockFilterParams = useCallback(() => {
     const categoryId = selectedCategory ? Number(selectedCategory) : undefined;
     const subCategoryId = selectedSubcategory ? Number(selectedSubcategory) : undefined;
+    const normalizedBrandId = brandId != null ? Number(brandId) : undefined;
+    const normalizedColorId = colorId != null ? Number(colorId) : undefined;
+    const normalizedWarehouseId = selectedWarehouseId != null ? Number(selectedWarehouseId) : undefined;
     const normalizedSearch = searchTerm ? searchTerm.trim() : undefined;
 
     return {
-      brandId: brandId || undefined,
-      colorId: colorId || undefined,
-      warehouseId: selectedWarehouseId || undefined,
+      brandId: Number.isNaN(normalizedBrandId) ? undefined : normalizedBrandId,
+      colorId: Number.isNaN(normalizedColorId) ? undefined : normalizedColorId,
+      warehouseId: Number.isNaN(normalizedWarehouseId) ? undefined : normalizedWarehouseId,
       categoryId: Number.isNaN(categoryId) ? undefined : categoryId,
       subCategoryId: Number.isNaN(subCategoryId) ? undefined : subCategoryId,
       reservedOnly: showReserved || undefined,
@@ -779,6 +795,21 @@ const Stock = () => {
       console.error('Error fetching stock status counts:', error);
     }
   }, [buildStockFilterParams]);
+
+  const fetchTotalQuantity = useCallback(async () => {
+    const params = {
+      ...buildStockFilterParams(),
+      status: filter
+    };
+    try {
+      const res = await axios.get('/api/stocks/total-quantity', { params });
+      const total = typeof res.data === 'number' ? res.data : 0;
+      setTotalQuantity(total);
+    } catch (error) {
+      console.error('Error fetching total stock quantity:', error);
+      setTotalQuantity(0);
+    }
+  }, [buildStockFilterParams, filter]);
 
   const fetchTransfers = useCallback(async (page = 0, append = false, pageSizeOverride) => {
     const size = pageSizeOverride ?? transferPageSize;
@@ -1069,6 +1100,10 @@ const Stock = () => {
   useEffect(() => {
     fetchStockStatusCounts();
   }, [fetchStockStatusCounts]);
+
+  useEffect(() => {
+    fetchTotalQuantity();
+  }, [fetchTotalQuantity]);
 
   useEffect(() => {
     fetchAllData();
@@ -2142,7 +2177,7 @@ const Stock = () => {
 
       {/* Filter Tabs */}
       {!showTransferHistory && (
-        <div className="mb-4">
+        <div className="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-4">
           <div className="btn-group" role="group">
             <input
               type="radio"
@@ -2182,6 +2217,12 @@ const Stock = () => {
             <label className="btn btn-outline-danger" htmlFor="out-of-stock">
               Stok Dışı ({safeOutCount})
             </label>
+          </div>
+          <div className="d-flex align-items-center gap-2">
+            <span className="text-muted small">Toplam Stok Miktarı</span>
+            <span className="badge bg-primary rounded-pill px-3 py-2 fs-6">
+              {totalQuantity.toLocaleString('tr-TR')}
+            </span>
           </div>
         </div>
       )}

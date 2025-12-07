@@ -208,20 +208,29 @@ const Dashboard = () => {
     fetchDashboardData();
   }, [fetchDashboardData]);
 
+  const productMap = useMemo(() => {
+    const map = {};
+    products.forEach(p => { if (p?.id != null) map[p.id] = p; });
+    return map;
+  }, [products]);
+
   const filterStockList = useCallback((list) => {
     const q = normalizeText(searchTerm);
     return (list || []).filter(s => {
+      const product = s?.product?.id != null ? productMap[s.product.id] : null;
+      const brandOfProduct = product?.brand?.id ?? s.product?.brand?.id;
+      const colorOfProduct = product?.color?.id ?? s.product?.color?.id;
       const matchesSearch = !q ||
         normalizeText(s.product?.name).includes(q) ||
         normalizeText(s.product?.sku).includes(q) ||
         normalizeText(s.warehouse?.name).includes(q) ||
         normalizeText(s.warehouse?.location).includes(q);
-      const matchesBrand = !brandId || (s.product?.brand?.id === brandId);
-      const matchesColor = !colorId || (s.product?.color?.id === colorId);
+      const matchesBrand = brandId == null || Number(brandOfProduct) === Number(brandId);
+      const matchesColor = colorId == null || Number(colorOfProduct) === Number(colorId);
       const matchesWarehouse = selectedWarehouseIds.length === 0 || selectedWarehouseIds.includes(s.warehouse?.id);
       return matchesSearch && matchesBrand && matchesColor && matchesWarehouse;
     });
-  }, [searchTerm, brandId, colorId, selectedWarehouseIds]);
+  }, [searchTerm, brandId, colorId, selectedWarehouseIds, productMap]);
 
   const filteredLow = useMemo(() => filterStockList(lowStocks), [lowStocks, filterStockList]);
   const filteredOut = useMemo(() => filterStockList(outStocks), [outStocks, filterStockList]);
@@ -685,7 +694,7 @@ const Dashboard = () => {
                   </ul>
                 </div>
                 {selectedWarehouseIds.length > 0 && (
-                  <div className="mt-2">
+                  <div className="mt-2 mb-2">
                     <div className="d-flex flex-wrap gap-1">
                       {selectedWarehouseOpts.map(opt => (
                         <span key={opt.id} className="badge bg-primary">
@@ -711,7 +720,11 @@ const Dashboard = () => {
               <SearchableSelect
                 label={<span className="fw-semibold"><i className="fas fa-copyright me-2 text-primary"></i>Marka Filtresi</span>}
                 value={brandId}
-                onChange={(id, opt) => { setBrandId(id); setBrandOpt(opt || null); }}
+                onChange={(id, opt) => {
+                  const parsed = id != null ? Number(id) : null;
+                  setBrandId(Number.isNaN(parsed) ? null : parsed);
+                  setBrandOpt(opt || null);
+                }}
                 searchEndpoint="/api/brands/search"
                 placeholder="Tüm markalar..."
                 allowClear={true}
@@ -723,7 +736,11 @@ const Dashboard = () => {
               <SearchableSelect
                 label={<span className="fw-semibold"><i className="fas fa-palette me-2 text-primary"></i>Renk Filtresi</span>}
                 value={colorId}
-                onChange={(id, opt) => { setColorId(id); setColorOpt(opt || null); }}
+                onChange={(id, opt) => {
+                  const parsed = id != null ? Number(id) : null;
+                  setColorId(Number.isNaN(parsed) ? null : parsed);
+                  setColorOpt(opt || null);
+                }}
                 searchEndpoint="/api/colors/search"
                 placeholder="Tüm renkler..."
                 allowClear={true}
