@@ -217,8 +217,7 @@ public class StockServiceImpl implements StockService {
                 searchPattern,
                 appliedFilter.isReservedOnly(),
                 appliedFilter.isConsignedOnly(),
-                statusValue
-        );
+                statusValue);
         return total != null ? total : 0L;
     }
 

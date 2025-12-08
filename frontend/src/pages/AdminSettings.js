@@ -393,14 +393,14 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
       type === 'success'
         ? 'text-bg-success'
         : type === 'warning'
-        ? 'text-bg-warning'
-        : 'text-bg-danger';
+          ? 'text-bg-warning'
+          : 'text-bg-danger';
     const icon =
       type === 'success'
         ? 'fa-check-circle'
         : type === 'warning'
-        ? 'fa-exclamation-triangle'
-        : 'fa-times-circle';
+          ? 'fa-exclamation-triangle'
+          : 'fa-times-circle';
     toast.className = `toast align-items-center ${bgClass} border-0 position-fixed top-0 end-0 m-3 show`;
     toast.setAttribute('role', 'alert');
     toast.style.zIndex = '9999';
@@ -410,9 +410,8 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
           <i class="fas ${icon} me-2 mt-1"></i>
           <div class="flex-grow-1">${message}</div>
         </div>
-        <button type="button" class="btn-close ${
-          type === 'success' ? 'btn-close-white' : ''
-        } me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button>
+        <button type="button" class="btn-close ${type === 'success' ? 'btn-close-white' : ''
+      } me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button>
       </div>
     `;
     document.body.appendChild(toast);
@@ -422,9 +421,9 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
         setTimeout(() => {
           try {
             document.body.removeChild(toast);
-          } catch {}
+          } catch { }
         }, 300);
-      } catch {}
+      } catch { }
     }, type === 'success' ? 4000 : 7000);
   };
 
@@ -504,8 +503,8 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
   const usersRef = useRef([]);
   const { askCode: askSecurityCode, SecurityCodePrompt, closePrompt: closeSecurityPrompt } = useSecurityCodePrompt();
   const adminSecurityErrorCodes = new Set([
-    'AUTH_002','AUTH_003','AUTH_004','AUTH_005','AUTH_006','AUTH_007',
-    'ADMIN_SECURITY_CODE_REQUIRED','INVALID_ADMIN_SECURITY_CODE','ADMIN_SECURITY_CODE_MISMATCH'
+    'AUTH_002', 'AUTH_003', 'AUTH_004', 'AUTH_005', 'AUTH_006', 'AUTH_007',
+    'ADMIN_SECURITY_CODE_REQUIRED', 'INVALID_ADMIN_SECURITY_CODE', 'ADMIN_SECURITY_CODE_MISMATCH'
   ]);
   const parseSecurityError = (error) => {
     const data = error?.response?.data;
@@ -522,14 +521,14 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
         tasks.push(
           axios.get('/api/brands')
             .then(res => setBrands(res.data || []))
-            .catch(() => {}) // önceki state'i koru
+            .catch(() => { }) // önceki state'i koru
         );
       }
       if (fetchColors) {
         tasks.push(
           axios.get('/api/colors')
             .then(res => setColors(res.data || []))
-            .catch(() => {})
+            .catch(() => { })
         );
       }
       if (fetchUsers) {
@@ -650,7 +649,7 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
         }
       }
       setEditing(undefined);
-      await load();  
+      await load();
     } catch (e) {
       const fallback =
         activeTab === 'brand'
@@ -1068,33 +1067,33 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
                     !userSearch ||
                     (u.username || '').toLowerCase().includes(userSearch.toLowerCase())
                   ).length === 0 && (
-                    <tr><td colSpan={3} className="text-center py-4 text-muted">Kayıt bulunamadı</td></tr>
-                  )}
+                      <tr><td colSpan={3} className="text-center py-4 text-muted">Kayıt bulunamadı</td></tr>
+                    )}
                   {!loading && users
                     .filter(u =>
                       !userSearch ||
                       (u.username || '').toLowerCase().includes(userSearch.toLowerCase())
                     )
                     .map(u => (
-                    <tr key={u.id}>
-                      <td>{u.username}</td>
-                      <td>
-                        <span className={`badge ${u.role === 'ADMIN' ? 'bg-danger' : u.role === 'STOCK_IN' ? 'bg-success' : 'bg-warning'}`}>
-                          {roleLabel(u.role)}
-                        </span>
-                      </td>
-                      <td>
-                        <div className="btn-group btn-group-sm">
-                          <button className="btn btn-outline-secondary" onClick={() => { setError(''); setEditing(u); }}>
-                            <i className="fas fa-edit"></i>
-                          </button>
-                          <button className="btn btn-outline-danger" onClick={() => handleDeleteUser(u)}>
-                            <i className="fas fa-trash"></i>
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                      <tr key={u.id}>
+                        <td>{u.username}</td>
+                        <td>
+                          <span className={`badge ${u.role === 'ADMIN' ? 'bg-danger' : u.role === 'STOCK_IN' ? 'bg-success' : 'bg-warning'}`}>
+                            {roleLabel(u.role)}
+                          </span>
+                        </td>
+                        <td>
+                          <div className="btn-group btn-group-sm">
+                            <button className="btn btn-outline-secondary" onClick={() => { setError(''); setEditing(u); }}>
+                              <i className="fas fa-edit"></i>
+                            </button>
+                            <button className="btn btn-outline-danger" onClick={() => handleDeleteUser(u)}>
+                              <i className="fas fa-trash"></i>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
                 </tbody>
               </table>
             </div>
