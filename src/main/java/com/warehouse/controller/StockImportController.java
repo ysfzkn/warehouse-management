@@ -4,6 +4,7 @@ import com.warehouse.config.ImportProperties;
 import com.warehouse.entity.StockImportHistory;
 import com.warehouse.repository.StockImportHistoryRepository;
 import com.warehouse.service.StockImportService;
+import com.warehouse.service.AdminSecurityService;
 import com.warehouse.dto.StockImportHistoryDto;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -36,6 +37,7 @@ public class StockImportController {
     private final StockImportService stockImportService;
     private final StockImportHistoryRepository historyRepository;
     private final ImportProperties importProperties;
+    private final AdminSecurityService adminSecurityService;
 
     @GetMapping("/template")
     public ResponseEntity<Resource> downloadTemplate() throws IOException {
@@ -80,7 +82,9 @@ public class StockImportController {
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<Void> deleteImportHistory(@PathVariable Long id) throws IOException {
+    public ResponseEntity<Void> deleteImportHistory(@PathVariable Long id,
+                                                    @RequestHeader(value = "X-ADMIN-SECURITY-CODE", required = false) String adminSecurityCode) throws IOException {
+        adminSecurityService.requireSecurityCodeForAdmin(adminSecurityCode);
         StockImportHistory history = historyRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Record not found: " + id));
         
@@ -97,10 +101,13 @@ public class StockImportController {
 
     @DeleteMapping("/bulk")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<BulkDeleteResponse> deleteImportHistories(@RequestBody List<Long> ids) throws IOException {
+    public ResponseEntity<BulkDeleteResponse> deleteImportHistories(@RequestBody List<Long> ids,
+                                                                     @RequestHeader(value = "X-ADMIN-SECURITY-CODE", required = false) String adminSecurityCode) throws IOException {
         if (ids == null || ids.isEmpty()) {
             return ResponseEntity.badRequest().build();
         }
+        
+        adminSecurityService.requireSecurityCodeForAdmin(adminSecurityCode);
         
         List<BulkDeleteResponse.DeleteError> errors = new ArrayList<>();
         int successCount = 0;

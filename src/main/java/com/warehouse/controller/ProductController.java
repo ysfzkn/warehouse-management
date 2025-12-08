@@ -9,6 +9,7 @@ import com.warehouse.service.ProductImageService;
 import com.warehouse.entity.ProductImage;
 import com.warehouse.service.StockService;
 import com.warehouse.service.PhotoStorageService;
+import com.warehouse.service.AdminSecurityService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import com.warehouse.dto.PagedResponse;
@@ -35,16 +36,19 @@ public class ProductController {
     private final StockService stockService;
     private final ProductImageService productImageService;
     private final PhotoStorageService photoStorageService;
+    private final AdminSecurityService adminSecurityService;
 
     @Autowired
     public ProductController(ProductService productService,
                              StockService stockService,
                              ProductImageService productImageService,
-                             PhotoStorageService photoStorageService) {
+                             PhotoStorageService photoStorageService,
+                             AdminSecurityService adminSecurityService) {
         this.productService = productService;
         this.stockService = stockService;
         this.productImageService = productImageService;
         this.photoStorageService = photoStorageService;
+        this.adminSecurityService = adminSecurityService;
     }
 
     @GetMapping
@@ -194,7 +198,9 @@ public class ProductController {
     }
 
     @DeleteMapping("/images/{imageId}")
-    public ResponseEntity<Void> deleteProductImage(@PathVariable Long imageId) {
+    public ResponseEntity<Void> deleteProductImage(@PathVariable Long imageId,
+                                                   @RequestHeader(value = "X-ADMIN-SECURITY-CODE", required = false) String adminSecurityCode) {
+        adminSecurityService.requireSecurityCodeForAdmin(adminSecurityCode);
         productImageService.deleteImage(imageId);
         return ResponseEntity.noContent().build();
     }
@@ -240,16 +246,20 @@ public class ProductController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteProduct(@PathVariable Long id) {
+    public ResponseEntity<Void> deleteProduct(@PathVariable Long id,
+                                              @RequestHeader(value = "X-ADMIN-SECURITY-CODE", required = false) String adminSecurityCode) {
+        adminSecurityService.requireSecurityCodeForAdmin(adminSecurityCode);
         productService.deleteProduct(id);
         return ResponseEntity.noContent().build();
     }
 
     @DeleteMapping("/bulk")
-    public ResponseEntity<BulkDeleteResponse> deleteProducts(@RequestBody List<Long> ids) {
+    public ResponseEntity<BulkDeleteResponse> deleteProducts(@RequestBody List<Long> ids,
+                                                             @RequestHeader(value = "X-ADMIN-SECURITY-CODE", required = false) String adminSecurityCode) {
         if (ids == null || ids.isEmpty()) {
             return ResponseEntity.badRequest().build();
         }
+        adminSecurityService.requireSecurityCodeForAdmin(adminSecurityCode);
         BulkDeleteResponse response = productService.deleteProducts(ids);
         return ResponseEntity.ok(response);
     }

@@ -1,7 +1,9 @@
 package com.warehouse.exception;
 
+import lombok.Getter;
 import org.springframework.http.HttpStatus;
 
+@Getter
 public enum ErrorCode {
     
     // Kaynak Bulunamadı (404)
@@ -39,6 +41,7 @@ public enum ErrorCode {
     TRANSFER_ALREADY_CANCELLED("TRANSFER_005", "Transfer zaten iptal edilmiş", HttpStatus.BAD_REQUEST),
     CANNOT_CANCEL_COMPLETED("TRANSFER_006", "Tamamlanan transfer iptal edilemez", HttpStatus.BAD_REQUEST),
     CANNOT_DELETE_IN_TRANSIT("TRANSFER_007", "Yoldaki transfer silinemez", HttpStatus.BAD_REQUEST),
+
     // Tamamlanan transferlerin silinmesine artık izin veriyoruz, bu nedenle CANNOT_DELETE_COMPLETED kullanılmıyor
     CANNOT_DELETE_COMPLETED("TRANSFER_008", "Tamamlanan transfer silinemez", HttpStatus.BAD_REQUEST),
     ONLY_PENDING_CAN_BE_UPDATED("TRANSFER_009", "Sadece beklemedeki transferler güncellenebilir", HttpStatus.BAD_REQUEST),
@@ -47,6 +50,12 @@ public enum ErrorCode {
     // Stok Talep Hataları
     ONLY_PENDING_REQUESTS_CAN_BE_DELETED("REQUEST_001", "Sadece beklemedeki talepler silinebilir", HttpStatus.BAD_REQUEST),
     UNAUTHORIZED_ACTION("AUTH_001", "Bu işlem için yetkiniz bulunmuyor", HttpStatus.FORBIDDEN),
+    ADMIN_SECURITY_CODE_REQUIRED("AUTH_002", "Yönetici güvenlik şifresi doğrulanamadı", HttpStatus.BAD_REQUEST),
+    INVALID_ADMIN_SECURITY_CODE("AUTH_003", "Güvenlik şifresi hatalı", HttpStatus.FORBIDDEN),
+    ADMIN_SECURITY_CODE_MISMATCH("AUTH_004", "Yeni güvenlik şifreleri uyuşmuyor", HttpStatus.BAD_REQUEST),
+    ADMIN_SECURITY_CODE_TOO_SHORT("AUTH_005", "Yeni güvenlik şifresi en az 5 karakter olmalıdır", HttpStatus.BAD_REQUEST),
+    ADMIN_SECURITY_CODE_CURRENT_REQUIRED("AUTH_006", "Mevcut güvenlik şifresi zorunludur", HttpStatus.BAD_REQUEST),
+    ADMIN_SECURITY_CODE_NEW_REQUIRED("AUTH_007", "Yeni güvenlik şifresi zorunludur", HttpStatus.BAD_REQUEST),
     
     // İlişki Kısıtları (400)
     CANNOT_DELETE_WITH_STOCKS("RELATION_001", "İlişkili stoklar varken silme yapılamaz", HttpStatus.BAD_REQUEST),
@@ -68,16 +77,5 @@ public enum ErrorCode {
         this.httpStatus = httpStatus;
     }
 
-    public String getCode() {
-        return code;
-    }
-
-    public String getMessage() {
-        return message;
-    }
-
-    public HttpStatus getHttpStatus() {
-        return httpStatus;
-    }
 }
 

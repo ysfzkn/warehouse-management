@@ -165,4 +165,17 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
         Long getProductId();
         Long getTotalQuantity();
     }
+
+    @Query("""
+        SELECT s.warehouse.id AS warehouseId, COALESCE(SUM(s.quantity), 0) AS totalQuantity
+        FROM Stock s
+        WHERE s.warehouse.id IN :warehouseIds
+        GROUP BY s.warehouse.id
+    """)
+    List<WarehouseQuantityAggregate> getTotalQuantitiesByWarehouseIds(@Param("warehouseIds") Collection<Long> warehouseIds);
+
+    interface WarehouseQuantityAggregate {
+        Long getWarehouseId();
+        Long getTotalQuantity();
+    }
 }

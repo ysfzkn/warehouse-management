@@ -3,6 +3,7 @@ package com.warehouse.controller;
 import com.warehouse.entity.User;
 import com.warehouse.entity.UserRole;
 import com.warehouse.service.UserService;
+import com.warehouse.service.AdminSecurityService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -16,9 +17,11 @@ import java.util.Map;
 public class UserController {
 
     private final UserService userService;
+    private final AdminSecurityService adminSecurityService;
 
-    public UserController(UserService userService) {
+    public UserController(UserService userService, AdminSecurityService adminSecurityService) {
         this.userService = userService;
+        this.adminSecurityService = adminSecurityService;
     }
 
     @GetMapping
@@ -29,18 +32,29 @@ public class UserController {
 
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
-    public User createUser(@RequestBody Map<String, String> body) {
+    public User createUser(@RequestBody Map<String, String> body,
+                           @RequestHeader(value = "X-ADMIN-SECURITY-CODE", required = false) String adminSecurityCode) {
         String username = body.getOrDefault("username", "");
         String password = body.getOrDefault("password", "");
         String role = body.getOrDefault("role", UserRole.STOCK_IN.name());
-        return userService.createUser(username, password, UserRole.valueOf(role));
+        UserRole targetRole = UserRole.valueOf(role);
+        if (targetRole == UserRole.ADMIN) {
+            adminSecurityService.requireSecurityCodeForAdmin(adminSecurityCode);
+        }
+        return userService.createUser(username, password, targetRole);
     }
 
     @PutMapping("/{id}/role")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<Void> changeRole(@PathVariable Long id, @RequestBody Map<String, String> body) {
+    public ResponseEntity<Void> changeRole(@PathVariable Long id,
+                                           @RequestBody Map<String, String> body,
+                                           @RequestHeader(value = "X-ADMIN-SECURITY-CODE", required = false) String adminSecurityCode) {
         String role = body.get("role");
-        userService.changeRole(id, UserRole.valueOf(role));
+        UserRole targetRole = UserRole.valueOf(role);
+        if (targetRole == UserRole.ADMIN) {
+            adminSecurityService.requireSecurityCodeForAdmin(adminSecurityCode);
+        }
+        userService.changeRole(id, targetRole);
         return ResponseEntity.noContent().build();
     }
 
@@ -54,7 +68,9 @@ public class UserController {
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<Void> deleteUser(@PathVariable Long id) {
+    public ResponseEntity<Void> deleteUser(@PathVariable Long id,
+                                           @RequestHeader(value = "X-ADMIN-SECURITY-CODE", required = false) String adminSecurityCode) {
+        adminSecurityService.requireSecurityCodeForAdmin(adminSecurityCode);
         userService.deleteUser(id);
         return ResponseEntity.noContent().build();
     }

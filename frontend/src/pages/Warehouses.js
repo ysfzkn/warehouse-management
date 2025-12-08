@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import WarehouseForm from '../components/WarehouseForm';
@@ -7,6 +7,7 @@ import StockTransferModal from '../components/StockTransferModal';
 import FilterChips from '../components/FilterChips';
 import SearchableSelect from '../components/SearchableSelect';
 import ConfirmModal from '../components/ConfirmModal';
+import useSecurityCodePrompt from '../components/useSecurityCodePrompt';
 
 const normalizeText = (text) => (text || '').toLocaleLowerCase('tr-TR');
 
@@ -24,8 +25,16 @@ const Warehouses = () => {
   const [warehouseTotals, setWarehouseTotals] = useState({});
   const [searchTerm, setSearchTerm] = useState('');
   const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null });
+  const role = (typeof window !== 'undefined' && localStorage.getItem('auth_role')) || 'ADMIN';
+  const isAdmin = role === 'ADMIN';
+  const { askCode: askSecurityCode, SecurityCodePrompt, closePrompt: closeSecurityPrompt } = useSecurityCodePrompt();
+
+  const fetchedRef = useRef(false);
 
   useEffect(() => {
+    // Prevent double fetch in React StrictMode (dev)
+    if (fetchedRef.current) return;
+    fetchedRef.current = true;
     fetchWarehouses();
   }, []);
 
@@ -35,20 +44,16 @@ const Warehouses = () => {
       const response = await axios.get('/api/warehouses');
       const list = response.data || [];
       setWarehouses(list);
-      try {
-        const totals = await Promise.all(
-          list.map(async (w) => {
-            try {
-              const r = await axios.get(`/api/stocks/warehouse/${w.id}/total-quantity`);
-              return { id: w.id, total: typeof r.data === 'number' ? r.data : 0 };
-            } catch {
-              return { id: w.id, total: 0 };
-            }
-          })
-        );
-        const map = totals.reduce((acc, t) => { acc[t.id] = t.total; return acc; }, {});
-        setWarehouseTotals(map);
-      } catch {}
+      // Prefer backend-provided aggregate quantities (if available) instead of per-warehouse calls
+      const map = {};
+      list.forEach((w) => {
+        if (typeof w.totalQuantity === 'number') {
+          map[w.id] = w.totalQuantity;
+        } else if (typeof w.stockTotal === 'number') {
+          map[w.id] = w.stockTotal;
+        }
+      });
+      setWarehouseTotals(map);
     } catch (error) {
       console.error('Error fetching warehouses:', error);
       setError('Depolar yüklenirken hata oluştu');
@@ -77,6 +82,22 @@ const Warehouses = () => {
     setShowForm(true);
   };
 
+  const showToast = (msg, variant = 'danger') => {
+    const toast = document.createElement('div');
+    toast.className = `toast align-items-center text-bg-${variant} border-0 position-fixed top-0 end-0 m-3 show fs-6`;
+    toast.style.minWidth = '360px';
+    toast.style.padding = '0.5rem 0.75rem';
+    toast.setAttribute('role', 'alert');
+    toast.innerHTML = `<div class="d-flex"><div class="toast-body fw-semibold">${msg}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
+    document.body.appendChild(toast);
+    setTimeout(() => { try { document.body.removeChild(toast); } catch {} }, 7000);
+  };
+
+  const securityErrorCodes = new Set([
+    'AUTH_002','AUTH_003','AUTH_004','AUTH_005','AUTH_006','AUTH_007',
+    'ADMIN_SECURITY_CODE_REQUIRED','INVALID_ADMIN_SECURITY_CODE','ADMIN_SECURITY_CODE_MISMATCH'
+  ]);
+
   const handleDelete = async (id) => {
     setConfirmModal({
       show: true,
@@ -87,22 +108,54 @@ const Warehouses = () => {
       confirmText: 'Sil',
       onConfirm: async () => {
         setConfirmModal({ show: false, title: '', message: '', onConfirm: null });
-        try {
-          await axios.delete(`/api/warehouses/${id}`);
-        } catch (error) {
-          const errorData = error?.response?.data;
-          const msg = errorData?.message || errorData?.error || (typeof errorData === 'string' ? errorData : 'Depo silinirken hata oluştu');
-          const toast = document.createElement('div');
-          toast.className = 'toast align-items-center text-bg-danger border-0 position-fixed top-0 end-0 m-3 show fs-6';
-          toast.style.minWidth = '360px';
-          toast.style.padding = '0.5rem 0.75rem';
-          toast.setAttribute('role', 'alert');
-          toast.innerHTML = `<div class="d-flex"><div class="toast-body fw-semibold">${msg}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
-          document.body.appendChild(toast);
-          setTimeout(() => { try { document.body.removeChild(toast); } catch {} }, 7000);
-        } finally {
-          // Hata olsa bile, kısmen silinmiş kayıtlar varsa depo listesini yenile
-          fetchWarehouses();
+        if (!isAdmin) {
+          try {
+            await axios.delete(`/api/warehouses/${id}`);
+            fetchWarehouses();
+          } catch (error) {
+            const errorData = error?.response?.data;
+            const msg = errorData?.message || errorData?.error || (typeof errorData === 'string' ? errorData : 'Depo silinirken hata oluştu');
+            showToast(msg, 'danger');
+          }
+          return;
+        }
+
+        let lastCode = '';
+        let lastErrorMsg = '';
+        // Retry loop: keep prompt open on security errors, no page refresh on fail
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+          const code = await askSecurityCode({
+            prefill: lastCode,
+            errorMessage: lastErrorMsg || (lastCode ? 'Güvenlik şifresi hatalı, tekrar deneyin.' : ''),
+            persistOnResolve: true
+          });
+          if (code === null) {
+            return;
+          }
+          lastCode = code;
+          lastErrorMsg = '';
+
+          try {
+            await axios.delete(`/api/warehouses/${id}`, { headers: { 'X-ADMIN-SECURITY-CODE': code } });
+            fetchWarehouses();
+            showToast('Depo başarıyla silindi.', 'success');
+            closeSecurityPrompt();
+            break;
+          } catch (error) {
+            const errorData = error?.response?.data;
+            const errCode = errorData?.code || errorData?.errorCode;
+            const msg = errorData?.message || errorData?.error || (typeof errorData === 'string' ? errorData : 'Depo silinirken hata oluştu');
+            showToast(msg, 'danger');
+            lastErrorMsg = msg;
+
+            // If it is NOT a security-code-related error, do not keep retrying
+            if (!securityErrorCodes.has(errCode)) {
+              closeSecurityPrompt();
+              break;
+            }
+            // Otherwise loop continues, prompt remains for retry with error message
+          }
         }
       }
     });
@@ -384,6 +437,7 @@ const Warehouses = () => {
         onConfirm={confirmModal.onConfirm}
         onCancel={() => setConfirmModal({ show: false, title: '', message: '', onConfirm: null })}
       />
+      {SecurityCodePrompt}
     </div>
   );
 };

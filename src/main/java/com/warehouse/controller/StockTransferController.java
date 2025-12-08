@@ -6,6 +6,7 @@ import com.warehouse.dto.StockTransferCreateRequest;
 import com.warehouse.dto.StockTransferDto;
 import com.warehouse.dto.StockTransferFilter;
 import com.warehouse.dto.StockTransferSummary;
+import com.warehouse.dto.StockTransferDeletionResult;
 import com.warehouse.entity.Product;
 import com.warehouse.entity.StockTransfer;
 import com.warehouse.entity.StockTransferItem;
@@ -15,6 +16,7 @@ import com.warehouse.enums.TransferType;
 import com.warehouse.enums.TransferApprovalStatus;
 import com.warehouse.mapper.StockTransferMapper;
 import com.warehouse.service.StockTransferService;
+import com.warehouse.service.AdminSecurityService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -36,11 +38,13 @@ public class StockTransferController {
 
     private final StockTransferService stockTransferService;
     private final StockTransferMapper transferMapper;
+    private final AdminSecurityService adminSecurityService;
 
     @Autowired
-    public StockTransferController(StockTransferService stockTransferService, StockTransferMapper transferMapper) {
+    public StockTransferController(StockTransferService stockTransferService, StockTransferMapper transferMapper, AdminSecurityService adminSecurityService) {
         this.stockTransferService = stockTransferService;
         this.transferMapper = transferMapper;
+        this.adminSecurityService = adminSecurityService;
     }
 
     @GetMapping
@@ -186,9 +190,10 @@ public class StockTransferController {
     @PostMapping("/{id}/approve-start")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<StockTransferDto> approveTransferStart(@PathVariable Long id,
-                                                                 @RequestBody(required = false) Map<String, String> payload) {
+                                                                 @RequestBody(required = false) Map<String, String> payload,
+                                                                 @RequestHeader(value = "X-ADMIN-SECURITY-CODE", required = false) String adminSecurityCode) {
         String note = payload != null ? payload.get("note") : null;
-        StockTransfer transfer = stockTransferService.approveTransferStart(id, note);
+        StockTransfer transfer = stockTransferService.approveTransferStart(id, note, adminSecurityCode);
         return ResponseEntity.ok(transferMapper.toDto(transfer));
     }
 
@@ -209,17 +214,23 @@ public class StockTransferController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteTransfer(@PathVariable Long id) {
-        stockTransferService.deleteTransfer(id);
+    public ResponseEntity<?> deleteTransfer(@PathVariable Long id,
+                                            @RequestHeader(value = "X-ADMIN-SECURITY-CODE", required = false) String adminSecurityCode) {
+        StockTransferDeletionResult result = stockTransferService.deleteTransfer(id, adminSecurityCode);
+        if (result.isApprovalRequested()) {
+            return ResponseEntity.status(HttpStatus.ACCEPTED).body(result);
+        }
         return ResponseEntity.noContent().build();
     }
 
     @DeleteMapping("/bulk")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<BulkDeleteResponse> deleteTransfers(@RequestBody List<Long> ids) {
+    public ResponseEntity<BulkDeleteResponse> deleteTransfers(@RequestBody List<Long> ids,
+                                                              @RequestHeader(value = "X-ADMIN-SECURITY-CODE", required = false) String adminSecurityCode) {
         if (ids == null || ids.isEmpty()) {
             return ResponseEntity.badRequest().build();
         }
+        adminSecurityService.requireSecurityCodeForAdmin(adminSecurityCode);
         BulkDeleteResponse response = stockTransferService.deleteTransfers(ids);
         return ResponseEntity.ok(response);
     }

@@ -5,6 +5,7 @@ import com.warehouse.dto.BulkDeleteResponse;
 import com.warehouse.dto.NotificationRequest;
 import com.warehouse.dto.StockTransferFilter;
 import com.warehouse.dto.StockTransferSummary;
+import com.warehouse.dto.StockTransferDeletionResult;
 import com.warehouse.entity.Product;
 import com.warehouse.entity.Stock;
 import com.warehouse.entity.StockTransfer;
@@ -23,6 +24,7 @@ import com.warehouse.repository.WarehouseRepository;
 import com.warehouse.service.AuditService;
 import com.warehouse.service.NotificationService;
 import com.warehouse.service.StockTransferService;
+import com.warehouse.service.AdminSecurityService;
 import com.warehouse.util.CurrentUser;
 import com.warehouse.util.EntityValidator;
 import com.warehouse.util.ValidationUtil;
@@ -62,19 +64,22 @@ public class StockTransferServiceImpl implements StockTransferService {
     private final WarehouseRepository warehouseRepository;
     private final AuditService auditService;
     private final NotificationService notificationService;
+    private final AdminSecurityService adminSecurityService;
 
     public StockTransferServiceImpl(StockTransferRepository stockTransferRepository,
                                     StockRepository stockRepository,
                                     ProductRepository productRepository,
                                     WarehouseRepository warehouseRepository,
                                     AuditService auditService,
-                                    NotificationService notificationService) {
+                                    NotificationService notificationService,
+                                    AdminSecurityService adminSecurityService) {
         this.stockTransferRepository = stockTransferRepository;
         this.stockRepository = stockRepository;
         this.productRepository = productRepository;
         this.warehouseRepository = warehouseRepository;
         this.auditService = auditService;
         this.notificationService = notificationService;
+        this.adminSecurityService = adminSecurityService;
     }
 
     @Override
@@ -254,6 +259,7 @@ public class StockTransferServiceImpl implements StockTransferService {
             transfer.setApprovalStatus(TransferApprovalStatus.PENDING);
             transfer.setApprovalRequestedBy(username);
             transfer.setApprovalRequestedAt(LocalDateTime.now());
+            transfer.setApprovalNote("START_REQUEST");
         } else {
             transfer.setApprovalStatus(TransferApprovalStatus.NONE);
         }
@@ -486,9 +492,18 @@ public class StockTransferServiceImpl implements StockTransferService {
     }
 
     @Override
-    public void deleteTransfer(Long transferId) {
+    public StockTransferDeletionResult deleteTransfer(Long transferId, String adminSecurityCode) {
         logger.info("Deleting transfer with id: {}", transferId);
         StockTransfer transfer = getTransferByIdOrThrow(transferId);
+        boolean isAdmin = isCurrentUserAdmin();
+
+        if (!isAdmin) {
+            StockTransferDeletionResult result = submitDeletionApprovalRequest(transfer);
+            logger.info("Deletion approval requested for transfer id {}", transferId);
+            return result;
+        }
+
+        adminSecurityService.requireSecurityCodeForAdmin(adminSecurityCode);
 
         // Tüm transfer durumlarının (yolda, tamamlanan, beklemede) silinmesine izin veriyoruz
         AuditMetadata metadata = buildTransferMetadata(transfer);
@@ -501,6 +516,7 @@ public class StockTransferServiceImpl implements StockTransferService {
                 String.format("Kullanıcı %s, #%d numaralı transferi sildi. Rota: %s | Ürünler: %s", username, transferId, describeRoute(transfer), describeItems(transfer)),
                 transfer));
         logger.info("Transfer deleted successfully with id: {}", transferId);
+        return StockTransferDeletionResult.deleted();
     }
 
     @Override
@@ -617,13 +633,27 @@ public class StockTransferServiceImpl implements StockTransferService {
     }
 
     @Override
-    public StockTransfer approveTransferStart(Long transferId, String approvalNote) {
+    public StockTransfer approveTransferStart(Long transferId, String approvalNote, String adminSecurityCode) {
         StockTransfer transfer = getTransferByIdOrThrow(transferId);
         if (transfer.getApprovalStatus() != TransferApprovalStatus.PENDING) {
             throw new WarehouseManagementException(ErrorCode.INVALID_TRANSFER_STATUS, "Onay bekleyen transfer bulunamadı");
         }
         String username = CurrentUser.usernameOrSystem();
         String trimmedNote = approvalNote != null && !approvalNote.trim().isEmpty() ? approvalNote.trim() : null;
+
+        if ("DELETE_REQUEST".equalsIgnoreCase(transfer.getApprovalNote())) {
+            adminSecurityService.requireSecurityCodeForAdmin(adminSecurityCode);
+            AuditMetadata metadata = buildTransferMetadata(transfer);
+            stockTransferRepository.delete(transfer);
+            auditService.log(AuditAction.TRANSFER_DELETE, DomainEntityType.StockTransfer.name(), transferId, username,
+                    String.format("Transfer silme onayı: %s | Ürünler=%s", describeRoute(transfer), describeItems(transfer)), metadata);
+            notificationService.create(buildTransferNotification(
+                    NotificationMessages.TRANSFER_DELETED_TITLE,
+                    String.format("Yönetici %s, #%d numaralı transferi silme talebini onayladı ve sildi. Rota: %s", username, transferId, describeRoute(transfer)),
+                    transfer));
+            return transfer;
+        }
+
         transfer.setApprovalStatus(TransferApprovalStatus.APPROVED);
         transfer.setApprovalDecisionBy(username);
         transfer.setApprovalDecisionAt(LocalDateTime.now());
@@ -658,6 +688,29 @@ public class StockTransferServiceImpl implements StockTransferService {
         }
         String username = CurrentUser.usernameOrSystem();
         String trimmedReason = rejectionReason != null && !rejectionReason.trim().isEmpty() ? rejectionReason.trim() : null;
+        if ("DELETE_REQUEST".equalsIgnoreCase(transfer.getApprovalNote())) {
+            transfer.setApprovalStatus(TransferApprovalStatus.REJECTED);
+            transfer.setApprovalDecisionBy(username);
+            transfer.setApprovalDecisionAt(LocalDateTime.now());
+            transfer.setApprovalNote(trimmedReason);
+            StockTransfer saved = stockTransferRepository.save(transfer);
+
+            notificationService.create(buildTransferNotification(
+                    NotificationMessages.TRANSFER_APPROVAL_REJECTED_TITLE,
+                    String.format("Yönetici %s, #%d numaralı transferin silme talebini reddetti.%s",
+                            username,
+                            saved.getId(),
+                            trimmedReason != null ? " Not: " + trimmedReason : ""),
+                    saved));
+
+            AuditMetadata metadata = buildTransferMetadata(saved);
+            auditService.log(AuditAction.TRANSFER_REJECT, DomainEntityType.StockTransfer.name(), saved.getId(), username,
+                    String.format("Transfer silme talebi reddedildi: %s%s",
+                            describeRoute(saved),
+                            trimmedReason != null ? " | Not: " + trimmedReason : ""),
+                    metadata);
+            return stockTransferRepository.findByIdWithRelations(saved.getId()).orElse(saved);
+        }
         transfer.setApprovalStatus(TransferApprovalStatus.REJECTED);
         transfer.setApprovalDecisionBy(username);
         transfer.setApprovalDecisionAt(LocalDateTime.now());
@@ -682,6 +735,30 @@ public class StockTransferServiceImpl implements StockTransferService {
                 metadata);
         
         return stockTransferRepository.findByIdWithRelations(saved.getId()).orElse(saved);
+    }
+
+    private StockTransferDeletionResult submitDeletionApprovalRequest(StockTransfer transfer) {
+        // Avoid duplicating pending delete requests
+        if ("DELETE_REQUEST".equalsIgnoreCase(transfer.getApprovalNote())
+                && transfer.getApprovalStatus() == TransferApprovalStatus.PENDING) {
+            return StockTransferDeletionResult.approval("Silme talebi zaten iletilmiş durumda.");
+        }
+
+        String username = CurrentUser.usernameOrSystem();
+        transfer.setApprovalStatus(TransferApprovalStatus.PENDING);
+        transfer.setApprovalRequestedBy(username);
+        transfer.setApprovalRequestedAt(LocalDateTime.now());
+        transfer.setApprovalDecisionBy(null);
+        transfer.setApprovalDecisionAt(null);
+        transfer.setApprovalNote("DELETE_REQUEST");
+        StockTransfer saved = stockTransferRepository.save(transfer);
+
+        notificationService.create(buildTransferNotification(
+                NotificationMessages.TRANSFER_DELETE_REQUEST_TITLE,
+                String.format("Kullanıcı %s, #%d numaralı transferin silinmesi için onay istedi. Rota: %s", username, saved.getId(), describeRoute(saved)),
+                saved));
+
+        return StockTransferDeletionResult.approval("Silme talebi yöneticilere iletildi. Onaylandığında kayıt silinecek.");
     }
 
     private TransferType validateTransferCreation(StockTransfer transfer, List<StockTransferItem> items) {

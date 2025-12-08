@@ -2,6 +2,7 @@ package com.warehouse.controller;
 
 import com.warehouse.entity.Color;
 import com.warehouse.service.ColorService;
+import com.warehouse.service.AdminSecurityService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -15,10 +16,12 @@ import java.util.List;
 public class ColorController {
 
     private final ColorService colorService;
+    private final AdminSecurityService adminSecurityService;
 
     @Autowired
-    public ColorController(ColorService colorService) {
+    public ColorController(ColorService colorService, AdminSecurityService adminSecurityService) {
         this.colorService = colorService;
+        this.adminSecurityService = adminSecurityService;
     }
 
     @GetMapping
@@ -56,13 +59,17 @@ public class ColorController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteColor(@PathVariable Long id) {
+    public ResponseEntity<Void> deleteColor(@PathVariable Long id,
+                                            @RequestHeader(value = "X-ADMIN-SECURITY-CODE", required = false) String adminSecurityCode) {
+        adminSecurityService.requireSecurityCodeForAdmin(adminSecurityCode);
         colorService.deleteColor(id);
         return ResponseEntity.noContent().build();
     }
 
     @DeleteMapping("/bulk")
-    public ResponseEntity<Void> deleteColorsBulk(@RequestBody List<Long> ids) {
+    public ResponseEntity<Void> deleteColorsBulk(@RequestBody List<Long> ids,
+                                                 @RequestHeader(value = "X-ADMIN-SECURITY-CODE", required = false) String adminSecurityCode) {
+        adminSecurityService.requireSecurityCodeForAdmin(adminSecurityCode);
         colorService.deleteColorsBulk(ids);
         return ResponseEntity.noContent().build();
     }

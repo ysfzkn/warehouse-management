@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import axios from 'axios';
+import useSecurityCodePrompt from '../components/useSecurityCodePrompt';
 import { compressImage } from '../utils/image';
 import { formatPhoneForDisplay } from '../utils/phone';
 import StockForm from '../components/StockForm';
@@ -1019,7 +1020,9 @@ const Stock = () => {
   const handleDetailPhotoRemove = async (transfer, item) => {
     if (!item?.id) return;
     try {
-      await axios.delete(`/api/stock-transfer-items/${item.id}/photo`);
+      const headers = isAdmin ? await requireAdminSecurityHeaders() : {};
+      if (headers === null) return;
+      await axios.delete(`/api/stock-transfer-items/${item.id}/photo`, { headers });
       // Fotoğraf silindikten sonra state'ten kaldır
       setTransferDetailPhotos(prev => {
         const updated = { ...prev };
@@ -1028,6 +1031,7 @@ const Stock = () => {
       });
       showSuccessToast('Fotoğraf kaldırıldı.');
     } catch (error) {
+      if (error?.message?.startsWith('ADMIN_SECURITY')) return;
       console.error('Error removing transfer item photo from detail modal', error);
       setErrorModal({
         show: true,
@@ -1383,6 +1387,29 @@ const Stock = () => {
     }, displayDuration);
   };
 
+  const { askCode: askSecurityCode, SecurityCodePrompt, closePrompt: closeSecurityPrompt } = useSecurityCodePrompt();
+
+  const adminSecurityErrorCodes = new Set([
+    'AUTH_002','AUTH_003','AUTH_004','AUTH_005','AUTH_006','AUTH_007',
+    'ADMIN_SECURITY_CODE_REQUIRED','INVALID_ADMIN_SECURITY_CODE','ADMIN_SECURITY_CODE_MISMATCH'
+  ]);
+
+  const parseSecurityError = (error) => {
+    const data = error?.response?.data;
+    const code = data?.code || data?.errorCode;
+    const msg = data?.message || data?.error || error?.message || 'Beklenmeyen bir hata oluştu';
+    return { code, msg };
+  };
+
+  const requireAdminSecurityHeaders = async () => {
+    if (!isAdmin) return {};
+    const code = await askSecurityCode();
+    if (code === null) {
+      return null; // kullanıcı iptal etti, hata olarak gösterme
+    }
+    return { 'X-ADMIN-SECURITY-CODE': code };
+  };
+
   const normalizeFailedRowsPayload = (failedRowsPayload) => {
     if (!failedRowsPayload) return [];
     if (Array.isArray(failedRowsPayload)) return failedRowsPayload;
@@ -1556,20 +1583,64 @@ const Stock = () => {
       icon: 'trash',
       onConfirm: async () => {
         setConfirmModal({ show: false });
-        try {
-          await axios.delete(`/api/stocks/${id}`);
-          showSuccessToast('Stok kaydı silindi.');
-        } catch (error) {
-          const errorData = error?.response?.data;
-          const msg = errorData?.message || errorData?.error || 'Beklenmeyen bir durum oluştu';
-          setErrorModal({
-            show: true,
-            title: 'Stok Silme Hatası',
-            message: `Stok silinirken hata oluştu: ${msg}`
+        // Admin değilse doğrudan sil
+        if (!isAdmin) {
+          try {
+            await axios.delete(`/api/stocks/${id}`);
+            showSuccessToast('Stok kaydı silindi.');
+            await Promise.all([fetchAllData(), fetchStocks(stockPage)]);
+          } catch (error) {
+            const errorData = error?.response?.data;
+            const msg = errorData?.message || errorData?.error || 'Beklenmeyen bir durum oluştu';
+            setErrorModal({
+              show: true,
+              title: 'Stok Silme Hatası',
+              message: `Stok silinirken hata oluştu: ${msg}`
+            });
+          }
+          return;
+        }
+
+        let lastCode = '';
+        let lastErrorMsg = '';
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+          const code = await askSecurityCode({
+            prefill: lastCode,
+            errorMessage: lastErrorMsg || (lastCode ? 'Güvenlik şifresi hatalı, tekrar deneyin.' : ''),
+            persistOnResolve: true
           });
-        } finally {
-          // Hata olsa bile, kısmen silinmiş stoklar varsa listeyi yenile
-          await Promise.all([fetchAllData(), fetchStocks(stockPage)]);
+          if (code === null) {
+            closeSecurityPrompt();
+            return;
+          }
+          lastCode = code;
+          lastErrorMsg = '';
+
+          try {
+            await axios.delete(`/api/stocks/${id}`, { headers: { 'X-ADMIN-SECURITY-CODE': code } });
+            closeSecurityPrompt();
+            showSuccessToast('Stok kaydı silindi.');
+            await Promise.all([fetchAllData(), fetchStocks(stockPage)]);
+            break;
+          } catch (error) {
+            const errorData = error?.response?.data;
+            const errCode = errorData?.code || errorData?.errorCode;
+            const msg = errorData?.message || errorData?.error || 'Beklenmeyen bir durum oluştu';
+            lastErrorMsg = msg;
+
+            if (!adminSecurityErrorCodes.has(errCode)) {
+              closeSecurityPrompt();
+              setErrorModal({
+                show: true,
+                title: 'Stok Silme Hatası',
+                message: `Stok silinirken hata oluştu: ${msg}`
+              });
+              await Promise.all([fetchAllData(), fetchStocks(stockPage)]);
+              break;
+            }
+            // Güvenlik hatası ise modal açık kalsın ve retry etsin
+          }
         }
       }
     });
@@ -1589,56 +1660,75 @@ const Stock = () => {
       onConfirm: async () => {
         setConfirmModal({ show: false });
 
-        try {
-          // Backend'den toplu silme endpoint'ini kullan
-          const response = await axios.delete('/api/stocks/bulk', { data: ids });
-          const result = response.data;
-
-          // Başarılı silinen stoklar için toast göster
-          if (result.successCount > 0) {
-            showSuccessToast(`${result.successCount} stok kaydı başarıyla silindi.`);
+        let lastCode = '';
+        let lastErrorMsg = '';
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+          const code = await askSecurityCode({
+            prefill: lastCode,
+            errorMessage: lastErrorMsg || (lastCode ? 'Güvenlik şifresi hatalı, tekrar deneyin.' : ''),
+            persistOnResolve: true
+          });
+          if (code === null) {
+            closeSecurityPrompt();
+            return;
           }
+          lastCode = code;
+          lastErrorMsg = '';
 
-          // Hata alan stoklar varsa detaylı hata listesi göster
-          if (result.errors && result.errors.length > 0) {
-            const formattedErrors = result.errors.map(err => ({
-              stockId: err.id,
-              stockInfo: err.name || `Stok #${err.id}`,
-              error: err.errorMessage || 'Bilinmeyen hata',
-              errorCode: err.errorCode || null,
-              sku: err.sku || null
+          try {
+            const response = await axios.delete('/api/stocks/bulk', { data: ids, headers: { 'X-ADMIN-SECURITY-CODE': code } });
+            const result = response.data;
+
+            if (result.successCount > 0) {
+              showSuccessToast(`${result.successCount} stok kaydı başarıyla silindi.`);
+            }
+
+            if (result.errors && result.errors.length > 0) {
+              const formattedErrors = result.errors.map(err => ({
+                stockId: err.id,
+                stockInfo: err.name || `Stok #${err.id}`,
+                error: err.errorMessage || 'Bilinmeyen hata',
+                errorCode: err.errorCode || null,
+                sku: err.sku || null
+              }));
+
+              setErrorDetailsModal({
+                show: true,
+                title: 'Silinemeyen Stoklar',
+                errors: formattedErrors
+              });
+            }
+
+            const errorIds = new Set((result.errors || []).map(err => err.id));
+            setSelectedStocks(prev => prev.filter(id => {
+              if (ids.includes(id)) {
+                return errorIds.has(id);
+              }
+              return true;
             }));
 
-            setErrorDetailsModal({
-              show: true,
-              title: 'Silinemeyen Stoklar',
-              errors: formattedErrors
-            });
-          }
+            closeSecurityPrompt();
+            await Promise.all([fetchAllData(), fetchStocks(stockPage)]);
+            break;
+          } catch (error) {
+            const errorData = error?.response?.data;
+            const errCode = errorData?.code || errorData?.errorCode;
+            const msg = errorData?.message || errorData?.error || error.message || 'Stoklar silinirken hata oluştu';
+            lastErrorMsg = msg;
 
-          // Seçili stokları temizle (sadece başarıyla silinenleri kaldır)
-          const errorIds = new Set((result.errors || []).map(err => err.id));
-          setSelectedStocks(prev => prev.filter(id => {
-            // Eğer bu ID silinmeye çalışılan ID'ler arasındaysa
-            if (ids.includes(id)) {
-              // Hata alan stokları seçimde tut
-              return errorIds.has(id);
+            if (!adminSecurityErrorCodes.has(errCode)) {
+              closeSecurityPrompt();
+              setErrorModal({
+                show: true,
+                title: 'Toplu Silme Hatası',
+                message: msg
+              });
+              await Promise.all([fetchAllData(), fetchStocks(stockPage)]);
+              break;
             }
-            // Diğer stokları olduğu gibi tut
-            return true;
-          }));
-        } catch (error) {
-          // Backend hatası (örneğin network hatası)
-          const errorData = error?.response?.data;
-          const msg = errorData?.message || errorData?.error || error.message || 'Stoklar silinirken hata oluştu';
-          setErrorModal({
-            show: true,
-            title: 'Toplu Silme Hatası',
-            message: msg
-          });
-        } finally {
-          // Listeyi yenile
-          await Promise.all([fetchAllData(), fetchStocks(stockPage)]);
+            // güvenlik hatası ise döngü devam eder, modal açık kalır
+          }
         }
       }
     });
@@ -1672,55 +1762,72 @@ const Stock = () => {
       onConfirm: async () => {
         setConfirmModal({ show: false });
 
-        try {
-          // Backend'den toplu silme endpoint'ini kullan
-          const response = await axios.delete('/api/stock-transfers/bulk', { data: ids });
-          const result = response.data;
-
-          // Başarılı silinen transferler için toast göster
-          if (result.successCount > 0) {
-            showSuccessToast(`${result.successCount} transfer başarıyla silindi.`);
+        let lastCode = '';
+        let lastErrorMsg = '';
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+          const code = await askSecurityCode({
+            prefill: lastCode,
+            errorMessage: lastErrorMsg || (lastCode ? 'Güvenlik şifresi hatalı, tekrar deneyin.' : ''),
+            persistOnResolve: true
+          });
+          if (code === null) {
+            closeSecurityPrompt();
+            return;
           }
+          lastCode = code;
+          lastErrorMsg = '';
 
-          // Hata alan transferler varsa detaylı hata listesi göster
-          if (result.errors && result.errors.length > 0) {
-            const formattedErrors = result.errors.map(err => ({
-              transferId: err.id,
-              transferInfo: err.name || `Transfer #${err.id}`,
-              error: err.errorMessage || 'Bilinmeyen hata',
-              errorCode: err.errorCode || null
+          try {
+            const response = await axios.delete('/api/stock-transfers/bulk', { data: ids, headers: { 'X-ADMIN-SECURITY-CODE': code } });
+            const result = response.data;
+
+            if (result.successCount > 0) {
+              showSuccessToast(`${result.successCount} transfer başarıyla silindi.`);
+            }
+
+            if (result.errors && result.errors.length > 0) {
+              const formattedErrors = result.errors.map(err => ({
+                transferId: err.id,
+                transferInfo: err.name || `Transfer #${err.id}`,
+                error: err.errorMessage || 'Bilinmeyen hata',
+                errorCode: err.errorCode || null
+              }));
+
+              setErrorDetailsModal({
+                show: true,
+                title: 'Silinemeyen Transferler',
+                errors: formattedErrors
+              });
+            }
+
+            const errorIds = new Set((result.errors || []).map(err => err.id));
+            setSelectedTransfers(prev => prev.filter(id => {
+              if (ids.includes(id)) {
+                return errorIds.has(id);
+              }
+              return true;
             }));
 
-            setErrorDetailsModal({
-              show: true,
-              title: 'Silinemeyen Transferler',
-              errors: formattedErrors
-            });
-          }
-
-          // Seçili transferleri temizle (sadece başarıyla silinenleri kaldır)
-          const errorIds = new Set((result.errors || []).map(err => err.id));
-          setSelectedTransfers(prev => prev.filter(id => {
-            // Eğer bu ID silinmeye çalışılan ID'ler arasındaysa
-            if (ids.includes(id)) {
-              // Hata alan transferleri seçimde tut
-              return errorIds.has(id);
+            closeSecurityPrompt();
+            await fetchTransfers(0, false);
+            break;
+          } catch (error) {
+            const { code: errCode, msg } = parseSecurityError(error);
+            showToast(msg, 'danger', 8000);
+            if (!adminSecurityErrorCodes.has(errCode)) {
+              closeSecurityPrompt();
+              setErrorModal({
+                show: true,
+                title: 'Toplu Silme Hatası',
+                message: msg
+              });
+              await fetchTransfers(0, false);
+              break;
             }
-            // Diğer transferleri olduğu gibi tut
-            return true;
-          }));
-        } catch (error) {
-          // Backend hatası (örneğin network hatası)
-          const errorData = error?.response?.data;
-          const msg = errorData?.message || errorData?.error || error.message || 'Transferler silinirken hata oluştu';
-          setErrorModal({
-            show: true,
-            title: 'Toplu Silme Hatası',
-            message: msg
-          });
-        } finally {
-          // Listeyi yenile
-          await fetchTransfers(0, false);
+            lastErrorMsg = msg || 'Güvenlik şifresi hatalı, tekrar deneyin.';
+            // güvenlik hatası; modal açık kalacak ve tekrar sorulacak
+          }
         }
       }
     });
@@ -1830,20 +1937,68 @@ const Stock = () => {
       icon: 'trash',
       onConfirm: async () => {
         setConfirmModal({ show: false });
-        try {
-          await axios.delete(`/api/stock-transfers/${transferId}`);
-          showSuccessToast('Transfer kaydı silindi.');
-        } catch (error) {
-          const errorData = error?.response?.data;
-          const msg = errorData?.message || errorData?.error || error.message || 'Beklenmeyen bir durum oluştu';
-          setErrorModal({
-            show: true,
-            title: 'Transfer Silme Hatası',
-            message: `Transfer silinirken hata oluştu: ${msg}`
+        if (!isAdmin) {
+          try {
+            const response = await axios.delete(`/api/stock-transfers/${transferId}`);
+            if (response?.status === 202 && response?.data?.message) {
+              showToast(response.data.message, 'success', 7000);
+            } else {
+              showSuccessToast('Transfer kaydı silindi.');
+            }
+            await fetchTransfers(0, false);
+          } catch (error) {
+            const errorData = error?.response?.data;
+            const msg = errorData?.message || errorData?.error || error.message || 'Beklenmeyen bir durum oluştu';
+            setErrorModal({
+              show: true,
+              title: 'Transfer Silme Hatası',
+              message: `Transfer silinirken hata oluştu: ${msg}`
+            });
+          }
+          return;
+        }
+
+        let lastCode = '';
+        let lastErrorMsg = '';
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+          const code = await askSecurityCode({
+            prefill: lastCode,
+            errorMessage: lastErrorMsg || (lastCode ? 'Güvenlik şifresi hatalı, tekrar deneyin.' : ''),
+            persistOnResolve: true
           });
-        } finally {
-          // Hata olsa bile, kısmen silinmiş olabilir; transfer listesini yenile
-          await fetchTransfers(0, false);
+          if (code === null) {
+            closeSecurityPrompt();
+            return;
+          }
+          lastCode = code;
+          lastErrorMsg = '';
+
+          try {
+            const response = await axios.delete(`/api/stock-transfers/${transferId}`, { headers: { 'X-ADMIN-SECURITY-CODE': code } });
+            if (response?.status === 202 && response?.data?.message) {
+              showToast(response.data.message, 'success', 7000);
+            } else {
+              showSuccessToast('Transfer kaydı silindi.');
+            }
+            closeSecurityPrompt();
+            await fetchTransfers(0, false);
+            break;
+          } catch (error) {
+            const { code: errCode, msg } = parseSecurityError(error);
+            showToast(msg, 'danger', 8000);
+            if (!adminSecurityErrorCodes.has(errCode)) {
+              closeSecurityPrompt();
+              setErrorModal({
+                show: true,
+                title: 'Transfer Silme Hatası',
+                message: `Transfer silinirken hata oluştu: ${msg}`
+              });
+              await fetchTransfers(0, false);
+              break;
+            }
+            lastErrorMsg = msg || 'Güvenlik şifresi hatalı, tekrar deneyin.';
+          }
         }
       }
     });
@@ -4847,6 +5002,7 @@ const Stock = () => {
           />
         )
       }
+      {SecurityCodePrompt}
     </div >
   );
 };

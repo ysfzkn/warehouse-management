@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
+import useSecurityCodePrompt from '../components/useSecurityCodePrompt';
 import ConfirmModal from '../components/ConfirmModal';
 
 const StockImportHistory = () => {
@@ -9,6 +10,17 @@ const StockImportHistory = () => {
   const [failedRows, setFailedRows] = useState([]);
   const [selectedItems, setSelectedItems] = useState([]);
   const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null });
+  const role = (typeof window !== 'undefined' && localStorage.getItem('auth_role')) || 'ADMIN';
+  const isAdmin = role === 'ADMIN';
+  const { askCode: askSecurityCode, SecurityCodePrompt } = useSecurityCodePrompt();
+  const requireAdminSecurityHeaders = async () => {
+    if (!isAdmin) return {};
+    const code = await askSecurityCode();
+    if (code === null) {
+      throw new Error('ADMIN_SECURITY_CANCELLED');
+    }
+    return { 'X-ADMIN-SECURITY-CODE': code };
+  };
 
   const showToast = (message, type = 'success') => {
     const toast = document.createElement('div');
@@ -98,11 +110,13 @@ const StockImportHistory = () => {
       onConfirm: async () => {
         setConfirmModal({ show: false, title: '', message: '', onConfirm: null });
         try {
-          await axios.delete(`/api/stock-imports/${id}`);
+          const headers = await requireAdminSecurityHeaders();
+          await axios.delete(`/api/stock-imports/${id}`, { headers });
           showToast('Aktarım geçmişi kaydı başarıyla silindi.', 'success');
           await fetchData();
           setSelectedItems(prev => prev.filter(itemId => itemId !== id));
         } catch (e) {
+          if (e?.message?.startsWith('ADMIN_SECURITY')) return;
           const errorData = e?.response?.data;
           let errorMessage = 'Aktarım geçmişi kaydı silinirken hata oluştu.';
           
@@ -134,7 +148,8 @@ const StockImportHistory = () => {
       onConfirm: async () => {
         setConfirmModal({ show: false, title: '', message: '', onConfirm: null });
         try {
-          const response = await axios.delete('/api/stock-imports/bulk', { data: selectedItems });
+          const headers = await requireAdminSecurityHeaders();
+          const response = await axios.delete('/api/stock-imports/bulk', { data: selectedItems, headers });
           const result = response.data;
           
           if (result.errorCount > 0) {
@@ -165,6 +180,7 @@ const StockImportHistory = () => {
           await fetchData();
           setSelectedItems([]);
         } catch (e) {
+          if (e?.message?.startsWith('ADMIN_SECURITY')) return;
           const errorData = e?.response?.data;
           let errorMessage = 'Kayıtlar silinirken hata oluştu.';
           
@@ -522,6 +538,7 @@ const StockImportHistory = () => {
         onConfirm={confirmModal.onConfirm}
         onCancel={() => setConfirmModal({ show: false, title: '', message: '', onConfirm: null })}
       />
+      {SecurityCodePrompt}
     </div>
   );
 };

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import useSecurityCodePrompt from './useSecurityCodePrompt';
 
 const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' }) => {
   const [activeTab, setActiveTab] = useState(initialTab);
@@ -53,6 +54,7 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
   const [transferLoading, setTransferLoading] = useState(true);
   const [transferProcessing, setTransferProcessing] = useState(null);
   const [transferFilter, setTransferFilter] = useState('PENDING');
+  const { askCode: askSecurityCode, SecurityCodePrompt } = useSecurityCodePrompt();
 
   useEffect(() => {
     fetchStockRequests();
@@ -136,7 +138,9 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
   const handleApproveTransfer = async (transferId) => {
     try {
       setTransferProcessing(transferId);
-      await axios.post(`/api/stock-transfers/${transferId}/approve-start`);
+      const code = await askSecurityCode();
+      if (code === null) return;
+      await axios.post(`/api/stock-transfers/${transferId}/approve-start`, {}, { headers: { 'X-ADMIN-SECURITY-CODE': code } });
       await fetchTransferApprovals();
       if (onApprove) onApprove();
     } catch (error) {
@@ -237,6 +241,7 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
 
   return (
     <>
+      {SecurityCodePrompt}
       <style>{`
         .approval-tab-toggle,
         .approval-filter-stack {

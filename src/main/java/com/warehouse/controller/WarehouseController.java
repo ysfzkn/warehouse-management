@@ -1,7 +1,9 @@
 package com.warehouse.controller;
 
+import com.warehouse.dto.WarehouseResponse;
 import com.warehouse.entity.Warehouse;
 import com.warehouse.service.WarehouseService;
+import com.warehouse.service.AdminSecurityService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -15,15 +17,17 @@ import java.util.List;
 public class WarehouseController {
 
     private final WarehouseService warehouseService;
+    private final AdminSecurityService adminSecurityService;
 
     @Autowired
-    public WarehouseController(WarehouseService warehouseService) {
+    public WarehouseController(WarehouseService warehouseService, AdminSecurityService adminSecurityService) {
         this.warehouseService = warehouseService;
+        this.adminSecurityService = adminSecurityService;
     }
 
     @GetMapping
-    public ResponseEntity<List<Warehouse>> getAllWarehouses() {
-        List<Warehouse> warehouses = warehouseService.getAllWarehouses();
+    public ResponseEntity<List<WarehouseResponse>> getAllWarehouses() {
+        List<WarehouseResponse> warehouses = warehouseService.getAllWarehouses();
         return ResponseEntity.ok(warehouses);
     }
 
@@ -36,14 +40,14 @@ public class WarehouseController {
     @GetMapping("/{id}")
     public ResponseEntity<Warehouse> getWarehouseById(@PathVariable Long id) {
         return warehouseService.getWarehouseById(id)
-                .map(warehouse -> ResponseEntity.ok(warehouse))
+                .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
 
     @GetMapping("/{id}/with-stocks")
     public ResponseEntity<Warehouse> getWarehouseByIdWithStocks(@PathVariable Long id) {
         return warehouseService.getWarehouseByIdWithStocks(id)
-                .map(warehouse -> ResponseEntity.ok(warehouse))
+                .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
 
@@ -60,7 +64,9 @@ public class WarehouseController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteWarehouse(@PathVariable Long id) {
+    public ResponseEntity<Void> deleteWarehouse(@PathVariable Long id,
+                                                @RequestHeader(value = "X-ADMIN-SECURITY-CODE", required = false) String adminSecurityCode) {
+        adminSecurityService.requireSecurityCodeForAdmin(adminSecurityCode);
         warehouseService.deleteWarehouse(id);
         return ResponseEntity.noContent().build();
     }

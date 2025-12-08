@@ -25,9 +25,11 @@ axios.interceptors.response.use(
       const reqUrl = error?.config?.url ?? '';
       const isAuthEndpoint = reqUrl.includes('/auth/login');
       const isNotifications = reqUrl.includes('/api/notifications');
+      const errCode = error?.response?.data?.code || error?.response?.data?.errorCode;
+      const isAdminSecurityError = ['AUTH_002','AUTH_003','AUTH_004','AUTH_005','AUTH_006','AUTH_007'].includes(errCode);
 
-      // Session expired or unauthorized
-      if ((status === 401 || status === 403) && !isAuthEndpoint && !isNotifications) {
+      // Session expired or unauthorized (skip admin security code errors)
+      if ((status === 401 || status === 403) && !isAuthEndpoint && !isNotifications && !isAdminSecurityError) {
         if (!window.__sessionExpiredHandling) {
           window.__sessionExpiredHandling = true;
 

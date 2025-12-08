@@ -4,6 +4,7 @@ import com.warehouse.entity.Category;
 import com.warehouse.service.CategoryService;
 import com.warehouse.repository.CategoryRepository;
 import com.warehouse.dto.CategoryDto;
+import com.warehouse.service.AdminSecurityService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import com.warehouse.dto.PagedResponse;
@@ -27,11 +28,13 @@ public class CategoryController {
 
     private final CategoryService categoryService;
     private final CategoryRepository categoryRepository;
+    private final AdminSecurityService adminSecurityService;
 
     @Autowired
-    public CategoryController(CategoryService categoryService, CategoryRepository categoryRepository) {
+    public CategoryController(CategoryService categoryService, CategoryRepository categoryRepository, AdminSecurityService adminSecurityService) {
         this.categoryService = categoryService;
         this.categoryRepository = categoryRepository;
+        this.adminSecurityService = adminSecurityService;
     }
 
     @GetMapping
@@ -202,7 +205,9 @@ public class CategoryController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteCategory(@PathVariable Long id) {
+    public ResponseEntity<Void> deleteCategory(@PathVariable Long id,
+                                               @RequestHeader(value = "X-ADMIN-SECURITY-CODE", required = false) String adminSecurityCode) {
+        adminSecurityService.requireSecurityCodeForAdmin(adminSecurityCode);
         categoryService.deleteCategory(id);
         return ResponseEntity.noContent().build();
     }

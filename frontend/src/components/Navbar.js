@@ -833,7 +833,7 @@ const Navbar = () => {
                   <li>
                     <Link className="dropdown-item" to="/admin-settings">
                       <i className="fas fa-tools me-2 text-danger"></i>
-                      Kullanıcı Ayarları
+                      Yönetici Ayarları
                     </Link>
                   </li>
                 </ul>

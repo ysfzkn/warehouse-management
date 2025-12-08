@@ -7,6 +7,7 @@ import com.warehouse.exception.WarehouseManagementException;
 import com.warehouse.repository.StockTransferItemPhotoRepository;
 import com.warehouse.repository.StockTransferItemRepository;
 import com.warehouse.service.PhotoStorageService;
+import com.warehouse.service.AdminSecurityService;
 import jakarta.validation.constraints.NotNull;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
@@ -32,13 +33,16 @@ public class StockTransferItemPhotoController {
     private final StockTransferItemPhotoRepository photoRepository;
     private final StockTransferItemRepository itemRepository;
     private final PhotoStorageService photoStorageService;
+    private final AdminSecurityService adminSecurityService;
 
     public StockTransferItemPhotoController(StockTransferItemPhotoRepository photoRepository,
                                             StockTransferItemRepository itemRepository,
-                                            PhotoStorageService photoStorageService) {
+                                            PhotoStorageService photoStorageService,
+                                            AdminSecurityService adminSecurityService) {
         this.photoRepository = photoRepository;
         this.itemRepository = itemRepository;
         this.photoStorageService = photoStorageService;
+        this.adminSecurityService = adminSecurityService;
     }
 
     @PostMapping("/{itemId}/photo")
@@ -108,7 +112,9 @@ public class StockTransferItemPhotoController {
 
     @DeleteMapping("/{itemId}/photo")
     @Transactional
-    public ResponseEntity<Void> deletePhoto(@PathVariable Long itemId) {
+    public ResponseEntity<Void> deletePhoto(@PathVariable Long itemId,
+                                            @RequestHeader(value = "X-ADMIN-SECURITY-CODE", required = false) String adminSecurityCode) {
+        adminSecurityService.requireSecurityCodeForAdmin(adminSecurityCode);
         StockTransferItem item = findItemOrThrow(itemId);
         Optional<StockTransferItemPhoto> existingOpt = photoRepository.findByItem(item);
         if (existingOpt.isEmpty()) {

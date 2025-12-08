@@ -2,6 +2,7 @@ package com.warehouse.controller;
 
 import com.warehouse.entity.Brand;
 import com.warehouse.service.BrandService;
+import com.warehouse.service.AdminSecurityService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -15,10 +16,12 @@ import java.util.List;
 public class BrandController {
 
     private final BrandService brandService;
+    private final AdminSecurityService adminSecurityService;
 
     @Autowired
-    public BrandController(BrandService brandService) {
+    public BrandController(BrandService brandService, AdminSecurityService adminSecurityService) {
         this.brandService = brandService;
+        this.adminSecurityService = adminSecurityService;
     }
 
     @GetMapping
@@ -56,13 +59,17 @@ public class BrandController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteBrand(@PathVariable Long id) {
+    public ResponseEntity<Void> deleteBrand(@PathVariable Long id,
+                                            @RequestHeader(value = "X-ADMIN-SECURITY-CODE", required = false) String adminSecurityCode) {
+        adminSecurityService.requireSecurityCodeForAdmin(adminSecurityCode);
         brandService.deleteBrand(id);
         return ResponseEntity.noContent().build();
     }
 
     @DeleteMapping("/bulk")
-    public ResponseEntity<Void> deleteBrandsBulk(@RequestBody List<Long> ids) {
+    public ResponseEntity<Void> deleteBrandsBulk(@RequestBody List<Long> ids,
+                                                 @RequestHeader(value = "X-ADMIN-SECURITY-CODE", required = false) String adminSecurityCode) {
+        adminSecurityService.requireSecurityCodeForAdmin(adminSecurityCode);
         brandService.deleteBrandsBulk(ids);
         return ResponseEntity.noContent().build();
     }

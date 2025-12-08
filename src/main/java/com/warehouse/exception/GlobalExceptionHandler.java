@@ -32,7 +32,10 @@ public class GlobalExceptionHandler {
             WarehouseManagementException ex, HttpServletRequest request) {
         
         ErrorCode errorCode = ex.getErrorCode();
-        String message = errorCode.getMessage();
+        String message = ex.getMessage() != null && !ex.getMessage().isBlank()
+                && !ex.getMessage().equals(errorCode.getMessage())
+                ? ex.getMessage()
+                : errorCode.getMessage();
         List<String> details = null;
         // Özel bazı doğrulama kodları için alan adı ekleyerek Türkçe mesaj üret
         if (errorCode == ErrorCode.REQUIRED_FIELD_MISSING && ex.getMessage() != null) {

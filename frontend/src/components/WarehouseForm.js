@@ -21,6 +21,43 @@ const WarehouseForm = ({ warehouse, onSuccess, onCancel }) => {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
 
+  const showToast = (message, type = 'success') => {
+    const toast = document.createElement('div');
+    const bgClass =
+      type === 'success'
+        ? 'text-bg-success'
+        : type === 'warning'
+        ? 'text-bg-warning'
+        : 'text-bg-danger';
+    const icon =
+      type === 'success'
+        ? 'fa-check-circle'
+        : type === 'warning'
+        ? 'fa-exclamation-triangle'
+        : 'fa-times-circle';
+    toast.className = `toast align-items-center ${bgClass} border-0 position-fixed top-0 end-0 m-3 show`;
+    toast.setAttribute('role', 'alert');
+    toast.style.zIndex = '9999';
+    toast.innerHTML = `
+      <div class="d-flex align-items-center">
+        <div class="toast-body d-flex align-items-start">
+          <i class="fas ${icon} me-2 mt-1"></i>
+          <div class="flex-grow-1">${message}</div>
+        </div>
+        <button type="button" class="btn-close ${type === 'success' ? 'btn-close-white' : ''} me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button>
+      </div>
+    `;
+    document.body.appendChild(toast);
+    setTimeout(() => {
+      try {
+        toast.classList.remove('show');
+        setTimeout(() => {
+          try { document.body.removeChild(toast); } catch {}
+        }, 300);
+      } catch {}
+    }, type === 'success' ? 4000 : 7000);
+  };
+
   useEffect(() => {
     if (warehouse) {
       setFormData({
@@ -71,8 +108,11 @@ const WarehouseForm = ({ warehouse, onSuccess, onCancel }) => {
       newErrors.name = 'Depo adı gereklidir';
     }
 
-    if (!formData.location.trim()) {
+    const loc = formData.location.trim();
+    if (!loc) {
       newErrors.location = 'Konum gereklidir';
+    } else if (loc.length < 3 || loc.length > 255) {
+      newErrors.location = 'Konum 3-255 karakter aralığında olmalıdır.';
     }
 
     if (formData.phone && !isPhoneComplete(formData.phone)) {
@@ -105,14 +145,43 @@ const WarehouseForm = ({ warehouse, onSuccess, onCancel }) => {
         await axios.post('/api/warehouses', dataToSend);
       }
 
+      showToast('Depo başarıyla kaydedildi.', 'success');
       onSuccess();
     } catch (error) {
       console.error('Error saving warehouse:', error);
-      if (error.response?.data) {
-        setErrors({ general: error.response.data });
-      } else {
-        setErrors({ general: 'Depo kaydedilirken hata oluştu' });
+      const errData = error?.response?.data;
+      const nextErrors = {};
+      let general = 'Depo kaydedilirken hata oluştu';
+
+      // Field-level validation mapping
+      if (errData && typeof errData === 'object' && errData.fieldErrors) {
+        const fe = errData.fieldErrors;
+        if (fe.location) {
+          nextErrors.location = 'Konum 5-255 karakter aralığında olmalıdır.';
+        }
+        if (fe.name) {
+          nextErrors.name = 'Depo adı geçersiz, lütfen kontrol edin.';
+        }
+        if (fe.phone) {
+          nextErrors.phone = 'Telefon numarası 10 haneli olmalıdır.';
+        }
+        if (Object.keys(fe).length > 0) {
+          general = 'Form doğrulaması başarısız. Lütfen alan hatalarını kontrol edin.';
+        }
       }
+
+      if (typeof errData === 'string') {
+        general = errData;
+      } else if (errData && typeof errData === 'object') {
+        if (typeof errData.message === 'string') {
+          general = errData.message;
+        } else if (Array.isArray(errData.details) && errData.details.length) {
+          general = errData.details.join(', ');
+        }
+      }
+
+      setErrors({ general, ...nextErrors });
+      showToast(general, 'error');
     } finally {
       setLoading(false);
     }
@@ -120,12 +189,6 @@ const WarehouseForm = ({ warehouse, onSuccess, onCancel }) => {
 
   return (
     <form onSubmit={handleSubmit}>
-      {errors.general && (
-        <div className="alert alert-danger" role="alert">
-          {errors.general}
-        </div>
-      )}
-
       <div className="row">
         <div className="col-md-6">
           <div className="mb-3">

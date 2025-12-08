@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
+import useSecurityCodePrompt from '../components/useSecurityCodePrompt';
 import ProductForm from '../components/ProductForm';
 import SearchableSelect from '../components/SearchableSelect';
 import ConfirmModal from '../components/ConfirmModal';
@@ -60,6 +61,34 @@ const Products = () => {
   const [subcategorySearch, setSubcategorySearch] = useState('');
   const categoryDropdownRef = useRef(null);
   const subcategoryDropdownRef = useRef(null);
+  const role = (typeof window !== 'undefined' && localStorage.getItem('auth_role')) || 'ADMIN';
+  const isAdmin = role === 'ADMIN';
+  const { askCode: askSecurityCode, SecurityCodePrompt, closePrompt: closeSecurityPrompt } = useSecurityCodePrompt();
+
+  const adminSecurityErrorCodes = new Set([
+    'AUTH_002','AUTH_003','AUTH_004','AUTH_005','AUTH_006','AUTH_007',
+    'ADMIN_SECURITY_CODE_REQUIRED','INVALID_ADMIN_SECURITY_CODE','ADMIN_SECURITY_CODE_MISMATCH'
+  ]);
+
+  const isAdminSecurityError = (code, status) =>
+    adminSecurityErrorCodes.has(code) || status === 401 || status === 403;
+
+  const parseSecurityError = (error) => {
+    const data = error?.response?.data;
+    const code = data?.code || data?.errorCode;
+    const msg = data?.message || data?.error || error?.message || 'Beklenmeyen bir hata oluştu';
+    const status = error?.response?.status;
+    return { code, msg, status };
+  };
+
+  const requireAdminSecurityHeaders = async () => {
+    if (!isAdmin) return {};
+    const code = await askSecurityCode();
+    if (code === null) {
+      return null; // iptal durumunda hata gösterme
+    }
+    return { 'X-ADMIN-SECURITY-CODE': code };
+  };
 
   const fetchProducts = useCallback(async (pageOverride = 0, pageSizeOverride) => {
     try {
@@ -314,42 +343,115 @@ const Products = () => {
       confirmText: 'Sil',
       onConfirm: async () => {
         setConfirmModal({ show: false, title: '', message: '', onConfirm: null });
-        try {
-          await axios.delete(`/api/products/${id}`);
-          const toast = document.createElement('div');
-          toast.className = 'toast align-items-center text-bg-success border-0 position-fixed top-0 end-0 m-3 show fs-6';
-          toast.style.minWidth = '360px';
-          toast.style.padding = '0.5rem 0.75rem';
-          toast.setAttribute('role', 'alert');
-          toast.innerHTML = `<div class="d-flex"><div class="toast-body fw-semibold">Ürün başarıyla silindi</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
-          document.body.appendChild(toast);
-          setTimeout(() => { try { document.body.removeChild(toast); } catch {} }, 7000);
-        } catch (error) {
-          const errorData = error?.response?.data;
-          const msg = errorData?.message || errorData?.error || (typeof errorData === 'string' ? errorData : 'Ürün silinirken hata oluştu');
-          
-          // Eğer ürün transfer ile bağlıysa detaylı uyarı göster
-          if (msg.includes('transfer') || errorData?.code === 'RELATION_004') {
-            setErrorModal({
-              show: true,
-              title: 'Ürün Silinemez',
-              message: product 
-                ? `${product.name} (SKU: ${product.sku}) - ${msg}`
-                : msg
+        // Admin için güvenlik kodu retry döngüsü
+        if (isAdmin) {
+          let lastCode = '';
+          let lastErrorMsg = '';
+          // eslint-disable-next-line no-constant-condition
+          while (true) {
+            const code = await askSecurityCode({
+              prefill: lastCode,
+              errorMessage: lastErrorMsg || (lastCode ? 'Güvenlik şifresi hatalı, tekrar deneyin.' : ''),
+              persistOnResolve: true
             });
-          } else {
+            if (code === null) {
+              closeSecurityPrompt();
+              return;
+            }
+            lastCode = code;
+            lastErrorMsg = '';
+
+            try {
+              await axios.delete(`/api/products/${id}`, { headers: { 'X-ADMIN-SECURITY-CODE': code } });
+              closeSecurityPrompt();
+              const toast = document.createElement('div');
+              toast.className = 'toast align-items-center text-bg-success border-0 position-fixed top-0 end-0 m-3 show fs-6';
+              toast.style.minWidth = '360px';
+              toast.style.padding = '0.5rem 0.75rem';
+              toast.setAttribute('role', 'alert');
+              toast.innerHTML = `<div class="d-flex"><div class="toast-body fw-semibold">Ürün başarıyla silindi</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
+              document.body.appendChild(toast);
+              setTimeout(() => { try { document.body.removeChild(toast); } catch {} }, 7000);
+              fetchProducts(productPage, productPageSize);
+              break;
+            } catch (error) {
+              const { code: errCode, msg, status } = parseSecurityError(error);
+              lastErrorMsg = msg;
+
+              const isSecurity = isAdminSecurityError(errCode, status);
+
+              if (!isSecurity) {
+                closeSecurityPrompt();
+                // Eğer ürün transfer ile bağlıysa detaylı uyarı göster
+                if (msg.includes('transfer') || errCode === 'RELATION_004') {
+                  setErrorModal({
+                    show: true,
+                    title: 'Ürün Silinemez',
+                    message: product 
+                      ? `${product.name} (SKU: ${product.sku}) - ${msg}`
+                      : msg
+                  });
+                } else {
+                  const toast = document.createElement('div');
+                  toast.className = 'toast align-items-center text-bg-danger border-0 position-fixed top-0 end-0 m-3 show fs-6';
+                  toast.style.minWidth = '360px';
+                  toast.style.padding = '0.5rem 0.75rem';
+                  toast.setAttribute('role', 'alert');
+                  toast.innerHTML = `<div class="d-flex"><div class="toast-body fw-semibold">${msg}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
+                  document.body.appendChild(toast);
+                  setTimeout(() => { try { document.body.removeChild(toast); } catch {} }, 7000);
+                }
+                fetchProducts(productPage, productPageSize);
+                break;
+              }
+              // güvenlik hatası ise modal açık kalsın, uyarıyı göster ve yeniden sor
+              const toast = document.createElement('div');
+              toast.className = 'toast align-items-center text-bg-danger border-0 position-fixed top-0 end-0 m-3 show fs-6';
+              toast.style.minWidth = '360px';
+              toast.style.padding = '0.5rem 0.75rem';
+              toast.setAttribute('role', 'alert');
+              toast.innerHTML = `<div class="d-flex"><div class="toast-body fw-semibold">${msg || 'Güvenlik şifresi hatalı'}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
+              document.body.appendChild(toast);
+              setTimeout(() => { try { document.body.removeChild(toast); } catch {} }, 7000);
+              // güvenlik hatası ise modal açık kalsın, döngü devam etsin
+            }
+          }
+        } else {
+          // Admin değilse doğrudan sil
+          try {
+            await axios.delete(`/api/products/${id}`);
             const toast = document.createElement('div');
-            toast.className = 'toast align-items-center text-bg-danger border-0 position-fixed top-0 end-0 m-3 show fs-6';
+            toast.className = 'toast align-items-center text-bg-success border-0 position-fixed top-0 end-0 m-3 show fs-6';
             toast.style.minWidth = '360px';
             toast.style.padding = '0.5rem 0.75rem';
             toast.setAttribute('role', 'alert');
-            toast.innerHTML = `<div class="d-flex"><div class="toast-body fw-semibold">${msg}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
+            toast.innerHTML = `<div class="d-flex"><div class="toast-body fw-semibold">Ürün başarıyla silindi</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
             document.body.appendChild(toast);
             setTimeout(() => { try { document.body.removeChild(toast); } catch {} }, 7000);
+          } catch (error) {
+            const errorData = error?.response?.data;
+            const msg = errorData?.message || errorData?.error || (typeof errorData === 'string' ? errorData : 'Ürün silinirken hata oluştu');
+            if (msg.includes('transfer') || errorData?.code === 'RELATION_004') {
+              setErrorModal({
+                show: true,
+                title: 'Ürün Silinemez',
+                message: product 
+                  ? `${product.name} (SKU: ${product.sku}) - ${msg}`
+                  : msg
+              });
+            } else {
+              const toast = document.createElement('div');
+              toast.className = 'toast align-items-center text-bg-danger border-0 position-fixed top-0 end-0 m-3 show fs-6';
+              toast.style.minWidth = '360px';
+              toast.style.padding = '0.5rem 0.75rem';
+              toast.setAttribute('role', 'alert');
+              toast.innerHTML = `<div class="d-flex"><div class="toast-body fw-semibold">${msg}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
+              document.body.appendChild(toast);
+              setTimeout(() => { try { document.body.removeChild(toast); } catch {} }, 7000);
+            }
+          } finally {
+            fetchProducts(productPage, productPageSize);
           }
-        } finally {
-          // Hata olsa bile, kısmen silinmiş ürünler varsa listeyi güncelle
-          fetchProducts(productPage, productPageSize);
         }
       }
     });
@@ -432,7 +534,8 @@ const Products = () => {
         
         try {
           // Backend'den toplu silme endpoint'ini kullan
-          const response = await axios.delete('/api/products/bulk', { data: ids });
+          const headers = await requireAdminSecurityHeaders();
+          const response = await axios.delete('/api/products/bulk', { data: ids, headers });
           const result = response.data;
           
           // Başarılı silinen ürünler için toast göster
@@ -475,6 +578,7 @@ const Products = () => {
             return true;
           }));
         } catch (error) {
+          if (error?.message?.startsWith('ADMIN_SECURITY')) return;
           // Backend hatası (örneğin network hatası)
           const errorData = error?.response?.data;
           const msg = errorData?.message || errorData?.error || error.message || 'Ürünler silinirken hata oluştu';
@@ -1723,6 +1827,8 @@ const Products = () => {
           </div>
         </div>
       )}
+
+      {SecurityCodePrompt}
     </div>
   );
 };

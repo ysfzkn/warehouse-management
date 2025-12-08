@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import axios from 'axios';
+import useSecurityCodePrompt from '../components/useSecurityCodePrompt';
 import CategoryForm from '../components/CategoryForm';
 import FilterChips from '../components/FilterChips';
 import ConfirmModal from '../components/ConfirmModal';
@@ -118,6 +119,34 @@ const Categories = () => {
     setEditingCategory(null);
     setShowForm(true);
   };
+  const role = (typeof window !== 'undefined' && localStorage.getItem('auth_role')) || 'ADMIN';
+  const isAdmin = role === 'ADMIN';
+  const { askCode: askSecurityCode, SecurityCodePrompt, closePrompt: closeSecurityPrompt } = useSecurityCodePrompt();
+
+  const adminSecurityErrorCodes = new Set([
+    'AUTH_002','AUTH_003','AUTH_004','AUTH_005','AUTH_006','AUTH_007',
+    'ADMIN_SECURITY_CODE_REQUIRED','INVALID_ADMIN_SECURITY_CODE','ADMIN_SECURITY_CODE_MISMATCH'
+  ]);
+
+  const isAdminSecurityError = (code, status) =>
+    adminSecurityErrorCodes.has(code) || status === 401 || status === 403;
+
+  const parseSecurityError = (error) => {
+    const data = error?.response?.data;
+    const code = data?.code || data?.errorCode;
+    const msg = data?.message || data?.error || error?.message || 'Beklenmeyen bir hata oluştu';
+    const status = error?.response?.status;
+    return { code, msg, status };
+  };
+
+  const requireAdminSecurityHeaders = async () => {
+    if (!isAdmin) return {};
+    const code = await askSecurityCode();
+    if (code === null) {
+      return null;
+    }
+    return { 'X-ADMIN-SECURITY-CODE': code };
+  };
 
   const handleEdit = (category) => {
     setEditingCategory(category);
@@ -134,22 +163,92 @@ const Categories = () => {
       confirmText: 'Sil',
       onConfirm: async () => {
         setConfirmModal({ show: false, title: '', message: '', onConfirm: null });
-        try {
-          await axios.delete(`/api/categories/${id}`);
-        } catch (error) {
-          const errorData = error?.response?.data;
-          const msg = errorData?.message || errorData?.error || (typeof errorData === 'string' ? errorData : 'Kategori silinirken hata oluştu');
-          const toast = document.createElement('div');
-          toast.className = 'toast align-items-center text-bg-danger border-0 position-fixed top-0 end-0 m-3 show fs-6';
-          toast.style.minWidth = '360px';
-          toast.style.padding = '0.5rem 0.75rem';
-          toast.setAttribute('role', 'alert');
-          toast.innerHTML = `<div class="d-flex"><div class="toast-body fw-semibold">${msg}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
-          document.body.appendChild(toast);
-          setTimeout(() => { try { document.body.removeChild(toast); } catch { } }, 7000);
-        } finally {
-          // Silme sonrası, hata olsa bile kategori listesini güncelle
-          fetchCategories(categoryPage, categoryPageSize);
+        if (isAdmin) {
+          let lastCode = '';
+          let lastErrorMsg = '';
+          // eslint-disable-next-line no-constant-condition
+          while (true) {
+            const code = await askSecurityCode({
+              prefill: lastCode,
+              errorMessage: lastErrorMsg || (lastCode ? 'Güvenlik şifresi hatalı, tekrar deneyin.' : ''),
+              persistOnResolve: true
+            });
+            if (code === null) {
+              closeSecurityPrompt();
+              return;
+            }
+            lastCode = code;
+            lastErrorMsg = '';
+
+            try {
+              await axios.delete(`/api/categories/${id}`, { headers: { 'X-ADMIN-SECURITY-CODE': code } });
+              closeSecurityPrompt();
+              const toast = document.createElement('div');
+              toast.className = 'toast align-items-center text-bg-success border-0 position-fixed top-0 end-0 m-3 show fs-6';
+              toast.style.minWidth = '360px';
+              toast.style.padding = '0.5rem 0.75rem';
+              toast.setAttribute('role', 'alert');
+              toast.innerHTML = `<div class="d-flex"><div class="toast-body fw-semibold">Kategori başarıyla silindi</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
+              document.body.appendChild(toast);
+              setTimeout(() => { try { document.body.removeChild(toast); } catch { } }, 7000);
+              fetchCategories(categoryPage, categoryPageSize);
+              break;
+            } catch (error) {
+              const { code: errCode, msg, status } = parseSecurityError(error);
+              lastErrorMsg = msg;
+
+              const isSecurity = isAdminSecurityError(errCode, status);
+
+              if (!isSecurity) {
+                closeSecurityPrompt();
+                const toast = document.createElement('div');
+                toast.className = 'toast align-items-center text-bg-danger border-0 position-fixed top-0 end-0 m-3 show fs-6';
+                toast.style.minWidth = '360px';
+                toast.style.padding = '0.5rem 0.75rem';
+                toast.setAttribute('role', 'alert');
+                toast.innerHTML = `<div class="d-flex"><div class="toast-body fw-semibold">${msg}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
+                document.body.appendChild(toast);
+                setTimeout(() => { try { document.body.removeChild(toast); } catch { } }, 7000);
+                fetchCategories(categoryPage, categoryPageSize);
+                break;
+              }
+              // güvenlik hatası: toast göster, modal açık kalsın ve retry
+              const toast = document.createElement('div');
+              toast.className = 'toast align-items-center text-bg-danger border-0 position-fixed top-0 end-0 m-3 show fs-6';
+              toast.style.minWidth = '360px';
+              toast.style.padding = '0.5rem 0.75rem';
+              toast.setAttribute('role', 'alert');
+              toast.innerHTML = `<div class="d-flex"><div class="toast-body fw-semibold">${msg || 'Güvenlik şifresi hatalı'}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
+              document.body.appendChild(toast);
+              setTimeout(() => { try { document.body.removeChild(toast); } catch { } }, 7000);
+              // güvenlik hatası ise modal açık kalsın, döngü devam etsin
+            }
+          }
+        } else {
+          try {
+            await axios.delete(`/api/categories/${id}`);
+            const toast = document.createElement('div');
+            toast.className = 'toast align-items-center text-bg-success border-0 position-fixed top-0 end-0 m-3 show fs-6';
+            toast.style.minWidth = '360px';
+            toast.style.padding = '0.5rem 0.75rem';
+            toast.setAttribute('role', 'alert');
+            toast.innerHTML = `<div class="d-flex"><div class="toast-body fw-semibold">Kategori başarıyla silindi</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
+            document.body.appendChild(toast);
+            setTimeout(() => { try { document.body.removeChild(toast); } catch { } }, 7000);
+          } catch (error) {
+            const errorData = error?.response?.data;
+            const msg = errorData?.message || errorData?.error || (typeof errorData === 'string' ? errorData : 'Kategori silinirken hata oluştu');
+            const toast = document.createElement('div');
+            toast.className = 'toast align-items-center text-bg-danger border-0 position-fixed top-0 end-0 m-3 show fs-6';
+            toast.style.minWidth = '360px';
+            toast.style.padding = '0.5rem 0.75rem';
+            toast.setAttribute('role', 'alert');
+            toast.innerHTML = `<div class="d-flex"><div class="toast-body fw-semibold">${msg}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
+            document.body.appendChild(toast);
+            setTimeout(() => { try { document.body.removeChild(toast); } catch { } }, 7000);
+          } finally {
+            fetchCategories(categoryPage, categoryPageSize);
+          }
         }
       }
     });
@@ -233,37 +332,117 @@ const Categories = () => {
       confirmText: 'Evet, Sil',
       onConfirm: async () => {
         setConfirmModal({ show: false, title: '', message: '', onConfirm: null });
-        try {
-          const deletePromises = ids.map(id => axios.delete(`/api/categories/${id}`));
-          const results = await Promise.allSettled(deletePromises);
-          const successful = results.filter(r => r.status === 'fulfilled').length;
-          const failed = results.filter(r => r.status === 'rejected').length;
-          setSelectedCategories([]);
-          const toast = document.createElement('div');
-          toast.className = `toast align-items-center text-bg-${failed > 0 ? 'warning' : 'success'} border-0 position-fixed top-0 end-0 m-3 show fs-6`;
-          toast.style.minWidth = '360px';
-          toast.style.padding = '0.5rem 0.75rem';
-          toast.setAttribute('role', 'alert');
-          const message = failed > 0
-            ? `${successful} kategori silindi, ${failed} kategori silinemedi (ürün veya alt kategori içeriyor olabilir)`
-            : `${successful} kategori başarıyla silindi`;
-          toast.innerHTML = `<div class="d-flex"><div class="toast-body fw-semibold">${message}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
-          document.body.appendChild(toast);
-          setTimeout(() => { try { document.body.removeChild(toast); } catch { } }, 7000);
-        } catch (error) {
-          const errorData = error?.response?.data;
-          const msg = errorData?.message || errorData?.error || (typeof errorData === 'string' ? errorData : 'Kategoriler silinirken hata oluştu');
-          const toast = document.createElement('div');
-          toast.className = 'toast align-items-center text-bg-danger border-0 position-fixed top-0 end-0 m-3 show fs-6';
-          toast.style.minWidth = '360px';
-          toast.style.padding = '0.5rem 0.75rem';
-          toast.setAttribute('role', 'alert');
-          toast.innerHTML = `<div class="d-flex"><div class="toast-body fw-semibold">${msg}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
-          document.body.appendChild(toast);
-          setTimeout(() => { try { document.body.removeChild(toast); } catch { } }, 7000);
-        } finally {
-          // Toplu silme sonrasında da kategori listesini yenile
-          fetchCategories(categoryPage, categoryPageSize);
+        if (isAdmin) {
+          let lastCode = '';
+          let lastErrorMsg = '';
+          // eslint-disable-next-line no-constant-condition
+          while (true) {
+            const code = await askSecurityCode({
+              prefill: lastCode,
+              errorMessage: lastErrorMsg || (lastCode ? 'Güvenlik şifresi hatalı, tekrar deneyin.' : ''),
+              persistOnResolve: true
+            });
+            if (code === null) {
+              closeSecurityPrompt();
+              return;
+            }
+            lastCode = code;
+            lastErrorMsg = '';
+
+            try {
+              const deletePromises = ids.map(id => axios.delete(`/api/categories/${id}`, { headers: { 'X-ADMIN-SECURITY-CODE': code } }));
+              const results = await Promise.allSettled(deletePromises);
+              const rejected = results.filter(r => r.status === 'rejected');
+              const securityRejected = rejected.filter(r => {
+                const { code: rCode, status } = parseSecurityError(r.reason || r);
+                return isAdminSecurityError(rCode, status);
+              });
+
+              if (securityRejected.length > 0) {
+                const { msg } = parseSecurityError(securityRejected[0].reason || securityRejected[0]);
+                lastErrorMsg = msg || 'Güvenlik şifresi hatalı';
+                const toast = document.createElement('div');
+                toast.className = 'toast align-items-center text-bg-danger border-0 position-fixed top-0 end-0 m-3 show fs-6';
+                toast.style.minWidth = '360px';
+                toast.style.padding = '0.5rem 0.75rem';
+                toast.setAttribute('role', 'alert');
+                toast.innerHTML = `<div class="d-flex"><div class="toast-body fw-semibold">${lastErrorMsg}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
+                document.body.appendChild(toast);
+                setTimeout(() => { try { document.body.removeChild(toast); } catch { } }, 7000);
+                // security error: keep modal open and retry
+                continue;
+              }
+
+              const successful = results.filter(r => r.status === 'fulfilled').length;
+              const failed = rejected.length;
+              setSelectedCategories([]);
+              const toast = document.createElement('div');
+              toast.className = `toast align-items-center text-bg-${failed > 0 ? 'warning' : 'success'} border-0 position-fixed top-0 end-0 m-3 show fs-6`;
+              toast.style.minWidth = '360px';
+              toast.style.padding = '0.5rem 0.75rem';
+              toast.setAttribute('role', 'alert');
+              const message = failed > 0
+                ? `${successful} kategori silindi, ${failed} kategori silinemedi (ürün veya alt kategori içeriyor olabilir)`
+                : `${successful} kategori başarıyla silindi`;
+              toast.innerHTML = `<div class="d-flex"><div class="toast-body fw-semibold">${message}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
+              document.body.appendChild(toast);
+              setTimeout(() => { try { document.body.removeChild(toast); } catch { } }, 7000);
+              closeSecurityPrompt();
+              fetchCategories(categoryPage, categoryPageSize);
+              break;
+            } catch (error) {
+              const { code: errCode, msg, status } = parseSecurityError(error);
+              lastErrorMsg = msg;
+              const toast = document.createElement('div');
+              toast.className = 'toast align-items-center text-bg-danger border-0 position-fixed top-0 end-0 m-3 show fs-6';
+              toast.style.minWidth = '360px';
+              toast.style.padding = '0.5rem 0.75rem';
+              toast.setAttribute('role', 'alert');
+              toast.innerHTML = `<div class="d-flex"><div class="toast-body fw-semibold">${msg || 'Güvenlik şifresi hatalı'}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
+              document.body.appendChild(toast);
+              setTimeout(() => { try { document.body.removeChild(toast); } catch { } }, 7000);
+
+              const isSecurity = isAdminSecurityError(errCode, status);
+              if (!isSecurity) {
+                closeSecurityPrompt();
+                fetchCategories(categoryPage, categoryPageSize);
+                break;
+              }
+              // security error -> retry
+            }
+          }
+        } else {
+          try {
+            const deletePromises = ids.map(id => axios.delete(`/api/categories/${id}`));
+            const results = await Promise.allSettled(deletePromises);
+            const successful = results.filter(r => r.status === 'fulfilled').length;
+            const failed = results.filter(r => r.status === 'rejected').length;
+            setSelectedCategories([]);
+            const toast = document.createElement('div');
+            toast.className = `toast align-items-center text-bg-${failed > 0 ? 'warning' : 'success'} border-0 position-fixed top-0 end-0 m-3 show fs-6`;
+            toast.style.minWidth = '360px';
+            toast.style.padding = '0.5rem 0.75rem';
+            toast.setAttribute('role', 'alert');
+            const message = failed > 0
+              ? `${successful} kategori silindi, ${failed} kategori silinemedi (ürün veya alt kategori içeriyor olabilir)`
+              : `${successful} kategori başarıyla silindi`;
+            toast.innerHTML = `<div class="d-flex"><div class="toast-body fw-semibold">${message}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
+            document.body.appendChild(toast);
+            setTimeout(() => { try { document.body.removeChild(toast); } catch { } }, 7000);
+          } catch (error) {
+            const errorData = error?.response?.data;
+            const msg = errorData?.message || errorData?.error || (typeof errorData === 'string' ? errorData : 'Kategoriler silinirken hata oluştu');
+            const toast = document.createElement('div');
+            toast.className = 'toast align-items-center text-bg-danger border-0 position-fixed top-0 end-0 m-3 show fs-6';
+            toast.style.minWidth = '360px';
+            toast.style.padding = '0.5rem 0.75rem';
+            toast.setAttribute('role', 'alert');
+            toast.innerHTML = `<div class="d-flex"><div class="toast-body fw-semibold">${msg}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
+            document.body.appendChild(toast);
+            setTimeout(() => { try { document.body.removeChild(toast); } catch { } }, 7000);
+          } finally {
+            fetchCategories(categoryPage, categoryPageSize);
+          }
         }
       }
     });
@@ -863,6 +1042,7 @@ const Categories = () => {
         onConfirm={confirmModal.onConfirm}
         onCancel={() => setConfirmModal({ show: false, title: '', message: '', onConfirm: null })}
       />
+      {SecurityCodePrompt}
     </div>
   );
 };

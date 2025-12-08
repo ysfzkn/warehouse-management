@@ -5,6 +5,7 @@ import com.warehouse.entity.StockRequest;
 import com.warehouse.enums.StockRequestStatus;
 import com.warehouse.enums.StockRequestType;
 import com.warehouse.service.StockRequestService;
+import com.warehouse.service.AdminSecurityService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -24,6 +25,7 @@ import java.util.Map;
 public class StockRequestController {
 
     private final StockRequestService stockRequestService;
+    private final AdminSecurityService adminSecurityService;
 
     /**
      * Create a new stock request
@@ -101,7 +103,9 @@ public class StockRequestController {
      */
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'STOCK_IN', 'STOCK_OUT')")
-    public ResponseEntity<Void> deleteOwnRequest(@PathVariable Long id) {
+    public ResponseEntity<Void> deleteOwnRequest(@PathVariable Long id,
+                                                 @RequestHeader(value = "X-ADMIN-SECURITY-CODE", required = false) String adminSecurityCode) {
+        adminSecurityService.requireSecurityCodeForAdmin(adminSecurityCode);
         stockRequestService.deleteOwnPendingRequest(id);
         return ResponseEntity.noContent().build();
     }

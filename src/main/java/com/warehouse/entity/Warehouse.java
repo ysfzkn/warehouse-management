@@ -30,7 +30,7 @@ public class Warehouse {
     private String name;
 
     @NotBlank(message = "Location is required")
-    @Size(min = 5, max = 255, message = "Location must be between 5 and 255 characters")
+    @Size(min = 3, max = 255, message = "Location must be between 3 and 255 characters")
     @Column(nullable = false)
     private String location;
 

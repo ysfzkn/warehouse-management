@@ -1,8 +1,10 @@
 package com.warehouse.service.impl;
 
+import com.warehouse.dto.WarehouseResponse;
 import com.warehouse.entity.Warehouse;
 import com.warehouse.exception.ErrorCode;
 import com.warehouse.exception.WarehouseManagementException;
+import com.warehouse.repository.StockRepository;
 import com.warehouse.repository.WarehouseRepository;
 import com.warehouse.service.WarehouseService;
 import com.warehouse.util.EntityValidator;
@@ -15,7 +17,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
  * Implementation of WarehouseService for managing warehouses.
@@ -27,16 +32,39 @@ public class WarehouseServiceImpl implements WarehouseService {
     private static final Logger logger = LoggerFactory.getLogger(WarehouseServiceImpl.class);
 
     private final WarehouseRepository warehouseRepository;
+    private final StockRepository stockRepository;
 
-    public WarehouseServiceImpl(WarehouseRepository warehouseRepository) {
+    public WarehouseServiceImpl(WarehouseRepository warehouseRepository, StockRepository stockRepository) {
         this.warehouseRepository = warehouseRepository;
+        this.stockRepository = stockRepository;
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<Warehouse> getAllWarehouses() {
-        logger.debug("Fetching all warehouses");
-        return warehouseRepository.findAll();
+    public List<WarehouseResponse> getAllWarehouses() {
+        logger.debug("Fetching all warehouses with aggregate quantities");
+        List<Warehouse> warehouses = warehouseRepository.findAll();
+        if (warehouses.isEmpty()) {
+            return List.of();
+        }
+
+        List<Long> warehouseIds = warehouses.stream()
+                .map(Warehouse::getId)
+                .filter(Objects::nonNull)
+                .toList();
+
+        Map<Long, Long> totalsByWarehouseId = stockRepository.getTotalQuantitiesByWarehouseIds(warehouseIds).stream()
+                .collect(Collectors.toMap(
+                        StockRepository.WarehouseQuantityAggregate::getWarehouseId,
+                        agg -> Optional.ofNullable(agg.getTotalQuantity()).orElse(0L)
+                ));
+
+        return warehouses.stream()
+                .map(warehouse -> WarehouseResponse.from(
+                        warehouse,
+                        totalsByWarehouseId.getOrDefault(warehouse.getId(), 0L)
+                ))
+                .toList();
     }
 
     @Override

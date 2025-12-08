@@ -1,7 +1,8 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import axios from 'axios';
 import ConfirmModal from '../components/ConfirmModal';
+import useSecurityCodePrompt from '../components/useSecurityCodePrompt';
 
 const CrudTable = ({
   title,
@@ -237,15 +238,39 @@ const EditModal = ({ title, fields, item, onClose, onSave, saving, error }) => {
 };
 
 const UserModal = ({ user, onClose, onSave, saving, error }) => {
-  const [form, setForm] = useState({ username: '', password: '', role: 'STOCK_IN' });
+  const [form, setForm] = useState({ username: '', password: '', confirmPassword: '', role: 'STOCK_IN' });
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [localError, setLocalError] = useState('');
 
   useEffect(() => {
     if (user) {
-      setForm({ username: user.username || '', password: '', role: user.role || 'STOCK_IN' });
+      setForm({ username: user.username || '', password: '', confirmPassword: '', role: user.role || 'STOCK_IN' });
     } else {
-      setForm({ username: '', password: '', role: 'STOCK_IN' });
+      setForm({ username: '', password: '', confirmPassword: '', role: 'STOCK_IN' });
     }
+    setLocalError('');
   }, [user]);
+
+  const passwordRequired = !user || form.password.length > 0;
+  const passwordTooShort = passwordRequired && (!form.password || form.password.length < 5);
+  const passwordsMismatch = passwordRequired && form.password !== form.confirmPassword;
+  const usernameEmpty = !form.username || form.username.trim().length === 0;
+  const canSave = !usernameEmpty && !passwordTooShort && !passwordsMismatch && (!passwordRequired || !!form.password);
+
+  const currentValidationMessage = (() => {
+    if (usernameEmpty) return 'Kullanıcı adı zorunludur.';
+    if (passwordTooShort) return 'Parola en az 5 karakter olmalıdır.';
+    if (passwordsMismatch) return 'Parola ve doğrulama aynı olmalıdır.';
+    return '';
+  })();
+
+  const handleSaveClick = () => {
+    const msg = currentValidationMessage;
+    setLocalError(msg);
+    if (msg) return;
+    onSave(form);
+  };
 
   return (
     <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
@@ -256,14 +281,61 @@ const UserModal = ({ user, onClose, onSave, saving, error }) => {
             <button type="button" className="btn-close" onClick={onClose}></button>
           </div>
           <div className="modal-body">
-            {error && <div className="alert alert-danger" dangerouslySetInnerHTML={{ __html: error }} />}
+            {(error || localError) && (
+              <div className="alert alert-danger" dangerouslySetInnerHTML={{ __html: error || localError }} />
+            )}
             <div className="mb-3">
               <label className="form-label">Kullanıcı Adı</label>
               <input className="form-control" value={form.username} onChange={e => setForm({ ...form, username: e.target.value })} disabled={!!user} />
             </div>
             <div className="mb-3">
               <label className="form-label">Parola {user && <small className="text-muted">(değiştirmek istemiyorsanız boş bırakın)</small>}</label>
-              <input type="password" className="form-control" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} />
+              <div className="input-group">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  className="form-control"
+                  value={form.password}
+                  onChange={e => setForm({ ...form, password: e.target.value })}
+                  autoComplete="new-password"
+                  name="new-user-password"
+                  aria-invalid={passwordTooShort || passwordsMismatch ? 'true' : 'false'}
+                />
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary"
+                  onClick={() => setShowPassword(prev => !prev)}
+                >
+                  <i className={`fas fa-eye${showPassword ? '-slash' : ''}`}></i>
+                </button>
+              </div>
+            </div>
+            <div className="mb-3">
+              <label className="form-label">Parola Doğrulama</label>
+              <div className="input-group">
+                <input
+                  type={showConfirm ? 'text' : 'password'}
+                  className="form-control"
+                  value={form.confirmPassword}
+                  onChange={e => setForm({ ...form, confirmPassword: e.target.value })}
+                  autoComplete="new-password"
+                  name="new-user-password-confirm"
+                  aria-invalid={passwordTooShort || passwordsMismatch ? 'true' : 'false'}
+                />
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary"
+                  onClick={() => setShowConfirm(prev => !prev)}
+                >
+                  <i className={`fas fa-eye${showConfirm ? '-slash' : ''}`}></i>
+                </button>
+              </div>
+              {(passwordTooShort || passwordsMismatch) && (
+                <div className="form-text text-danger">
+                  {passwordTooShort
+                    ? 'Parola en az 5 karakter olmalıdır.'
+                    : 'Parola ve doğrulama aynı olmalıdır.'}
+                </div>
+              )}
             </div>
             <div className="mb-3">
               <label className="form-label">Yetki</label>
@@ -281,7 +353,7 @@ const UserModal = ({ user, onClose, onSave, saving, error }) => {
           </div>
           <div className="modal-footer">
             <button className="btn btn-secondary" onClick={onClose} disabled={saving}>İptal</button>
-            <button className="btn btn-primary" onClick={() => onSave(form)} disabled={saving}>
+            <button className="btn btn-primary" onClick={handleSaveClick} disabled={saving || !canSave}>
               {saving ? <span className="spinner-border spinner-border-sm" /> : 'Kaydet'}
             </button>
           </div>
@@ -293,9 +365,10 @@ const UserModal = ({ user, onClose, onSave, saving, error }) => {
 
 const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
   const location = useLocation();
+  const allowedTabsKey = useMemo(() => JSON.stringify(allowedTabsProp ?? []), [allowedTabsProp]);
   const allowedTabs = useMemo(
-    () => (Array.isArray(allowedTabsProp) && allowedTabsProp.length ? allowedTabsProp : ['brand', 'color', 'users']),
-    [allowedTabsProp]
+    () => (Array.isArray(allowedTabsProp) && allowedTabsProp.length ? [...allowedTabsProp] : ['brand', 'color', 'users']),
+    [allowedTabsKey]
   );
   const [activeTab, setActiveTab] = useState(allowedTabs[0] || 'users');
   const [brands, setBrands] = useState([]);
@@ -355,6 +428,17 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
     }, type === 'success' ? 4000 : 7000);
   };
 
+  const promptAdminSecurityCode = () => {
+    const code = window.prompt('Yönetici güvenlik şifresi');
+    if (code === null) return null;
+    const trimmed = (code || '').trim();
+    if (!trimmed) {
+      showToast('Güvenlik şifresi zorunlu.', 'error');
+      return null;
+    }
+    return trimmed;
+  };
+
   // Hata mesajını backend'den detaylarıyla birlikte güvenli şekilde çıkarmak için helper
   const buildErrorMessage = (rawError, fallbackMessage) => {
     console.log(rawError)
@@ -408,24 +492,125 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
   const [error, setError] = useState('');
   const [editing, setEditing] = useState(undefined);
   const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null });
+  const [securityStatus, setSecurityStatus] = useState({ configured: false, loading: true });
+  const [securityForm, setSecurityForm] = useState({ currentCode: '', newCode: '', confirmNewCode: '' });
+  const [securitySaving, setSecuritySaving] = useState(false);
+  const [showSecurityModal, setShowSecurityModal] = useState(false);
+  const [showSecurityPassword, setShowSecurityPassword] = useState({
+    current: false,
+    new: false,
+    confirm: false
+  });
+  const usersRef = useRef([]);
+  const { askCode: askSecurityCode, SecurityCodePrompt, closePrompt: closeSecurityPrompt } = useSecurityCodePrompt();
+  const adminSecurityErrorCodes = new Set([
+    'AUTH_002','AUTH_003','AUTH_004','AUTH_005','AUTH_006','AUTH_007',
+    'ADMIN_SECURITY_CODE_REQUIRED','INVALID_ADMIN_SECURITY_CODE','ADMIN_SECURITY_CODE_MISMATCH'
+  ]);
+  const parseSecurityError = (error) => {
+    const data = error?.response?.data;
+    const code = data?.code || data?.errorCode;
+    const msg = data?.message || data?.error || error?.message || 'Beklenmeyen bir hata oluştu';
+    return { code, msg };
+  };
 
-  const load = async () => {
+  const load = async ({ fetchBrands = true, fetchColors = true, fetchUsers = true } = {}) => {
     try {
       setLoading(true);
-      const [b, c, u] = await Promise.all([
-        axios.get('/api/brands').catch(() => ({ data: [] })),
-        axios.get('/api/colors').catch(() => ({ data: [] })),
-        axios.get('/api/users').catch(() => ({ data: [] }))
-      ]);
-      setBrands(b.data || []);
-      setColors(c.data || []);
-      setUsers(u.data || []);
+      const tasks = [];
+      if (fetchBrands) {
+        tasks.push(
+          axios.get('/api/brands')
+            .then(res => setBrands(res.data || []))
+            .catch(() => {}) // önceki state'i koru
+        );
+      }
+      if (fetchColors) {
+        tasks.push(
+          axios.get('/api/colors')
+            .then(res => setColors(res.data || []))
+            .catch(() => {})
+        );
+      }
+      if (fetchUsers) {
+        tasks.push(
+          axios.get('/api/users')
+            .then(res => {
+              const incoming = Array.isArray(res.data) ? res.data : usersRef.current;
+              console.log('[AdminSettings] users fetched', { next: incoming.length, prev: usersRef.current.length });
+              // Koruma: mevcut listedeki kişi sayısından beklenmedik düşüşte eski listeyi koru
+              if (incoming.length === 0 && usersRef.current.length > 0) {
+                console.warn('[AdminSettings] empty users response, keeping previous list');
+                setUsers(usersRef.current);
+              } else if (incoming.length < usersRef.current.length - 1) {
+                console.warn('[AdminSettings] users length dropped unexpectedly, keeping previous list');
+                setUsers(usersRef.current);
+              } else {
+                setUsers(incoming);
+              }
+            })
+            .catch((err) => {
+              console.warn('[AdminSettings] users fetch failed, keeping previous list', err?.response || err);
+              setUsers(usersRef.current);
+            })
+        );
+      }
+      await Promise.all(tasks);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { load(); }, []);
+  const refreshUsers = async () => {
+    const previous = usersRef.current;
+    try {
+      const res = await axios.get('/api/users');
+      const list = Array.isArray(res.data) ? res.data : previous;
+      console.log('[AdminSettings] refreshUsers', { prev: previous.length, next: list.length });
+      if (list.length === 0 && previous.length > 0) {
+        console.warn('[AdminSettings] refreshUsers got empty list, keeping previous');
+        setUsers(previous);
+      } else if (list.length < previous.length - 1) {
+        console.warn('[AdminSettings] refreshUsers length dropped unexpectedly, keeping previous');
+        setUsers(previous);
+      } else {
+        setUsers(list);
+      }
+    } catch (err) {
+      console.warn('[AdminSettings] refreshUsers failed, keeping previous list', err?.response || err);
+      setUsers(previous);
+    }
+  };
+
+  // Keep a stable copy of users to avoid accidental drops
+  useEffect(() => {
+    if (Array.isArray(users)) {
+      usersRef.current = users;
+    }
+  }, [users]);
+
+
+  useEffect(() => {
+    load({
+      fetchBrands: allowedTabs.includes('brand'),
+      fetchColors: allowedTabs.includes('color'),
+      fetchUsers: allowedTabs.includes('users'),
+    });
+    // allowedTabsKey keeps array reference stable to prevent needless reloads
+  }, [allowedTabsKey]);
+
+  useEffect(() => {
+    const fetchSecurityStatus = async () => {
+      try {
+        setSecurityStatus(s => ({ ...s, loading: true }));
+        const { data } = await axios.get('/api/admin/security-code/status');
+        setSecurityStatus({ configured: !!data?.configured, loading: false });
+      } catch {
+        setSecurityStatus({ configured: false, loading: false });
+      }
+    };
+    fetchSecurityStatus();
+  }, []);
 
   // Initialize tab from query string (e.g. ?tab=color or ?tab=users)
   useEffect(() => {
@@ -492,19 +677,45 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
       onConfirm: async () => {
         setConfirmModal({ show: false, title: '', message: '', onConfirm: null });
         const url = activeTab === 'brand' ? `/api/brands/${item.id}` : `/api/colors/${item.id}`;
-        try {
-          await axios.delete(url);
-             load();
-          showToast(
-            `"${item.name}" ${itemType.toLowerCase()}ı başarıyla silindi.`,
-            'success'
-          );
-        } catch (e) {
-          const fallbackMsg =
-            `"${item.name}" ${itemType.toLowerCase()} silinirken bir hata oluştu. Bu öğe başka kayıtlar tarafından kullanılıyor olabilir.`;
-          console.log(e.response)
-          const finalMessage = buildErrorMessage(e.response?.data, fallbackMsg);
-          showToast(finalMessage, 'error');
+        let lastCode = '';
+        let lastErrorMsg = '';
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+          const code = await askSecurityCode({
+            prefill: lastCode,
+            errorMessage: lastErrorMsg || (lastCode ? 'Güvenlik şifresi hatalı, tekrar deneyin.' : ''),
+            persistOnResolve: true
+          });
+          if (code === null) {
+            closeSecurityPrompt();
+            return;
+          }
+          lastCode = code;
+          lastErrorMsg = '';
+
+          try {
+            await axios.delete(url, { headers: { 'X-ADMIN-SECURITY-CODE': code } });
+            closeSecurityPrompt();
+            await load();
+            showToast(
+              `"${item.name}" ${itemType.toLowerCase()}ı başarıyla silindi.`,
+              'success'
+            );
+            break;
+          } catch (e) {
+            const { code: errCode, msg } = parseSecurityError(e);
+            lastErrorMsg = msg;
+            if (!adminSecurityErrorCodes.has(errCode)) {
+              closeSecurityPrompt();
+              const fallbackMsg =
+                `"${item.name}" ${itemType.toLowerCase()} silinirken bir hata oluştu. Bu öğe başka kayıtlar tarafından kullanılıyor olabilir.`;
+              const finalMessage = buildErrorMessage(e.response?.data, fallbackMsg);
+              showToast(finalMessage, 'error');
+              break;
+            }
+            showToast(msg || 'Güvenlik şifresi hatalı', 'error');
+            // security error -> retry with same modal
+          }
         }
       }
     });
@@ -525,25 +736,51 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
       confirmText: 'Seçilenleri Sil',
       onConfirm: async () => {
         setConfirmModal({ show: false, title: '', message: '', onConfirm: null });
-        try {
-          const baseUrl = isBrandTab ? '/api/brands' : '/api/colors';
-          await axios.delete(`${baseUrl}/bulk`, { data: ids });
-          await load();
-          if (isBrandTab) {
-            setSelectedBrandIds([]);
-          } else {
-            setSelectedColorIds([]);
+        const baseUrl = isBrandTab ? '/api/brands' : '/api/colors';
+        let lastCode = '';
+        let lastErrorMsg = '';
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+          const code = await askSecurityCode({
+            prefill: lastCode,
+            errorMessage: lastErrorMsg || (lastCode ? 'Güvenlik şifresi hatalı, tekrar deneyin.' : ''),
+            persistOnResolve: true
+          });
+          if (code === null) {
+            closeSecurityPrompt();
+            return;
           }
-          const successMsg = isBrandTab
-            ? `Seçili ${ids.length} marka başarıyla silindi.`
-            : `Seçili ${ids.length} renk başarıyla silindi.`;
-          showToast(successMsg, 'success');
-        } catch (e) {
-          const fallbackMsg =
-            'Toplu silme sırasında bir hata oluştu. Lütfen daha sonra tekrar deneyin.';
-          console.log(e.response)
-          const finalMessage = buildErrorMessage(e.response?.data, fallbackMsg);
-          showToast(finalMessage, 'error');
+          lastCode = code;
+          lastErrorMsg = '';
+
+          try {
+            await axios.delete(`${baseUrl}/bulk`, { data: ids, headers: { 'X-ADMIN-SECURITY-CODE': code } });
+            closeSecurityPrompt();
+            await load();
+            if (isBrandTab) {
+              setSelectedBrandIds([]);
+            } else {
+              setSelectedColorIds([]);
+            }
+            const successMsg = isBrandTab
+              ? `Seçili ${ids.length} marka başarıyla silindi.`
+              : `Seçili ${ids.length} renk başarıyla silindi.`;
+            showToast(successMsg, 'success');
+            break;
+          } catch (e) {
+            const { code: errCode, msg } = parseSecurityError(e);
+            lastErrorMsg = msg;
+            if (!adminSecurityErrorCodes.has(errCode)) {
+              closeSecurityPrompt();
+              const fallbackMsg =
+                'Toplu silme sırasında bir hata oluştu. Lütfen daha sonra tekrar deneyin.';
+              const finalMessage = buildErrorMessage(e.response?.data, fallbackMsg);
+              showToast(finalMessage, 'error');
+              break;
+            }
+            showToast(msg || 'Güvenlik şifresi hatalı', 'error');
+            // security error -> retry with same modal
+          }
         }
       }
     });
@@ -559,18 +796,92 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
       confirmText: 'Sil',
       onConfirm: async () => {
         setConfirmModal({ show: false, title: '', message: '', onConfirm: null });
-        try {
-          await axios.delete(`/api/users/${user.id}`);
-          await load();
-          showToast(`"${user.username}" kullanıcısı başarıyla silindi.`, 'success');
-        } catch (e) {
-          const fallbackMsg =
-            `"${user.username}" kullanıcısı silinirken bir hata oluştu. Kullanıcıya ait başka kayıtlar olabilir.`;
-          const finalMessage = buildErrorMessage(e.response?.data, fallbackMsg);
-          showToast(finalMessage, 'error');
+        let lastCode = '';
+        let lastErrorMsg = '';
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+          const code = await askSecurityCode({
+            prefill: lastCode,
+            errorMessage: lastErrorMsg || (lastCode ? 'Güvenlik şifresi hatalı, tekrar deneyin.' : ''),
+            persistOnResolve: true
+          });
+          if (code === null) {
+            closeSecurityPrompt();
+            return;
+          }
+          lastCode = code;
+          lastErrorMsg = '';
+
+          try {
+            await axios.delete(`/api/users/${user.id}`, { headers: { 'X-ADMIN-SECURITY-CODE': code } });
+            closeSecurityPrompt();
+            await load();
+            showToast(`"${user.username}" kullanıcısı başarıyla silindi.`, 'success');
+            break;
+          } catch (e) {
+            const { code: errCode, msg } = parseSecurityError(e);
+            lastErrorMsg = msg;
+            if (!adminSecurityErrorCodes.has(errCode)) {
+              closeSecurityPrompt();
+              const fallbackMsg =
+                `"${user.username}" kullanıcısı silinirken bir hata oluştu. Kullanıcıya ait başka kayıtlar olabilir.`;
+              const finalMessage = buildErrorMessage(e.response?.data, fallbackMsg);
+              showToast(finalMessage, 'error');
+              break;
+            }
+            // security error -> retry same modal
+          }
         }
       }
     });
+  };
+
+  const handleSecurityCodeSave = async () => {
+    console.log('[AdminSettings] security save start users count', users.length);
+    if ((securityForm.newCode || '').length < 5) {
+      showToast('Yeni şifre en az 5 karakter olmalıdır.', 'error');
+      return;
+    }
+    if (securityForm.newCode !== securityForm.confirmNewCode) {
+      showToast('Yeni şifreler eşleşmiyor.', 'error');
+      return;
+    }
+    try {
+      setSecuritySaving(true);
+      await axios.put('/api/admin/security-code', securityForm);
+      await refreshUsers();
+      setSecurityForm({ currentCode: '', newCode: '', confirmNewCode: '' });
+      setSecurityStatus((s) => ({ ...s, configured: true }));
+      showToast('Güvenlik şifresi güncellendi.', 'success');
+      setShowSecurityModal(false);
+    } catch (e) {
+      const errData = e?.response?.data;
+      const code = errData?.code || errData?.errorCode;
+      const rawMessage = errData?.message || errData?.error || (typeof errData === 'string' ? errData : null);
+      const lower = (rawMessage || '').toLowerCase();
+      let friendly = 'Güvenlik şifresi güncellenemedi.';
+      if (code === 'AUTH_003' || lower.includes('mevcut güvenlik')) {
+        friendly = 'Mevcut güvenlik şifresi doğru değil. Lütfen kontrol edin.';
+      } else if (code === 'AUTH_002') {
+        friendly = 'Güvenlik şifresi zorunlu. Lütfen mevcut şifreyi girin.';
+      } else if (code === 'AUTH_006') {
+        friendly = 'Mevcut güvenlik şifresi zorunludur.';
+      } else if (code === 'AUTH_007') {
+        friendly = 'Yeni güvenlik şifresi zorunludur.';
+      } else if (lower.includes('eşleşmiyor') || lower.includes('uyuşmuyor')) {
+        friendly = 'Girilen yeni şifreler uyuşmuyor.';
+      } else if (lower.includes('en az 5') || code === 'AUTH_005') {
+        friendly = 'Yeni şifre en az 5 karakter olmalıdır.';
+      } else if (code === 'INVALID_VALUE') {
+        friendly = 'Girilen değerler geçersiz. Mevcut ve yeni şifreleri kontrol edin.';
+      } else if (rawMessage) {
+        friendly = rawMessage;
+      }
+      showToast(friendly, 'error');
+    } finally {
+      setSecuritySaving(false);
+      console.log('[AdminSettings] security save end users count', users.length);
+    }
   };
 
   return (
@@ -705,20 +1016,34 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
               <h5 className="mb-0">Kullanıcılar</h5>
               <div className="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center gap-2 w-100 w-md-auto">
                 <div className="flex-grow-1 position-relative">
-                  <input
-                    type="text"
-                    className="form-control form-control-sm ps-5"
-                    placeholder="Kullanıcı ara..."
-                    value={userSearch}
-                    onChange={e => setUserSearch(e.target.value)}
-                  />
-                  <span
-                    className="position-absolute top-50 start-0 translate-middle-y ms-3 text-muted"
-                    style={{ pointerEvents: 'none' }}
-                  >
-                    <i className="fas fa-search"></i>
-                  </span>
+                  <form autoComplete="off" onSubmit={(e) => e.preventDefault()}>
+                    <input
+                      type="text"
+                      className="form-control form-control-sm ps-5"
+                      placeholder="Kullanıcı ara..."
+                      value={userSearch}
+                      onChange={e => setUserSearch(e.target.value)}
+                      autoComplete="new-password"
+                      name="user-search"
+                    />
+                    <span
+                      className="position-absolute top-50 start-0 translate-middle-y ms-3 text-muted"
+                      style={{ pointerEvents: 'none' }}
+                    >
+                      <i className="fas fa-search"></i>
+                    </span>
+                  </form>
                 </div>
+                <button
+                  className="btn btn-outline-secondary btn-sm"
+                  onClick={() => {
+                    setUserSearch('');
+                    setShowSecurityModal(true);
+                  }}
+                >
+                  <i className="fas fa-shield-alt me-2"></i>
+                  Yönetici Güvenlik Şifresi
+                </button>
                 <button className="btn btn-primary btn-sm" onClick={() => { setError(''); setEditing({ __create: true }); }}>
                   <i className="fas fa-user-plus me-2"></i>Yeni Kullanıcı
                 </button>
@@ -800,15 +1125,64 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
               setSaving(true);
               setError('');
               if (editing.__create) {
+                // Eğer yeni kullanıcı ADMIN rolündeyse yönetici güvenlik şifresi iste
+                let adminHeader = {};
+                if (form.role === 'ADMIN') {
+                  let lastCode = '';
+                  let lastErrorMsg = '';
+                  // eslint-disable-next-line no-constant-condition
+                  while (true) {
+                    const code = await askSecurityCode({
+                      prefill: lastCode,
+                      errorMessage: lastErrorMsg || (lastCode ? 'Güvenlik şifresi hatalı, tekrar deneyin.' : ''),
+                      persistOnResolve: true
+                    });
+                    if (code === null) {
+                      closeSecurityPrompt();
+                      setSaving(false);
+                      return;
+                    }
+                    lastCode = code;
+                    lastErrorMsg = '';
+                    adminHeader = { 'X-ADMIN-SECURITY-CODE': code };
+                    break;
+                  }
+                  closeSecurityPrompt();
+                }
+
                 await axios.post('/api/users', {
                   username: form.username,
                   password: form.password,
                   role: form.role
-                });
+                }, { headers: adminHeader });
                 showToast('Kullanıcı başarıyla oluşturuldu.', 'success');
               } else {
                 if (form.role && form.role !== editing.role) {
-                  await axios.put(`/api/users/${editing.id}/role`, { role: form.role });
+                  // Rol değişikliği ADMIN ise güvenlik kodu iste
+                  let adminHeader = {};
+                  if (form.role === 'ADMIN') {
+                    let lastCode = '';
+                    let lastErrorMsg = '';
+                    // eslint-disable-next-line no-constant-condition
+                    while (true) {
+                      const code = await askSecurityCode({
+                        prefill: lastCode,
+                        errorMessage: lastErrorMsg || (lastCode ? 'Güvenlik şifresi hatalı, tekrar deneyin.' : ''),
+                        persistOnResolve: true
+                      });
+                      if (code === null) {
+                        closeSecurityPrompt();
+                        setSaving(false);
+                        return;
+                      }
+                      lastCode = code;
+                      lastErrorMsg = '';
+                      adminHeader = { 'X-ADMIN-SECURITY-CODE': code };
+                      break;
+                    }
+                    closeSecurityPrompt();
+                  }
+                  await axios.put(`/api/users/${editing.id}/role`, { role: form.role }, { headers: adminHeader });
                 }
                 if (form.password) {
                   await axios.put(`/api/users/${editing.id}/password`, {
@@ -820,6 +1194,10 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
               setEditing(undefined);
               await load();
             } catch (e) {
+              if (e?.message === 'ADMIN_SECURITY_CANCELLED') {
+                setSaving(false);
+                return;
+              }
               const fallbackMsg =
                 'Kullanıcı kaydedilirken bir hata oluştu. Lütfen girdiğiniz bilgileri kontrol edin.';
               const finalMessage = buildErrorMessage(e.response?.data, fallbackMsg);
@@ -843,6 +1221,106 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
         onConfirm={confirmModal.onConfirm}
         onCancel={() => setConfirmModal({ show: false, title: '', message: '', onConfirm: null })}
       />
+
+      {showSecurityModal && (
+        <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 4000 }}>
+          <div className="modal-dialog">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">Yönetici Güvenlik Şifresi</h5>
+                <button type="button" className="btn-close" onClick={() => setShowSecurityModal(false)}></button>
+              </div>
+              <div className="modal-body">
+                <p className="text-muted mb-3">
+                  Silme işlemleri için yönetici güvenlik şifresi gereklidir. Değiştirmek için mevcut şifreyi doğrulayın.
+                </p>
+                <div className="mb-3">
+                  <label className="form-label">Mevcut Şifre</label>
+                  <form autoComplete="off" onSubmit={(e) => e.preventDefault()}>
+                    <div className="input-group">
+                      <input
+                        type={showSecurityPassword.current ? 'text' : 'password'}
+                        className="form-control"
+                        value={securityForm.currentCode}
+                        onChange={(e) => setSecurityForm({ ...securityForm, currentCode: e.target.value })}
+                        placeholder={securityStatus.configured ? 'Mevcut şifreyi girin' : 'İlk kez şifre tanımlayın'}
+                        disabled={securitySaving}
+                        autoComplete="new-password"
+                        name="current-security-code"
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-outline-secondary"
+                        onClick={() => setShowSecurityPassword(prev => ({ ...prev, current: !prev.current }))}
+                      >
+                        <i className={`fas fa-eye${showSecurityPassword.current ? '-slash' : ''}`}></i>
+                      </button>
+                    </div>
+                  </form>
+                </div>
+                <div className="mb-3">
+                  <label className="form-label">Yeni Şifre</label>
+                  <form autoComplete="off" onSubmit={(e) => e.preventDefault()}>
+                    <div className="input-group">
+                      <input
+                        type={showSecurityPassword.new ? 'text' : 'password'}
+                        className="form-control"
+                        value={securityForm.newCode}
+                        onChange={(e) => setSecurityForm({ ...securityForm, newCode: e.target.value })}
+                        disabled={securitySaving}
+                        autoComplete="new-password"
+                        name="new-security-code"
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-outline-secondary"
+                        onClick={() => setShowSecurityPassword(prev => ({ ...prev, new: !prev.new }))}
+                      >
+                        <i className={`fas fa-eye${showSecurityPassword.new ? '-slash' : ''}`}></i>
+                      </button>
+                    </div>
+                  </form>
+                </div>
+                <div className="mb-3">
+                  <label className="form-label">Yeni Şifre (Tekrar)</label>
+                  <form autoComplete="off" onSubmit={(e) => e.preventDefault()}>
+                    <div className="input-group">
+                      <input
+                        type={showSecurityPassword.confirm ? 'text' : 'password'}
+                        className="form-control"
+                        value={securityForm.confirmNewCode}
+                        onChange={(e) => setSecurityForm({ ...securityForm, confirmNewCode: e.target.value })}
+                        disabled={securitySaving}
+                        autoComplete="new-password"
+                        name="confirm-security-code"
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-outline-secondary"
+                        onClick={() => setShowSecurityPassword(prev => ({ ...prev, confirm: !prev.confirm }))}
+                      >
+                        <i className={`fas fa-eye${showSecurityPassword.confirm ? '-slash' : ''}`}></i>
+                      </button>
+                    </div>
+                  </form>
+                </div>
+                <span className={`badge ${securityStatus.configured ? 'bg-success' : 'bg-secondary'}`}>
+                  {securityStatus.loading ? 'Durum kontrol ediliyor...' : securityStatus.configured ? 'Şifre tanımlı' : 'Şifre henüz tanımlı değil'}
+                </span>
+              </div>
+              <div className="modal-footer">
+                <button className="btn btn-secondary" onClick={() => setShowSecurityModal(false)} disabled={securitySaving}>
+                  Kapat
+                </button>
+                <button className="btn btn-primary" onClick={handleSecurityCodeSave} disabled={securitySaving}>
+                  {securitySaving ? <span className="spinner-border spinner-border-sm" /> : 'Şifreyi Güncelle'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {SecurityCodePrompt}
     </div>
   );
 };

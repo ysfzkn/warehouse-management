@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
+import useSecurityCodePrompt from './useSecurityCodePrompt';
 import {
   extractPhoneDigits,
   isPhoneComplete,
@@ -13,6 +14,9 @@ import { compressImage } from '../utils/image';
 const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery = false }) => {
   const [currentStep, setCurrentStep] = useState(1);
   const initialTransferType = lockToCustomerDelivery ? 'CUSTOMER_DELIVERY' : 'WAREHOUSE';
+  const role = (typeof window !== 'undefined' && localStorage.getItem('auth_role')) || 'ADMIN';
+  const isAdmin = role === 'ADMIN';
+  const { askCode: askSecurityCode, SecurityCodePrompt } = useSecurityCodePrompt();
   
   // Get current date/time in Turkey timezone (GMT+3)
   const getTurkeyDateTime = () => {
@@ -63,6 +67,14 @@ const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery 
   const [itemPhotos, setItemPhotos] = useState({});
   const [photoUploads, setPhotoUploads] = useState({});
   const [pendingItemPhotos, setPendingItemPhotos] = useState({});
+  const requireAdminSecurityHeaders = async () => {
+    if (!isAdmin) return {};
+    const code = await askSecurityCode();
+    if (code === null) {
+      throw new Error('ADMIN_SECURITY_CANCELLED');
+    }
+    return { 'X-ADMIN-SECURITY-CODE': code };
+  };
   const transferTypeOptions = [
     { key: 'WAREHOUSE', label: 'Depo Transferi', icon: 'fa-warehouse', accent: 'primary', hint: 'Şubeler arası stok taşıma' },
     { key: 'CUSTOMER_DELIVERY', label: 'Müşteri Sevkiyatı', icon: 'fa-shipping-fast', accent: 'info', hint: 'Depodan müşteriye sevk' }
@@ -491,7 +503,8 @@ useEffect(() => {
     }
 
     try {
-      await axios.delete(`/api/stock-transfer-items/${photoInfo.itemId}/photo`);
+      const headers = await requireAdminSecurityHeaders();
+      await axios.delete(`/api/stock-transfer-items/${photoInfo.itemId}/photo`, { headers });
       setItemPhotos(prev => {
         const copy = { ...prev };
         delete copy[productId];
@@ -499,6 +512,7 @@ useEffect(() => {
       });
       showToast('Fotoğraf kaldırıldı.', 'success');
     } catch (e) {
+      if (e?.message?.startsWith('ADMIN_SECURITY')) return;
       console.error('Failed to delete transfer item photo', e);
       showToast('Fotoğraf silinirken hata oluştu.', 'error');
     }

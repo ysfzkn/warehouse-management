@@ -3,6 +3,7 @@ package com.warehouse.service;
 import com.warehouse.dto.BulkDeleteResponse;
 import com.warehouse.dto.StockTransferFilter;
 import com.warehouse.dto.StockTransferSummary;
+import com.warehouse.dto.StockTransferDeletionResult;
 import com.warehouse.entity.StockTransfer;
 import com.warehouse.enums.TransferStatus;
 import com.warehouse.enums.TransferApprovalStatus;
@@ -47,7 +48,7 @@ public interface StockTransferService {
 
     StockTransfer updateTransfer(Long transferId, StockTransfer updatedTransfer);
 
-    void deleteTransfer(Long transferId);
+    StockTransferDeletionResult deleteTransfer(Long transferId, String adminSecurityCode);
 
     BulkDeleteResponse deleteTransfers(List<Long> transferIds);
 
@@ -55,7 +56,7 @@ public interface StockTransferService {
 
     long countTransferApprovals(TransferApprovalStatus status);
 
-    StockTransfer approveTransferStart(Long transferId, String approvalNote);
+    StockTransfer approveTransferStart(Long transferId, String approvalNote, String adminSecurityCode);
 
     StockTransfer rejectTransferStart(Long transferId, String rejectionReason);
 

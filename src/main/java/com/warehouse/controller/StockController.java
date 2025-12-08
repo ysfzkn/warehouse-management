@@ -8,6 +8,7 @@ import com.warehouse.dto.StockRequestDto;
 import com.warehouse.entity.Stock;
 import com.warehouse.service.StockService;
 import com.warehouse.service.StockRequestService;
+import com.warehouse.service.AdminSecurityService;
 import com.warehouse.enums.StockRequestType;
 import com.warehouse.entity.UserRole;
 import com.warehouse.util.CurrentUser;
@@ -37,13 +38,15 @@ public class StockController {
     private final StockService stockService;
     private final SsePushService ssePushService;
     private final StockRequestService stockRequestService;
+    private final AdminSecurityService adminSecurityService;
     private static final Logger logger = LoggerFactory.getLogger(StockController.class);
 
     @Autowired
-    public StockController(StockService stockService, SsePushService ssePushService, StockRequestService stockRequestService) {
+    public StockController(StockService stockService, SsePushService ssePushService, StockRequestService stockRequestService, AdminSecurityService adminSecurityService) {
         this.stockService = stockService;
         this.ssePushService = ssePushService;
         this.stockRequestService = stockRequestService;
+        this.adminSecurityService = adminSecurityService;
     }
 
     @GetMapping
@@ -327,7 +330,9 @@ public class StockController {
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<Void> deleteStock(@PathVariable Long id) {
+    public ResponseEntity<Void> deleteStock(@PathVariable Long id,
+                                            @RequestHeader(value = "X-ADMIN-SECURITY-CODE", required = false) String adminSecurityCode) {
+        adminSecurityService.requireSecurityCodeForAdmin(adminSecurityCode);
         stockService.deleteStock(id);
         try {
             ssePushService.broadcastCounts();
@@ -340,10 +345,12 @@ public class StockController {
 
     @DeleteMapping("/bulk")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<BulkDeleteResponse> deleteStocks(@RequestBody List<Long> ids) {
+    public ResponseEntity<BulkDeleteResponse> deleteStocks(@RequestBody List<Long> ids,
+                                                           @RequestHeader(value = "X-ADMIN-SECURITY-CODE", required = false) String adminSecurityCode) {
         if (ids == null || ids.isEmpty()) {
             return ResponseEntity.badRequest().build();
         }
+        adminSecurityService.requireSecurityCodeForAdmin(adminSecurityCode);
         BulkDeleteResponse response = stockService.deleteStocks(ids);
         try {
             ssePushService.broadcastCounts();
