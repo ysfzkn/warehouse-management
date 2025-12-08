@@ -306,6 +306,12 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
   const [userSearch, setUserSearch] = useState('');
   const [selectedBrandIds, setSelectedBrandIds] = useState([]);
   const [selectedColorIds, setSelectedColorIds] = useState([]);
+  const roleLabel = (r) => {
+    if (r === 'ADMIN') return 'Yönetici';
+    if (r === 'STOCK_IN') return 'Stok Giriş';
+    if (r === 'STOCK_OUT') return 'Stok Çıkış';
+    return r || '-';
+  };
 
   // TOAST
   const showToast = (message, type = 'success') => {
@@ -749,7 +755,7 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
                       <td>{u.username}</td>
                       <td>
                         <span className={`badge ${u.role === 'ADMIN' ? 'bg-danger' : u.role === 'STOCK_IN' ? 'bg-success' : 'bg-warning'}`}>
-                          {u.role === 'ADMIN' ? 'Yönetici' : u.role === 'STOCK_IN' ? 'Stok Giriş' : 'Stok Çıkış'}
+                          {roleLabel(u.role)}
                         </span>
                       </td>
                       <td>

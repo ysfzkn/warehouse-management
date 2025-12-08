@@ -2079,7 +2079,17 @@ const Stock = () => {
                   </span>
                 )}
               </button>
-              <button className="btn btn-primary" onClick={handleCreateStock}>
+              {canTransfer && (
+                <button
+                  className="btn btn-primary"
+                onClick={() => handleStockTransfer(null, role === 'STOCK_OUT')}
+                  style={{ minWidth: 160 }}
+                >
+                  <i className="fas fa-play me-2"></i>
+                  Transfer Başlat
+                </button>
+              )}
+              <button className="btn btn-outline-primary" onClick={handleCreateStock}>
                 <i className="fas fa-plus me-2"></i>
                 Yeni Stok Kaydı
               </button>
@@ -2093,7 +2103,7 @@ const Stock = () => {
               <div className="alert alert-info mb-0 py-2 px-3 flex-grow-1">
                 <i className="fas fa-info-circle me-2"></i>
                 <span>
-                  {role === 'STOCK_IN' && 'Stok ekleme talepleri oluşturabilir, müşteri sevkiyat transferlerinizi görüntüleyebilirsiniz.'}
+                  {(role === 'STOCK_IN') && 'Stok ekleme talepleri oluşturabilir, müşteri sevkiyat transferlerinizi görüntüleyebilirsiniz.'}
                   {role === 'STOCK_OUT' && 'Stok çıkarma talepleri oluşturabilir, müşteri sevkiyat transferlerinizi görüntüleyebilirsiniz.'}
                 </span>
               </div>
@@ -2108,6 +2118,16 @@ const Stock = () => {
                 />
               </div>
               <div className="d-flex flex-wrap gap-2 justify-content-lg-end">
+                {canTransfer && (
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => handleStockTransfer(null, role === 'STOCK_OUT')}
+                    style={{ minWidth: 160 }}
+                  >
+                    <i className="fas fa-play me-2"></i>
+                    Transfer Başlat
+                  </button>
+                )}
                 <button className="btn btn-success" onClick={handleShowTransferHistory}>
                   <i className={`fas fa-${showTransferHistory ? 'cubes' : 'exchange-alt'} me-2`}></i>
                   {showTransferHistory ? 'Stok Listesi' : 'Transferlerim'}
@@ -2631,7 +2651,7 @@ const Stock = () => {
                             {canTransfer && (
                               <button
                                 className="btn btn-sm btn-outline-success d-none d-lg-inline-flex"
-                                onClick={() => handleStockTransfer(stock, role !== 'ADMIN')}
+                                onClick={() => handleStockTransfer(stock, role === 'STOCK_OUT')}
                                 title="Transfer Yap"
                                 style={{ padding: '0.25rem 0.375rem', fontSize: '0.75rem' }}
                               >
@@ -2851,7 +2871,7 @@ const Stock = () => {
                             {canTransfer && (
                               <button
                                 className="btn btn-outline-success mobile-action-btn"
-                                onClick={() => handleStockTransfer(stock, role !== 'ADMIN')}
+                                onClick={() => handleStockTransfer(stock, role === 'STOCK_OUT')}
                                 title="Transfer"
                               >
                                 <i className="fas fa-exchange-alt"></i>
@@ -4118,7 +4138,7 @@ const Stock = () => {
                                       Tamamlama
                                     </button>
                                   )}
-                                  {role === 'ADMIN' && (
+                                  {isAdmin && (
                                     <button
                                       className="btn btn-sm btn-outline-secondary w-100 py-1 px-2"
                                       style={{ fontSize: 'clamp(0.7rem, 2vw, 0.8rem)', whiteSpace: 'nowrap' }}
@@ -4503,7 +4523,7 @@ const Stock = () => {
                                     <i className="fas fa-clipboard-check"></i>
                                   </button>
                                 )}
-                                {role === 'ADMIN' && (
+                                {isAdmin && (
                                   <button
                                     className="btn btn-outline-secondary mobile-action-btn"
                                     onClick={() => setAuditModal({ show: true, entityType: 'StockTransfer', entityId: transfer.id })}
