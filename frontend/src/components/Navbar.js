@@ -21,6 +21,13 @@ const Navbar = () => {
   const notifLoadingRef = useRef(false);
   const notifRefreshingRef = useRef(false);
   const sseRef = useRef(null);
+  const handleLogout = useCallback(() => {
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('auth_user');
+    localStorage.removeItem('auth_role');
+    window.dispatchEvent(new Event('auth-changed'));
+    navigate('/login', { replace: true });
+  }, [navigate]);
   const isJwtExpired = useCallback((token) => {
     try {
       const [, payload] = token.split('.');
@@ -159,14 +166,6 @@ const Navbar = () => {
   const isActive = (path) => {
     return location.pathname === path;
   };
-
-  const handleLogout = useCallback(() => {
-    localStorage.removeItem('auth_token');
-    localStorage.removeItem('auth_user');
-    localStorage.removeItem('auth_role');
-    window.dispatchEvent(new Event('auth-changed'));
-    navigate('/login', { replace: true });
-  }, [navigate]);
 
   const navbarStyle = {
     background: 'linear-gradient(135deg, #1e3c72 0%, #2a5298 50%, #1e3c72 100%)',
