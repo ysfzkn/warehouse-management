@@ -13,9 +13,17 @@ import java.util.List;
 public interface StockRequestService {
 
     /**
-     * Create a new stock request
+     * Create a new stock request. If stockId is null and product/warehouse are provided,
+     * a stock entry will be created (quantity=0) if it does not exist.
      */
-    StockRequest createRequest(Long stockId, StockRequestType type, Integer quantity, String notes);
+    StockRequest createRequest(Long stockId,
+                               StockRequestType type,
+                               Integer quantity,
+                               String notes,
+                               Long productId,
+                               Long warehouseId,
+                               String customerName,
+                               String customerPhone);
 
     /**
      * Get all requests

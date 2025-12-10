@@ -659,6 +659,7 @@ const Stock = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showForm, setShowForm] = useState(false);
+  const [stockFormMode, setStockFormMode] = useState('create'); // create | request
   const [quickAdjustModal, setQuickAdjustModal] = useState({ show: false, stock: null, type: null });
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showTransferModal, setShowTransferModal] = useState(false);
@@ -1555,9 +1556,18 @@ const Stock = () => {
 
 
 
-  const handleCreateStock = () => {
+  const handleCreateStock = (mode = 'create') => {
     setSelectedStock(null);
+    setStockFormMode(mode);
     setShowForm(true);
+  };
+
+  const handleCreateStockRequest = () => {
+    showToast(
+      'Stok ekleme talebi oluşturacaksınız. Kayıtlar yönetici onayına gidecek.',
+      'warning'
+    );
+    handleCreateStock('request');
   };
 
   const handleQuickAdd = (stock) => {
@@ -1842,6 +1852,94 @@ const Stock = () => {
     await Promise.all([fetchAllData(), fetchStocks(0)]);
     if (options.message) {
       showSuccessToast(options.message);
+    }
+  };
+
+  const fetchStockIdByProductAndWarehouse = async (productId, warehouseId) => {
+    if (!productId || !warehouseId) return null;
+    try {
+      const res = await axios.get(`/api/stocks/product/${productId}/warehouse/${warehouseId}`);
+      return res?.data?.id || null;
+    } catch (error) {
+      if (error?.response?.status === 404) return null;
+      // For other errors, log but don't block; caller can handle as failure
+      console.warn('Stock lookup failed', { productId, warehouseId, error });
+      return null;
+    }
+  };
+
+  const handleStockRequestSubmit = async (payload, meta = {}) => {
+    if (!Array.isArray(payload) || payload.length === 0) {
+      throw new Error('Talep oluşturmak için ürün seçmelisiniz.');
+    }
+
+    const notes = meta.additionNote || '';
+    const failures = [];
+    let successCount = 0;
+
+    for (const entry of payload) {
+      const productId = entry?.product?.id;
+      const warehouseId = entry?.warehouse?.id;
+
+      if (!productId || !warehouseId) {
+        failures.push({ ...entry, reason: 'Ürün veya depo seçimi eksik.' });
+        continue;
+      }
+
+      try {
+        await axios.post('/api/stock-requests', {
+          stockId: stocks.find(
+            (s) =>
+              String(s.product?.id) === String(productId) &&
+              String(s.warehouse?.id) === String(warehouseId)
+          )?.id ?? null,
+          productId,
+          warehouseId,
+          type: 'ADD',
+          quantity: entry.quantity,
+          notes
+        });
+        successCount += 1;
+      } catch (error) {
+        const msg =
+          error?.response?.data?.message ||
+          error?.response?.data?.error ||
+          'Talep oluşturulamadı.';
+        failures.push({ ...entry, reason: msg });
+      }
+    }
+
+    if (successCount === 0) {
+      const message =
+        failures.length === payload.length
+          ? 'Uygun stok kaydı bulunamadı veya talep oluşturulamadı. Lütfen ürünlerin depoda tanımlı olduğundan emin olun.'
+          : 'Talep oluşturulamadı. Lütfen tekrar deneyin.';
+      throw new Error(message);
+    }
+
+    await Promise.all([fetchAllData(), fetchStocks(stockPage)]);
+    setShowForm(false);
+    clearUrlQuery();
+    showToast(
+      `${successCount} stok ekleme talebi yöneticilere iletildi. Onay sonrası sisteme yansıyacak.`,
+      'success'
+    );
+
+    if (failures.length > 0) {
+      const failureMessages = failures
+        .slice(0, 4)
+        .map((f) => {
+          const name = f?.name || f?.product?.name || 'Ürün';
+          const reason = f?.reason || 'İşlenemedi';
+          return `• ${name}: ${reason}`;
+        })
+        .join('<br/>');
+      const extra = failures.length > 4 ? `<br/>... ve ${failures.length - 4} kayıt daha` : '';
+      showToast(
+        `${failures.length} ürün için talep oluşturulamadı:<br/>${failureMessages}${extra}`,
+        'warning',
+        12000
+      );
     }
   };
 
@@ -2273,6 +2371,15 @@ const Stock = () => {
                 />
               </div>
               <div className="d-flex flex-wrap gap-2 justify-content-lg-end">
+                {role === 'STOCK_IN' && (
+                  <button
+                    className="btn btn-outline-primary"
+                    onClick={handleCreateStockRequest}
+                  >
+                    <i className="fas fa-plus me-2"></i>
+                    Yeni Stok Kaydı (Talep)
+                  </button>
+                )}
                 {canTransfer && (
                   <button
                     className="btn btn-primary"
@@ -3108,8 +3215,11 @@ const Stock = () => {
                 <StockForm
                   products={products}
                   warehouses={warehouses}
-                  onSuccess={handleFormSuccess}
+                  onSuccess={stockFormMode === 'request' ? undefined : handleFormSuccess}
+                  onSubmit={stockFormMode === 'request' ? handleStockRequestSubmit : undefined}
                   onCancel={handleFormCancel}
+                  disableProductCreate={stockFormMode === 'request'}
+                  mode={stockFormMode}
                 />
               </div>
             </div>
@@ -3173,6 +3283,8 @@ const Stock = () => {
                     (t.transferType || 'WAREHOUSE') === 'CUSTOMER_DELIVERY'
                       ? `${t.sourceWarehouse?.name || '-'} → ${t.customerFullName || 'Müşteri'}`
                       : `${t.sourceWarehouse?.name || '-'} → ${t.destinationWarehouse?.name || '-'}`;
+                  const sourceType = (t.sourceWarehouse?.warehouseType || '').toUpperCase();
+                  const isEmanetSource = sourceType.includes('EMANET');
                   return (
                     <>
                       <div className="row g-3 mb-3">
@@ -3266,7 +3378,16 @@ const Stock = () => {
                                   : null;
                                 return (
                                   <tr key={`${t.id}-detail-${item.id || idx}`}>
-                                    <td>{item.product?.name || '-'}</td>
+                                    <td>
+                                      <div className="fw-semibold">{item.product?.name || '-'}</div>
+                                      {isEmanetSource && item.customerName && (
+                                        <small className="badge text-bg-light border mt-1">
+                                          <i className="fas fa-user me-1"></i>
+                                          {item.customerName}
+                                          {item.customerPhone ? ` • ${item.customerPhone}` : ''}
+                                        </small>
+                                      )}
+                                    </td>
                                     <td>{item.product?.sku || '-'}</td>
                                     <td className="text-center" style={{ minWidth: '110px' }}>
                                       <div className="d-flex flex-column align-items-center gap-1">
@@ -3922,6 +4043,7 @@ const Stock = () => {
                           const totalQuantity = getTransferTotalQuantity(transfer);
                           const awaitingApproval = (transfer.approvalStatus || '').toUpperCase() === 'PENDING';
                           const approvalRejected = (transfer.approvalStatus || '').toUpperCase() === 'REJECTED';
+                          const isDeleteRequest = !!transfer.deleteRequest;
 
                           const isSelected = selectedTransfers.includes(transfer.id);
 
@@ -4091,7 +4213,7 @@ const Stock = () => {
                                 {awaitingApproval && (
                                   <small className="d-block text-warning mt-1">
                                     <i className="fas fa-hourglass-half me-1"></i>
-                                    Onay Bekleniyor
+                                    {isDeleteRequest ? 'Silme Onayı Bekleniyor' : 'Onay Bekleniyor'}
                                   </small>
                                 )}
                                 {approvalRejected && (
@@ -4114,9 +4236,9 @@ const Stock = () => {
                                   {transfer.status === 'PENDING' && (
                                     awaitingApproval ? (
                                       <div className="d-flex flex-column gap-2">
-                                        <span className="badge bg-warning text-dark">
+                                        <span className={`badge ${isDeleteRequest ? 'bg-dark' : 'bg-warning text-dark'}`}>
                                           <i className="fas fa-hourglass-half me-1"></i>
-                                          Onay Bekleniyor
+                                          {isDeleteRequest ? 'Silme Onayı Bekleniyor' : 'Onay Bekleniyor'}
                                         </span>
                                         {isAdmin && (
                                           <button
@@ -4988,8 +5110,17 @@ const Stock = () => {
         showApprovalModal && (
           <StockRequestApprovalModal
             onClose={() => setShowApprovalModal(false)}
-            onApprove={() => {
-              fetchAllData();
+            onApprove={async () => {
+              try {
+                await Promise.all([
+                  fetchAllData(),
+                  fetchStocks(stockPage)
+                ]);
+                showSuccessToast('Stok listesi güncellendi.');
+              } catch (err) {
+                console.warn('Stock refresh after approval failed', err);
+                showToast('Stoklar yenilenirken hata oluştu. Sayfayı yenileyin.', 'warning', 6000);
+              }
             }}
             initialTab={approvalModalTab}
           />

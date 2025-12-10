@@ -4,13 +4,11 @@ import com.warehouse.dto.BulkDeleteResponse;
 import com.warehouse.dto.PagedResponse;
 import com.warehouse.dto.StockDto;
 import com.warehouse.dto.StockFilter;
-import com.warehouse.dto.StockRequestDto;
 import com.warehouse.entity.Stock;
 import com.warehouse.service.StockService;
 import com.warehouse.service.StockRequestService;
 import com.warehouse.service.AdminSecurityService;
 import com.warehouse.enums.StockRequestType;
-import com.warehouse.entity.UserRole;
 import com.warehouse.util.CurrentUser;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -267,7 +265,16 @@ public class StockController {
             return ResponseEntity.ok(toDtoLean(updatedStock));
         } else {
             // STOCK_IN users create a request
-            var request = stockRequestService.createRequest(id, StockRequestType.ADD, quantity, notes);
+            var request = stockRequestService.createRequest(
+                    id,
+                    StockRequestType.ADD,
+                    quantity,
+                    notes,
+                    null,
+                    null,
+                    null,
+                    null
+            );
             return ResponseEntity.status(HttpStatus.ACCEPTED)
                     .body(Map.of("message", "Stok ekleme talebi oluşturuldu. Yönetici onayı bekleniyor.",
                                  "requestId", request.getId()));
@@ -295,7 +302,16 @@ public class StockController {
             return ResponseEntity.ok(toDtoLean(updatedStock));
         } else {
             // STOCK_OUT users create a request
-            var request = stockRequestService.createRequest(id, StockRequestType.REMOVE, quantity, notes);
+            var request = stockRequestService.createRequest(
+                    id,
+                    StockRequestType.REMOVE,
+                    quantity,
+                    notes,
+                    null,
+                    null,
+                    null,
+                    null
+            );
             return ResponseEntity.status(HttpStatus.ACCEPTED)
                     .body(Map.of("message", "Stok çıkarma talebi oluşturuldu. Yönetici onayı bekleniyor.",
                                  "requestId", request.getId()));

@@ -46,6 +46,7 @@ public class StockTransferDto {
     private String approvalDecisionBy;
     private LocalDateTime approvalDecisionAt;
     private String approvalNote;
+    private boolean deleteRequest;
 
     @Data
     @NoArgsConstructor
@@ -54,6 +55,7 @@ public class StockTransferDto {
         private Long id;
         private String name;
         private String location;
+        private String warehouseType;
     }
 
     @Data
@@ -70,8 +72,11 @@ public class StockTransferDto {
     @AllArgsConstructor
     public static class TransferItemDto {
         private Long id;
+        private Long stockId;
         private SimpleProductDto product;
         private Integer quantity;
+        private String customerName;
+        private String customerPhone;
     }
 }
 

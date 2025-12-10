@@ -598,6 +598,11 @@ const MyStockRequestsModal = ({ onClose }) => {
                             <tbody>
                               {filteredTransferRequests.map(transfer => {
                                 const status = statusConfig[transfer.approvalStatus] || statusConfig.PENDING;
+                                const noteUpper = (transfer.approvalNote || '').toUpperCase();
+                                const isDeleteRequest = !!transfer.deleteRequest || noteUpper === 'DELETE_REQUEST' || noteUpper === 'SILME_TALEBI';
+                                const sanitizedNote = (noteUpper === 'START_REQUEST' || noteUpper === 'DELETE_REQUEST' || noteUpper === 'SILME_TALEBI')
+                                  ? ''
+                                  : transfer.approvalNote;
                                 const sourceName = transfer.sourceWarehouse?.name || 'Bilinmiyor';
                                 const destName =
                                   transfer.transferType === 'CUSTOMER_DELIVERY'
@@ -623,10 +628,18 @@ const MyStockRequestsModal = ({ onClose }) => {
                                       </span>
                                     </td>
                                     <td className="text-center">
-                                      <span className={`badge bg-${status.className}`}>
-                                        <i className={`fas ${status.icon} me-1`}></i>
-                                        {status.label}
-                                      </span>
+                                      <div className="d-flex flex-column align-items-center gap-1">
+                                        <span className={`badge bg-${status.className}`}>
+                                          <i className={`fas ${status.icon} me-1`}></i>
+                                          {isDeleteRequest && status.label === 'Beklemede' ? 'Silme Onayı Bekliyor' : status.label}
+                                        </span>
+                                        {isDeleteRequest && status.label !== 'Beklemede' && (
+                                          <span className="badge bg-dark">
+                                            <i className="fas fa-trash me-1"></i>
+                                            Silme Talebi
+                                          </span>
+                                        )}
+                                      </div>
                                     </td>
                                     <td>
                                       <small className="text-muted d-block">{formatDate(transfer.transferDate)}</small>
@@ -638,21 +651,27 @@ const MyStockRequestsModal = ({ onClose }) => {
                                     </td>
                                     <td className="text-center">
                                       <div className="d-flex gap-1 justify-content-center">
-                                        {transfer.approvalNote && (
+                                        {sanitizedNote && !isDeleteRequest && (
                                           <button
                                             className="btn btn-sm btn-outline-secondary"
                                             title="Notları Gör"
                                             onClick={() => setNotesModal({
                                               show: true,
                                               title: transfer.approvalStatus === 'REJECTED' ? 'Reddetme Nedeni' : 'Onay Notu',
-                                              notes: transfer.approvalNote,
+                                              notes: sanitizedNote,
                                               requestId: transfer.id
                                             })}
                                           >
                                             <i className="fas fa-sticky-note"></i>
                                           </button>
                                         )}
-                                        {!transfer.approvalNote && (
+                                        {isDeleteRequest && (
+                                          <span className="badge bg-dark">
+                                            <i className="fas fa-info-circle me-1"></i>
+                                            Silme onayı bekleniyor
+                                          </span>
+                                        )}
+                                        {!sanitizedNote && !isDeleteRequest && (
                                           <span className="text-muted small">-</span>
                                         )}
                                       </div>
@@ -666,6 +685,11 @@ const MyStockRequestsModal = ({ onClose }) => {
                         <div className="d-md-none px-3 pb-3 my-requests-mobile-list">
                           {filteredTransferRequests.map(transfer => {
                             const status = statusConfig[transfer.approvalStatus] || statusConfig.PENDING;
+                            const noteUpper = (transfer.approvalNote || '').toUpperCase();
+                            const isDeleteRequest = !!transfer.deleteRequest || noteUpper === 'DELETE_REQUEST' || noteUpper === 'SILME_TALEBI';
+                            const sanitizedNote = (noteUpper === 'START_REQUEST' || noteUpper === 'DELETE_REQUEST' || noteUpper === 'SILME_TALEBI')
+                              ? ''
+                              : transfer.approvalNote;
                             const sourceName = transfer.sourceWarehouse?.name || 'Bilinmiyor';
                             const destName =
                               transfer.transferType === 'CUSTOMER_DELIVERY'
@@ -683,8 +707,14 @@ const MyStockRequestsModal = ({ onClose }) => {
                                     </div>
                                     <span className={`my-requests-pill badge bg-${status.className}`}>
                                       <i className={`fas ${status.icon} me-1`}></i>
-                                      {status.label}
+                                      {isDeleteRequest && status.label === 'Beklemede' ? 'Silme Onayı Bekliyor' : status.label}
                                     </span>
+                                    {isDeleteRequest && (
+                                      <span className="my-requests-pill badge bg-dark ms-2">
+                                        <i className="fas fa-trash me-1"></i>
+                                        Silme Talebi
+                                      </span>
+                                    )}
                                   </div>
                                   <div className="my-requests-card__details mb-3">
                                     <div className="my-requests-card__meta-row fw-semibold text-dark">
@@ -711,16 +741,22 @@ const MyStockRequestsModal = ({ onClose }) => {
                                         Karar: {formatDate(transfer.approvalDecisionAt)}
                                       </div>
                                     )}
+                                    {isDeleteRequest && (
+                                      <div className="my-requests-card__meta-row">
+                                        <i className="fas fa-trash text-muted"></i>
+                                        Silme onayı bekleniyor
+                                      </div>
+                                    )}
                                   </div>
                                   <div className="my-requests-actions d-flex flex-wrap gap-2">
-                                    {transfer.approvalNote ? (
+                                    {sanitizedNote && !isDeleteRequest ? (
                                       <button
                                         className="btn btn-outline-secondary btn-sm flex-fill"
                                         onClick={() =>
                                           setNotesModal({
                                             show: true,
                                             title: transfer.approvalStatus === 'REJECTED' ? 'Reddetme Nedeni' : 'Onay Notu',
-                                            notes: transfer.approvalNote,
+                                            notes: sanitizedNote,
                                             requestId: transfer.id
                                           })
                                         }
@@ -729,7 +765,7 @@ const MyStockRequestsModal = ({ onClose }) => {
                                         Notu Gör
                                       </button>
                                     ) : (
-                                      <span className="text-muted small">Not bulunmuyor</span>
+                                      <span className="text-muted small">{isDeleteRequest ? 'Silme talebi, ek not yok' : 'Not bulunmuyor'}</span>
                                     )}
                                   </div>
                                 </div>

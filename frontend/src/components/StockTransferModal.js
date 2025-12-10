@@ -52,7 +52,7 @@ const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery 
   const [warehouseStocks, setWarehouseStocks] = useState([]);
   const [stockLoading, setStockLoading] = useState(false);
   const [transferItems, setTransferItems] = useState([]);
-  const [itemForm, setItemForm] = useState({ productId: '', quantity: '' });
+  const [itemForm, setItemForm] = useState({ productId: '', stockId: '', quantity: '' });
   const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
   const [error, setError] = useState(null);
@@ -63,7 +63,7 @@ const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery 
   const INITIAL_VISIBLE_STOCKS = 12;
   const [visibleStockCount, setVisibleStockCount] = useState(INITIAL_VISIBLE_STOCKS);
 
-  // Per-item photo state: keyed by productId
+  // Per-item photo state: keyed by stockId
   const [itemPhotos, setItemPhotos] = useState({});
   const [photoUploads, setPhotoUploads] = useState({});
   const [pendingItemPhotos, setPendingItemPhotos] = useState({});
@@ -198,7 +198,9 @@ const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery 
   const syncItemsWithStocks = useCallback((stocks) => {
     setTransferItems(prev =>
       prev.map(item => {
-        const stockMatch = stocks.find(s => s.product?.id === item.productId);
+        const stockMatch =
+          stocks.find(s => String(s.id) === String(item.stockId)) ||
+          stocks.find(s => s.product?.id === item.productId);
         const available = calculateAvailableQuantity(stockMatch);
         return {
           ...item,
@@ -250,6 +252,7 @@ useEffect(() => {
         sourceWarehouseId: stock.warehouse.id
       }));
       setTransferItems([{
+        stockId: stock.id ? String(stock.id) : undefined,
         productId: stock.product.id,
         productName: stock.product.name,
         sku: stock.product.sku,
@@ -381,14 +384,22 @@ useEffect(() => {
     return { name: 'Ürün', sku: '' };
   }, [warehouseStocks, stock, products]);
 
-  const getAvailableForProduct = useCallback((productId) => {
-    const numericId = parseInt(productId);
-    const stockRecord = warehouseStocks.find(s => s.product?.id === numericId);
-    if (stockRecord) {
-      return calculateAvailableQuantity(stockRecord);
+  const getAvailableForStock = useCallback((stockId, productId) => {
+    if (stockId) {
+      const matchByStock = warehouseStocks.find(s => String(s.id) === String(stockId));
+      if (matchByStock) {
+        return calculateAvailableQuantity(matchByStock);
+      }
     }
-    if (stock?.product?.id === numericId && stock?.warehouse?.id === parseInt(formData.sourceWarehouseId)) {
-      return calculateAvailableQuantity(stock);
+    if (productId) {
+      const numericId = parseInt(productId);
+      const matchByProduct = warehouseStocks.find(s => s.product?.id === numericId);
+      if (matchByProduct) {
+        return calculateAvailableQuantity(matchByProduct);
+      }
+      if (stock?.product?.id === numericId && stock?.warehouse?.id === parseInt(formData.sourceWarehouseId)) {
+        return calculateAvailableQuantity(stock);
+      }
     }
     return 0;
   }, [warehouseStocks, stock, formData.sourceWarehouseId]);
@@ -405,22 +416,27 @@ useEffect(() => {
 
   const handleAddItem = () => {
     const productId = itemForm.productId;
+    const stockId = itemForm.stockId;
     const quantity = parseInt(itemForm.quantity, 10);
     const errors = {};
 
-    if (!productId) {
-      errors.itemProductId = 'Ürün seçiniz';
+    if (!productId || !stockId) {
+      errors.itemProductId = 'Stok seçiniz';
     }
     if (!quantity || quantity <= 0) {
       errors.itemQuantity = 'Geçerli bir miktar giriniz';
     }
 
-    if (productId) {
-      const available = getAvailableForProduct(productId);
-      const existing = transferItems.find(item => item.productId === parseInt(productId));
+    const selectedStock = stockId
+      ? warehouseStocks.find(s => String(s.id) === String(stockId))
+      : null;
+
+    if (selectedStock) {
+      const available = calculateAvailableQuantity(selectedStock);
+      const existing = transferItems.find(item => item.stockId === String(stockId));
       const alreadySelected = existing ? existing.quantity : 0;
       if (available <= 0) {
-        errors.itemProductId = 'Bu üründe stok bulunmuyor';
+        errors.itemProductId = 'Bu stokta ürün bulunmuyor';
       } else if (quantity && quantity + alreadySelected > available) {
         errors.itemQuantity = `Maksimum ${available - alreadySelected} adet eklenebilir`;
       }
@@ -431,22 +447,25 @@ useEffect(() => {
       return;
     }
 
-    const numericId = parseInt(productId);
-    const available = getAvailableForProduct(productId);
-    const details = getProductDetails(productId);
+    const numericProductId = parseInt(productId);
+    const available = selectedStock ? calculateAvailableQuantity(selectedStock) : getAvailableForStock(stockId, productId);
+    const details = selectedStock
+      ? { name: selectedStock.product?.name || 'Ürün', sku: selectedStock.product?.sku || '' }
+      : getProductDetails(productId);
 
     setTransferItems(prev => {
-      const exists = prev.find(item => item.productId === numericId);
+      const exists = prev.find(item => item.stockId === String(stockId));
       if (exists) {
-        return prev.map(item => item.productId === numericId
-          ? { ...item, quantity: item.quantity + quantity, availableQuantity: available }
+        return prev.map(item => item.stockId === String(stockId)
+          ? { ...item, quantity: item.quantity + quantity }
           : item
         );
       }
       return [
         ...prev,
         {
-          productId: numericId,
+          stockId: String(stockId),
+          productId: numericProductId,
           productName: details.name,
           sku: details.sku,
           quantity,
@@ -454,34 +473,36 @@ useEffect(() => {
         }
       ];
     });
-    setItemForm({ productId: '', quantity: '' });
+    setItemForm({ productId: '', stockId: '', quantity: '' });
     setValidationErrors(prev => ({ ...prev, itemProductId: '', itemQuantity: '' }));
   };
 
-  const handleRemoveItem = (productId) => {
-    setTransferItems(prev => prev.filter(item => item.productId !== productId));
+  const handleRemoveItem = (stockId) => {
+    const key = String(stockId);
+    setTransferItems(prev => prev.filter(item => item.stockId !== key));
     setItemPhotos(prev => {
-      if (!prev[productId]) return prev;
+      if (!prev[key]) return prev;
       const copy = { ...prev };
-      delete copy[productId];
+      delete copy[key];
       return copy;
     });
     setPhotoUploads(prev => {
-      if (!prev[productId]) return prev;
+      if (!prev[key]) return prev;
       const copy = { ...prev };
-      delete copy[productId];
+      delete copy[key];
       return copy;
     });
     setPendingItemPhotos(prev => {
-      if (!prev[productId]) return prev;
+      if (!prev[key]) return prev;
       const copy = { ...prev };
-      delete copy[productId];
+      delete copy[key];
       return copy;
     });
   };
 
-  const handleRemovePhoto = async (productId) => {
-    const photoInfo = itemPhotos[productId];
+  const handleRemovePhoto = async (stockId) => {
+    const key = String(stockId);
+    const photoInfo = itemPhotos[key];
     if (!photoInfo) {
       return;
     }
@@ -490,12 +511,12 @@ useEffect(() => {
     if (!photoInfo.itemId || photoInfo.pending) {
       setItemPhotos(prev => {
         const copy = { ...prev };
-        delete copy[productId];
+        delete copy[key];
         return copy;
       });
       setPendingItemPhotos(prev => {
         const copy = { ...prev };
-        delete copy[productId];
+        delete copy[key];
         return copy;
       });
       showToast('Fotoğraf kaldırıldı.', 'warning');
@@ -507,7 +528,7 @@ useEffect(() => {
       await axios.delete(`/api/stock-transfer-items/${photoInfo.itemId}/photo`, { headers });
       setItemPhotos(prev => {
         const copy = { ...prev };
-        delete copy[productId];
+        delete copy[key];
         return copy;
       });
       showToast('Fotoğraf kaldırıldı.', 'success');
@@ -518,14 +539,16 @@ useEffect(() => {
     }
   };
 
-  const handlePhotoFileChange = async (productId, file) => {
+  const handlePhotoFileChange = async (stockId, file) => {
     if (!file) {
       return;
     }
 
+    const key = String(stockId);
+
     setPhotoUploads(prev => ({
       ...prev,
-      [productId]: { loading: true, error: null, optimizing: true }
+      [key]: { loading: true, error: null, optimizing: true }
     }));
 
     try {
@@ -542,11 +565,11 @@ useEffect(() => {
       if (!createdTransferId) {
         setPendingItemPhotos(prev => ({
           ...prev,
-          [productId]: optimizedFile
+          [key]: optimizedFile
         }));
         setItemPhotos(prev => ({
           ...prev,
-          [productId]: {
+          [key]: {
             itemId: null,
             meta: { localUrl },
             pending: true
@@ -554,7 +577,7 @@ useEffect(() => {
         }));
         setPhotoUploads(prev => ({
           ...prev,
-          [productId]: { loading: false, error: null, optimizing: false }
+          [key]: { loading: false, error: null, optimizing: false }
         }));
         showToast(
           'Fotoğraf seçildi, transfer oluşturulduğunda otomatik yüklenecek.',
@@ -566,7 +589,7 @@ useEffect(() => {
       // Transfer oluşturulmuşsa doğrudan upload et
       const transferResp = await axios.get(`/api/stock-transfers/${createdTransferId}`);
       const transfer = transferResp.data;
-      const item = (transfer.items || []).find(i => i.product?.id === productId);
+      const item = (transfer.items || []).find(i => String(i.stockId) === key);
       if (!item) {
         throw new Error('Fotoğraf eklenecek transfer satırı bulunamadı');
       }
@@ -584,7 +607,7 @@ useEffect(() => {
 
       setItemPhotos(prev => ({
         ...prev,
-        [productId]: {
+        [key]: {
           itemId: item.id,
           meta: metaResp.data,
           loading: false,
@@ -594,27 +617,29 @@ useEffect(() => {
 
       setPhotoUploads(prev => ({
         ...prev,
-        [productId]: { loading: false, error: null, optimizing: false }
+        [key]: { loading: false, error: null, optimizing: false }
       }));
       showToast('Fotoğraf başarıyla yüklendi.', 'success');
     } catch (e) {
       console.error('Photo upload failed', e);
       setPhotoUploads(prev => ({
         ...prev,
-        [productId]: { loading: false, error: 'Fotoğraf yüklenirken hata oluştu', optimizing: false }
+        [key]: { loading: false, error: 'Fotoğraf yüklenirken hata oluştu', optimizing: false }
       }));
       showToast('Fotoğraf yüklenemedi. Lütfen tekrar deneyin.', 'error');
     }
   };
 
-  const handleItemQuantityUpdate = (productId, value) => {
+  const handleItemQuantityUpdate = (productId, value, stockId) => {
     const numericValue = parseInt(value, 10);
     setTransferItems(prev =>
       prev.map(item => {
-        if (item.productId !== productId) {
+        if (stockId) {
+          if (item.stockId !== String(stockId)) return item;
+        } else if (item.productId !== productId) {
           return item;
         }
-        const available = item.availableQuantity ?? getAvailableForProduct(productId);
+        const available = item.availableQuantity ?? getAvailableForStock(item.stockId, productId);
         const safeValue = Math.min(Math.max(isNaN(numericValue) ? 0 : numericValue, 0), available);
         return { ...item, quantity: safeValue };
       })
@@ -699,7 +724,7 @@ useEffect(() => {
           if (!item.quantity || item.quantity <= 0) {
             errors.transferItems = 'Her ürün için geçerli miktar giriniz';
           }
-          const available = item.availableQuantity ?? getAvailableForProduct(item.productId);
+          const available = item.availableQuantity ?? getAvailableForStock(item.stockId, item.productId);
           if (available && item.quantity > available) {
             errors.transferItems = 'Ürün miktarları mevcut stoktan fazla olamaz';
           }
@@ -775,6 +800,7 @@ useEffect(() => {
         transferType: formData.transferType,
         items: transferItems.map(item => ({
           productId: item.productId,
+          stockId: item.stockId || null,
           quantity: item.quantity
         }))
       };
@@ -804,11 +830,11 @@ useEffect(() => {
           const items = transfer.items || [];
 
           const photoUploadErrors = [];
-          for (const [productIdStr, file] of Object.entries(pendingItemPhotos)) {
-            const productId = Number(productIdStr);
-            const item = items.find(i => i.product?.id === productId);
+          for (const [stockIdStr, file] of Object.entries(pendingItemPhotos)) {
+            const stockKey = stockIdStr;
+            const item = items.find(i => String(i.stockId) === stockKey);
             if (!item) {
-              photoUploadErrors.push(`Ürün ID ${productId} için transfer satırı bulunamadı`);
+              photoUploadErrors.push(`Stok ID ${stockKey} için transfer satırı bulunamadı`);
               continue;
             }
 
@@ -829,13 +855,13 @@ useEffect(() => {
                 { headers: { 'Content-Type': 'multipart/form-data' } }
               );
             } catch (itemPhotoErr) {
-              const productName = item.product?.name || `Ürün ID ${productId}`;
+              const productName = item.product?.name || `Stok ID ${stockKey}`;
               const errorMsg = itemPhotoErr?.response?.data?.message || 
                               itemPhotoErr?.response?.data?.error || 
                               itemPhotoErr?.message || 
                               'Bilinmeyen hata';
               photoUploadErrors.push(`${productName}: ${errorMsg}`);
-              console.error(`Error uploading photo for product ${productId} (item ${item.id}):`, itemPhotoErr);
+              console.error(`Error uploading photo for stock ${stockKey} (item ${item.id}):`, itemPhotoErr);
             }
           }
 
@@ -901,6 +927,7 @@ useEffect(() => {
   const isCustomerTransfer = formData.transferType === 'CUSTOMER_DELIVERY';
   const canChangeTransferType = !lockToCustomerDelivery;
   const sourceWarehouse = warehouses.find(w => w.id === parseInt(formData.sourceWarehouseId));
+  const isEmanetSource = sourceWarehouse?.warehouseType === 'EMANET_DEPO';
   const destinationWarehouse = !isCustomerTransfer
     ? warehouses.find(w => w.id === parseInt(formData.destinationWarehouseId))
     : null;
@@ -914,9 +941,12 @@ useEffect(() => {
       const name = stockItem.product?.name ? stockItem.product.name.toLocaleLowerCase('tr-TR') : '';
       const sku = stockItem.product?.sku ? stockItem.product.sku.toLocaleLowerCase('tr-TR') : '';
       const barcode = stockItem.product?.barcode ? stockItem.product.barcode.toLocaleLowerCase('tr-TR') : '';
-      return name.includes(q) || sku.includes(q) || barcode.includes(q);
+      const customer = isEmanetSource && stockItem.customerName
+        ? stockItem.customerName.toLocaleLowerCase('tr-TR')
+        : '';
+      return name.includes(q) || sku.includes(q) || barcode.includes(q) || customer.includes(q);
     });
-  }, [warehouseStocks, stockSearchTerm]);
+  }, [warehouseStocks, stockSearchTerm, isEmanetSource]);
   useEffect(() => {
     setVisibleStockCount(INITIAL_VISIBLE_STOCKS);
   }, [stockSearchTerm, filteredWarehouseStocks.length]);
@@ -1088,6 +1118,12 @@ useEffect(() => {
                           Aktif depo bulunamadı. Lütfen önce depo ekleyin.
                         </small>
                       )}
+                    {isEmanetSource && (
+                      <small className="text-warning d-block mt-1">
+                        <i className="fas fa-info-circle me-1"></i>
+                        Emanet depo: listedeki stoklarda müşteri adı/telefonu gösterilir ve aramada müşteri adına göre de arama yapılır.
+                      </small>
+                    )}
                     </div>
 
                     {!isCustomerTransfer ? (
@@ -1254,8 +1290,8 @@ useEffect(() => {
                             </div>
                           ) : (
                             <>
-                              <div className="row g-3 align-items-end">
-                                <div className="col-md-7">
+                              <div className="row g-3">
+                                <div className="col-12">
                                   <label className="form-label fw-bold">
                                     <i className="fas fa-box text-primary me-1"></i>
                                     Depo Stokları
@@ -1267,7 +1303,7 @@ useEffect(() => {
                                     <input
                                       type="text"
                                       className="form-control"
-                                      placeholder="Ürün adı, SKU veya barkod ile ara..."
+                                      placeholder="Ürün adı, SKU veya Müşteri ile ara..."
                                       value={stockSearchTerm}
                                       onChange={(e) => setStockSearchTerm(e.target.value)}
                                       disabled={stockLoading || !warehouseStocks.length}
@@ -1319,6 +1355,7 @@ useEffect(() => {
                                                   <th style={{ width: '40px' }}></th>
                                                   <th>Ürün Adı</th>
                                                   <th>Stok Kodu</th>
+                                                  {isEmanetSource && <th>Müşteri</th>}
                                                   <th className="text-center">Mevcut Stok</th>
                                                   <th className="text-center">Rezerve</th>
                                                   <th className="text-center">Emanet</th>
@@ -1328,14 +1365,18 @@ useEffect(() => {
                                               <tbody>
                                                 {limitedStockList.map(stockItem => {
                                                   const optionProductId = String(stockItem.product.id);
-                                                  const isSelected = String(itemForm.productId) === optionProductId;
+                                                  const optionStockId = String(stockItem.id);
+                                                  const isSelected = String(itemForm.stockId) === optionStockId;
                                                   const available = calculateAvailableQuantity(stockItem);
                                                   return (
                                                     <tr
-                                                      key={stockItem.product.id}
+                                                      key={stockItem.id}
                                                       className={isSelected ? 'table-primary' : ''}
                                                       style={{ cursor: 'pointer' }}
-                                                      onClick={() => handleItemFormChange('productId', optionProductId)}
+                                                      onClick={() => {
+                                                        handleItemFormChange('productId', optionProductId);
+                                                        handleItemFormChange('stockId', optionStockId);
+                                                      }}
                                                     >
                                                       <td className="text-center">
                                                         {isSelected && (
@@ -1358,6 +1399,20 @@ useEffect(() => {
                                                           {stockItem.product.sku}
                                                         </span>
                                                       </td>
+                                                  {isEmanetSource && (
+                                                    <td>
+                                                      {stockItem.customerName ? (
+                                                        <>
+                                                          <div className="fw-semibold">{stockItem.customerName}</div>
+                                                          {stockItem.customerPhone && (
+                                                            <small className="text-muted d-block">{stockItem.customerPhone}</small>
+                                                          )}
+                                                        </>
+                                                      ) : (
+                                                        <span className="text-muted">-</span>
+                                                      )}
+                                                    </td>
+                                                  )}
                                                       <td className="text-center">
                                                         <span className="fw-bold">{stockItem.quantity}</span>
                                                       </td>
@@ -1388,18 +1443,22 @@ useEffect(() => {
                                             <div className="d-flex flex-column gap-2" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
                                               {limitedStockList.map(stockItem => {
                                                 const optionProductId = String(stockItem.product.id);
-                                                const isSelected = String(itemForm.productId) === optionProductId;
+                                                const optionStockId = String(stockItem.id);
+                                                const isSelected = String(itemForm.stockId) === optionStockId;
                                                 const available = calculateAvailableQuantity(stockItem);
                                                 return (
                                                   <div
-                                                    key={stockItem.product.id}
+                                                    key={stockItem.id}
                                                     className={`card border-2 shadow-sm ${isSelected ? 'border-primary bg-primary bg-opacity-10' : 'border-light'}`}
                                                     style={{
                                                       cursor: 'pointer',
                                                       transition: 'all 0.2s ease',
                                                       borderRadius: '8px'
                                                     }}
-                                                    onClick={() => handleItemFormChange('productId', optionProductId)}
+                                                    onClick={() => {
+                                                      handleItemFormChange('productId', optionProductId);
+                                                      handleItemFormChange('stockId', optionStockId);
+                                                    }}
                                                   >
                                                     <div className="card-body p-2">
                                                       <div className="d-flex justify-content-between align-items-start mb-2">
@@ -1418,7 +1477,16 @@ useEffect(() => {
                                                                 {stockItem.product.brand.name.length > 12 ? `${stockItem.product.brand.name.substring(0, 12)}...` : stockItem.product.brand.name}
                                                               </span>
                                                             )}
+                                                            {isEmanetSource && stockItem.customerName && (
+                                                              <span className="badge bg-dark">
+                                                                <i className="fas fa-user me-1"></i>
+                                                                {stockItem.customerName}
+                                                              </span>
+                                                            )}
                                                           </div>
+                                                          {isEmanetSource && stockItem.customerPhone && (
+                                                            <small className="text-muted d-block mt-1">{stockItem.customerPhone}</small>
+                                                          )}
                                                         </div>
                                                         <div className="flex-shrink-0">
                                                           {isSelected && (
@@ -1506,7 +1574,7 @@ useEffect(() => {
                                     </small>
                                   )}
                                 </div>
-                                <div className="col-md-3">
+                                <div className="col-12 col-md-4 col-lg-3">
                                   <label className="form-label fw-bold">
                                     <i className="fas fa-sort-numeric-up text-info me-1"></i>
                                     Eklenilecek Miktar
@@ -1524,7 +1592,7 @@ useEffect(() => {
                                     <div className="invalid-feedback">{validationErrors.itemQuantity}</div>
                                   )}
                                 </div>
-                                <div className="col-md-2">
+                                <div className="col-12 col-md-4 col-lg-3 d-flex align-items-end">
                                   <button
                                     type="button"
                                     className="btn btn-primary btn-lg w-100"
@@ -1561,11 +1629,11 @@ useEffect(() => {
                                           </tr>
                                         </thead>
                                         <tbody>
-                                          {transferItems.map(item => {
-                                            const photoInfo = itemPhotos[item.productId];
-                                            const uploadState = photoUploads[item.productId] || { loading: false, error: null };
+                                                {transferItems.map(item => {
+                                            const photoInfo = itemPhotos[item.stockId] || itemPhotos[item.productId];
+                                            const uploadState = photoUploads[item.stockId] || { loading: false, error: null };
                                             return (
-                                            <tr key={item.productId}>
+                                            <tr key={item.stockId || item.productId}>
                                               <td>{item.productName}</td>
                                               <td><span className="badge bg-light text-dark">{item.sku}</span></td>
                                               <td className="text-center">
@@ -1580,7 +1648,7 @@ useEffect(() => {
                                                   value={item.quantity}
                                                   min="0"
                                                   max={item.availableQuantity || undefined}
-                                                  onChange={(e) => handleItemQuantityUpdate(item.productId, e.target.value)}
+                                                  onChange={(e) => handleItemQuantityUpdate(item.productId, e.target.value, item.stockId)}
                                                 />
                                               </td>
                                                 <td className="text-center" style={{ minWidth: '130px' }}>
@@ -1626,7 +1694,7 @@ useEffect(() => {
                                                                 const file = e.target.files && e.target.files[0];
                                                                 e.target.value = '';
                                                                 if (file) {
-                                                                  handlePhotoFileChange(item.productId, file);
+                                                              handlePhotoFileChange(item.stockId, file);
                                                                 }
                                                               }}
                                                             />
@@ -1634,7 +1702,7 @@ useEffect(() => {
                                                           <button
                                                             type="button"
                                                             className="btn btn-link btn-sm text-danger p-0"
-                                                            onClick={() => handleRemovePhoto(item.productId)}
+                                                        onClick={() => handleRemovePhoto(item.stockId)}
                                                           >
                                                             <i className="fas fa-trash-alt me-1"></i>
                                                             Kaldır
@@ -1655,7 +1723,7 @@ useEffect(() => {
                                                               const file = e.target.files && e.target.files[0];
                                                               e.target.value = '';
                                                               if (file) {
-                                                                handlePhotoFileChange(item.productId, file);
+                                                            handlePhotoFileChange(item.stockId, file);
                                                               }
                                                             }}
                                                           />
@@ -1679,7 +1747,7 @@ useEffect(() => {
                                                 <button
                                                   type="button"
                                                   className="btn btn-link text-danger btn-sm"
-                                                  onClick={() => handleRemoveItem(item.productId)}
+                                                  onClick={() => handleRemoveItem(item.stockId)}
                                                 >
                                                   <i className="fas fa-trash-alt"></i>
                                                 </button>
@@ -2017,7 +2085,7 @@ useEffect(() => {
                                 </thead>
                                 <tbody>
                                   {transferItems.map(item => (
-                                    <tr key={item.productId}>
+                                    <tr key={item.stockId || item.productId}>
                                       <td>{item.productName}</td>
                                       <td><span className="badge bg-light text-dark">{item.sku}</span></td>
                                       <td className="text-center">

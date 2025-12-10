@@ -49,7 +49,7 @@ public interface StockRequestRepository extends JpaRepository<StockRequest, Long
            "LEFT JOIN FETCH s.warehouse w " +
            "WHERE sr.status = :status " +
            "ORDER BY sr.requestedAt DESC")
-    List<StockRequest> findPendingRequestsWithDetails(StockRequestStatus status);
+    List<StockRequest> findRequestsWithDetailsByStatus(@Param("status") StockRequestStatus status);
 
     @Query("SELECT sr FROM StockRequest sr " +
            "LEFT JOIN FETCH sr.stock s " +
@@ -67,5 +67,6 @@ public interface StockRequestRepository extends JpaRepository<StockRequest, Long
            "ORDER BY sr.requestedAt DESC")
     List<StockRequest> findAllDetailsByRequestedByAndStatus(@Param("requestedBy") String requestedBy,
                                                             @Param("status") StockRequestStatus status);
+
 }
 

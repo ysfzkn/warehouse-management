@@ -3,6 +3,8 @@ package com.warehouse.service.impl;
 import com.warehouse.dto.StockRequestDto;
 import com.warehouse.entity.Stock;
 import com.warehouse.entity.StockRequest;
+import com.warehouse.entity.Product;
+import com.warehouse.entity.Warehouse;
 import com.warehouse.enums.StockRequestStatus;
 import com.warehouse.enums.StockRequestType;
 import com.warehouse.exception.ErrorCode;
@@ -38,14 +40,49 @@ public class StockRequestServiceImpl implements StockRequestService {
 
     @Override
     @Transactional
-    public StockRequest createRequest(Long stockId, StockRequestType type, Integer quantity, String notes) {
-        logger.info("Creating stock request: stockId={}, type={}, quantity={}", stockId, type, quantity);
+    public StockRequest createRequest(Long stockId,
+                                      StockRequestType type,
+                                      Integer quantity,
+                                      String notes,
+                                      Long productId,
+                                      Long warehouseId,
+                                      String customerName,
+                                      String customerPhone) {
+        logger.info("Creating stock request: stockId={}, type={}, quantity={}, productId={}, warehouseId={}",
+                stockId, type, quantity, productId, warehouseId);
 
         if (quantity == null || quantity <= 0) {
             throw new IllegalArgumentException("Quantity must be positive");
         }
 
-        Stock stock = stockService.getStockByIdOrThrow(stockId);
+        Stock stock;
+
+        if (stockId != null) {
+            stock = stockService.getStockByIdOrThrow(stockId);
+        } else {
+            if (productId == null || warehouseId == null) {
+                throw new IllegalArgumentException("Stock ID or (productId & warehouseId) must be provided");
+            }
+
+            stock = stockService.getStockByProductAndWarehouse(productId, warehouseId)
+                    .orElseGet(() -> {
+                        logger.info("No stock found for product {} and warehouse {}, creating placeholder stock with quantity 0",
+                                productId, warehouseId);
+                        Stock newStock = new Stock();
+                        Product product = new Product();
+                        product.setId(productId);
+                        Warehouse warehouse = new Warehouse();
+                        warehouse.setId(warehouseId);
+                        newStock.setProduct(product);
+                        newStock.setWarehouse(warehouse);
+                        newStock.setQuantity(0);
+                        newStock.setReservedQuantity(0);
+                        newStock.setConsignedQuantity(0);
+                        newStock.setCustomerName(customerName);
+                        newStock.setCustomerPhone(customerPhone);
+                        return stockService.createStock(newStock);
+                    });
+        }
         String username = CurrentUser.usernameOrSystem();
 
         // Check if REMOVE request has sufficient stock
@@ -104,7 +141,7 @@ public class StockRequestServiceImpl implements StockRequestService {
     @Override
     public List<StockRequestDto> getRequestsByStatus(StockRequestStatus status) {
         logger.debug("Fetching stock requests by status: {}", status);
-        return stockRequestRepository.findPendingRequestsWithDetails(status)
+        return stockRequestRepository.findRequestsWithDetailsByStatus(status)
                 .stream()
                 .map(this::toDto)
                 .collect(Collectors.toList());

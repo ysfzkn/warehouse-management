@@ -62,6 +62,7 @@ public class StockTransferCreateRequest {
 
     @Data
     public static class TransferItemRequest {
+        private Long stockId;
         @NotNull(message = "Product ID is required")
         private Long productId;
 

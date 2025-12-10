@@ -22,7 +22,15 @@ const buildItemFromProduct = (product) => ({
   consignedQuantity: '0'
 });
 
-const StockForm = ({ products, warehouses, onSuccess, onCancel }) => {
+const StockForm = ({
+  products,
+  warehouses,
+  onSuccess,
+  onCancel,
+  onSubmit,
+  disableProductCreate = false,
+  mode = 'create'
+}) => {
   const [warehouseId, setWarehouseId] = useState('');
   const [items, setItems] = useState([]);
   const [productSearchTerm, setProductSearchTerm] = useState('');
@@ -372,19 +380,41 @@ const StockForm = ({ products, warehouses, onSuccess, onCancel }) => {
     setLoading(true);
     try {
       const payload = buildPayload();
-      const response = await axios.post('/api/stocks/bulk', payload);
-      const createdCount = Array.isArray(response.data) ? response.data.length : payload.length;
-      setFeedback({
-        type: 'success',
-        message: `${createdCount} stok kaydı başarıyla oluşturuldu.`
-      });
-      setItems([]);
-      setProductSearchTerm('');
-      setAdditionNote('');
-      setCustomerName('');
-      setCustomerPhone('');
-      if (onSuccess) {
-        onSuccess({ close: false, message: 'Stok kayıtları başarıyla oluşturuldu.' });
+      if (typeof onSubmit === 'function') {
+        await onSubmit(payload, {
+          warehouseId,
+          additionNote,
+          customerName,
+          customerPhone,
+          items
+        });
+        setFeedback({
+          type: 'success',
+          message: 'Stok talebiniz oluşturuldu. Yönetici onayı bekleniyor.'
+        });
+        setItems([]);
+        setProductSearchTerm('');
+        setAdditionNote('');
+        setCustomerName('');
+        setCustomerPhone('');
+        if (onSuccess) {
+          onSuccess({ close: true });
+        }
+      } else {
+        const response = await axios.post('/api/stocks/bulk', payload);
+        const createdCount = Array.isArray(response.data) ? response.data.length : payload.length;
+        setFeedback({
+          type: 'success',
+          message: `${createdCount} stok kaydı başarıyla oluşturuldu.`
+        });
+        setItems([]);
+        setProductSearchTerm('');
+        setAdditionNote('');
+        setCustomerName('');
+        setCustomerPhone('');
+        if (onSuccess) {
+          onSuccess({ close: false, message: 'Stok kayıtları başarıyla oluşturuldu.' });
+        }
       }
     } catch (error) {
       const message =
@@ -407,6 +437,16 @@ const StockForm = ({ products, warehouses, onSuccess, onCancel }) => {
       {feedback && (
         <div className={`alert alert-${feedback.type}`} role="alert">
           {feedback.message}
+        </div>
+      )}
+
+      {mode === 'request' && (
+        <div className="alert alert-info d-flex align-items-start gap-2">
+          <i className="fas fa-info-circle mt-1"></i>
+          <div>
+            Stok giriş talebi oluşturuyorsunuz. Kayıtlar yöneticinin onayına
+            gönderilecek ve onaylandıktan sonra sisteme eklenecek.
+          </div>
         </div>
       )}
 
@@ -573,6 +613,8 @@ const StockForm = ({ products, warehouses, onSuccess, onCancel }) => {
                   type="button"
                   className="btn btn-outline-primary btn-sm"
                   onClick={() => setShowProductModal(true)}
+                  disabled={disableProductCreate}
+                  title={disableProductCreate ? 'Ürün ekleme sadece yönetici tarafından yapılabilir.' : undefined}
                 >
                   <i className="fas fa-plus me-2"></i>
                   Yeni Ürün Ekle

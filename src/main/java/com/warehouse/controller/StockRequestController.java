@@ -33,12 +33,32 @@ public class StockRequestController {
     @PostMapping
     @PreAuthorize("hasAnyRole('STOCK_IN', 'STOCK_OUT')")
     public ResponseEntity<StockRequestDto> createRequest(@RequestBody Map<String, Object> payload) {
-        Long stockId = Long.valueOf(payload.get("stockId").toString());
+        Long stockId = payload.containsKey("stockId") && payload.get("stockId") != null
+                ? Long.valueOf(payload.get("stockId").toString())
+                : null;
+        Long productId = payload.containsKey("productId") && payload.get("productId") != null
+                ? Long.valueOf(payload.get("productId").toString())
+                : null;
+        Long warehouseId = payload.containsKey("warehouseId") && payload.get("warehouseId") != null
+                ? Long.valueOf(payload.get("warehouseId").toString())
+                : null;
+        String customerName = payload.containsKey("customerName") ? (String) payload.get("customerName") : null;
+        String customerPhone = payload.containsKey("customerPhone") ? (String) payload.get("customerPhone") : null;
+
         StockRequestType type = StockRequestType.valueOf(payload.get("type").toString());
         Integer quantity = Integer.valueOf(payload.get("quantity").toString());
         String notes = payload.containsKey("notes") ? payload.get("notes").toString() : null;
 
-        StockRequest request = stockRequestService.createRequest(stockId, type, quantity, notes);
+        StockRequest request = stockRequestService.createRequest(
+                stockId,
+                type,
+                quantity,
+                notes,
+                productId,
+                warehouseId,
+                customerName,
+                customerPhone
+        );
         return ResponseEntity.status(HttpStatus.CREATED).body(stockRequestService.toDto(request));
     }
 

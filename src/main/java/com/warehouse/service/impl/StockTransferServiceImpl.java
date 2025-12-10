@@ -24,6 +24,7 @@ import com.warehouse.repository.WarehouseRepository;
 import com.warehouse.service.AuditService;
 import com.warehouse.service.NotificationService;
 import com.warehouse.service.StockTransferService;
+import com.warehouse.service.StockService;
 import com.warehouse.service.AdminSecurityService;
 import com.warehouse.util.CurrentUser;
 import com.warehouse.util.EntityValidator;
@@ -40,12 +41,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 
@@ -61,6 +62,7 @@ public class StockTransferServiceImpl implements StockTransferService {
     private final StockTransferRepository stockTransferRepository;
     private final StockRepository stockRepository;
     private final ProductRepository productRepository;
+    private final StockService stockService;
     private final WarehouseRepository warehouseRepository;
     private final AuditService auditService;
     private final NotificationService notificationService;
@@ -72,7 +74,8 @@ public class StockTransferServiceImpl implements StockTransferService {
                                     WarehouseRepository warehouseRepository,
                                     AuditService auditService,
                                     NotificationService notificationService,
-                                    AdminSecurityService adminSecurityService) {
+                                    AdminSecurityService adminSecurityService,
+                                    StockService stockService) {
         this.stockTransferRepository = stockTransferRepository;
         this.stockRepository = stockRepository;
         this.productRepository = productRepository;
@@ -80,6 +83,7 @@ public class StockTransferServiceImpl implements StockTransferService {
         this.auditService = auditService;
         this.notificationService = notificationService;
         this.adminSecurityService = adminSecurityService;
+        this.stockService = stockService;
     }
 
     @Override
@@ -326,9 +330,9 @@ public class StockTransferServiceImpl implements StockTransferService {
         }
 
         List<StockTransferItem> items = getTransferItemsOrFallback(transfer);
-        Map<Long, Stock> sourceStocks = loadSourceStocks(transfer.getSourceWarehouse(), items);
+        Map<String, Stock> sourceStocks = loadSourceStocks(transfer.getSourceWarehouse(), items);
         for (StockTransferItem item : items) {
-            Stock sourceStock = sourceStocks.get(item.getProduct().getId());
+            Stock sourceStock = sourceStocks.get(stockKey(item));
             validateSufficientAvailableStock(sourceStock, item.getQuantity());
             reserveStockForTransfer(sourceStock, item.getQuantity());
         }
@@ -370,16 +374,16 @@ public class StockTransferServiceImpl implements StockTransferService {
         }
 
         List<StockTransferItem> items = getTransferItemsOrFallback(transfer);
-        Map<Long, Stock> sourceStocks = loadSourceStocks(transfer.getSourceWarehouse(), items);
+        Map<String, Stock> sourceStocks = loadSourceStocks(transfer.getSourceWarehouse(), items);
 
         if (transfer.getStatus() == TransferStatus.PENDING) {
             for (StockTransferItem item : items) {
-                Stock sourceStock = sourceStocks.get(item.getProduct().getId());
+                Stock sourceStock = sourceStocks.get(stockKey(item));
                 deductStockDirectly(sourceStock, item.getQuantity());
             }
         } else if (transfer.getStatus() == TransferStatus.IN_TRANSIT) {
             for (StockTransferItem item : items) {
-                Stock sourceStock = sourceStocks.get(item.getProduct().getId());
+                Stock sourceStock = sourceStocks.get(stockKey(item));
                 deductReservedStock(sourceStock, item.getQuantity());
             }
         }
@@ -433,9 +437,9 @@ public class StockTransferServiceImpl implements StockTransferService {
 
         if (transfer.getStatus() == TransferStatus.IN_TRANSIT) {
             List<StockTransferItem> items = getTransferItemsOrFallback(transfer);
-            Map<Long, Stock> sourceStocks = loadSourceStocks(transfer.getSourceWarehouse(), items);
+            Map<String, Stock> sourceStocks = loadSourceStocks(transfer.getSourceWarehouse(), items);
             for (StockTransferItem item : items) {
-                Stock sourceStock = sourceStocks.get(item.getProduct().getId());
+                Stock sourceStock = sourceStocks.get(stockKey(item));
                 releaseReservedStock(sourceStock, item.getQuantity());
             }
         }
@@ -641,19 +645,30 @@ public class StockTransferServiceImpl implements StockTransferService {
         String username = CurrentUser.usernameOrSystem();
         String trimmedNote = approvalNote != null && !approvalNote.trim().isEmpty() ? approvalNote.trim() : null;
 
-        if ("DELETE_REQUEST".equalsIgnoreCase(transfer.getApprovalNote())) {
+        if (transfer.isDeleteRequest()) {
             adminSecurityService.requireSecurityCodeForAdmin(adminSecurityCode);
-            AuditMetadata metadata = buildTransferMetadata(transfer);
-            stockTransferRepository.delete(transfer);
-            auditService.log(AuditAction.TRANSFER_DELETE, DomainEntityType.StockTransfer.name(), transferId, username,
-                    String.format("Transfer silme onayı: %s | Ürünler=%s", describeRoute(transfer), describeItems(transfer)), metadata);
+            transfer.setApprovalStatus(TransferApprovalStatus.APPROVED);
+            transfer.setApprovalDecisionBy(username);
+            transfer.setApprovalDecisionAt(LocalDateTime.now());
+            transfer.setApprovalNote(trimmedNote);
+            transfer.setStatus(TransferStatus.CANCELLED);
+            transfer.setCancellationReason(trimmedNote != null ? trimmedNote : "Silme talebi onaylandı");
+            StockTransfer saved = stockTransferRepository.save(transfer);
+
+            AuditMetadata metadata = buildTransferMetadata(saved);
+            auditService.log(AuditAction.TRANSFER_DELETE, DomainEntityType.StockTransfer.name(), saved.getId(), username,
+                    String.format("Transfer silme talebi onaylandı: %s | Ürünler=%s",
+                            describeRoute(saved), describeItems(saved)), metadata);
+
             notificationService.create(buildTransferNotification(
                     NotificationMessages.TRANSFER_DELETED_TITLE,
-                    String.format("Yönetici %s, #%d numaralı transferi silme talebini onayladı ve sildi. Rota: %s", username, transferId, describeRoute(transfer)),
-                    transfer));
-            return transfer;
+                    String.format("Yönetici %s, #%d numaralı transferin silme talebini onayladı. Rota: %s",
+                            username, saved.getId(), describeRoute(saved)),
+                    saved));
+            return stockTransferRepository.findByIdWithRelations(saved.getId()).orElse(saved);
         }
 
+        // Normal onaylarda güvenlik şifresi isteme
         transfer.setApprovalStatus(TransferApprovalStatus.APPROVED);
         transfer.setApprovalDecisionBy(username);
         transfer.setApprovalDecisionAt(LocalDateTime.now());
@@ -739,7 +754,7 @@ public class StockTransferServiceImpl implements StockTransferService {
 
     private StockTransferDeletionResult submitDeletionApprovalRequest(StockTransfer transfer) {
         // Avoid duplicating pending delete requests
-        if ("DELETE_REQUEST".equalsIgnoreCase(transfer.getApprovalNote())
+        if (transfer.isDeleteRequest()
                 && transfer.getApprovalStatus() == TransferApprovalStatus.PENDING) {
             return StockTransferDeletionResult.approval("Silme talebi zaten iletilmiş durumda.");
         }
@@ -750,7 +765,8 @@ public class StockTransferServiceImpl implements StockTransferService {
         transfer.setApprovalRequestedAt(LocalDateTime.now());
         transfer.setApprovalDecisionBy(null);
         transfer.setApprovalDecisionAt(null);
-        transfer.setApprovalNote("DELETE_REQUEST");
+        transfer.setApprovalNote(null);
+        transfer.setDeleteRequest(true);
         StockTransfer saved = stockTransferRepository.save(transfer);
 
         notificationService.create(buildTransferNotification(
@@ -926,6 +942,7 @@ public class StockTransferServiceImpl implements StockTransferService {
                 normalized.setTransfer(transfer);
                 normalized.setProduct(product);
                 normalized.setQuantity(item.getQuantity());
+                normalized.setStockId(item.getStockId());
                 resolved.add(normalized);
             }
         } else {
@@ -940,21 +957,7 @@ public class StockTransferServiceImpl implements StockTransferService {
             resolved.add(fallback);
         }
 
-        return mergeItemsByProduct(resolved);
-    }
-
-    private List<StockTransferItem> mergeItemsByProduct(List<StockTransferItem> items) {
-        Map<Long, StockTransferItem> merged = new HashMap<>();
-        for (StockTransferItem item : items) {
-            Long productId = item.getProduct().getId();
-            if (merged.containsKey(productId)) {
-                StockTransferItem existing = merged.get(productId);
-                existing.setQuantity(existing.getQuantity() + item.getQuantity());
-            } else {
-                merged.put(productId, item);
-            }
-        }
-        return new ArrayList<>(merged.values());
+        return resolved;
     }
 
     private List<StockTransferItem> getTransferItemsOrFallback(StockTransfer transfer) {
@@ -998,36 +1001,58 @@ public class StockTransferServiceImpl implements StockTransferService {
     }
 
     private void validateSufficientStockForItems(Warehouse warehouse, List<StockTransferItem> items) {
-        Map<Long, Stock> stocks = loadSourceStocks(warehouse, items);
+        Map<String, Stock> stocks = loadSourceStocks(warehouse, items);
         for (StockTransferItem item : items) {
-            Stock stock = stocks.get(item.getProduct().getId());
+            Stock stock = stocks.get(stockKey(item));
             validateSufficientAvailableStock(stock, item.getQuantity());
         }
     }
 
-    private Map<Long, Stock> loadSourceStocks(Warehouse warehouse, List<StockTransferItem> items) {
-        Map<Long, Stock> stocks = fetchStocksByWarehouse(warehouse, items);
+    private Map<String, Stock> loadSourceStocks(Warehouse warehouse, List<StockTransferItem> items) {
+        Map<String, Stock> result = new LinkedHashMap<>();
+
+        // First resolve items that carry explicit stockId
         for (StockTransferItem item : items) {
-            Long productId = item.getProduct().getId();
-            if (!stocks.containsKey(productId)) {
-                logger.warn("Product not found in warehouse. Product id: {}, Warehouse id: {}", productId, warehouse.getId());
+            if (item.getStockId() != null) {
+                Stock stock = stockService.getStockByIdOrThrow(item.getStockId());
+                if (!Objects.equals(stock.getWarehouse().getId(), warehouse.getId())) {
+                    logger.warn("Stock {} does not belong to warehouse {} for transfer", stock.getId(), warehouse.getId());
+                    throw new WarehouseManagementException(ErrorCode.PRODUCT_NOT_IN_WAREHOUSE);
+                }
+                result.put(stockKey(item), stock);
+            }
+        }
+
+        // Fetch remaining by product for items without stockId
+        List<Long> productIds = items.stream()
+                .filter(it -> it.getStockId() == null)
+                .map(it -> it.getProduct().getId())
+                .distinct()
+                .collect(Collectors.toList());
+
+        if (!productIds.isEmpty()) {
+            List<Stock> stockList = stockRepository.findByWarehouseAndProductIds(warehouse, productIds);
+            for (Stock stock : stockList) {
+                String key = "P" + stock.getProduct().getId();
+                result.putIfAbsent(key, stock);
+            }
+        }
+
+        for (StockTransferItem item : items) {
+            String key = stockKey(item);
+            if (!result.containsKey(key)) {
+                logger.warn("Stock not found in warehouse. productId={}, stockId={}, warehouseId={}", item.getProduct().getId(), item.getStockId(), warehouse.getId());
                 throw new WarehouseManagementException(ErrorCode.PRODUCT_NOT_IN_WAREHOUSE);
             }
         }
-        return stocks;
+
+        return result;
     }
 
-    private Map<Long, Stock> fetchStocksByWarehouse(Warehouse warehouse, List<StockTransferItem> items) {
-        List<Long> productIds = items.stream()
-                .map(item -> item.getProduct().getId())
-                .distinct()
-                .collect(Collectors.toList());
-        if (productIds.isEmpty()) {
-            return new HashMap<>();
-        }
-        List<Stock> stockList = stockRepository.findByWarehouseAndProductIds(warehouse, productIds);
-        return stockList.stream()
-                .collect(Collectors.toMap(stock -> stock.getProduct().getId(), Function.identity()));
+    private String stockKey(StockTransferItem item) {
+        return item.getStockId() != null
+                ? "S" + item.getStockId()
+                : "P" + item.getProduct().getId();
     }
 
     private StockTransfer submitStartApprovalRequest(StockTransfer transfer) {

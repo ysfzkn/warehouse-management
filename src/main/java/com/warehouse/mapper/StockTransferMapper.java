@@ -3,6 +3,8 @@ package com.warehouse.mapper;
 import com.warehouse.dto.StockTransferDto;
 import com.warehouse.entity.StockTransfer;
 import com.warehouse.entity.StockTransferItem;
+import com.warehouse.service.StockService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -10,7 +12,10 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Component
+@RequiredArgsConstructor
 public class StockTransferMapper {
+
+    private final StockService stockService;
 
     public StockTransferDto toDto(StockTransfer entity) {
         if (entity == null) {
@@ -44,12 +49,18 @@ public class StockTransferMapper {
         dto.setApprovalDecisionBy(entity.getApprovalDecisionBy());
         dto.setApprovalDecisionAt(entity.getApprovalDecisionAt());
         dto.setApprovalNote(entity.getApprovalNote());
+        dto.setDeleteRequest(entity.isDeleteRequest());
 
         if (entity.getSourceWarehouse() != null) {
             StockTransferDto.SimpleWarehouseDto sourceDto = new StockTransferDto.SimpleWarehouseDto();
             sourceDto.setId(entity.getSourceWarehouse().getId());
             sourceDto.setName(entity.getSourceWarehouse().getName());
             sourceDto.setLocation(entity.getSourceWarehouse().getLocation());
+            sourceDto.setWarehouseType(
+                    entity.getSourceWarehouse().getWarehouseType() != null
+                            ? entity.getSourceWarehouse().getWarehouseType().name()
+                            : null
+            );
             dto.setSourceWarehouse(sourceDto);
         }
 
@@ -58,6 +69,11 @@ public class StockTransferMapper {
             destDto.setId(entity.getDestinationWarehouse().getId());
             destDto.setName(entity.getDestinationWarehouse().getName());
             destDto.setLocation(entity.getDestinationWarehouse().getLocation());
+            destDto.setWarehouseType(
+                    entity.getDestinationWarehouse().getWarehouseType() != null
+                            ? entity.getDestinationWarehouse().getWarehouseType().name()
+                            : null
+            );
             dto.setDestinationWarehouse(destDto);
         }
 
@@ -86,7 +102,14 @@ public class StockTransferMapper {
                     .map(item -> {
                         StockTransferDto.TransferItemDto dtoItem = new StockTransferDto.TransferItemDto();
                         dtoItem.setId(item.getId());
+                        dtoItem.setStockId(item.getStockId());
                         dtoItem.setQuantity(item.getQuantity());
+                    if (item.getStockId() != null) {
+                        stockService.getStockById(item.getStockId()).ifPresent(stock -> {
+                            dtoItem.setCustomerName(stock.getCustomerName());
+                            dtoItem.setCustomerPhone(stock.getCustomerPhone());
+                        });
+                    }
                         if (item.getProduct() != null) {
                             dtoItem.setProduct(mapProduct(item.getProduct().getId(), item.getProduct().getName(), item.getProduct().getSku()));
                         }

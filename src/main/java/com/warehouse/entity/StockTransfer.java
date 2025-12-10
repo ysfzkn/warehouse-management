@@ -172,6 +172,9 @@ public class StockTransfer {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
+    @Column(name = "delete_request", nullable = false)
+    private boolean deleteRequest = false;
+
     @PrePersist
     protected void onCreate() {
         this.createdAt = LocalDateTime.now();

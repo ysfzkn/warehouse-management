@@ -32,6 +32,9 @@ public class StockTransferItem {
     @JoinColumn(name = "product_id", nullable = false)
     private Product product;
 
+    @Column(name = "stock_id")
+    private Long stockId;
+
     @NotNull(message = "Quantity is required")
     @Min(value = 1, message = "Quantity must be at least 1")
     @Column(nullable = false)

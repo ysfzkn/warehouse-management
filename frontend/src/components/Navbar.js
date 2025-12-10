@@ -278,9 +278,10 @@ const Navbar = () => {
                       style={{minHeight: '38px'}}
                       onClick={async () => {
                         const title = (n.title || '').toLowerCase();
+                        const message = (n.message || '').toLowerCase();
                         const isTransfer = n.entityType === 'StockTransfer' || title.includes('transfer');
                         const isStockRequest = n.entityType === 'StockRequest';
-                        const isTransferApprovalRequest = title.includes('onay') || title.includes('approval') || title.includes('talep');
+                        const isTransferApprovalRequest = title.includes('onay') || title.includes('approval') || title.includes('talep') || title.includes('sil');
                         
                         if (isStockRequest) {
                           if (location.pathname === '/stock') {

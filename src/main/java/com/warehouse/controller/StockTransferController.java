@@ -298,6 +298,7 @@ public class StockTransferController {
             transfer.setItems(
                     request.getItems().stream().map(itemRequest -> {
                         StockTransferItem item = new StockTransferItem();
+                        item.setStockId(itemRequest.getStockId());
                         Product product = new Product();
                         product.setId(itemRequest.getProductId());
                         item.setProduct(product);
