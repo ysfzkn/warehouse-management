@@ -154,7 +154,7 @@ const Navbar = () => {
       closed = true;
       try { es.close(); } catch {}
       sseRef.current = null;
-      handleLogout();
+      // Do not auto-logout on SSE errors to avoid interrupting active sessions
     };
     return () => {
       closed = true;
