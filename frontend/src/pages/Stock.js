@@ -726,6 +726,7 @@ const Stock = () => {
   const [selectedTransfers, setSelectedTransfers] = useState([]);
   const [successToast, setSuccessToast] = useState({ show: false, message: '' });
   const toastTimeoutRef = useRef(null);
+  const [transferActionState, setTransferActionState] = useState({});
 
   const buildStockFilterParams = useCallback(() => {
     const categoryId = selectedCategory ? Number(selectedCategory) : undefined;
@@ -1980,6 +1981,11 @@ const Stock = () => {
   };
 
   const handleTransferStatusChange = async (transferId, action, payload = undefined) => {
+    const actionKey = `${transferId}-${action}`;
+    if (transferActionState[actionKey]) {
+      return; // prevent duplicate submissions while a request is in-flight
+    }
+    setTransferActionState((prev) => ({ ...prev, [actionKey]: true }));
     try {
       const body = payload && Object.keys(payload).length > 0 ? payload : undefined;
       const response = await axios.post(`/api/stock-transfers/${transferId}/${action}`, body);
@@ -2017,6 +2023,11 @@ const Stock = () => {
         show: true,
         title: 'Transfer İşlemi Hatası',
         message: `Transfer ${actionName} işlemi sırasında hata oluştu: ${errorMessage}`
+      });
+    } finally {
+      setTransferActionState((prev) => {
+        const { [actionKey]: _ignored, ...rest } = prev;
+        return rest;
       });
     }
   };

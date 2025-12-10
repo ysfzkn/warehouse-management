@@ -365,8 +365,8 @@ public class StockTransferServiceImpl implements StockTransferService {
         StockTransfer transfer = getTransferByIdOrThrow(transferId);
 
         if (transfer.getStatus() == TransferStatus.COMPLETED) {
-            logger.warn("Transfer already completed. Transfer id: {}", transferId);
-            throw new WarehouseManagementException(ErrorCode.TRANSFER_ALREADY_COMPLETED);
+            logger.info("Transfer already completed, returning existing record. Transfer id: {}", transferId);
+            return stockTransferRepository.findByIdWithRelations(transferId).orElse(transfer);
         }
         if (transfer.getStatus() == TransferStatus.CANCELLED) {
             logger.warn("Cannot complete cancelled transfer. Transfer id: {}", transferId);
