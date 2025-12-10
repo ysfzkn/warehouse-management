@@ -20,6 +20,19 @@ const Navbar = () => {
   const userBadgeRef = useRef(null);
   const notifLoadingRef = useRef(false);
   const notifRefreshingRef = useRef(false);
+  const sseRef = useRef(null);
+  const isJwtExpired = useCallback((token) => {
+    try {
+      const [, payload] = token.split('.');
+      if (!payload) return false;
+      const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
+      const decoded = JSON.parse(atob(normalized));
+      const exp = decoded?.exp;
+      return typeof exp === 'number' && exp * 1000 < Date.now();
+    } catch {
+      return false;
+    }
+  }, []);
   const NOTIFICATION_BATCH_SIZE = 10;
 
   const loadNotifications = useCallback(async ({ page = 0, reset = false, silent = false } = {}) => {
@@ -102,7 +115,13 @@ const Navbar = () => {
   useEffect(() => {
     const token = localStorage.getItem('auth_token');
     if (!token) return;
+    if (isJwtExpired(token)) {
+      handleLogout();
+      return;
+    }
     const es = new EventSource(`/api/stream?token=${encodeURIComponent(token)}`);
+    sseRef.current = es;
+    let closed = false;
     const onMessage = async (ev) => {
       try {
         const data = typeof ev.data === 'string' ? JSON.parse(ev.data) : ev.data;
@@ -124,24 +143,30 @@ const Navbar = () => {
     es.addEventListener('snapshot', onMessage);
     es.addEventListener('update', onMessage);
     es.onerror = () => {
-      // Let the browser attempt reconnects automatically
+      if (closed) return;
+      closed = true;
+      try { es.close(); } catch {}
+      sseRef.current = null;
+      handleLogout();
     };
     return () => {
+      closed = true;
       try { es.close(); } catch {}
+      sseRef.current = null;
     };
-  }, [role, loadNotifications]);
+  }, [role, loadNotifications, isJwtExpired, handleLogout]);
 
   const isActive = (path) => {
     return location.pathname === path;
   };
 
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
     localStorage.removeItem('auth_token');
     localStorage.removeItem('auth_user');
     localStorage.removeItem('auth_role');
     window.dispatchEvent(new Event('auth-changed'));
     navigate('/login', { replace: true });
-  };
+  }, [navigate]);
 
   const navbarStyle = {
     background: 'linear-gradient(135deg, #1e3c72 0%, #2a5298 50%, #1e3c72 100%)',
