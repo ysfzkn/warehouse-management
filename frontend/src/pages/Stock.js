@@ -643,6 +643,7 @@ const getTransferTypeLabel = (type) =>
   (type || 'WAREHOUSE') === 'CUSTOMER_DELIVERY' ? 'Müşteri Sevkiyatı' : 'Depo Transferi';
 
 const Stock = () => {
+  const wrapTextStyle = { whiteSpace: 'normal', wordBreak: 'break-word' };
   const location = useLocation();
   const role = (typeof window !== 'undefined' && localStorage.getItem('auth_role')) || 'ADMIN';
   const isAdmin = role === 'ADMIN';
@@ -4099,7 +4100,7 @@ const Stock = () => {
                                 </div>
                               </td>
                               <td className="align-middle">
-                                <div className="text-truncate">
+                                <div className="text-wrap text-break" style={wrapTextStyle}>
                                   {transferItemsPreview.length === 0 ? (
                                     <small className="text-muted">Ürün bilgisi yok</small>
                                   ) : (
@@ -4107,8 +4108,12 @@ const Stock = () => {
                                       {transferItemsPreview.slice(0, 3).map((item, idx) => (
                                         <div key={`${transfer.id}-${item.product?.id || idx}`} className="d-flex justify-content-between align-items-center mb-1">
                                           <div className="me-2 overflow-hidden">
-                                            <div className="fw-bold small text-truncate">{item.product?.name || '-'}</div>
-                                            <small className="text-muted text-truncate">{item.product?.sku || '-'}</small>
+                                            <div className="fw-bold small text-break" style={wrapTextStyle} title={item.product?.name || '-'}>
+                                              {item.product?.name || '-'}
+                                            </div>
+                                            <small className="text-muted text-break d-block" style={wrapTextStyle} title={item.product?.sku || '-'}>
+                                              {item.product?.sku || '-'}
+                                            </small>
                                           </div>
                                           <span className="badge bg-light text-dark">{item.quantity}</span>
                                         </div>
@@ -4132,11 +4137,11 @@ const Stock = () => {
                                     <i className="fas fa-warehouse text-danger fa-sm"></i>
                                   </div>
                                   <div className="small overflow-hidden w-100">
-                                    <div className="fw-bold text-truncate" title={transfer.sourceWarehouse?.name}>
+                                      <div className="fw-bold text-break" style={wrapTextStyle} title={transfer.sourceWarehouse?.name}>
                                       <i className="fas fa-warehouse text-danger fa-xs me-1 d-inline d-sm-none"></i>
                                       {transfer.sourceWarehouse?.name}
                                     </div>
-                                    <small className="text-muted d-block text-truncate" title={transfer.sourceWarehouse?.location}>
+                                      <small className="text-muted d-block text-break" style={wrapTextStyle} title={transfer.sourceWarehouse?.location}>
                                       {transfer.sourceWarehouse?.location}
                                     </small>
                                   </div>
@@ -4156,26 +4161,26 @@ const Stock = () => {
                                   <div className="small overflow-hidden w-100">
                                     {(transfer.transferType || 'WAREHOUSE') === 'CUSTOMER_DELIVERY' ? (
                                       <>
-                                        <div className="fw-bold text-truncate" title={transfer.customerFullName}>
+                                        <div className="fw-bold text-break" style={wrapTextStyle} title={transfer.customerFullName}>
                                           <i className="fas fa-user-tag text-info fa-xs me-1 d-inline d-sm-none"></i>
                                           {transfer.customerFullName}
                                         </div>
-                                        <small className="text-muted d-block text-truncate" title={transfer.customerPhone}>
+                                        <small className="text-muted d-block text-break" style={wrapTextStyle} title={transfer.customerPhone}>
                                           <i className="fas fa-phone me-1"></i>
                                           {transfer.customerPhone || '-'}
                                         </small>
-                                        <small className="text-muted d-block text-truncate" title={transfer.customerAddress}>
+                                        <small className="text-muted d-block text-break" style={wrapTextStyle} title={transfer.customerAddress}>
                                           <i className="fas fa-map-marker-alt me-1"></i>
                                           {transfer.customerAddress || '-'}
                                         </small>
                                       </>
                                     ) : (
                                       <>
-                                        <div className="fw-bold text-truncate" title={transfer.destinationWarehouse?.name}>
+                                        <div className="fw-bold text-break" style={wrapTextStyle} title={transfer.destinationWarehouse?.name}>
                                           <i className="fas fa-warehouse text-success fa-xs me-1 d-inline d-sm-none"></i>
                                           {transfer.destinationWarehouse?.name}
                                         </div>
-                                        <small className="text-muted d-block text-truncate" title={transfer.destinationWarehouse?.location}>
+                                        <small className="text-muted d-block text-break" style={wrapTextStyle} title={transfer.destinationWarehouse?.location}>
                                           {transfer.destinationWarehouse?.location}
                                         </small>
                                       </>
@@ -4188,9 +4193,9 @@ const Stock = () => {
                               </td>
                               {/* Şoför kolonu - tablet ve üstünde göster */}
                               <td className="align-middle d-none d-md-table-cell">
-                                <div className="small overflow-hidden">
-                                  <div className="fw-bold text-truncate" title={transfer.driverName}>{transfer.driverName}</div>
-                                  <div className="text-muted text-truncate" title={transfer.driverPhone}>
+                                <div className="small overflow-hidden text-break" style={wrapTextStyle}>
+                                  <div className="fw-bold text-break" style={wrapTextStyle} title={transfer.driverName}>{transfer.driverName}</div>
+                                  <div className="text-muted text-break" style={wrapTextStyle} title={transfer.driverPhone}>
                                     <i className="fas fa-phone me-1"></i>
                                     {transfer.driverPhone}
                                   </div>
@@ -4229,7 +4234,8 @@ const Stock = () => {
                                 )}
                                 {approvalRejected && (
                                   <small
-                                    className="d-block text-danger mt-1 text-truncate"
+                                    className="d-block text-danger mt-1 text-break"
+                                    style={wrapTextStyle}
                                     title={transfer.approvalNote || 'Onay reddedildi'}
                                   >
                                     <i className="fas fa-times-circle me-1"></i>

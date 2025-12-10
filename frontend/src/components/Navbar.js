@@ -21,13 +21,7 @@ const Navbar = () => {
   const notifLoadingRef = useRef(false);
   const notifRefreshingRef = useRef(false);
   const sseRef = useRef(null);
-  const handleLogout = useCallback(() => {
-    localStorage.removeItem('auth_token');
-    localStorage.removeItem('auth_user');
-    localStorage.removeItem('auth_role');
-    window.dispatchEvent(new Event('auth-changed'));
-    navigate('/login', { replace: true });
-  }, [navigate]);
+
   const isJwtExpired = useCallback((token) => {
     try {
       const [, payload] = token.split('.');
@@ -118,6 +112,14 @@ const Navbar = () => {
       ignore = true;
     };
   }, [role, loadNotifications]);
+
+  const handleLogout = useCallback(() => {
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('auth_user');
+    localStorage.removeItem('auth_role');
+    window.dispatchEvent(new Event('auth-changed'));
+    navigate('/login', { replace: true });
+  }, [navigate]);
 
   useEffect(() => {
     const token = localStorage.getItem('auth_token');
