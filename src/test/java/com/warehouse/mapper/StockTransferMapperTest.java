@@ -9,6 +9,8 @@ import com.warehouse.enums.TransferStatus;
 import com.warehouse.enums.TransferType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import com.warehouse.service.StockService;
+import org.mockito.Mockito;
 
 import java.time.LocalDateTime;
 import java.util.Arrays;
@@ -19,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class StockTransferMapperTest {
 
     private StockTransferMapper mapper;
+    private StockService stockService;
     private StockTransfer stockTransfer;
     private Warehouse sourceWarehouse;
     private Warehouse destinationWarehouse;
@@ -27,7 +30,8 @@ class StockTransferMapperTest {
 
     @BeforeEach
     void setUp() {
-        mapper = new StockTransferMapper();
+        stockService = Mockito.mock(StockService.class);
+        mapper = new StockTransferMapper(stockService);
 
         sourceWarehouse = new Warehouse();
         sourceWarehouse.setId(1L);
