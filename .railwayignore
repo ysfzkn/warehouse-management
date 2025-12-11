@@ -1,0 +1,48 @@
+# Railway specific ignore file
+# These files won't be uploaded to Railway during deployment
+
+# Build artifacts
+target/
+*.class
+
+# Dependencies
+node_modules/
+frontend/node_modules/
+frontend/build/
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Documentation
+*.md
+LICENSE
+
+# Development files
+docker-compose.yml
+.env.local
+.env.development
+
+# Test files
+src/test/
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+logs/
+
+# Uploads (if using Railway volumes)
+uploads/
+
+# Git
+.git/
+.gitignore
+.dockerignore
+

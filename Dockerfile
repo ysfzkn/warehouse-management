@@ -6,19 +6,25 @@ FROM maven:3.9.9-eclipse-temurin-17-alpine AS build
 
 WORKDIR /app
 
-# Copy Maven metadata and warm dependency cache (improves Docker layer reuse)
+# Copy Maven metadata only (for better layer caching)
 COPY pom.xml .
-RUN mvn -B dependency:go-offline
 
-# Copy source after dependencies to avoid invalidating cache on every change
+# Download dependencies (cached layer)
+RUN mvn -B dependency:go-offline -DskipTests=true || true
+
+# Copy source code
 COPY src ./src
-RUN mvn -B clean package -DskipTests
+
+# Build the application
+RUN mvn -B clean package -DskipTests -Dmaven.test.skip=true -Dmaven.javadoc.skip=true
 
 FROM eclipse-temurin:17-jre-alpine
 
 WORKDIR /app
 
-RUN apk add --no-cache curl
+# Install curl for healthcheck
+RUN apk add --no-cache curl && \
+    rm -rf /var/cache/apk/*
 
 # Copy built jar (use wildcard to keep version-independent)
 COPY --from=build /app/target/warehouse-management-*.jar app.jar
@@ -31,22 +37,16 @@ COPY --from=build /app/target/warehouse-management-*.jar app.jar
 ##
 ## To make this feature work reliably on Railway with volumes, we currently run
 ## the container as root. This is a pragmatic choice specific to this environment.
-##
-## If you want a stricter, best-practice setup (non-root runtime), you can:
-## - Mount the volume as usual (root:root)
-## - Use an entrypoint script to chown the volume paths at startup
-## - Then drop privileges to a non-root user (e.g. appuser) before starting the app.
-##
-## Example of the old non-root setup (kept here for reference):
-##
-## RUN addgroup -g 1001 -S appuser && \
-##     adduser -S appuser -u 1001 -G appuser
-##
-## USER appuser
 
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD curl -f http://localhost:8080/actuator/health || exit 1
 
-ENTRYPOINT ["java", "-jar", "app.jar"]
+# Run with optimized JVM flags for Railway
+ENTRYPOINT ["java", \
+    "-XX:+UseContainerSupport", \
+    "-XX:MaxRAMPercentage=75.0", \
+    "-XX:+UseG1GC", \
+    "-Djava.security.egd=file:/dev/./urandom", \
+    "-jar", "app.jar"]
