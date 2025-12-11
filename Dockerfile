@@ -1,53 +1,40 @@
 ##
-# Multi-stage build for Spring Boot backend
+# Optimized Spring Boot build for Railway
 ##
 
 FROM maven:3.9.9-eclipse-temurin-17-alpine AS build
 
 WORKDIR /app
 
-# Copy Maven metadata only (for better layer caching)
+# Copy pom.xml and resolve dependencies (cached layer)
 COPY pom.xml .
+RUN mvn dependency:resolve dependency:resolve-plugins --fail-never
 
-# Download dependencies (cached layer)
-RUN mvn -B dependency:go-offline -DskipTests=true || true
-
-
-# Copy source code
+# Copy source and build
 COPY src ./src
+RUN mvn package -DskipTests --batch-mode
 
-# Build the application
-RUN mvn -B clean package -DskipTests -Dmaven.test.skip=true -Dmaven.javadoc.skip=true
-
+##
+# Runtime stage
+##
 FROM eclipse-temurin:17-jre-alpine
 
 WORKDIR /app
 
-# Install curl for healthcheck
-RUN apk add --no-cache curl && \
-    rm -rf /var/cache/apk/*
+# Install curl for Railway healthcheck
+RUN apk add --no-cache curl
 
-# Copy built jar (use wildcard to keep version-independent)
+# Copy the built jar
 COPY --from=build /app/target/warehouse-management-*.jar app.jar
 
-## IMPORTANT (Railway + Volumes)
-## Railway volumes are typically mounted as root:root and only writable by root.
-## In the previous configuration the app was running as a non-root user (appuser),
-## so it could not create directories under the mounted volume and we were getting
-## AccessDeniedException during photo uploads.
-##
-## To make this feature work reliably on Railway with volumes, we currently run
-## the container as root. This is a pragmatic choice specific to this environment.
-
+# Railway runs as root for volume access
 EXPOSE 8080
 
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+# Healthcheck for Railway
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
   CMD curl -f http://localhost:8080/actuator/health || exit 1
 
-# Run with optimized JVM flags for Railway
-ENTRYPOINT ["java", \
-    "-XX:+UseContainerSupport", \
-    "-XX:MaxRAMPercentage=75.0", \
-    "-XX:+UseG1GC", \
-    "-Djava.security.egd=file:/dev/./urandom", \
-    "-jar", "app.jar"]
+# JVM settings optimized for Railway containers
+ENV JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -Djava.security.egd=file:/dev/./urandom"
+
+ENTRYPOINT sh -c "java $JAVA_OPTS -jar app.jar"
