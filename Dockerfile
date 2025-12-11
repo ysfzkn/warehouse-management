@@ -12,6 +12,7 @@ COPY pom.xml .
 # Download dependencies (cached layer)
 RUN mvn -B dependency:go-offline -DskipTests=true || true
 
+
 # Copy source code
 COPY src ./src
 
