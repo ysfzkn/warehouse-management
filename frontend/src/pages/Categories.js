@@ -521,7 +521,6 @@ const Categories = () => {
                 className="btn btn-sm btn-outline-primary rounded-circle"
                 onClick={() => {
                   setCategorySortDir(categorySortDir === 'asc' ? 'desc' : 'asc');
-                  setCategoryPage(0);
                 }}
                 title={categorySortDir === 'asc' ? 'Artan sıralama' : 'Azalan sıralama'}
               >
