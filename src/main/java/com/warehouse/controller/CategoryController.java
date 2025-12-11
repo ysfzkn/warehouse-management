@@ -8,10 +8,6 @@ import com.warehouse.service.AdminSecurityService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import com.warehouse.dto.PagedResponse;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -78,96 +74,34 @@ public class CategoryController {
 
     @GetMapping("/top-level")
     public ResponseEntity<?> getTopLevelCategories(
-            @RequestParam(required = false, defaultValue = "0") Integer page,
-            @RequestParam(required = false, defaultValue = "20") Integer size,
             @RequestParam(required = false, defaultValue = "name") String sortBy,
             @RequestParam(required = false, defaultValue = "asc") String sortDir) {
+        
+        // Fetch product counts
         var counts = categoryRepository.fetchCategoryProductCounts();
         var countMap = new java.util.HashMap<Long, Long>();
         counts.forEach(c -> countMap.put(c.getCategoryId(), c.getProductCount()));
 
-        // If size is very large (>1000), return all categories without pagination
-        if (size != null && size > 1000) {
-            // Non-paginated response - return ALL categories
-            List<Category> topLevelCategories = categoryService.getTopLevelCategories();
-            Map<Long, List<CategoryDto>> childrenMap = loadSubcategoriesForParents(topLevelCategories, countMap);
-            
-            // Apply sorting manually
-            Sort sort = Sort.by(Sort.Direction.fromString(sortDir), sortBy);
-            List<Category> sortedCategories = topLevelCategories;
-            if (sort.isSorted()) {
-                sortedCategories = topLevelCategories.stream()
-                    .sorted((c1, c2) -> {
-                        int comparison = 0;
-                        for (Sort.Order order : sort) {
-                            if ("name".equals(order.getProperty())) {
-                                comparison = c1.getName().compareToIgnoreCase(c2.getName());
-                            } else if ("updatedAt".equals(order.getProperty())) {
-                                comparison = c1.getUpdatedAt() != null && c2.getUpdatedAt() != null 
-                                    ? c1.getUpdatedAt().compareTo(c2.getUpdatedAt()) 
-                                    : 0;
-                            } else if ("createdAt".equals(order.getProperty())) {
-                                comparison = c1.getCreatedAt() != null && c2.getCreatedAt() != null 
-                                    ? c1.getCreatedAt().compareTo(c2.getCreatedAt()) 
-                                    : 0;
-                            }
-                            if (comparison != 0) {
-                                return order.isAscending() ? comparison : -comparison;
-                            }
-                        }
-                        return comparison;
-                    })
-                    .toList();
-            }
-            
-            var result = sortedCategories.stream()
-                .map(cat -> buildCategoryDto(cat, countMap, childrenMap.getOrDefault(cat.getId(), List.of())))
-                .toList();
-            
-            // Return with pagination metadata showing all results in one page
-            PagedResponse<CategoryDto> response = new PagedResponse<>(
-                    result,
-                    0,
-                    result.size(),
-                    (long) result.size(),
-                    1,
-                    true,
-                    true
-            );
-            return ResponseEntity.ok(response);
-        } else if (page != null && size != null) {
-            // Paginated response
-            int safePage = Math.max(0, page);
-            int safeSize = Math.max(1, Math.min(size, 100));
-            Sort sort = Sort.by(Sort.Direction.fromString(sortDir), sortBy);
-            Pageable pageable = PageRequest.of(safePage, safeSize, sort);
-            Page<Category> categoryPage = categoryService.getTopLevelCategories(pageable);
-            List<Category> parents = categoryPage.getContent();
-            Map<Long, List<CategoryDto>> childrenMap = loadSubcategoriesForParents(parents, countMap);
-
-            var content = parents.stream()
-                .map(cat -> buildCategoryDto(cat, countMap, childrenMap.getOrDefault(cat.getId(), List.of())))
-                .toList();
-
-            PagedResponse<CategoryDto> response = new PagedResponse<>(
-                    content,
-                    categoryPage.getNumber(),
-                    categoryPage.getSize(),
-                    categoryPage.getTotalElements(),
-                    categoryPage.getTotalPages(),
-                    categoryPage.isFirst(),
-                    categoryPage.isLast()
-            );
-            return ResponseEntity.ok(response);
-        } else {
-            // Non-paginated response (backward compatibility)
-            List<Category> topLevelCategories = categoryService.getTopLevelCategories();
-            Map<Long, List<CategoryDto>> childrenMap = loadSubcategoriesForParents(topLevelCategories, countMap);
-            var result = topLevelCategories.stream()
-                .map(cat -> buildCategoryDto(cat, countMap, childrenMap.getOrDefault(cat.getId(), List.of())))
-                .toList();
-            return ResponseEntity.ok(result);
-        }
+        // Get sorted categories from service
+        List<Category> sortedCategories = categoryService.getTopLevelCategoriesSorted(sortBy, sortDir);
+        Map<Long, List<CategoryDto>> childrenMap = loadSubcategoriesForParents(sortedCategories, countMap);
+        
+        // Build DTOs
+        var result = sortedCategories.stream()
+            .map(cat -> buildCategoryDto(cat, countMap, childrenMap.getOrDefault(cat.getId(), List.of())))
+            .toList();
+        
+        // Return with metadata for frontend compatibility
+        PagedResponse<CategoryDto> response = new PagedResponse<>(
+                result,
+                0,
+                result.size(),
+                (long) result.size(),
+                1,
+                true,
+                true
+        );
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/{parentId}/subcategories")

@@ -45,6 +45,8 @@ public interface CategoryService {
 
     List<Category> getTopLevelCategories();
 
+    List<Category> getTopLevelCategoriesSorted(String sortBy, String sortDir);
+
     List<Category> getSubcategories(Long parentId);
 
     List<CategoryDto> getHierarchicalCategories();

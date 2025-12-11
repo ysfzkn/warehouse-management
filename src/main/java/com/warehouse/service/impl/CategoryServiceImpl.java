@@ -189,6 +189,42 @@ public class CategoryServiceImpl implements CategoryService {
 
     @Override
     @Transactional(readOnly = true)
+    public List<Category> getTopLevelCategoriesSorted(String sortBy, String sortDir) {
+        logger.debug("Fetching top-level categories sorted by {} {}", sortBy, sortDir);
+        List<Category> categories = categoryRepository.findTopLevelCategories();
+        
+        // Apply sorting
+        boolean ascending = "asc".equalsIgnoreCase(sortDir);
+        
+        return categories.stream()
+            .sorted((c1, c2) -> {
+                int comparison = 0;
+                
+                switch (sortBy) {
+                    case "name":
+                        comparison = c1.getName().compareToIgnoreCase(c2.getName());
+                        break;
+                    case "updatedAt":
+                        if (c1.getUpdatedAt() != null && c2.getUpdatedAt() != null) {
+                            comparison = c1.getUpdatedAt().compareTo(c2.getUpdatedAt());
+                        }
+                        break;
+                    case "createdAt":
+                        if (c1.getCreatedAt() != null && c2.getCreatedAt() != null) {
+                            comparison = c1.getCreatedAt().compareTo(c2.getCreatedAt());
+                        }
+                        break;
+                    default:
+                        comparison = c1.getName().compareToIgnoreCase(c2.getName());
+                }
+                
+                return ascending ? comparison : -comparison;
+            })
+            .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Page<Category> getTopLevelCategories(Pageable pageable) {
         logger.debug("Fetching paged top-level categories - page: {}, size: {}", pageable.getPageNumber(), pageable.getPageSize());
         return categoryRepository.findTopLevelCategories(pageable);

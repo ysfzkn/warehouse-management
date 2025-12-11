@@ -38,13 +38,11 @@ const Categories = () => {
     { value: 'updatedAt', label: 'Son Güncellemeye Göre', icon: 'fa-clock' }
   ];
 
-  const fetchCategories = useCallback(async (pageOverride = 0, pageSizeOverride, searchQuery = '') => {
+  const fetchCategories = useCallback(async () => {
     try {
       setLoading(true);
-      const size = pageSizeOverride ?? categoryPageSize;
+      // Fetch ALL categories with sorting
       const params = {
-        page: searchQuery ? 0 : pageOverride,
-        size: searchQuery ? 9999 : size,  // Fetch all categories when searching
         sortBy: categorySortBy,
         sortDir: categorySortDir
       };
@@ -73,27 +71,20 @@ const Categories = () => {
       });
       setMainCategories(categoriesWithSubInfo);
 
-      // Update pagination state if response is paginated
-      if (data.totalElements !== undefined) {
-        setCategoryPage(data.page ?? pageOverride);
-        setCategoryTotalCount(data.totalElements ?? list.length);
-        setCategoryTotalPages(data.totalPages ?? 0);
-      } else {
-        setCategoryPage(0);
-        setCategoryTotalCount(list.length);
-        setCategoryTotalPages(1);
-      }
+      // Set pagination for frontend (all categories loaded)
+      setCategoryTotalCount(categoriesWithSubInfo.length);
+      setCategoryTotalPages(Math.ceil(categoriesWithSubInfo.length / categoryPageSize));
     } catch (error) {
       console.error('Error fetching categories:', error);
       setError('Kategoriler yüklenirken hata oluştu');
     } finally {
       setLoading(false);
     }
-  }, [categoryPageSize, categorySortBy, categorySortDir, searchTerm]);
+  }, [categorySortBy, categorySortDir]);
 
   useEffect(() => {
-    fetchCategories(categoryPage, categoryPageSize, searchTerm);
-  }, [fetchCategories, categoryPage, categoryPageSize, searchTerm]);
+    fetchCategories();
+  }, [fetchCategories]);
 
   // Reset to first page when search or sort changes
   useEffect(() => {
@@ -191,7 +182,7 @@ const Categories = () => {
               toast.innerHTML = `<div class="d-flex"><div class="toast-body fw-semibold">Kategori başarıyla silindi</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
               document.body.appendChild(toast);
               setTimeout(() => { try { document.body.removeChild(toast); } catch { } }, 7000);
-              fetchCategories(categoryPage, categoryPageSize);
+              fetchCategories();
               break;
             } catch (error) {
               const { code: errCode, msg, status } = parseSecurityError(error);
@@ -209,7 +200,7 @@ const Categories = () => {
                 toast.innerHTML = `<div class="d-flex"><div class="toast-body fw-semibold">${msg}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
                 document.body.appendChild(toast);
                 setTimeout(() => { try { document.body.removeChild(toast); } catch { } }, 7000);
-                fetchCategories(categoryPage, categoryPageSize);
+                fetchCategories();
                 break;
               }
               // güvenlik hatası: toast göster, modal açık kalsın ve retry
@@ -247,7 +238,7 @@ const Categories = () => {
             document.body.appendChild(toast);
             setTimeout(() => { try { document.body.removeChild(toast); } catch { } }, 7000);
           } finally {
-            fetchCategories(categoryPage, categoryPageSize);
+            fetchCategories();
           }
         }
       }
@@ -388,7 +379,7 @@ const Categories = () => {
               document.body.appendChild(toast);
               setTimeout(() => { try { document.body.removeChild(toast); } catch { } }, 7000);
               closeSecurityPrompt();
-              fetchCategories(categoryPage, categoryPageSize);
+              fetchCategories();
               break;
             } catch (error) {
               const { code: errCode, msg, status } = parseSecurityError(error);
@@ -405,7 +396,7 @@ const Categories = () => {
               const isSecurity = isAdminSecurityError(errCode, status);
               if (!isSecurity) {
                 closeSecurityPrompt();
-                fetchCategories(categoryPage, categoryPageSize);
+                fetchCategories();
                 break;
               }
               // security error -> retry
@@ -441,7 +432,7 @@ const Categories = () => {
             document.body.appendChild(toast);
             setTimeout(() => { try { document.body.removeChild(toast); } catch { } }, 7000);
           } finally {
-            fetchCategories(categoryPage, categoryPageSize);
+            fetchCategories();
           }
         }
       }

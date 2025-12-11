@@ -278,10 +278,8 @@ const Products = () => {
 
   const fetchMainCategories = async () => {
     try {
-      // Fetch ALL categories without pagination for filter dropdown
-      const response = await axios.get('/api/categories/top-level', {
-        params: { size: 9999 }
-      });
+      // Fetch ALL categories (no pagination on backend)
+      const response = await axios.get('/api/categories/top-level');
       const data = response.data || {};
       // Handle paginated response
       const categoriesList = Array.isArray(data.content) ? data.content : (Array.isArray(data) ? data : []);
