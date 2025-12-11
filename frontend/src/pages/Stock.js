@@ -1134,7 +1134,10 @@ const Stock = () => {
   useEffect(() => {
     const fetchMainCategories = async () => {
       try {
-        const response = await axios.get('/api/categories/top-level');
+        // Fetch ALL categories without pagination for filter dropdown
+        const response = await axios.get('/api/categories/top-level', {
+          params: { size: 9999 }
+        });
         const categoriesData = response.data;
         const list = Array.isArray(categoriesData?.content)
           ? categoriesData.content

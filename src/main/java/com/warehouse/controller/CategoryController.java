@@ -86,7 +86,56 @@ public class CategoryController {
         var countMap = new java.util.HashMap<Long, Long>();
         counts.forEach(c -> countMap.put(c.getCategoryId(), c.getProductCount()));
 
-        if (page != null && size != null) {
+        // If size is very large (>1000), return all categories without pagination
+        if (size != null && size > 1000) {
+            // Non-paginated response - return ALL categories
+            List<Category> topLevelCategories = categoryService.getTopLevelCategories();
+            Map<Long, List<CategoryDto>> childrenMap = loadSubcategoriesForParents(topLevelCategories, countMap);
+            
+            // Apply sorting manually
+            Sort sort = Sort.by(Sort.Direction.fromString(sortDir), sortBy);
+            List<Category> sortedCategories = topLevelCategories;
+            if (sort.isSorted()) {
+                sortedCategories = topLevelCategories.stream()
+                    .sorted((c1, c2) -> {
+                        int comparison = 0;
+                        for (Sort.Order order : sort) {
+                            if ("name".equals(order.getProperty())) {
+                                comparison = c1.getName().compareToIgnoreCase(c2.getName());
+                            } else if ("updatedAt".equals(order.getProperty())) {
+                                comparison = c1.getUpdatedAt() != null && c2.getUpdatedAt() != null 
+                                    ? c1.getUpdatedAt().compareTo(c2.getUpdatedAt()) 
+                                    : 0;
+                            } else if ("createdAt".equals(order.getProperty())) {
+                                comparison = c1.getCreatedAt() != null && c2.getCreatedAt() != null 
+                                    ? c1.getCreatedAt().compareTo(c2.getCreatedAt()) 
+                                    : 0;
+                            }
+                            if (comparison != 0) {
+                                return order.isAscending() ? comparison : -comparison;
+                            }
+                        }
+                        return comparison;
+                    })
+                    .toList();
+            }
+            
+            var result = sortedCategories.stream()
+                .map(cat -> buildCategoryDto(cat, countMap, childrenMap.getOrDefault(cat.getId(), List.of())))
+                .toList();
+            
+            // Return with pagination metadata showing all results in one page
+            PagedResponse<CategoryDto> response = new PagedResponse<>(
+                    result,
+                    0,
+                    result.size(),
+                    (long) result.size(),
+                    1,
+                    true,
+                    true
+            );
+            return ResponseEntity.ok(response);
+        } else if (page != null && size != null) {
             // Paginated response
             int safePage = Math.max(0, page);
             int safeSize = Math.max(1, Math.min(size, 100));

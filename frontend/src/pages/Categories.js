@@ -38,13 +38,13 @@ const Categories = () => {
     { value: 'updatedAt', label: 'Son Güncellemeye Göre', icon: 'fa-clock' }
   ];
 
-  const fetchCategories = useCallback(async (pageOverride = 0, pageSizeOverride) => {
+  const fetchCategories = useCallback(async (pageOverride = 0, pageSizeOverride, searchQuery = '') => {
     try {
       setLoading(true);
       const size = pageSizeOverride ?? categoryPageSize;
       const params = {
-        page: pageOverride,
-        size,
+        page: searchQuery ? 0 : pageOverride,
+        size: searchQuery ? 9999 : size,  // Fetch all categories when searching
         sortBy: categorySortBy,
         sortDir: categorySortDir
       };
@@ -89,11 +89,11 @@ const Categories = () => {
     } finally {
       setLoading(false);
     }
-  }, [categoryPageSize, categorySortBy, categorySortDir]);
+  }, [categoryPageSize, categorySortBy, categorySortDir, searchTerm]);
 
   useEffect(() => {
-    fetchCategories(0, categoryPageSize);
-  }, [fetchCategories, categoryPageSize]);
+    fetchCategories(categoryPage, categoryPageSize, searchTerm);
+  }, [fetchCategories, categoryPage, categoryPageSize, searchTerm]);
 
   // Reset to first page when search or sort changes
   useEffect(() => {
