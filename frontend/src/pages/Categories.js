@@ -4,7 +4,6 @@ import useSecurityCodePrompt from '../components/useSecurityCodePrompt';
 import CategoryForm from '../components/CategoryForm';
 import FilterChips from '../components/FilterChips';
 import ConfirmModal from '../components/ConfirmModal';
-import PaginationControls from '../components/PaginationControls';
 
 const normalizeText = (text) => (text || '').toLocaleLowerCase('tr-TR');
 
@@ -20,10 +19,6 @@ const Categories = () => {
   const [showSubcategoryModal, setShowSubcategoryModal] = useState(false);
   const [selectedParentCategory, setSelectedParentCategory] = useState(null);
   const [selectedCategories, setSelectedCategories] = useState([]);
-  const [categoryPage, setCategoryPage] = useState(0);
-  const [categoryPageSize, setCategoryPageSize] = useState(20);
-  const [categoryTotalPages, setCategoryTotalPages] = useState(0);
-  const [categoryTotalCount, setCategoryTotalCount] = useState(0);
   const [categorySortBy, setCategorySortBy] = useState('name');
   const [categorySortDir, setCategorySortDir] = useState('asc');
   const handleCategorySortChange = (value) => {
@@ -31,7 +26,6 @@ const Categories = () => {
     if (value === 'updatedAt') {
       setCategorySortDir('desc');
     }
-    setCategoryPage(0);
   };
   const categorySortOptions = [
     { value: 'name', label: 'İsme Göre', icon: 'fa-font' },
@@ -70,10 +64,8 @@ const Categories = () => {
         };
       });
       setMainCategories(categoriesWithSubInfo);
-
-      // Set pagination for frontend (all categories loaded)
-      setCategoryTotalCount(categoriesWithSubInfo.length);
-      setCategoryTotalPages(Math.ceil(categoriesWithSubInfo.length / categoryPageSize));
+      
+      // Pagination will be calculated in useEffect based on filteredCategories
     } catch (error) {
       console.error('Error fetching categories:', error);
       setError('Kategoriler yüklenirken hata oluştu');
@@ -86,12 +78,10 @@ const Categories = () => {
     fetchCategories();
   }, [fetchCategories]);
 
-  // Reset to first page when search or sort changes
+  // Refetch when sort changes
   useEffect(() => {
-    if (categoryPage !== 0) {
-      setCategoryPage(0);
-    }
-  }, [searchTerm, categorySortBy, categorySortDir]);
+    fetchCategories();
+  }, [categorySortBy, categorySortDir]);
 
   const toggleCategoryExpansion = useCallback((categoryId) => {
     const id = Number(categoryId);
@@ -272,19 +262,7 @@ const Categories = () => {
     );
   }, [mainCategories, searchTerm]);
 
-  // Update pagination when filtered results change
-  useEffect(() => {
-    if (searchTerm) {
-      // Frontend filtering - update pagination based on filtered results
-      const total = filteredCategories.length;
-      setCategoryTotalCount(total);
-      setCategoryTotalPages(Math.ceil(total / categoryPageSize));
-      if (categoryPage > 0 && categoryPage >= Math.ceil(total / categoryPageSize)) {
-        setCategoryPage(0);
-      }
-    }
-    // If no search term, pagination is handled by fetchCategories
-  }, [filteredCategories.length, searchTerm, categoryPageSize]);
+  // No pagination needed - showing all categories
 
   // Selection handlers
   const allVisibleCategoryIds = filteredCategories.map(c => c.id);
@@ -639,7 +617,7 @@ const Categories = () => {
                 </tr>
               </thead>
               <tbody>
-                {filteredCategories.slice(categoryPage * categoryPageSize, (categoryPage + 1) * categoryPageSize).map((category) => {
+                {filteredCategories.map((category) => {
                   const isSelected = selectedCategories.includes(category.id);
                   return (
                     <React.Fragment key={category.id}>
@@ -808,7 +786,7 @@ const Categories = () => {
           {/* Mobile Card View */}
           <div className="d-lg-none">
             <div className="d-flex flex-column gap-3">
-              {filteredCategories.slice(categoryPage * categoryPageSize, (categoryPage + 1) * categoryPageSize).map((category) => {
+              {filteredCategories.map((category) => {
                 const isSelected = selectedCategories.includes(category.id);
                 const isExpanded = expandedCategories.includes(Number(category.id));
 
