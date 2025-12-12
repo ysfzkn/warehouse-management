@@ -23,7 +23,8 @@ import java.util.List;
         @Index(name = "idx_products_is_active", columnList = "is_active"),
         @Index(name = "idx_products_category_id", columnList = "category_id"),
         @Index(name = "idx_products_brand_id", columnList = "brand_id"),
-        @Index(name = "idx_products_color_id", columnList = "color_id")
+        @Index(name = "idx_products_color_id", columnList = "color_id"),
+        @Index(name = "idx_products_updated_at", columnList = "updated_at")
     }
 )
 @NamedEntityGraph(

@@ -201,6 +201,37 @@ public class StockController {
         return ResponseEntity.ok(total);
     }
 
+    @PostMapping("/quantities-by-warehouse")
+    @Transactional(readOnly = true)
+    public ResponseEntity<List<Map<String, Object>>> getQuantitiesByWarehouse(@RequestBody Map<String, Object> request) {
+        Long warehouseId = request.get("warehouseId") != null ? 
+            Long.valueOf(request.get("warehouseId").toString()) : null;
+        
+        @SuppressWarnings("unchecked")
+        List<Object> productIdsRaw = (List<Object>) request.get("productIds");
+        
+        if (warehouseId == null || productIdsRaw == null || productIdsRaw.isEmpty()) {
+            return ResponseEntity.ok(List.of());
+        }
+        
+        // Convert Integer/Long objects to Long
+        List<Long> productIds = productIdsRaw.stream()
+            .map(id -> Long.valueOf(id.toString()))
+            .toList();
+
+        List<Stock> stocks = stockService.getStocksByWarehouseAndProductIds(warehouseId, productIds);
+        List<Map<String, Object>> result = stocks.stream()
+            .map(stock -> {
+                Map<String, Object> item = new java.util.HashMap<>();
+                item.put("productId", stock.getProduct().getId());
+                item.put("quantity", stock.getQuantity());
+                return item;
+            })
+            .toList();
+        
+        return ResponseEntity.ok(result);
+    }
+
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<StockDto> createStock(@Valid @RequestBody Stock stock) {

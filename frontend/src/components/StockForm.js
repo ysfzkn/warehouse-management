@@ -28,6 +28,7 @@ const StockForm = ({
   onSuccess,
   onCancel,
   onSubmit,
+  onProductCreated,
   disableProductCreate = false,
   mode = 'create'
 }) => {
@@ -52,6 +53,7 @@ const StockForm = ({
   const [showProductModal, setShowProductModal] = useState(false);
   const [localProducts, setLocalProducts] = useState(products || []);
   const [selectedSearchTerm, setSelectedSearchTerm] = useState('');
+  const [warehouseStockQuantities, setWarehouseStockQuantities] = useState({});
 
   useEffect(() => {
     if (!warehouseId && warehouses.length > 0) {
@@ -66,6 +68,40 @@ const StockForm = ({
   useEffect(() => {
     setVisibleProductCount(INITIAL_VISIBLE_PRODUCTS);
   }, [productSearchTerm, localProducts.length]);
+
+  // Fetch warehouse stock quantities when warehouse changes
+  useEffect(() => {
+    const fetchWarehouseStockQuantities = async () => {
+      if (!warehouseId || localProducts.length === 0) {
+        setWarehouseStockQuantities({});
+        return;
+      }
+      
+      try {
+        const productIds = localProducts.map(p => p.id);
+        const response = await axios.post('/api/stocks/quantities-by-warehouse', {
+          warehouseId: Number(warehouseId),
+          productIds
+        });
+        
+        // Convert array response to map for quick lookup
+        const quantitiesMap = {};
+        if (Array.isArray(response.data)) {
+          response.data.forEach(item => {
+            if (item.productId) {
+              quantitiesMap[item.productId] = item.quantity || 0;
+            }
+          });
+        }
+        setWarehouseStockQuantities(quantitiesMap);
+      } catch (error) {
+        console.error('Error fetching warehouse stock quantities:', error);
+        setWarehouseStockQuantities({});
+      }
+    };
+
+    fetchWarehouseStockQuantities();
+  }, [warehouseId, localProducts]);
 
   const filteredProducts = useMemo(() => {
     if (!productSearchTerm.trim()) return localProducts;
@@ -154,20 +190,109 @@ const StockForm = ({
     }, type === 'success' ? 4000 : 7000);
   };
 
-  const handleProductCreateSuccess = (created) => {
+  const handleProductCreateSuccess = async (created) => {
     if (!created) return;
     if (created.error) {
       showToast(created.message || 'Ürün kaydedilemedi', 'danger');
       return;
     }
     const newProduct = Array.isArray(created) ? created[0] : created;
-    setLocalProducts(prev => [newProduct, ...prev]);
-    setShowProductModal(false);
-    showToast('Ürün eklendi ve listeye alındı.', 'success');
-    // Otomatik seç ve formu koru
-    if (newProduct?.id) {
-      handleAddProduct(String(newProduct.id));
-      // form alanları korunuyor, sadece liste güncellendi
+    
+    // Check if warehouse is selected
+    if (!warehouseId) {
+      setErrors(prev => ({ ...prev, warehouseId: 'Önce depo seçiniz' }));
+      showToast('Ürün eklemek için önce depo seçmelisiniz', 'warning');
+      return;
+    }
+    
+    // Fetch the complete product details from backend to ensure all fields are populated
+    try {
+      const response = await axios.get(`/api/products/${newProduct.id}`);
+      const fullProduct = response.data;
+      
+      // Add to the beginning of the list with full details
+      setLocalProducts(prev => [fullProduct, ...prev]);
+      
+      // Fetch warehouse stock quantity for the new product
+      if (warehouseId && fullProduct?.id) {
+        try {
+          const stockResponse = await axios.post('/api/stocks/quantities-by-warehouse', {
+            warehouseId: Number(warehouseId),
+            productIds: [fullProduct.id]
+          });
+          
+          if (Array.isArray(stockResponse.data) && stockResponse.data.length > 0) {
+            const qty = stockResponse.data[0].quantity || 0;
+            setWarehouseStockQuantities(prev => ({
+              ...prev,
+              [fullProduct.id]: qty
+            }));
+          } else {
+            // No stock record exists yet, set to 0
+            setWarehouseStockQuantities(prev => ({
+              ...prev,
+              [fullProduct.id]: 0
+            }));
+          }
+        } catch (stockError) {
+          console.error('Error fetching stock quantity for new product:', stockError);
+          // Default to 0 on error
+          setWarehouseStockQuantities(prev => ({
+            ...prev,
+            [fullProduct.id]: 0
+          }));
+        }
+      }
+      
+      setShowProductModal(false);
+      
+      // Clear search term so the new product is immediately visible
+      setProductSearchTerm('');
+      
+      // Notify parent component about new product
+      if (onProductCreated) {
+        onProductCreated(fullProduct);
+      }
+      
+      // Automatically add the product to selected items
+      // Use the product directly instead of relying on state update
+      const newItem = buildItemFromProduct(fullProduct);
+      setItems(prev => {
+        // Check if already exists
+        if (prev.some(item => String(item.productId) === String(fullProduct.id))) {
+          return prev;
+        }
+        return [newItem, ...prev];
+      });
+      setErrors(prev => ({ ...prev, items: null }));
+      
+      showToast('Ürün eklendi ve otomatik olarak seçildi!', 'success');
+      
+    } catch (error) {
+      console.error('Error fetching new product details:', error);
+      // Fallback to using the created product as-is
+      setLocalProducts(prev => [newProduct, ...prev]);
+      setShowProductModal(false);
+      
+      // Clear search term so the new product is immediately visible
+      setProductSearchTerm('');
+      
+      // Notify parent component about new product
+      if (onProductCreated) {
+        onProductCreated(newProduct);
+      }
+      
+      // Automatically add the product to selected items
+      const newItem = buildItemFromProduct(newProduct);
+      setItems(prev => {
+        if (prev.some(item => String(item.productId) === String(newProduct.id))) {
+          return prev;
+        }
+        return [newItem, ...prev];
+      });
+      setErrors(prev => ({ ...prev, items: null }));
+      
+      showToast('Ürün eklendi ve otomatik olarak seçildi!', 'success');
     }
   };
 
@@ -693,6 +818,7 @@ const StockForm = ({
                           <th>Marka</th>
                           <th>Kategori</th>
                           <th>Renk</th>
+                          <th style={{ width: 120 }} className="text-center">Depodaki Miktar</th>
                           <th>Açıklama</th>
                         </tr>
                       </thead>
@@ -700,6 +826,7 @@ const StockForm = ({
                         {limitedProductOptions.map(product => {
                           const productId = String(product.id);
                           const isSelected = selectedProductMap.has(productId);
+                          const warehouseQty = warehouseStockQuantities[product.id] || 0;
                           return (
                             <tr
                               key={product.id}
@@ -732,6 +859,12 @@ const StockForm = ({
                                   </span>
                                 ) : '-'}
                               </td>
+                              <td className="text-center">
+                                <span className={`badge ${warehouseQty > 0 ? 'bg-primary' : 'bg-secondary'} fs-6 px-3 py-2`}>
+                                  <i className="fas fa-cubes me-1"></i>
+                                  {warehouseQty}
+                                </span>
+                              </td>
                               <td className="text-muted small">
                                 {product.description
                                   ? (product.description.length > 90
@@ -751,6 +884,7 @@ const StockForm = ({
                     {limitedProductOptions.map(product => {
                       const productId = String(product.id);
                       const isSelected = selectedProductMap.has(productId);
+                      const warehouseQty = warehouseStockQuantities[product.id] || 0;
                       return (
                         <div
                           key={product.id}
@@ -759,36 +893,9 @@ const StockForm = ({
                           onClick={() => !isSelected && handleAddProduct(productId)}
                         >
                           <div className="card-body p-3">
-                            <div className="d-flex justify-content-between align-items-start">
+                            <div className="d-flex justify-content-between align-items-start mb-2">
                               <div className="flex-grow-1">
                                 <div className="fw-bold">{product.name}</div>
-                                <div className="d-flex flex-wrap gap-2 mt-1">
-                                  <span className="badge bg-light text-dark border">
-                                    <i className="fas fa-barcode me-1"></i>{product.sku}
-                                  </span>
-                                  {product.brand?.name && (
-                                    <span className="badge bg-light text-dark border">
-                                      <i className="fas fa-copyright me-1"></i>{product.brand.name}
-                                    </span>
-                                  )}
-                                  {product.category?.name && (
-                                    <span className="badge bg-info bg-opacity-10 text-info border border-info">
-                                      <i className="fas fa-tag me-1"></i>
-                                      {product.category.parentName ? `${product.category.parentName} > ` : ''}{product.category.name}
-                                    </span>
-                                  )}
-                                  {product.color?.name && (
-                                    <span className="badge bg-light text-dark border">
-                                      <i className="fas fa-palette me-1"></i>
-                                      {product.color.name}
-                                    </span>
-                                  )}
-                                </div>
-                                {product.description && (
-                                  <div className="text-muted small mt-1">
-                                    {product.description.length > 90 ? `${product.description.substring(0, 90)}...` : product.description}
-                                  </div>
-                                )}
                               </div>
                               <div className="ms-2">
                                 {isSelected ? (
@@ -807,6 +914,41 @@ const StockForm = ({
                                     <i className="fas fa-plus me-1"></i>Ekle
                                   </button>
                                 )}
+                              </div>
+                            </div>
+                            <div className="d-flex flex-wrap gap-2 mb-2">
+                              <span className="badge bg-light text-dark border">
+                                <i className="fas fa-barcode me-1"></i>{product.sku}
+                              </span>
+                              {product.brand?.name && (
+                                <span className="badge bg-light text-dark border">
+                                  <i className="fas fa-copyright me-1"></i>{product.brand.name}
+                                </span>
+                              )}
+                              {product.category?.name && (
+                                <span className="badge bg-info bg-opacity-10 text-info border border-info">
+                                  <i className="fas fa-tag me-1"></i>
+                                  {product.category.parentName ? `${product.category.parentName} > ` : ''}{product.category.name}
+                                </span>
+                              )}
+                              {product.color?.name && (
+                                <span className="badge bg-light text-dark border">
+                                  <i className="fas fa-palette me-1"></i>
+                                  {product.color.name}
+                                </span>
+                              )}
+                            </div>
+                            <div className="d-flex justify-content-between align-items-center">
+                              <div className="text-muted small" style={{ flex: 1 }}>
+                                {product.description && (
+                                  <>{product.description.length > 60 ? `${product.description.substring(0, 60)}...` : product.description}</>
+                                )}
+                              </div>
+                              <div className="ms-2">
+                                <span className={`badge ${warehouseQty > 0 ? 'bg-primary' : 'bg-secondary'} fs-6 px-3 py-2`}>
+                                  <i className="fas fa-cubes me-1"></i>
+                                  {warehouseQty}
+                                </span>
                               </div>
                             </div>
                           </div>

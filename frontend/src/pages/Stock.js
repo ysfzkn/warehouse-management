@@ -866,6 +866,7 @@ const Stock = () => {
       setLoading(true);
 
       // Fetch all products by making multiple requests if needed
+      // Sort by updatedAt DESC to show recently added/updated products first
       let allProducts = [];
       let currentPage = 0;
       const pageSize = 250; // Maximum allowed by backend
@@ -873,7 +874,12 @@ const Stock = () => {
 
       while (hasMore) {
         const response = await axios.get('/api/products', {
-          params: { page: currentPage, size: pageSize }
+          params: { 
+            page: currentPage, 
+            size: pageSize,
+            sortBy: 'updatedAt',
+            sortDir: 'desc'
+          }
         });
         const data = response.data || {};
         const productsList = Array.isArray(data.content) ? data.content : (Array.isArray(data) ? data : []);
@@ -1949,6 +1955,22 @@ const Stock = () => {
   const handleFormCancel = () => {
     setShowForm(false);
     clearUrlQuery();
+  };
+
+  const handleProductCreated = async (newProduct) => {
+    // Add the new product to the beginning of the products list
+    if (newProduct?.id) {
+      try {
+        // Fetch complete product details to ensure consistency
+        const response = await axios.get(`/api/products/${newProduct.id}`);
+        const fullProduct = response.data;
+        setProducts(prev => [fullProduct, ...prev]);
+      } catch (error) {
+        console.error('Error fetching new product for parent list:', error);
+        // Fallback to adding the product as-is
+        setProducts(prev => [newProduct, ...prev]);
+      }
+    }
   };
 
   const handleQuickAdjustSuccess = async () => {
@@ -3231,6 +3253,7 @@ const Stock = () => {
                   onSuccess={stockFormMode === 'request' ? undefined : handleFormSuccess}
                   onSubmit={stockFormMode === 'request' ? handleStockRequestSubmit : undefined}
                   onCancel={handleFormCancel}
+                  onProductCreated={handleProductCreated}
                   disableProductCreate={stockFormMode === 'request'}
                   mode={stockFormMode}
                 />

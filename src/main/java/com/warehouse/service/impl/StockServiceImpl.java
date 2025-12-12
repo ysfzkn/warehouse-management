@@ -138,6 +138,17 @@ public class StockServiceImpl implements StockService {
 
     @Override
     @Transactional(readOnly = true)
+    public List<Stock> getStocksByWarehouseAndProductIds(Long warehouseId, List<Long> productIds) {
+        logger.debug("Fetching stocks by warehouse id: {} and product ids: {}", warehouseId, productIds);
+        if (productIds == null || productIds.isEmpty()) {
+            return List.of();
+        }
+        Warehouse warehouse = findWarehouseOrThrow(warehouseId);
+        return stockRepository.findByWarehouseAndProductIds(warehouse, productIds);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Optional<Stock> getStockByProductAndWarehouse(Long productId, Long warehouseId) {
         logger.debug("Fetching stock by product id: {} and warehouse id: {}", productId, warehouseId);
         Product product = findProductOrThrow(productId);

@@ -29,6 +29,8 @@ public interface StockService {
 
     List<Stock> getStocksByWarehouse(Long warehouseId);
 
+    List<Stock> getStocksByWarehouseAndProductIds(Long warehouseId, List<Long> productIds);
+
     Optional<Stock> getStockByProductAndWarehouse(Long productId, Long warehouseId);
 
     List<Stock> getLowStockItems();
