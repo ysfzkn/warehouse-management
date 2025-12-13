@@ -808,18 +808,18 @@ const StockForm = ({
               ) : (
                 <>
                   {/* Wide table view similar to transfer selection */}
-                  <div className="d-none d-md-block table-responsive border rounded shadow-sm bg-white" style={{ maxHeight: '65vh', overflowY: 'auto' }}>
-                    <table className="table table-hover table-sm mb-0">
+                  <div className="d-none d-md-block border rounded shadow-sm bg-white" style={{ maxHeight: '65vh', overflowY: 'auto', overflowX: 'hidden' }}>
+                    <table className="table table-hover table-sm mb-0" style={{ tableLayout: 'fixed', width: '100%' }}>
                       <thead className="table-light">
                         <tr>
-                          <th style={{ width: 40 }}></th>
-                          <th>Ürün Adı</th>
-                          <th>Stok Kodu</th>
-                          <th>Marka</th>
-                          <th>Kategori</th>
-                          <th>Renk</th>
-                          <th style={{ width: 120 }} className="text-center">Depodaki Miktar</th>
-                          <th>Açıklama</th>
+                          <th style={{ width: '40px' }}></th>
+                          <th style={{ width: '20%' }}>Ürün Adı</th>
+                          <th style={{ width: '12%' }}>Stok Kodu</th>
+                          <th style={{ width: '10%' }}>Marka</th>
+                          <th style={{ width: '15%' }}>Kategori</th>
+                          <th style={{ width: '10%' }}>Renk</th>
+                          <th style={{ width: '120px' }} className="text-center">Depodaki Miktar</th>
+                          <th style={{ width: '18%' }}>Açıklama</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -838,22 +838,28 @@ const StockForm = ({
                                 {isSelected && <i className="fas fa-check text-success"></i>}
                               </td>
                               <td>
-                                <div className="fw-semibold">{product.name}</div>
+                                <div className="fw-semibold" style={{ wordBreak: 'break-word', whiteSpace: 'normal' }}>
+                                  {product.name}
+                                </div>
                               </td>
                               <td>
-                                <span className="badge text-bg-light border">{product.sku}</span>
+                                <span className="badge text-bg-light border" style={{ wordBreak: 'break-all', whiteSpace: 'normal', display: 'inline-block' }}>
+                                  {product.sku}
+                                </span>
                               </td>
-                              <td>{product.brand?.name || '-'}</td>
+                              <td style={{ wordBreak: 'break-word', whiteSpace: 'normal' }}>
+                                {product.brand?.name || '-'}
+                              </td>
                               <td>
                                 {product.category?.name ? (
-                                  <span className="badge bg-info bg-opacity-10 text-info border border-info">
+                                  <span className="badge bg-info bg-opacity-10 text-info border border-info" style={{ whiteSpace: 'normal', display: 'inline-block', wordBreak: 'break-word' }}>
                                     {product.category.parentName ? `${product.category.parentName} > ` : ''}{product.category.name}
                                   </span>
                                 ) : '-'}
                               </td>
                               <td>
                                 {product.color?.name ? (
-                                  <span className="badge bg-light text-dark border">
+                                  <span className="badge bg-light text-dark border" style={{ whiteSpace: 'normal', display: 'inline-block' }}>
                                     <i className="fas fa-palette me-1"></i>
                                     {product.color.name}
                                   </span>
@@ -865,12 +871,8 @@ const StockForm = ({
                                   {warehouseQty}
                                 </span>
                               </td>
-                              <td className="text-muted small">
-                                {product.description
-                                  ? (product.description.length > 90
-                                    ? `${product.description.substring(0, 90)}...`
-                                    : product.description)
-                                  : '-'}
+                              <td className="text-muted small" style={{ wordBreak: 'break-word', whiteSpace: 'normal' }}>
+                                {product.description || '-'}
                               </td>
                             </tr>
                           );
@@ -894,10 +896,10 @@ const StockForm = ({
                         >
                           <div className="card-body p-3">
                             <div className="d-flex justify-content-between align-items-start mb-2">
-                              <div className="flex-grow-1">
-                                <div className="fw-bold">{product.name}</div>
+                              <div className="flex-grow-1" style={{ minWidth: 0 }}>
+                                <div className="fw-bold" style={{ wordBreak: 'break-word' }}>{product.name}</div>
                               </div>
-                              <div className="ms-2">
+                              <div className="ms-2 flex-shrink-0">
                                 {isSelected ? (
                                   <span className="badge bg-success text-white">
                                     <i className="fas fa-check me-1"></i>Seçildi
@@ -917,7 +919,7 @@ const StockForm = ({
                               </div>
                             </div>
                             <div className="d-flex flex-wrap gap-2 mb-2">
-                              <span className="badge bg-light text-dark border">
+                              <span className="badge bg-light text-dark border" style={{ wordBreak: 'break-all' }}>
                                 <i className="fas fa-barcode me-1"></i>{product.sku}
                               </span>
                               {product.brand?.name && (
@@ -939,12 +941,10 @@ const StockForm = ({
                               )}
                             </div>
                             <div className="d-flex justify-content-between align-items-center">
-                              <div className="text-muted small" style={{ flex: 1 }}>
-                                {product.description && (
-                                  <>{product.description.length > 60 ? `${product.description.substring(0, 60)}...` : product.description}</>
-                                )}
+                              <div className="text-muted small" style={{ flex: 1, minWidth: 0, wordBreak: 'break-word' }}>
+                                {product.description || '-'}
                               </div>
-                              <div className="ms-2">
+                              <div className="ms-2 flex-shrink-0">
                                 <span className={`badge ${warehouseQty > 0 ? 'bg-primary' : 'bg-secondary'} fs-6 px-3 py-2`}>
                                   <i className="fas fa-cubes me-1"></i>
                                   {warehouseQty}
