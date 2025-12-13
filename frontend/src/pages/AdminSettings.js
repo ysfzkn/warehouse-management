@@ -15,6 +15,7 @@ const CrudTable = ({
   enableSelection = false,
   onBulkDelete,
   hasSelection = false,
+  selectedCount = 0,
   onToggleAll,
   searchPlaceholder = 'Ara...',
   searchTerm,
@@ -23,7 +24,14 @@ const CrudTable = ({
   <div className="card mb-4">
     <div className="card-header">
       <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-md-between gap-2">
-        <h5 className="mb-0">{title}</h5>
+        <div className="d-flex align-items-center gap-2">
+          <h5 className="mb-0">{title}</h5>
+          {enableSelection && selectedCount > 0 && (
+            <span className="badge bg-primary rounded-pill">
+              {selectedCount} seçili
+            </span>
+          )}
+        </div>
         <div className="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center gap-2 w-100 w-md-auto">
           <div className="flex-grow-1 position-relative">
             <input
@@ -48,7 +56,7 @@ const CrudTable = ({
               disabled={loading || !hasSelection}
             >
               <i className="fas fa-trash-alt me-1"></i>
-              Seçilenleri Sil
+              Seçilenleri Sil {selectedCount > 0 && `(${selectedCount})`}
             </button>
           )}
           <button className="btn btn-primary btn-sm" onClick={onCreate}>
@@ -933,6 +941,7 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
           enableSelection
           onBulkDelete={handleBulkDelete}
           hasSelection={selectedBrandIds.length > 0}
+          selectedCount={selectedBrandIds.length}
           onToggleAll={(checked, visibleItems) => {
             const visibleIds = visibleItems.map(it => it.id);
             setSelectedBrandIds(prev => {
@@ -993,6 +1002,7 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
           enableSelection
           onBulkDelete={handleBulkDelete}
           hasSelection={selectedColorIds.length > 0}
+          selectedCount={selectedColorIds.length}
           onToggleAll={(checked, visibleItems) => {
             const visibleIds = visibleItems.map(it => it.id);
             setSelectedColorIds(prev => {

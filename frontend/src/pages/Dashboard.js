@@ -75,7 +75,12 @@ const Dashboard = () => {
       
       while (hasMore) {
         const response = await axios.get('/api/products', { 
-          params: { page: currentPage, size: pageSize } 
+          params: { 
+            page: currentPage, 
+            size: pageSize,
+            sortBy: 'updatedAt',
+            sortDir: 'desc'
+          } 
         });
         const data = response.data || {};
         const productsList = Array.isArray(data.content) ? data.content : (Array.isArray(data) ? data : []);
@@ -91,12 +96,38 @@ const Dashboard = () => {
         }
       }
       
-      const [warehousesRes, categoriesRes, lowStockRes, outOfStockRes, allStocksRes, brandsRes, colorsRes] = await Promise.all([
+      console.log(`Dashboard: Toplam ${allProducts.length} ürün çekildi`);
+      
+      // Fetch all stocks by making multiple requests if needed
+      let allStocksData = [];
+      let stockPage = 0;
+      const stockPageSize = 250;
+      let hasMoreStocks = true;
+      
+      while (hasMoreStocks) {
+        const stockResponse = await axios.get('/api/stocks', { 
+          params: { size: stockPageSize, page: stockPage } 
+        });
+        const data = stockResponse.data || {};
+        const stocksList = Array.isArray(data.content) ? data.content : (Array.isArray(data) ? data : []);
+        allStocksData = [...allStocksData, ...stocksList];
+        
+        // Check if there are more pages
+        if (data.totalPages !== undefined) {
+          hasMoreStocks = stockPage + 1 < data.totalPages;
+          stockPage++;
+        } else {
+          hasMoreStocks = false;
+        }
+      }
+      
+      console.log(`Dashboard: Toplam ${allStocksData.length} stok kaydı çekildi`);
+      
+      const [warehousesRes, categoriesRes, lowStockRes, outOfStockRes, brandsRes, colorsRes] = await Promise.all([
         axios.get('/api/warehouses'),
         axios.get('/api/categories'),
         axios.get('/api/stocks/low-stock'),
         axios.get('/api/stocks/out-of-stock'),
-        axios.get('/api/stocks', { params: { size: 500, page: 0 } }),
         axios.get('/api/brands'),
         axios.get('/api/colors')
       ]);
@@ -108,8 +139,7 @@ const Dashboard = () => {
       const categories = categoriesRes.data;
       const lowStockItems = Array.isArray(lowStockRes.data) ? lowStockRes.data : (lowStockRes.data?.content || []);
       const outOfStockItems = Array.isArray(outOfStockRes.data) ? outOfStockRes.data : (outOfStockRes.data?.content || []);
-      const allStocksRaw = allStocksRes.data;
-      const allStocksData = Array.isArray(allStocksRaw?.content) ? allStocksRaw.content : (Array.isArray(allStocksRaw) ? allStocksRaw : []);
+      // allStocksData is already fetched above with pagination
       const brands = brandsRes.data || [];
       const colors = colorsRes.data || [];
       
