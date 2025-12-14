@@ -39,18 +39,18 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
     @EntityGraph(value = Stock.GRAPH_WITH_PRODUCT_AND_WAREHOUSE, type = EntityGraph.EntityGraphType.LOAD)
     List<Stock> findByWarehouse(@Param("warehouse") Warehouse warehouse);
 
-    @Query("SELECT s FROM Stock s WHERE s.quantity <= (CASE WHEN s.minStockLevel IS NULL OR s.minStockLevel = 0 THEN 10 ELSE s.minStockLevel END)")
+    @Query("SELECT s FROM Stock s WHERE s.quantity <= (CASE WHEN s.minStockLevel IS NULL OR s.minStockLevel = 0 THEN 2 ELSE s.minStockLevel END)")
     @EntityGraph(value = Stock.GRAPH_WITH_PRODUCT_AND_WAREHOUSE, type = EntityGraph.EntityGraphType.LOAD)
     List<Stock> findLowStockItems();
 
-    @Query("SELECT COUNT(s) FROM Stock s WHERE s.quantity <= (CASE WHEN s.minStockLevel IS NULL OR s.minStockLevel = 0 THEN 10 ELSE s.minStockLevel END)")
+    @Query("SELECT COUNT(s) FROM Stock s WHERE s.quantity <= (CASE WHEN s.minStockLevel IS NULL OR s.minStockLevel = 0 THEN 2 ELSE s.minStockLevel END)")
     long countLowStockItems();
 
     @Query("SELECT s FROM Stock s WHERE s.quantity = 0")
     @EntityGraph(value = Stock.GRAPH_WITH_PRODUCT_AND_WAREHOUSE, type = EntityGraph.EntityGraphType.LOAD)
     List<Stock> findOutOfStockItems();
 
-    @Query("SELECT s FROM Stock s WHERE s.warehouse = :warehouse AND s.quantity <= (CASE WHEN s.minStockLevel IS NULL OR s.minStockLevel = 0 THEN 10 ELSE s.minStockLevel END)")
+    @Query("SELECT s FROM Stock s WHERE s.warehouse = :warehouse AND s.quantity <= (CASE WHEN s.minStockLevel IS NULL OR s.minStockLevel = 0 THEN 2 ELSE s.minStockLevel END)")
     @EntityGraph(value = Stock.GRAPH_WITH_PRODUCT_AND_WAREHOUSE, type = EntityGraph.EntityGraphType.LOAD)
     List<Stock> findLowStockItemsByWarehouse(@Param("warehouse") Warehouse warehouse);
 
@@ -87,7 +87,7 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
           AND (:consignedOnly = false OR COALESCE(s.consignedQuantity, 0) > 0)
           AND (
                 :status = 'ALL'
-                OR (:status = 'LOW' AND s.quantity > 0 AND s.quantity <= (CASE WHEN s.minStockLevel IS NULL OR s.minStockLevel = 0 THEN 10 ELSE s.minStockLevel END))
+                OR (:status = 'LOW' AND s.quantity > 0 AND s.quantity <= (CASE WHEN s.minStockLevel IS NULL OR s.minStockLevel = 0 THEN 2 ELSE s.minStockLevel END))
                 OR (:status = 'OUT' AND s.quantity = 0)
           )
     """)
@@ -129,7 +129,7 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
           AND (:consignedOnly = false OR COALESCE(s.consignedQuantity, 0) > 0)
           AND (
                 :status = 'ALL'
-                OR (:status = 'LOW' AND s.quantity > 0 AND s.quantity <= (CASE WHEN s.minStockLevel IS NULL OR s.minStockLevel = 0 THEN 10 ELSE s.minStockLevel END))
+                OR (:status = 'LOW' AND s.quantity > 0 AND s.quantity <= (CASE WHEN s.minStockLevel IS NULL OR s.minStockLevel = 0 THEN 2 ELSE s.minStockLevel END))
                 OR (:status = 'OUT' AND s.quantity = 0)
           )
     """)

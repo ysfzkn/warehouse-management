@@ -1279,7 +1279,7 @@ const Stock = () => {
 
   const getEffectiveMin = useCallback((stock) => {
     const val = Number(stock?.minStockLevel);
-    if (!Number.isFinite(val) || val <= 0) return 10;
+    if (!Number.isFinite(val) || val <= 0) return 2;
     return val;
   }, []);
 

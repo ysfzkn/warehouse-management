@@ -16,7 +16,7 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
   const [settings, setSettings] = useState({
     productId: null,
     consignedQuantity: 0,
-    minStockLevel: 10,
+    minStockLevel: 2,
     customerName: '',
     customerPhone: '',
     additionNote: ''
@@ -39,7 +39,7 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
       setSettings({
         productId: stock.product?.id || null,
         consignedQuantity: stock.consignedQuantity || 0,
-        minStockLevel: stock.minStockLevel || 10,
+        minStockLevel: stock.minStockLevel || 2,
         customerName: stock.customerName || '',
         customerPhone: stock.customerPhone ? extractPhoneDigits(stock.customerPhone) : '',
         additionNote: stock.additionNote || ''
@@ -174,7 +174,7 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
     const hasChanges = 
       settings.productId !== originalProductId ||
       settings.consignedQuantity !== (stock.consignedQuantity || 0) ||
-      settings.minStockLevel !== (stock.minStockLevel || 10) ||
+      settings.minStockLevel !== (stock.minStockLevel || 2) ||
       settings.additionNote.trim() !== originalAdditionNote ||
       (isEmanetDepo && (
         settings.customerName.trim() !== originalCustomerName ||
