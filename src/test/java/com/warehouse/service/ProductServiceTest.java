@@ -233,4 +233,205 @@ class ProductServiceTest {
         assertEquals(1, result.size());
         verify(productRepository, times(1)).findActiveByBrandAndColor(brand, color);
     }
+
+    // ==================== BULK PRICE UPDATE TESTS ====================
+
+    @Test
+    void bulkAdjustPrices_PercentageIncrease_ShouldUseJPQLBulkUpdate() {
+        com.warehouse.dto.BulkPriceUpdateRequest request = new com.warehouse.dto.BulkPriceUpdateRequest();
+        request.setMode("PERCENTAGE");
+        request.setDirection("INCREASE");
+        request.setValue(BigDecimal.valueOf(10));
+        request.setOnlyActive(true);
+        request.setCategoryId(1L);
+
+        when(productRepository.bulkUpdatePriceByPercentage(
+            BigDecimal.valueOf(10), 1L, null, null, true
+        )).thenReturn(150);
+
+        int result = productService.bulkAdjustPrices(request);
+
+        assertEquals(150, result);
+        verify(productRepository, times(1)).bulkUpdatePriceByPercentage(
+            BigDecimal.valueOf(10), 1L, null, null, true
+        );
+        // Verify that lightweight method is NOT called (JPQL used instead)
+        verify(productRepository, never()).findByOptionalFiltersLightweight(any(), any(), any(), anyBoolean());
+    }
+
+    @Test
+    void bulkAdjustPrices_PercentageDecrease_ShouldUseJPQLBulkUpdate() {
+        com.warehouse.dto.BulkPriceUpdateRequest request = new com.warehouse.dto.BulkPriceUpdateRequest();
+        request.setMode("PERCENTAGE");
+        request.setDirection("DECREASE");
+        request.setValue(BigDecimal.valueOf(15));
+        request.setOnlyActive(true);
+
+        when(productRepository.bulkUpdatePriceByPercentageDecrease(
+            BigDecimal.valueOf(15), null, null, null, true
+        )).thenReturn(200);
+
+        int result = productService.bulkAdjustPrices(request);
+
+        assertEquals(200, result);
+        verify(productRepository, times(1)).bulkUpdatePriceByPercentageDecrease(
+            BigDecimal.valueOf(15), null, null, null, true
+        );
+    }
+
+    @Test
+    void bulkAdjustPrices_AmountIncrease_ShouldUseJPQLBulkUpdate() {
+        com.warehouse.dto.BulkPriceUpdateRequest request = new com.warehouse.dto.BulkPriceUpdateRequest();
+        request.setMode("AMOUNT");
+        request.setDirection("INCREASE");
+        request.setValue(BigDecimal.valueOf(50));
+        request.setOnlyActive(true);
+        request.setBrandId(2L);
+
+        when(productRepository.bulkUpdatePriceByAmount(
+            BigDecimal.valueOf(50), null, 2L, null, true
+        )).thenReturn(75);
+
+        int result = productService.bulkAdjustPrices(request);
+
+        assertEquals(75, result);
+        verify(productRepository, times(1)).bulkUpdatePriceByAmount(
+            BigDecimal.valueOf(50), null, 2L, null, true
+        );
+    }
+
+    @Test
+    void bulkAdjustPrices_AmountDecrease_ShouldUseJPQLBulkUpdate() {
+        com.warehouse.dto.BulkPriceUpdateRequest request = new com.warehouse.dto.BulkPriceUpdateRequest();
+        request.setMode("AMOUNT");
+        request.setDirection("DECREASE");
+        request.setValue(BigDecimal.valueOf(25));
+        request.setOnlyActive(false);
+        request.setColorId(3L);
+
+        when(productRepository.bulkUpdatePriceByAmountDecrease(
+            BigDecimal.valueOf(25), null, null, 3L, false
+        )).thenReturn(100);
+
+        int result = productService.bulkAdjustPrices(request);
+
+        assertEquals(100, result);
+        verify(productRepository, times(1)).bulkUpdatePriceByAmountDecrease(
+            BigDecimal.valueOf(25), null, null, 3L, false
+        );
+    }
+
+    @Test
+    void bulkAdjustPrices_WithAllFilters_ShouldPassAllParameters() {
+        com.warehouse.dto.BulkPriceUpdateRequest request = new com.warehouse.dto.BulkPriceUpdateRequest();
+        request.setMode("PERCENTAGE");
+        request.setDirection("INCREASE");
+        request.setValue(BigDecimal.valueOf(20));
+        request.setOnlyActive(true);
+        request.setCategoryId(1L);
+        request.setBrandId(2L);
+        request.setColorId(3L);
+
+        when(productRepository.bulkUpdatePriceByPercentage(
+            BigDecimal.valueOf(20), 1L, 2L, 3L, true
+        )).thenReturn(50);
+
+        int result = productService.bulkAdjustPrices(request);
+
+        assertEquals(50, result);
+        verify(productRepository, times(1)).bulkUpdatePriceByPercentage(
+            BigDecimal.valueOf(20), 1L, 2L, 3L, true
+        );
+    }
+
+    @Test
+    void bulkAdjustPrices_InvalidMode_ShouldThrowException() {
+        com.warehouse.dto.BulkPriceUpdateRequest request = new com.warehouse.dto.BulkPriceUpdateRequest();
+        request.setMode("INVALID");
+        request.setDirection("INCREASE");
+        request.setValue(BigDecimal.valueOf(10));
+
+        assertThrows(WarehouseManagementException.class, () -> 
+            productService.bulkAdjustPrices(request)
+        );
+    }
+
+    @Test
+    void bulkAdjustPrices_InvalidDirection_ShouldThrowException() {
+        com.warehouse.dto.BulkPriceUpdateRequest request = new com.warehouse.dto.BulkPriceUpdateRequest();
+        request.setMode("PERCENTAGE");
+        request.setDirection("INVALID");
+        request.setValue(BigDecimal.valueOf(10));
+
+        assertThrows(WarehouseManagementException.class, () -> 
+            productService.bulkAdjustPrices(request)
+        );
+    }
+
+    @Test
+    void bulkAdjustPrices_NegativeValue_ShouldThrowException() {
+        com.warehouse.dto.BulkPriceUpdateRequest request = new com.warehouse.dto.BulkPriceUpdateRequest();
+        request.setMode("PERCENTAGE");
+        request.setDirection("INCREASE");
+        request.setValue(BigDecimal.valueOf(-10));
+
+        assertThrows(WarehouseManagementException.class, () -> 
+            productService.bulkAdjustPrices(request)
+        );
+    }
+
+    @Test
+    void bulkAdjustPrices_PercentageTooHigh_ShouldThrowException() {
+        com.warehouse.dto.BulkPriceUpdateRequest request = new com.warehouse.dto.BulkPriceUpdateRequest();
+        request.setMode("PERCENTAGE");
+        request.setDirection("INCREASE");
+        request.setValue(BigDecimal.valueOf(1500)); // > 1000
+
+        assertThrows(WarehouseManagementException.class, () -> 
+            productService.bulkAdjustPrices(request)
+        );
+    }
+
+    @Test
+    void bulkAdjustPrices_NullParameters_ShouldThrowException() {
+        com.warehouse.dto.BulkPriceUpdateRequest request = new com.warehouse.dto.BulkPriceUpdateRequest();
+        // Missing required fields
+
+        assertThrows(WarehouseManagementException.class, () -> 
+            productService.bulkAdjustPrices(request)
+        );
+    }
+
+    @Test
+    void bulkAdjustPrices_WhenJPQLFails_ShouldFallbackToBatchProcessing() {
+        com.warehouse.dto.BulkPriceUpdateRequest request = new com.warehouse.dto.BulkPriceUpdateRequest();
+        request.setMode("PERCENTAGE");
+        request.setDirection("INCREASE");
+        request.setValue(BigDecimal.valueOf(10));
+        request.setOnlyActive(true);
+
+        // Simulate JPQL failure
+        when(productRepository.bulkUpdatePriceByPercentage(any(), any(), any(), any(), anyBoolean()))
+            .thenThrow(new RuntimeException("Database error"));
+
+        // Mock fallback batch processing
+        Product product1 = new Product();
+        product1.setId(1L);
+        product1.setPrice(BigDecimal.valueOf(100));
+
+        Product product2 = new Product();
+        product2.setId(2L);
+        product2.setPrice(BigDecimal.valueOf(200));
+
+        List<Product> products = Arrays.asList(product1, product2);
+        when(productRepository.findByOptionalFiltersLightweight(null, null, null, true))
+            .thenReturn(products);
+        when(productRepository.saveAll(anyList())).thenReturn(products);
+
+        int result = productService.bulkAdjustPrices(request);
+
+        assertEquals(2, result);
+        verify(productRepository, times(1)).findByOptionalFiltersLightweight(null, null, null, true);
+        verify(productRepository, times(1)).saveAll(anyList());
+    }
 }

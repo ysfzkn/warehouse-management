@@ -8,10 +8,12 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
@@ -60,6 +62,87 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     @Query("SELECT p FROM Product p WHERE (:categoryId IS NULL OR p.category.id = :categoryId) AND (:brandId IS NULL OR p.brand.id = :brandId) AND (:colorId IS NULL OR p.color.id = :colorId) AND (:onlyActive = false OR p.isActive = true)")
     @EntityGraph(value = Product.GRAPH_WITH_RELATIONS, type = EntityGraph.EntityGraphType.LOAD)
     List<Product> findByOptionalFilters(@Param("categoryId") Long categoryId,
+                                        @Param("brandId") Long brandId,
+                                        @Param("colorId") Long colorId,
+                                        @Param("onlyActive") boolean onlyActive);
+
+    // Lightweight version without EntityGraph for bulk operations
+    @Query("SELECT p FROM Product p WHERE (:categoryId IS NULL OR p.category.id = :categoryId) AND (:brandId IS NULL OR p.brand.id = :brandId) AND (:colorId IS NULL OR p.color.id = :colorId) AND (:onlyActive = false OR p.isActive = true)")
+    List<Product> findByOptionalFiltersLightweight(@Param("categoryId") Long categoryId,
+                                                   @Param("brandId") Long brandId,
+                                                   @Param("colorId") Long colorId,
+                                                   @Param("onlyActive") boolean onlyActive);
+
+    // Bulk update with native SQL for percentage-based price increase
+    @Modifying
+    @Query(value = """
+            UPDATE products 
+            SET price = ROUND(CAST(price * (1 + :percentage / 100.0) AS numeric), 2)
+            WHERE (:categoryId IS NULL OR category_id = :categoryId)
+              AND (:brandId IS NULL OR brand_id = :brandId)
+              AND (:colorId IS NULL OR color_id = :colorId)
+              AND (CAST(:onlyActive AS boolean) = false OR is_active = CAST(:onlyActive AS boolean))
+            """,
+           nativeQuery = true)
+    int bulkUpdatePriceByPercentage(@Param("percentage") BigDecimal percentage,
+                                    @Param("categoryId") Long categoryId,
+                                    @Param("brandId") Long brandId,
+                                    @Param("colorId") Long colorId,
+                                    @Param("onlyActive") boolean onlyActive);
+
+    // Bulk update with native SQL for percentage-based price decrease
+    @Modifying
+    @Query(value = """
+            UPDATE products 
+            SET price = CASE 
+                WHEN (price * (1 - :percentage / 100.0)) < 0 THEN 0 
+                ELSE ROUND(CAST(price * (1 - :percentage / 100.0) AS numeric), 2) 
+            END
+            WHERE (:categoryId IS NULL OR category_id = :categoryId)
+              AND (:brandId IS NULL OR brand_id = :brandId)
+              AND (:colorId IS NULL OR color_id = :colorId)
+              AND (CAST(:onlyActive AS boolean) = false OR is_active = CAST(:onlyActive AS boolean))
+            """,
+           nativeQuery = true)
+    int bulkUpdatePriceByPercentageDecrease(@Param("percentage") BigDecimal percentage,
+                                            @Param("categoryId") Long categoryId,
+                                            @Param("brandId") Long brandId,
+                                            @Param("colorId") Long colorId,
+                                            @Param("onlyActive") boolean onlyActive);
+
+    // Bulk update with native SQL for fixed amount increase
+    @Modifying
+    @Query(value = """
+            UPDATE products 
+            SET price = ROUND(CAST(price + :amount AS numeric), 2)
+            WHERE (:categoryId IS NULL OR category_id = :categoryId)
+              AND (:brandId IS NULL OR brand_id = :brandId)
+              AND (:colorId IS NULL OR color_id = :colorId)
+              AND (CAST(:onlyActive AS boolean) = false OR is_active = CAST(:onlyActive AS boolean))
+            """,
+           nativeQuery = true)
+    int bulkUpdatePriceByAmount(@Param("amount") BigDecimal amount,
+                                @Param("categoryId") Long categoryId,
+                                @Param("brandId") Long brandId,
+                                @Param("colorId") Long colorId,
+                                @Param("onlyActive") boolean onlyActive);
+
+    // Bulk update with native SQL for fixed amount decrease
+    @Modifying
+    @Query(value = """
+            UPDATE products 
+            SET price = CASE 
+                WHEN (price - :amount) < 0 THEN 0 
+                ELSE ROUND(CAST(price - :amount AS numeric), 2) 
+            END
+            WHERE (:categoryId IS NULL OR category_id = :categoryId)
+              AND (:brandId IS NULL OR brand_id = :brandId)
+              AND (:colorId IS NULL OR color_id = :colorId)
+              AND (CAST(:onlyActive AS boolean) = false OR is_active = CAST(:onlyActive AS boolean))
+            """,
+           nativeQuery = true)
+    int bulkUpdatePriceByAmountDecrease(@Param("amount") BigDecimal amount,
+                                        @Param("categoryId") Long categoryId,
                                         @Param("brandId") Long brandId,
                                         @Param("colorId") Long colorId,
                                         @Param("onlyActive") boolean onlyActive);

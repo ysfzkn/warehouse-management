@@ -324,31 +324,110 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     public int bulkAdjustPrices(BulkPriceUpdateRequest request) {
-        logger.info("Starting bulk price adjustment");
+        logger.info("Starting optimized bulk price adjustment");
         validateBulkRequest(request);
-        List<Product> targets = productRepository.findByOptionalFilters(
+        
+        boolean isIncrease = "INCREASE".equalsIgnoreCase(request.getDirection());
+        boolean isPercentage = "PERCENTAGE".equalsIgnoreCase(request.getMode());
+        BigDecimal value = request.getValue();
+
+        int updatedCount;
+        
+        // Use JPQL bulk update for maximum performance
+        // This executes a single UPDATE query directly in the database
+        try {
+            if (isPercentage) {
+                if (isIncrease) {
+                    updatedCount = productRepository.bulkUpdatePriceByPercentage(
+                        value, 
+                        request.getCategoryId(), 
+                        request.getBrandId(), 
+                        request.getColorId(), 
+                        request.isOnlyActive()
+                    );
+                } else {
+                    updatedCount = productRepository.bulkUpdatePriceByPercentageDecrease(
+                        value, 
+                        request.getCategoryId(), 
+                        request.getBrandId(), 
+                        request.getColorId(), 
+                        request.isOnlyActive()
+                    );
+                }
+            } else {
+                if (isIncrease) {
+                    updatedCount = productRepository.bulkUpdatePriceByAmount(
+                        value, 
+                        request.getCategoryId(), 
+                        request.getBrandId(), 
+                        request.getColorId(), 
+                        request.isOnlyActive()
+                    );
+                } else {
+                    updatedCount = productRepository.bulkUpdatePriceByAmountDecrease(
+                        value, 
+                        request.getCategoryId(), 
+                        request.getBrandId(), 
+                        request.getColorId(), 
+                        request.isOnlyActive()
+                    );
+                }
+            }
+            
+            logger.info("Optimized bulk price adjustment completed. Updated {} products", updatedCount);
+            return updatedCount;
+            
+        } catch (Exception e) {
+            logger.error("Error during bulk price update, falling back to batch processing", e);
+            return bulkAdjustPricesWithBatchProcessing(request, isIncrease, isPercentage, value);
+        }
+    }
+
+    /**
+     * Fallback method using batch processing for bulk price updates.
+     * Used when JPQL bulk update fails.
+     */
+    private int bulkAdjustPricesWithBatchProcessing(BulkPriceUpdateRequest request, 
+                                                     boolean isIncrease, 
+                                                     boolean isPercentage, 
+                                                     BigDecimal value) {
+        logger.info("Using batch processing for bulk price adjustment");
+        
+        // Use lightweight query without EntityGraph to reduce memory footprint
+        List<Product> targets = productRepository.findByOptionalFiltersLightweight(
                 request.getCategoryId(), request.getBrandId(), request.getColorId(), request.isOnlyActive()
         );
+        
         if (targets.isEmpty()) {
             logger.warn(BusinessMessages.NO_PRODUCTS_FOR_BULK);
             return 0;
         }
 
-        boolean isIncrease = "INCREASE".equalsIgnoreCase(request.getDirection());
-        boolean isPercentage = "PERCENTAGE".equalsIgnoreCase(request.getMode());
-        BigDecimal value = request.getValue();
-
-        int updatedCount = 0;
-        for (Product product : targets) {
-            BigDecimal current = product.getPrice() != null ? product.getPrice() : BigDecimal.ZERO;
-            BigDecimal updated = calculateNewPrice(current, value, isIncrease, isPercentage);
-            product.setPrice(updated.setScale(2, RoundingMode.HALF_UP));
-            updatedCount++;
+        // Process in batches to avoid memory issues with large datasets
+        int batchSize = 500; // Process 500 products at a time
+        int totalUpdated = 0;
+        
+        for (int i = 0; i < targets.size(); i += batchSize) {
+            int endIndex = Math.min(i + batchSize, targets.size());
+            List<Product> batch = targets.subList(i, endIndex);
+            
+            for (Product product : batch) {
+                BigDecimal current = product.getPrice() != null ? product.getPrice() : BigDecimal.ZERO;
+                BigDecimal updated = calculateNewPrice(current, value, isIncrease, isPercentage);
+                product.setPrice(updated.setScale(2, RoundingMode.HALF_UP));
+            }
+            
+            productRepository.saveAll(batch);
+            totalUpdated += batch.size();
+            
+            logger.debug("Processed batch {}/{}, total updated: {}", 
+                        (i / batchSize) + 1, 
+                        (targets.size() + batchSize - 1) / batchSize, 
+                        totalUpdated);
         }
 
-        productRepository.saveAll(targets);
-        logger.info("Bulk price adjustment completed. Updated {} products", updatedCount);
-        return updatedCount;
+        logger.info("Batch processing completed. Updated {} products", totalUpdated);
+        return totalUpdated;
     }
 
     private void validateSkuUniqueness(String sku) {
