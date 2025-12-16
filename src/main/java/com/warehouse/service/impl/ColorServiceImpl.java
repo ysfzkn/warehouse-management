@@ -109,7 +109,7 @@ public class ColorServiceImpl implements ColorService {
             logger.warn("Cannot delete color with id={} because it is used by {} products: {}", id, total, productNames);
             throw new WarehouseManagementException(
                     ErrorCode.CANNOT_DELETE_WITH_PRODUCTS,
-                    productNames.toArray(new String[0])
+                    (Object) productNames.toArray(new String[0])
             );
         }
         colorRepository.delete(color);

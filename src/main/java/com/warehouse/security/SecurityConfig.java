@@ -38,6 +38,8 @@ public class SecurityConfig {
                         .requestMatchers(ApiPaths.AUTH, ApiPaths.ACTUATOR, ApiPaths.INFO, ApiPaths.ERROR).permitAll()
                         // SSE stream available to authenticated roles
                         .requestMatchers(ApiPaths.STREAM).hasAnyRole("ADMIN", "STOCK_IN", "STOCK_OUT")
+                        // Cezeri AI assistant
+                        .requestMatchers(ApiPaths.CEZERI).hasAnyRole("ADMIN", "STOCK_IN", "STOCK_OUT")
                         // Stock viewing available to all authenticated users
                         .requestMatchers(org.springframework.http.HttpMethod.GET, ApiPaths.STOCKS).hasAnyRole("ADMIN", "STOCK_IN", "STOCK_OUT")
                         // Stock add operation - ADMIN and STOCK_IN

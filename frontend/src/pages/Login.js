@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
+const CEZERI_LOGO_SRC = '/cezeri-logo.png'; // user will add to frontend/public
+
 const Login = () => {
   const navigate = useNavigate();
   const [username, setUsername] = useState('');
@@ -47,26 +49,41 @@ const Login = () => {
         {/* Left Section - Hero with animated icons */}
         <div className="left-section" style={styles.leftSection}>
           <div style={styles.heroContent}>
-            {/* Logo */}
+            {/* Company logo (top) */}
             <div style={styles.logoContainer}>
               <img
                 src="/company-logo.png"
                 onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = '/company-logo.png'; }}
                 alt="Şahinler DTM"
+                className="brand-logo brand-logo--company"
                 style={styles.logo}
               />
             </div>
 
-            {/* Title */}
-            <h1 className="hero-title" style={styles.heroTitle}>
-              Beyaz Eşya Stok
-              <br />
-              <span style={styles.heroTitleAccent}>Yönetim Sistemi</span>
-            </h1>
+            {/* Headline (left) + Cezeri logo (right, separate column) */}
+            <div className="hero-top-grid">
+              <div className="hero-left-col">
+                <h1 className="hero-title" style={styles.heroTitle}>
+                  Beyaz Eşya Stok
+                  <br />
+                  <span style={styles.heroTitleAccent}>Yönetim Sistemi</span>
+                </h1>
 
-            <p className="hero-subtitle" style={styles.heroSubtitle}>
-              Depo operasyonlarınızı dijitalleştirin, envanter yönetiminizi optimize edin
-            </p>
+                <p className="hero-subtitle" style={styles.heroSubtitle}>
+                  Depo operasyonlarınızı dijitalleştirin, envanter yönetiminizi optimize edin.
+                  <span className="hero-ai-line"> Cezeri ile yapay zekâ destekli hızlı arama ve yönlendirme.</span>
+                </p>
+              </div>
+
+              <div className="hero-right-col" aria-hidden="true">
+                <img
+                  src={CEZERI_LOGO_SRC}
+                  alt="Cezeri"
+                  className="hero-cezeri-logo"
+                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                />
+              </div>
+            </div>
 
             {/* Feature Cards */}
             <div className="features-grid" style={styles.featuresGrid}>
@@ -112,19 +129,21 @@ const Login = () => {
             </div>
 
             {/* Floating Icons Animation */}
-            {floatingIcons.map((item, index) => (
-              <i
-                key={index}
-                className={`fas ${item.icon} floating-icon`}
-                style={{
-                  ...styles.floatingIcon,
-                  left: `${15 + index * 18}%`,
-                  top: `${20 + (index % 3) * 25}%`,
-                  animationDelay: `${item.delay}s`,
-                  animationDuration: `${item.duration}s`,
-                }}
-              ></i>
-            ))}
+            <div className="hero-float-layer" aria-hidden="true">
+              {floatingIcons.map((item, index) => (
+                <i
+                  key={index}
+                  className={`fas ${item.icon} floating-icon`}
+                  style={{
+                    ...styles.floatingIcon,
+                    left: `${15 + index * 18}%`,
+                    top: `${20 + (index % 3) * 25}%`,
+                    animationDelay: `${item.delay}s`,
+                    animationDuration: `${item.duration}s`,
+                  }}
+                ></i>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -227,6 +246,83 @@ const Login = () => {
 
       {/* Inline Styles with Animations */}
       <style>{`
+        .hero-ai-line {
+          display: inline;
+          color: rgba(255,255,255,0.95);
+          font-weight: 700;
+        }
+
+        /* Hero top grid: fixed left text column + independent right logo column */
+        .hero-top-grid {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) minmax(240px, 320px);
+          gap: 28px;
+          align-items: start;
+        }
+        .hero-left-col {
+          min-width: 0;
+        }
+        .hero-right-col {
+          display: flex;
+          align-items: flex-start;
+          justify-content: flex-end;
+          pointer-events: none;
+        }
+        .hero-cezeri-logo {
+          width: 100%;
+          height: auto;
+          max-height: 220px;
+          object-fit: contain;
+          filter: drop-shadow(0 16px 34px rgba(0,210,255,0.32));
+        }
+
+        /* Clip only floating icons, not the logo */
+        .hero-float-layer {
+          position: absolute;
+          inset: 0;
+          overflow: hidden;
+          pointer-events: none;
+          z-index: 1;
+        }
+        .hero-top-grid,
+        .features-grid {
+          position: relative;
+          z-index: 2;
+        }
+        .brand-logo--company {
+          position: relative;
+          z-index: 3;
+        }
+        .brand-logo {
+          display: block;
+          object-fit: contain;
+        }
+        .brand-logo--company {
+          max-height: 56px;
+          width: auto;
+          filter: drop-shadow(0 4px 12px rgba(0,0,0,0.18));
+        }
+
+        @media (max-width: 1250px) {
+          .hero-top-grid {
+            grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
+            gap: 22px;
+          }
+          .hero-cezeri-logo {
+            max-height: 200px;
+          }
+        }
+
+        @media (max-width: 1100px) {
+          .hero-top-grid {
+            grid-template-columns: minmax(0, 1fr) minmax(200px, 240px);
+            gap: 18px;
+          }
+          .hero-cezeri-logo {
+            max-height: 180px;
+          }
+        }
+
         /* Login Icon Container - Base Sizing */
         .login-icon-container {
           width: 64px;
@@ -597,6 +693,17 @@ const Login = () => {
           .left-section { 
             display: none !important; 
           }
+          .brand-logo--company {
+            max-height: 48px;
+          }
+          .brand-logo--cezeri {
+            width: 124px;
+            height: 124px;
+          }
+          .brand-divider {
+            height: 52px;
+            margin: 0 8px;
+          }
           .right-section { 
             width: 100% !important; 
             max-width: 100% !important;
@@ -694,6 +801,17 @@ const Login = () => {
 
         /* ===== SMALL MOBILE ===== */
         @media (max-width: 576px) {
+          .brand-divider {
+            height: 48px;
+            margin: 0 6px;
+          }
+          .brand-logo--company {
+            max-height: 44px;
+          }
+          .brand-logo--cezeri {
+            width: 112px;
+            height: 112px;
+          }
           .right-section {
             padding: 20px 14px !important;
           }
@@ -910,7 +1028,7 @@ const styles = {
     minHeight: '100vh',
     margin: '0 auto',
     padding: '16px 0',
-    flexWrap: 'wrap',
+    flexWrap: 'nowrap',
     alignItems: 'center',
   },
   leftSection: {
@@ -958,6 +1076,9 @@ const styles = {
     maxWidth: '460px',
     lineHeight: '1.6',
     animation: 'fadeIn 1.4s ease-out',
+  },
+  cezeriBadge: {
+    animation: 'fadeIn 1.1s ease-out',
   },
   featuresGrid: {
     display: 'grid',

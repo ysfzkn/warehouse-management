@@ -13,6 +13,7 @@ public final class ApiPaths {
     public static final String INFO = API_BASE + "/info";
     public static final String ERROR = "/error";
     public static final String STREAM = API_BASE + "/stream";
+    public static final String CEZERI = API_BASE + "/cezeri/**";
     public static final String STOCKS = API_BASE + "/stocks/**";
     public static final String STOCK_TRANSFERS = API_BASE + "/stock-transfers/**";
     public static final String STOCK_IMPORTS = API_BASE + "/stock-imports/**";

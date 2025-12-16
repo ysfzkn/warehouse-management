@@ -14,6 +14,7 @@ import AdminAuditDetails from './pages/AdminAuditDetails';
 import StockImportHistory from './pages/StockImportHistory';
 import AdminNotifications from './pages/AdminNotifications';
 import WarehouseActivity from './pages/WarehouseActivity';
+import CezeriAssistantWidget from './components/CezeriAssistantWidget';
 import './App.css';
 
 function App() {
@@ -53,6 +54,8 @@ function App() {
           <Route path="/warehouses/:warehouseId/activity" element={authed && role === 'ADMIN' ? <WarehouseActivity /> : <Navigate to={authed ? '/stock' : '/login'} replace />} />
         </Routes>
       </div>
+      {/* Global, fixed assistant widget (visible on all screens) */}
+      <CezeriAssistantWidget />
     </div>
   );
 }

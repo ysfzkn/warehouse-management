@@ -109,7 +109,7 @@ public class BrandServiceImpl implements BrandService {
             logger.warn("Cannot delete brand with id={} because it is used by {} products: {}", id, total, productNames);
             throw new WarehouseManagementException(
                     ErrorCode.CANNOT_DELETE_WITH_PRODUCTS,
-                    productNames.toArray(new String[0])
+                    (Object) productNames.toArray(new String[0])
             );
         }
         brandRepository.delete(brand);

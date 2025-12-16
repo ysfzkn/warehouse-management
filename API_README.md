@@ -9,19 +9,48 @@ Complete REST API documentation for the Warehouse Management System.
 
 ## 🔐 Authentication
 
-Currently, the API uses Basic Authentication:
+The API uses **JWT Bearer authentication**.
+
+1) Login:
 
 ```http
-Authorization: Basic YWRtaW46YWRtaW4=
+POST /api/auth/login
+Content-Type: application/json
+
+{"username":"admin","password":"admin"}
 ```
 
-**Default Credentials:**
-- Username: `admin`
-- Password: `admin`
+2) Use the returned token:
 
-> **Note:** Update credentials in production via environment variables `APP_ADMIN_USERNAME` and `APP_ADMIN_PASSWORD`
+```http
+Authorization: Bearer <JWT>
+```
 
 ---
+
+## 🤖 Cezeri AI Assistant
+
+### Chat (tool calling enabled)
+
+```http
+POST /api/cezeri/chat
+Authorization: Bearer <JWT>
+Content-Type: application/json
+
+{
+  "messages": [
+    { "role": "user", "content": "Show low stock items for warehouse 3" }
+  ],
+  "allowMutations": false,
+  "ui": { "route": "/stock", "warehouseId": 3 }
+}
+```
+
+**Azure OpenAI env vars (backend):**
+- `AZURE_OPENAI_ENDPOINT`
+- `AZURE_OPENAI_API_KEY`
+- `AZURE_OPENAI_API_VERSION` (optional)
+- `AZURE_OPENAI_GPT51_DEPLOYMENT`
 
 ## 📝 Response Format
 

@@ -253,6 +253,12 @@ SPRING_DATASOURCE_PASSWORD=your_password
 # Application Profile
 SPRING_PROFILES_ACTIVE=prod
 
+# Cezeri (Spring AI + Azure OpenAI)
+AZURE_OPENAI_ENDPOINT=https://<your-resource>.openai.azure.com
+AZURE_OPENAI_API_KEY=<your-key>
+AZURE_OPENAI_API_VERSION=2025-04-01-preview
+AZURE_OPENAI_GPT51_DEPLOYMENT=<your-gpt-5-1-deployment-name>
+
 # Flyway (optional overrides)
 SPRING_FLYWAY_BASELINE_ON_MIGRATE=false
 SPRING_FLYWAY_BASELINE_VERSION=1
@@ -263,6 +269,14 @@ SERVER_PORT=8080
 ```
 
 `deploy.sh` also understands `SKIP_FLYWAY=true` if you need to skip the pre-build migration step locally.
+
+### Cezeri UI Avatars (Required)
+
+Place the two avatar PNGs here (exact filenames):
+- `frontend/public/cezeri-left.png` (default state: facing left)
+- `frontend/public/cezeri-front.png` (hover state: facing user)
+
+The floating Cezeri button will automatically swap images on hover.
 
 ### Application Profiles
 
