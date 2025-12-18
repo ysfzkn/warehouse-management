@@ -101,7 +101,9 @@ public class StockRequestController {
      */
     @PostMapping("/{id}/approve")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<Void> approveRequest(@PathVariable Long id) {
+    public ResponseEntity<Void> approveRequest(@PathVariable Long id,
+                                               @RequestHeader(value = "X-ADMIN-SECURITY-CODE", required = false) String adminSecurityCode) {
+        adminSecurityService.requireSecurityCodeForAdmin(adminSecurityCode);
         stockRequestService.approveRequest(id);
         return ResponseEntity.ok().build();
     }
@@ -112,7 +114,9 @@ public class StockRequestController {
     @PostMapping("/{id}/reject")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Void> rejectRequest(@PathVariable Long id,
-                                                @RequestBody(required = false) Map<String, String> body) {
+                                              @RequestBody(required = false) Map<String, String> body,
+                                              @RequestHeader(value = "X-ADMIN-SECURITY-CODE", required = false) String adminSecurityCode) {
+        adminSecurityService.requireSecurityCodeForAdmin(adminSecurityCode);
         String reason = body != null ? body.get("rejectionReason") : null;
         stockRequestService.rejectRequest(id, reason);
         return ResponseEntity.ok().build();
