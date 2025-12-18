@@ -264,7 +264,7 @@ function defaultSessionMessages() {
     {
       role: 'assistant',
       content:
-        'Merhaba, ben Cezeri. Stok sorgulama, ürün (SKU/isim) arama, düşük stokları inceleme ve size uygun sonraki adımları önermek konularında yardımcı olabilirim.\n\nNe yapmak istersiniz?',
+        'Merhaba, ben Cezeri. \n\nStok sorgulama, ürün (Stok Kodu/isim) arama, düşük stokları inceleme, müşteri/depo bazlı stok sorgulama, depo/stok hareketlerini inceleme gibi konularda size yardımcı olabilirim.\n\nNe yapmak istersiniz?',
     },
   ];
 }

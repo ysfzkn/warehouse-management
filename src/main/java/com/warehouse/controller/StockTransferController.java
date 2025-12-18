@@ -27,7 +27,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.format.annotation.DateTimeFormat;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -53,12 +55,15 @@ public class StockTransferController {
             @RequestParam(required = false) TransferType transferType,
             @RequestParam(required = false) Long sourceWarehouseId,
             @RequestParam(required = false) Long destinationWarehouseId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate,
             @RequestParam(required = false) String productName,
             @RequestParam(required = false) String sku,
             @RequestParam(required = false) String driverName,
             @RequestParam(required = false) String notes,
+            @RequestParam(required = false) String customerQuery,
             @PageableDefault(size = 25, sort = "transferDate", direction = Sort.Direction.DESC) Pageable pageable) {
-        StockTransferFilter filter = buildFilter(status, transferType, sourceWarehouseId, destinationWarehouseId, productName, sku, driverName, notes);
+        StockTransferFilter filter = buildFilter(status, transferType, sourceWarehouseId, destinationWarehouseId, startDate, endDate, productName, sku, driverName, notes, customerQuery);
         Page<StockTransfer> transfers = stockTransferService.getTransfersPaged(filter, pageable);
         List<StockTransferDto> dtos = transferMapper.toDtoList(transfers.getContent());
         StockTransferSummary summary = stockTransferService.getTransferSummary(filter, false);
@@ -114,12 +119,15 @@ public class StockTransferController {
             @RequestParam(required = false) TransferType transferType,
             @RequestParam(required = false) Long sourceWarehouseId,
             @RequestParam(required = false) Long destinationWarehouseId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate,
             @RequestParam(required = false) String productName,
             @RequestParam(required = false) String sku,
             @RequestParam(required = false) String driverName,
             @RequestParam(required = false) String notes,
+            @RequestParam(required = false) String customerQuery,
             @PageableDefault(size = 25, sort = "transferDate", direction = Sort.Direction.DESC) Pageable pageable) {
-        StockTransferFilter filter = buildFilter(status, transferType, sourceWarehouseId, destinationWarehouseId, productName, sku, driverName, notes);
+        StockTransferFilter filter = buildFilter(status, transferType, sourceWarehouseId, destinationWarehouseId, startDate, endDate, productName, sku, driverName, notes, customerQuery);
         Page<StockTransfer> transfers = stockTransferService.getTransfersForCurrentUserPaged(filter, pageable);
         List<StockTransferDto> dtos = transferMapper.toDtoList(transfers.getContent());
         StockTransferSummary summary = stockTransferService.getTransferSummary(filter, true);
@@ -245,19 +253,25 @@ public class StockTransferController {
                                             TransferType transferType,
                                             Long sourceWarehouseId,
                                             Long destinationWarehouseId,
+                                            LocalDateTime startDate,
+                                            LocalDateTime endDate,
                                             String productName,
                                             String sku,
                                             String driverName,
-                                            String notes) {
+                                            String notes,
+                                            String customerQuery) {
         StockTransferFilter filter = new StockTransferFilter();
         filter.setStatus(status);
         filter.setTransferType(transferType);
         filter.setSourceWarehouseId(sourceWarehouseId);
         filter.setDestinationWarehouseId(destinationWarehouseId);
+        filter.setStartDate(startDate);
+        filter.setEndDate(endDate);
         filter.setProductName(productName);
         filter.setSku(sku);
         filter.setDriverName(driverName);
         filter.setNotes(notes);
+        filter.setCustomerQuery(customerQuery);
         return filter;
     }
 

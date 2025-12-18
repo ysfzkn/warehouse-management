@@ -3,6 +3,8 @@ package com.warehouse.dto;
 import com.warehouse.enums.TransferStatus;
 import com.warehouse.enums.TransferType;
 
+import java.time.LocalDateTime;
+
 public class StockTransferFilter {
 
     private TransferStatus status;
@@ -13,6 +15,10 @@ public class StockTransferFilter {
     private String sku;
     private String driverName;
     private String notes;
+    private LocalDateTime startDate;
+    private LocalDateTime endDate;
+    /** Applies mostly to CUSTOMER_DELIVERY transfers (customerFullName / customerPhone) */
+    private String customerQuery;
 
     public TransferStatus getStatus() {
         return status;
@@ -76,6 +82,30 @@ public class StockTransferFilter {
 
     public void setNotes(String notes) {
         this.notes = notes;
+    }
+
+    public LocalDateTime getStartDate() {
+        return startDate;
+    }
+
+    public void setStartDate(LocalDateTime startDate) {
+        this.startDate = startDate;
+    }
+
+    public LocalDateTime getEndDate() {
+        return endDate;
+    }
+
+    public void setEndDate(LocalDateTime endDate) {
+        this.endDate = endDate;
+    }
+
+    public String getCustomerQuery() {
+        return customerQuery;
+    }
+
+    public void setCustomerQuery(String customerQuery) {
+        this.customerQuery = customerQuery;
     }
 }
 

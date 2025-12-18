@@ -54,10 +54,10 @@ public class CezeriChatService {
         if (!CezeriRolePolicy.isAdmin(role) && CezeriRolePolicy.looksAdminOnlyRequest(lastUser)) {
             CezeriChatResponse resp = new CezeriChatResponse();
             resp.message = """
-Bu işlem için **Yönetici yetkisi** gerekiyor. Yetkiniz olmadığı için bunu sizin adınıza gerçekleştiremiyorum.
+                    Bu işlem için **Yönetici yetkisi** gerekiyor. Yetkiniz olmadığı için bunu sizin adınıza gerçekleştiremiyorum.
                     
-                    Sizin yapabilecekleriniz:
-                    %s
+                                        Sizin yapabilecekleriniz:
+                                        %s
                     """.formatted(CezeriRolePolicy.capabilitiesForRole(role));
             resp.suggestedActions = List.of();
             return resp;
