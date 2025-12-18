@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import axios from 'axios';
+import useSecurityCodePrompt from './useSecurityCodePrompt';
 
 /**
  * Quick stock adjustment modal - simplified for fast add/remove operations
@@ -11,22 +12,70 @@ const QuickStockAdjustModal = ({ stock, type, onSuccess, onClose }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  const { askCode: askSecurityCode, SecurityCodePrompt, closePrompt: closeSecurityPrompt } = useSecurityCodePrompt();
 
   const isAdd = type === 'add';
   const canPerform = isAdd 
     ? (role === 'ADMIN' || role === 'STOCK_IN')
     : (role === 'ADMIN' || role === 'STOCK_OUT');
 
+  const adminSecurityErrorCodes = useMemo(() => new Set([
+    'AUTH_002','AUTH_003','AUTH_004','AUTH_005','AUTH_006','AUTH_007',
+    'ADMIN_SECURITY_CODE_REQUIRED','INVALID_ADMIN_SECURITY_CODE','ADMIN_SECURITY_CODE_MISMATCH'
+  ]), []);
+
+  const parseSecurityError = (err) => {
+    const data = err?.response?.data;
+    const code = data?.code || data?.errorCode;
+    const msg = data?.message || data?.error || err?.message || 'Beklenmeyen bir hata oluştu';
+    return { code, msg };
+  };
+
+  const showToast = (message, type = 'success', duration = 6000) => {
+    try {
+      const bgClass =
+        type === 'success' ? 'text-bg-success'
+          : type === 'warning' ? 'text-bg-warning'
+            : type === 'danger' ? 'text-bg-danger'
+              : 'text-bg-secondary';
+
+      const toast = document.createElement('div');
+      toast.className = `toast align-items-center ${bgClass} border-0 position-fixed top-0 end-0 m-3 show`;
+      toast.setAttribute('role', 'alert');
+      toast.style.zIndex = '9999';
+      toast.style.minWidth = '360px';
+      toast.style.maxWidth = '600px';
+      toast.innerHTML = `
+        <div class="d-flex">
+          <div class="toast-body">${message}</div>
+          <button type="button" class="btn-close ${type === 'success' ? 'btn-close-white' : ''} me-2 m-auto" aria-label="Kapat"></button>
+        </div>
+      `;
+      document.body.appendChild(toast);
+      toast.querySelector('.btn-close')?.addEventListener('click', () => {
+        try { document.body.removeChild(toast); } catch {}
+      });
+      setTimeout(() => {
+        try {
+          toast.classList.remove('show');
+          setTimeout(() => { try { document.body.removeChild(toast); } catch {} }, 300);
+        } catch {}
+      }, duration);
+    } catch {}
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
     if (!quantity || parseInt(quantity) <= 0) {
       setError('Geçerli bir miktar giriniz');
+      showToast('Geçerli bir miktar giriniz', 'warning');
       return;
     }
 
     if (!canPerform) {
       setError(`Yetkiniz yok: ${isAdd ? 'Sadece stok ekleme' : 'Sadece stok çıkarma'} yapabilirsiniz`);
+      showToast('Bu işlem için yetkiniz yok.', 'danger');
       return;
     }
 
@@ -41,23 +90,64 @@ const QuickStockAdjustModal = ({ stock, type, onSuccess, onClose }) => {
       }
 
       const endpoint = isAdd ? `/api/stocks/${stock.id}/add` : `/api/stocks/${stock.id}/remove`;
-      const response = await axios.put(endpoint, null, { params });
+      const doRequest = async (headers = {}) => axios.put(endpoint, null, { params, headers });
+
+      let response;
+      if (role !== 'ADMIN') {
+        response = await doRequest();
+      } else {
+        let lastCode = '';
+        let lastErrorMsg = '';
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+          const code = await askSecurityCode({
+            prefill: lastCode,
+            errorMessage: lastErrorMsg || (lastCode ? 'Güvenlik şifresi hatalı, tekrar deneyin.' : ''),
+            persistOnResolve: true,
+            title: 'Yönetici Güvenlik Şifresi',
+            description: `Stok ${isAdd ? 'ekleme' : 'çıkarma'} işlemini tamamlamak için güvenlik şifresini girin.`
+          });
+          if (code === null) {
+            closeSecurityPrompt();
+            setLoading(false);
+            return;
+          }
+          lastCode = code;
+          lastErrorMsg = '';
+          try {
+            response = await doRequest({ 'X-ADMIN-SECURITY-CODE': code });
+            closeSecurityPrompt();
+            break;
+          } catch (err) {
+            const { code: errCode, msg } = parseSecurityError(err);
+            lastErrorMsg = msg;
+            if (!adminSecurityErrorCodes.has(errCode)) {
+              closeSecurityPrompt();
+              throw err;
+            }
+            // security error: loop continues, prompt stays open
+          }
+        }
+      }
 
       if (response.status === 202) {
         setSuccess('✓ Talebiniz oluşturuldu! Yönetici onayı bekleniyor.');
+        showToast('Talebiniz oluşturuldu. Yönetici onayı bekleniyor.', 'success', 7000);
         setTimeout(() => {
           onSuccess();
         }, 1500);
       } else {
         setSuccess(`✓ Stok başarıyla ${isAdd ? 'eklendi' : 'çıkarıldı'}!`);
+        showToast(`Stok başarıyla ${isAdd ? 'eklendi' : 'çıkarıldı'}.`, 'success', 6000);
         setTimeout(() => {
           onSuccess();
         }, 800);
       }
     } catch (error) {
       console.error('Error adjusting stock:', error);
-      const msg = error.response?.data?.message || error.response?.data || 'İşlem sırasında hata oluştu';
+      const msg = error.response?.data?.message || error.response?.data?.error || error.response?.data || 'İşlem sırasında hata oluştu';
       setError(msg);
+      showToast(msg, 'danger', 8000);
     } finally {
       setLoading(false);
     }
@@ -66,9 +156,11 @@ const QuickStockAdjustModal = ({ stock, type, onSuccess, onClose }) => {
   const suggestedAmounts = [1, 5, 10, 20, 50, 100];
 
   return (
-    <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-      <div className="modal-dialog modal-dialog-centered">
-        <div className="modal-content">
+    <>
+      {SecurityCodePrompt}
+      <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+        <div className="modal-dialog modal-dialog-centered">
+          <div className="modal-content">
           <div className={`modal-header ${isAdd ? 'bg-success' : 'bg-danger'} text-white`}>
             <h5 className="modal-title">
               <i className={`fas fa-${isAdd ? 'plus' : 'minus'}-circle me-2`}></i>
@@ -227,7 +319,8 @@ const QuickStockAdjustModal = ({ stock, type, onSuccess, onClose }) => {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 };
 

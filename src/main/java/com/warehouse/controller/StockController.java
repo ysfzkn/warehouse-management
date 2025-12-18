@@ -281,11 +281,13 @@ public class StockController {
     @PutMapping("/{id}/add")
     @PreAuthorize("hasAnyRole('ADMIN', 'STOCK_IN')")
     public ResponseEntity<?> addToStock(@PathVariable Long id, @RequestParam Integer quantity,
-                                        @RequestParam(required = false) String notes) {
+                                        @RequestParam(required = false) String notes,
+                                        @RequestHeader(value = "X-ADMIN-SECURITY-CODE", required = false) String adminSecurityCode) {
         String userRole = CurrentUser.getRole();
         
         // ADMIN users can directly add stock
         if ("ADMIN".equals(userRole)) {
+            adminSecurityService.requireSecurityCodeForAdmin(adminSecurityCode);
             Stock updatedStock = stockService.addToStock(id, quantity);
             try {
                 ssePushService.broadcastCounts();
@@ -318,11 +320,13 @@ public class StockController {
     @PutMapping("/{id}/remove")
     @PreAuthorize("hasAnyRole('ADMIN', 'STOCK_OUT')")
     public ResponseEntity<?> removeFromStock(@PathVariable Long id, @RequestParam Integer quantity,
-                                             @RequestParam(required = false) String notes) {
+                                             @RequestParam(required = false) String notes,
+                                             @RequestHeader(value = "X-ADMIN-SECURITY-CODE", required = false) String adminSecurityCode) {
         String userRole = CurrentUser.getRole();
         
         // ADMIN users can directly remove stock
         if ("ADMIN".equals(userRole)) {
+            adminSecurityService.requireSecurityCodeForAdmin(adminSecurityCode);
             Stock updatedStock = stockService.removeFromStock(id, quantity);
             try {
                 ssePushService.broadcastCounts();
