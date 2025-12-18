@@ -54,7 +54,52 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
   const [transferLoading, setTransferLoading] = useState(true);
   const [transferProcessing, setTransferProcessing] = useState(null);
   const [transferFilter, setTransferFilter] = useState('PENDING');
-  const { askCode: askSecurityCode, SecurityCodePrompt } = useSecurityCodePrompt();
+  const { askCode: askSecurityCode, SecurityCodePrompt, closePrompt: closeSecurityPrompt } = useSecurityCodePrompt();
+
+  const adminSecurityErrorCodes = new Set([
+    'AUTH_002','AUTH_003','AUTH_004','AUTH_005','AUTH_006','AUTH_007',
+    'ADMIN_SECURITY_CODE_REQUIRED','INVALID_ADMIN_SECURITY_CODE','ADMIN_SECURITY_CODE_MISMATCH'
+  ]);
+
+  const parseSecurityError = (err) => {
+    const data = err?.response?.data;
+    const code = data?.code || data?.errorCode;
+    const msg = data?.message || data?.error || err?.message || 'Beklenmeyen bir hata oluştu';
+    return { code, msg };
+  };
+
+  const showToast = (message, type = 'success', duration = 6000) => {
+    try {
+      const bgClass =
+        type === 'success' ? 'text-bg-success'
+          : type === 'warning' ? 'text-bg-warning'
+            : type === 'danger' ? 'text-bg-danger'
+              : 'text-bg-secondary';
+
+      const toast = document.createElement('div');
+      toast.className = `toast align-items-center ${bgClass} border-0 position-fixed top-0 end-0 m-3 show`;
+      toast.setAttribute('role', 'alert');
+      toast.style.zIndex = '10001';
+      toast.style.minWidth = '360px';
+      toast.style.maxWidth = '680px';
+      toast.innerHTML = `
+        <div class="d-flex">
+          <div class="toast-body">${message}</div>
+          <button type="button" class="btn-close ${type === 'success' ? 'btn-close-white' : ''} me-2 m-auto" aria-label="Kapat"></button>
+        </div>
+      `;
+      document.body.appendChild(toast);
+      toast.querySelector('.btn-close')?.addEventListener('click', () => {
+        try { document.body.removeChild(toast); } catch {}
+      });
+      setTimeout(() => {
+        try {
+          toast.classList.remove('show');
+          setTimeout(() => { try { document.body.removeChild(toast); } catch {} }, 300);
+        } catch {}
+      }, duration);
+    } catch {}
+  };
 
   useEffect(() => {
     fetchStockRequests();
@@ -135,11 +180,45 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
   const handleApprove = async (requestId) => {
     try {
       setProcessing(requestId);
-      await axios.post(`/api/stock-requests/${requestId}/approve`);
+      let lastCode = '';
+      let lastErrorMsg = '';
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        const code = await askSecurityCode({
+          prefill: lastCode,
+          errorMessage: lastErrorMsg || (lastCode ? 'Güvenlik şifresi hatalı, tekrar deneyin.' : ''),
+          persistOnResolve: true,
+          title: 'Yönetici Güvenlik Şifresi',
+          description: 'Stok talebini onaylamak için güvenlik şifresini girin.'
+        });
+        if (code === null) {
+          closeSecurityPrompt();
+          return;
+        }
+        lastCode = code;
+        lastErrorMsg = '';
+        try {
+          await axios.post(`/api/stock-requests/${requestId}/approve`, null, {
+            headers: { 'X-ADMIN-SECURITY-CODE': code }
+          });
+          closeSecurityPrompt();
+          break;
+        } catch (err) {
+          const { code: errCode, msg } = parseSecurityError(err);
+          lastErrorMsg = msg;
+          if (!adminSecurityErrorCodes.has(errCode)) {
+            closeSecurityPrompt();
+            throw err;
+          }
+          // security error: retry
+        }
+      }
       await fetchStockRequests();
       if (onApprove) onApprove();
+      showToast('Talep onaylandı.', 'success', 6000);
     } catch (error) {
-      alert(error.response?.data?.message || 'Onaylama hatası');
+      const msg = error.response?.data?.message || error.response?.data?.error || 'Onaylama hatası';
+      showToast(msg, 'danger', 8000);
     } finally {
       setProcessing(null);
     }
@@ -150,17 +229,51 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
       setTransferProcessing(transferId);
       const normalizedNote = (approvalNote || '').toUpperCase();
       const isDeleteRequest = !!deleteRequestFlag || normalizedNote === 'DELETE_REQUEST' || normalizedNote === 'SILME_TALEBI';
-      const headers = {};
-      if (isDeleteRequest) {
-        const code = await askSecurityCode();
-        if (code === null) return;
-        headers['X-ADMIN-SECURITY-CODE'] = code;
+      if (!isDeleteRequest) {
+        await axios.post(`/api/stock-transfers/${transferId}/approve-start`, { note: approvalNote });
+      } else {
+        let lastCode = '';
+        let lastErrorMsg = '';
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+          const code = await askSecurityCode({
+            prefill: lastCode,
+            errorMessage: lastErrorMsg || (lastCode ? 'Güvenlik şifresi hatalı, tekrar deneyin.' : ''),
+            persistOnResolve: true,
+            title: 'Yönetici Güvenlik Şifresi',
+            description: 'Silme talebini onaylamak için güvenlik şifresini girin.'
+          });
+          if (code === null) {
+            closeSecurityPrompt();
+            return;
+          }
+          lastCode = code;
+          lastErrorMsg = '';
+          try {
+            await axios.post(
+              `/api/stock-transfers/${transferId}/approve-start`,
+              { note: approvalNote },
+              { headers: { 'X-ADMIN-SECURITY-CODE': code } }
+            );
+            closeSecurityPrompt();
+            break;
+          } catch (err) {
+            const { code: errCode, msg } = parseSecurityError(err);
+            lastErrorMsg = msg;
+            if (!adminSecurityErrorCodes.has(errCode)) {
+              closeSecurityPrompt();
+              throw err;
+            }
+            // security error: retry
+          }
+        }
       }
-      await axios.post(`/api/stock-transfers/${transferId}/approve-start`, { note: approvalNote }, { headers });
       await fetchTransferApprovals();
       if (onApprove) onApprove();
+      showToast('Transfer onaylandı.', 'success', 6000);
     } catch (error) {
-      alert(error.response?.data?.message || 'Onaylama hatası');
+      const msg = error.response?.data?.message || error.response?.data?.error || 'Onaylama hatası';
+      showToast(msg, 'danger', 8000);
     } finally {
       setTransferProcessing(null);
     }
@@ -176,22 +289,58 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
         setRejectionModal({ show: false, id: null, reason: '', type: 'transfer' });
         await fetchTransferApprovals();
         if (onApprove) onApprove();
+        showToast('Transfer reddedildi.', 'success', 6000);
       } catch (error) {
-        alert(error.response?.data?.message || 'Reddetme hatası');
+        const msg = error.response?.data?.message || error.response?.data?.error || 'Reddetme hatası';
+        showToast(msg, 'danger', 8000);
       } finally {
         setTransferProcessing(null);
       }
     } else {
       try {
         setProcessing(rejectionModal.id);
-        await axios.post(`/api/stock-requests/${rejectionModal.id}/reject`, {
-          rejectionReason: rejectionModal.reason
-        });
+        let lastCode = '';
+        let lastErrorMsg = '';
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+          const code = await askSecurityCode({
+            prefill: lastCode,
+            errorMessage: lastErrorMsg || (lastCode ? 'Güvenlik şifresi hatalı, tekrar deneyin.' : ''),
+            persistOnResolve: true,
+            title: 'Yönetici Güvenlik Şifresi',
+            description: 'Stok talebini reddetmek için güvenlik şifresini girin.'
+          });
+          if (code === null) {
+            closeSecurityPrompt();
+            return;
+          }
+          lastCode = code;
+          lastErrorMsg = '';
+          try {
+            await axios.post(`/api/stock-requests/${rejectionModal.id}/reject`, {
+              rejectionReason: rejectionModal.reason
+            }, {
+              headers: { 'X-ADMIN-SECURITY-CODE': code }
+            });
+            closeSecurityPrompt();
+            break;
+          } catch (err) {
+            const { code: errCode, msg } = parseSecurityError(err);
+            lastErrorMsg = msg;
+            if (!adminSecurityErrorCodes.has(errCode)) {
+              closeSecurityPrompt();
+              throw err;
+            }
+            // security error: retry
+          }
+        }
         setRejectionModal({ show: false, id: null, reason: '', type: 'stock' });
         await fetchStockRequests();
         if (onApprove) onApprove();
+        showToast('Talep reddedildi.', 'success', 6000);
       } catch (error) {
-        alert(error.response?.data?.message || 'Reddetme hatası');
+        const msg = error.response?.data?.message || error.response?.data?.error || 'Reddetme hatası';
+        showToast(msg, 'danger', 8000);
       } finally {
         setProcessing(null);
       }
