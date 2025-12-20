@@ -749,6 +749,59 @@ const Stock = () => {
     };
   }, [brandId, colorId, selectedWarehouseId, selectedCategory, selectedSubcategory, showReserved, showConsigned, searchTerm]);
 
+  const handleExportToExcel = useCallback(async () => {
+    try {
+      const params = {
+        ...buildStockFilterParams(),
+        status: filter
+      };
+      
+      // Remove undefined values
+      Object.keys(params).forEach(key => params[key] === undefined && delete params[key]);
+      
+      const response = await axios.get('/api/stocks/export', {
+        params,
+        responseType: 'blob'
+      });
+      
+      // Create download link
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      
+      // Get filename from Content-Disposition header or use default
+      const contentDisposition = response.headers['content-disposition'];
+      let filename = 'stok-raporu.xlsx';
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+        if (filenameMatch && filenameMatch[1]) {
+          filename = filenameMatch[1].replace(/['"]/g, '');
+        }
+      }
+      
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      setSuccessToast({ show: true, message: 'Excel dosyası başarıyla indirildi.' });
+      if (toastTimeoutRef.current) {
+        clearTimeout(toastTimeoutRef.current);
+      }
+      toastTimeoutRef.current = setTimeout(() => {
+        setSuccessToast({ show: false, message: '' });
+      }, 4000);
+    } catch (error) {
+      console.error('Error exporting to Excel:', error);
+      setErrorModal({
+        show: true,
+        title: 'Excel Export Hatası',
+        message: error.response?.data?.message || 'Excel dosyası oluşturulurken bir hata oluştu. Lütfen tekrar deneyin.'
+      });
+    }
+  }, [buildStockFilterParams, filter]);
+
   const fetchStocks = useCallback(async (pageOverride = 0, pageSizeOverride) => {
     const size = pageSizeOverride ?? stockPageSize;
     const sortByParam = stockSortBy === 'lastUpdated'
@@ -2381,6 +2434,12 @@ const Stock = () => {
                 <i className="fas fa-plus me-2"></i>
                 Yeni Stok Kaydı
               </button>
+              {!showTransferHistory && (
+                <button className="btn btn-info text-white" onClick={handleExportToExcel}>
+                  <i className="fas fa-file-excel me-2"></i>
+                  Excel'e Aktar
+                </button>
+              )}
               <button className="btn btn-success" onClick={handleShowTransferHistory}>
                 <i className={`fas fa-${showTransferHistory ? 'cubes' : 'exchange-alt'} me-2`}></i>
                 {showTransferHistory ? 'Stok Listesi' : 'Transfer Geçmişi'}
@@ -2423,6 +2482,12 @@ const Stock = () => {
                   >
                     <i className="fas fa-play me-2"></i>
                     Transfer Başlat
+                  </button>
+                )}
+                {!showTransferHistory && (
+                  <button className="btn btn-info text-white" onClick={handleExportToExcel}>
+                    <i className="fas fa-file-excel me-2"></i>
+                    Excel'e Aktar
                   </button>
                 )}
                 <button className="btn btn-success" onClick={handleShowTransferHistory}>

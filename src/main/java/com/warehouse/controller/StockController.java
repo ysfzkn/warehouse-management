@@ -8,6 +8,7 @@ import com.warehouse.entity.Stock;
 import com.warehouse.service.StockService;
 import com.warehouse.service.StockRequestService;
 import com.warehouse.service.AdminSecurityService;
+import com.warehouse.service.StockExportService;
 import com.warehouse.enums.StockRequestType;
 import com.warehouse.util.CurrentUser;
 import jakarta.validation.Valid;
@@ -17,7 +18,9 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.JpaSort;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -25,7 +28,10 @@ import org.springframework.transaction.annotation.Transactional;
 import com.warehouse.service.SsePushService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 @RestController
@@ -37,14 +43,17 @@ public class StockController {
     private final SsePushService ssePushService;
     private final StockRequestService stockRequestService;
     private final AdminSecurityService adminSecurityService;
+    private final StockExportService stockExportService;
     private static final Logger logger = LoggerFactory.getLogger(StockController.class);
+    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss", Locale.forLanguageTag("tr-TR"));
 
     @Autowired
-    public StockController(StockService stockService, SsePushService ssePushService, StockRequestService stockRequestService, AdminSecurityService adminSecurityService) {
+    public StockController(StockService stockService, SsePushService ssePushService, StockRequestService stockRequestService, AdminSecurityService adminSecurityService, StockExportService stockExportService) {
         this.stockService = stockService;
         this.ssePushService = ssePushService;
         this.stockRequestService = stockRequestService;
         this.adminSecurityService = adminSecurityService;
+        this.stockExportService = stockExportService;
     }
 
     @GetMapping
@@ -68,16 +77,8 @@ public class StockController {
         Sort sort = resolveSort(sortBy, sortDir);
         Pageable pageable = PageRequest.of(safePage, safeSize, sort);
 
-        StockFilter filter = new StockFilter();
-        filter.setBrandId(brandId);
-        filter.setColorId(colorId);
-        filter.setWarehouseId(warehouseId);
-        filter.setCategoryId(categoryId);
-        filter.setSubCategoryId(subCategoryId);
-        filter.setReservedOnly(Boolean.TRUE.equals(reservedOnly));
-        filter.setConsignedOnly(Boolean.TRUE.equals(consignedOnly));
-        filter.setSearch(search != null && !search.isBlank() ? search.trim() : null);
-        filter.setStatus(StockFilter.Status.from(status));
+        StockFilter filter = buildStockFilter(brandId, colorId, warehouseId, categoryId, 
+                subCategoryId, reservedOnly, consignedOnly, search, status);
 
         Page<Stock> stocks = stockService.getStocks(filter, pageable);
         List<StockDto> content = stocks.getContent().stream().map(this::toDto).toList();
@@ -199,6 +200,75 @@ public class StockController {
 
         Long total = stockService.getTotalQuantityByFilter(filter);
         return ResponseEntity.ok(total);
+    }
+
+    /**
+     * Exports stock data to Excel format based on provided filter parameters.
+     * 
+     * @param brandId optional brand filter
+     * @param colorId optional color filter
+     * @param warehouseId optional warehouse filter
+     * @param categoryId optional category filter
+     * @param subCategoryId optional subcategory filter
+     * @param reservedOnly filter for reserved stocks only
+     * @param consignedOnly filter for consigned stocks only
+     * @param search search term for product name, SKU, warehouse, etc.
+     * @param status stock status filter (all, low-stock, out-of-stock)
+     * @return Excel file as downloadable resource
+     */
+    @GetMapping("/export")
+    @Transactional(readOnly = true)
+    public ResponseEntity<org.springframework.core.io.Resource> exportToExcel(
+            @RequestParam(required = false) Long brandId,
+            @RequestParam(required = false) Long colorId,
+            @RequestParam(required = false) Long warehouseId,
+            @RequestParam(required = false) Long categoryId,
+            @RequestParam(required = false) Long subCategoryId,
+            @RequestParam(required = false) Boolean reservedOnly,
+            @RequestParam(required = false) Boolean consignedOnly,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false, defaultValue = "all") String status) {
+        
+        logger.debug("Excel export requested with filters - brandId: {}, colorId: {}, warehouseId: {}, categoryId: {}, subCategoryId: {}, status: {}", 
+                brandId, colorId, warehouseId, categoryId, subCategoryId, status);
+        
+        try {
+            StockFilter filter = buildStockFilter(brandId, colorId, warehouseId, categoryId, 
+                    subCategoryId, reservedOnly, consignedOnly, search, status);
+            
+            org.springframework.core.io.Resource resource = stockExportService.exportToExcel(filter);
+            String filename = generateExportFilename();
+            
+            logger.info("Excel export completed successfully");
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                    .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                    .body(resource);
+        } catch (Exception e) {
+            logger.error("Failed to export stock data to Excel", e);
+            throw e;
+        }
+    }
+    
+    private StockFilter buildStockFilter(Long brandId, Long colorId, Long warehouseId, 
+                                        Long categoryId, Long subCategoryId, 
+                                        Boolean reservedOnly, Boolean consignedOnly, 
+                                        String search, String status) {
+        StockFilter filter = new StockFilter();
+        filter.setBrandId(brandId);
+        filter.setColorId(colorId);
+        filter.setWarehouseId(warehouseId);
+        filter.setCategoryId(categoryId);
+        filter.setSubCategoryId(subCategoryId);
+        filter.setReservedOnly(Boolean.TRUE.equals(reservedOnly));
+        filter.setConsignedOnly(Boolean.TRUE.equals(consignedOnly));
+        filter.setSearch(search != null && !search.isBlank() ? search.trim() : null);
+        filter.setStatus(StockFilter.Status.from(status));
+        return filter;
+    }
+    
+    private String generateExportFilename() {
+        return "stok-raporu_" + LocalDateTime.now().format(DATE_FORMATTER) + ".xlsx";
     }
 
     @PostMapping("/quantities-by-warehouse")
