@@ -15,6 +15,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.JpaSort;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.stereotype.Component;
+import jakarta.annotation.Nullable;
 
 import java.util.Locale;
 import java.util.List;
@@ -124,9 +125,20 @@ public class CezeriStockTools {
     }
 
     @Tool(description = "Get total stock quantity in Emanet Depo. Optional customerQuery narrows by customer name/phone; optional warehouseId narrows to a specific emanet warehouse. This is NOT the same as 'emanete ayrılmış miktar' in normal depolar.")
-    public Long totalEmanetDepotStockQuantity(String customerQuery,
-                                              Long warehouseId) {
-        String q = customerQuery != null ? customerQuery.trim() : "";
+    public Long totalEmanetDepotStockQuantity(@Nullable String customerQuery,
+                                              @Nullable String warehouseIdStr) {
+        // Parse warehouseId - handle empty string from Ollama
+        Long warehouseId = null;
+        if (warehouseIdStr != null && !warehouseIdStr.isBlank()) {
+            try {
+                warehouseId = Long.parseLong(warehouseIdStr.trim());
+            } catch (NumberFormatException e) {
+                // Invalid format, treat as null
+                warehouseId = null;
+            }
+        }
+        
+        String q = customerQuery != null && !customerQuery.isBlank() ? customerQuery.trim() : "";
         boolean searchEnabled = !q.isBlank();
         String patternRaw = searchEnabled ? "%" + q + "%" : "%";
         String patternLower = searchEnabled ? "%" + q.toLowerCase(Locale.ROOT) + "%" : "%";
@@ -152,7 +164,7 @@ public class CezeriStockTools {
     }
 
     @Tool(description = "Get customer-independent totals for a product in Emanet Depo. If multiple customers have records, this still returns the total. Optional warehouseId narrows to a specific emanet warehouse.")
-    public EmanetProductTotals emanetDepotTotalsForProduct(Long productId, Long warehouseId) {
+    public EmanetProductTotals emanetDepotTotalsForProduct(Long productId, @Nullable Long warehouseId) {
         if (productId == null) return null;
         Long totalQty = stockRepository.sumEmanetDepotQuantityByProduct(WarehouseType.EMANET_DEPO, warehouseId, productId);
         Long totalAvail = stockRepository.sumEmanetDepotAvailableByProduct(WarehouseType.EMANET_DEPO, warehouseId, productId);
@@ -163,12 +175,40 @@ public class CezeriStockTools {
     }
 
     @Tool(description = "List Emanet Depo stock records for a customer name or phone. Optional warehouseId narrows to a specific emanet warehouse.")
-    public PagedResponse<StockDto> listEmanetStocksByCustomer(String customerQuery,
-                                                              Long warehouseId,
-                                                              Integer page,
-                                                              Integer size) {
-        int safePage = page != null && page >= 0 ? page : 0;
-        int safeSize = size != null ? Math.min(Math.max(size, 1), 100) : 20;
+    public PagedResponse<StockDto> listEmanetStocksByCustomer(@Nullable String customerQuery,
+                                                              @Nullable String warehouseIdStr,
+                                                              @Nullable String pageStr,
+                                                              @Nullable String sizeStr) {
+        // Parse warehouseId - handle empty string from Ollama
+        Long warehouseId = null;
+        if (warehouseIdStr != null && !warehouseIdStr.isBlank()) {
+            try {
+                warehouseId = Long.parseLong(warehouseIdStr.trim());
+            } catch (NumberFormatException e) {
+                warehouseId = null;
+            }
+        }
+        
+        // Parse page and size - handle empty string from Ollama
+        int safePage = 0;
+        if (pageStr != null && !pageStr.isBlank()) {
+            try {
+                int parsed = Integer.parseInt(pageStr.trim());
+                safePage = parsed >= 0 ? parsed : 0;
+            } catch (NumberFormatException e) {
+                safePage = 0;
+            }
+        }
+        
+        int safeSize = 20;
+        if (sizeStr != null && !sizeStr.isBlank()) {
+            try {
+                int parsed = Integer.parseInt(sizeStr.trim());
+                safeSize = Math.min(Math.max(parsed, 1), 100);
+            } catch (NumberFormatException e) {
+                safeSize = 20;
+            }
+        }
         Pageable pageable = PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.DESC, "lastUpdated"));
 
         String q = customerQuery != null ? customerQuery.trim() : "";
@@ -210,10 +250,29 @@ public class CezeriStockTools {
     }
 
     @Tool(description = "Find matching customers in Emanet Depo by partial name or phone. Use this when the user might refer to multiple customers (e.g., same first name). Returns a short list of options (name + masked phone) so you can ask 'hangisi?'.")
-    public List<EmanetCustomerOption> findEmanetCustomerOptions(String customerQuery,
-                                                                Long warehouseId,
-                                                                Integer limit) {
-        int safeLimit = limit != null ? Math.min(Math.max(limit, 1), 10) : 5;
+    public List<EmanetCustomerOption> findEmanetCustomerOptions(@Nullable String customerQuery,
+                                                                @Nullable String warehouseIdStr,
+                                                                @Nullable String limitStr) {
+        // Parse warehouseId - handle empty string from Ollama
+        Long warehouseId = null;
+        if (warehouseIdStr != null && !warehouseIdStr.isBlank()) {
+            try {
+                warehouseId = Long.parseLong(warehouseIdStr.trim());
+            } catch (NumberFormatException e) {
+                warehouseId = null;
+            }
+        }
+        
+        // Parse limit - handle empty string from Ollama
+        int safeLimit = 5;
+        if (limitStr != null && !limitStr.isBlank()) {
+            try {
+                int parsed = Integer.parseInt(limitStr.trim());
+                safeLimit = Math.min(Math.max(parsed, 1), 10);
+            } catch (NumberFormatException e) {
+                safeLimit = 5;
+            }
+        }
         Pageable pageable = PageRequest.of(0, safeLimit, Sort.by(Sort.Direction.ASC, "customerName"));
 
         String q = customerQuery != null ? customerQuery.trim() : "";

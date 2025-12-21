@@ -16,6 +16,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.async.AsyncRequestTimeoutException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.HashMap;
 import java.util.List;
@@ -164,6 +165,23 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Handles static resource not found errors (e.g., manifest.json, favicon.ico).
+     * These are normal browser requests and should not be logged as errors.
+     */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<?> handleNoResourceFoundException(
+            NoResourceFoundException ex, HttpServletRequest request) {
+        
+        String uri = request.getRequestURI();
+        // Static resources (manifest.json, favicon.ico, etc.) are normal browser requests
+        // Log at debug level instead of error level
+        logger.debug("Static resource not found: {}", uri);
+        
+        // Return 404 without body
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+    }
+
+    /**
      * Handles timeout events for async/SSE requests.
      * For the SSE stream (/api/stream), this is considered a normal situation
      * (client closed tab, network idle vs.), bu yüzden stack trace loglamıyoruz.
@@ -186,13 +204,13 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ErrorResponse> handleGenericException(
+    public ResponseEntity<?> handleGenericException(
             Exception ex, HttpServletRequest request) {
         // Avoid writing JSON on SSE endpoint which uses text/event-stream
         String uri = request.getRequestURI();
         if (uri != null && uri.startsWith("/api/stream")) {
             logger.error("Unhandled exception on SSE stream at path={} : {}", uri, ex.getMessage(), ex);
-            return new ResponseEntity<>(null, HttpStatus.INTERNAL_SERVER_ERROR);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
         ErrorResponse errorResponse = new ErrorResponse(
                 ErrorCode.INTERNAL_SERVER_ERROR.getCode(),

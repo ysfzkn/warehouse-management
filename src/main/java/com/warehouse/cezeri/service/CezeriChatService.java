@@ -17,7 +17,8 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 
 /**
- * Cezeri chat orchestration (Spring AI + Azure OpenAI + tool calling).
+ * Cezeri chat orchestration (Spring AI + Azure OpenAI/Ollama + tool calling).
+ * Provider selection via app.ai.provider property.
  */
 @Service
 @Profile("!test")
