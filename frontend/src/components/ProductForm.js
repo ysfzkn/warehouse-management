@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import SearchableSelect from './SearchableSelect';
 import './ProductForm.css';
-import { compressImage } from '../utils/image';
 
 const ProductForm = ({ product, onSuccess, onCancel }) => {
   const [formData, setFormData] = useState({
@@ -35,9 +34,6 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
   const [createModalDescription, setCreateModalDescription] = useState('');
   const [createModalLoading, setCreateModalLoading] = useState(false);
   const [priceIncludesVat, setPriceIncludesVat] = useState(false);
-  const [productImages, setProductImages] = useState([]);
-  const [imageUploads, setImageUploads] = useState({});
-  const MAX_IMAGES = 5;
   
   // Calculate total price with taxes
   const calculateTotalPrice = () => {
@@ -144,16 +140,6 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
     } else {
       setSubcategories([]);
     }
-
-    // Load existing images for edit mode
-    (async () => {
-      try {
-        const resp = await axios.get(`/api/products/${product.id}/images`);
-        setProductImages(Array.isArray(resp.data) ? resp.data : []);
-      } catch (e) {
-        console.error('Error loading product images:', e);
-      }
-    })();
   }, [product]);
 
   const normalizeSubcategories = (subs = [], parentMeta = {}) => {
@@ -467,83 +453,6 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleImageUpload = async (files) => {
-    if (!files || files.length === 0) return;
-
-    if (!product) {
-      setErrors(prev => ({
-        ...prev,
-        images: 'Fotoğraf eklemek için önce ürünü kaydedin.'
-      }));
-      return;
-    }
-
-    const currentCount = productImages.length;
-    const remaining = MAX_IMAGES - currentCount;
-    const selected = Array.from(files).slice(0, remaining > 0 ? remaining : 0);
-
-    if (selected.length === 0) {
-      setErrors(prev => ({
-        ...prev,
-        images: `En fazla ${MAX_IMAGES} fotoğraf ekleyebilirsiniz.`
-      }));
-      return;
-    }
-
-    for (const file of selected) {
-      const tempKey = `${Date.now()}-${file.name}`;
-      setImageUploads(prev => ({
-        ...prev,
-        [tempKey]: { loading: true, error: null }
-      }));
-
-      try {
-        const optimized = await compressImage(file, {
-          maxWidth: 1920,
-          maxHeight: 1920,
-          quality: 0.75,
-          mimeType: file.type
-        });
-
-        const formData = new FormData();
-        formData.append('file', optimized);
-        // Primary bayrağını ilk görsel için set edebiliriz (varsayılan davranış)
-        const isFirst = productImages.length === 0;
-        if (isFirst) {
-          formData.append('primary', 'true');
-        }
-
-        await axios.post(`/api/products/${product.id}/images`, formData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
-
-        const resp = await axios.get(`/api/products/${product.id}/images`);
-        setProductImages(Array.isArray(resp.data) ? resp.data : []);
-        setImageUploads(prev => {
-          const copy = { ...prev };
-          delete copy[tempKey];
-          return copy;
-        });
-        setErrors(prev => ({ ...prev, images: '' }));
-      } catch (err) {
-        console.error('Error uploading product image', err);
-        setImageUploads(prev => ({
-          ...prev,
-          [tempKey]: { loading: false, error: 'Fotoğraf yüklenemedi' }
-        }));
-      }
-    }
-  };
-
-  const handleDeleteImage = async (imageId) => {
-    try {
-      await axios.delete(`/api/products/images/${imageId}`);
-      setProductImages(prev => prev.filter(img => img.id !== imageId));
-    } catch (err) {
-      console.error('Error deleting product image', err);
-    }
-  };
-
   const handleSubmit = async (e) => {
     if (e && typeof e.preventDefault === 'function') {
       e.preventDefault();
@@ -671,83 +580,6 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
           placeholder="Ürün açıklaması..."
         />
       </div>
-
-      {/* Product Images Section */}
-      {product && (
-        <div className="mb-4">
-          <div className="d-flex justify-content-between align-items-center mb-2">
-            <h6 className="text-muted mb-0">
-              <i className="fas fa-image me-2"></i>
-              Ürün Fotoğrafları
-            </h6>
-            <small className="text-muted">
-              Maksimum {MAX_IMAGES} fotoğraf, ilk fotoğraf kapak olarak kullanılır.
-            </small>
-          </div>
-
-          <div className="product-image-uploader border rounded-3 p-3 mb-2">
-            <div className="d-flex align-items-center flex-wrap gap-3">
-              <label className="btn btn-outline-secondary mb-0">
-                <i className="fas fa-camera me-2"></i>
-                Fotoğraf Ekle
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  className="d-none"
-                  onChange={(e) => {
-                    const files = e.target.files;
-                    e.target.value = '';
-                    if (files && files.length) {
-                      handleImageUpload(files);
-                    }
-                  }}
-                />
-              </label>
-              <div className="text-muted small">
-                Önerilen: 1920x1920 piksel altı, JPG/PNG. Büyük dosyalar otomatik sıkıştırılır.
-              </div>
-            </div>
-            {errors.images && (
-              <div className="text-danger small mt-2">
-                <i className="fas fa-exclamation-circle me-1"></i>
-                {errors.images}
-              </div>
-            )}
-          </div>
-
-          <div className="product-image-grid">
-            {productImages.map((img) => (
-              <div key={img.id} className="product-image-card">
-                <div className="product-image-wrapper">
-                  <img
-                    src={`/api/products/images/${img.id}/view?thumbnail=true`}
-                    alt={formData.name || 'Ürün görseli'}
-                    className="product-image-thumb"
-                    onClick={() =>
-                      window.open(`/api/products/images/${img.id}/view`, '_blank', 'noopener')
-                    }
-                  />
-                  {img.primary && (
-                    <span className="badge bg-primary product-image-badge">
-                      <i className="fas fa-star me-1"></i>
-                      Kapak
-                    </span>
-                  )}
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-danger product-image-delete"
-                    onClick={() => handleDeleteImage(img.id)}
-                    title="Fotoğrafı sil"
-                  >
-                    <i className="fas fa-trash"></i>
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Price and Tax Section */}
       <div className="row mb-3">
