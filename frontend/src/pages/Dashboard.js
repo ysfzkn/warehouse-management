@@ -49,10 +49,8 @@ const Dashboard = () => {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [allStocks, setAllStocks] = useState([]);
   const [lowStocks, setLowStocks] = useState([]);
   const [outStocks, setOutStocks] = useState([]);
-  const [products, setProducts] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedWarehouseIds, setSelectedWarehouseIds] = useState([]);
   const [selectedWarehouseOpts, setSelectedWarehouseOpts] = useState([]);
@@ -63,170 +61,54 @@ const Dashboard = () => {
   const [warehouseStats, setWarehouseStats] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
 
-  const fetchDashboardData = useCallback(async () => {
+  const fetchDashboardData = useCallback(async (signal) => {
     try {
       setLoading(true);
       
-      // Fetch all products by making multiple requests if needed
-      let allProducts = [];
-      let currentPage = 0;
-      const pageSize = 250; // Maximum allowed by backend
-      let hasMore = true;
-      
-      while (hasMore) {
-        const response = await axios.get('/api/products', { 
-          params: { 
-            page: currentPage, 
-            size: pageSize,
-            sortBy: 'updatedAt',
-            sortDir: 'desc'
-          } 
-        });
-        const data = response.data || {};
-        const productsList = Array.isArray(data.content) ? data.content : (Array.isArray(data) ? data : []);
-        allProducts = [...allProducts, ...productsList];
-        
-        // Check if there are more pages
-        if (data.totalPages !== undefined) {
-          hasMore = currentPage + 1 < data.totalPages;
-          currentPage++;
-        } else {
-          // Non-paginated response or single page
-          hasMore = false;
-        }
-      }
-      
-      console.log(`Dashboard: Toplam ${allProducts.length} ürün çekildi`);
-      
-      // Fetch all stocks by making multiple requests if needed
-      let allStocksData = [];
-      let stockPage = 0;
-      const stockPageSize = 250;
-      let hasMoreStocks = true;
-      
-      while (hasMoreStocks) {
-        const stockResponse = await axios.get('/api/stocks', { 
-          params: { size: stockPageSize, page: stockPage } 
-        });
-        const data = stockResponse.data || {};
-        const stocksList = Array.isArray(data.content) ? data.content : (Array.isArray(data) ? data : []);
-        allStocksData = [...allStocksData, ...stocksList];
-        
-        // Check if there are more pages
-        if (data.totalPages !== undefined) {
-          hasMoreStocks = stockPage + 1 < data.totalPages;
-          stockPage++;
-        } else {
-          hasMoreStocks = false;
-        }
-      }
-      
-      console.log(`Dashboard: Toplam ${allStocksData.length} stok kaydı çekildi`);
-      
-      const [warehousesRes, categoriesRes, lowStockRes, outOfStockRes, brandsRes, colorsRes] = await Promise.all([
-        axios.get('/api/warehouses'),
-        axios.get('/api/categories'),
-        axios.get('/api/stocks/low-stock'),
-        axios.get('/api/stocks/out-of-stock'),
-        axios.get('/api/brands'),
-        axios.get('/api/colors')
+      // Use optimized dashboard endpoints - single API call for all stats
+      const [statsRes, warehouseStatsRes, lowStockRes, outOfStockRes, warehousesRes] = await Promise.all([
+        axios.get('/api/dashboard/stats', { signal }),
+        axios.get('/api/dashboard/warehouse-stats', { signal }),
+        axios.get('/api/dashboard/low-stock-items', { signal }),
+        axios.get('/api/dashboard/out-of-stock-items', { signal }),
+        axios.get('/api/warehouses', { signal })
       ]);
 
-      const warehousesData = warehousesRes.data;
-      setWarehouses(warehousesData);
-      const productsData = allProducts;
-      setProducts(productsData);
-      const categories = categoriesRes.data;
-      const lowStockItems = Array.isArray(lowStockRes.data) ? lowStockRes.data : (lowStockRes.data?.content || []);
-      const outOfStockItems = Array.isArray(outOfStockRes.data) ? outOfStockRes.data : (outOfStockRes.data?.content || []);
-      // allStocksData is already fetched above with pagination
-      const brands = brandsRes.data || [];
-      const colors = colorsRes.data || [];
+      const statsData = statsRes.data;
+      const warehouseStatsData = warehouseStatsRes.data || [];
+      const lowStockItems = lowStockRes.data || [];
+      const outOfStockItems = outOfStockRes.data || [];
+      const warehousesData = warehousesRes.data || [];
       
+      setWarehouses(warehousesData);
+      setWarehouseStats(warehouseStatsData);
       setLowStocks(lowStockItems);
       setOutStocks(outOfStockItems);
-      setAllStocks(allStocksData);
-
-      // Calculate warehouse statistics
-      const warehouseStatsMap = {};
-      allStocksData.forEach(stock => {
-        const whId = stock.warehouse?.id;
-        if (!whId) return;
-        if (!warehouseStatsMap[whId]) {
-          warehouseStatsMap[whId] = {
-            id: whId,
-            name: stock.warehouse?.name || '',
-            location: stock.warehouse?.location || '',
-            totalQuantity: 0,
-            totalValue: 0,
-            productCount: 0,
-            reserved: 0,
-            consigned: 0,
-          };
-        }
-        warehouseStatsMap[whId].totalQuantity += stock.quantity || 0;
-        warehouseStatsMap[whId].reserved += stock.reservedQuantity || 0;
-        warehouseStatsMap[whId].consigned += stock.consignedQuantity || 0;
-        warehouseStatsMap[whId].productCount += 1;
-        
-        const product = productsData.find(p => p.id === stock.product?.id);
-        if (product) {
-          warehouseStatsMap[whId].totalValue += (product.price || 0) * (stock.quantity || 0);
-        }
-      });
-      setWarehouseStats(Object.values(warehouseStatsMap));
-
-      // Calculate totals
-      let totalStockValue = 0;
-      let totalStockQuantity = 0;
-      let totalReserved = 0;
-      let totalConsigned = 0;
-
-      allStocksData.forEach(stock => {
-        totalStockQuantity += stock.quantity || 0;
-        totalReserved += stock.reservedQuantity || 0;
-        totalConsigned += stock.consignedQuantity || 0;
-        
-        const product = productsData.find(p => p.id === stock.product?.id);
-        if (product) {
-          totalStockValue += (product.price || 0) * (stock.quantity || 0);
-        }
-      });
-
-      // Handle active/isActive field - could be boolean, 1/0, or "1"/"0"
-      const activeWarehouses = warehousesData.filter(w => {
-        const activeValue = w.active !== undefined ? w.active : w.isActive;
-        return activeValue === true || activeValue === 1 || activeValue === '1' || activeValue === 'true';
-      }).length;
-
-      console.log('Warehouse active status check:', {
-        total: warehousesData.length,
-        active: activeWarehouses,
-        sample: warehousesData.slice(0, 3).map(w => ({ 
-          name: w.name, 
-          active: w.active, 
-          isActive: w.isActive, 
-          activeType: typeof w.active,
-          isActiveType: typeof w.isActive 
-        }))
-      });
-
+      
+      // Set stats from optimized backend response
       setStats({
-        totalWarehouses: warehousesData.length,
-        totalProducts: productsData.length,
-        totalCategories: categories.length,
-        lowStockItems: lowStockItems.length,
-        outOfStockItems: outOfStockItems.length,
-        totalStockValue,
-        totalStockQuantity,
-        totalReserved,
-        totalConsigned,
-        activeWarehouses,
-        totalBrands: brands.length,
-        totalColors: colors.length,
+        totalWarehouses: statsData.totalWarehouses || 0,
+        totalProducts: statsData.totalProducts || 0,
+        totalCategories: statsData.totalCategories || 0,
+        lowStockItems: statsData.lowStockItems || 0,
+        outOfStockItems: statsData.outOfStockItems || 0,
+        totalStockValue: statsData.totalStockValue || 0,
+        totalStockQuantity: statsData.totalStockQuantity || 0,
+        totalReserved: statsData.totalReserved || 0,
+        totalConsigned: statsData.totalConsigned || 0,
+        activeWarehouses: statsData.activeWarehouses || 0,
+        totalBrands: statsData.totalBrands || 0,
+        totalColors: statsData.totalColors || 0,
       });
+
+      console.log('Dashboard: Optimized data loaded successfully');
 
     } catch (error) {
+      // Ignore abort errors
+      if (error.name === 'CanceledError' || error.message === 'canceled') {
+        console.log('Dashboard: Request was cancelled');
+        return;
+      }
       console.error('Error fetching dashboard data:', error);
       setError('Dashboard verileri yüklenirken hata oluştu');
     } finally {
@@ -235,36 +117,31 @@ const Dashboard = () => {
   }, []);
 
   useEffect(() => {
-    fetchDashboardData();
+    const abortController = new AbortController();
+    fetchDashboardData(abortController.signal);
+    
+    // Cleanup function - cancel request if component unmounts
+    return () => {
+      abortController.abort();
+    };
   }, [fetchDashboardData]);
-
-  const productMap = useMemo(() => {
-    const map = {};
-    products.forEach(p => { if (p?.id != null) map[p.id] = p; });
-    return map;
-  }, [products]);
 
   const filterStockList = useCallback((list) => {
     const q = normalizeText(searchTerm);
-    return (list || []).filter(s => {
-      const product = s?.product?.id != null ? productMap[s.product.id] : null;
-      const brandOfProduct = product?.brand?.id ?? s.product?.brand?.id;
-      const colorOfProduct = product?.color?.id ?? s.product?.color?.id;
+    return (list || []).filter(item => {
       const matchesSearch = !q ||
-        normalizeText(s.product?.name).includes(q) ||
-        normalizeText(s.product?.sku).includes(q) ||
-        normalizeText(s.warehouse?.name).includes(q) ||
-        normalizeText(s.warehouse?.location).includes(q);
-      const matchesBrand = brandId == null || Number(brandOfProduct) === Number(brandId);
-      const matchesColor = colorId == null || Number(colorOfProduct) === Number(colorId);
-      const matchesWarehouse = selectedWarehouseIds.length === 0 || selectedWarehouseIds.includes(s.warehouse?.id);
+        normalizeText(item.productName).includes(q) ||
+        normalizeText(item.productSku).includes(q) ||
+        normalizeText(item.warehouseName).includes(q);
+      const matchesBrand = brandId == null || Number(item.brandId) === Number(brandId);
+      const matchesColor = colorId == null || Number(item.colorId) === Number(colorId);
+      const matchesWarehouse = selectedWarehouseIds.length === 0 || selectedWarehouseIds.includes(item.warehouseId);
       return matchesSearch && matchesBrand && matchesColor && matchesWarehouse;
     });
-  }, [searchTerm, brandId, colorId, selectedWarehouseIds, productMap]);
+  }, [searchTerm, brandId, colorId, selectedWarehouseIds]);
 
   const filteredLow = useMemo(() => filterStockList(lowStocks), [lowStocks, filterStockList]);
   const filteredOut = useMemo(() => filterStockList(outStocks), [outStocks, filterStockList]);
-  const filteredAllStocks = useMemo(() => filterStockList(allStocks), [allStocks, filterStockList]);
 
   // Filtered warehouse stats
   const filteredWarehouseStats = useMemo(() => {
@@ -272,41 +149,31 @@ const Dashboard = () => {
     return warehouseStats.filter(w => selectedWarehouseIds.includes(w.id));
   }, [warehouseStats, selectedWarehouseIds]);
 
-  // Computed stats based on filters
+  // Computed stats based on filters (for display purposes)
   const computedStats = useMemo(() => {
     if (selectedWarehouseIds.length === 0 && !brandId && !colorId && !searchTerm) {
       return stats;
     }
     
-    const filtered = filteredAllStocks;
-    
-    // Calculate total stock value and unique product count from filtered stocks
-    let totalStockValue = 0;
-    const uniqueProductIds = new Set();
-    
-    filtered.forEach(stock => {
-      if (stock.product?.id) {
-        uniqueProductIds.add(stock.product.id);
-        
-        // Get product price from products array
-        const product = products.find(p => p.id === stock.product.id);
-        const productPrice = product?.price || stock.product?.price || 0;
-        const quantity = stock.quantity || 0;
-        totalStockValue += productPrice * quantity;
-      }
-    });
+    // For filtered warehouse stats - sum up selected warehouses
+    const filteredWh = filteredWarehouseStats;
+    const totalQuantity = filteredWh.reduce((sum, w) => sum + (w.totalQuantity || 0), 0);
+    const totalReserved = filteredWh.reduce((sum, w) => sum + (w.reserved || 0), 0);
+    const totalConsigned = filteredWh.reduce((sum, w) => sum + (w.consigned || 0), 0);
+    const totalValue = filteredWh.reduce((sum, w) => sum + (w.totalValue || 0), 0);
+    const totalProducts = filteredWh.reduce((sum, w) => sum + (w.productCount || 0), 0);
     
     return {
       ...stats,
       lowStockItems: filteredLow.length,
       outOfStockItems: filteredOut.length,
-      totalStockQuantity: filtered.reduce((sum, s) => sum + (s.quantity || 0), 0),
-      totalReserved: filtered.reduce((sum, s) => sum + (s.reservedQuantity || 0), 0),
-      totalConsigned: filtered.reduce((sum, s) => sum + (s.consignedQuantity || 0), 0),
-      totalStockValue: totalStockValue,
-      totalProducts: uniqueProductIds.size,
+      totalStockQuantity: selectedWarehouseIds.length > 0 ? totalQuantity : stats.totalStockQuantity,
+      totalReserved: selectedWarehouseIds.length > 0 ? totalReserved : stats.totalReserved,
+      totalConsigned: selectedWarehouseIds.length > 0 ? totalConsigned : stats.totalConsigned,
+      totalStockValue: selectedWarehouseIds.length > 0 ? totalValue : stats.totalStockValue,
+      totalProducts: selectedWarehouseIds.length > 0 ? totalProducts : stats.totalProducts,
     };
-  }, [stats, filteredAllStocks, filteredLow, filteredOut, products, selectedWarehouseIds, brandId, colorId, searchTerm]);
+  }, [stats, filteredLow, filteredOut, selectedWarehouseIds, brandId, colorId, searchTerm, filteredWarehouseStats]);
 
   const barChartData = {
     labels: ['Aktif Depolar', 'Toplam Ürünler', 'Kategoriler', 'Düşük Stok', 'Stok Dışı'],
@@ -410,7 +277,7 @@ const Dashboard = () => {
           </p>
         </div>
         <div className="d-flex gap-2">
-          <button className="btn btn-outline-primary" onClick={() => fetchDashboardData()}>
+          <button className="btn btn-outline-primary" onClick={() => fetchDashboardData(new AbortController().signal)}>
             <i className="fas fa-sync-alt me-2"></i>
             Yenile
           </button>
@@ -882,24 +749,24 @@ const Dashboard = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredLow.slice(0, 10).map((s) => (
-                      <tr key={s.id} style={{ cursor: 'pointer' }} onClick={() => {
+                    {filteredLow.slice(0, 10).map((item) => (
+                      <tr key={item.stockId} style={{ cursor: 'pointer' }} onClick={() => {
                         const params = new URLSearchParams();
                         params.set('filter', 'low-stock');
-                        if (s.product?.brand?.id) params.set('brandId', s.product.brand.id);
-                        if (s.product?.color?.id) params.set('colorId', s.product.color.id);
+                        if (item.brandId) params.set('brandId', item.brandId);
+                        if (item.colorId) params.set('colorId', item.colorId);
                         navigate(`/stock?${params.toString()}`);
                       }}>
-                        <td>{s.product?.name} <small className="text-muted">({s.product?.sku})</small></td>
+                        <td>{item.productName} <small className="text-muted">({item.productSku})</small></td>
                         <td style={{ textDecoration: 'underline' }} onClick={(e) => { e.stopPropagation();
-                          if (s.warehouse?.id) {
+                          if (item.warehouseId) {
                             const params = new URLSearchParams();
-                            params.set('warehouseId', s.warehouse.id);
+                            params.set('warehouseId', item.warehouseId);
                             navigate(`/stock?${params.toString()}`);
                           }
-                        }}>{s.warehouse?.name}</td>
-                        <td>{s.quantity}</td>
-                        <td>{s.minStockLevel}</td>
+                        }}>{item.warehouseName}</td>
+                        <td>{item.quantity}</td>
+                        <td>{item.minStockLevel}</td>
                       </tr>
                     ))}
                     {filteredLow.length === 0 && (
@@ -935,23 +802,23 @@ const Dashboard = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredOut.slice(0, 10).map((s) => (
-                      <tr key={s.id} style={{ cursor: 'pointer' }} onClick={() => {
+                    {filteredOut.slice(0, 10).map((item) => (
+                      <tr key={item.stockId} style={{ cursor: 'pointer' }} onClick={() => {
                         const params = new URLSearchParams();
                         params.set('filter', 'out-of-stock');
-                        if (s.product?.brand?.id) params.set('brandId', s.product.brand.id);
-                        if (s.product?.color?.id) params.set('colorId', s.product.color.id);
+                        if (item.brandId) params.set('brandId', item.brandId);
+                        if (item.colorId) params.set('colorId', item.colorId);
                         navigate(`/stock?${params.toString()}`);
                       }}>
-                        <td>{s.product?.name} <small className="text-muted">({s.product?.sku})</small></td>
+                        <td>{item.productName} <small className="text-muted">({item.productSku})</small></td>
                         <td style={{ textDecoration: 'underline' }} onClick={(e) => { e.stopPropagation();
-                          if (s.warehouse?.id) {
+                          if (item.warehouseId) {
                             const params = new URLSearchParams();
-                            params.set('warehouseId', s.warehouse.id);
+                            params.set('warehouseId', item.warehouseId);
                             navigate(`/stock?${params.toString()}`);
                           }
-                        }}>{s.warehouse?.name}</td>
-                        <td>{s.quantity}</td>
+                        }}>{item.warehouseName}</td>
+                        <td>{item.quantity}</td>
                       </tr>
                     ))}
                     {filteredOut.length === 0 && (
