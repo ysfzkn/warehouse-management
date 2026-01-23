@@ -39,16 +39,19 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
     @EntityGraph(value = Stock.GRAPH_WITH_PRODUCT_AND_WAREHOUSE, type = EntityGraph.EntityGraphType.LOAD)
     List<Stock> findByWarehouse(@Param("warehouse") Warehouse warehouse);
 
-    @Query("SELECT s FROM Stock s WHERE s.quantity <= (CASE WHEN s.minStockLevel IS NULL OR s.minStockLevel = 0 THEN 2 ELSE s.minStockLevel END)")
+    @Query("SELECT s FROM Stock s WHERE s.quantity > 0 AND s.quantity <= (CASE WHEN s.minStockLevel IS NULL OR s.minStockLevel = 0 THEN 2 ELSE s.minStockLevel END)")
     @EntityGraph(value = Stock.GRAPH_WITH_PRODUCT_AND_WAREHOUSE, type = EntityGraph.EntityGraphType.LOAD)
     List<Stock> findLowStockItems();
 
-    @Query("SELECT COUNT(s) FROM Stock s WHERE s.quantity <= (CASE WHEN s.minStockLevel IS NULL OR s.minStockLevel = 0 THEN 2 ELSE s.minStockLevel END)")
+    @Query(value = "SELECT COUNT(*) FROM stocks WHERE quantity > 0 AND quantity <= CASE WHEN min_stock_level IS NULL OR min_stock_level = 0 THEN 2 ELSE min_stock_level END", nativeQuery = true)
     long countLowStockItems();
 
     @Query("SELECT s FROM Stock s WHERE s.quantity = 0")
     @EntityGraph(value = Stock.GRAPH_WITH_PRODUCT_AND_WAREHOUSE, type = EntityGraph.EntityGraphType.LOAD)
     List<Stock> findOutOfStockItems();
+
+    @Query("SELECT COUNT(s) FROM Stock s WHERE s.quantity = 0")
+    long countOutOfStockItems();
 
     @Query("SELECT s FROM Stock s WHERE s.warehouse = :warehouse AND s.quantity <= (CASE WHEN s.minStockLevel IS NULL OR s.minStockLevel = 0 THEN 2 ELSE s.minStockLevel END)")
     @EntityGraph(value = Stock.GRAPH_WITH_PRODUCT_AND_WAREHOUSE, type = EntityGraph.EntityGraphType.LOAD)
@@ -177,5 +180,141 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
     interface WarehouseQuantityAggregate {
         Long getWarehouseId();
         Long getTotalQuantity();
+    }
+
+    // ============================================================================
+    // Dashboard Optimized Queries
+    // ============================================================================
+
+    /**
+     * Get aggregated stock statistics for dashboard.
+     * Returns: totalStockQuantity, totalReserved, totalConsigned, totalStockValue
+     */
+    @Query(value = """
+        SELECT 
+            COALESCE(SUM(s.quantity), 0) as totalQuantity,
+            COALESCE(SUM(s.reserved_quantity), 0) as totalReserved,
+            COALESCE(SUM(s.consigned_quantity), 0) as totalConsigned,
+            COALESCE(SUM(s.quantity * p.price), 0) as totalValue
+        FROM stocks s
+        INNER JOIN products p ON s.product_id = p.id
+        """, nativeQuery = true)
+    StockAggregateResult getStockAggregates();
+
+    interface StockAggregateResult {
+        Long getTotalQuantity();
+        Long getTotalReserved();
+        Long getTotalConsigned();
+        java.math.BigDecimal getTotalValue();
+    }
+
+    /**
+     * Get warehouse-level aggregated statistics for dashboard.
+     */
+    @Query(value = """
+        SELECT 
+            w.id as warehouseId,
+            w.name as warehouseName,
+            w.location as warehouseLocation,
+            COALESCE(SUM(s.quantity), 0) as totalQuantity,
+            COALESCE(SUM(s.reserved_quantity), 0) as reserved,
+            COALESCE(SUM(s.consigned_quantity), 0) as consigned,
+            COUNT(DISTINCT s.product_id) as productCount,
+            COALESCE(SUM(s.quantity * p.price), 0) as totalValue
+        FROM warehouses w
+        LEFT JOIN stocks s ON w.id = s.warehouse_id
+        LEFT JOIN products p ON s.product_id = p.id
+        GROUP BY w.id, w.name, w.location
+        ORDER BY w.name
+        """, nativeQuery = true)
+    List<WarehouseStatsResult> getWarehouseStats();
+
+    interface WarehouseStatsResult {
+        Long getWarehouseId();
+        String getWarehouseName();
+        String getWarehouseLocation();
+        Long getTotalQuantity();
+        Long getReserved();
+        Long getConsigned();
+        Long getProductCount();
+        java.math.BigDecimal getTotalValue();
+    }
+
+    /**
+     * Get low stock items with minimal data for dashboard display.
+     * Only returns first 50 items for performance.
+     */
+    @Query(value = """
+        SELECT 
+            s.id as stockId,
+            p.id as productId,
+            p.name as productName,
+            p.sku as productSku,
+            w.id as warehouseId,
+            w.name as warehouseName,
+            s.quantity as quantity,
+            s.min_stock_level as minStockLevel,
+            p.brand_id as brandId,
+            p.color_id as colorId
+        FROM stocks s
+        INNER JOIN products p ON s.product_id = p.id
+        INNER JOIN warehouses w ON s.warehouse_id = w.id
+        WHERE s.quantity > 0 
+          AND s.quantity <= CASE 
+              WHEN s.min_stock_level IS NULL OR s.min_stock_level = 0 THEN 2 
+              ELSE s.min_stock_level 
+          END
+        ORDER BY s.quantity ASC, p.name ASC
+        LIMIT 50
+        """, nativeQuery = true)
+    List<LowStockItemResult> getLowStockItemsForDashboard();
+
+    interface LowStockItemResult {
+        Long getStockId();
+        Long getProductId();
+        String getProductName();
+        String getProductSku();
+        Long getWarehouseId();
+        String getWarehouseName();
+        Integer getQuantity();
+        Integer getMinStockLevel();
+        Long getBrandId();
+        Long getColorId();
+    }
+
+    /**
+     * Get out of stock items with minimal data for dashboard display.
+     * Only returns first 50 items for performance.
+     */
+    @Query(value = """
+        SELECT 
+            s.id as stockId,
+            p.id as productId,
+            p.name as productName,
+            p.sku as productSku,
+            w.id as warehouseId,
+            w.name as warehouseName,
+            s.quantity as quantity,
+            p.brand_id as brandId,
+            p.color_id as colorId
+        FROM stocks s
+        INNER JOIN products p ON s.product_id = p.id
+        INNER JOIN warehouses w ON s.warehouse_id = w.id
+        WHERE s.quantity = 0
+        ORDER BY p.name ASC
+        LIMIT 50
+        """, nativeQuery = true)
+    List<OutOfStockItemResult> getOutOfStockItemsForDashboard();
+
+    interface OutOfStockItemResult {
+        Long getStockId();
+        Long getProductId();
+        String getProductName();
+        String getProductSku();
+        Long getWarehouseId();
+        String getWarehouseName();
+        Integer getQuantity();
+        Long getBrandId();
+        Long getColorId();
     }
 }
