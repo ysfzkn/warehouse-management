@@ -317,4 +317,72 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
         Long getBrandId();
         Long getColorId();
     }
+
+    /**
+     * Get aggregated stock statistics with filters for dashboard.
+     * Note: warehouseIds should be null if no warehouse filter is applied.
+     */
+    @Query(value = """
+        SELECT 
+            COALESCE(SUM(s.quantity), 0) as totalQuantity,
+            COALESCE(SUM(s.reserved_quantity), 0) as totalReserved,
+            COALESCE(SUM(s.consigned_quantity), 0) as totalConsigned,
+            COALESCE(SUM(s.quantity * p.price), 0) as totalValue,
+            COUNT(DISTINCT p.id) as productCount
+        FROM stocks s
+        INNER JOIN products p ON s.product_id = p.id
+        WHERE (:brandId IS NULL OR p.brand_id = :brandId)
+          AND (:colorId IS NULL OR p.color_id = :colorId)
+          AND (COALESCE(:hasWarehouseFilter, false) = false OR s.warehouse_id IN (:warehouseIds))
+        """, nativeQuery = true)
+    FilteredStockAggregateResult getFilteredStockAggregates(
+            @Param("brandId") Long brandId,
+            @Param("colorId") Long colorId,
+            @Param("warehouseIds") java.util.List<Long> warehouseIds,
+            @Param("hasWarehouseFilter") Boolean hasWarehouseFilter);
+
+    interface FilteredStockAggregateResult {
+        Long getTotalQuantity();
+        Long getTotalReserved();
+        Long getTotalConsigned();
+        java.math.BigDecimal getTotalValue();
+        Long getProductCount();
+    }
+
+    /**
+     * Count low stock items with filters.
+     */
+    @Query(value = """
+        SELECT COUNT(*) 
+        FROM stocks s
+        INNER JOIN products p ON s.product_id = p.id
+        WHERE s.quantity > 0 
+          AND s.quantity <= CASE WHEN s.min_stock_level IS NULL OR s.min_stock_level = 0 THEN 2 ELSE s.min_stock_level END
+          AND (:brandId IS NULL OR p.brand_id = :brandId)
+          AND (:colorId IS NULL OR p.color_id = :colorId)
+          AND (COALESCE(:hasWarehouseFilter, false) = false OR s.warehouse_id IN (:warehouseIds))
+        """, nativeQuery = true)
+    long countFilteredLowStockItems(
+            @Param("brandId") Long brandId,
+            @Param("colorId") Long colorId,
+            @Param("warehouseIds") java.util.List<Long> warehouseIds,
+            @Param("hasWarehouseFilter") Boolean hasWarehouseFilter);
+
+    /**
+     * Count out of stock items with filters.
+     */
+    @Query(value = """
+        SELECT COUNT(*) 
+        FROM stocks s
+        INNER JOIN products p ON s.product_id = p.id
+        WHERE s.quantity = 0
+          AND (:brandId IS NULL OR p.brand_id = :brandId)
+          AND (:colorId IS NULL OR p.color_id = :colorId)
+          AND (COALESCE(:hasWarehouseFilter, false) = false OR s.warehouse_id IN (:warehouseIds))
+        """, nativeQuery = true)
+    long countFilteredOutOfStockItems(
+            @Param("brandId") Long brandId,
+            @Param("colorId") Long colorId,
+            @Param("warehouseIds") java.util.List<Long> warehouseIds,
+            @Param("hasWarehouseFilter") Boolean hasWarehouseFilter);
 }
