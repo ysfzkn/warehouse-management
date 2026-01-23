@@ -71,6 +71,46 @@ public class DashboardService {
     }
 
     /**
+     * Get filtered dashboard statistics based on brand, color, and warehouse filters.
+     * Not cached - used for dynamic filtering.
+     */
+    public DashboardStatsDto getFilteredDashboardStats(Long brandId, Long colorId, List<Long> warehouseIds) {
+        DashboardStatsDto stats = new DashboardStatsDto();
+
+        // Determine if warehouse filter is active
+        boolean hasWarehouseFilter = warehouseIds != null && !warehouseIds.isEmpty();
+        
+        // Use list with at least one element for IN clause (workaround for PostgreSQL)
+        List<Long> warehouseIdList = hasWarehouseFilter ? warehouseIds : List.of(-1L);
+
+        // Get filtered stock aggregates
+        StockRepository.FilteredStockAggregateResult aggregates = 
+                stockRepository.getFilteredStockAggregates(brandId, colorId, warehouseIdList, hasWarehouseFilter);
+        
+        stats.setTotalStockQuantity(aggregates.getTotalQuantity() != null ? aggregates.getTotalQuantity() : 0L);
+        stats.setTotalReserved(aggregates.getTotalReserved() != null ? aggregates.getTotalReserved() : 0L);
+        stats.setTotalConsigned(aggregates.getTotalConsigned() != null ? aggregates.getTotalConsigned() : 0L);
+        stats.setTotalStockValue(aggregates.getTotalValue() != null ? aggregates.getTotalValue() : java.math.BigDecimal.ZERO);
+
+        // Use productCount from filtered query instead of total products
+        Long filteredProductCount = aggregates.getProductCount() != null ? aggregates.getProductCount() : 0L;
+        stats.setTotalProducts(filteredProductCount);
+
+        // Get filtered counts
+        stats.setLowStockItems(stockRepository.countFilteredLowStockItems(brandId, colorId, warehouseIdList, hasWarehouseFilter));
+        stats.setOutOfStockItems(stockRepository.countFilteredOutOfStockItems(brandId, colorId, warehouseIdList, hasWarehouseFilter));
+
+        // These don't change with stock filters, use cached values
+        stats.setTotalWarehouses(warehouseRepository.count());
+        stats.setActiveWarehouses((long) warehouseRepository.findAllActive().size());
+        stats.setTotalCategories(categoryRepository.count());
+        stats.setTotalBrands(brandRepository.count());
+        stats.setTotalColors(colorRepository.count());
+
+        return stats;
+    }
+
+    /**
      * Get warehouse-level statistics with aggregated data.
      * Cached for 5 minutes to reduce database load.
      */

@@ -61,13 +61,21 @@ const Dashboard = () => {
   const [warehouseStats, setWarehouseStats] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
 
-  const fetchDashboardData = useCallback(async (signal) => {
+  const fetchDashboardData = useCallback(async (signal, filters = {}) => {
     try {
       setLoading(true);
       
+      // Build stats params with filters
+      const statsParams = {};
+      if (filters.brandId) statsParams.brandId = filters.brandId;
+      if (filters.colorId) statsParams.colorId = filters.colorId;
+      if (filters.warehouseIds && filters.warehouseIds.length > 0) {
+        statsParams.warehouseIds = filters.warehouseIds.join(',');
+      }
+      
       // Use optimized dashboard endpoints - single API call for all stats
       const [statsRes, warehouseStatsRes, lowStockRes, outOfStockRes, warehousesRes] = await Promise.all([
-        axios.get('/api/dashboard/stats', { signal }),
+        axios.get('/api/dashboard/stats', { signal, params: statsParams }),
         axios.get('/api/dashboard/warehouse-stats', { signal }),
         axios.get('/api/dashboard/low-stock-items', { signal }),
         axios.get('/api/dashboard/out-of-stock-items', { signal }),
@@ -101,7 +109,7 @@ const Dashboard = () => {
         totalColors: statsData.totalColors || 0,
       });
 
-      console.log('Dashboard: Optimized data loaded successfully');
+      console.log('Dashboard: Optimized data loaded successfully', filters.brandId || filters.colorId || filters.warehouseIds ? '(filtered)' : '(cached)');
 
     } catch (error) {
       // Ignore abort errors
@@ -116,15 +124,22 @@ const Dashboard = () => {
     }
   }, []);
 
+  // Fetch dashboard data on mount and whenever filters change
   useEffect(() => {
     const abortController = new AbortController();
-    fetchDashboardData(abortController.signal);
+    const filters = {
+      brandId,
+      colorId,
+      warehouseIds: selectedWarehouseIds
+    };
     
-    // Cleanup function - cancel request if component unmounts
+    // Always fetch with current filters (empty filters = cached global stats)
+    fetchDashboardData(abortController.signal, filters);
+    
     return () => {
       abortController.abort();
     };
-  }, [fetchDashboardData]);
+  }, [brandId, colorId, selectedWarehouseIds, fetchDashboardData]);
 
   const filterStockList = useCallback((list) => {
     const q = normalizeText(searchTerm);
@@ -150,30 +165,21 @@ const Dashboard = () => {
   }, [warehouseStats, selectedWarehouseIds]);
 
   // Computed stats based on filters (for display purposes)
+  // Now stats come from backend with filters applied, only need to adjust for search term
   const computedStats = useMemo(() => {
-    if (selectedWarehouseIds.length === 0 && !brandId && !colorId && !searchTerm) {
+    // Search term only affects the displayed lists, not the overall counts
+    // Backend already applied brand, color, warehouse filters
+    if (!searchTerm) {
       return stats;
     }
     
-    // For filtered warehouse stats - sum up selected warehouses
-    const filteredWh = filteredWarehouseStats;
-    const totalQuantity = filteredWh.reduce((sum, w) => sum + (w.totalQuantity || 0), 0);
-    const totalReserved = filteredWh.reduce((sum, w) => sum + (w.reserved || 0), 0);
-    const totalConsigned = filteredWh.reduce((sum, w) => sum + (w.consigned || 0), 0);
-    const totalValue = filteredWh.reduce((sum, w) => sum + (w.totalValue || 0), 0);
-    const totalProducts = filteredWh.reduce((sum, w) => sum + (w.productCount || 0), 0);
-    
+    // When search is active, show counts from filtered lists
     return {
       ...stats,
       lowStockItems: filteredLow.length,
       outOfStockItems: filteredOut.length,
-      totalStockQuantity: selectedWarehouseIds.length > 0 ? totalQuantity : stats.totalStockQuantity,
-      totalReserved: selectedWarehouseIds.length > 0 ? totalReserved : stats.totalReserved,
-      totalConsigned: selectedWarehouseIds.length > 0 ? totalConsigned : stats.totalConsigned,
-      totalStockValue: selectedWarehouseIds.length > 0 ? totalValue : stats.totalStockValue,
-      totalProducts: selectedWarehouseIds.length > 0 ? totalProducts : stats.totalProducts,
     };
-  }, [stats, filteredLow, filteredOut, selectedWarehouseIds, brandId, colorId, searchTerm, filteredWarehouseStats]);
+  }, [stats, filteredLow, filteredOut, searchTerm]);
 
   const barChartData = {
     labels: ['Aktif Depolar', 'Toplam Ürünler', 'Kategoriler', 'Düşük Stok', 'Stok Dışı'],
@@ -277,7 +283,14 @@ const Dashboard = () => {
           </p>
         </div>
         <div className="d-flex gap-2">
-          <button className="btn btn-outline-primary" onClick={() => fetchDashboardData(new AbortController().signal)}>
+          <button className="btn btn-outline-primary" onClick={() => {
+            const filters = {
+              brandId,
+              colorId,
+              warehouseIds: selectedWarehouseIds
+            };
+            fetchDashboardData(new AbortController().signal, filters);
+          }}>
             <i className="fas fa-sync-alt me-2"></i>
             Yenile
           </button>

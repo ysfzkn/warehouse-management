@@ -30,11 +30,38 @@ public class DashboardController {
      * Get all dashboard statistics in a single optimized API call.
      * Returns aggregated data with caching enabled.
      * 
+     * If filters are provided, returns filtered stats (not cached).
+     * If no filters, returns cached global stats.
+     * 
+     * @param brandId Optional brand filter
+     * @param colorId Optional color filter
+     * @param warehouseIds Optional warehouse filter (comma-separated)
      * @return DashboardStatsDto with all statistics
      */
     @GetMapping("/stats")
-    public ResponseEntity<DashboardStatsDto> getDashboardStats() {
-        DashboardStatsDto stats = dashboardService.getDashboardStats();
+    public ResponseEntity<DashboardStatsDto> getDashboardStats(
+            @RequestParam(required = false) Long brandId,
+            @RequestParam(required = false) Long colorId,
+            @RequestParam(required = false) String warehouseIds) {
+        
+        // If no filters, use cached stats
+        if (brandId == null && colorId == null && warehouseIds == null) {
+            DashboardStatsDto stats = dashboardService.getDashboardStats();
+            return ResponseEntity.ok(stats);
+        }
+        
+        // Parse warehouse IDs
+        java.util.List<Long> warehouseIdList = null;
+        if (warehouseIds != null && !warehouseIds.isEmpty()) {
+            warehouseIdList = java.util.Arrays.stream(warehouseIds.split(","))
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty())
+                    .map(Long::parseLong)
+                    .toList();
+        }
+        
+        // Get filtered stats (not cached)
+        DashboardStatsDto stats = dashboardService.getFilteredDashboardStats(brandId, colorId, warehouseIdList);
         return ResponseEntity.ok(stats);
     }
 
