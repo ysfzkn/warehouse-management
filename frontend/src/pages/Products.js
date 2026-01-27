@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import axios from 'axios';
 import useSecurityCodePrompt from '../components/useSecurityCodePrompt';
 import ProductForm from '../components/ProductForm';
@@ -11,6 +12,7 @@ const normalizeText = (text) => (text || '').toLocaleLowerCase('tr-TR');
 const PAGE_SIZE_OPTIONS = [20, 50, 100, 250];
 
 const Products = () => {
+  const location = useLocation();
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -61,6 +63,7 @@ const Products = () => {
   const [subcategorySearch, setSubcategorySearch] = useState('');
   const categoryDropdownRef = useRef(null);
   const subcategoryDropdownRef = useRef(null);
+  const [highlightedProductId, setHighlightedProductId] = useState(null);
   const role = (typeof window !== 'undefined' && localStorage.getItem('auth_role')) || 'ADMIN';
   const isAdmin = role === 'ADMIN';
   const { askCode: askSecurityCode, SecurityCodePrompt, closePrompt: closeSecurityPrompt } = useSecurityCodePrompt();
@@ -519,6 +522,63 @@ const Products = () => {
     setSelectedProducts([]);
   };
 
+  // Handle highlightProduct parameter from URL (for direct navigation from stock audit)
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const highlightId = params.get('highlightProduct');
+    if (!highlightId) return;
+
+    const productId = parseInt(highlightId, 10);
+    if (!Number.isFinite(productId)) return;
+
+    let attempts = 0;
+    const maxAttempts = 20;
+    let clearHighlightTimeoutId = null;
+
+    const applyHighlight = () => {
+      setHighlightedProductId(productId);
+      const el = document.getElementById(`product-${productId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+        // Clean URL once we successfully scrolled
+        params.delete('highlightProduct');
+        const newSearch = params.toString();
+        const newUrl = newSearch ? `${location.pathname}?${newSearch}` : location.pathname;
+        window.history.replaceState({}, '', newUrl);
+
+        if (!clearHighlightTimeoutId) {
+          clearHighlightTimeoutId = window.setTimeout(() => {
+            setHighlightedProductId(null);
+          }, 7000);
+        }
+        return true;
+      }
+      return false;
+    };
+
+    // Try immediately
+    if (applyHighlight()) {
+      return () => {
+        if (clearHighlightTimeoutId) clearTimeout(clearHighlightTimeoutId);
+      };
+    }
+
+    // Retry for a short period until row is rendered
+    const intervalId = window.setInterval(() => {
+      attempts += 1;
+      const done = applyHighlight();
+      if (done || attempts >= maxAttempts) {
+        window.clearInterval(intervalId);
+      }
+    }, 300);
+
+    return () => {
+      window.clearInterval(intervalId);
+      if (clearHighlightTimeoutId) clearTimeout(clearHighlightTimeoutId);
+    };
+  }, [location.pathname, location.search, filteredProducts.length]);
+
   const handleBatchDeleteProducts = (ids) => {
     if (!ids || ids.length === 0) {
       return;
@@ -622,6 +682,18 @@ const Products = () => {
   return (
     <div>
       <style>{`
+        .stock-highlighted {
+          animation: highlightPulse 2s ease-in-out infinite;
+          transition: all 0.3s ease;
+        }
+        @keyframes highlightPulse {
+          0%, 100% {
+            background-color: rgba(59, 130, 246, 0.08);
+          }
+          50% {
+            background-color: rgba(59, 130, 246, 0.18);
+          }
+        }
         .loading-overlay {
           position: fixed;
           inset: 0;
@@ -1240,7 +1312,11 @@ const Products = () => {
                   const isSelected = selectedProducts.includes(product.id);
 
                   return (
-                    <tr key={product.id} className={isSelected ? 'table-active' : ''}>
+                    <tr
+                      key={product.id}
+                      id={`product-${product.id}`}
+                      className={`${isSelected ? 'table-active' : ''} ${highlightedProductId === product.id ? 'stock-highlighted' : ''}`}
+                    >
                       <td className="text-center align-middle">
                         <div className="form-check mb-0">
                           <input
@@ -1263,9 +1339,27 @@ const Products = () => {
                         )}
                       </td>
                       <td>
-                        <span className="badge text-bg-light border">
-                          <i className="fas fa-barcode me-1"></i>{product.sku}
-                        </span>
+                        <div className="d-flex flex-wrap align-items-center gap-2">
+                          <span className="badge text-bg-light border">
+                            <i className="fas fa-barcode me-1"></i>{product.sku}
+                          </span>
+                          {product.sku && (
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-outline-secondary"
+                              style={{ fontSize: '0.7rem', padding: '0.1rem 0.45rem' }}
+                              onClick={() => {
+                                if (navigator.clipboard?.writeText) {
+                                  navigator.clipboard.writeText(product.sku).catch(() => {});
+                                }
+                              }}
+                              title="Stok kodunu kopyala"
+                            >
+                              <i className="fas fa-copy me-1"></i>
+                              Kopyala
+                            </button>
+                          )}
+                        </div>
                       </td>
                       <td>
                         {product.category?.name ? (
