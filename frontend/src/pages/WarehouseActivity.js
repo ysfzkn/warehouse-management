@@ -261,8 +261,8 @@ const WarehouseActivity = () => {
                                       fontWeight: '600',
                                       color: '#475569',
                                       overflow: 'hidden',
-                                      textOverflow: 'ellipsis',
-                                      whiteSpace: 'nowrap'
+                                      whiteSpace: 'normal',
+                                      wordBreak: 'break-word'
                                     }}>
                                       {log.productName}
                                     </div>

@@ -770,7 +770,8 @@ const AuditTimelineModal = ({ entityType, entityId, onClose }) => {
                   fontWeight: '600',
                   color: '#1e293b',
                   overflow: 'hidden',
-                  textOverflow: 'ellipsis'
+                  whiteSpace: 'normal',
+                  wordBreak: 'break-word'
                 }}>{parsed.product}</div>
               </div>
             </div>
@@ -995,7 +996,8 @@ const AuditTimelineModal = ({ entityType, entityId, onClose }) => {
                   fontWeight: '600',
                   color: '#1e293b',
                   overflow: 'hidden',
-                  textOverflow: 'ellipsis'
+                  whiteSpace: 'normal',
+                  wordBreak: 'break-word'
                 }}>{parsed.product}</div>
               </div>
             </div>
@@ -1169,7 +1171,8 @@ const AuditTimelineModal = ({ entityType, entityId, onClose }) => {
                   fontWeight: '600',
                   color: '#1e293b',
                   overflow: 'hidden',
-                  textOverflow: 'ellipsis'
+                  whiteSpace: 'normal',
+                  wordBreak: 'break-word'
                 }}>{parsed.product}</div>
               </div>
             </div>
@@ -1342,7 +1345,8 @@ const AuditTimelineModal = ({ entityType, entityId, onClose }) => {
                 fontWeight: '600',
                 color: '#1e293b',
                 overflow: 'hidden',
-                textOverflow: 'ellipsis'
+                whiteSpace: 'normal',
+                wordBreak: 'break-word'
               }}>{parsed.product}</div>
             </div>
           </div>
@@ -1794,7 +1798,9 @@ const AuditTimelineModal = ({ entityType, entityId, onClose }) => {
                 fontSize: isMobile ? '0.85rem' : '0.9rem',
                 fontWeight: '600',
                 color: productSku ? '#475569' : '#1e293b',
-                lineHeight: '1.4'
+                lineHeight: '1.4',
+                whiteSpace: 'normal',
+                wordBreak: 'break-word'
               }}>
                 {parsed.product}
               </div>
