@@ -2141,13 +2141,13 @@ const AuditTimelineModal = ({ entityType, entityId, onClose }) => {
                       color: '#64748b',
                       marginBottom: '0.125rem'
                     }}>Ürün</div>
-                    <div style={{
+                <div style={{
                       fontSize: '0.85rem',
                       fontWeight: '600',
                       color: '#1e293b',
                       overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap'
+                      whiteSpace: 'normal',
+                      wordBreak: 'break-word'
                     }}>{entityData.product.name}</div>
                   </div>
                 </div>
