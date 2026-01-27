@@ -330,24 +330,81 @@ const AuditTimelineModal = ({ entityType, entityId, onClose }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [hoveredItem, setHoveredItem] = useState(null);
+  const [entityData, setEntityData] = useState(null);
+  const [copiedSku, setCopiedSku] = useState(null);
   
   // Get responsive values
   const { isMobile, isTablet } = useIsMobile();
   const styles = useMemo(() => getStyles(isMobile, isTablet), [isMobile, isTablet]);
 
+  // Copy SKU to clipboard
+  const copySku = (sku) => {
+    navigator.clipboard.writeText(sku).then(() => {
+      setCopiedSku(sku);
+      setTimeout(() => setCopiedSku(null), 2000);
+    }).catch(err => {
+      console.error('Failed to copy SKU:', err);
+    });
+  };
+
   useEffect(() => {
-    const fetchLogs = async () => {
+    const fetchData = async () => {
       try {
         setLoading(true);
-        const res = await axios.get('/api/audit', { params: { entityType, entityId, size: 500 } });
-        setLogs(res.data || []);
+        
+        // Fetch audit logs
+        const logsRes = await axios.get('/api/audit', { params: { entityType, entityId, size: 500 } });
+        setLogs(logsRes.data || []);
+        
+        // Fetch entity data if it's a Stock
+        if (entityType === 'Stock') {
+          try {
+            const entityRes = await axios.get(`/api/stocks/${entityId}`);
+            setEntityData(entityRes.data);
+          } catch (e) {
+            console.warn('Failed to fetch stock details:', e);
+          }
+        } else if (entityType === 'StockTransfer') {
+          try {
+            const entityRes = await axios.get(`/api/stock-transfers/${entityId}`);
+            const transferData = entityRes.data;
+            
+            // Fetch transfer items with product details
+            if (transferData && transferData.items) {
+              // Group by SKU and sum quantities for distinct list
+              const distinctProducts = {};
+              transferData.items.forEach(item => {
+                const sku = item.product?.sku || 'N/A';
+                const key = sku;
+                if (distinctProducts[key]) {
+                  distinctProducts[key].qty += item.quantity;
+                } else {
+                  distinctProducts[key] = {
+                    sku: sku,
+                    name: item.product?.name || 'Unknown',
+                    qty: item.quantity,
+                    productId: item.product?.id,
+                    // stockId comes directly from DTO (stockId field), not nested stock
+                    stockId: item.stockId || null
+                  };
+                }
+              });
+              
+              transferData.distinctProducts = Object.values(distinctProducts);
+            }
+            
+            setEntityData(transferData);
+          } catch (e) {
+            console.warn('Failed to fetch transfer details:', e);
+          }
+        }
       } catch (e) {
         setError('Hareket geçmişi yüklenirken hata oluştu');
       } finally {
         setLoading(false);
       }
     };
-    fetchLogs();
+    fetchData();
   }, [entityType, entityId]);
 
   const formatDate = (iso) => {
@@ -832,16 +889,40 @@ const AuditTimelineModal = ({ entityType, entityId, onClose }) => {
                 </div>
                 <div>
                   <div style={{
-                    fontSize: isMobile ? '0.7rem' : '0.75rem',
-                    color: '#64748b',
-                    marginBottom: '0.125rem'
-                  }}>Yeni Miktar</div>
-                  <div style={{
-                    fontSize: isMobile ? '1.1rem' : '1.25rem',
-                    fontWeight: '700',
-                    color: '#4f46e5'
+                    fontSize: isMobile ? '0.75rem' : '0.8rem',
+                    color: '#0f172a',
+                    fontWeight: '600',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                    marginBottom: '0.2rem'
                   }}>
-                    {parsed.newQty !== null ? `${parsed.newQty} adet` : '-'}
+                    Yeni Miktar
+                  </div>
+                  <div style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    padding: isMobile ? '0.25rem 0.7rem' : '0.3rem 0.85rem',
+                    borderRadius: '999px',
+                    backgroundColor: '#eef2ff',
+                    border: '1px solid #e0e7ff',
+                    boxShadow: '0 0 0 1px rgba(129, 140, 248, 0.3)'
+                  }}>
+                    <i className="fas fa-hashtag" style={{ fontSize: isMobile ? '0.8rem' : '0.85rem', color: '#4f46e5' }}></i>
+                    <span style={{
+                      fontSize: isMobile ? '1.1rem' : '1.25rem',
+                      fontWeight: '800',
+                      color: '#1d4ed8'
+                    }}>
+                      {parsed.newQty !== null ? parsed.newQty : '-'}
+                    </span>
+                    <span style={{
+                      fontSize: isMobile ? '0.75rem' : '0.8rem',
+                      fontWeight: '600',
+                      color: '#4b5563'
+                    }}>
+                      adet
+                    </span>
                   </div>
                 </div>
               </div>
@@ -1323,18 +1404,78 @@ const AuditTimelineModal = ({ entityType, entityId, onClose }) => {
 
     // Multi-product transfer
     if (parsed._type === 'transfer_multi' && parsed.products) {
+      // Use entityData's distinctProducts if available, otherwise group parsed products
+      let displayProducts = [];
+      
+      if (entityData && entityData.distinctProducts) {
+        // Use pre-processed distinct products with SKU
+        displayProducts = entityData.distinctProducts;
+      } else {
+        // Group products by name and sum quantities (fallback for older logs)
+        const productMap = {};
+        parsed.products.forEach(p => {
+          const key = p.name;
+          if (productMap[key]) {
+            productMap[key].qty += p.qty;
+          } else {
+            productMap[key] = { name: p.name, qty: p.qty, sku: null };
+          }
+        });
+        displayProducts = Object.values(productMap);
+      }
+      
+      // Check if it's a customer delivery transfer based on transferType
+      const transferType = entityData?.transferType;
+      const isCustomerDelivery = transferType === 'CUSTOMER_DELIVERY';
+      const isSourceCustomer = false;
+      const isDestCustomer = isCustomerDelivery;
+      
       return (
         <div>
           {/* Source -> Destination */}
           <div style={styles.transferArrow}>
-            <div style={styles.warehouseBox}>
-              <i className="fas fa-warehouse" style={{ color: '#ef4444' }}></i>
-              <span>{parsed.src}</span>
+            <div style={{
+              ...styles.warehouseBox,
+              flexDirection: 'column',
+              gap: '0.25rem',
+              alignItems: 'flex-start'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <i className={`fas ${isSourceCustomer ? 'fa-user-tag' : 'fa-warehouse'}`} style={{ color: '#ef4444' }}></i>
+                <span style={{ fontWeight: '600' }}>{parsed.src}</span>
+              </div>
+              <span style={{
+                fontSize: '0.65rem',
+                color: '#64748b',
+                backgroundColor: isSourceCustomer ? '#fef3c7' : '#f1f5f9',
+                padding: '0.15rem 0.4rem',
+                borderRadius: '4px',
+                fontWeight: '500'
+              }}>
+                {isSourceCustomer ? '👤 Müşteri' : '🏢 Depo'}
+              </span>
             </div>
             <i className="fas fa-long-arrow-alt-right" style={styles.arrowIcon}></i>
-            <div style={styles.warehouseBox}>
-              <i className="fas fa-warehouse" style={{ color: '#22c55e' }}></i>
-              <span>{parsed.dst}</span>
+            <div style={{
+              ...styles.warehouseBox,
+              flexDirection: 'column',
+              gap: '0.25rem',
+              alignItems: 'flex-start'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <i className={`fas ${isDestCustomer ? 'fa-user-tag' : 'fa-warehouse'}`} style={{ color: '#22c55e' }}></i>
+                <span style={{ fontWeight: '600' }}>{parsed.dst}</span>
+              </div>
+              <span style={{
+                fontSize: '0.65rem',
+                color: '#64748b',
+                backgroundColor: isDestCustomer ? '#fef3c7' : '#f1f5f9',
+                padding: '0.15rem 0.4rem',
+                borderRadius: '4px',
+                fontWeight: '500'
+              }}>
+                {isDestCustomer ? '👤 Müşteri' : '🏢 Depo'}
+              </span>
             </div>
           </div>
           
@@ -1358,55 +1499,142 @@ const AuditTimelineModal = ({ entityType, entityId, onClose }) => {
               color: '#475569'
             }}>
               <i className="fas fa-boxes" style={{ color: '#6366f1' }}></i>
-              Ürünler ({parsed.products.length})
+              Ürünler ({displayProducts.length})
             </div>
-            <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
-              {parsed.products.map((product, idx) => (
+            <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+              {displayProducts.map((product, idx) => (
                 <div 
                   key={idx}
                   style={{
                     display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.75rem',
-                    padding: isMobile ? '0.5rem 0.75rem' : '0.625rem 0.75rem',
-                    borderBottom: idx < parsed.products.length - 1 ? '1px solid #f1f5f9' : 'none',
+                    alignItems: 'stretch',
+                    gap: isMobile ? '0.5rem' : '0.75rem',
+                    padding: isMobile ? '0.75rem' : '1rem',
+                    borderBottom: idx < displayProducts.length - 1 ? '1px solid #f1f5f9' : 'none',
                     transition: 'background-color 0.15s ease'
                   }}
                 >
                   <div style={{
-                    width: isMobile ? '28px' : '32px',
-                    height: isMobile ? '28px' : '32px',
-                    borderRadius: '8px',
+                    width: isMobile ? '36px' : '42px',
+                    height: isMobile ? '36px' : '42px',
+                    borderRadius: '10px',
                     backgroundColor: '#e0f2fe',
                     color: '#0369a1',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    fontSize: isMobile ? '0.7rem' : '0.8rem',
+                    fontSize: isMobile ? '0.85rem' : '1rem',
                     flexShrink: 0
                   }}>
                     <i className="fas fa-box"></i>
                   </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    {product.sku && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        <div style={{
+                          fontSize: isMobile ? '0.85rem' : '0.95rem',
+                          fontWeight: '700',
+                          color: '#1e293b',
+                          fontFamily: 'monospace',
+                          letterSpacing: '1px',
+                          backgroundColor: '#f8fafc',
+                          padding: '0.35rem 0.65rem',
+                          borderRadius: '6px',
+                          border: '1px solid #e2e8f0'
+                        }}>
+                          <i className="fas fa-barcode me-2" style={{ fontSize: '0.8rem', color: '#6366f1' }}></i>
+                          {product.sku}
+                        </div>
+                        <button
+                          onClick={() => copySku(product.sku)}
+                          title="Stok kodunu kopyala"
+                          style={{
+                            padding: '0.35rem 0.65rem',
+                            backgroundColor: copiedSku === product.sku ? '#dcfce7' : 'white',
+                            color: copiedSku === product.sku ? '#15803d' : '#64748b',
+                            border: `1px solid ${copiedSku === product.sku ? '#86efac' : '#e2e8f0'}`,
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                            fontSize: '0.75rem',
+                            fontWeight: '600',
+                            transition: 'all 0.2s ease',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.35rem'
+                          }}
+                          onMouseEnter={(e) => {
+                            if (copiedSku !== product.sku) {
+                              e.currentTarget.style.backgroundColor = '#f1f5f9';
+                              e.currentTarget.style.borderColor = '#cbd5e1';
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            if (copiedSku !== product.sku) {
+                              e.currentTarget.style.backgroundColor = 'white';
+                              e.currentTarget.style.borderColor = '#e2e8f0';
+                            }
+                          }}
+                        >
+                          <i className={`fas ${copiedSku === product.sku ? 'fa-check' : 'fa-copy'}`}></i>
+                          {copiedSku === product.sku ? 'Kopyalandı!' : 'Kopyala'}
+                        </button>
+                      </div>
+                    )}
                     <div style={{
-                      fontSize: isMobile ? '0.75rem' : '0.8rem',
-                      fontWeight: '500',
-                      color: '#1e293b',
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis'
+                      fontSize: isMobile ? '0.85rem' : '0.9rem',
+                      fontWeight: '600',
+                      color: product.sku ? '#475569' : '#1e293b',
+                      lineHeight: '1.4'
                     }}>
                       {product.name}
                     </div>
+                    {product.stockId && (
+                      <a
+                        href={`/stock?highlight=${product.stockId}`}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          window.location.href = `/stock?highlight=${product.stockId}`;
+                        }}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.35rem',
+                          fontSize: '0.75rem',
+                          color: '#6366f1',
+                          fontWeight: '600',
+                          textDecoration: 'none',
+                          padding: '0.35rem 0.65rem',
+                          backgroundColor: '#f5f3ff',
+                          border: '1px solid #e0e7ff',
+                          borderRadius: '6px',
+                          width: 'fit-content',
+                          transition: 'all 0.2s ease'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = '#ede9fe';
+                          e.currentTarget.style.borderColor = '#c7d2fe';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = '#f5f3ff';
+                          e.currentTarget.style.borderColor = '#e0e7ff';
+                        }}
+                      >
+                        <i className="fas fa-external-link-alt"></i>
+                        Stok'u Görüntüle
+                      </a>
+                    )}
                   </div>
                   <div style={{
-                    padding: '0.25rem 0.5rem',
+                    padding: isMobile ? '0.4rem 0.7rem' : '0.5rem 0.85rem',
                     backgroundColor: '#dbeafe',
                     color: '#1d4ed8',
-                    borderRadius: '6px',
-                    fontSize: isMobile ? '0.7rem' : '0.75rem',
-                    fontWeight: '600',
-                    whiteSpace: 'nowrap'
+                    borderRadius: '10px',
+                    fontSize: isMobile ? '0.85rem' : '0.9rem',
+                    fontWeight: '700',
+                    whiteSpace: 'nowrap',
+                    display: 'flex',
+                    alignItems: 'center',
+                    height: 'fit-content'
                   }}>
                     {product.qty} adet
                   </div>
@@ -1419,36 +1647,206 @@ const AuditTimelineModal = ({ entityType, entityId, onClose }) => {
     }
 
     // Single product transfer (legacy format)
+    // Try to get SKU and stockId from entityData if available
+    let productSku = null;
+    let stockId = null;
+    if (entityData && entityData.items && entityData.items.length > 0) {
+      const matchingItem = entityData.items.find(item => 
+        item.product?.name === parsed.product
+      );
+      if (matchingItem) {
+        productSku = matchingItem.product?.sku;
+        // stockId comes directly from DTO (stockId field)
+        stockId = matchingItem.stockId || null;
+      }
+    }
+    
+    // Check if it's a customer delivery transfer based on transferType
+    const transferType = entityData?.transferType;
+    const isCustomerDelivery = transferType === 'CUSTOMER_DELIVERY';
+    const isSourceCustomer = false;
+    const isDestCustomer = isCustomerDelivery;
+    
     return (
       <div>
         <div style={styles.transferArrow}>
-          <div style={styles.warehouseBox}>
-            <i className="fas fa-warehouse" style={{ color: '#ef4444' }}></i>
-            <span>{parsed.src}</span>
+          <div style={{
+            ...styles.warehouseBox,
+            flexDirection: 'column',
+            gap: '0.25rem',
+            alignItems: 'flex-start'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <i className={`fas ${isSourceCustomer ? 'fa-user-tag' : 'fa-warehouse'}`} style={{ color: '#ef4444' }}></i>
+              <span style={{ fontWeight: '600' }}>{parsed.src}</span>
+            </div>
+            <span style={{
+              fontSize: '0.65rem',
+              color: '#64748b',
+              backgroundColor: isSourceCustomer ? '#fef3c7' : '#f1f5f9',
+              padding: '0.15rem 0.4rem',
+              borderRadius: '4px',
+              fontWeight: '500'
+            }}>
+              {isSourceCustomer ? '👤 Müşteri' : '🏢 Depo'}
+            </span>
           </div>
           <i className="fas fa-long-arrow-alt-right" style={styles.arrowIcon}></i>
-          <div style={styles.warehouseBox}>
-            <i className="fas fa-warehouse" style={{ color: '#22c55e' }}></i>
-            <span>{parsed.dst}</span>
+          <div style={{
+            ...styles.warehouseBox,
+            flexDirection: 'column',
+            gap: '0.25rem',
+            alignItems: 'flex-start'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <i className={`fas ${isDestCustomer ? 'fa-user-tag' : 'fa-warehouse'}`} style={{ color: '#22c55e' }}></i>
+              <span style={{ fontWeight: '600' }}>{parsed.dst}</span>
+            </div>
+            <span style={{
+              fontSize: '0.65rem',
+              color: '#64748b',
+              backgroundColor: isDestCustomer ? '#fef3c7' : '#f1f5f9',
+              padding: '0.15rem 0.4rem',
+              borderRadius: '4px',
+              fontWeight: '500'
+            }}>
+              {isDestCustomer ? '👤 Müşteri' : '🏢 Depo'}
+            </span>
           </div>
         </div>
-        <div style={{ ...styles.detailsGrid, marginTop: '0.75rem' }}>
-          <div style={styles.detailItem}>
-            <div style={{ ...styles.detailIcon, backgroundColor: '#e0f2fe', color: '#0369a1' }}>
+        
+        {/* Product Details Card */}
+        <div style={{
+          marginTop: '0.75rem',
+          backgroundColor: 'white',
+          borderRadius: '10px',
+          border: '1px solid #e2e8f0',
+          padding: isMobile ? '0.75rem' : '1rem'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'stretch', gap: '0.75rem' }}>
+            <div style={{
+              width: isMobile ? '36px' : '42px',
+              height: isMobile ? '36px' : '42px',
+              borderRadius: '10px',
+              backgroundColor: '#e0f2fe',
+              color: '#0369a1',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: isMobile ? '0.85rem' : '1rem',
+              flexShrink: 0
+            }}>
               <i className="fas fa-box"></i>
             </div>
-            <div>
-              <div style={styles.detailLabel}>Ürün</div>
-              <div style={styles.detailValue}>{parsed.product}</div>
+            <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              {productSku && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  <div style={{
+                    fontSize: isMobile ? '0.85rem' : '0.95rem',
+                    fontWeight: '700',
+                    color: '#1e293b',
+                    fontFamily: 'monospace',
+                    letterSpacing: '1px',
+                    backgroundColor: '#f8fafc',
+                    padding: '0.35rem 0.65rem',
+                    borderRadius: '6px',
+                    border: '1px solid #e2e8f0'
+                  }}>
+                    <i className="fas fa-barcode me-2" style={{ fontSize: '0.8rem', color: '#6366f1' }}></i>
+                    {productSku}
+                  </div>
+                  <button
+                    onClick={() => copySku(productSku)}
+                    title="Stok kodunu kopyala"
+                    style={{
+                      padding: '0.35rem 0.65rem',
+                      backgroundColor: copiedSku === productSku ? '#dcfce7' : 'white',
+                      color: copiedSku === productSku ? '#15803d' : '#64748b',
+                      border: `1px solid ${copiedSku === productSku ? '#86efac' : '#e2e8f0'}`,
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: '0.75rem',
+                      fontWeight: '600',
+                      transition: 'all 0.2s ease',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.35rem'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (copiedSku !== productSku) {
+                        e.currentTarget.style.backgroundColor = '#f1f5f9';
+                        e.currentTarget.style.borderColor = '#cbd5e1';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (copiedSku !== productSku) {
+                        e.currentTarget.style.backgroundColor = 'white';
+                        e.currentTarget.style.borderColor = '#e2e8f0';
+                      }
+                    }}
+                  >
+                    <i className={`fas ${copiedSku === productSku ? 'fa-check' : 'fa-copy'}`}></i>
+                    {copiedSku === productSku ? 'Kopyalandı!' : 'Kopyala'}
+                  </button>
+                </div>
+              )}
+              <div style={{
+                fontSize: isMobile ? '0.85rem' : '0.9rem',
+                fontWeight: '600',
+                color: productSku ? '#475569' : '#1e293b',
+                lineHeight: '1.4'
+              }}>
+                {parsed.product}
+              </div>
+              {stockId && (
+                <a
+                  href={`/stock?highlight=${stockId}`}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    window.location.href = `/stock?highlight=${stockId}`;
+                  }}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.35rem',
+                    fontSize: '0.75rem',
+                    color: '#6366f1',
+                    fontWeight: '600',
+                    textDecoration: 'none',
+                    padding: '0.35rem 0.65rem',
+                    backgroundColor: '#f5f3ff',
+                    border: '1px solid #e0e7ff',
+                    borderRadius: '6px',
+                    width: 'fit-content',
+                    transition: 'all 0.2s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = '#ede9fe';
+                    e.currentTarget.style.borderColor = '#c7d2fe';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = '#f5f3ff';
+                    e.currentTarget.style.borderColor = '#e0e7ff';
+                  }}
+                >
+                  <i className="fas fa-external-link-alt"></i>
+                  Stok'u Görüntüle
+                </a>
+              )}
             </div>
-          </div>
-          <div style={styles.detailItem}>
-            <div style={{ ...styles.detailIcon, backgroundColor: '#dbeafe', color: '#1d4ed8' }}>
-              <i className="fas fa-cubes"></i>
-            </div>
-            <div>
-              <div style={styles.detailLabel}>Miktar</div>
-              <div style={styles.detailValue}>{parsed.qty} adet</div>
+            <div style={{
+              padding: isMobile ? '0.4rem 0.7rem' : '0.5rem 0.85rem',
+              backgroundColor: '#dbeafe',
+              color: '#1d4ed8',
+              borderRadius: '10px',
+              fontSize: isMobile ? '0.85rem' : '0.9rem',
+              fontWeight: '700',
+              whiteSpace: 'nowrap',
+              display: 'flex',
+              alignItems: 'center',
+              height: 'fit-content'
+            }}>
+              {parsed.qty} adet
             </div>
           </div>
         </div>
@@ -1593,9 +1991,17 @@ const AuditTimelineModal = ({ entityType, entityId, onClose }) => {
               <div style={styles.headerIcon}>
                 <i className={`fas ${headerIconClass}`}></i>
               </div>
-              <div>
+              <div style={{ flex: 1 }}>
                 <div>Hareket Geçmişi</div>
-                <div style={styles.headerBadge}>{label} #{entityId}</div>
+                <div style={{ 
+                  ...styles.headerBadge,
+                  textAlign: 'center',
+                  display: 'inline-block'
+                }}>
+                  {entityType === 'Stock' && entityData?.product?.sku 
+                    ? `Stok: ${entityData.product.sku}` 
+                    : `${label} #${entityId}`}
+                </div>
               </div>
             </div>
             <button 
@@ -1605,6 +2011,269 @@ const AuditTimelineModal = ({ entityType, entityId, onClose }) => {
               style={styles.closeBtn}
             ></button>
           </div>
+
+          {/* Product Details Section (only for Stock entity) */}
+          {entityType === 'Stock' && entityData && (
+            <div style={{
+              backgroundColor: 'white',
+              borderBottom: '1px solid #e2e8f0',
+              padding: isMobile ? '0.75rem 1rem' : '1rem 1.5rem'
+            }}>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(220px, 1fr))',
+                gap: isMobile ? '0.5rem' : '0.75rem'
+              }}>
+                {/* SKU + Copy + View Product */}
+                {entityData.product?.sku && (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    padding: '0.5rem 0.75rem',
+                    backgroundColor: '#f8fafc',
+                    borderRadius: '8px',
+                    border: '1px solid #e2e8f0',
+                    flexWrap: 'wrap'
+                  }}>
+                    <div style={{
+                      fontSize: '0.9rem',
+                      fontWeight: '700',
+                      color: '#1e293b',
+                      fontFamily: 'monospace',
+                      letterSpacing: '1px',
+                      backgroundColor: '#eef2ff',
+                      padding: '0.35rem 0.65rem',
+                      borderRadius: '6px',
+                      border: '1px solid #e0e7ff',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.4rem'
+                    }}>
+                      <i className="fas fa-barcode" style={{ fontSize: '0.8rem', color: '#6366f1' }}></i>
+                      {entityData.product.sku}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => copySku(entityData.product.sku)}
+                      title="Stok kodunu kopyala"
+                      style={{
+                        padding: '0.35rem 0.65rem',
+                        backgroundColor: copiedSku === entityData.product.sku ? '#dcfce7' : 'white',
+                        color: copiedSku === entityData.product.sku ? '#15803d' : '#64748b',
+                        border: `1px solid ${copiedSku === entityData.product.sku ? '#86efac' : '#e2e8f0'}`,
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontSize: '0.75rem',
+                        fontWeight: '600',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.35rem',
+                        transition: 'all 0.2s ease'
+                      }}
+                    >
+                      <i className={`fas ${copiedSku === entityData.product.sku ? 'fa-check' : 'fa-copy'}`}></i>
+                      {copiedSku === entityData.product.sku ? 'Kopyalandı!' : 'Kopyala'}
+                    </button>
+                    {entityData.product?.id && (
+                      <a
+                        href={`/products?highlightProduct=${entityData.product.id}`}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          window.location.href = `/products?highlightProduct=${entityData.product.id}`;
+                        }}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.35rem',
+                          fontSize: '0.75rem',
+                          color: '#6366f1',
+                          fontWeight: '600',
+                          textDecoration: 'none',
+                          padding: '0.35rem 0.65rem',
+                          backgroundColor: '#f5f3ff',
+                          border: '1px solid #e0e7ff',
+                          borderRadius: '6px',
+                          transition: 'all 0.2s ease',
+                          whiteSpace: 'nowrap'
+                        }}
+                      >
+                        <i className="fas fa-external-link-alt"></i>
+                        Ürünü Görüntüle
+                      </a>
+                    )}
+                  </div>
+                )}
+
+                {/* Product Name */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  padding: '0.5rem 0.75rem',
+                  backgroundColor: '#f8fafc',
+                  borderRadius: '8px',
+                  border: '1px solid #e2e8f0'
+                }}>
+                  <div style={{
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '8px',
+                    backgroundColor: '#dbeafe',
+                    color: '#1d4ed8',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '0.85rem',
+                    flexShrink: 0
+                  }}>
+                    <i className="fas fa-box"></i>
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{
+                      fontSize: '0.7rem',
+                      color: '#64748b',
+                      marginBottom: '0.125rem'
+                    }}>Ürün</div>
+                    <div style={{
+                      fontSize: '0.85rem',
+                      fontWeight: '600',
+                      color: '#1e293b',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap'
+                    }}>{entityData.product.name}</div>
+                  </div>
+                </div>
+
+                {/* Warehouse */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  padding: '0.5rem 0.75rem',
+                  backgroundColor: '#f8fafc',
+                  borderRadius: '8px',
+                  border: '1px solid #e2e8f0'
+                }}>
+                  <div style={{
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '8px',
+                    backgroundColor: '#fef3c7',
+                    color: '#b45309',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '0.85rem',
+                    flexShrink: 0
+                  }}>
+                    <i className="fas fa-warehouse"></i>
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{
+                      fontSize: '0.7rem',
+                      color: '#64748b',
+                      marginBottom: '0.125rem'
+                    }}>Depo</div>
+                    <div style={{
+                      fontSize: '0.85rem',
+                      fontWeight: '600',
+                      color: '#1e293b',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap'
+                    }}>{entityData.warehouse.name}</div>
+                  </div>
+                </div>
+
+                {/* Quantity */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  padding: '0.5rem 0.75rem',
+                  backgroundColor: '#f8fafc',
+                  borderRadius: '8px',
+                  border: '1px solid #e2e8f0'
+                }}>
+                  <div style={{
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '8px',
+                    backgroundColor: '#dcfce7',
+                    color: '#15803d',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '0.85rem',
+                    flexShrink: 0
+                  }}>
+                    <i className="fas fa-cubes"></i>
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{
+                      fontSize: '0.7rem',
+                      color: '#64748b',
+                      marginBottom: '0.125rem'
+                    }}>Miktar</div>
+                    <div style={{
+                      fontSize: '0.85rem',
+                      fontWeight: '600',
+                      color: '#1e293b'
+                    }}>{entityData.quantity} adet</div>
+                  </div>
+                </div>
+
+                {/* Category (if exists) */}
+                {entityData.product.category && (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    padding: '0.5rem 0.75rem',
+                    backgroundColor: '#f8fafc',
+                    borderRadius: '8px',
+                    border: '1px solid #e2e8f0'
+                  }}>
+                    <div style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '8px',
+                      backgroundColor: '#e0e7ff',
+                      color: '#4338ca',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '0.85rem',
+                      flexShrink: 0
+                    }}>
+                      <i className="fas fa-tag"></i>
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{
+                        fontSize: '0.7rem',
+                        color: '#64748b',
+                        marginBottom: '0.125rem'
+                      }}>Kategori</div>
+                      <div style={{
+                        fontSize: '0.85rem',
+                        fontWeight: '600',
+                        color: '#1e293b',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
+                      }}>
+                        {entityData.product.category.parentName 
+                          ? `${entityData.product.category.parentName} > ${entityData.product.category.name}`
+                          : entityData.product.category.name}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Body */}
           <div className="modal-body" style={styles.modalBody}>

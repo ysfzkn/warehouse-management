@@ -85,6 +85,23 @@ const StockFiltersBar = ({
   return (
     <>
       <style>{`
+        /* Stock highlight animation */
+        @keyframes highlightPulse {
+          0%, 100% { 
+            background-color: rgba(59, 130, 246, 0.15);
+            box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4);
+          }
+          50% { 
+            background-color: rgba(59, 130, 246, 0.25);
+            box-shadow: 0 0 0 10px rgba(59, 130, 246, 0);
+          }
+        }
+        
+        .stock-highlighted {
+          animation: highlightPulse 2s ease-in-out infinite;
+          transition: all 0.3s ease;
+        }
+        
         @media (max-width: 1155px) {
           .stock-mobile-card,
           .transfer-mobile-card {
@@ -97,6 +114,9 @@ const StockFiltersBar = ({
           .transfer-mobile-card.is-selected {
             border-color: #3b82f6 !important;
             box-shadow: 0 20px 45px rgba(59,130,246,0.22);
+          }
+          .stock-mobile-card.stock-highlighted {
+            border-color: #3b82f6 !important;
           }
           .stock-mobile-card__header,
           .transfer-mobile-card__header {
@@ -722,6 +742,7 @@ const Stock = () => {
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [showMyRequestsModal, setShowMyRequestsModal] = useState(false);
   const [lockCustomerTransfer, setLockCustomerTransfer] = useState(false);
+  const [highlightedStockId, setHighlightedStockId] = useState(null);
   const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
   const [selectedStocks, setSelectedStocks] = useState([]);
   const [selectedTransfers, setSelectedTransfers] = useState([]);
@@ -1329,6 +1350,70 @@ const Stock = () => {
     if (!selectedStocks.length) return;
     setSelectedStocks(prev => prev.filter(id => stocks.some(stock => stock.id === id)));
   }, [stocks, selectedStocks.length]);
+
+  // Handle highlight parameter from URL (for direct navigation from audit logs)
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const highlightId = params.get('highlight');
+    if (!highlightId) return;
+
+    const stockId = parseInt(highlightId, 10);
+    if (!Number.isFinite(stockId)) return;
+
+    let attempts = 0;
+    const maxAttempts = 20;
+    let clearHighlightTimeoutId = null;
+
+    const applyHighlight = () => {
+      // Always set highlighted ID so CSS animation can kick in once element exists
+      setHighlightedStockId(stockId);
+
+      const element = document.getElementById(`stock-${stockId}`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+        // Clean URL once we successfully scrolled
+        params.delete('highlight');
+        const newSearch = params.toString();
+        const newUrl = newSearch ? `${location.pathname}?${newSearch}` : location.pathname;
+        window.history.replaceState({}, '', newUrl);
+
+        // Remove visual highlight after a while
+        if (!clearHighlightTimeoutId) {
+          clearHighlightTimeoutId = window.setTimeout(() => {
+            setHighlightedStockId(null);
+          }, 7000);
+        }
+        return true;
+      }
+      return false;
+    };
+
+    // First immediate attempt (in case list is already rendered)
+    if (applyHighlight()) {
+      return () => {
+        if (clearHighlightTimeoutId) {
+          clearTimeout(clearHighlightTimeoutId);
+        }
+      };
+    }
+
+    // Retry for a while until element appears (handles slow renders / pagination)
+    const intervalId = window.setInterval(() => {
+      attempts += 1;
+      const done = applyHighlight();
+      if (done || attempts >= maxAttempts) {
+        window.clearInterval(intervalId);
+      }
+    }, 300);
+
+    return () => {
+      window.clearInterval(intervalId);
+      if (clearHighlightTimeoutId) {
+        clearTimeout(clearHighlightTimeoutId);
+      }
+    };
+  }, [location.pathname, location.search, stocks.length]);
 
   const getEffectiveMin = useCallback((stock) => {
     const val = Number(stock?.minStockLevel);
@@ -2872,7 +2957,11 @@ const Stock = () => {
                     const isSelected = selectedStocks.includes(stock.id);
 
                     return (
-                      <tr key={stock.id} className={isSelected ? 'table-active' : ''}>
+                      <tr 
+                        key={stock.id} 
+                        id={`stock-${stock.id}`}
+                        className={`${isSelected ? 'table-active' : ''} ${highlightedStockId === stock.id ? 'stock-highlighted' : ''}`}
+                      >
                         <td className="text-center align-middle">
                           <div className="form-check mb-0">
                             <input
@@ -3067,7 +3156,8 @@ const Stock = () => {
                   return (
                     <div
                       key={stock.id}
-                      className={`stock-mobile-card card border-0 shadow-sm ${isSelected ? 'is-selected' : ''}`}
+                      id={`stock-${stock.id}`}
+                      className={`stock-mobile-card card border-0 shadow-sm ${isSelected ? 'is-selected' : ''} ${highlightedStockId === stock.id ? 'stock-highlighted' : ''}`}
                     >
                       <div className="card-body p-3">
                         <div className="stock-mobile-card__header mb-3">

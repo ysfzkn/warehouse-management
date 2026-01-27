@@ -180,9 +180,10 @@ const WarehouseActivity = () => {
                 <div className="list-group list-group-flush">
                   {logs.map(log => (
                     <div key={log.id} className="list-group-item">
-                      <div className="d-flex justify-content-between flex-wrap gap-2">
+                      {/* Header with action and timestamp */}
+                      <div className="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
                         <div>
-                          <span className={`badge bg-${actionMeta(log.action).variant}`}>
+                          <span className={`badge bg-${actionMeta(log.action).variant} fs-6`}>
                             {actionMeta(log.action).label}
                           </span>
                           <div className="text-muted small mt-2">
@@ -192,30 +193,208 @@ const WarehouseActivity = () => {
                             </span>
                           </div>
                         </div>
-                        <div className="d-flex flex-wrap align-items-center gap-2">
-                          {log.username && <span className="badge bg-primary">{log.username}</span>}
-                          {log.productSku && <span className="badge bg-secondary">SKU: {log.productSku}</span>}
-                          {log.productName && (
-                            <span className="badge bg-light text-dark">
-                              <i className="fas fa-box me-1"></i>{log.productName}
-                            </span>
-                          )}
-                          {typeof log.quantity === 'number' && (
-                            <span className="badge bg-info text-dark">Adet: {log.quantity}</span>
-                          )}
-                          {log.sourceWarehouseName && (
-                            <span className="badge bg-light text-dark">
-                              <i className="fas fa-arrow-right me-1"></i>{log.sourceWarehouseName}
-                            </span>
-                          )}
-                          {log.destinationWarehouseName && (
-                            <span className="badge bg-light text-dark">
-                              <i className="fas fa-arrow-right me-1"></i>{log.destinationWarehouseName}
-                            </span>
-                          )}
-                        </div>
+                        {log.username && (
+                          <div className="d-flex align-items-center gap-2">
+                            <div style={{
+                              width: '32px',
+                              height: '32px',
+                              borderRadius: '8px',
+                              backgroundColor: '#e0e7ff',
+                              color: '#4f46e5',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: '0.75rem',
+                              fontWeight: '600'
+                            }}>
+                              {log.username.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+                            </div>
+                            <span className="fw-semibold">{log.username}</span>
+                          </div>
+                        )}
                       </div>
-                      <div className="mt-2" style={{ whiteSpace: 'pre-wrap' }}>{log.details}</div>
+
+                      {/* Product Details Card */}
+                      <div className="row g-2 mb-2">
+                        {/* Product SKU and Name */}
+                        {(log.productSku || log.productName) && (
+                          <div className="col-12 col-lg-6">
+                            <div style={{
+                              backgroundColor: '#f8fafc',
+                              borderRadius: '8px',
+                              border: '1px solid #e2e8f0',
+                              padding: '0.75rem',
+                              height: '100%'
+                            }}>
+                              <div className="d-flex align-items-center gap-2">
+                                <div style={{
+                                  width: '36px',
+                                  height: '36px',
+                                  borderRadius: '8px',
+                                  backgroundColor: '#dbeafe',
+                                  color: '#1d4ed8',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontSize: '0.9rem',
+                                  flexShrink: 0
+                                }}>
+                                  <i className="fas fa-box"></i>
+                                </div>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  {log.productSku && (
+                                    <div style={{
+                                      fontSize: '0.75rem',
+                                      color: '#1e293b',
+                                      fontWeight: '700',
+                                      marginBottom: '0.25rem',
+                                      fontFamily: 'monospace',
+                                      letterSpacing: '0.5px'
+                                    }}>
+                                      <i className="fas fa-barcode me-1"></i>
+                                      {log.productSku}
+                                    </div>
+                                  )}
+                                  {log.productName && (
+                                    <div style={{
+                                      fontSize: '0.9rem',
+                                      fontWeight: '600',
+                                      color: '#475569',
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                      whiteSpace: 'nowrap'
+                                    }}>
+                                      {log.productName}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Quantity */}
+                        {typeof log.quantity === 'number' && (
+                          <div className="col-6 col-lg-3">
+                            <div style={{
+                              backgroundColor: '#f8fafc',
+                              borderRadius: '8px',
+                              border: '1px solid #e2e8f0',
+                              padding: '0.75rem',
+                              height: '100%'
+                            }}>
+                              <div className="d-flex align-items-center gap-2">
+                                <div style={{
+                                  width: '36px',
+                                  height: '36px',
+                                  borderRadius: '8px',
+                                  backgroundColor: '#dcfce7',
+                                  color: '#15803d',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontSize: '0.9rem',
+                                  flexShrink: 0
+                                }}>
+                                  <i className="fas fa-cubes"></i>
+                                </div>
+                                <div>
+                                  <div style={{
+                                    fontSize: '0.7rem',
+                                    color: '#64748b',
+                                    marginBottom: '0.125rem'
+                                  }}>Miktar</div>
+                                  <div style={{
+                                    fontSize: '0.9rem',
+                                    fontWeight: '700',
+                                    color: '#1e293b'
+                                  }}>
+                                    {log.quantity} adet
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Warehouse Transfer Info */}
+                        {(log.sourceWarehouseName || log.destinationWarehouseName) && (
+                          <div className="col-12 col-lg-6">
+                            <div style={{
+                              backgroundColor: '#f8fafc',
+                              borderRadius: '8px',
+                              border: '1px solid #e2e8f0',
+                              padding: '0.75rem',
+                              height: '100%'
+                            }}>
+                              <div className="d-flex align-items-center gap-2">
+                                <div style={{
+                                  width: '36px',
+                                  height: '36px',
+                                  borderRadius: '8px',
+                                  backgroundColor: '#fef3c7',
+                                  color: '#b45309',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontSize: '0.9rem',
+                                  flexShrink: 0
+                                }}>
+                                  <i className="fas fa-exchange-alt"></i>
+                                </div>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{
+                                    fontSize: '0.7rem',
+                                    color: '#64748b',
+                                    marginBottom: '0.25rem'
+                                  }}>Transfer</div>
+                                  <div className="d-flex align-items-center gap-2" style={{ fontSize: '0.85rem', fontWeight: '600' }}>
+                                    {log.sourceWarehouseName && (
+                                      <span style={{
+                                        color: '#ef4444',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        whiteSpace: 'nowrap'
+                                      }}>
+                                        {log.sourceWarehouseName}
+                                      </span>
+                                    )}
+                                    {log.sourceWarehouseName && log.destinationWarehouseName && (
+                                      <i className="fas fa-long-arrow-alt-right" style={{ color: '#667eea', flexShrink: 0 }}></i>
+                                    )}
+                                    {log.destinationWarehouseName && (
+                                      <span style={{
+                                        color: '#22c55e',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        whiteSpace: 'nowrap'
+                                      }}>
+                                        {log.destinationWarehouseName}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Details */}
+                      {log.details && (
+                        <div style={{
+                          marginTop: '0.75rem',
+                          padding: '0.75rem',
+                          backgroundColor: 'white',
+                          borderRadius: '8px',
+                          border: '1px solid #e2e8f0',
+                          fontSize: '0.85rem',
+                          color: '#475569',
+                          whiteSpace: 'pre-wrap'
+                        }}>
+                          {log.details}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
