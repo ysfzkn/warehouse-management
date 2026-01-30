@@ -1,5 +1,6 @@
 package com.warehouse.dto;
 
+import java.time.LocalDateTime;
 import java.util.Locale;
 
 public class StockFilter {
@@ -28,6 +29,8 @@ public class StockFilter {
     private Status status = Status.ALL;
     private boolean reservedOnly;
     private boolean consignedOnly;
+    private LocalDateTime lastUpdatedFrom;
+    private LocalDateTime lastUpdatedTo;
 
     public Long getBrandId() {
         return brandId;
@@ -99,6 +102,22 @@ public class StockFilter {
 
     public void setConsignedOnly(boolean consignedOnly) {
         this.consignedOnly = consignedOnly;
+    }
+
+    public LocalDateTime getLastUpdatedFrom() {
+        return lastUpdatedFrom;
+    }
+
+    public void setLastUpdatedFrom(LocalDateTime lastUpdatedFrom) {
+        this.lastUpdatedFrom = lastUpdatedFrom;
+    }
+
+    public LocalDateTime getLastUpdatedTo() {
+        return lastUpdatedTo;
+    }
+
+    public void setLastUpdatedTo(LocalDateTime lastUpdatedTo) {
+        this.lastUpdatedTo = lastUpdatedTo;
     }
 }
 

@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
 // Hook to detect mobile screen
@@ -326,6 +327,7 @@ const actionColors = {
 };
 
 const AuditTimelineModal = ({ entityType, entityId, onClose }) => {
+  const navigate = useNavigate();
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -674,6 +676,19 @@ const AuditTimelineModal = ({ entityType, entityId, onClose }) => {
       return { type: 'update', warehouse: m[1], product: m[2] };
     }
     
+    // Format: "Stok transfer yoluyla azaltıldı: -X adet → Yeni=Y (Rezerve'den çıkarıldı) | Transfer #Z - ... | Depo=..., Ürün=..."
+    m = details.match(/^Stok transfer yoluyla azaltıldı: ([+-]?\d+) adet → Yeni=(\d+)([^|]*) \| ([^|]+) \| Depo=([^,]+), Ürün=(.+?)(?:\s*\||$)/);
+    if (m) {
+      return {
+        type: 'remove',
+        delta: parseInt(m[1], 10),
+        newQty: parseInt(m[2], 10),
+        warehouse: m[5].trim(),
+        product: m[6].trim(),
+        isTransfer: true
+      };
+    }
+    
     // Fallback: Try to parse any stock-related detail with common patterns
     // Format: "... adet ... Depo=X ... Ürün=Y"
     m = details.match(/([+-]?\d+)\s*adet.*?(?:→|->)?\s*(?:Yeni=)?(\d+)?.*?Depo=([^,|]+).*?Ürün=(.+)$/i);
@@ -722,10 +737,22 @@ const AuditTimelineModal = ({ entityType, entityId, onClose }) => {
     return username.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   };
 
-  const renderStockDetails = (parsed) => {
+  const renderStockDetails = (parsed, log = null) => {
     if (parsed.type === 'add' || parsed.type === 'remove') {
       const isAdd = parsed.type === 'add';
       const absoluteDelta = Math.abs(parsed.delta);
+      const hasCustomerInfo = log && (log.customerName || log.customerPhone);
+      const hasTransferInfo = log && log.transferId;
+      // Use parsed.newQty if available, otherwise try to calculate from log.quantity or use null
+      let displayNewQty = parsed.newQty;
+      if (displayNewQty === null || displayNewQty === undefined) {
+        // Try to calculate from log quantity if available
+        if (log && typeof log.quantity === 'number' && parsed.delta) {
+          // If quantity is negative (removal), newQty might be calculated
+          // But we can't reliably calculate without knowing previous quantity
+          displayNewQty = null;
+        }
+      }
       
       return (
         <div>
@@ -782,7 +809,7 @@ const AuditTimelineModal = ({ entityType, entityId, onClose }) => {
               display: 'flex',
               alignItems: 'center',
               gap: '0.5rem',
-              borderBottom: '1px solid #f1f5f9'
+              borderBottom: hasCustomerInfo || hasTransferInfo ? '1px solid #f1f5f9' : 'none'
             }}>
               <div style={{
                 width: isMobile ? '28px' : '32px',
@@ -810,6 +837,166 @@ const AuditTimelineModal = ({ entityType, entityId, onClose }) => {
                 }}>{parsed.warehouse}</div>
               </div>
             </div>
+            
+            {/* Customer Info (for EMANET_DEPO) */}
+            {hasCustomerInfo && (
+              <div style={{
+                padding: isMobile ? '0.625rem 0.75rem' : '0.75rem 1rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.75rem',
+                borderBottom: hasTransferInfo ? '1px solid #f1f5f9' : 'none',
+                backgroundColor: '#fffbeb',
+                borderLeft: '4px solid #f59e0b',
+                borderRadius: '0 8px 8px 0',
+                boxShadow: '0 2px 4px rgba(251, 191, 36, 0.15)',
+                marginTop: '0.5rem'
+              }}>
+                <div style={{
+                  width: isMobile ? '36px' : '40px',
+                  height: isMobile ? '36px' : '40px',
+                  borderRadius: '10px',
+                  backgroundColor: '#fbbf24',
+                  color: '#78350f',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: isMobile ? '0.85rem' : '1rem',
+                  boxShadow: '0 2px 4px rgba(251, 191, 36, 0.3)',
+                  flexShrink: 0
+                }}>
+                  <i className="fas fa-user-tag"></i>
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{
+                    fontSize: isMobile ? '0.7rem' : '0.75rem',
+                    color: '#92400e',
+                    marginBottom: '0.375rem',
+                    fontWeight: '700',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.375rem'
+                  }}>
+                    <i className="fas fa-handshake" style={{ fontSize: '0.7rem' }}></i>
+                    Emanet Müşteri
+                  </div>
+                  <div style={{
+                    fontSize: isMobile ? '0.85rem' : '0.95rem',
+                    fontWeight: '700',
+                    color: '#78350f',
+                    marginBottom: log.customerPhone ? '0.25rem' : '0',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap'
+                  }}>
+                    {log.customerName || 'Bilinmiyor'}
+                  </div>
+                  {log.customerPhone && (
+                    <div style={{
+                      fontSize: isMobile ? '0.75rem' : '0.8rem',
+                      color: '#92400e',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.375rem',
+                      fontWeight: '500'
+                    }}>
+                      <i className="fas fa-phone" style={{ fontSize: '0.7rem' }}></i>
+                      {log.customerPhone}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            
+            {/* Transfer Info */}
+            {hasTransferInfo && (
+              <div style={{
+                padding: isMobile ? '0.625rem 0.75rem' : '0.75rem 1rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.75rem',
+                backgroundColor: '#eff6ff',
+                borderLeft: '4px solid #0ea5e9',
+                borderRadius: '0 8px 8px 0',
+                boxShadow: '0 2px 4px rgba(14, 165, 233, 0.15)',
+                marginTop: hasCustomerInfo ? '0.5rem' : '0.5rem'
+              }}>
+                <div style={{
+                  width: isMobile ? '36px' : '40px',
+                  height: isMobile ? '36px' : '40px',
+                  borderRadius: '10px',
+                  backgroundColor: '#0ea5e9',
+                  color: 'white',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: isMobile ? '0.85rem' : '1rem',
+                  boxShadow: '0 2px 4px rgba(14, 165, 233, 0.3)',
+                  flexShrink: 0
+                }}>
+                  <i className="fas fa-truck"></i>
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{
+                    fontSize: isMobile ? '0.7rem' : '0.75rem',
+                    color: '#0369a1',
+                    marginBottom: '0.375rem',
+                    fontWeight: '700',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.375rem'
+                  }}>
+                    <i className="fas fa-exchange-alt" style={{ fontSize: '0.7rem' }}></i>
+                    Transfer İşlemi
+                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onClose();
+                      navigate(`/stock?highlightTransfer=${log.transferId}`);
+                    }}
+                    style={{
+                      backgroundColor: '#dbeafe',
+                      color: '#0c4a6e',
+                      border: '2px solid #0ea5e9',
+                      padding: '0.375rem 0.75rem',
+                      borderRadius: '8px',
+                      fontFamily: 'monospace',
+                      letterSpacing: '0.5px',
+                      fontWeight: '700',
+                      fontSize: isMobile ? '0.85rem' : '0.9rem',
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      transition: 'all 0.2s ease',
+                      boxShadow: '0 2px 4px rgba(14, 165, 233, 0.2)'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = '#bfdbfe';
+                      e.currentTarget.style.borderColor = '#0284c7';
+                      e.currentTarget.style.transform = 'translateY(-1px)';
+                      e.currentTarget.style.boxShadow = '0 4px 8px rgba(14, 165, 233, 0.3)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = '#dbeafe';
+                      e.currentTarget.style.borderColor = '#0ea5e9';
+                      e.currentTarget.style.transform = 'translateY(0)';
+                      e.currentTarget.style.boxShadow = '0 2px 4px rgba(14, 165, 233, 0.2)';
+                    }}
+                    title="Transferi görüntüle"
+                  >
+                    <i className="fas fa-external-link-alt" style={{ fontSize: '0.75rem' }}></i>
+                    Transferi Görüntüle
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
           
           {/* Quantity Change Card */}
@@ -915,7 +1102,7 @@ const AuditTimelineModal = ({ entityType, entityId, onClose }) => {
                       fontWeight: '800',
                       color: '#1d4ed8'
                     }}>
-                      {parsed.newQty !== null ? parsed.newQty : '-'}
+                      {displayNewQty !== null && displayNewQty !== undefined ? displayNewQty : '-'}
                     </span>
                     <span style={{
                       fontSize: isMobile ? '0.75rem' : '0.8rem',
@@ -952,6 +1139,8 @@ const AuditTimelineModal = ({ entityType, entityId, onClose }) => {
 
     if (parsed.type === 'reserve' || parsed.type === 'release') {
       const isReserve = parsed.type === 'reserve';
+      const hasCustomerInfo = log && (log.customerName || log.customerPhone);
+      const hasTransferInfo = log && log.transferId;
       
       return (
         <div>
@@ -1035,6 +1224,166 @@ const AuditTimelineModal = ({ entityType, entityId, onClose }) => {
                 }}>{parsed.warehouse}</div>
               </div>
             </div>
+            
+            {/* Customer Info (for EMANET_DEPO) */}
+            {hasCustomerInfo && (
+              <div style={{
+                padding: isMobile ? '0.625rem 0.75rem' : '0.75rem 1rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.75rem',
+                borderBottom: hasTransferInfo ? '1px solid #f1f5f9' : 'none',
+                backgroundColor: '#fffbeb',
+                borderLeft: '4px solid #f59e0b',
+                borderRadius: '0 8px 8px 0',
+                boxShadow: '0 2px 4px rgba(251, 191, 36, 0.15)',
+                marginTop: '0.5rem'
+              }}>
+                <div style={{
+                  width: isMobile ? '36px' : '40px',
+                  height: isMobile ? '36px' : '40px',
+                  borderRadius: '10px',
+                  backgroundColor: '#fbbf24',
+                  color: '#78350f',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: isMobile ? '0.85rem' : '1rem',
+                  boxShadow: '0 2px 4px rgba(251, 191, 36, 0.3)',
+                  flexShrink: 0
+                }}>
+                  <i className="fas fa-user-tag"></i>
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{
+                    fontSize: isMobile ? '0.7rem' : '0.75rem',
+                    color: '#92400e',
+                    marginBottom: '0.375rem',
+                    fontWeight: '700',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.375rem'
+                  }}>
+                    <i className="fas fa-handshake" style={{ fontSize: '0.7rem' }}></i>
+                    Emanet Müşteri
+                  </div>
+                  <div style={{
+                    fontSize: isMobile ? '0.85rem' : '0.95rem',
+                    fontWeight: '700',
+                    color: '#78350f',
+                    marginBottom: log.customerPhone ? '0.25rem' : '0',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap'
+                  }}>
+                    {log.customerName || 'Bilinmiyor'}
+                  </div>
+                  {log.customerPhone && (
+                    <div style={{
+                      fontSize: isMobile ? '0.75rem' : '0.8rem',
+                      color: '#92400e',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.375rem',
+                      fontWeight: '500'
+                    }}>
+                      <i className="fas fa-phone" style={{ fontSize: '0.7rem' }}></i>
+                      {log.customerPhone}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            
+            {/* Transfer Info */}
+            {hasTransferInfo && (
+              <div style={{
+                padding: isMobile ? '0.625rem 0.75rem' : '0.75rem 1rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.75rem',
+                backgroundColor: '#eff6ff',
+                borderLeft: '4px solid #0ea5e9',
+                borderRadius: '0 8px 8px 0',
+                boxShadow: '0 2px 4px rgba(14, 165, 233, 0.15)',
+                marginTop: hasCustomerInfo ? '0.5rem' : '0.5rem'
+              }}>
+                <div style={{
+                  width: isMobile ? '36px' : '40px',
+                  height: isMobile ? '36px' : '40px',
+                  borderRadius: '10px',
+                  backgroundColor: '#0ea5e9',
+                  color: 'white',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: isMobile ? '0.85rem' : '1rem',
+                  boxShadow: '0 2px 4px rgba(14, 165, 233, 0.3)',
+                  flexShrink: 0
+                }}>
+                  <i className="fas fa-truck"></i>
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{
+                    fontSize: isMobile ? '0.7rem' : '0.75rem',
+                    color: '#0369a1',
+                    marginBottom: '0.375rem',
+                    fontWeight: '700',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.375rem'
+                  }}>
+                    <i className="fas fa-exchange-alt" style={{ fontSize: '0.7rem' }}></i>
+                    Transfer İşlemi
+                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onClose();
+                      navigate(`/stock?highlightTransfer=${log.transferId}`);
+                    }}
+                    style={{
+                      backgroundColor: '#dbeafe',
+                      color: '#0c4a6e',
+                      border: '2px solid #0ea5e9',
+                      padding: '0.375rem 0.75rem',
+                      borderRadius: '8px',
+                      fontFamily: 'monospace',
+                      letterSpacing: '0.5px',
+                      fontWeight: '700',
+                      fontSize: isMobile ? '0.85rem' : '0.9rem',
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      transition: 'all 0.2s ease',
+                      boxShadow: '0 2px 4px rgba(14, 165, 233, 0.2)'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = '#bfdbfe';
+                      e.currentTarget.style.borderColor = '#0284c7';
+                      e.currentTarget.style.transform = 'translateY(-1px)';
+                      e.currentTarget.style.boxShadow = '0 4px 8px rgba(14, 165, 233, 0.3)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = '#dbeafe';
+                      e.currentTarget.style.borderColor = '#0ea5e9';
+                      e.currentTarget.style.transform = 'translateY(0)';
+                      e.currentTarget.style.boxShadow = '0 2px 4px rgba(14, 165, 233, 0.2)';
+                    }}
+                    title="Transferi görüntüle"
+                  >
+                    <i className="fas fa-external-link-alt" style={{ fontSize: '0.75rem' }}></i>
+                    Transferi Görüntüle
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
           
           {/* Reservation Info Card */}
@@ -1913,9 +2262,9 @@ const AuditTimelineModal = ({ entityType, entityId, onClose }) => {
     return null;
   };
 
-  const renderDetails = (details) => {
+  const renderDetails = (details, log = null) => {
     const stockParsed = parseStockChange(details);
-    if (stockParsed) return renderStockDetails(stockParsed);
+    if (stockParsed) return renderStockDetails(stockParsed, log);
     
     const transferParsed = parseTransferChange(details);
     if (transferParsed) return renderTransferDetails(transferParsed);
@@ -2369,7 +2718,7 @@ const AuditTimelineModal = ({ entityType, entityId, onClose }) => {
                         </div>
 
                         {/* Details */}
-                        {translatedDetails && renderDetails(translatedDetails)}
+                        {translatedDetails && renderDetails(translatedDetails, log)}
                       </div>
                     </div>
                   );

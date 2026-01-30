@@ -317,6 +317,151 @@ const WarehouseActivity = () => {
                           </div>
                         )}
 
+                        {/* Customer Info (for EMANET_DEPO) */}
+                        {(log.customerName || log.customerPhone) && (
+                          <div className="col-12 col-lg-6">
+                            <div style={{
+                              backgroundColor: '#fffbeb',
+                              borderRadius: '8px',
+                              border: '2px solid #fbbf24',
+                              padding: '0.75rem',
+                              height: '100%',
+                              boxShadow: '0 2px 4px rgba(251, 191, 36, 0.1)'
+                            }}>
+                              <div className="d-flex align-items-center gap-2">
+                                <div style={{
+                                  width: '36px',
+                                  height: '36px',
+                                  borderRadius: '8px',
+                                  backgroundColor: '#fbbf24',
+                                  color: '#78350f',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontSize: '0.9rem',
+                                  flexShrink: 0
+                                }}>
+                                  <i className="fas fa-user-tag"></i>
+                                </div>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{
+                                    fontSize: '0.7rem',
+                                    color: '#92400e',
+                                    marginBottom: '0.25rem',
+                                    fontWeight: '600'
+                                  }}>
+                                    <i className="fas fa-handshake me-1"></i>
+                                    Emanet Müşteri
+                                  </div>
+                                  <div style={{
+                                    fontSize: '0.9rem',
+                                    fontWeight: '700',
+                                    color: '#78350f',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                    marginBottom: log.customerPhone ? '0.25rem' : '0'
+                                  }}>
+                                    {log.customerName || 'Bilinmiyor'}
+                                  </div>
+                                  {log.customerPhone && (
+                                    <div style={{
+                                      fontSize: '0.8rem',
+                                      color: '#92400e',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '0.25rem'
+                                    }}>
+                                      <i className="fas fa-phone" style={{ fontSize: '0.7rem' }}></i>
+                                      {log.customerPhone}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Transfer Info */}
+                        {log.transferId && (
+                          <div className="col-12 col-lg-6">
+                            <div style={{
+                              backgroundColor: '#eff6ff',
+                              borderRadius: '8px',
+                              border: '2px solid #0ea5e9',
+                              padding: '0.75rem',
+                              height: '100%',
+                              boxShadow: '0 2px 4px rgba(14, 165, 233, 0.1)'
+                            }}>
+                              <div className="d-flex align-items-center gap-2">
+                                <div style={{
+                                  width: '36px',
+                                  height: '36px',
+                                  borderRadius: '8px',
+                                  backgroundColor: '#0ea5e9',
+                                  color: 'white',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontSize: '0.9rem',
+                                  flexShrink: 0
+                                }}>
+                                  <i className="fas fa-truck"></i>
+                                </div>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{
+                                    fontSize: '0.7rem',
+                                    color: '#0369a1',
+                                    marginBottom: '0.25rem',
+                                    fontWeight: '600'
+                                  }}>
+                                    Transfer İşlemi
+                                  </div>
+                                  <button
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      navigate(`/stock?highlightTransfer=${log.transferId}`);
+                                    }}
+                                    style={{
+                                      backgroundColor: '#dbeafe',
+                                      color: '#0c4a6e',
+                                      border: '2px solid #0ea5e9',
+                                      padding: '0.375rem 0.75rem',
+                                      borderRadius: '8px',
+                                      fontFamily: 'monospace',
+                                      letterSpacing: '0.5px',
+                                      fontWeight: '700',
+                                      fontSize: '0.9rem',
+                                      cursor: 'pointer',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '0.5rem',
+                                      transition: 'all 0.2s ease',
+                                      boxShadow: '0 2px 4px rgba(14, 165, 233, 0.2)'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                      e.currentTarget.style.backgroundColor = '#bfdbfe';
+                                      e.currentTarget.style.borderColor = '#0284c7';
+                                      e.currentTarget.style.transform = 'translateY(-1px)';
+                                      e.currentTarget.style.boxShadow = '0 4px 8px rgba(14, 165, 233, 0.3)';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      e.currentTarget.style.backgroundColor = '#dbeafe';
+                                      e.currentTarget.style.borderColor = '#0ea5e9';
+                                      e.currentTarget.style.transform = 'translateY(0)';
+                                      e.currentTarget.style.boxShadow = '0 2px 4px rgba(14, 165, 233, 0.2)';
+                                    }}
+                                    title="Transferi görüntüle"
+                                  >
+                                    <i className="fas fa-external-link-alt" style={{ fontSize: '0.75rem' }}></i>
+                                    Transferi Görüntüle
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
                         {/* Warehouse Transfer Info */}
                         {(log.sourceWarehouseName || log.destinationWarehouseName) && (
                           <div className="col-12 col-lg-6">

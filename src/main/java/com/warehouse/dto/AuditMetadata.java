@@ -19,5 +19,8 @@ public class AuditMetadata {
     private String productName;
     private String productSku;
     private Integer quantity;
+    private String customerName; // For EMANET_DEPO warehouses and transfer customer info
+    private String customerPhone; // For EMANET_DEPO warehouses and transfer customer info
+    private Long transferId; // Reference to transfer if this is a transfer-related stock movement
 }
 

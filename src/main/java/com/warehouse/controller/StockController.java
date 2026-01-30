@@ -28,7 +28,9 @@ import org.springframework.transaction.annotation.Transactional;
 import com.warehouse.service.SsePushService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
@@ -68,6 +70,8 @@ public class StockController {
             @RequestParam(required = false) Boolean consignedOnly,
             @RequestParam(required = false) String search,
             @RequestParam(required = false, defaultValue = "all") String status,
+            @RequestParam(required = false) String lastUpdatedFrom,
+            @RequestParam(required = false) String lastUpdatedTo,
             @RequestParam(required = false, defaultValue = "0") Integer page,
             @RequestParam(required = false, defaultValue = "20") Integer size,
             @RequestParam(defaultValue = "lastUpdated") String sortBy,
@@ -78,7 +82,7 @@ public class StockController {
         Pageable pageable = PageRequest.of(safePage, safeSize, sort);
 
         StockFilter filter = buildStockFilter(brandId, colorId, warehouseId, categoryId, 
-                subCategoryId, reservedOnly, consignedOnly, search, status);
+                subCategoryId, reservedOnly, consignedOnly, search, status, lastUpdatedFrom, lastUpdatedTo);
 
         Page<Stock> stocks = stockService.getStocks(filter, pageable);
         List<StockDto> content = stocks.getContent().stream().map(this::toDto).toList();
@@ -227,14 +231,16 @@ public class StockController {
             @RequestParam(required = false) Boolean reservedOnly,
             @RequestParam(required = false) Boolean consignedOnly,
             @RequestParam(required = false) String search,
-            @RequestParam(required = false, defaultValue = "all") String status) {
+            @RequestParam(required = false, defaultValue = "all") String status,
+            @RequestParam(required = false) String lastUpdatedFrom,
+            @RequestParam(required = false) String lastUpdatedTo) {
         
         logger.debug("Excel export requested with filters - brandId: {}, colorId: {}, warehouseId: {}, categoryId: {}, subCategoryId: {}, status: {}", 
                 brandId, colorId, warehouseId, categoryId, subCategoryId, status);
         
         try {
             StockFilter filter = buildStockFilter(brandId, colorId, warehouseId, categoryId, 
-                    subCategoryId, reservedOnly, consignedOnly, search, status);
+                    subCategoryId, reservedOnly, consignedOnly, search, status, lastUpdatedFrom, lastUpdatedTo);
             
             org.springframework.core.io.Resource resource = stockExportService.exportToExcel(filter);
             String filename = generateExportFilename();
@@ -253,7 +259,8 @@ public class StockController {
     private StockFilter buildStockFilter(Long brandId, Long colorId, Long warehouseId, 
                                         Long categoryId, Long subCategoryId, 
                                         Boolean reservedOnly, Boolean consignedOnly, 
-                                        String search, String status) {
+                                        String search, String status,
+                                        String lastUpdatedFrom, String lastUpdatedTo) {
         StockFilter filter = new StockFilter();
         filter.setBrandId(brandId);
         filter.setColorId(colorId);
@@ -264,9 +271,43 @@ public class StockController {
         filter.setConsignedOnly(Boolean.TRUE.equals(consignedOnly));
         filter.setSearch(search != null && !search.isBlank() ? search.trim() : null);
         filter.setStatus(StockFilter.Status.from(status));
+        
+        // Parse date strings to LocalDateTime (accepts ISO with or without Z, e.g. from frontend toISOString())
+        if (lastUpdatedFrom != null && !lastUpdatedFrom.isBlank()) {
+            try {
+                filter.setLastUpdatedFrom(parseIsoToLocalDateTime(lastUpdatedFrom));
+            } catch (Exception e) {
+                logger.warn("Invalid lastUpdatedFrom format: {}", lastUpdatedFrom, e);
+            }
+        }
+        if (lastUpdatedTo != null && !lastUpdatedTo.isBlank()) {
+            try {
+                filter.setLastUpdatedTo(parseIsoToLocalDateTime(lastUpdatedTo));
+            } catch (Exception e) {
+                logger.warn("Invalid lastUpdatedTo format: {}", lastUpdatedTo, e);
+            }
+        }
+        
         return filter;
     }
     
+    /**
+     * Parses an ISO date-time string (e.g. "2026-01-30T14:00:00", "2026-01-30T14:00:00.000Z",
+     * or "2026-01-30T14:00") to LocalDateTime in the server's default zone.
+     */
+    private static LocalDateTime parseIsoToLocalDateTime(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        String s = value.trim();
+        try {
+            return LocalDateTime.parse(s, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+        } catch (Exception ignored) {
+            // e.g. "2026-01-30T14:00:00.000Z" from frontend toISOString()
+            return Instant.parse(s).atZone(ZoneId.systemDefault()).toLocalDateTime();
+        }
+    }
+
     private String generateExportFilename() {
         return "stok-raporu_" + LocalDateTime.now().format(DATE_FORMATTER) + ".xlsx";
     }

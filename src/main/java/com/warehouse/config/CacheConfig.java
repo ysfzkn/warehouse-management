@@ -26,7 +26,8 @@ public class CacheConfig {
             "dashboardStats",      // 5 minutes TTL
             "warehouseStats",      // 5 minutes TTL
             "lowStockItems",       // 3 minutes TTL
-            "outOfStockItems"      // 3 minutes TTL
+            "outOfStockItems",    // 3 minutes TTL
+            "counts"              // lowStock, unread etc. (short TTL)
         );
         
         cacheManager.setCaffeine(Caffeine.newBuilder()

@@ -93,6 +93,8 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
                 OR (:status = 'LOW' AND s.quantity > 0 AND s.quantity <= (CASE WHEN s.minStockLevel IS NULL OR s.minStockLevel = 0 THEN 2 ELSE s.minStockLevel END))
                 OR (:status = 'OUT' AND s.quantity = 0)
           )
+          AND s.lastUpdated >= :lastUpdatedFrom
+          AND s.lastUpdated <= :lastUpdatedTo
     """)
     Page<Stock> findByFilters(@Param("brandId") Long brandId,
                               @Param("colorId") Long colorId,
@@ -104,6 +106,8 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
                               @Param("reservedOnly") boolean reservedOnly,
                               @Param("consignedOnly") boolean consignedOnly,
                               @Param("status") String status,
+                              @Param("lastUpdatedFrom") java.time.LocalDateTime lastUpdatedFrom,
+                              @Param("lastUpdatedTo") java.time.LocalDateTime lastUpdatedTo,
                               Pageable pageable);
 
     @Query("""
@@ -135,6 +139,8 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
                 OR (:status = 'LOW' AND s.quantity > 0 AND s.quantity <= (CASE WHEN s.minStockLevel IS NULL OR s.minStockLevel = 0 THEN 2 ELSE s.minStockLevel END))
                 OR (:status = 'OUT' AND s.quantity = 0)
           )
+          AND s.lastUpdated >= :lastUpdatedFrom
+          AND s.lastUpdated <= :lastUpdatedTo
     """)
     Long sumQuantityByFilters(@Param("brandId") Long brandId,
                               @Param("colorId") Long colorId,
@@ -145,7 +151,9 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
                               @Param("searchPattern") String searchPattern,
                               @Param("reservedOnly") boolean reservedOnly,
                               @Param("consignedOnly") boolean consignedOnly,
-                              @Param("status") String status);
+                              @Param("status") String status,
+                              @Param("lastUpdatedFrom") java.time.LocalDateTime lastUpdatedFrom,
+                              @Param("lastUpdatedTo") java.time.LocalDateTime lastUpdatedTo);
 
     @Query("""
         SELECT s FROM Stock s
