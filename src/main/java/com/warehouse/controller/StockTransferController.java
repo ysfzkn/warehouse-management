@@ -28,6 +28,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 
@@ -57,8 +61,12 @@ public class StockTransferController {
             @RequestParam(required = false) String sku,
             @RequestParam(required = false) String driverName,
             @RequestParam(required = false) String notes,
+            @RequestParam(required = false) String transferDateFrom,
+            @RequestParam(required = false) String transferDateTo,
+            @RequestParam(required = false) String createdAtFrom,
+            @RequestParam(required = false) String createdAtTo,
             @PageableDefault(size = 25, sort = "transferDate", direction = Sort.Direction.DESC) Pageable pageable) {
-        StockTransferFilter filter = buildFilter(status, transferType, sourceWarehouseId, destinationWarehouseId, productName, sku, driverName, notes);
+        StockTransferFilter filter = buildFilter(status, transferType, sourceWarehouseId, destinationWarehouseId, productName, sku, driverName, notes, transferDateFrom, transferDateTo, createdAtFrom, createdAtTo);
         Page<StockTransfer> transfers = stockTransferService.getTransfersPaged(filter, pageable);
         List<StockTransferDto> dtos = transferMapper.toDtoList(transfers.getContent());
         StockTransferSummary summary = stockTransferService.getTransferSummary(filter, false);
@@ -118,8 +126,12 @@ public class StockTransferController {
             @RequestParam(required = false) String sku,
             @RequestParam(required = false) String driverName,
             @RequestParam(required = false) String notes,
+            @RequestParam(required = false) String transferDateFrom,
+            @RequestParam(required = false) String transferDateTo,
+            @RequestParam(required = false) String createdAtFrom,
+            @RequestParam(required = false) String createdAtTo,
             @PageableDefault(size = 25, sort = "transferDate", direction = Sort.Direction.DESC) Pageable pageable) {
-        StockTransferFilter filter = buildFilter(status, transferType, sourceWarehouseId, destinationWarehouseId, productName, sku, driverName, notes);
+        StockTransferFilter filter = buildFilter(status, transferType, sourceWarehouseId, destinationWarehouseId, productName, sku, driverName, notes, transferDateFrom, transferDateTo, createdAtFrom, createdAtTo);
         Page<StockTransfer> transfers = stockTransferService.getTransfersForCurrentUserPaged(filter, pageable);
         List<StockTransferDto> dtos = transferMapper.toDtoList(transfers.getContent());
         StockTransferSummary summary = stockTransferService.getTransferSummary(filter, true);
@@ -248,7 +260,11 @@ public class StockTransferController {
                                             String productName,
                                             String sku,
                                             String driverName,
-                                            String notes) {
+                                            String notes,
+                                            String transferDateFrom,
+                                            String transferDateTo,
+                                            String createdAtFrom,
+                                            String createdAtTo) {
         StockTransferFilter filter = new StockTransferFilter();
         filter.setStatus(status);
         filter.setTransferType(transferType);
@@ -258,7 +274,40 @@ public class StockTransferController {
         filter.setSku(sku);
         filter.setDriverName(driverName);
         filter.setNotes(notes);
+        
+        // Parse date strings to LocalDateTime (accepts ISO with or without Z, e.g. from frontend toISOString())
+        if (transferDateFrom != null && !transferDateFrom.isBlank()) {
+            try {
+                filter.setTransferDateFrom(parseIsoToLocalDateTime(transferDateFrom));
+            } catch (Exception ignored) { }
+        }
+        if (transferDateTo != null && !transferDateTo.isBlank()) {
+            try {
+                filter.setTransferDateTo(parseIsoToLocalDateTime(transferDateTo));
+            } catch (Exception ignored) { }
+        }
+        if (createdAtFrom != null && !createdAtFrom.isBlank()) {
+            try {
+                filter.setCreatedAtFrom(parseIsoToLocalDateTime(createdAtFrom));
+            } catch (Exception ignored) { }
+        }
+        if (createdAtTo != null && !createdAtTo.isBlank()) {
+            try {
+                filter.setCreatedAtTo(parseIsoToLocalDateTime(createdAtTo));
+            } catch (Exception ignored) { }
+        }
+        
         return filter;
+    }
+
+    private static LocalDateTime parseIsoToLocalDateTime(String value) {
+        if (value == null || value.isBlank()) return null;
+        String s = value.trim();
+        try {
+            return LocalDateTime.parse(s, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+        } catch (Exception ignored) {
+            return Instant.parse(s).atZone(ZoneId.systemDefault()).toLocalDateTime();
+        }
     }
 
     private StockTransfer mapToEntity(StockTransferCreateRequest request) {

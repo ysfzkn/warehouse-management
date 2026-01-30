@@ -70,6 +70,10 @@ const StockFiltersBar = ({
   setShowReserved,
   showConsigned,
   setShowConsigned,
+  stockLastUpdatedFrom,
+  setStockLastUpdatedFrom,
+  stockLastUpdatedTo,
+  setStockLastUpdatedTo,
   getWarehouseById
 }) => {
   const searchInputRef = useRef(null);
@@ -582,6 +586,41 @@ const StockFiltersBar = ({
         </div>
       </div>
 
+      {/* Date Range Filters */}
+      <div className="row g-3 mb-3">
+        <div className="col-12 col-md-6">
+          <div className="stock-filter-card">
+            <small>
+              <i className="fas fa-calendar-alt me-1"></i>
+              Son Güncelleme (Başlangıç)
+            </small>
+            <input
+              type="datetime-local"
+              className="form-control mt-2"
+              value={stockLastUpdatedFrom}
+              onChange={(e) => setStockLastUpdatedFrom(e.target.value)}
+              style={{ fontSize: '0.9rem' }}
+            />
+          </div>
+        </div>
+        <div className="col-12 col-md-6">
+          <div className="stock-filter-card">
+            <small>
+              <i className="fas fa-calendar-check me-1"></i>
+              Son Güncelleme (Bitiş)
+            </small>
+            <input
+              type="datetime-local"
+              className="form-control mt-2"
+              value={stockLastUpdatedTo}
+              onChange={(e) => setStockLastUpdatedTo(e.target.value)}
+              min={stockLastUpdatedFrom || undefined}
+              style={{ fontSize: '0.9rem' }}
+            />
+          </div>
+        </div>
+      </div>
+
       {/* Additional filters */}
       <div className="stock-filter-toggle-modern mb-3">
         <div>
@@ -610,6 +649,19 @@ const StockFiltersBar = ({
             Emanet
           </label>
         </div>
+        {(stockLastUpdatedFrom || stockLastUpdatedTo) && (
+          <button
+            className="btn btn-sm btn-outline-danger"
+            onClick={() => {
+              setStockLastUpdatedFrom('');
+              setStockLastUpdatedTo('');
+            }}
+            title="Tarih filtrelerini temizle"
+          >
+            <i className="fas fa-times me-1"></i>
+            Tarih Filtrelerini Temizle
+          </button>
+        )}
       </div>
 
       <FilterChips
@@ -623,6 +675,11 @@ const StockFiltersBar = ({
           colorId ? { icon: 'fas fa-palette', label: `Renk: ${colorOpt?.name || colorId}`, onClear: () => { setColorId(null); setColorOpt(null); } } : null,
           showReserved ? { icon: 'fas fa-lock', label: 'Rezerve Olanlar', onClear: () => setShowReserved(false) } : null,
           showConsigned ? { icon: 'fas fa-handshake', label: 'Emanet Olanlar', onClear: () => setShowConsigned(false) } : null,
+          stockLastUpdatedFrom || stockLastUpdatedTo ? { 
+            icon: 'fas fa-calendar-alt', 
+            label: `Tarih: ${stockLastUpdatedFrom ? new Date(stockLastUpdatedFrom).toLocaleString('tr-TR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '...'} - ${stockLastUpdatedTo ? new Date(stockLastUpdatedTo).toLocaleString('tr-TR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '...'}`, 
+            onClear: () => { setStockLastUpdatedFrom(''); setStockLastUpdatedTo(''); } 
+          } : null,
         ].filter(Boolean)}
         onClearAll={() => {
           setSearchTerm('');
@@ -637,6 +694,8 @@ const StockFiltersBar = ({
           setColorOpt(null);
           setShowReserved(false);
           setShowConsigned(false);
+          setStockLastUpdatedFrom('');
+          setStockLastUpdatedTo('');
         }}
       />
     </>
@@ -716,11 +775,19 @@ const Stock = () => {
   const [transferSourceWarehouseId, setTransferSourceWarehouseId] = useState(null);
   const [transferDestinationWarehouseId, setTransferDestinationWarehouseId] = useState(null);
   const [transferTypeFilter, setTransferTypeFilter] = useState('ALL');
+  // Date filters for transfers
+  const [transferDateFrom, setTransferDateFrom] = useState('');
+  const [transferDateTo, setTransferDateTo] = useState('');
+  const [transferCreatedAtFrom, setTransferCreatedAtFrom] = useState('');
+  const [transferCreatedAtTo, setTransferCreatedAtTo] = useState('');
   // Category filters
   const [categories, setCategories] = useState([]);
   const [subcategories, setSubcategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('');
   const [selectedSubcategory, setSelectedSubcategory] = useState('');
+  // Date filters for stock
+  const [stockLastUpdatedFrom, setStockLastUpdatedFrom] = useState('');
+  const [stockLastUpdatedTo, setStockLastUpdatedTo] = useState('');
   // Stock list sorting
   const [stockSortBy, setStockSortBy] = useState('lastUpdated'); // 'warehouse' | 'lastUpdated' | 'quantity'
   const [stockSortDir, setStockSortDir] = useState('desc'); // 'asc' | 'desc'
@@ -757,6 +824,10 @@ const Stock = () => {
     const normalizedColorId = colorId != null ? Number(colorId) : undefined;
     const normalizedWarehouseId = selectedWarehouseId != null ? Number(selectedWarehouseId) : undefined;
     const normalizedSearch = searchTerm ? searchTerm.trim() : undefined;
+    
+    // Format dates for API (convert datetime-local to ISO string)
+    const lastUpdatedFrom = stockLastUpdatedFrom ? new Date(stockLastUpdatedFrom).toISOString() : undefined;
+    const lastUpdatedTo = stockLastUpdatedTo ? new Date(stockLastUpdatedTo).toISOString() : undefined;
 
     return {
       brandId: Number.isNaN(normalizedBrandId) ? undefined : normalizedBrandId,
@@ -766,9 +837,11 @@ const Stock = () => {
       subCategoryId: Number.isNaN(subCategoryId) ? undefined : subCategoryId,
       reservedOnly: showReserved || undefined,
       consignedOnly: showConsigned || undefined,
-      search: normalizedSearch || undefined
+      search: normalizedSearch || undefined,
+      lastUpdatedFrom: lastUpdatedFrom,
+      lastUpdatedTo: lastUpdatedTo
     };
-  }, [brandId, colorId, selectedWarehouseId, selectedCategory, selectedSubcategory, showReserved, showConsigned, searchTerm]);
+  }, [brandId, colorId, selectedWarehouseId, selectedCategory, selectedSubcategory, showReserved, showConsigned, searchTerm, stockLastUpdatedFrom, stockLastUpdatedTo]);
 
   const handleExportToExcel = useCallback(async () => {
     try {
@@ -896,6 +969,13 @@ const Stock = () => {
       const normalizedSku = transferSku ? transferSku.toLocaleLowerCase('tr-TR') : undefined;
       const normalizedDriver = transferDriver ? transferDriver.toLocaleLowerCase('tr-TR') : undefined;
       const normalizedNotes = transferNotes ? transferNotes.toLocaleLowerCase('tr-TR') : undefined;
+      
+      // Format dates for API (convert datetime-local to ISO string)
+      const transferDateFromFormatted = transferDateFrom ? new Date(transferDateFrom).toISOString() : undefined;
+      const transferDateToFormatted = transferDateTo ? new Date(transferDateTo).toISOString() : undefined;
+      const createdAtFromFormatted = transferCreatedAtFrom ? new Date(transferCreatedAtFrom).toISOString() : undefined;
+      const createdAtToFormatted = transferCreatedAtTo ? new Date(transferCreatedAtTo).toISOString() : undefined;
+      
       const params = {
         page,
         size,
@@ -907,8 +987,14 @@ const Stock = () => {
         notes: normalizedNotes,
         sourceWarehouseId: transferSourceWarehouseId || undefined,
         destinationWarehouseId: transferDestinationWarehouseId || undefined,
+        transferDateFrom: transferDateFromFormatted,
+        transferDateTo: transferDateToFormatted,
+        createdAtFrom: createdAtFromFormatted,
+        createdAtTo: createdAtToFormatted,
         sort: 'updatedAt,desc'
       };
+      // Remove undefined/null so only set filters are sent to API
+      Object.keys(params).forEach(k => { if (params[k] === undefined || params[k] === null || params[k] === '') delete params[k]; });
       const endpoint = isAdmin ? '/api/stock-transfers' : '/api/stock-transfers/current-user';
       const response = await axios.get(endpoint, { params });
       const data = response.data || {};
@@ -933,7 +1019,7 @@ const Stock = () => {
       console.error('Error fetching transfers:', error);
       throw error;
     }
-  }, [isAdmin, transferStatusFilter, transferTypeFilter, transferProductName, transferSku, transferDriver, transferNotes, transferSourceWarehouseId, transferDestinationWarehouseId, transferPageSize]);
+  }, [isAdmin, transferStatusFilter, transferTypeFilter, transferProductName, transferSku, transferDriver, transferNotes, transferSourceWarehouseId, transferDestinationWarehouseId, transferPageSize, transferDateFrom, transferDateTo, transferCreatedAtFrom, transferCreatedAtTo]);
 
   const fetchAllData = useCallback(async () => {
     try {
@@ -1204,11 +1290,11 @@ const Stock = () => {
 
   useEffect(() => {
     setStockPage(0);
-  }, [filter, searchTerm, selectedCategory, selectedSubcategory, showReserved, showConsigned, brandId, colorId, selectedWarehouseId, stockSortBy, stockSortDir]);
+  }, [filter, searchTerm, selectedCategory, selectedSubcategory, showReserved, showConsigned, brandId, colorId, selectedWarehouseId, stockSortBy, stockSortDir, stockLastUpdatedFrom, stockLastUpdatedTo]);
 
   useEffect(() => {
     setTransferPage(0);
-  }, [transferStatusFilter, transferTypeFilter, transferProductName, transferSku, transferDriver, transferNotes, transferSourceWarehouseId, transferDestinationWarehouseId]);
+  }, [transferStatusFilter, transferTypeFilter, transferProductName, transferSku, transferDriver, transferNotes, transferSourceWarehouseId, transferDestinationWarehouseId, transferDateFrom, transferDateTo, transferCreatedAtFrom, transferCreatedAtTo]);
 
   // Fetch main categories on mount
   useEffect(() => {
@@ -1414,6 +1500,56 @@ const Stock = () => {
       }
     };
   }, [location.pathname, location.search, stocks.length]);
+
+  // Handle highlightTransfer parameter from URL (for direct navigation from audit logs)
+  // Fetch transfer by ID from API so it works even when date/filters hide it from the list
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const highlightTransferId = params.get('highlightTransfer');
+    if (!highlightTransferId) return;
+
+    const transferId = parseInt(highlightTransferId, 10);
+    if (!Number.isFinite(transferId)) return;
+
+    let cancelled = false;
+
+    const openAndClean = (transfer) => {
+      if (cancelled) return;
+      openTransferDetailModal(transfer);
+      params.delete('highlightTransfer');
+      const newSearch = params.toString();
+      const newUrl = newSearch ? `${location.pathname}?${newSearch}` : location.pathname;
+      window.history.replaceState({}, '', newUrl);
+    };
+
+    // Open transfer history tab so user sees the transfer context
+    if (!showTransferHistory) {
+      setShowTransferHistory(true);
+    }
+
+    // Prefer transfer from current list if present (avoids extra request)
+    const fromList = transfers.find(t => t.id === transferId);
+    if (fromList) {
+      openAndClean(fromList);
+      return;
+    }
+
+    // Otherwise fetch by ID so it works when filters (e.g. date) exclude it from the list
+    axios.get(`/api/stock-transfers/${transferId}`)
+      .then((res) => {
+        if (cancelled || !res?.data) return;
+        openAndClean(res.data);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        params.delete('highlightTransfer');
+        const newSearch = params.toString();
+        const newUrl = newSearch ? `${location.pathname}?${newSearch}` : location.pathname;
+        window.history.replaceState({}, '', newUrl);
+      });
+
+    return () => { cancelled = true; };
+  }, [location.pathname, location.search, showTransferHistory, transfers]);
 
   const getEffectiveMin = useCallback((stock) => {
     const val = Number(stock?.minStockLevel);
@@ -2620,6 +2756,10 @@ const Stock = () => {
           setShowReserved={setShowReserved}
           showConsigned={showConsigned}
           setShowConsigned={setShowConsigned}
+          stockLastUpdatedFrom={stockLastUpdatedFrom}
+          setStockLastUpdatedFrom={setStockLastUpdatedFrom}
+          stockLastUpdatedTo={stockLastUpdatedTo}
+          setStockLastUpdatedTo={setStockLastUpdatedTo}
           getWarehouseById={getWarehouseById}
         />
       )}
@@ -3994,6 +4134,99 @@ const Stock = () => {
                       onChange={(e) => setTransferNotes(e.target.value)}
                     />
                   </div>
+                </div>
+              </div>
+              {/* Transfer Date Filters */}
+              <div className="row g-2 mt-3">
+                <div className="col-md-12">
+                  <h6 className="text-muted mb-2">
+                    <i className="fas fa-calendar-alt me-2"></i>
+                    Tarih Filtreleri
+                  </h6>
+                </div>
+                <div className="col-md-3">
+                  <label className="form-label small text-muted">Transfer Tarihi (Başlangıç)</label>
+                  <input
+                    type="datetime-local"
+                    className="form-control"
+                    value={transferDateFrom}
+                    onChange={(e) => setTransferDateFrom(e.target.value)}
+                  />
+                </div>
+                <div className="col-md-3">
+                  <label className="form-label small text-muted">Transfer Tarihi (Bitiş)</label>
+                  <input
+                    type="datetime-local"
+                    className="form-control"
+                    value={transferDateTo}
+                    onChange={(e) => setTransferDateTo(e.target.value)}
+                    min={transferDateFrom || undefined}
+                  />
+                </div>
+                <div className="col-md-3">
+                  <label className="form-label small text-muted">Oluşturulma Tarihi (Başlangıç)</label>
+                  <input
+                    type="datetime-local"
+                    className="form-control"
+                    value={transferCreatedAtFrom}
+                    onChange={(e) => setTransferCreatedAtFrom(e.target.value)}
+                  />
+                </div>
+                <div className="col-md-3">
+                  <label className="form-label small text-muted">Oluşturulma Tarihi (Bitiş)</label>
+                  <input
+                    type="datetime-local"
+                    className="form-control"
+                    value={transferCreatedAtTo}
+                    onChange={(e) => setTransferCreatedAtTo(e.target.value)}
+                    min={transferCreatedAtFrom || undefined}
+                  />
+                </div>
+                <div className="col-md-12 d-flex flex-wrap gap-2 align-items-end">
+                  {(transferDateFrom || transferDateTo) && (
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline-danger"
+                      onClick={() => {
+                        setTransferDateFrom('');
+                        setTransferDateTo('');
+                      }}
+                      title="Transfer tarihi filtrelerini temizle"
+                    >
+                      <i className="fas fa-calendar-times me-1"></i>
+                      Transfer Tarihini Temizle
+                    </button>
+                  )}
+                  {(transferCreatedAtFrom || transferCreatedAtTo) && (
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline-warning text-dark"
+                      onClick={() => {
+                        setTransferCreatedAtFrom('');
+                        setTransferCreatedAtTo('');
+                      }}
+                      title="Oluşturulma tarihi filtrelerini temizle"
+                    >
+                      <i className="fas fa-calendar-minus me-1"></i>
+                      Oluşturulma Tarihini Temizle
+                    </button>
+                  )}
+                  {(transferDateFrom || transferDateTo || transferCreatedAtFrom || transferCreatedAtTo) && (
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline-secondary"
+                      onClick={() => {
+                        setTransferDateFrom('');
+                        setTransferDateTo('');
+                        setTransferCreatedAtFrom('');
+                        setTransferCreatedAtTo('');
+                      }}
+                      title="Tüm tarih filtrelerini temizle"
+                    >
+                      <i className="fas fa-times me-1"></i>
+                      Tüm Tarih Filtrelerini Temizle
+                    </button>
+                  )}
                 </div>
               </div>
               <div className="row g-2 mt-2">

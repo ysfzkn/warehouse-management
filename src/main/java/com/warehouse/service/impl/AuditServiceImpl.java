@@ -53,6 +53,9 @@ public class AuditServiceImpl implements AuditService {
             log.setProductName(metadata.getProductName());
             log.setProductSku(metadata.getProductSku());
             log.setQuantity(metadata.getQuantity());
+            log.setCustomerName(metadata.getCustomerName());
+            log.setCustomerPhone(metadata.getCustomerPhone());
+            log.setTransferId(metadata.getTransferId());
         }
         auditLogRepository.save(log);
     }

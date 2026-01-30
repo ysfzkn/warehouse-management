@@ -34,6 +34,7 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -89,6 +90,9 @@ public class StockServiceImpl implements StockService {
 
         logger.debug("Fetching stocks with advanced filters - page: {}, size: {}", pageable.getPageNumber(),
                 pageable.getPageSize());
+        // Use safe bounds when null (PostgreSQL rejects LocalDateTime.MIN/MAX as "timestamp out of range")
+        LocalDateTime from = appliedFilter.getLastUpdatedFrom() != null ? appliedFilter.getLastUpdatedFrom() : LocalDateTime.of(1970, 1, 1, 0, 0);
+        LocalDateTime to = appliedFilter.getLastUpdatedTo() != null ? appliedFilter.getLastUpdatedTo() : LocalDateTime.of(2099, 12, 31, 23, 59, 59);
         return stockRepository.findByFilters(
                 appliedFilter.getBrandId(),
                 appliedFilter.getColorId(),
@@ -100,6 +104,8 @@ public class StockServiceImpl implements StockService {
                 appliedFilter.isReservedOnly(),
                 appliedFilter.isConsignedOnly(),
                 statusValue,
+                from,
+                to,
                 pageable);
     }
 
@@ -219,6 +225,8 @@ public class StockServiceImpl implements StockService {
         boolean searchEnabled = search != null && !search.isBlank();
         String searchPattern = searchEnabled ? "%" + search.toLowerCase(Locale.forLanguageTag("tr-TR")) + "%" : "%";
 
+        LocalDateTime from = appliedFilter.getLastUpdatedFrom() != null ? appliedFilter.getLastUpdatedFrom() : LocalDateTime.of(1970, 1, 1, 0, 0);
+        LocalDateTime to = appliedFilter.getLastUpdatedTo() != null ? appliedFilter.getLastUpdatedTo() : LocalDateTime.of(2099, 12, 31, 23, 59, 59);
         Long total = stockRepository.sumQuantityByFilters(
                 appliedFilter.getBrandId(),
                 appliedFilter.getColorId(),
@@ -229,7 +237,9 @@ public class StockServiceImpl implements StockService {
                 searchPattern,
                 appliedFilter.isReservedOnly(),
                 appliedFilter.isConsignedOnly(),
-                statusValue);
+                statusValue,
+                from,
+                to);
         return total != null ? total : 0L;
     }
 
@@ -543,12 +553,20 @@ public class StockServiceImpl implements StockService {
         stock.setQuantity(stock.getQuantity() - quantity);
         Stock saved = stockRepository.save(stock);
         String username = CurrentUser.usernameOrSystem();
-        AuditMetadata metadata = buildStockMetadata(saved, -quantity);
+        Warehouse warehouse = saved.getWarehouse();
+        boolean isEmanetDepo = warehouse != null && warehouse.getWarehouseType() == WarehouseType.EMANET_DEPO;
+        String customerName = isEmanetDepo ? saved.getCustomerName() : null;
+        String customerPhone = isEmanetDepo ? saved.getCustomerPhone() : null;
+        
+        AuditMetadata metadata = buildStockMetadata(saved, -quantity, customerName, customerPhone, null);
+        String detailsMessage = String.format("Stok azaltıldı: -%s adet → Yeni=%s | Depo=%s, Ürün=%s",
+                String.valueOf(quantity), String.valueOf(saved.getQuantity()),
+                saved.getWarehouse().getName(), saved.getProduct().getName());
+        if (isEmanetDepo && customerName != null && !customerName.trim().isEmpty()) {
+            detailsMessage += String.format(" | Müşteri: %s", customerName);
+        }
         auditService.log(AuditAction.STOCK_REMOVE, DomainEntityType.Stock.name(), saved.getId(), username,
-                String.format("Stok azaltıldı: -%s adet → Yeni=%s | Depo=%s, Ürün=%s",
-                        String.valueOf(quantity), String.valueOf(saved.getQuantity()),
-                        saved.getWarehouse().getName(), saved.getProduct().getName()),
-                metadata);
+                detailsMessage, metadata);
         notificationService.create(buildNotificationRequest(
                 NotificationMessages.STOCK_DECREASED_TITLE,
                 String.format("Kullanıcı %s, %s/%s stokundan %s adet çıkardı (Yeni toplam: %s).", username,
@@ -815,11 +833,18 @@ public class StockServiceImpl implements StockService {
     }
 
     private AuditMetadata buildStockMetadata(Stock stock, Integer quantityContext) {
+        return buildStockMetadata(stock, quantityContext, null, null, null);
+    }
+
+    private AuditMetadata buildStockMetadata(Stock stock, Integer quantityContext, String customerName, String customerPhone, Long transferId) {
         if (stock == null) {
             return null;
         }
         Product product = stock.getProduct();
         Warehouse warehouse = stock.getWarehouse();
+        // Use provided customer info or fallback to stock's customer info
+        String finalCustomerName = customerName != null ? customerName : stock.getCustomerName();
+        String finalCustomerPhone = customerPhone != null ? customerPhone : stock.getCustomerPhone();
         return AuditMetadata.builder()
                 .warehouseId(warehouse != null ? warehouse.getId() : null)
                 .warehouseName(warehouse != null ? warehouse.getName() : null)
@@ -827,6 +852,9 @@ public class StockServiceImpl implements StockService {
                 .productName(product != null ? product.getName() : null)
                 .productSku(product != null ? product.getSku() : null)
                 .quantity(quantityContext)
+                .customerName(finalCustomerName)
+                .customerPhone(finalCustomerPhone)
+                .transferId(transferId)
                 .build();
     }
 
