@@ -74,6 +74,10 @@ const StockFiltersBar = ({
   setStockLastUpdatedFrom,
   stockLastUpdatedTo,
   setStockLastUpdatedTo,
+  stockLastUpdatedFromTime,
+  setStockLastUpdatedFromTime,
+  stockLastUpdatedToTime,
+  setStockLastUpdatedToTime,
   getWarehouseById
 }) => {
   const searchInputRef = useRef(null);
@@ -586,37 +590,58 @@ const StockFiltersBar = ({
         </div>
       </div>
 
-      {/* Date Range Filters */}
+      {/* Date Range Filters (date + optional time) */}
       <div className="row g-3 mb-3">
         <div className="col-12 col-md-6">
           <div className="stock-filter-card">
             <small>
               <i className="fas fa-calendar-alt me-1"></i>
-              Son Güncelleme (Başlangıç)
+              Son Güncelleme - Başlangıç
             </small>
-            <input
-              type="datetime-local"
-              className="form-control mt-2"
-              value={stockLastUpdatedFrom}
-              onChange={(e) => setStockLastUpdatedFrom(e.target.value)}
-              style={{ fontSize: '0.9rem' }}
-            />
+            <div className="d-flex gap-2 mt-2 flex-wrap">
+              <input
+                type="date"
+                className="form-control"
+                value={stockLastUpdatedFrom}
+                onChange={(e) => setStockLastUpdatedFrom(e.target.value)}
+                style={{ fontSize: '0.9rem', flex: '1 1 140px' }}
+              />
+              <input
+                type="time"
+                className="form-control"
+                value={stockLastUpdatedFromTime}
+                onChange={(e) => setStockLastUpdatedFromTime(e.target.value)}
+                placeholder="Saat (opsiyonel)"
+                style={{ fontSize: '0.9rem', maxWidth: '120px' }}
+                title="Saat (opsiyonel — boş bırakırsanız gün başı kullanılır)"
+              />
+            </div>
           </div>
         </div>
         <div className="col-12 col-md-6">
           <div className="stock-filter-card">
             <small>
               <i className="fas fa-calendar-check me-1"></i>
-              Son Güncelleme (Bitiş)
+              Son Güncelleme - Bitiş
             </small>
-            <input
-              type="datetime-local"
-              className="form-control mt-2"
-              value={stockLastUpdatedTo}
-              onChange={(e) => setStockLastUpdatedTo(e.target.value)}
-              min={stockLastUpdatedFrom || undefined}
-              style={{ fontSize: '0.9rem' }}
-            />
+            <div className="d-flex gap-2 mt-2 flex-wrap">
+              <input
+                type="date"
+                className="form-control"
+                value={stockLastUpdatedTo}
+                onChange={(e) => setStockLastUpdatedTo(e.target.value)}
+                min={stockLastUpdatedFrom || undefined}
+                style={{ fontSize: '0.9rem', flex: '1 1 140px' }}
+              />
+              <input
+                type="time"
+                className="form-control"
+                value={stockLastUpdatedToTime}
+                onChange={(e) => setStockLastUpdatedToTime(e.target.value)}
+                title="Saat (opsiyonel — boş bırakırsanız gün sonu kullanılır)"
+                style={{ fontSize: '0.9rem', maxWidth: '120px' }}
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -655,6 +680,8 @@ const StockFiltersBar = ({
             onClick={() => {
               setStockLastUpdatedFrom('');
               setStockLastUpdatedTo('');
+              setStockLastUpdatedFromTime('');
+              setStockLastUpdatedToTime('');
             }}
             title="Tarih filtrelerini temizle"
           >
@@ -677,8 +704,8 @@ const StockFiltersBar = ({
           showConsigned ? { icon: 'fas fa-handshake', label: 'Emanet Olanlar', onClear: () => setShowConsigned(false) } : null,
           stockLastUpdatedFrom || stockLastUpdatedTo ? { 
             icon: 'fas fa-calendar-alt', 
-            label: `Tarih: ${stockLastUpdatedFrom ? new Date(stockLastUpdatedFrom).toLocaleString('tr-TR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '...'} - ${stockLastUpdatedTo ? new Date(stockLastUpdatedTo).toLocaleString('tr-TR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '...'}`, 
-            onClear: () => { setStockLastUpdatedFrom(''); setStockLastUpdatedTo(''); } 
+            label: `Tarih: ${stockLastUpdatedFrom ? new Date(stockLastUpdatedFrom + 'T12:00:00').toLocaleDateString('tr-TR') : '...'} - ${stockLastUpdatedTo ? new Date(stockLastUpdatedTo + 'T12:00:00').toLocaleDateString('tr-TR') : '...'}${(stockLastUpdatedFromTime || stockLastUpdatedToTime) ? ' (saatli)' : ''}`, 
+            onClear: () => { setStockLastUpdatedFrom(''); setStockLastUpdatedTo(''); setStockLastUpdatedFromTime(''); setStockLastUpdatedToTime(''); } 
           } : null,
         ].filter(Boolean)}
         onClearAll={() => {
@@ -696,6 +723,8 @@ const StockFiltersBar = ({
           setShowConsigned(false);
           setStockLastUpdatedFrom('');
           setStockLastUpdatedTo('');
+          setStockLastUpdatedFromTime('');
+          setStockLastUpdatedToTime('');
         }}
       />
     </>
@@ -775,19 +804,25 @@ const Stock = () => {
   const [transferSourceWarehouseId, setTransferSourceWarehouseId] = useState(null);
   const [transferDestinationWarehouseId, setTransferDestinationWarehouseId] = useState(null);
   const [transferTypeFilter, setTransferTypeFilter] = useState('ALL');
-  // Date filters for transfers
+  // Date filters for transfers (date required, time optional)
   const [transferDateFrom, setTransferDateFrom] = useState('');
   const [transferDateTo, setTransferDateTo] = useState('');
   const [transferCreatedAtFrom, setTransferCreatedAtFrom] = useState('');
   const [transferCreatedAtTo, setTransferCreatedAtTo] = useState('');
+  const [transferDateFromTime, setTransferDateFromTime] = useState('');
+  const [transferDateToTime, setTransferDateToTime] = useState('');
+  const [transferCreatedAtFromTime, setTransferCreatedAtFromTime] = useState('');
+  const [transferCreatedAtToTime, setTransferCreatedAtToTime] = useState('');
   // Category filters
   const [categories, setCategories] = useState([]);
   const [subcategories, setSubcategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('');
   const [selectedSubcategory, setSelectedSubcategory] = useState('');
-  // Date filters for stock
+  // Date filters for stock (date required, time optional)
   const [stockLastUpdatedFrom, setStockLastUpdatedFrom] = useState('');
   const [stockLastUpdatedTo, setStockLastUpdatedTo] = useState('');
+  const [stockLastUpdatedFromTime, setStockLastUpdatedFromTime] = useState('');
+  const [stockLastUpdatedToTime, setStockLastUpdatedToTime] = useState('');
   // Stock list sorting
   const [stockSortBy, setStockSortBy] = useState('lastUpdated'); // 'warehouse' | 'lastUpdated' | 'quantity'
   const [stockSortDir, setStockSortDir] = useState('desc'); // 'asc' | 'desc'
@@ -825,9 +860,11 @@ const Stock = () => {
     const normalizedWarehouseId = selectedWarehouseId != null ? Number(selectedWarehouseId) : undefined;
     const normalizedSearch = searchTerm ? searchTerm.trim() : undefined;
     
-    // Format dates for API (convert datetime-local to ISO string)
-    const lastUpdatedFrom = stockLastUpdatedFrom ? new Date(stockLastUpdatedFrom).toISOString() : undefined;
-    const lastUpdatedTo = stockLastUpdatedTo ? new Date(stockLastUpdatedTo).toISOString() : undefined;
+    // Date + optional time (HH:mm): no time = full day, with time = that moment
+    const fromTimeStr = stockLastUpdatedFromTime ? (stockLastUpdatedFromTime.length === 5 ? stockLastUpdatedFromTime + ':00' : stockLastUpdatedFromTime) : '00:00:00';
+    const toTimeStr = stockLastUpdatedToTime ? (stockLastUpdatedToTime.length === 5 ? stockLastUpdatedToTime + ':59.999' : stockLastUpdatedToTime) : '23:59:59.999';
+    const lastUpdatedFrom = stockLastUpdatedFrom ? new Date(stockLastUpdatedFrom + 'T' + fromTimeStr).toISOString() : undefined;
+    const lastUpdatedTo = stockLastUpdatedTo ? new Date(stockLastUpdatedTo + 'T' + toTimeStr).toISOString() : undefined;
 
     return {
       brandId: Number.isNaN(normalizedBrandId) ? undefined : normalizedBrandId,
@@ -841,7 +878,7 @@ const Stock = () => {
       lastUpdatedFrom: lastUpdatedFrom,
       lastUpdatedTo: lastUpdatedTo
     };
-  }, [brandId, colorId, selectedWarehouseId, selectedCategory, selectedSubcategory, showReserved, showConsigned, searchTerm, stockLastUpdatedFrom, stockLastUpdatedTo]);
+  }, [brandId, colorId, selectedWarehouseId, selectedCategory, selectedSubcategory, showReserved, showConsigned, searchTerm, stockLastUpdatedFrom, stockLastUpdatedTo, stockLastUpdatedFromTime, stockLastUpdatedToTime]);
 
   const handleExportToExcel = useCallback(async () => {
     try {
@@ -970,11 +1007,18 @@ const Stock = () => {
       const normalizedDriver = transferDriver ? transferDriver.toLocaleLowerCase('tr-TR') : undefined;
       const normalizedNotes = transferNotes ? transferNotes.toLocaleLowerCase('tr-TR') : undefined;
       
-      // Format dates for API (convert datetime-local to ISO string)
-      const transferDateFromFormatted = transferDateFrom ? new Date(transferDateFrom).toISOString() : undefined;
-      const transferDateToFormatted = transferDateTo ? new Date(transferDateTo).toISOString() : undefined;
-      const createdAtFromFormatted = transferCreatedAtFrom ? new Date(transferCreatedAtFrom).toISOString() : undefined;
-      const createdAtToFormatted = transferCreatedAtTo ? new Date(transferCreatedAtTo).toISOString() : undefined;
+      // Date + optional time (HH:mm): no time = full day, with time = that moment
+      const toIso = (d, t, end) => {
+        if (!d) return undefined;
+        const timeStr = end
+          ? (!t ? '23:59:59.999' : (t.length === 5 ? t + ':59.999' : t.slice(0, 6) + '59.999'))
+          : (!t ? '00:00:00' : (t.length === 5 ? t + ':00' : t));
+        return new Date(d + 'T' + timeStr).toISOString();
+      };
+      const transferDateFromFormatted = toIso(transferDateFrom, transferDateFromTime, false);
+      const transferDateToFormatted = toIso(transferDateTo, transferDateToTime, true);
+      const createdAtFromFormatted = toIso(transferCreatedAtFrom, transferCreatedAtFromTime, false);
+      const createdAtToFormatted = toIso(transferCreatedAtTo, transferCreatedAtToTime, true);
       
       const params = {
         page,
@@ -1019,7 +1063,7 @@ const Stock = () => {
       console.error('Error fetching transfers:', error);
       throw error;
     }
-  }, [isAdmin, transferStatusFilter, transferTypeFilter, transferProductName, transferSku, transferDriver, transferNotes, transferSourceWarehouseId, transferDestinationWarehouseId, transferPageSize, transferDateFrom, transferDateTo, transferCreatedAtFrom, transferCreatedAtTo]);
+  }, [isAdmin, transferStatusFilter, transferTypeFilter, transferProductName, transferSku, transferDriver, transferNotes, transferSourceWarehouseId, transferDestinationWarehouseId, transferPageSize, transferDateFrom, transferDateTo, transferCreatedAtFrom, transferCreatedAtTo, transferDateFromTime, transferDateToTime, transferCreatedAtFromTime, transferCreatedAtToTime]);
 
   const fetchAllData = useCallback(async () => {
     try {
@@ -1290,11 +1334,11 @@ const Stock = () => {
 
   useEffect(() => {
     setStockPage(0);
-  }, [filter, searchTerm, selectedCategory, selectedSubcategory, showReserved, showConsigned, brandId, colorId, selectedWarehouseId, stockSortBy, stockSortDir, stockLastUpdatedFrom, stockLastUpdatedTo]);
+  }, [filter, searchTerm, selectedCategory, selectedSubcategory, showReserved, showConsigned, brandId, colorId, selectedWarehouseId, stockSortBy, stockSortDir, stockLastUpdatedFrom, stockLastUpdatedTo, stockLastUpdatedFromTime, stockLastUpdatedToTime]);
 
   useEffect(() => {
     setTransferPage(0);
-  }, [transferStatusFilter, transferTypeFilter, transferProductName, transferSku, transferDriver, transferNotes, transferSourceWarehouseId, transferDestinationWarehouseId, transferDateFrom, transferDateTo, transferCreatedAtFrom, transferCreatedAtTo]);
+  }, [transferStatusFilter, transferTypeFilter, transferProductName, transferSku, transferDriver, transferNotes, transferSourceWarehouseId, transferDestinationWarehouseId, transferDateFrom, transferDateTo, transferCreatedAtFrom, transferCreatedAtTo, transferDateFromTime, transferDateToTime, transferCreatedAtFromTime, transferCreatedAtToTime]);
 
   // Fetch main categories on mount
   useEffect(() => {
@@ -2760,6 +2804,10 @@ const Stock = () => {
           setStockLastUpdatedFrom={setStockLastUpdatedFrom}
           stockLastUpdatedTo={stockLastUpdatedTo}
           setStockLastUpdatedTo={setStockLastUpdatedTo}
+          stockLastUpdatedFromTime={stockLastUpdatedFromTime}
+          setStockLastUpdatedFromTime={setStockLastUpdatedFromTime}
+          stockLastUpdatedToTime={stockLastUpdatedToTime}
+          setStockLastUpdatedToTime={setStockLastUpdatedToTime}
           getWarehouseById={getWarehouseById}
         />
       )}
@@ -4136,7 +4184,7 @@ const Stock = () => {
                   </div>
                 </div>
               </div>
-              {/* Transfer Date Filters */}
+              {/* Transfer Date Filters (date + optional time) */}
               <div className="row g-2 mt-3">
                 <div className="col-md-12">
                   <h6 className="text-muted mb-2">
@@ -4146,41 +4194,31 @@ const Stock = () => {
                 </div>
                 <div className="col-md-3">
                   <label className="form-label small text-muted">Transfer Tarihi (Başlangıç)</label>
-                  <input
-                    type="datetime-local"
-                    className="form-control"
-                    value={transferDateFrom}
-                    onChange={(e) => setTransferDateFrom(e.target.value)}
-                  />
+                  <div className="d-flex gap-1 flex-wrap">
+                    <input type="date" className="form-control" value={transferDateFrom} onChange={(e) => setTransferDateFrom(e.target.value)} style={{ flex: '1 1 120px' }} />
+                    <input type="time" className="form-control" value={transferDateFromTime} onChange={(e) => setTransferDateFromTime(e.target.value)} title="Saat (opsiyonel)" style={{ maxWidth: '95px' }} />
+                  </div>
                 </div>
                 <div className="col-md-3">
                   <label className="form-label small text-muted">Transfer Tarihi (Bitiş)</label>
-                  <input
-                    type="datetime-local"
-                    className="form-control"
-                    value={transferDateTo}
-                    onChange={(e) => setTransferDateTo(e.target.value)}
-                    min={transferDateFrom || undefined}
-                  />
+                  <div className="d-flex gap-1 flex-wrap">
+                    <input type="date" className="form-control" value={transferDateTo} onChange={(e) => setTransferDateTo(e.target.value)} min={transferDateFrom || undefined} style={{ flex: '1 1 120px' }} />
+                    <input type="time" className="form-control" value={transferDateToTime} onChange={(e) => setTransferDateToTime(e.target.value)} title="Saat (opsiyonel)" style={{ maxWidth: '95px' }} />
+                  </div>
                 </div>
                 <div className="col-md-3">
                   <label className="form-label small text-muted">Oluşturulma Tarihi (Başlangıç)</label>
-                  <input
-                    type="datetime-local"
-                    className="form-control"
-                    value={transferCreatedAtFrom}
-                    onChange={(e) => setTransferCreatedAtFrom(e.target.value)}
-                  />
+                  <div className="d-flex gap-1 flex-wrap">
+                    <input type="date" className="form-control" value={transferCreatedAtFrom} onChange={(e) => setTransferCreatedAtFrom(e.target.value)} style={{ flex: '1 1 120px' }} />
+                    <input type="time" className="form-control" value={transferCreatedAtFromTime} onChange={(e) => setTransferCreatedAtFromTime(e.target.value)} title="Saat (opsiyonel)" style={{ maxWidth: '95px' }} />
+                  </div>
                 </div>
                 <div className="col-md-3">
                   <label className="form-label small text-muted">Oluşturulma Tarihi (Bitiş)</label>
-                  <input
-                    type="datetime-local"
-                    className="form-control"
-                    value={transferCreatedAtTo}
-                    onChange={(e) => setTransferCreatedAtTo(e.target.value)}
-                    min={transferCreatedAtFrom || undefined}
-                  />
+                  <div className="d-flex gap-1 flex-wrap">
+                    <input type="date" className="form-control" value={transferCreatedAtTo} onChange={(e) => setTransferCreatedAtTo(e.target.value)} min={transferCreatedAtFrom || undefined} style={{ flex: '1 1 120px' }} />
+                    <input type="time" className="form-control" value={transferCreatedAtToTime} onChange={(e) => setTransferCreatedAtToTime(e.target.value)} title="Saat (opsiyonel)" style={{ maxWidth: '95px' }} />
+                  </div>
                 </div>
                 <div className="col-md-12 d-flex flex-wrap gap-2 align-items-end">
                   {(transferDateFrom || transferDateTo) && (
@@ -4190,6 +4228,8 @@ const Stock = () => {
                       onClick={() => {
                         setTransferDateFrom('');
                         setTransferDateTo('');
+                        setTransferDateFromTime('');
+                        setTransferDateToTime('');
                       }}
                       title="Transfer tarihi filtrelerini temizle"
                     >
@@ -4204,6 +4244,8 @@ const Stock = () => {
                       onClick={() => {
                         setTransferCreatedAtFrom('');
                         setTransferCreatedAtTo('');
+                        setTransferCreatedAtFromTime('');
+                        setTransferCreatedAtToTime('');
                       }}
                       title="Oluşturulma tarihi filtrelerini temizle"
                     >
@@ -4220,6 +4262,10 @@ const Stock = () => {
                         setTransferDateTo('');
                         setTransferCreatedAtFrom('');
                         setTransferCreatedAtTo('');
+                        setTransferDateFromTime('');
+                        setTransferDateToTime('');
+                        setTransferCreatedAtFromTime('');
+                        setTransferCreatedAtToTime('');
                       }}
                       title="Tüm tarih filtrelerini temizle"
                     >
