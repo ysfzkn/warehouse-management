@@ -72,6 +72,7 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
         WHERE (:brandId IS NULL OR p.brand.id = :brandId)
           AND (:colorId IS NULL OR p.color.id = :colorId)
           AND (:warehouseId IS NULL OR s.warehouse.id = :warehouseId)
+          AND (COALESCE(:hasWarehouseFilter, false) = false OR s.warehouse.id IN :warehouseIds)
           AND (
                 :categoryId IS NULL
                 OR c.id = :categoryId
@@ -99,6 +100,8 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
     Page<Stock> findByFilters(@Param("brandId") Long brandId,
                               @Param("colorId") Long colorId,
                               @Param("warehouseId") Long warehouseId,
+                              @Param("warehouseIds") java.util.List<Long> warehouseIds,
+                              @Param("hasWarehouseFilter") Boolean hasWarehouseFilter,
                               @Param("categoryId") Long categoryId,
                               @Param("subCategoryId") Long subCategoryId,
                               @Param("searchEnabled") boolean searchEnabled,
@@ -118,6 +121,7 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
         WHERE (:brandId IS NULL OR p.brand.id = :brandId)
           AND (:colorId IS NULL OR p.color.id = :colorId)
           AND (:warehouseId IS NULL OR s.warehouse.id = :warehouseId)
+          AND (COALESCE(:hasWarehouseFilter, false) = false OR s.warehouse.id IN :warehouseIds)
           AND (
                 :categoryId IS NULL
                 OR c.id = :categoryId
@@ -145,6 +149,8 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
     Long sumQuantityByFilters(@Param("brandId") Long brandId,
                               @Param("colorId") Long colorId,
                               @Param("warehouseId") Long warehouseId,
+                              @Param("warehouseIds") java.util.List<Long> warehouseIds,
+                              @Param("hasWarehouseFilter") Boolean hasWarehouseFilter,
                               @Param("categoryId") Long categoryId,
                               @Param("subCategoryId") Long subCategoryId,
                               @Param("searchEnabled") boolean searchEnabled,

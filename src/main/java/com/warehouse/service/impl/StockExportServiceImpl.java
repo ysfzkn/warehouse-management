@@ -233,8 +233,19 @@ public class StockExportServiceImpl implements StockExportService {
                 id -> brandRepository.findById(id).map(b -> b.getName()));
         addFilterIfPresent(filterInfo, filter.getColorId(), "Renk", 
                 id -> colorRepository.findById(id).map(c -> c.getName()));
-        addFilterIfPresent(filterInfo, filter.getWarehouseId(), "Depo", 
-                id -> warehouseRepository.findById(id).map(w -> w.getName()));
+        // Warehouse filter supports both single id and multi ids
+        if (filter.getWarehouseIds() != null && !filter.getWarehouseIds().isEmpty()) {
+            List<String> names = filter.getWarehouseIds().stream()
+                    .filter(id -> id != null)
+                    .map(id -> warehouseRepository.findById(id).map(w -> w.getName()).orElse("ID: " + id))
+                    .toList();
+            if (!names.isEmpty()) {
+                filterInfo.add("Depo: " + String.join(", ", names));
+            }
+        } else {
+            addFilterIfPresent(filterInfo, filter.getWarehouseId(), "Depo",
+                    id -> warehouseRepository.findById(id).map(w -> w.getName()));
+        }
         addFilterIfPresent(filterInfo, filter.getCategoryId(), "Kategori", 
                 id -> categoryRepository.findById(id).map(c -> c.getName()));
         addFilterIfPresent(filterInfo, filter.getSubCategoryId(), "Alt Kategori", 
@@ -289,6 +300,8 @@ public class StockExportServiceImpl implements StockExportService {
                     params.brandId(),
                     params.colorId(),
                     params.warehouseId(),
+                    params.warehouseIds(),
+                    params.hasWarehouseFilter(),
                     params.categoryId(),
                     params.subCategoryId(),
                     params.searchEnabled(),
@@ -319,11 +332,16 @@ public class StockExportServiceImpl implements StockExportService {
                 : "%";
         LocalDateTime lastUpdatedFrom = filter.getLastUpdatedFrom() != null ? filter.getLastUpdatedFrom() : LocalDateTime.of(1970, 1, 1, 0, 0);
         LocalDateTime lastUpdatedTo = filter.getLastUpdatedTo() != null ? filter.getLastUpdatedTo() : LocalDateTime.of(2099, 12, 31, 23, 59, 59);
+        List<Long> warehouseIds = filter.getWarehouseIds();
+        boolean hasWarehouseFilter = warehouseIds != null && !warehouseIds.isEmpty();
+        Long warehouseId = hasWarehouseFilter ? null : filter.getWarehouseId();
 
         return new FilterParams(
                 filter.getBrandId(),
                 filter.getColorId(),
-                filter.getWarehouseId(),
+                warehouseId,
+                hasWarehouseFilter ? warehouseIds : List.of(0L),
+                hasWarehouseFilter,
                 filter.getCategoryId(),
                 filter.getSubCategoryId(),
                 searchEnabled,
@@ -469,6 +487,8 @@ public class StockExportServiceImpl implements StockExportService {
             Long brandId,
             Long colorId,
             Long warehouseId,
+            List<Long> warehouseIds,
+            boolean hasWarehouseFilter,
             Long categoryId,
             Long subCategoryId,
             boolean searchEnabled,

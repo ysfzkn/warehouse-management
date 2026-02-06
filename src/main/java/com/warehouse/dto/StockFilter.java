@@ -1,6 +1,7 @@
 package com.warehouse.dto;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Locale;
 
 public class StockFilter {
@@ -23,6 +24,11 @@ public class StockFilter {
     private Long brandId;
     private Long colorId;
     private Long warehouseId;
+    /**
+     * Optional multi-warehouse filter. When provided and non-empty, it should take precedence over {@link #warehouseId}.
+     * This enables filtering stock across multiple warehouses in a single query.
+     */
+    private List<Long> warehouseIds;
     private Long categoryId;
     private Long subCategoryId;
     private String search;
@@ -54,6 +60,14 @@ public class StockFilter {
 
     public void setWarehouseId(Long warehouseId) {
         this.warehouseId = warehouseId;
+    }
+
+    public List<Long> getWarehouseIds() {
+        return warehouseIds;
+    }
+
+    public void setWarehouseIds(List<Long> warehouseIds) {
+        this.warehouseIds = warehouseIds;
     }
 
     public Long getCategoryId() {
