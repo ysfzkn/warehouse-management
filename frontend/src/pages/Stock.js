@@ -10,6 +10,7 @@ import StockSettingsModal from '../components/StockSettingsModal';
 import StockTransferModal from '../components/StockTransferModal';
 import StockRequestApprovalModal from '../components/StockRequestApprovalModal';
 import SearchableSelect from '../components/SearchableSelect';
+import MultiSearchableSelect from '../components/MultiSearchableSelect';
 import FilterChips from '../components/FilterChips';
 import ConfirmModal from '../components/ConfirmModal';
 import NotesModal from '../components/NotesModal';
@@ -47,10 +48,10 @@ const PAGE_SIZE_OPTIONS = [20, 50, 100, 250];
 const StockFiltersBar = ({
   searchTerm,
   setSearchTerm,
-  selectedWarehouseId,
-  setSelectedWarehouseId,
-  selectedWarehouseOpt,
-  setSelectedWarehouseOpt,
+  selectedWarehouseIds,
+  setSelectedWarehouseIds,
+  selectedWarehouseById,
+  setSelectedWarehouseById,
   brandId,
   setBrandId,
   brandOpt,
@@ -489,20 +490,17 @@ const StockFiltersBar = ({
           <div className="stock-filter-card">
             <small>Depo</small>
             <div className="mt-2">
-              <SearchableSelect
+              <MultiSearchableSelect
                 label=""
-                value={selectedWarehouseId}
-                onChange={(id, opt) => {
-                  const parsed = id != null ? Number(id) : null;
-                  setSelectedWarehouseId(Number.isNaN(parsed) ? null : parsed);
-                  setSelectedWarehouseOpt(opt || null);
+                values={selectedWarehouseIds}
+                onChange={(nextIds, nextById) => {
+                  setSelectedWarehouseIds(Array.isArray(nextIds) ? nextIds : []);
+                  setSelectedWarehouseById(nextById || {});
                 }}
                 searchEndpoint="/api/warehouses"
-                placeholder="Depo ara..."
-                allowClear={true}
-                clearText="Temizle"
-                wrapperClassName="mb-0"
+                placeholder={selectedWarehouseIds?.length ? `Seçili depo: ${selectedWarehouseIds.length}` : 'Depo ara...'}
                 renderOption={(w) => w.name}
+                getOptionLabel={(w) => w?.name || (w?.id != null ? String(w.id) : '')}
               />
             </div>
           </div>
@@ -695,7 +693,26 @@ const StockFiltersBar = ({
         className="mb-3"
         chips={[
           searchTerm ? { icon: 'fas fa-search', label: `Arama: "${searchTerm}"`, onClear: () => setSearchTerm('') } : null,
-          selectedWarehouseId ? { icon: 'fas fa-warehouse', label: `Depo: ${selectedWarehouseOpt?.name || getWarehouseById(selectedWarehouseId)?.name || selectedWarehouseId}`, onClear: () => { setSelectedWarehouseId(null); setSelectedWarehouseOpt(null); } } : null,
+          ...(Array.isArray(selectedWarehouseIds) ? selectedWarehouseIds : []).map((wid) => {
+            const idNum = Number(wid);
+            if (Number.isNaN(idNum)) return null;
+            const name =
+              selectedWarehouseById?.[idNum]?.name ||
+              getWarehouseById(idNum)?.name ||
+              idNum;
+            return {
+              icon: 'fas fa-warehouse',
+              label: `Depo: ${name}`,
+              onClear: () => {
+                setSelectedWarehouseIds(prev => (Array.isArray(prev) ? prev.filter(x => Number(x) !== idNum) : []));
+                setSelectedWarehouseById(prev => {
+                  const next = { ...(prev || {}) };
+                  delete next[idNum];
+                  return next;
+                });
+              }
+            };
+          }).filter(Boolean),
           selectedCategory ? { icon: 'fas fa-tag', label: `Ana Kategori: ${Array.isArray(categories) ? categories.find(c => c.id.toString() === selectedCategory)?.name || selectedCategory : selectedCategory}`, onClear: () => { setSelectedCategory(''); setSelectedSubcategory(''); setSubcategories([]); } } : null,
           selectedSubcategory ? { icon: 'fas fa-tags', label: `Alt Kategori: ${subcategories.find(c => c.id.toString() === selectedSubcategory)?.name || selectedSubcategory}`, onClear: () => setSelectedSubcategory('') } : null,
           brandId ? { icon: 'fas fa-copyright', label: `Marka: ${brandOpt?.name || brandId}`, onClear: () => { setBrandId(null); setBrandOpt(null); } } : null,
@@ -710,8 +727,8 @@ const StockFiltersBar = ({
         ].filter(Boolean)}
         onClearAll={() => {
           setSearchTerm('');
-          setSelectedWarehouseId(null);
-          setSelectedWarehouseOpt(null);
+          setSelectedWarehouseIds([]);
+          setSelectedWarehouseById({});
           setSelectedCategory('');
           setSelectedSubcategory('');
           setSubcategories([]);
@@ -790,8 +807,8 @@ const Stock = () => {
   const [colorId, setColorId] = useState(null);
   const [brandOpt, setBrandOpt] = useState(null);
   const [colorOpt, setColorOpt] = useState(null);
-  const [selectedWarehouseId, setSelectedWarehouseId] = useState(null);
-  const [selectedWarehouseOpt, setSelectedWarehouseOpt] = useState(null);
+  const [selectedWarehouseIds, setSelectedWarehouseIds] = useState([]);
+  const [selectedWarehouseById, setSelectedWarehouseById] = useState({});
   const [searchTerm, setSearchTerm] = useState('');
   const [showReserved, setShowReserved] = useState(false);
   const [showConsigned, setShowConsigned] = useState(false);
@@ -857,7 +874,9 @@ const Stock = () => {
     const subCategoryId = selectedSubcategory ? Number(selectedSubcategory) : undefined;
     const normalizedBrandId = brandId != null ? Number(brandId) : undefined;
     const normalizedColorId = colorId != null ? Number(colorId) : undefined;
-    const normalizedWarehouseId = selectedWarehouseId != null ? Number(selectedWarehouseId) : undefined;
+    const normalizedWarehouseIds = Array.isArray(selectedWarehouseIds)
+      ? selectedWarehouseIds.map(id => Number(id)).filter(id => !Number.isNaN(id))
+      : [];
     const normalizedSearch = searchTerm ? searchTerm.trim() : undefined;
     
     // Date + optional time (HH:mm): no time = full day, with time = that moment
@@ -869,7 +888,8 @@ const Stock = () => {
     return {
       brandId: Number.isNaN(normalizedBrandId) ? undefined : normalizedBrandId,
       colorId: Number.isNaN(normalizedColorId) ? undefined : normalizedColorId,
-      warehouseId: Number.isNaN(normalizedWarehouseId) ? undefined : normalizedWarehouseId,
+      // Backend binds List<Long> from comma-separated values
+      warehouseIds: normalizedWarehouseIds.length ? normalizedWarehouseIds.join(',') : undefined,
       categoryId: Number.isNaN(categoryId) ? undefined : categoryId,
       subCategoryId: Number.isNaN(subCategoryId) ? undefined : subCategoryId,
       reservedOnly: showReserved || undefined,
@@ -878,7 +898,7 @@ const Stock = () => {
       lastUpdatedFrom: lastUpdatedFrom,
       lastUpdatedTo: lastUpdatedTo
     };
-  }, [brandId, colorId, selectedWarehouseId, selectedCategory, selectedSubcategory, showReserved, showConsigned, searchTerm, stockLastUpdatedFrom, stockLastUpdatedTo, stockLastUpdatedFromTime, stockLastUpdatedToTime]);
+  }, [brandId, colorId, selectedWarehouseIds, selectedCategory, selectedSubcategory, showReserved, showConsigned, searchTerm, stockLastUpdatedFrom, stockLastUpdatedTo, stockLastUpdatedFromTime, stockLastUpdatedToTime]);
 
   const handleExportToExcel = useCallback(async () => {
     try {
@@ -1334,7 +1354,7 @@ const Stock = () => {
 
   useEffect(() => {
     setStockPage(0);
-  }, [filter, searchTerm, selectedCategory, selectedSubcategory, showReserved, showConsigned, brandId, colorId, selectedWarehouseId, stockSortBy, stockSortDir, stockLastUpdatedFrom, stockLastUpdatedTo, stockLastUpdatedFromTime, stockLastUpdatedToTime]);
+  }, [filter, searchTerm, selectedCategory, selectedSubcategory, showReserved, showConsigned, brandId, colorId, selectedWarehouseIds, stockSortBy, stockSortDir, stockLastUpdatedFrom, stockLastUpdatedTo, stockLastUpdatedFromTime, stockLastUpdatedToTime]);
 
   useEffect(() => {
     setTransferPage(0);
@@ -1396,6 +1416,7 @@ const Stock = () => {
     const b = params.get('brandId');
     const c = params.get('colorId');
     const w = params.get('warehouseId');
+    const ws = params.get('warehouseIds');
     const stockIdParam = params.get('stockId');
     const transferIdParam = params.get('transferId');
     const auditStockIdParam = params.get('auditStockId');
@@ -1403,7 +1424,18 @@ const Stock = () => {
     if (f === 'low-stock' || f === 'out-of-stock' || f === 'all') setFilter(f);
     if (b) setBrandId(Number(b));
     if (c) setColorId(Number(c));
-    if (w) setSelectedWarehouseId(Number(w));
+    if (ws) {
+      const ids = String(ws)
+        .split(',')
+        .map(s => Number(s.trim()))
+        .filter(n => !Number.isNaN(n));
+      setSelectedWarehouseIds(ids);
+    } else if (w) {
+      const idNum = Number(w);
+      setSelectedWarehouseIds(Number.isNaN(idNum) ? [] : [idNum]);
+    } else {
+      setSelectedWarehouseIds([]);
+    }
     if (stockIdParam) setPendingStockId(Number(stockIdParam));
     if (transferIdParam) {
       // Open transfer history and highlight by filtering to ALL
@@ -2777,10 +2809,10 @@ const Stock = () => {
         <StockFiltersBar
           searchTerm={searchTerm}
           setSearchTerm={setSearchTerm}
-          selectedWarehouseId={selectedWarehouseId}
-          setSelectedWarehouseId={setSelectedWarehouseId}
-          selectedWarehouseOpt={selectedWarehouseOpt}
-          setSelectedWarehouseOpt={setSelectedWarehouseOpt}
+          selectedWarehouseIds={selectedWarehouseIds}
+          setSelectedWarehouseIds={setSelectedWarehouseIds}
+          selectedWarehouseById={selectedWarehouseById}
+          setSelectedWarehouseById={setSelectedWarehouseById}
           brandId={brandId}
           setBrandId={setBrandId}
           brandOpt={brandOpt}

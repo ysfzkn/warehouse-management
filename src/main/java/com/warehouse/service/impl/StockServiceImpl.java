@@ -93,10 +93,18 @@ public class StockServiceImpl implements StockService {
         // Use safe bounds when null (PostgreSQL rejects LocalDateTime.MIN/MAX as "timestamp out of range")
         LocalDateTime from = appliedFilter.getLastUpdatedFrom() != null ? appliedFilter.getLastUpdatedFrom() : LocalDateTime.of(1970, 1, 1, 0, 0);
         LocalDateTime to = appliedFilter.getLastUpdatedTo() != null ? appliedFilter.getLastUpdatedTo() : LocalDateTime.of(2099, 12, 31, 23, 59, 59);
+
+        List<Long> warehouseIds = appliedFilter.getWarehouseIds();
+        boolean hasWarehouseFilter = warehouseIds != null && !warehouseIds.isEmpty();
+        // If multi-warehouse filter is provided, ignore single warehouseId to avoid conflicting filters.
+        Long singleWarehouseId = hasWarehouseFilter ? null : appliedFilter.getWarehouseId();
+
         return stockRepository.findByFilters(
                 appliedFilter.getBrandId(),
                 appliedFilter.getColorId(),
-                appliedFilter.getWarehouseId(),
+                singleWarehouseId,
+                hasWarehouseFilter ? warehouseIds : List.of(0L),
+                hasWarehouseFilter,
                 appliedFilter.getCategoryId(),
                 appliedFilter.getSubCategoryId(),
                 searchEnabled,
@@ -227,10 +235,17 @@ public class StockServiceImpl implements StockService {
 
         LocalDateTime from = appliedFilter.getLastUpdatedFrom() != null ? appliedFilter.getLastUpdatedFrom() : LocalDateTime.of(1970, 1, 1, 0, 0);
         LocalDateTime to = appliedFilter.getLastUpdatedTo() != null ? appliedFilter.getLastUpdatedTo() : LocalDateTime.of(2099, 12, 31, 23, 59, 59);
+
+        List<Long> warehouseIds = appliedFilter.getWarehouseIds();
+        boolean hasWarehouseFilter = warehouseIds != null && !warehouseIds.isEmpty();
+        Long singleWarehouseId = hasWarehouseFilter ? null : appliedFilter.getWarehouseId();
+
         Long total = stockRepository.sumQuantityByFilters(
                 appliedFilter.getBrandId(),
                 appliedFilter.getColorId(),
-                appliedFilter.getWarehouseId(),
+                singleWarehouseId,
+                hasWarehouseFilter ? warehouseIds : List.of(0L),
+                hasWarehouseFilter,
                 appliedFilter.getCategoryId(),
                 appliedFilter.getSubCategoryId(),
                 searchEnabled,

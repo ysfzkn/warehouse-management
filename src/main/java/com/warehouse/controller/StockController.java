@@ -64,6 +64,7 @@ public class StockController {
             @RequestParam(required = false) Long brandId,
             @RequestParam(required = false) Long colorId,
             @RequestParam(required = false) Long warehouseId,
+            @RequestParam(required = false, name = "warehouseIds") List<Long> warehouseIds,
             @RequestParam(required = false) Long categoryId,
             @RequestParam(required = false) Long subCategoryId,
             @RequestParam(required = false) Boolean reservedOnly,
@@ -82,7 +83,7 @@ public class StockController {
         Pageable pageable = PageRequest.of(safePage, safeSize, sort);
 
         StockFilter filter = buildStockFilter(brandId, colorId, warehouseId, categoryId, 
-                subCategoryId, reservedOnly, consignedOnly, search, status, lastUpdatedFrom, lastUpdatedTo);
+                subCategoryId, reservedOnly, consignedOnly, search, status, lastUpdatedFrom, lastUpdatedTo, warehouseIds);
 
         Page<Stock> stocks = stockService.getStocks(filter, pageable);
         List<StockDto> content = stocks.getContent().stream().map(this::toDto).toList();
@@ -184,6 +185,7 @@ public class StockController {
             @RequestParam(required = false) Long brandId,
             @RequestParam(required = false) Long colorId,
             @RequestParam(required = false) Long warehouseId,
+            @RequestParam(required = false, name = "warehouseIds") List<Long> warehouseIds,
             @RequestParam(required = false) Long categoryId,
             @RequestParam(required = false) Long subCategoryId,
             @RequestParam(required = false) Boolean reservedOnly,
@@ -195,6 +197,7 @@ public class StockController {
         filter.setBrandId(brandId);
         filter.setColorId(colorId);
         filter.setWarehouseId(warehouseId);
+        filter.setWarehouseIds(warehouseIds);
         filter.setCategoryId(categoryId);
         filter.setSubCategoryId(subCategoryId);
         filter.setReservedOnly(Boolean.TRUE.equals(reservedOnly));
@@ -226,6 +229,7 @@ public class StockController {
             @RequestParam(required = false) Long brandId,
             @RequestParam(required = false) Long colorId,
             @RequestParam(required = false) Long warehouseId,
+            @RequestParam(required = false, name = "warehouseIds") List<Long> warehouseIds,
             @RequestParam(required = false) Long categoryId,
             @RequestParam(required = false) Long subCategoryId,
             @RequestParam(required = false) Boolean reservedOnly,
@@ -240,7 +244,7 @@ public class StockController {
         
         try {
             StockFilter filter = buildStockFilter(brandId, colorId, warehouseId, categoryId, 
-                    subCategoryId, reservedOnly, consignedOnly, search, status, lastUpdatedFrom, lastUpdatedTo);
+                    subCategoryId, reservedOnly, consignedOnly, search, status, lastUpdatedFrom, lastUpdatedTo, warehouseIds);
             
             org.springframework.core.io.Resource resource = stockExportService.exportToExcel(filter);
             String filename = generateExportFilename();
@@ -260,11 +264,13 @@ public class StockController {
                                         Long categoryId, Long subCategoryId, 
                                         Boolean reservedOnly, Boolean consignedOnly, 
                                         String search, String status,
-                                        String lastUpdatedFrom, String lastUpdatedTo) {
+                                        String lastUpdatedFrom, String lastUpdatedTo,
+                                        List<Long> warehouseIds) {
         StockFilter filter = new StockFilter();
         filter.setBrandId(brandId);
         filter.setColorId(colorId);
         filter.setWarehouseId(warehouseId);
+        filter.setWarehouseIds(warehouseIds);
         filter.setCategoryId(categoryId);
         filter.setSubCategoryId(subCategoryId);
         filter.setReservedOnly(Boolean.TRUE.equals(reservedOnly));
