@@ -10,6 +10,7 @@ import StockSettingsModal from '../components/StockSettingsModal';
 import StockTransferModal from '../components/StockTransferModal';
 import StockRequestApprovalModal from '../components/StockRequestApprovalModal';
 import SearchableSelect from '../components/SearchableSelect';
+import MultiSearchableSelect from '../components/MultiSearchableSelect';
 import FilterChips from '../components/FilterChips';
 import ConfirmModal from '../components/ConfirmModal';
 import NotesModal from '../components/NotesModal';
@@ -47,10 +48,10 @@ const PAGE_SIZE_OPTIONS = [20, 50, 100, 250];
 const StockFiltersBar = ({
   searchTerm,
   setSearchTerm,
-  selectedWarehouseId,
-  setSelectedWarehouseId,
-  selectedWarehouseOpt,
-  setSelectedWarehouseOpt,
+  selectedWarehouseIds,
+  setSelectedWarehouseIds,
+  selectedWarehouseById,
+  setSelectedWarehouseById,
   brandId,
   setBrandId,
   brandOpt,
@@ -70,6 +71,14 @@ const StockFiltersBar = ({
   setShowReserved,
   showConsigned,
   setShowConsigned,
+  stockLastUpdatedFrom,
+  setStockLastUpdatedFrom,
+  stockLastUpdatedTo,
+  setStockLastUpdatedTo,
+  stockLastUpdatedFromTime,
+  setStockLastUpdatedFromTime,
+  stockLastUpdatedToTime,
+  setStockLastUpdatedToTime,
   getWarehouseById
 }) => {
   const searchInputRef = useRef(null);
@@ -85,6 +94,23 @@ const StockFiltersBar = ({
   return (
     <>
       <style>{`
+        /* Stock highlight animation */
+        @keyframes highlightPulse {
+          0%, 100% { 
+            background-color: rgba(59, 130, 246, 0.15);
+            box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4);
+          }
+          50% { 
+            background-color: rgba(59, 130, 246, 0.25);
+            box-shadow: 0 0 0 10px rgba(59, 130, 246, 0);
+          }
+        }
+        
+        .stock-highlighted {
+          animation: highlightPulse 2s ease-in-out infinite;
+          transition: all 0.3s ease;
+        }
+        
         @media (max-width: 1155px) {
           .stock-mobile-card,
           .transfer-mobile-card {
@@ -97,6 +123,9 @@ const StockFiltersBar = ({
           .transfer-mobile-card.is-selected {
             border-color: #3b82f6 !important;
             box-shadow: 0 20px 45px rgba(59,130,246,0.22);
+          }
+          .stock-mobile-card.stock-highlighted {
+            border-color: #3b82f6 !important;
           }
           .stock-mobile-card__header,
           .transfer-mobile-card__header {
@@ -461,20 +490,17 @@ const StockFiltersBar = ({
           <div className="stock-filter-card">
             <small>Depo</small>
             <div className="mt-2">
-              <SearchableSelect
+              <MultiSearchableSelect
                 label=""
-                value={selectedWarehouseId}
-                onChange={(id, opt) => {
-                  const parsed = id != null ? Number(id) : null;
-                  setSelectedWarehouseId(Number.isNaN(parsed) ? null : parsed);
-                  setSelectedWarehouseOpt(opt || null);
+                values={selectedWarehouseIds}
+                onChange={(nextIds, nextById) => {
+                  setSelectedWarehouseIds(Array.isArray(nextIds) ? nextIds : []);
+                  setSelectedWarehouseById(nextById || {});
                 }}
                 searchEndpoint="/api/warehouses"
-                placeholder="Depo ara..."
-                allowClear={true}
-                clearText="Temizle"
-                wrapperClassName="mb-0"
+                placeholder={selectedWarehouseIds?.length ? `Seçili depo: ${selectedWarehouseIds.length}` : 'Depo ara...'}
                 renderOption={(w) => w.name}
+                getOptionLabel={(w) => w?.name || (w?.id != null ? String(w.id) : '')}
               />
             </div>
           </div>
@@ -562,6 +588,62 @@ const StockFiltersBar = ({
         </div>
       </div>
 
+      {/* Date Range Filters (date + optional time) */}
+      <div className="row g-3 mb-3">
+        <div className="col-12 col-md-6">
+          <div className="stock-filter-card">
+            <small>
+              <i className="fas fa-calendar-alt me-1"></i>
+              Son Güncelleme - Başlangıç
+            </small>
+            <div className="d-flex gap-2 mt-2 flex-wrap">
+              <input
+                type="date"
+                className="form-control"
+                value={stockLastUpdatedFrom}
+                onChange={(e) => setStockLastUpdatedFrom(e.target.value)}
+                style={{ fontSize: '0.9rem', flex: '1 1 140px' }}
+              />
+              <input
+                type="time"
+                className="form-control"
+                value={stockLastUpdatedFromTime}
+                onChange={(e) => setStockLastUpdatedFromTime(e.target.value)}
+                placeholder="Saat (opsiyonel)"
+                style={{ fontSize: '0.9rem', maxWidth: '120px' }}
+                title="Saat (opsiyonel — boş bırakırsanız gün başı kullanılır)"
+              />
+            </div>
+          </div>
+        </div>
+        <div className="col-12 col-md-6">
+          <div className="stock-filter-card">
+            <small>
+              <i className="fas fa-calendar-check me-1"></i>
+              Son Güncelleme - Bitiş
+            </small>
+            <div className="d-flex gap-2 mt-2 flex-wrap">
+              <input
+                type="date"
+                className="form-control"
+                value={stockLastUpdatedTo}
+                onChange={(e) => setStockLastUpdatedTo(e.target.value)}
+                min={stockLastUpdatedFrom || undefined}
+                style={{ fontSize: '0.9rem', flex: '1 1 140px' }}
+              />
+              <input
+                type="time"
+                className="form-control"
+                value={stockLastUpdatedToTime}
+                onChange={(e) => setStockLastUpdatedToTime(e.target.value)}
+                title="Saat (opsiyonel — boş bırakırsanız gün sonu kullanılır)"
+                style={{ fontSize: '0.9rem', maxWidth: '120px' }}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Additional filters */}
       <div className="stock-filter-toggle-modern mb-3">
         <div>
@@ -590,24 +672,63 @@ const StockFiltersBar = ({
             Emanet
           </label>
         </div>
+        {(stockLastUpdatedFrom || stockLastUpdatedTo) && (
+          <button
+            className="btn btn-sm btn-outline-danger"
+            onClick={() => {
+              setStockLastUpdatedFrom('');
+              setStockLastUpdatedTo('');
+              setStockLastUpdatedFromTime('');
+              setStockLastUpdatedToTime('');
+            }}
+            title="Tarih filtrelerini temizle"
+          >
+            <i className="fas fa-times me-1"></i>
+            Tarih Filtrelerini Temizle
+          </button>
+        )}
       </div>
 
       <FilterChips
         className="mb-3"
         chips={[
           searchTerm ? { icon: 'fas fa-search', label: `Arama: "${searchTerm}"`, onClear: () => setSearchTerm('') } : null,
-          selectedWarehouseId ? { icon: 'fas fa-warehouse', label: `Depo: ${selectedWarehouseOpt?.name || getWarehouseById(selectedWarehouseId)?.name || selectedWarehouseId}`, onClear: () => { setSelectedWarehouseId(null); setSelectedWarehouseOpt(null); } } : null,
+          ...(Array.isArray(selectedWarehouseIds) ? selectedWarehouseIds : []).map((wid) => {
+            const idNum = Number(wid);
+            if (Number.isNaN(idNum)) return null;
+            const name =
+              selectedWarehouseById?.[idNum]?.name ||
+              getWarehouseById(idNum)?.name ||
+              idNum;
+            return {
+              icon: 'fas fa-warehouse',
+              label: `Depo: ${name}`,
+              onClear: () => {
+                setSelectedWarehouseIds(prev => (Array.isArray(prev) ? prev.filter(x => Number(x) !== idNum) : []));
+                setSelectedWarehouseById(prev => {
+                  const next = { ...(prev || {}) };
+                  delete next[idNum];
+                  return next;
+                });
+              }
+            };
+          }).filter(Boolean),
           selectedCategory ? { icon: 'fas fa-tag', label: `Ana Kategori: ${Array.isArray(categories) ? categories.find(c => c.id.toString() === selectedCategory)?.name || selectedCategory : selectedCategory}`, onClear: () => { setSelectedCategory(''); setSelectedSubcategory(''); setSubcategories([]); } } : null,
           selectedSubcategory ? { icon: 'fas fa-tags', label: `Alt Kategori: ${subcategories.find(c => c.id.toString() === selectedSubcategory)?.name || selectedSubcategory}`, onClear: () => setSelectedSubcategory('') } : null,
           brandId ? { icon: 'fas fa-copyright', label: `Marka: ${brandOpt?.name || brandId}`, onClear: () => { setBrandId(null); setBrandOpt(null); } } : null,
           colorId ? { icon: 'fas fa-palette', label: `Renk: ${colorOpt?.name || colorId}`, onClear: () => { setColorId(null); setColorOpt(null); } } : null,
           showReserved ? { icon: 'fas fa-lock', label: 'Rezerve Olanlar', onClear: () => setShowReserved(false) } : null,
           showConsigned ? { icon: 'fas fa-handshake', label: 'Emanet Olanlar', onClear: () => setShowConsigned(false) } : null,
+          stockLastUpdatedFrom || stockLastUpdatedTo ? { 
+            icon: 'fas fa-calendar-alt', 
+            label: `Tarih: ${stockLastUpdatedFrom ? new Date(stockLastUpdatedFrom + 'T12:00:00').toLocaleDateString('tr-TR') : '...'} - ${stockLastUpdatedTo ? new Date(stockLastUpdatedTo + 'T12:00:00').toLocaleDateString('tr-TR') : '...'}${(stockLastUpdatedFromTime || stockLastUpdatedToTime) ? ' (saatli)' : ''}`, 
+            onClear: () => { setStockLastUpdatedFrom(''); setStockLastUpdatedTo(''); setStockLastUpdatedFromTime(''); setStockLastUpdatedToTime(''); } 
+          } : null,
         ].filter(Boolean)}
         onClearAll={() => {
           setSearchTerm('');
-          setSelectedWarehouseId(null);
-          setSelectedWarehouseOpt(null);
+          setSelectedWarehouseIds([]);
+          setSelectedWarehouseById({});
           setSelectedCategory('');
           setSelectedSubcategory('');
           setSubcategories([]);
@@ -617,6 +738,10 @@ const StockFiltersBar = ({
           setColorOpt(null);
           setShowReserved(false);
           setShowConsigned(false);
+          setStockLastUpdatedFrom('');
+          setStockLastUpdatedTo('');
+          setStockLastUpdatedFromTime('');
+          setStockLastUpdatedToTime('');
         }}
       />
     </>
@@ -682,8 +807,8 @@ const Stock = () => {
   const [colorId, setColorId] = useState(null);
   const [brandOpt, setBrandOpt] = useState(null);
   const [colorOpt, setColorOpt] = useState(null);
-  const [selectedWarehouseId, setSelectedWarehouseId] = useState(null);
-  const [selectedWarehouseOpt, setSelectedWarehouseOpt] = useState(null);
+  const [selectedWarehouseIds, setSelectedWarehouseIds] = useState([]);
+  const [selectedWarehouseById, setSelectedWarehouseById] = useState({});
   const [searchTerm, setSearchTerm] = useState('');
   const [showReserved, setShowReserved] = useState(false);
   const [showConsigned, setShowConsigned] = useState(false);
@@ -696,11 +821,25 @@ const Stock = () => {
   const [transferSourceWarehouseId, setTransferSourceWarehouseId] = useState(null);
   const [transferDestinationWarehouseId, setTransferDestinationWarehouseId] = useState(null);
   const [transferTypeFilter, setTransferTypeFilter] = useState('ALL');
+  // Date filters for transfers (date required, time optional)
+  const [transferDateFrom, setTransferDateFrom] = useState('');
+  const [transferDateTo, setTransferDateTo] = useState('');
+  const [transferCreatedAtFrom, setTransferCreatedAtFrom] = useState('');
+  const [transferCreatedAtTo, setTransferCreatedAtTo] = useState('');
+  const [transferDateFromTime, setTransferDateFromTime] = useState('');
+  const [transferDateToTime, setTransferDateToTime] = useState('');
+  const [transferCreatedAtFromTime, setTransferCreatedAtFromTime] = useState('');
+  const [transferCreatedAtToTime, setTransferCreatedAtToTime] = useState('');
   // Category filters
   const [categories, setCategories] = useState([]);
   const [subcategories, setSubcategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('');
   const [selectedSubcategory, setSelectedSubcategory] = useState('');
+  // Date filters for stock (date required, time optional)
+  const [stockLastUpdatedFrom, setStockLastUpdatedFrom] = useState('');
+  const [stockLastUpdatedTo, setStockLastUpdatedTo] = useState('');
+  const [stockLastUpdatedFromTime, setStockLastUpdatedFromTime] = useState('');
+  const [stockLastUpdatedToTime, setStockLastUpdatedToTime] = useState('');
   // Stock list sorting
   const [stockSortBy, setStockSortBy] = useState('lastUpdated'); // 'warehouse' | 'lastUpdated' | 'quantity'
   const [stockSortDir, setStockSortDir] = useState('desc'); // 'asc' | 'desc'
@@ -722,6 +861,7 @@ const Stock = () => {
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [showMyRequestsModal, setShowMyRequestsModal] = useState(false);
   const [lockCustomerTransfer, setLockCustomerTransfer] = useState(false);
+  const [highlightedStockId, setHighlightedStockId] = useState(null);
   const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
   const [selectedStocks, setSelectedStocks] = useState([]);
   const [selectedTransfers, setSelectedTransfers] = useState([]);
@@ -734,20 +874,31 @@ const Stock = () => {
     const subCategoryId = selectedSubcategory ? Number(selectedSubcategory) : undefined;
     const normalizedBrandId = brandId != null ? Number(brandId) : undefined;
     const normalizedColorId = colorId != null ? Number(colorId) : undefined;
-    const normalizedWarehouseId = selectedWarehouseId != null ? Number(selectedWarehouseId) : undefined;
+    const normalizedWarehouseIds = Array.isArray(selectedWarehouseIds)
+      ? selectedWarehouseIds.map(id => Number(id)).filter(id => !Number.isNaN(id))
+      : [];
     const normalizedSearch = searchTerm ? searchTerm.trim() : undefined;
+    
+    // Date + optional time (HH:mm): no time = full day, with time = that moment
+    const fromTimeStr = stockLastUpdatedFromTime ? (stockLastUpdatedFromTime.length === 5 ? stockLastUpdatedFromTime + ':00' : stockLastUpdatedFromTime) : '00:00:00';
+    const toTimeStr = stockLastUpdatedToTime ? (stockLastUpdatedToTime.length === 5 ? stockLastUpdatedToTime + ':59.999' : stockLastUpdatedToTime) : '23:59:59.999';
+    const lastUpdatedFrom = stockLastUpdatedFrom ? new Date(stockLastUpdatedFrom + 'T' + fromTimeStr).toISOString() : undefined;
+    const lastUpdatedTo = stockLastUpdatedTo ? new Date(stockLastUpdatedTo + 'T' + toTimeStr).toISOString() : undefined;
 
     return {
       brandId: Number.isNaN(normalizedBrandId) ? undefined : normalizedBrandId,
       colorId: Number.isNaN(normalizedColorId) ? undefined : normalizedColorId,
-      warehouseId: Number.isNaN(normalizedWarehouseId) ? undefined : normalizedWarehouseId,
+      // Backend binds List<Long> from comma-separated values
+      warehouseIds: normalizedWarehouseIds.length ? normalizedWarehouseIds.join(',') : undefined,
       categoryId: Number.isNaN(categoryId) ? undefined : categoryId,
       subCategoryId: Number.isNaN(subCategoryId) ? undefined : subCategoryId,
       reservedOnly: showReserved || undefined,
       consignedOnly: showConsigned || undefined,
-      search: normalizedSearch || undefined
+      search: normalizedSearch || undefined,
+      lastUpdatedFrom: lastUpdatedFrom,
+      lastUpdatedTo: lastUpdatedTo
     };
-  }, [brandId, colorId, selectedWarehouseId, selectedCategory, selectedSubcategory, showReserved, showConsigned, searchTerm]);
+  }, [brandId, colorId, selectedWarehouseIds, selectedCategory, selectedSubcategory, showReserved, showConsigned, searchTerm, stockLastUpdatedFrom, stockLastUpdatedTo, stockLastUpdatedFromTime, stockLastUpdatedToTime]);
 
   const handleExportToExcel = useCallback(async () => {
     try {
@@ -875,6 +1026,20 @@ const Stock = () => {
       const normalizedSku = transferSku ? transferSku.toLocaleLowerCase('tr-TR') : undefined;
       const normalizedDriver = transferDriver ? transferDriver.toLocaleLowerCase('tr-TR') : undefined;
       const normalizedNotes = transferNotes ? transferNotes.toLocaleLowerCase('tr-TR') : undefined;
+      
+      // Date + optional time (HH:mm): no time = full day, with time = that moment
+      const toIso = (d, t, end) => {
+        if (!d) return undefined;
+        const timeStr = end
+          ? (!t ? '23:59:59.999' : (t.length === 5 ? t + ':59.999' : t.slice(0, 6) + '59.999'))
+          : (!t ? '00:00:00' : (t.length === 5 ? t + ':00' : t));
+        return new Date(d + 'T' + timeStr).toISOString();
+      };
+      const transferDateFromFormatted = toIso(transferDateFrom, transferDateFromTime, false);
+      const transferDateToFormatted = toIso(transferDateTo, transferDateToTime, true);
+      const createdAtFromFormatted = toIso(transferCreatedAtFrom, transferCreatedAtFromTime, false);
+      const createdAtToFormatted = toIso(transferCreatedAtTo, transferCreatedAtToTime, true);
+      
       const params = {
         page,
         size,
@@ -886,8 +1051,14 @@ const Stock = () => {
         notes: normalizedNotes,
         sourceWarehouseId: transferSourceWarehouseId || undefined,
         destinationWarehouseId: transferDestinationWarehouseId || undefined,
+        transferDateFrom: transferDateFromFormatted,
+        transferDateTo: transferDateToFormatted,
+        createdAtFrom: createdAtFromFormatted,
+        createdAtTo: createdAtToFormatted,
         sort: 'updatedAt,desc'
       };
+      // Remove undefined/null so only set filters are sent to API
+      Object.keys(params).forEach(k => { if (params[k] === undefined || params[k] === null || params[k] === '') delete params[k]; });
       const endpoint = isAdmin ? '/api/stock-transfers' : '/api/stock-transfers/current-user';
       const response = await axios.get(endpoint, { params });
       const data = response.data || {};
@@ -912,7 +1083,7 @@ const Stock = () => {
       console.error('Error fetching transfers:', error);
       throw error;
     }
-  }, [isAdmin, transferStatusFilter, transferTypeFilter, transferProductName, transferSku, transferDriver, transferNotes, transferSourceWarehouseId, transferDestinationWarehouseId, transferPageSize]);
+  }, [isAdmin, transferStatusFilter, transferTypeFilter, transferProductName, transferSku, transferDriver, transferNotes, transferSourceWarehouseId, transferDestinationWarehouseId, transferPageSize, transferDateFrom, transferDateTo, transferCreatedAtFrom, transferCreatedAtTo, transferDateFromTime, transferDateToTime, transferCreatedAtFromTime, transferCreatedAtToTime]);
 
   const fetchAllData = useCallback(async () => {
     try {
@@ -1183,11 +1354,11 @@ const Stock = () => {
 
   useEffect(() => {
     setStockPage(0);
-  }, [filter, searchTerm, selectedCategory, selectedSubcategory, showReserved, showConsigned, brandId, colorId, selectedWarehouseId, stockSortBy, stockSortDir]);
+  }, [filter, searchTerm, selectedCategory, selectedSubcategory, showReserved, showConsigned, brandId, colorId, selectedWarehouseIds, stockSortBy, stockSortDir, stockLastUpdatedFrom, stockLastUpdatedTo, stockLastUpdatedFromTime, stockLastUpdatedToTime]);
 
   useEffect(() => {
     setTransferPage(0);
-  }, [transferStatusFilter, transferTypeFilter, transferProductName, transferSku, transferDriver, transferNotes, transferSourceWarehouseId, transferDestinationWarehouseId]);
+  }, [transferStatusFilter, transferTypeFilter, transferProductName, transferSku, transferDriver, transferNotes, transferSourceWarehouseId, transferDestinationWarehouseId, transferDateFrom, transferDateTo, transferCreatedAtFrom, transferCreatedAtTo, transferDateFromTime, transferDateToTime, transferCreatedAtFromTime, transferCreatedAtToTime]);
 
   // Fetch main categories on mount
   useEffect(() => {
@@ -1245,6 +1416,7 @@ const Stock = () => {
     const b = params.get('brandId');
     const c = params.get('colorId');
     const w = params.get('warehouseId');
+    const ws = params.get('warehouseIds');
     const stockIdParam = params.get('stockId');
     const transferIdParam = params.get('transferId');
     const auditStockIdParam = params.get('auditStockId');
@@ -1252,7 +1424,18 @@ const Stock = () => {
     if (f === 'low-stock' || f === 'out-of-stock' || f === 'all') setFilter(f);
     if (b) setBrandId(Number(b));
     if (c) setColorId(Number(c));
-    if (w) setSelectedWarehouseId(Number(w));
+    if (ws) {
+      const ids = String(ws)
+        .split(',')
+        .map(s => Number(s.trim()))
+        .filter(n => !Number.isNaN(n));
+      setSelectedWarehouseIds(ids);
+    } else if (w) {
+      const idNum = Number(w);
+      setSelectedWarehouseIds(Number.isNaN(idNum) ? [] : [idNum]);
+    } else {
+      setSelectedWarehouseIds([]);
+    }
     if (stockIdParam) setPendingStockId(Number(stockIdParam));
     if (transferIdParam) {
       // Open transfer history and highlight by filtering to ALL
@@ -1329,6 +1512,120 @@ const Stock = () => {
     if (!selectedStocks.length) return;
     setSelectedStocks(prev => prev.filter(id => stocks.some(stock => stock.id === id)));
   }, [stocks, selectedStocks.length]);
+
+  // Handle highlight parameter from URL (for direct navigation from audit logs)
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const highlightId = params.get('highlight');
+    if (!highlightId) return;
+
+    const stockId = parseInt(highlightId, 10);
+    if (!Number.isFinite(stockId)) return;
+
+    let attempts = 0;
+    const maxAttempts = 20;
+    let clearHighlightTimeoutId = null;
+
+    const applyHighlight = () => {
+      // Always set highlighted ID so CSS animation can kick in once element exists
+      setHighlightedStockId(stockId);
+
+      const element = document.getElementById(`stock-${stockId}`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+        // Clean URL once we successfully scrolled
+        params.delete('highlight');
+        const newSearch = params.toString();
+        const newUrl = newSearch ? `${location.pathname}?${newSearch}` : location.pathname;
+        window.history.replaceState({}, '', newUrl);
+
+        // Remove visual highlight after a while
+        if (!clearHighlightTimeoutId) {
+          clearHighlightTimeoutId = window.setTimeout(() => {
+            setHighlightedStockId(null);
+          }, 7000);
+        }
+        return true;
+      }
+      return false;
+    };
+
+    // First immediate attempt (in case list is already rendered)
+    if (applyHighlight()) {
+      return () => {
+        if (clearHighlightTimeoutId) {
+          clearTimeout(clearHighlightTimeoutId);
+        }
+      };
+    }
+
+    // Retry for a while until element appears (handles slow renders / pagination)
+    const intervalId = window.setInterval(() => {
+      attempts += 1;
+      const done = applyHighlight();
+      if (done || attempts >= maxAttempts) {
+        window.clearInterval(intervalId);
+      }
+    }, 300);
+
+    return () => {
+      window.clearInterval(intervalId);
+      if (clearHighlightTimeoutId) {
+        clearTimeout(clearHighlightTimeoutId);
+      }
+    };
+  }, [location.pathname, location.search, stocks.length]);
+
+  // Handle highlightTransfer parameter from URL (for direct navigation from audit logs)
+  // Fetch transfer by ID from API so it works even when date/filters hide it from the list
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const highlightTransferId = params.get('highlightTransfer');
+    if (!highlightTransferId) return;
+
+    const transferId = parseInt(highlightTransferId, 10);
+    if (!Number.isFinite(transferId)) return;
+
+    let cancelled = false;
+
+    const openAndClean = (transfer) => {
+      if (cancelled) return;
+      openTransferDetailModal(transfer);
+      params.delete('highlightTransfer');
+      const newSearch = params.toString();
+      const newUrl = newSearch ? `${location.pathname}?${newSearch}` : location.pathname;
+      window.history.replaceState({}, '', newUrl);
+    };
+
+    // Open transfer history tab so user sees the transfer context
+    if (!showTransferHistory) {
+      setShowTransferHistory(true);
+    }
+
+    // Prefer transfer from current list if present (avoids extra request)
+    const fromList = transfers.find(t => t.id === transferId);
+    if (fromList) {
+      openAndClean(fromList);
+      return;
+    }
+
+    // Otherwise fetch by ID so it works when filters (e.g. date) exclude it from the list
+    axios.get(`/api/stock-transfers/${transferId}`)
+      .then((res) => {
+        if (cancelled || !res?.data) return;
+        openAndClean(res.data);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        params.delete('highlightTransfer');
+        const newSearch = params.toString();
+        const newUrl = newSearch ? `${location.pathname}?${newSearch}` : location.pathname;
+        window.history.replaceState({}, '', newUrl);
+      });
+
+    return () => { cancelled = true; };
+  }, [location.pathname, location.search, showTransferHistory, transfers]);
 
   const getEffectiveMin = useCallback((stock) => {
     const val = Number(stock?.minStockLevel);
@@ -2512,10 +2809,10 @@ const Stock = () => {
         <StockFiltersBar
           searchTerm={searchTerm}
           setSearchTerm={setSearchTerm}
-          selectedWarehouseId={selectedWarehouseId}
-          setSelectedWarehouseId={setSelectedWarehouseId}
-          selectedWarehouseOpt={selectedWarehouseOpt}
-          setSelectedWarehouseOpt={setSelectedWarehouseOpt}
+          selectedWarehouseIds={selectedWarehouseIds}
+          setSelectedWarehouseIds={setSelectedWarehouseIds}
+          selectedWarehouseById={selectedWarehouseById}
+          setSelectedWarehouseById={setSelectedWarehouseById}
           brandId={brandId}
           setBrandId={setBrandId}
           brandOpt={brandOpt}
@@ -2535,6 +2832,14 @@ const Stock = () => {
           setShowReserved={setShowReserved}
           showConsigned={showConsigned}
           setShowConsigned={setShowConsigned}
+          stockLastUpdatedFrom={stockLastUpdatedFrom}
+          setStockLastUpdatedFrom={setStockLastUpdatedFrom}
+          stockLastUpdatedTo={stockLastUpdatedTo}
+          setStockLastUpdatedTo={setStockLastUpdatedTo}
+          stockLastUpdatedFromTime={stockLastUpdatedFromTime}
+          setStockLastUpdatedFromTime={setStockLastUpdatedFromTime}
+          stockLastUpdatedToTime={stockLastUpdatedToTime}
+          setStockLastUpdatedToTime={setStockLastUpdatedToTime}
           getWarehouseById={getWarehouseById}
         />
       )}
@@ -2872,7 +3177,11 @@ const Stock = () => {
                     const isSelected = selectedStocks.includes(stock.id);
 
                     return (
-                      <tr key={stock.id} className={isSelected ? 'table-active' : ''}>
+                      <tr 
+                        key={stock.id} 
+                        id={`stock-${stock.id}`}
+                        className={`${isSelected ? 'table-active' : ''} ${highlightedStockId === stock.id ? 'stock-highlighted' : ''}`}
+                      >
                         <td className="text-center align-middle">
                           <div className="form-check mb-0">
                             <input
@@ -3067,7 +3376,8 @@ const Stock = () => {
                   return (
                     <div
                       key={stock.id}
-                      className={`stock-mobile-card card border-0 shadow-sm ${isSelected ? 'is-selected' : ''}`}
+                      id={`stock-${stock.id}`}
+                      className={`stock-mobile-card card border-0 shadow-sm ${isSelected ? 'is-selected' : ''} ${highlightedStockId === stock.id ? 'stock-highlighted' : ''}`}
                     >
                       <div className="card-body p-3">
                         <div className="stock-mobile-card__header mb-3">
@@ -3904,6 +4214,97 @@ const Stock = () => {
                       onChange={(e) => setTransferNotes(e.target.value)}
                     />
                   </div>
+                </div>
+              </div>
+              {/* Transfer Date Filters (date + optional time) */}
+              <div className="row g-2 mt-3">
+                <div className="col-md-12">
+                  <h6 className="text-muted mb-2">
+                    <i className="fas fa-calendar-alt me-2"></i>
+                    Tarih Filtreleri
+                  </h6>
+                </div>
+                <div className="col-md-3">
+                  <label className="form-label small text-muted">Transfer Tarihi (Başlangıç)</label>
+                  <div className="d-flex gap-1 flex-wrap">
+                    <input type="date" className="form-control" value={transferDateFrom} onChange={(e) => setTransferDateFrom(e.target.value)} style={{ flex: '1 1 120px' }} />
+                    <input type="time" className="form-control" value={transferDateFromTime} onChange={(e) => setTransferDateFromTime(e.target.value)} title="Saat (opsiyonel)" style={{ maxWidth: '95px' }} />
+                  </div>
+                </div>
+                <div className="col-md-3">
+                  <label className="form-label small text-muted">Transfer Tarihi (Bitiş)</label>
+                  <div className="d-flex gap-1 flex-wrap">
+                    <input type="date" className="form-control" value={transferDateTo} onChange={(e) => setTransferDateTo(e.target.value)} min={transferDateFrom || undefined} style={{ flex: '1 1 120px' }} />
+                    <input type="time" className="form-control" value={transferDateToTime} onChange={(e) => setTransferDateToTime(e.target.value)} title="Saat (opsiyonel)" style={{ maxWidth: '95px' }} />
+                  </div>
+                </div>
+                <div className="col-md-3">
+                  <label className="form-label small text-muted">Oluşturulma Tarihi (Başlangıç)</label>
+                  <div className="d-flex gap-1 flex-wrap">
+                    <input type="date" className="form-control" value={transferCreatedAtFrom} onChange={(e) => setTransferCreatedAtFrom(e.target.value)} style={{ flex: '1 1 120px' }} />
+                    <input type="time" className="form-control" value={transferCreatedAtFromTime} onChange={(e) => setTransferCreatedAtFromTime(e.target.value)} title="Saat (opsiyonel)" style={{ maxWidth: '95px' }} />
+                  </div>
+                </div>
+                <div className="col-md-3">
+                  <label className="form-label small text-muted">Oluşturulma Tarihi (Bitiş)</label>
+                  <div className="d-flex gap-1 flex-wrap">
+                    <input type="date" className="form-control" value={transferCreatedAtTo} onChange={(e) => setTransferCreatedAtTo(e.target.value)} min={transferCreatedAtFrom || undefined} style={{ flex: '1 1 120px' }} />
+                    <input type="time" className="form-control" value={transferCreatedAtToTime} onChange={(e) => setTransferCreatedAtToTime(e.target.value)} title="Saat (opsiyonel)" style={{ maxWidth: '95px' }} />
+                  </div>
+                </div>
+                <div className="col-md-12 d-flex flex-wrap gap-2 align-items-end">
+                  {(transferDateFrom || transferDateTo) && (
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline-danger"
+                      onClick={() => {
+                        setTransferDateFrom('');
+                        setTransferDateTo('');
+                        setTransferDateFromTime('');
+                        setTransferDateToTime('');
+                      }}
+                      title="Transfer tarihi filtrelerini temizle"
+                    >
+                      <i className="fas fa-calendar-times me-1"></i>
+                      Transfer Tarihini Temizle
+                    </button>
+                  )}
+                  {(transferCreatedAtFrom || transferCreatedAtTo) && (
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline-warning text-dark"
+                      onClick={() => {
+                        setTransferCreatedAtFrom('');
+                        setTransferCreatedAtTo('');
+                        setTransferCreatedAtFromTime('');
+                        setTransferCreatedAtToTime('');
+                      }}
+                      title="Oluşturulma tarihi filtrelerini temizle"
+                    >
+                      <i className="fas fa-calendar-minus me-1"></i>
+                      Oluşturulma Tarihini Temizle
+                    </button>
+                  )}
+                  {(transferDateFrom || transferDateTo || transferCreatedAtFrom || transferCreatedAtTo) && (
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline-secondary"
+                      onClick={() => {
+                        setTransferDateFrom('');
+                        setTransferDateTo('');
+                        setTransferCreatedAtFrom('');
+                        setTransferCreatedAtTo('');
+                        setTransferDateFromTime('');
+                        setTransferDateToTime('');
+                        setTransferCreatedAtFromTime('');
+                        setTransferCreatedAtToTime('');
+                      }}
+                      title="Tüm tarih filtrelerini temizle"
+                    >
+                      <i className="fas fa-times me-1"></i>
+                      Tüm Tarih Filtrelerini Temizle
+                    </button>
+                  )}
                 </div>
               </div>
               <div className="row g-2 mt-2">

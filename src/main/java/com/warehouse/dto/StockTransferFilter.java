@@ -2,7 +2,6 @@ package com.warehouse.dto;
 
 import com.warehouse.enums.TransferStatus;
 import com.warehouse.enums.TransferType;
-
 import java.time.LocalDateTime;
 
 public class StockTransferFilter {
@@ -19,6 +18,10 @@ public class StockTransferFilter {
     private LocalDateTime endDate;
     /** Applies mostly to CUSTOMER_DELIVERY transfers (customerFullName / customerPhone) */
     private String customerQuery;
+    private LocalDateTime transferDateFrom;
+    private LocalDateTime transferDateTo;
+    private LocalDateTime createdAtFrom;
+    private LocalDateTime createdAtTo;
 
     public TransferStatus getStatus() {
         return status;
@@ -107,5 +110,36 @@ public class StockTransferFilter {
     public void setCustomerQuery(String customerQuery) {
         this.customerQuery = customerQuery;
     }
-}
 
+    public LocalDateTime getTransferDateFrom() {
+        return transferDateFrom;
+    }
+
+    public void setTransferDateFrom(LocalDateTime transferDateFrom) {
+        this.transferDateFrom = transferDateFrom;
+    }
+
+    public LocalDateTime getTransferDateTo() {
+        return transferDateTo;
+    }
+
+    public void setTransferDateTo(LocalDateTime transferDateTo) {
+        this.transferDateTo = transferDateTo;
+    }
+
+    public LocalDateTime getCreatedAtFrom() {
+        return createdAtFrom;
+    }
+
+    public void setCreatedAtFrom(LocalDateTime createdAtFrom) {
+        this.createdAtFrom = createdAtFrom;
+    }
+
+    public LocalDateTime getCreatedAtTo() {
+        return createdAtTo;
+    }
+
+    public void setCreatedAtTo(LocalDateTime createdAtTo) {
+        this.createdAtTo = createdAtTo;
+    }
+}

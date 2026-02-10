@@ -15,6 +15,7 @@ import com.warehouse.enums.AuditAction;
 import com.warehouse.enums.TransferStatus;
 import com.warehouse.enums.TransferType;
 import com.warehouse.enums.TransferApprovalStatus;
+import com.warehouse.enums.WarehouseType;
 import com.warehouse.exception.ErrorCode;
 import com.warehouse.exception.WarehouseManagementException;
 import com.warehouse.repository.StockTransferRepository;
@@ -98,6 +99,11 @@ public class StockTransferServiceImpl implements StockTransferService {
     public Page<StockTransfer> getTransfersPaged(StockTransferFilter filter, Pageable pageable) {
         TransferFilterParams params = TransferFilterParams.from(filter);
         logger.debug("Fetching paged transfers - page: {}, size: {}", pageable.getPageNumber(), pageable.getPageSize());
+        // Safe bounds when null so PostgreSQL can infer parameter type (avoids "could not determine data type of parameter")
+        LocalDateTime transferDateFrom = filter != null && filter.getTransferDateFrom() != null ? filter.getTransferDateFrom() : LocalDateTime.of(1970, 1, 1, 0, 0);
+        LocalDateTime transferDateTo = filter != null && filter.getTransferDateTo() != null ? filter.getTransferDateTo() : LocalDateTime.of(2099, 12, 31, 23, 59, 59);
+        LocalDateTime createdAtFrom = filter != null && filter.getCreatedAtFrom() != null ? filter.getCreatedAtFrom() : LocalDateTime.of(1970, 1, 1, 0, 0);
+        LocalDateTime createdAtTo = filter != null && filter.getCreatedAtTo() != null ? filter.getCreatedAtTo() : LocalDateTime.of(2099, 12, 31, 23, 59, 59);
         return stockTransferRepository.findByFilters(
                 null,
                 params.status,
@@ -117,6 +123,10 @@ public class StockTransferServiceImpl implements StockTransferService {
                 params.customerProvided,
                 params.customerNamePattern,
                 params.customerPhonePattern,
+                transferDateFrom,
+                transferDateTo,
+                createdAtFrom,
+                createdAtTo,
                 pageable);
     }
 
@@ -175,6 +185,10 @@ public class StockTransferServiceImpl implements StockTransferService {
         String username = CurrentUser.usernameOrSystem();
         TransferFilterParams params = TransferFilterParams.from(filter);
         logger.debug("Fetching paged transfers for user: {} - page: {}", username, pageable.getPageNumber());
+        LocalDateTime transferDateFrom = filter != null && filter.getTransferDateFrom() != null ? filter.getTransferDateFrom() : LocalDateTime.of(1970, 1, 1, 0, 0);
+        LocalDateTime transferDateTo = filter != null && filter.getTransferDateTo() != null ? filter.getTransferDateTo() : LocalDateTime.of(2099, 12, 31, 23, 59, 59);
+        LocalDateTime createdAtFrom = filter != null && filter.getCreatedAtFrom() != null ? filter.getCreatedAtFrom() : LocalDateTime.of(1970, 1, 1, 0, 0);
+        LocalDateTime createdAtTo = filter != null && filter.getCreatedAtTo() != null ? filter.getCreatedAtTo() : LocalDateTime.of(2099, 12, 31, 23, 59, 59);
         return stockTransferRepository.findByFilters(
                 username,
                 params.status,
@@ -194,6 +208,10 @@ public class StockTransferServiceImpl implements StockTransferService {
                 params.customerProvided,
                 params.customerNamePattern,
                 params.customerPhonePattern,
+                transferDateFrom,
+                transferDateTo,
+                createdAtFrom,
+                createdAtTo,
                 pageable);
     }
 
@@ -354,7 +372,7 @@ public class StockTransferServiceImpl implements StockTransferService {
         for (StockTransferItem item : items) {
             Stock sourceStock = sourceStocks.get(stockKey(item));
             validateSufficientAvailableStock(sourceStock, item.getQuantity());
-            reserveStockForTransfer(sourceStock, item.getQuantity());
+            reserveStockForTransfer(sourceStock, item.getQuantity(), transfer);
         }
 
         transfer.setStatus(TransferStatus.IN_TRANSIT);
@@ -399,12 +417,12 @@ public class StockTransferServiceImpl implements StockTransferService {
         if (transfer.getStatus() == TransferStatus.PENDING) {
             for (StockTransferItem item : items) {
                 Stock sourceStock = sourceStocks.get(stockKey(item));
-                deductStockDirectly(sourceStock, item.getQuantity());
+                deductStockDirectly(sourceStock, item.getQuantity(), transfer);
             }
         } else if (transfer.getStatus() == TransferStatus.IN_TRANSIT) {
             for (StockTransferItem item : items) {
                 Stock sourceStock = sourceStocks.get(stockKey(item));
-                deductReservedStock(sourceStock, item.getQuantity());
+                deductReservedStock(sourceStock, item.getQuantity(), transfer);
             }
         }
 
@@ -862,9 +880,46 @@ public class StockTransferServiceImpl implements StockTransferService {
         }
     }
 
-    private void reserveStockForTransfer(Stock stock, Integer quantity) {
+    private void reserveStockForTransfer(Stock stock, Integer quantity, StockTransfer transfer) {
         stock.setReservedQuantity(stock.getReservedQuantity() + quantity);
-        stockRepository.save(stock);
+        Stock saved = stockRepository.save(stock);
+        
+        // Log stock reservation for transfer
+        String username = CurrentUser.usernameOrSystem();
+        Warehouse warehouse = saved.getWarehouse();
+        Product product = saved.getProduct();
+        boolean isEmanetDepo = warehouse != null && warehouse.getWarehouseType() == WarehouseType.EMANET_DEPO;
+        String customerName = isEmanetDepo ? saved.getCustomerName() : null;
+        String customerPhone = isEmanetDepo ? saved.getCustomerPhone() : null;
+        
+        String transferInfo = String.format("Transfer #%d", transfer.getId());
+        String routeInfo = describeRoute(transfer);
+        if (routeInfo != null && !routeInfo.isEmpty()) {
+            transferInfo += " - " + routeInfo;
+        }
+        
+        AuditMetadata metadata = AuditMetadata.builder()
+                .warehouseId(warehouse != null ? warehouse.getId() : null)
+                .warehouseName(warehouse != null ? warehouse.getName() : null)
+                .productId(product != null ? product.getId() : null)
+                .productName(product != null ? product.getName() : null)
+                .productSku(product != null ? product.getSku() : null)
+                .quantity(quantity)
+                .customerName(customerName)
+                .customerPhone(customerPhone)
+                .transferId(transfer.getId())
+                .build();
+        
+        String detailsMessage = String.format("Stok transfer için rezerve edildi: +%s adet (Rezerve=%s) | %s | Depo=%s, Ürün=%s",
+                String.valueOf(quantity), String.valueOf(saved.getReservedQuantity()),
+                transferInfo, warehouse != null ? warehouse.getName() : "N/A",
+                product != null ? product.getName() : "N/A");
+        if (isEmanetDepo && customerName != null && !customerName.trim().isEmpty()) {
+            detailsMessage += String.format(" | Müşteri: %s", customerName);
+        }
+        
+        auditService.log(AuditAction.STOCK_RESERVE, DomainEntityType.Stock.name(), saved.getId(), username,
+                detailsMessage, metadata);
     }
 
     private void releaseReservedStock(Stock stock, Integer quantity) {
@@ -874,15 +929,78 @@ public class StockTransferServiceImpl implements StockTransferService {
         stockRepository.save(stock);
     }
 
-    private void deductStockDirectly(Stock stock, Integer quantity) {
+    private void deductStockDirectly(Stock stock, Integer quantity, StockTransfer transfer) {
         stock.setQuantity(stock.getQuantity() - quantity);
-        stockRepository.save(stock);
+        Stock saved = stockRepository.save(stock);
+        
+        // Log stock removal for transfer
+        logStockRemovalForTransfer(saved, quantity, transfer, false);
     }
 
-    private void deductReservedStock(Stock stock, Integer quantity) {
+    private void deductReservedStock(Stock stock, Integer quantity, StockTransfer transfer) {
         stock.setQuantity(stock.getQuantity() - quantity);
         stock.setReservedQuantity(stock.getReservedQuantity() - quantity);
-        stockRepository.save(stock);
+        Stock saved = stockRepository.save(stock);
+        
+        // Log stock removal for transfer
+        logStockRemovalForTransfer(saved, quantity, transfer, true);
+    }
+    
+    private void logStockRemovalForTransfer(Stock stock, Integer quantity, StockTransfer transfer, boolean wasReserved) {
+        String username = CurrentUser.usernameOrSystem();
+        Warehouse warehouse = stock.getWarehouse();
+        Product product = stock.getProduct();
+        boolean isEmanetDepo = warehouse != null && warehouse.getWarehouseType() == WarehouseType.EMANET_DEPO;
+        String customerName = isEmanetDepo ? stock.getCustomerName() : null;
+        String customerPhone = isEmanetDepo ? stock.getCustomerPhone() : null;
+        
+        // Get customer info from transfer if it's a customer delivery
+        String transferCustomerName = null;
+        String transferCustomerPhone = null;
+        if (transfer.getTransferType() == TransferType.CUSTOMER_DELIVERY) {
+            transferCustomerName = transfer.getCustomerFullName();
+            transferCustomerPhone = transfer.getCustomerPhone();
+        }
+        
+        // Use transfer customer info if available, otherwise use stock customer info
+        String finalCustomerName = transferCustomerName != null ? transferCustomerName : customerName;
+        String finalCustomerPhone = transferCustomerPhone != null ? transferCustomerPhone : customerPhone;
+        
+        String transferInfo = String.format("Transfer #%d", transfer.getId());
+        String routeInfo = describeRoute(transfer);
+        if (routeInfo != null && !routeInfo.isEmpty()) {
+            transferInfo += " - " + routeInfo;
+        }
+        
+        // Build customer delivery message
+        String customerDeliveryInfo = "";
+        if (transfer.getTransferType() == TransferType.CUSTOMER_DELIVERY && finalCustomerName != null && !finalCustomerName.trim().isEmpty()) {
+            customerDeliveryInfo = String.format(" | %s müşterisine teslim edildi", finalCustomerName);
+        }
+        
+        AuditMetadata metadata = AuditMetadata.builder()
+                .warehouseId(warehouse != null ? warehouse.getId() : null)
+                .warehouseName(warehouse != null ? warehouse.getName() : null)
+                .productId(product != null ? product.getId() : null)
+                .productName(product != null ? product.getName() : null)
+                .productSku(product != null ? product.getSku() : null)
+                .quantity(-quantity)
+                .customerName(finalCustomerName)
+                .customerPhone(finalCustomerPhone)
+                .transferId(transfer.getId())
+                .build();
+        
+        String reservedInfo = wasReserved ? " (Rezerve'den çıkarıldı)" : "";
+        String detailsMessage = String.format("Stok transfer yoluyla azaltıldı: -%s adet → Yeni=%s%s | %s | Depo=%s, Ürün=%s%s",
+                String.valueOf(quantity), String.valueOf(stock.getQuantity()), reservedInfo,
+                transferInfo, warehouse != null ? warehouse.getName() : "N/A",
+                product != null ? product.getName() : "N/A", customerDeliveryInfo);
+        if (isEmanetDepo && customerName != null && !customerName.trim().isEmpty() && transferCustomerName == null) {
+            detailsMessage += String.format(" | Emanet Müşteri: %s", customerName);
+        }
+        
+        auditService.log(AuditAction.STOCK_REMOVE, DomainEntityType.Stock.name(), stock.getId(), username,
+                detailsMessage, metadata);
     }
 
     private void addStockToDestination(StockTransfer transfer, List<StockTransferItem> items) {

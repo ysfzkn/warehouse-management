@@ -18,6 +18,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -232,8 +233,19 @@ public class StockExportServiceImpl implements StockExportService {
                 id -> brandRepository.findById(id).map(b -> b.getName()));
         addFilterIfPresent(filterInfo, filter.getColorId(), "Renk", 
                 id -> colorRepository.findById(id).map(c -> c.getName()));
-        addFilterIfPresent(filterInfo, filter.getWarehouseId(), "Depo", 
-                id -> warehouseRepository.findById(id).map(w -> w.getName()));
+        // Warehouse filter supports both single id and multi ids
+        if (filter.getWarehouseIds() != null && !filter.getWarehouseIds().isEmpty()) {
+            List<String> names = filter.getWarehouseIds().stream()
+                    .filter(id -> id != null)
+                    .map(id -> warehouseRepository.findById(id).map(w -> w.getName()).orElse("ID: " + id))
+                    .toList();
+            if (!names.isEmpty()) {
+                filterInfo.add("Depo: " + String.join(", ", names));
+            }
+        } else {
+            addFilterIfPresent(filterInfo, filter.getWarehouseId(), "Depo",
+                    id -> warehouseRepository.findById(id).map(w -> w.getName()));
+        }
         addFilterIfPresent(filterInfo, filter.getCategoryId(), "Kategori", 
                 id -> categoryRepository.findById(id).map(c -> c.getName()));
         addFilterIfPresent(filterInfo, filter.getSubCategoryId(), "Alt Kategori", 
@@ -284,10 +296,12 @@ public class StockExportServiceImpl implements StockExportService {
         
         while (hasMore) {
             Pageable pageable = PageRequest.of(page, PAGE_SIZE);
-            var stockPage = stockRepository.findByFilters(
+            Page<Stock> stockPage = stockRepository.findByFilters(
                     params.brandId(),
                     params.colorId(),
                     params.warehouseId(),
+                    params.warehouseIds(),
+                    params.hasWarehouseFilter(),
                     params.categoryId(),
                     params.subCategoryId(),
                     params.searchEnabled(),
@@ -295,6 +309,8 @@ public class StockExportServiceImpl implements StockExportService {
                     params.reservedOnly(),
                     params.consignedOnly(),
                     params.statusValue(),
+                    params.lastUpdatedFrom(),
+                    params.lastUpdatedTo(),
                     pageable);
 
             allStocks.addAll(stockPage.getContent());
@@ -314,18 +330,27 @@ public class StockExportServiceImpl implements StockExportService {
         String searchPattern = searchEnabled && search != null
                 ? "%" + search.toLowerCase(Locale.forLanguageTag("tr-TR")) + "%"
                 : "%";
-        
+        LocalDateTime lastUpdatedFrom = filter.getLastUpdatedFrom() != null ? filter.getLastUpdatedFrom() : LocalDateTime.of(1970, 1, 1, 0, 0);
+        LocalDateTime lastUpdatedTo = filter.getLastUpdatedTo() != null ? filter.getLastUpdatedTo() : LocalDateTime.of(2099, 12, 31, 23, 59, 59);
+        List<Long> warehouseIds = filter.getWarehouseIds();
+        boolean hasWarehouseFilter = warehouseIds != null && !warehouseIds.isEmpty();
+        Long warehouseId = hasWarehouseFilter ? null : filter.getWarehouseId();
+
         return new FilterParams(
                 filter.getBrandId(),
                 filter.getColorId(),
-                filter.getWarehouseId(),
+                warehouseId,
+                hasWarehouseFilter ? warehouseIds : List.of(0L),
+                hasWarehouseFilter,
                 filter.getCategoryId(),
                 filter.getSubCategoryId(),
                 searchEnabled,
                 searchPattern,
                 filter.isReservedOnly(),
                 filter.isConsignedOnly(),
-                status.name()
+                status.name(),
+                lastUpdatedFrom,
+                lastUpdatedTo
         );
     }
 
@@ -462,13 +487,17 @@ public class StockExportServiceImpl implements StockExportService {
             Long brandId,
             Long colorId,
             Long warehouseId,
+            List<Long> warehouseIds,
+            boolean hasWarehouseFilter,
             Long categoryId,
             Long subCategoryId,
             boolean searchEnabled,
             String searchPattern,
             boolean reservedOnly,
             boolean consignedOnly,
-            String statusValue
+            String statusValue,
+            java.time.LocalDateTime lastUpdatedFrom,
+            java.time.LocalDateTime lastUpdatedTo
     ) {}
 
     private static class ExcelStyles {

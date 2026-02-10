@@ -196,6 +196,10 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, Lo
                       )
                 )
           )
+          AND st.transferDate >= :transferDateFrom
+          AND st.transferDate <= :transferDateTo
+          AND st.createdAt >= :createdAtFrom
+          AND st.createdAt <= :createdAtTo
         ORDER BY st.transferDate DESC
     """)
     Page<StockTransfer> findByFilters(@Param("createdBy") String createdBy,
@@ -216,6 +220,10 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, Lo
                                       @Param("customerProvided") boolean customerProvided,
                                       @Param("customerNamePattern") String customerNamePattern,
                                       @Param("customerPhonePattern") String customerPhonePattern,
+                                      @Param("transferDateFrom") java.time.LocalDateTime transferDateFrom,
+                                      @Param("transferDateTo") java.time.LocalDateTime transferDateTo,
+                                      @Param("createdAtFrom") java.time.LocalDateTime createdAtFrom,
+                                      @Param("createdAtTo") java.time.LocalDateTime createdAtTo,
                                       Pageable pageable);
 
     @Query("""

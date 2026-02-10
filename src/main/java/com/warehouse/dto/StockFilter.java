@@ -1,5 +1,7 @@
 package com.warehouse.dto;
 
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Locale;
 
 public class StockFilter {
@@ -22,12 +24,19 @@ public class StockFilter {
     private Long brandId;
     private Long colorId;
     private Long warehouseId;
+    /**
+     * Optional multi-warehouse filter. When provided and non-empty, it should take precedence over {@link #warehouseId}.
+     * This enables filtering stock across multiple warehouses in a single query.
+     */
+    private List<Long> warehouseIds;
     private Long categoryId;
     private Long subCategoryId;
     private String search;
     private Status status = Status.ALL;
     private boolean reservedOnly;
     private boolean consignedOnly;
+    private LocalDateTime lastUpdatedFrom;
+    private LocalDateTime lastUpdatedTo;
 
     public Long getBrandId() {
         return brandId;
@@ -51,6 +60,14 @@ public class StockFilter {
 
     public void setWarehouseId(Long warehouseId) {
         this.warehouseId = warehouseId;
+    }
+
+    public List<Long> getWarehouseIds() {
+        return warehouseIds;
+    }
+
+    public void setWarehouseIds(List<Long> warehouseIds) {
+        this.warehouseIds = warehouseIds;
     }
 
     public Long getCategoryId() {
@@ -99,6 +116,22 @@ public class StockFilter {
 
     public void setConsignedOnly(boolean consignedOnly) {
         this.consignedOnly = consignedOnly;
+    }
+
+    public LocalDateTime getLastUpdatedFrom() {
+        return lastUpdatedFrom;
+    }
+
+    public void setLastUpdatedFrom(LocalDateTime lastUpdatedFrom) {
+        this.lastUpdatedFrom = lastUpdatedFrom;
+    }
+
+    public LocalDateTime getLastUpdatedTo() {
+        return lastUpdatedTo;
+    }
+
+    public void setLastUpdatedTo(LocalDateTime lastUpdatedTo) {
+        this.lastUpdatedTo = lastUpdatedTo;
     }
 }
 

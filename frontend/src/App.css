@@ -169,3 +169,88 @@
   border-width: 0 2px 2px 0;
   transform: rotate(45deg);
 }
+
+/* Audit Timeline Modal - Mobile Responsive Styles */
+@media (max-width: 576px) {
+  .audit-timeline-modal .modal-dialog {
+    margin: 0.5rem;
+    max-width: calc(100% - 1rem);
+  }
+  
+  .audit-timeline-modal .modal-content {
+    border-radius: 12px;
+  }
+  
+  .audit-timeline-modal .modal-header {
+    padding: 1rem;
+  }
+  
+  .audit-timeline-modal .modal-body {
+    max-height: calc(100vh - 180px);
+  }
+  
+  .audit-timeline-modal .timeline-card {
+    padding: 0.75rem;
+  }
+  
+  .audit-timeline-modal .card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+  
+  .audit-timeline-modal .time-info {
+    align-items: flex-start;
+  }
+  
+  .audit-timeline-modal .details-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .audit-timeline-modal .transfer-arrow {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .audit-timeline-modal .transfer-arrow .arrow-icon {
+    transform: rotate(90deg);
+  }
+  
+  .audit-timeline-modal .warehouse-box {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 768px) {
+  .audit-timeline-modal .modal-dialog {
+    margin: 0.75rem;
+  }
+  
+  .audit-timeline-modal .details-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Smooth animations for audit timeline */
+.audit-timeline-modal .timeline-item {
+  animation: slideInUp 0.3s ease-out;
+  animation-fill-mode: both;
+}
+
+.audit-timeline-modal .timeline-item:nth-child(1) { animation-delay: 0.05s; }
+.audit-timeline-modal .timeline-item:nth-child(2) { animation-delay: 0.1s; }
+.audit-timeline-modal .timeline-item:nth-child(3) { animation-delay: 0.15s; }
+.audit-timeline-modal .timeline-item:nth-child(4) { animation-delay: 0.2s; }
+.audit-timeline-modal .timeline-item:nth-child(5) { animation-delay: 0.25s; }
+
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

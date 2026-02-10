@@ -1,7 +1,6 @@
 package com.warehouse.config;
 
 import com.github.benmanes.caffeine.cache.Caffeine;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.cache.caffeine.CaffeineCacheManager;
@@ -11,27 +10,42 @@ import org.springframework.context.annotation.Configuration;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Configures application-level caching using Caffeine. The "counts" cache is
- * used to store small, frequently accessed aggregates like unread and low-stock counts.
+ * Cache configuration for dashboard and other frequently accessed data.
+ * Uses Caffeine cache for in-memory caching with TTL.
  */
 @Configuration
 @EnableCaching
 public class CacheConfig {
 
+    /**
+     * Configure cache manager with different TTLs for different cache types.
+     */
     @Bean
-    public CacheManager cacheManager(
-            @Value("${app.cache.counts.ttl-seconds:5}") long ttlSeconds,
-            @Value("${app.cache.counts.max-size:100}") long maxSize,
-            @Value("${app.cache.refdata.ttl-seconds:60}") long refTtlSeconds,
-            @Value("${app.cache.refdata.max-size:1000}") long refMaxSize) {
-        CaffeineCacheManager manager = new CaffeineCacheManager("counts", "refdata");
-        // Spring's single CaffeineCacheManager uses the same builder for all caches; build a generous config
-        // suitable for both small, frequent counts and small reference lists
-        manager.setCaffeine(Caffeine.newBuilder()
-                .expireAfterWrite(Math.max(ttlSeconds, refTtlSeconds), TimeUnit.SECONDS)
-                .maximumSize(Math.max(maxSize, refMaxSize)));
-        return manager;
+    public CacheManager cacheManager() {
+        CaffeineCacheManager cacheManager = new CaffeineCacheManager(
+            "dashboardStats",      // 5 minutes TTL
+            "warehouseStats",      // 5 minutes TTL
+            "lowStockItems",       // 3 minutes TTL
+            "outOfStockItems",    // 3 minutes TTL
+            "counts"              // lowStock, unread etc. (short TTL)
+        );
+        
+        cacheManager.setCaffeine(Caffeine.newBuilder()
+            .expireAfterWrite(5, TimeUnit.MINUTES)
+            .maximumSize(100)
+            .recordStats());
+        
+        return cacheManager;
+    }
+
+    /**
+     * Separate cache manager for low/out of stock items with shorter TTL.
+     */
+    @Bean
+    public Caffeine<Object, Object> caffeineConfig() {
+        return Caffeine.newBuilder()
+            .expireAfterWrite(3, TimeUnit.MINUTES)
+            .maximumSize(50)
+            .recordStats();
     }
 }
-
-

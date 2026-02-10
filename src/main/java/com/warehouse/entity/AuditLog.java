@@ -2,6 +2,7 @@ package com.warehouse.entity;
 
 import com.warehouse.enums.AuditAction;
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
@@ -70,6 +71,17 @@ public class AuditLog {
 
     @Column(name = "quantity")
     private Integer quantity;
+
+    @Size(max = 255, message = "Customer name cannot exceed 255 characters")
+    @Column(name = "customer_name", length = 255)
+    private String customerName; // For EMANET_DEPO warehouses and transfer customer info
+
+    @Size(max = 20, message = "Customer phone cannot exceed 20 characters")
+    @Column(name = "customer_phone", length = 20)
+    private String customerPhone; // For EMANET_DEPO warehouses and transfer customer info
+
+    @Column(name = "transfer_id")
+    private Long transferId; // Reference to transfer if this is a transfer-related stock movement
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;

@@ -36,7 +36,7 @@ const Navbar = () => {
   }, []);
   const NOTIFICATION_BATCH_SIZE = 10;
 
-  const loadNotifications = useCallback(async ({ page = 0, reset = false, silent = false } = {}) => {
+  const loadNotifications = useCallback(async ({ page = 0, reset = false, silent = false, signal = null } = {}) => {
     if (role !== 'ADMIN') return;
     if (!silent && notifLoadingRef.current && !reset) return;
     if (silent && notifRefreshingRef.current && !reset) return;
@@ -48,7 +48,10 @@ const Navbar = () => {
       setNotifLoading(true);
     }
     try {
-      const res = await axios.get('/api/notifications', { params: { size: NOTIFICATION_BATCH_SIZE, page } });
+      const res = await axios.get('/api/notifications', { 
+        params: { size: NOTIFICATION_BATCH_SIZE, page },
+        signal: signal 
+      });
       const list = Array.isArray(res.data) ? res.data : [];
       setNotifications(prev => {
         if (reset || page === 0) {
@@ -64,7 +67,10 @@ const Navbar = () => {
       });
       setNotifHasMore(list.length === NOTIFICATION_BATCH_SIZE);
       setNotifPage(page);
-    } catch {
+    } catch (error) {
+      // Ignore cancellation errors
+      if (error.name === 'CanceledError' || error.message === 'canceled') return;
+      
       if (reset || page === 0) {
         setNotifications([]);
         setUnreadCount(0);
@@ -84,10 +90,16 @@ const Navbar = () => {
 
   useEffect(() => {
     let ignore = false;
+    const abortController = new AbortController();
+    
     const hydrate = async () => {
       try {
         if (role === 'ADMIN') {
-          await loadNotifications({ page: 0, reset: true });
+          await loadNotifications({ 
+            page: 0, 
+            reset: true, 
+            signal: abortController.signal 
+          });
           if (ignore) return;
         } else if (!ignore) {
           setNotifications([]);
@@ -95,21 +107,19 @@ const Navbar = () => {
           setNotifHasMore(false);
           setNotifPage(0);
         }
-      } catch {}
-      try {
-        const lowRes = await axios.get('/api/stocks/low-stock/count');
-        if (!ignore) {
-          const data = lowRes.data;
-          const count = typeof data === 'number'
-            ? data
-            : (Array.isArray(data) ? data.length : 0);
-          setLowStockCount(count);
-        }
-      } catch {}
+      } catch (error) {
+        if (error.name === 'CanceledError' || error.message === 'canceled') return;
+      }
+      // Note: lowStockCount is now populated via SSE (Server-Sent Events)
+      // Initial value will come from SSE 'snapshot' event shortly after mount
+      // This prevents duplicate /api/dashboard/stats requests when Dashboard page also loads
     };
+    
     hydrate();
+    
     return () => {
       ignore = true;
+      abortController.abort();
     };
   }, [role, loadNotifications]);
 
@@ -139,7 +149,8 @@ const Navbar = () => {
         if (nextUnread != null) {
           setUnreadCount(prev => {
             if (nextUnread !== prev) {
-              loadNotifications({ page: 0, reset: true, silent: true });
+              // SSE notification update - fire and forget (no signal needed)
+              loadNotifications({ page: 0, reset: true, silent: true }).catch(() => {});
             }
             return nextUnread;
           });
