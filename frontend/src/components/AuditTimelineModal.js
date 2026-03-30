@@ -1050,7 +1050,7 @@ const AuditTimelineModal = ({ entityType, entityId, onClose }) => {
                     textTransform: 'uppercase',
                     letterSpacing: '0.5px'
                   }}>
-                    Kullanici Notu
+                    Kullanıcı Notu
                   </div>
                   <div style={{
                     fontSize: isMobile ? '0.8rem' : '0.9rem',
