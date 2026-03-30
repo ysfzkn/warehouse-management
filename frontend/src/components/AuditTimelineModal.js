@@ -732,6 +732,17 @@ const AuditTimelineModal = ({ entityType, entityId, onClose }) => {
     return null;
   };
 
+  const extractNoteSuffix = (value) => {
+    if (!value || typeof value !== 'string') return '';
+    const match = value.match(/\|\s*Not:\s*(.+)$/i);
+    return match ? match[1].trim() : '';
+  };
+
+  const stripNoteSuffix = (value) => {
+    if (!value || typeof value !== 'string') return value || '';
+    return value.replace(/\s*\|\s*Not:\s*.+$/i, '').trim();
+  };
+
   const getUserInitials = (username) => {
     if (!username) return '?';
     return username.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
@@ -743,6 +754,12 @@ const AuditTimelineModal = ({ entityType, entityId, onClose }) => {
       const absoluteDelta = Math.abs(parsed.delta);
       const hasCustomerInfo = log && (log.customerName || log.customerPhone);
       const hasTransferInfo = log && log.transferId;
+      const productDisplayName = stripNoteSuffix(parsed.product);
+      const movementNote =
+        (log?.note && String(log.note).trim()) ||
+        extractNoteSuffix(parsed.product) ||
+        extractNoteSuffix(log?.details);
+      const hasMovementNote = Boolean(movementNote);
       // Use parsed.newQty if available, otherwise try to calculate from log.quantity or use null
       let displayNewQty = parsed.newQty;
       if (displayNewQty === null || displayNewQty === undefined) {
@@ -799,7 +816,7 @@ const AuditTimelineModal = ({ entityType, entityId, onClose }) => {
                   overflow: 'hidden',
                   whiteSpace: 'normal',
                   wordBreak: 'break-word'
-                }}>{parsed.product}</div>
+                }}>{productDisplayName}</div>
               </div>
             </div>
             
@@ -809,7 +826,7 @@ const AuditTimelineModal = ({ entityType, entityId, onClose }) => {
               display: 'flex',
               alignItems: 'center',
               gap: '0.5rem',
-              borderBottom: hasCustomerInfo || hasTransferInfo ? '1px solid #f1f5f9' : 'none'
+              borderBottom: hasCustomerInfo || hasTransferInfo || hasMovementNote ? '1px solid #f1f5f9' : 'none'
             }}>
               <div style={{
                 width: isMobile ? '28px' : '32px',
@@ -994,6 +1011,56 @@ const AuditTimelineModal = ({ entityType, entityId, onClose }) => {
                     <i className="fas fa-external-link-alt" style={{ fontSize: '0.75rem' }}></i>
                     Transferi Görüntüle
                   </button>
+                </div>
+              </div>
+            )}
+
+            {hasMovementNote && (
+              <div style={{
+                padding: isMobile ? '0.625rem 0.75rem' : '0.75rem 1rem',
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: '0.75rem',
+                backgroundColor: '#fefce8',
+                borderLeft: '4px solid #eab308',
+                borderRadius: '0 8px 8px 0',
+                boxShadow: '0 2px 4px rgba(234, 179, 8, 0.15)',
+                marginTop: '0.5rem'
+              }}>
+                <div style={{
+                  width: isMobile ? '36px' : '40px',
+                  height: isMobile ? '36px' : '40px',
+                  borderRadius: '10px',
+                  backgroundColor: '#fde68a',
+                  color: '#92400e',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: isMobile ? '0.85rem' : '1rem',
+                  flexShrink: 0
+                }}>
+                  <i className="fas fa-sticky-note"></i>
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{
+                    fontSize: isMobile ? '0.7rem' : '0.75rem',
+                    color: '#92400e',
+                    marginBottom: '0.3rem',
+                    fontWeight: '700',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px'
+                  }}>
+                    Kullanici Notu
+                  </div>
+                  <div style={{
+                    fontSize: isMobile ? '0.8rem' : '0.9rem',
+                    color: '#78350f',
+                    fontWeight: '600',
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word'
+                  }}>
+                    {movementNote}
+                  </div>
                 </div>
               </div>
             )}
