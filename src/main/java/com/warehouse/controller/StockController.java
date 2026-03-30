@@ -405,7 +405,7 @@ public class StockController {
         // ADMIN users can directly add stock
         if ("ADMIN".equals(userRole)) {
             adminSecurityService.requireSecurityCodeForAdmin(adminSecurityCode);
-            Stock updatedStock = stockService.addToStock(id, quantity);
+            Stock updatedStock = stockService.addToStock(id, quantity, notes);
             try {
                 ssePushService.broadcastCounts();
                 logger.debug("SSE counts broadcasted after addToStock. stockId={}, quantity={} ", id, quantity);
@@ -444,7 +444,7 @@ public class StockController {
         // ADMIN users can directly remove stock
         if ("ADMIN".equals(userRole)) {
             adminSecurityService.requireSecurityCodeForAdmin(adminSecurityCode);
-            Stock updatedStock = stockService.removeFromStock(id, quantity);
+            Stock updatedStock = stockService.removeFromStock(id, quantity, notes);
             try {
                 ssePushService.broadcastCounts();
                 logger.debug("SSE counts broadcasted after removeFromStock. stockId={}, quantity={} ", id, quantity);

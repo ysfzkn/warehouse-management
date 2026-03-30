@@ -24,5 +24,6 @@ public class NotificationRequest {
     private String productName;
     private String productSku;
     private Integer quantity;
+    private String note;
 }
 

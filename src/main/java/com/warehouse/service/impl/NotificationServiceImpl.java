@@ -59,6 +59,7 @@ public class NotificationServiceImpl implements NotificationService {
             notification.setProductName(request.getProductName());
             notification.setProductSku(request.getProductSku());
             notification.setQuantity(request.getQuantity());
+            notification.setNote(request.getNote());
         } else {
             notification.setActor(CurrentUser.usernameOrSystem());
         }

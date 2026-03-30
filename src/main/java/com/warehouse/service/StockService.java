@@ -60,7 +60,11 @@ public interface StockService {
 
     Stock addToStock(Long stockId, Integer quantity);
 
+    Stock addToStock(Long stockId, Integer quantity, String note);
+
     Stock removeFromStock(Long stockId, Integer quantity);
+
+    Stock removeFromStock(Long stockId, Integer quantity, String note);
 
     void deleteStock(Long id);
 

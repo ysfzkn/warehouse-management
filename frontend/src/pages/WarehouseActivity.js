@@ -525,6 +525,58 @@ const WarehouseActivity = () => {
                         )}
                       </div>
 
+                      {/* User Note */}
+                      {log.note && (
+                        <div style={{
+                          marginTop: '0.75rem',
+                          padding: '0.75rem 1rem',
+                          backgroundColor: '#fefce8',
+                          borderRadius: '8px',
+                          border: '1px solid #fde68a',
+                          borderLeft: '4px solid #eab308',
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          gap: '0.6rem'
+                        }}>
+                          <div style={{
+                            width: '28px',
+                            height: '28px',
+                            borderRadius: '6px',
+                            backgroundColor: '#fde68a',
+                            color: '#92400e',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '0.75rem',
+                            flexShrink: 0,
+                            marginTop: '1px'
+                          }}>
+                            <i className="fas fa-sticky-note"></i>
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{
+                              fontSize: '0.7rem',
+                              fontWeight: '600',
+                              color: '#92400e',
+                              marginBottom: '0.25rem',
+                              textTransform: 'uppercase',
+                              letterSpacing: '0.5px'
+                            }}>
+                              Kullanıcı Notu
+                            </div>
+                            <div style={{
+                              fontSize: '0.85rem',
+                              color: '#78350f',
+                              fontWeight: '500',
+                              whiteSpace: 'pre-wrap',
+                              wordBreak: 'break-word'
+                            }}>
+                              {log.note}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
                       {/* Details */}
                       {log.details && (
                         <div style={{
