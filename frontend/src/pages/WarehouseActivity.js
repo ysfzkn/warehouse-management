@@ -42,6 +42,12 @@ const actionMeta = (action) => {
   return map[action] || { label: action || '-', variant: 'secondary' };
 };
 
+const extractNoteFromDetails = (details) => {
+  if (!details || typeof details !== 'string') return '';
+  const match = details.match(/\|\s*Not:\s*(.+)$/i);
+  return match ? match[1].trim() : '';
+};
+
 const WarehouseActivity = () => {
   const { warehouseId } = useParams();
   const navigate = useNavigate();
@@ -178,7 +184,9 @@ const WarehouseActivity = () => {
                 <div className="text-muted">Kayıt bulunamadı.</div>
               ) : (
                 <div className="list-group list-group-flush">
-                  {logs.map(log => (
+                  {logs.map(log => {
+                    const movementNote = (log.note && String(log.note).trim()) || extractNoteFromDetails(log.details);
+                    return (
                     <div key={log.id} className="list-group-item">
                       {/* Header with action and timestamp */}
                       <div className="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
@@ -526,7 +534,7 @@ const WarehouseActivity = () => {
                       </div>
 
                       {/* User Note */}
-                      {log.note && (
+                      {movementNote && (
                         <div style={{
                           marginTop: '0.75rem',
                           padding: '0.75rem 1rem',
@@ -571,7 +579,7 @@ const WarehouseActivity = () => {
                               whiteSpace: 'pre-wrap',
                               wordBreak: 'break-word'
                             }}>
-                              {log.note}
+                              {movementNote}
                             </div>
                           </div>
                         </div>
@@ -593,7 +601,8 @@ const WarehouseActivity = () => {
                         </div>
                       )}
                     </div>
-                  ))}
+                  );
+                  })}
                 </div>
               )}
               <div className="d-flex justify-content-between align-items-center mt-3 flex-wrap gap-2">
