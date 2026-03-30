@@ -48,6 +48,11 @@ const extractNoteFromDetails = (details) => {
   return match ? match[1].trim() : '';
 };
 
+const stripNoteSuffix = (value) => {
+  if (!value || typeof value !== 'string') return value || '';
+  return value.replace(/\s*\|\s*Not:\s*.+$/i, '').trim();
+};
+
 const WarehouseActivity = () => {
   const { warehouseId } = useParams();
   const navigate = useNavigate();
@@ -186,6 +191,8 @@ const WarehouseActivity = () => {
                 <div className="list-group list-group-flush">
                   {logs.map(log => {
                     const movementNote = (log.note && String(log.note).trim()) || extractNoteFromDetails(log.details);
+                    const displayDetails = stripNoteSuffix(log.details);
+                    const displayProductName = stripNoteSuffix(log.productName);
                     return (
                     <div key={log.id} className="list-group-item">
                       {/* Header with action and timestamp */}
@@ -263,7 +270,7 @@ const WarehouseActivity = () => {
                                       {log.productSku}
                                     </div>
                                   )}
-                                  {log.productName && (
+                                  {displayProductName && (
                                     <div style={{
                                       fontSize: '0.9rem',
                                       fontWeight: '600',
@@ -272,7 +279,7 @@ const WarehouseActivity = () => {
                                       whiteSpace: 'normal',
                                       wordBreak: 'break-word'
                                     }}>
-                                      {log.productName}
+                                      {displayProductName}
                                     </div>
                                   )}
                                 </div>
@@ -586,7 +593,7 @@ const WarehouseActivity = () => {
                       )}
 
                       {/* Details */}
-                      {log.details && (
+                      {displayDetails && (
                         <div style={{
                           marginTop: '0.75rem',
                           padding: '0.75rem',
@@ -597,7 +604,7 @@ const WarehouseActivity = () => {
                           color: '#475569',
                           whiteSpace: 'pre-wrap'
                         }}>
-                          {log.details}
+                          {displayDetails}
                         </div>
                       )}
                     </div>
