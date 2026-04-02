@@ -50,4 +50,9 @@ public interface CategoryService {
     List<Category> getSubcategories(Long parentId);
 
     List<CategoryDto> getHierarchicalCategories();
+
+    // E-commerce storefront methods
+    Category getCategoryBySlug(String slug);
+
+    List<Category> getAllRootCategories();
 }

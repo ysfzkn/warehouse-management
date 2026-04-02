@@ -15,8 +15,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/audit")
-@CrossOrigin(origins = "*")
+@RequestMapping("/api/admin/audit")
 public class AuditController {
 
     private final AuditLogRepository auditLogRepository;

@@ -90,6 +90,10 @@ public class Stock {
     @Column(name = "customer_phone", length = 20)
     private String customerPhone; // For EMANET_DEPO warehouses
 
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version = 0L;
+
     @Column(name = "last_updated", nullable = false)
     private LocalDateTime lastUpdated;
 

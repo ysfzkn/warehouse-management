@@ -101,6 +101,9 @@ public class LocalPhotoStorageService implements PhotoStorageService {
             if (originalBytes.length == 0) {
                 throw new IllegalArgumentException("Empty image stream");
             }
+            if (originalBytes.length > 10 * 1024 * 1024) {
+                throw new IllegalArgumentException("Dosya boyutu 10MB sinirini asiyor");
+            }
 
             BufferedImage sourceImage = ImageIO.read(new ByteArrayInputStream(originalBytes));
             if (sourceImage == null) {
@@ -175,32 +178,21 @@ public class LocalPhotoStorageService implements PhotoStorageService {
     }
 
     @Override
-    public StoredPhoto storeProductImage(Long productId,
-            String originalFileName,
-            String contentType,
+    public StoredPhoto storeProductImage(Long productId, String originalFileName, String contentType,
             InputStream inputStream) {
         try {
             byte[] originalBytes = inputStream.readAllBytes();
             if (originalBytes.length == 0) {
                 throw new IllegalArgumentException("Empty image stream");
             }
-
-            BufferedImage sourceImage = ImageIO.read(new ByteArrayInputStream(originalBytes));
-            if (sourceImage == null) {
-                throw new IllegalArgumentException("Unsupported image format");
+            if (originalBytes.length > 10 * 1024 * 1024) {
+                throw new IllegalArgumentException("Dosya boyutu 10MB sinirini asiyor");
             }
-
-            BufferedImage optimized = resizeIfNeeded(sourceImage,
-                    properties.getMaxWidth(),
-                    properties.getMaxHeight());
-
-            BufferedImage thumbnail = resizeIfNeeded(sourceImage, 320, 320);
 
             String extension = resolveExtension(originalFileName, contentType);
             String baseName = UUID.randomUUID().toString();
 
             LocalDate today = LocalDate.now();
-            // Use a separate root folder for product images to keep things organized
             Path resolvedBase = resolveBaseDir();
             Path productsBase = resolvedBase.getParent().resolve("products");
             Path baseDir = productsBase
@@ -216,10 +208,23 @@ public class LocalPhotoStorageService implements PhotoStorageService {
             Path optimizedPath = baseDir.resolve(optimizedFileName);
             Path thumbPath = baseDir.resolve(thumbFileName);
 
-            writeCompressedImage(optimized, extension, optimizedPath, properties.getQuality());
-            writeCompressedImage(thumbnail, extension, thumbPath, properties.getQuality());
+            BufferedImage sourceImage = ImageIO.read(new ByteArrayInputStream(originalBytes));
+            if (sourceImage != null) {
+                BufferedImage optimized = resizeIfNeeded(sourceImage,
+                        properties.getMaxWidth(), properties.getMaxHeight());
+                BufferedImage thumbnail = resizeIfNeeded(sourceImage, 320, 320);
+                writeCompressedImage(optimized, extension, optimizedPath, properties.getQuality());
+                writeCompressedImage(thumbnail, extension, thumbPath, properties.getQuality());
+            } else {
+                // ImageIO can't read (CMYK JPEG, some WebP, etc.) — save raw
+                log.info("ImageIO cannot process product image, saving raw: {}", originalFileName);
+                Files.write(optimizedPath, originalBytes);
+                Files.write(thumbPath, originalBytes);
+            }
 
             long sizeBytes = Files.size(optimizedPath);
+            Integer width = sourceImage != null ? sourceImage.getWidth() : null;
+            Integer height = sourceImage != null ? sourceImage.getHeight() : null;
 
             return new StoredPhoto(
                     optimizedFileName,
@@ -227,12 +232,91 @@ public class LocalPhotoStorageService implements PhotoStorageService {
                     baseDir.toString().replace("\\", "/") + "/" + thumbFileName,
                     resolveContentType(extension),
                     sizeBytes,
-                    optimized.getWidth(),
-                    optimized.getHeight());
+                    width,
+                    height);
         } catch (IOException e) {
             log.error("Failed to store product image", e);
             throw new RuntimeException("Failed to store product image", e);
         }
+    }
+
+    @Override
+    public StoredPhoto storeSiteAsset(String assetName, String originalFileName, String contentType,
+            InputStream inputStream) {
+        try {
+            byte[] originalBytes = inputStream.readAllBytes();
+            if (originalBytes.length == 0) {
+                throw new IllegalArgumentException("Empty image stream");
+            }
+            if (originalBytes.length > 10 * 1024 * 1024) {
+                throw new IllegalArgumentException("Dosya boyutu 10MB sinirini asiyor");
+            }
+
+            // Validate content type
+            if (contentType == null || (!contentType.startsWith("image/") && !contentType.equals("application/octet-stream"))) {
+                throw new IllegalArgumentException("Gecersiz dosya tipi: " + contentType);
+            }
+
+            String extension = resolveSiteAssetExtension(originalFileName, contentType);
+            String baseName = UUID.randomUUID().toString();
+
+            Path resolvedBase = resolveBaseDir();
+            Path siteBase = resolvedBase.getParent().resolve("site");
+            Files.createDirectories(siteBase);
+
+            String savedFileName = assetName + "_" + baseName + "." + extension;
+            Path savedPath = siteBase.resolve(savedFileName);
+
+            // Try to optimize via ImageIO (works for JPEG/PNG)
+            BufferedImage sourceImage = ImageIO.read(new ByteArrayInputStream(originalBytes));
+            if (sourceImage != null) {
+                BufferedImage optimized = resizeIfNeeded(sourceImage,
+                        properties.getMaxWidth(), properties.getMaxHeight());
+                writeCompressedImage(optimized, extension, savedPath, properties.getQuality());
+            } else {
+                // ImageIO can't read this format (SVG, ICO, some WebP, CMYK JPEG)
+                // Save raw bytes directly — still valid for browser rendering
+                log.info("ImageIO cannot process format, saving raw file: {}", originalFileName);
+                Files.write(savedPath, originalBytes);
+            }
+
+            long sizeBytes = Files.size(savedPath);
+
+            return new StoredPhoto(
+                    savedFileName,
+                    siteBase.toString().replace("\\", "/") + "/" + savedFileName,
+                    null,
+                    contentType,
+                    sizeBytes,
+                    null,
+                    null);
+        } catch (IOException e) {
+            log.error("Failed to store site asset: {}", assetName, e);
+            throw new RuntimeException("Failed to store site asset", e);
+        }
+    }
+
+    private String resolveSiteAssetExtension(String originalFileName, String contentType) {
+        if (originalFileName != null && originalFileName.contains(".")) {
+            String ext = originalFileName.substring(originalFileName.lastIndexOf('.') + 1).toLowerCase();
+            if (ext.matches("jpe?g|png|webp|svg|ico|gif")) {
+                return ext;
+            }
+        }
+        if (contentType != null) {
+            if (contentType.contains("svg")) return "svg";
+            if (contentType.contains("icon") || contentType.contains("ico")) return "ico";
+            if (contentType.contains("png")) return "png";
+            if (contentType.contains("webp")) return "webp";
+            if (contentType.contains("gif")) return "gif";
+            if (contentType.contains("jpeg") || contentType.contains("jpg")) return "jpg";
+        }
+        return "png";
+    }
+
+    @Override
+    public Path getSiteAssetDir() {
+        return resolveBaseDir().getParent().resolve("site");
     }
 
     @Override
@@ -262,7 +346,13 @@ public class LocalPhotoStorageService implements PhotoStorageService {
                 throw new RuntimeException("Photo path is null or empty");
             }
 
-            Path path = Paths.get(relativePath);
+            // Security: prevent path traversal attacks
+            if (relativePath.contains("..") || relativePath.contains("~")) {
+                log.error("Path traversal attempt detected: {}", relativePath);
+                throw new SecurityException("Invalid file path");
+            }
+
+            Path path = Paths.get(relativePath).normalize();
 
             // If path is not absolute, try to resolve it relative to base directory
             if (!path.isAbsolute()) {

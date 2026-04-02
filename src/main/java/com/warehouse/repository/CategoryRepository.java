@@ -45,4 +45,10 @@ public interface CategoryRepository extends JpaRepository<Category, Long> {
         Long getCategoryId();
         Long getProductCount();
     }
+
+    // E-commerce storefront queries
+    Optional<Category> findBySlug(String slug);
+
+    @Query("SELECT c FROM Category c LEFT JOIN FETCH c.children WHERE c.parent IS NULL AND c.isActive = true ORDER BY c.sortOrder, c.name")
+    List<Category> findActiveRootCategoriesWithChildren();
 }

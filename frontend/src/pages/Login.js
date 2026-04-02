@@ -24,7 +24,7 @@ const Login = () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await axios.post('/api/auth/login', { username, password });
+      const res = await axios.post('/api/admin/auth/login', { username, password });
       localStorage.setItem('auth_token', res.data.token);
       localStorage.setItem('auth_user', res.data.username);
       if (res.data.role) localStorage.setItem('auth_role', res.data.role);

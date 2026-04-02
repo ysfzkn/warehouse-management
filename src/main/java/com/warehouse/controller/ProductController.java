@@ -28,8 +28,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/products")
-@CrossOrigin(origins = "*")
+@RequestMapping("/api/admin/products")
 public class ProductController {
 
     private final ProductService productService;
@@ -168,20 +167,34 @@ public class ProductController {
 
     @GetMapping("/{id}/images")
     @Transactional(readOnly = true)
-    public ResponseEntity<List<ProductImage>> getProductImages(@PathVariable Long id) {
+    public ResponseEntity<List<Map<String, Object>>> getProductImages(@PathVariable Long id) {
         List<ProductImage> images = productImageService.getImagesForProduct(id);
-        return ResponseEntity.ok(images);
+        List<Map<String, Object>> dtos = images.stream().map(img -> {
+            Map<String, Object> dto = new java.util.LinkedHashMap<>();
+            dto.put("id", img.getId());
+            dto.put("fileName", img.getFileName());
+            dto.put("relativePath", img.getRelativePath());
+            dto.put("thumbnailPath", img.getThumbnailPath());
+            dto.put("sortOrder", img.getSortOrder());
+            dto.put("primary", img.isPrimary());
+            dto.put("contentType", img.getContentType());
+            dto.put("sizeBytes", img.getSizeBytes());
+            dto.put("width", img.getWidth());
+            dto.put("height", img.getHeight());
+            return dto;
+        }).collect(java.util.stream.Collectors.toList());
+        return ResponseEntity.ok(dtos);
     }
 
     @PostMapping("/{id}/images")
-    public ResponseEntity<ProductImage> uploadProductImage(@PathVariable Long id,
+    public ResponseEntity<Map<String, Object>> uploadProductImage(@PathVariable Long id,
                                                            @RequestParam("file") MultipartFile file,
                                                            @RequestParam(name = "primary", defaultValue = "false") boolean primary) {
         if (file.isEmpty()) {
-            return ResponseEntity.badRequest().build();
+            return ResponseEntity.badRequest().body(Map.of("message", "Dosya boş."));
         }
         if (file.getContentType() == null || !file.getContentType().startsWith("image/")) {
-            return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE).build();
+            return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE).body(Map.of("message", "Sadece görsel dosyaları yüklenebilir."));
         }
         try {
             ProductImage image = productImageService.addImageToProduct(
@@ -191,16 +204,30 @@ public class ProductController {
                     file.getInputStream(),
                     primary
             );
-            return ResponseEntity.status(HttpStatus.CREATED).body(image);
+            // Return simple DTO to avoid LazyInitializationException on product.category
+            Map<String, Object> dto = new java.util.LinkedHashMap<>();
+            dto.put("id", image.getId());
+            dto.put("fileName", image.getFileName());
+            dto.put("sortOrder", image.getSortOrder());
+            dto.put("primary", image.isPrimary());
+            dto.put("contentType", image.getContentType());
+            dto.put("sizeBytes", image.getSizeBytes());
+            dto.put("width", image.getWidth());
+            dto.put("height", image.getHeight());
+            return ResponseEntity.status(HttpStatus.CREATED).body(dto);
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("message", "Görsel yüklenemedi: " + e.getMessage()));
         }
     }
 
+    @PutMapping("/images/{imageId}/set-primary")
+    public ResponseEntity<Map<String, String>> setImagePrimary(@PathVariable Long imageId) {
+        productImageService.setPrimaryImage(imageId);
+        return ResponseEntity.ok(Map.of("message", "Birincil görsel güncellendi."));
+    }
+
     @DeleteMapping("/images/{imageId}")
-    public ResponseEntity<Void> deleteProductImage(@PathVariable Long imageId,
-                                                   @RequestHeader(value = "X-ADMIN-SECURITY-CODE", required = false) String adminSecurityCode) {
-        adminSecurityService.requireSecurityCodeForAdmin(adminSecurityCode);
+    public ResponseEntity<Void> deleteProductImage(@PathVariable Long imageId) {
         productImageService.deleteImage(imageId);
         return ResponseEntity.noContent().build();
     }

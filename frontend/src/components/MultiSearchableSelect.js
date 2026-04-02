@@ -29,7 +29,7 @@ const MultiSearchableSelect = ({
   renderOption,
   getOptionLabel = (opt) => opt?.name || '',
 }) => {
-  const normalizedValues = Array.isArray(values) ? values.filter(v => v != null) : [];
+  const normalizedValues = useMemo(() => Array.isArray(values) ? values.filter(v => v != null) : [], [values]);
   const valuesSet = useMemo(() => new Set(normalizedValues.map(v => Number(v))), [normalizedValues]);
 
   const [query, setQuery] = useState('');

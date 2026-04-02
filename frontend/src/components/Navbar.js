@@ -15,7 +15,7 @@ const Navbar = () => {
   const [notifPage, setNotifPage] = useState(0);
   const [notifHasMore, setNotifHasMore] = useState(true);
   const [notifLoading, setNotifLoading] = useState(false);
-  const [notifRefreshing, setNotifRefreshing] = useState(false);
+  const [, setNotifRefreshing] = useState(false);
   const role = (typeof window !== 'undefined' && localStorage.getItem('auth_role')) || 'ADMIN';
   const userBadgeRef = useRef(null);
   const notifLoadingRef = useRef(false);
@@ -138,7 +138,7 @@ const Navbar = () => {
       handleLogout();
       return;
     }
-    const es = new EventSource(`/api/stream?token=${encodeURIComponent(token)}`);
+    const es = new EventSource(`/api/admin/stream?token=${encodeURIComponent(token)}`);
     sseRef.current = es;
     let closed = false;
     const onMessage = async (ev) => {
@@ -315,7 +315,6 @@ const Navbar = () => {
                       style={{minHeight: '38px'}}
                       onClick={async () => {
                         const title = (n.title || '').toLowerCase();
-                        const message = (n.message || '').toLowerCase();
                         const isTransfer = n.entityType === 'StockTransfer' || title.includes('transfer');
                         const isStockRequest = n.entityType === 'StockRequest';
                         const isTransferApprovalRequest = title.includes('onay') || title.includes('approval') || title.includes('talep') || title.includes('sil');
@@ -865,6 +864,49 @@ const Navbar = () => {
                     <Link className="dropdown-item" to="/admin/notifications">
                       <i className="fas fa-bell me-2 text-warning"></i>
                       Bildirimler
+                    </Link>
+                  </li>
+                  <li><hr className="dropdown-divider" /></li>
+                  <li>
+                    <Link className="dropdown-item" to="/admin/orders">
+                      <i className="fas fa-shopping-cart me-2 text-success"></i>
+                      Siparişler
+                    </Link>
+                  </li>
+                  <li>
+                    <Link className="dropdown-item" to="/admin/customers">
+                      <i className="fas fa-users me-2 text-warning"></i>
+                      Müşteriler
+                    </Link>
+                  </li>
+                  <li>
+                    <Link className="dropdown-item" to="/admin/payments">
+                      <i className="fas fa-credit-card me-2 text-danger"></i>
+                      Ödemeler
+                    </Link>
+                  </li>
+                  <li>
+                    <Link className="dropdown-item" to="/admin/payment-gateways">
+                      <i className="fas fa-plug me-2 text-purple" style={{color:'#6f42c1'}}></i>
+                      Ödeme Gateway'leri
+                    </Link>
+                  </li>
+                  <li>
+                    <Link className="dropdown-item" to="/admin/coupons">
+                      <i className="fas fa-ticket-alt me-2 text-success"></i>
+                      Kuponlar
+                    </Link>
+                  </li>
+                  <li>
+                    <Link className="dropdown-item" to="/admin/cms">
+                      <i className="fas fa-file-alt me-2 text-info"></i>
+                      İçerik Yönetimi
+                    </Link>
+                  </li>
+                  <li>
+                    <Link className="dropdown-item" to="/admin/site-settings">
+                      <i className="fas fa-globe me-2 text-primary"></i>
+                      Site Ayarları
                     </Link>
                   </li>
                   <li><hr className="dropdown-divider" /></li>

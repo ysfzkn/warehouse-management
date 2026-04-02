@@ -19,8 +19,7 @@ import java.util.Map;
  * REST controller for stock request operations
  */
 @RestController
-@RequestMapping("/api/stock-requests")
-@CrossOrigin(origins = "*")
+@RequestMapping("/api/admin/stock-requests")
 @RequiredArgsConstructor
 public class StockRequestController {
 

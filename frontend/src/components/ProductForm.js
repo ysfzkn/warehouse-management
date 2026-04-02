@@ -1,14 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import SearchableSelect from './SearchableSelect';
+import ConfirmModal from './ConfirmModal';
 import './ProductForm.css';
 
 const ProductForm = ({ product, onSuccess, onCancel }) => {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
+    shortDescription: '',
     sku: '',
     price: '',
+    salePrice: '',
+    saleStart: '',
+    saleEnd: '',
+    isFeatured: false,
+    isNew: false,
     weight: '',
     dimensions: '',
     lengthCm: '',
@@ -21,6 +28,10 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
     subcategoryId: '',
     isActive: true
   });
+  const [productImages, setProductImages] = useState([]);
+  const [imageUploading, setImageUploading] = useState(false);
+  const [deleteImageId, setDeleteImageId] = useState(null);
+  const imageInputRef = React.useRef(null);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
   const [mainCategories, setMainCategories] = useState([]);
@@ -80,6 +91,7 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
 
   useEffect(() => {
     fetchMainCategories();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -88,6 +100,7 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
     } else {
       setSubcategories([]);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData.categoryId]);
 
   useEffect(() => {
@@ -120,8 +133,18 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
       sctRate: product.sctRate || '',
       categoryId: mainCategoryIdNumeric != null ? String(mainCategoryIdNumeric) : '',
       subcategoryId: subcategoryIdNumeric != null ? String(subcategoryIdNumeric) : '',
-      isActive: product.isActive !== false
+      isActive: product.isActive !== false,
+      shortDescription: product.shortDescription || '',
+      salePrice: product.salePrice || '',
+      saleStart: product.saleStart ? product.saleStart.substring(0, 16) : '',
+      saleEnd: product.saleEnd ? product.saleEnd.substring(0, 16) : '',
+      isFeatured: !!product.featured || !!product.isFeatured,
+      isNew: !!product.isNew,
     }));
+    // Load product images
+    if (product.id) {
+      axios.get(`/api/products/${product.id}/images`).then(r => setProductImages(r.data || [])).catch(() => {});
+    }
     const resolvedBrandId = product.brand?.id
       ?? (product.brandId != null ? Number(product.brandId) : null);
     const resolvedColorId = product.color?.id
@@ -140,6 +163,7 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
     } else {
       setSubcategories([]);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product]);
 
   const normalizeSubcategories = (subs = [], parentMeta = {}) => {
@@ -453,6 +477,23 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
     return Object.keys(newErrors).length === 0;
   };
 
+  const uploadImage = async (file) => {
+    if (!product?.id || !file) return;
+    setImageUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('primary', productImages.length === 0 ? 'true' : 'false');
+      await axios.post(`/api/products/${product.id}/images`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      const res = await axios.get(`/api/products/${product.id}/images`);
+      setProductImages(res.data || []);
+    } catch (e) {
+      setErrors({ general: e.response?.data?.message || 'Görsel yüklenemedi' });
+    } finally { setImageUploading(false); }
+  };
+
   const handleSubmit = async (e) => {
     if (e && typeof e.preventDefault === 'function') {
       e.preventDefault();
@@ -471,8 +512,14 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
       const dataToSend = {
         name: formData.name,
         description: formData.description,
+        shortDescription: formData.shortDescription || null,
         sku: formData.sku,
         price: parseFloat(formData.price),
+        salePrice: formData.salePrice ? parseFloat(formData.salePrice) : null,
+        saleStart: formData.saleStart ? formData.saleStart + ':00' : null,
+        saleEnd: formData.saleEnd ? formData.saleEnd + ':00' : null,
+        featured: formData.isFeatured,
+        isNew: formData.isNew,
         weight: formData.weight ? parseFloat(formData.weight) : null,
         dimensions: formData.dimensions,
         lengthCm: formData.lengthCm ? parseFloat(formData.lengthCm) : null,
@@ -567,18 +614,14 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
       </div>
 
       <div className="mb-3">
-        <label htmlFor="description" className="form-label">
-          Açıklama
-        </label>
-        <textarea
-          className="form-control"
-          id="description"
-          name="description"
-          rows="3"
-          value={formData.description}
-          onChange={handleChange}
-          placeholder="Ürün açıklaması..."
-        />
+        <label htmlFor="description" className="form-label">Açıklama</label>
+        <textarea className="form-control" id="description" name="description" rows="3"
+          value={formData.description} onChange={handleChange} placeholder="Detaylı ürün açıklaması..." />
+      </div>
+      <div className="mb-3">
+        <label htmlFor="shortDescription" className="form-label">Kısa Açıklama <small className="text-muted">(mağazada listede görünür)</small></label>
+        <textarea className="form-control" id="shortDescription" name="shortDescription" rows="2"
+          value={formData.shortDescription} onChange={handleChange} placeholder="Mağazada ürün kartında görünecek kısa açıklama..." maxLength={1000} />
       </div>
 
       {/* Price and Tax Section */}
@@ -1094,6 +1137,128 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
         </div>
       )}
 
+      {/* ===== İndirim & Kampanya ===== */}
+      <div className="row mb-3 mt-4">
+        <div className="col-12">
+          <h6 className="text-muted mb-3"><i className="fas fa-percentage me-2" />İndirim & Kampanya</h6>
+        </div>
+      </div>
+      <div className="row">
+        <div className="col-md-4">
+          <div className="mb-3">
+            <label className="form-label">İndirimli Fiyat (₺)</label>
+            <input type="number" step="0.01" min="0" className="form-control" name="salePrice"
+              value={formData.salePrice} onChange={handleChange} placeholder="İndirim yoksa boş bırakın" />
+            {formData.salePrice && formData.price && parseFloat(formData.salePrice) < parseFloat(formData.price) && (
+              <small className="text-success mt-1 d-block">
+                <i className="fas fa-tag me-1" />%{((1 - parseFloat(formData.salePrice) / parseFloat(formData.price)) * 100).toFixed(0)} indirim
+              </small>
+            )}
+          </div>
+        </div>
+        <div className="col-md-4">
+          <div className="mb-3">
+            <label className="form-label">İndirim Başlangıcı</label>
+            <input type="datetime-local" className="form-control" name="saleStart"
+              value={formData.saleStart} onChange={handleChange} />
+          </div>
+        </div>
+        <div className="col-md-4">
+          <div className="mb-3">
+            <label className="form-label">İndirim Bitişi</label>
+            <input type="datetime-local" className="form-control" name="saleEnd"
+              value={formData.saleEnd} onChange={handleChange} />
+          </div>
+        </div>
+      </div>
+      <div className="row mb-3">
+        <div className="col-md-6">
+          <div className="form-check form-switch">
+            <input className="form-check-input" type="checkbox" id="isFeatured" checked={formData.isFeatured}
+              onChange={e => setFormData(f => ({...f, isFeatured: e.target.checked}))} />
+            <label className="form-check-label" htmlFor="isFeatured"><i className="fas fa-star text-warning me-1" />Öne Çıkan Ürün</label>
+          </div>
+        </div>
+        <div className="col-md-6">
+          <div className="form-check form-switch">
+            <input className="form-check-input" type="checkbox" id="isNew" checked={formData.isNew}
+              onChange={e => setFormData(f => ({...f, isNew: e.target.checked}))} />
+            <label className="form-check-label" htmlFor="isNew"><i className="fas fa-sparkles text-info me-1" />Yeni Ürün Etiketi</label>
+          </div>
+        </div>
+      </div>
+
+      {/* ===== Ürün Görselleri (sadece düzenleme modunda) ===== */}
+      {product?.id && (
+        <>
+          <div className="row mb-3 mt-4">
+            <div className="col-12">
+              <h6 className="text-muted mb-3"><i className="fas fa-images me-2" />Ürün Görselleri</h6>
+            </div>
+          </div>
+          <div className="mb-3">
+            {/* Image Grid */}
+            {productImages.length > 0 && (
+              <div className="row g-2 mb-3">
+                {productImages.sort((a,b) => a.sortOrder - b.sortOrder).map(img => (
+                  <div key={img.id} className="col-6 col-md-3">
+                    <div className={`border rounded overflow-hidden position-relative ${img.primary ? 'border-primary border-2' : ''}`}>
+                      <img src={`/api/admin/products/images/${img.id}/view?thumbnail=true`}
+                        alt="" style={{width:'100%', height:140, objectFit:'contain', background:'#f8f9fa'}}
+                        onError={e => { e.target.style.display='none'; }} />
+                      <div className="position-absolute top-0 end-0 p-1 d-flex gap-1">
+                        {!img.primary && (
+                          <button className="btn btn-sm btn-warning" title="Birincil yap"
+                            style={{width:24,height:24,padding:0,fontSize:10}}
+                            onClick={() => {
+                              axios.put(`/api/products/images/${img.id}/set-primary`).then(() => {
+                                axios.get(`/api/products/${product.id}/images`).then(r => setProductImages(r.data || []));
+                              }).catch(() => {});
+                            }}>
+                            <i className="fas fa-star" />
+                          </button>
+                        )}
+                        <button className="btn btn-sm btn-danger" title="Sil"
+                          style={{width:24,height:24,padding:0,fontSize:10}}
+                          onClick={() => setDeleteImageId(img.id)}>
+                          <i className="fas fa-times" />
+                        </button>
+                      </div>
+                      {img.primary && (
+                        <div className="position-absolute bottom-0 start-0 w-100 text-center" style={{background:'rgba(37,99,235,0.8)', padding:'2px 0'}}>
+                          <small className="text-white" style={{fontSize:10}}>Ana Görsel</small>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {/* Upload Zone */}
+            <div className="border-2 border-dashed rounded p-3 text-center" style={{cursor:'pointer'}}
+              onClick={() => imageInputRef.current?.click()}
+              onDragOver={e => e.preventDefault()}
+              onDrop={e => {
+                e.preventDefault();
+                const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+                files.forEach(f => uploadImage(f));
+              }}>
+              <input type="file" ref={imageInputRef} className="d-none" accept="image/*" multiple
+                onChange={e => { Array.from(e.target.files).forEach(f => uploadImage(f)); e.target.value=''; }} />
+              {imageUploading ? (
+                <div><span className="spinner-border spinner-border-sm me-2" />Yükleniyor...</div>
+              ) : (
+                <div>
+                  <i className="fas fa-cloud-upload-alt text-muted fa-lg d-block mb-1" />
+                  <div className="small text-muted">Görsel sürükleyin veya <span className="text-primary fw-medium">dosya seçin</span></div>
+                  <div className="text-muted small">PNG, JPG, WebP — Birden fazla seçebilirsiniz</div>
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+
       <div className="d-flex justify-content-end gap-2">
         <button
           type="button"
@@ -1124,6 +1289,23 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
       </div>
 
       {/* Create Modal */}
+      <ConfirmModal
+        show={!!deleteImageId}
+        title="Gorseli Sil"
+        message="Bu gorseli silmek istediginize emin misiniz? Bu islem geri alinamaz."
+        icon="trash"
+        confirmText="Sil"
+        confirmVariant="danger"
+        onConfirm={() => {
+          const imgId = deleteImageId;
+          setDeleteImageId(null);
+          axios.delete(`/api/products/images/${imgId}`).then(() => {
+            setProductImages(prev => prev.filter(i => i.id !== imgId));
+          }).catch(() => {});
+        }}
+        onCancel={() => setDeleteImageId(null)}
+      />
+
       {showCreateModal && (
         <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} tabIndex="-1">
           <div className="modal-dialog modal-dialog-centered">

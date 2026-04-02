@@ -25,8 +25,7 @@ import java.util.Map;
 import java.util.Optional;
 
 @RestController
-@RequestMapping("/api/stock-transfer-items")
-@CrossOrigin(origins = "*")
+@RequestMapping("/api/admin/stock-transfer-items")
 @Slf4j
 public class StockTransferItemPhotoController {
 

@@ -8,6 +8,7 @@ import java.util.TimeZone;
 
 @SpringBootApplication
 @EnableCaching
+@org.springframework.scheduling.annotation.EnableAsync
 public class WarehouseManagementApplication {
 
     @PostConstruct

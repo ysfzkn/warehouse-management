@@ -167,6 +167,10 @@ public class ProductServiceImpl implements ProductService {
         product.setCategory(category);
         setBrandIfPresent(product);
         setColorIfPresent(product);
+        if (product.getSlug() == null || product.getSlug().isBlank()) {
+            product.setSlug(product.getSku().toLowerCase()
+                .replace(" ", "-").replaceAll("[^a-z0-9\\-]", ""));
+        }
 
         Product saved = productRepository.save(product);
         logger.info("Product created successfully with id: {}", saved.getId());
@@ -428,6 +432,19 @@ public class ProductServiceImpl implements ProductService {
 
         logger.info("Batch processing completed. Updated {} products", totalUpdated);
         return totalUpdated;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Product getProductBySlug(String slug) {
+        return productRepository.findBySlug(slug)
+            .orElseThrow(() -> new WarehouseManagementException(ErrorCode.PRODUCT_NOT_FOUND, "Slug: " + slug));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<Product> getAllActiveProducts(Pageable pageable, String search, Long categoryId, Long brandId, Long colorId) {
+        return productRepository.findActiveByFilters(search, categoryId, brandId, colorId, pageable);
     }
 
     private void validateSkuUniqueness(String sku) {

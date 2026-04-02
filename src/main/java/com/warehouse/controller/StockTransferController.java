@@ -36,8 +36,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/stock-transfers")
-@CrossOrigin(origins = "*")
+@RequestMapping("/api/admin/stock-transfers")
 public class StockTransferController {
 
     private final StockTransferService stockTransferService;

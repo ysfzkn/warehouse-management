@@ -193,6 +193,7 @@ const Products = () => {
     if (productPage !== 0) {
       setProductPage(0);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchTerm, selectedCategory, selectedSubcategory, selectedBrand, selectedColor, productSortBy, productSortDir]);
 
   useEffect(() => {
@@ -208,6 +209,7 @@ const Products = () => {
       setSubcategories([]);
       setSelectedSubcategory('');
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCategory]);
 
   const selectedCategoryOption = categories.find(category => category.id?.toString() === selectedCategory);

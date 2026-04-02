@@ -1,27 +1,78 @@
 package com.warehouse.constants;
 
 /**
- * Centralized API path constants to avoid scattering literal strings.
+ * Centralized API path constants.
+ * Admin paths serve the existing WMS dashboard.
+ * Store paths serve the new B2C e-commerce storefront.
  */
 public final class ApiPaths {
 
     private ApiPaths() {}
 
+    // ── Base ─────────────────────────────────────────
     public static final String API_BASE = "/api";
-    public static final String AUTH = API_BASE + "/auth/**";
-    public static final String ACTUATOR = "/actuator/**";
+    public static final String API_ADMIN_BASE = API_BASE + "/admin";
+    public static final String API_STORE_BASE = API_BASE + "/store";
+
+    // ── Public (no auth) ─────────────────────────────
     public static final String INFO = API_BASE + "/info";
+    public static final String ACTUATOR = "/actuator/**";
     public static final String ERROR = "/error";
-    public static final String STREAM = API_BASE + "/stream";
-    public static final String STOCKS = API_BASE + "/stocks/**";
-    public static final String STOCK_TRANSFERS = API_BASE + "/stock-transfers/**";
-    public static final String STOCK_IMPORTS = API_BASE + "/stock-imports/**";
-    public static final String PRODUCTS = API_BASE + "/products/**";
-    public static final String WAREHOUSES = API_BASE + "/warehouses/**";
-    public static final String CATEGORIES = API_BASE + "/categories/**";
-    public static final String BRANDS = API_BASE + "/brands/**";
-    public static final String COLORS = API_BASE + "/colors/**";
+
+    // ── Admin paths (existing WMS) ───────────────────
+    public static final String ADMIN_AUTH = API_ADMIN_BASE + "/auth/**";
+    public static final String ADMIN_STREAM = API_ADMIN_BASE + "/stream";
+    public static final String ADMIN_STOCKS = API_ADMIN_BASE + "/stocks/**";
+    public static final String ADMIN_STOCK_TRANSFERS = API_ADMIN_BASE + "/stock-transfers/**";
+    public static final String ADMIN_STOCK_IMPORTS = API_ADMIN_BASE + "/stock-imports/**";
+    public static final String ADMIN_STOCK_REQUESTS = API_ADMIN_BASE + "/stock-requests/**";
+    public static final String ADMIN_STOCK_TRANSFER_ITEMS = API_ADMIN_BASE + "/stock-transfer-items/**";
+    public static final String ADMIN_PRODUCTS = API_ADMIN_BASE + "/products/**";
+    public static final String ADMIN_WAREHOUSES = API_ADMIN_BASE + "/warehouses/**";
+    public static final String ADMIN_CATEGORIES = API_ADMIN_BASE + "/categories/**";
+    public static final String ADMIN_BRANDS = API_ADMIN_BASE + "/brands/**";
+    public static final String ADMIN_COLORS = API_ADMIN_BASE + "/colors/**";
+    public static final String ADMIN_CUSTOMERS = API_ADMIN_BASE + "/customers/**";
+    public static final String ADMIN_ANY = API_ADMIN_BASE + "/**";
+
+    // ── Store paths (e-commerce) ─────────────────────
+    public static final String STORE_AUTH = API_STORE_BASE + "/auth/**";
+    public static final String STORE_PRODUCTS = API_STORE_BASE + "/products/**";
+    public static final String STORE_CATEGORIES = API_STORE_BASE + "/categories/**";
+    public static final String STORE_BRANDS = API_STORE_BASE + "/brands/**";
+    public static final String STORE_COLORS = API_STORE_BASE + "/colors/**";
+    public static final String STORE_PAGES = API_STORE_BASE + "/pages/**";
+    public static final String STORE_CART = API_STORE_BASE + "/cart/**";
+    public static final String STORE_CHECKOUT = API_STORE_BASE + "/checkout/**";
+    public static final String STORE_SETTINGS = API_STORE_BASE + "/settings/**";
+    public static final String STORE_PAYMENT_CALLBACK = API_STORE_BASE + "/payment/callback";
+    public static final String STORE_PAYMENT_CALLBACK_POS = API_STORE_BASE + "/payment/callback/pos/**";
+    public static final String STORE_PAYMENT_CALLBACK_PAYTR = API_STORE_BASE + "/payment/callback/paytr/**";
+    public static final String STORE_PAYMENT_METHODS = API_STORE_BASE + "/payment/methods";
+    public static final String STORE_NEWSLETTER = API_STORE_BASE + "/newsletter/**";
+    public static final String STORE_ANY = API_STORE_BASE + "/**";
+
+    // ── Legacy (for backward compatibility during transition) ──
+    @Deprecated
+    public static final String AUTH = ADMIN_AUTH;
+    @Deprecated
+    public static final String STOCKS = ADMIN_STOCKS;
+    @Deprecated
+    public static final String STOCK_TRANSFERS = ADMIN_STOCK_TRANSFERS;
+    @Deprecated
+    public static final String STOCK_IMPORTS = ADMIN_STOCK_IMPORTS;
+    @Deprecated
+    public static final String PRODUCTS = ADMIN_PRODUCTS;
+    @Deprecated
+    public static final String WAREHOUSES = ADMIN_WAREHOUSES;
+    @Deprecated
+    public static final String CATEGORIES = ADMIN_CATEGORIES;
+    @Deprecated
+    public static final String BRANDS = ADMIN_BRANDS;
+    @Deprecated
+    public static final String COLORS = ADMIN_COLORS;
+    @Deprecated
+    public static final String STREAM = ADMIN_STREAM;
+    @Deprecated
     public static final String ANY_API = API_BASE + "/**";
 }
-
-

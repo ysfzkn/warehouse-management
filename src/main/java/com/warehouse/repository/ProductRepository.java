@@ -164,4 +164,27 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
                                 @Param("brandId") Long brandId,
                                 @Param("colorId") Long colorId,
                                 Pageable pageable);
+
+    // E-commerce storefront queries
+    @EntityGraph(value = Product.GRAPH_WITH_RELATIONS, type = EntityGraph.EntityGraphType.LOAD)
+    Optional<Product> findBySlug(String slug);
+
+    @Query("""
+        SELECT p FROM Product p
+        LEFT JOIN p.category c
+        LEFT JOIN c.parent cp
+        LEFT JOIN p.brand b
+        LEFT JOIN p.color col
+        WHERE p.isActive = true
+          AND (:search IS NULL OR LOWER(p.name) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')) OR LOWER(p.sku) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')))
+          AND (:categoryId IS NULL OR c.id = :categoryId OR cp.id = :categoryId)
+          AND (:brandId IS NULL OR b.id = :brandId)
+          AND (:colorId IS NULL OR col.id = :colorId)
+    """)
+    @EntityGraph(value = Product.GRAPH_WITH_RELATIONS, type = EntityGraph.EntityGraphType.LOAD)
+    Page<Product> findActiveByFilters(@Param("search") String search,
+                                      @Param("categoryId") Long categoryId,
+                                      @Param("brandId") Long brandId,
+                                      @Param("colorId") Long colorId,
+                                      Pageable pageable);
 }

@@ -49,11 +49,13 @@ class AuditAndNotificationIntegrationTest {
 
         category = new Category();
         category.setName("Integration Category");
+        category.setSlug("integration-category");
         category = categoryRepository.save(category);
 
         product = new Product();
         product.setName("Test Product");
         product.setSku("INT-TEST-001");
+        product.setSlug("int-test-001");
         product.setCategory(category);
         productRepository.save(product);
 

@@ -55,4 +55,9 @@ public interface ProductService {
     boolean existsBySku(String sku);
 
     int bulkAdjustPrices(BulkPriceUpdateRequest request);
+
+    // E-commerce storefront methods
+    Product getProductBySlug(String slug);
+
+    Page<Product> getAllActiveProducts(Pageable pageable, String search, Long categoryId, Long brandId, Long colorId);
 }

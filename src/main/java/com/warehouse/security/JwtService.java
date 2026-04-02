@@ -64,6 +64,35 @@ public class JwtService {
                 .compact();
     }
 
+    /**
+     * Generate a JWT for B2C customer authentication.
+     * Includes userType=customer claim for filter chain routing.
+     */
+    public String generateCustomerToken(Long customerId, String email) {
+        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime exp = now.plusDays(securityProperties.getCustomerTokenExpirationDays());
+        return Jwts.builder()
+                .setSubject(email)
+                .addClaims(Map.of(
+                    "customerId", customerId,
+                    "userType", "customer"
+                ))
+                .setIssuedAt(Date.from(now.toInstant()))
+                .setExpiration(Date.from(exp.toInstant()))
+                .signWith(signingKey, SignatureAlgorithm.HS256)
+                .compact();
+    }
+
+    public Long extractCustomerId(String token) {
+        try {
+            Claims claims = parseToken(token);
+            Object cid = claims.get("customerId");
+            if (cid instanceof Number) return ((Number) cid).longValue();
+            if (cid instanceof String) return Long.parseLong((String) cid);
+            return null;
+        } catch (Exception e) { return null; }
+    }
+
     public Claims parseToken(String token) {
         return Jwts.parserBuilder()
                 .setSigningKey(signingKey)

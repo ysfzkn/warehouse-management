@@ -5,9 +5,20 @@ import App from './App';
 import { BrowserRouter } from 'react-router-dom';
 import axios from 'axios';
 
-// attach Bearer auth header from localStorage token
+// Rewrite legacy /api/* paths to /api/admin/* (matches nginx rewrite rule)
+// Store paths (/api/store/*) and public paths (/api/info) are not rewritten
 axios.interceptors.request.use((config) => {
-  const token = localStorage.getItem('auth_token');
+  if (config.url && config.url.startsWith('/api/') &&
+      !config.url.startsWith('/api/admin/') &&
+      !config.url.startsWith('/api/store/') &&
+      !config.url.startsWith('/api/info')) {
+    config.url = config.url.replace('/api/', '/api/admin/');
+  }
+  // attach Bearer auth header — admin or customer token based on request path
+  const isStoreApi = config.url && config.url.startsWith('/api/store/');
+  const token = isStoreApi
+    ? (localStorage.getItem('customer_token') || localStorage.getItem('auth_token'))
+    : (localStorage.getItem('auth_token') || localStorage.getItem('customer_token'));
   if (token) {
     config.headers = config.headers || {};
     config.headers['Authorization'] = `Bearer ${token}`;
@@ -23,15 +34,26 @@ axios.interceptors.response.use(
     if (error && error.response) {
       const status = error.response.status;
       const reqUrl = error?.config?.url ?? '';
-      const isAuthEndpoint = reqUrl.includes('/auth/login');
+      const isAuthEndpoint = reqUrl.includes('/auth/');
       const isNotifications = reqUrl.includes('/api/notifications');
       const errCode = error?.response?.data?.code || error?.response?.data?.errorCode;
       const isAdminSecurityError = ['AUTH_002','AUTH_003','AUTH_004','AUTH_005','AUTH_006','AUTH_007'].includes(errCode);
 
-      // Session expired or unauthorized (skip admin security code errors)
-      if ((status === 401 || status === 403) && !isAuthEndpoint && !isNotifications && !isAdminSecurityError) {
+      // --- Oturum kontrolü: SADECE 401 (Unauthorized) + token mevcut = gerçek oturum süresi dolması ---
+      // 403 (Forbidden) = yetki yetersizliği, oturum aktif olabilir — modal GÖSTERME
+      const hasAdminToken = !!localStorage.getItem('auth_token');
+      const hasCustomerToken = !!localStorage.getItem('customer_token');
+      const isStoreRequest = reqUrl.includes('/api/store/');
+      const isRealSessionExpiry = status === 401 && (hasAdminToken || hasCustomerToken)
+          && !isAuthEndpoint && !isNotifications && !isAdminSecurityError;
+
+      if (isRealSessionExpiry) {
         if (!window.__sessionExpiredHandling) {
           window.__sessionExpiredHandling = true;
+
+          // Doğru login sayfasını belirle: store isteği → store login, admin isteği → admin login
+          const loginUrl = isStoreRequest ? '/store/giris' : '/login';
+          const tokenKey = isStoreRequest ? 'customer_token' : 'auth_token';
 
           const modalId = 'session-expired-modal';
           if (!document.getElementById(modalId)) {
@@ -43,8 +65,8 @@ axios.interceptors.response.use(
                   <div class="modal-content shadow-lg border-0">
                     <div class="modal-header border-0 pb-0">
                       <div class="w-100 text-center pt-3">
-                        <div class="text-info mb-3">
-                          <i class="fas fa-info-circle fa-3x"></i>
+                        <div class="text-warning mb-3">
+                          <i class="fas fa-clock fa-3x"></i>
                         </div>
                         <h5 class="modal-title fw-bold">Oturum Süresi Doldu</h5>
                       </div>
@@ -70,13 +92,15 @@ axios.interceptors.response.use(
 
             const onOk = () => {
               try {
-                localStorage.removeItem('auth_token');
-                localStorage.removeItem('auth_user');
-                localStorage.removeItem('auth_role');
+                localStorage.removeItem(tokenKey);
+                if (!isStoreRequest) {
+                  localStorage.removeItem('auth_user');
+                  localStorage.removeItem('auth_role');
+                }
                 window.dispatchEvent(new Event('auth-changed'));
               } catch {}
               cleanup();
-              window.location.replace('/login');
+              window.location.replace(loginUrl);
             };
 
             document.getElementById('session-expired-ok')?.addEventListener('click', onOk);

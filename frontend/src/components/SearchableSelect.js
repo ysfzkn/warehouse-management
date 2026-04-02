@@ -45,6 +45,7 @@ const SearchableSelect = ({ label, value, onChange, searchEndpoint, placeholder 
       // Value is null, clear label
       setSelectedLabel('');
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value, searchEndpoint]);
 
   useEffect(() => {

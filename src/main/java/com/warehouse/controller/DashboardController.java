@@ -15,8 +15,7 @@ import java.util.List;
  * Provides aggregated statistics without loading all entities into memory.
  */
 @RestController
-@RequestMapping("/api/dashboard")
-@CrossOrigin(origins = "*")
+@RequestMapping("/api/admin/dashboard")
 public class DashboardController {
 
     private final DashboardService dashboardService;

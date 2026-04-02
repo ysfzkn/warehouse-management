@@ -5,7 +5,6 @@ import WarehouseForm from '../components/WarehouseForm';
 import StockModal from '../components/StockModal';
 import StockTransferModal from '../components/StockTransferModal';
 import FilterChips from '../components/FilterChips';
-import SearchableSelect from '../components/SearchableSelect';
 import ConfirmModal from '../components/ConfirmModal';
 import useSecurityCodePrompt from '../components/useSecurityCodePrompt';
 

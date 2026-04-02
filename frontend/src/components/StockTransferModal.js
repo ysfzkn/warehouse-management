@@ -16,7 +16,7 @@ const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery 
   const initialTransferType = lockToCustomerDelivery ? 'CUSTOMER_DELIVERY' : 'WAREHOUSE';
   const role = (typeof window !== 'undefined' && localStorage.getItem('auth_role')) || 'ADMIN';
   const isAdmin = role === 'ADMIN';
-  const { askCode: askSecurityCode, SecurityCodePrompt } = useSecurityCodePrompt();
+  const { askCode: askSecurityCode } = useSecurityCodePrompt();
   
   // Get current date/time in Turkey timezone (GMT+3)
   const getTurkeyDateTime = () => {
