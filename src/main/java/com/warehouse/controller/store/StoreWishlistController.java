@@ -17,6 +17,7 @@ import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/store/wishlist")
+@Transactional(readOnly = true)
 public class StoreWishlistController {
 
     private final WishlistRepository wishlistRepo;
@@ -62,6 +63,7 @@ public class StoreWishlistController {
     }
 
     @PostMapping("/{productId}")
+    @Transactional
     public ResponseEntity<?> add(HttpServletRequest request, @PathVariable Long productId) {
         Long cid = extractCustomerId(request);
         if (cid == null) return ResponseEntity.badRequest().body(Map.of("message", "Giriş yapmanız gerekiyor."));

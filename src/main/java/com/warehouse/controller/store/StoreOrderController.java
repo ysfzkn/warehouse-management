@@ -3,8 +3,12 @@ package com.warehouse.controller.store;
 import com.warehouse.dto.PagedResponse;
 import com.warehouse.entity.Order;
 import com.warehouse.entity.OrderItem;
+import com.warehouse.entity.OrderStatusHistory;
+import com.warehouse.enums.OrderStatus;
 import com.warehouse.repository.OrderRepository;
 import com.warehouse.repository.OrderItemRepository;
+import com.warehouse.repository.OrderStatusHistoryRepository;
+import com.warehouse.util.OrderStatusHistoryFactory;
 import com.warehouse.security.JwtService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.data.domain.Page;
@@ -23,11 +27,14 @@ public class StoreOrderController {
 
     private final OrderRepository orderRepo;
     private final OrderItemRepository orderItemRepo;
+    private final OrderStatusHistoryRepository statusHistoryRepo;
     private final JwtService jwtService;
 
-    public StoreOrderController(OrderRepository orderRepo, OrderItemRepository orderItemRepo, JwtService jwtService) {
+    public StoreOrderController(OrderRepository orderRepo, OrderItemRepository orderItemRepo,
+                                 OrderStatusHistoryRepository statusHistoryRepo, JwtService jwtService) {
         this.orderRepo = orderRepo;
         this.orderItemRepo = orderItemRepo;
+        this.statusHistoryRepo = statusHistoryRepo;
         this.jwtService = jwtService;
     }
 
@@ -78,6 +85,45 @@ public class StoreOrderController {
                     return ResponseEntity.ok(dto);
                 })
                 .orElse(ResponseEntity.notFound().build());
+    }
+
+    @PostMapping("/{orderNumber}/return-request")
+    @org.springframework.transaction.annotation.Transactional
+    public ResponseEntity<?> requestReturn(HttpServletRequest request, @PathVariable String orderNumber,
+                                            @RequestBody Map<String, String> body) {
+        Long customerId = extractCustomerId(request);
+        if (customerId == null) return ResponseEntity.badRequest().body(Map.of("message", "Giriş yapmanız gerekiyor."));
+
+        Optional<Order> orderOpt = orderRepo.findByOrderNumber(orderNumber);
+        if (orderOpt.isEmpty()) return ResponseEntity.notFound().build();
+        Order order = orderOpt.get();
+
+        if (order.getCustomer() == null || !order.getCustomer().getId().equals(customerId)) {
+            return ResponseEntity.notFound().build();
+        }
+
+        // Only SHIPPED or DELIVERED orders can be returned
+        if (order.getStatus() != OrderStatus.SHIPPED && order.getStatus() != OrderStatus.DELIVERED) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Bu sipariş için iade talebi oluşturulamaz. Sadece kargoda veya teslim edilmiş siparişler iade edilebilir."));
+        }
+
+        // Check not already in return process
+        if (order.getStatus() == OrderStatus.RETURN_REQUESTED) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Bu sipariş için zaten bir iade talebi mevcut."));
+        }
+
+        String reason = body.getOrDefault("reason", "");
+        String note = body.getOrDefault("note", "");
+
+        OrderStatus oldStatus = order.getStatus();
+        order.setStatus(OrderStatus.RETURN_REQUESTED);
+        orderRepo.save(order);
+
+        statusHistoryRepo.save(OrderStatusHistoryFactory.create(
+                order, oldStatus, OrderStatus.RETURN_REQUESTED,
+                "customer", "CUSTOMER", "İade talebi: " + reason + (note.isEmpty() ? "" : " — " + note)));
+
+        return ResponseEntity.ok(Map.of("message", "İade talebiniz alındı. En kısa sürede değerlendirilecektir."));
     }
 
     private Map<String, Object> toDto(Order o) {

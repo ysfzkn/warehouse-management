@@ -6,11 +6,14 @@ import com.warehouse.service.CategoryService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import org.springframework.transaction.annotation.Transactional;
+
 import java.util.List;
 import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/store/categories")
+@Transactional(readOnly = true)
 public class StoreCategoryController {
 
     private final CategoryService categoryService;
@@ -57,6 +60,7 @@ public class StoreCategoryController {
             .sortOrder(category.getSortOrder())
             .parentId(category.getParent() != null ? category.getParent().getId() : null)
             .parentSlug(category.getParent() != null ? category.getParent().getSlug() : null)
+            .parentName(category.getParent() != null ? category.getParent().getName() : null)
             .children(children)
             .build();
     }

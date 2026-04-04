@@ -17,7 +17,9 @@ import com.iyzipay.request.RetrieveCheckoutFormRequest;
 import com.iyzipay.request.RetrieveInstallmentInfoRequest;
 import com.warehouse.config.PaymentProperties;
 import com.warehouse.dto.payment.*;
+import com.warehouse.entity.PaymentGatewayConfig;
 import com.warehouse.enums.PaymentProvider;
+import com.warehouse.repository.PaymentGatewayConfigRepository;
 import com.warehouse.service.PaymentConfigService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,28 +34,81 @@ public class IyzicoPaymentGateway implements PaymentGateway {
 
     private static final Logger logger = LoggerFactory.getLogger(IyzicoPaymentGateway.class);
     private final PaymentConfigService paymentConfigService;
+    private final PaymentGatewayConfigRepository gatewayConfigRepo;
     private final PaymentProperties.IyzicoConfig fallbackConfig;
 
-    public IyzicoPaymentGateway(PaymentConfigService paymentConfigService, PaymentProperties paymentProperties) {
+    public IyzicoPaymentGateway(PaymentConfigService paymentConfigService,
+                                 PaymentGatewayConfigRepository gatewayConfigRepo,
+                                 PaymentProperties paymentProperties) {
         this.paymentConfigService = paymentConfigService;
+        this.gatewayConfigRepo = gatewayConfigRepo;
         this.fallbackConfig = paymentProperties.getIyzico();
     }
 
-    /** Build Options from DB config on each call — allows runtime changes without restart */
+    /**
+     * Build Options — priority:
+     * 1. payment_gateway_configs table (admin panel'den eklenen)
+     * 2. site_settings table (eski config)
+     * 3. application.properties (fallback)
+     */
     private Options buildOptions() {
+        // First try: gateway config table (admin panel)
+        PaymentGatewayConfig gwConfig = findActiveIyzicoConfig();
+        if (gwConfig != null && hasValue(gwConfig.getApiKey()) && hasValue(gwConfig.getSecretKey())) {
+            Options opts = new Options();
+            opts.setApiKey(gwConfig.getApiKey());
+            opts.setSecretKey(gwConfig.getSecretKey());
+            opts.setBaseUrl(hasValue(gwConfig.getBaseUrl()) ? gwConfig.getBaseUrl()
+                : (gwConfig.isSandbox() ? "https://sandbox-api.iyzipay.com" : "https://api.iyzipay.com"));
+            logger.debug("iyzico config loaded from gateway_configs table (code={})", gwConfig.getCode());
+            return opts;
+        }
+
+        // Second try: site_settings + properties fallback
         Map<String, String> cfg = paymentConfigService.getIyzicoConfigRaw();
+        String apiKey = cfg.getOrDefault("apiKey", "");
+        String secretKey = cfg.getOrDefault("secretKey", "");
+
+        if (hasValue(apiKey) && hasValue(secretKey)) {
+            Options opts = new Options();
+            opts.setApiKey(apiKey);
+            opts.setSecretKey(secretKey);
+            opts.setBaseUrl(cfg.getOrDefault("baseUrl", fallbackConfig.getBaseUrl()));
+            return opts;
+        }
+
+        // Final fallback: application.properties
         Options opts = new Options();
-        opts.setApiKey(cfg.getOrDefault("apiKey", fallbackConfig.getApiKey()));
-        opts.setSecretKey(cfg.getOrDefault("secretKey", fallbackConfig.getSecretKey()));
-        opts.setBaseUrl(cfg.getOrDefault("baseUrl", fallbackConfig.getBaseUrl()));
+        opts.setApiKey(fallbackConfig.getApiKey());
+        opts.setSecretKey(fallbackConfig.getSecretKey());
+        opts.setBaseUrl(fallbackConfig.getBaseUrl());
         return opts;
     }
 
     private String getCallbackUrl() {
+        PaymentGatewayConfig gwConfig = findActiveIyzicoConfig();
+        if (gwConfig != null && hasValue(gwConfig.getCallbackUrl())) {
+            return gwConfig.getCallbackUrl();
+        }
         Map<String, String> cfg = paymentConfigService.getIyzicoConfigRaw();
         String url = cfg.get("callbackUrl");
         return (url != null && !url.isEmpty()) ? url : fallbackConfig.getCallbackUrl();
     }
+
+    private PaymentGatewayConfig findActiveIyzicoConfig() {
+        try {
+            List<PaymentGatewayConfig> configs = gatewayConfigRepo.findByGatewayProtocol("IYZICO");
+            return configs.stream()
+                .filter(PaymentGatewayConfig::isActive)
+                .findFirst()
+                .orElse(null);
+        } catch (Exception e) {
+            logger.warn("Could not load iyzico gateway config from DB: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    private boolean hasValue(String s) { return s != null && !s.trim().isEmpty(); }
 
     @Override
     public PaymentProvider getProvider() { return PaymentProvider.IYZICO; }
@@ -118,7 +173,7 @@ public class IyzicoPaymentGateway implements PaymentGateway {
 
             CheckoutFormInitialize result = CheckoutFormInitialize.create(iyzicoRequest, buildOptions());
 
-            if (result.getStatus() != null && result.getStatus().equals("success")) {
+            if (result.getStatus() != null && result.getStatus().equalsIgnoreCase("success")) {
                 return PaymentInitResult.builder()
                     .success(true)
                     .htmlContent(result.getCheckoutFormContent())
@@ -157,7 +212,22 @@ public class IyzicoPaymentGateway implements PaymentGateway {
 
             CheckoutForm result = CheckoutForm.retrieve(request, buildOptions());
 
-            boolean success = "success".equals(result.getPaymentStatus());
+            // Detailed logging for debugging
+            logger.info("iyzico CheckoutForm.retrieve result: status={}, paymentStatus={}, errorCode={}, errorMessage={}, token={}",
+                result.getStatus(), result.getPaymentStatus(), result.getErrorCode(), result.getErrorMessage(), token);
+
+            boolean success = "success".equalsIgnoreCase(result.getPaymentStatus());
+            String errorMsg = result.getErrorMessage();
+
+            // If payment status is null or empty, check the general status
+            if (!success && (errorMsg == null || errorMsg.isEmpty())) {
+                if (!"success".equalsIgnoreCase(result.getStatus())) {
+                    errorMsg = "iyzico durumu: " + result.getStatus() + " | " + result.getErrorCode();
+                } else {
+                    // Status is success but paymentStatus is not — payment still processing or user cancelled
+                    errorMsg = "Ödeme tamamlanmadı. Ödeme durumu: " + result.getPaymentStatus();
+                }
+            }
 
             return PaymentCallbackResult.builder()
                 .success(success)
@@ -171,11 +241,13 @@ public class IyzicoPaymentGateway implements PaymentGateway {
                 .cardFamily(result.getCardFamily())
                 .threeDSecure("1".equals(String.valueOf(result.getFraudStatus())))
                 .errorCode(result.getErrorCode())
-                .errorMessage(result.getErrorMessage())
+                .errorMessage(errorMsg)
                 .rawResponse(Map.of(
                     "status", String.valueOf(result.getStatus()),
                     "paymentStatus", String.valueOf(result.getPaymentStatus()),
-                    "paymentId", String.valueOf(result.getPaymentId())
+                    "paymentId", String.valueOf(result.getPaymentId()),
+                    "errorCode", String.valueOf(result.getErrorCode()),
+                    "errorMessage", String.valueOf(result.getErrorMessage())
                 ))
                 .build();
         } catch (Exception e) {
@@ -191,7 +263,7 @@ public class IyzicoPaymentGateway implements PaymentGateway {
             request.setLocale(com.iyzipay.model.Locale.TR.getValue());
             request.setToken(token);
             CheckoutForm result = CheckoutForm.retrieve(request, buildOptions());
-            boolean success = "success".equals(result.getPaymentStatus());
+            boolean success = "success".equalsIgnoreCase(result.getPaymentStatus());
             return PaymentStatusResult.builder()
                 .status(success ? com.warehouse.enums.PaymentStatus.SUCCESS : com.warehouse.enums.PaymentStatus.PROCESSING)
                 .paidAmount(result.getPaidPrice())
@@ -214,7 +286,7 @@ public class IyzicoPaymentGateway implements PaymentGateway {
             iyzicoRequest.setReason(com.iyzipay.model.RefundReason.OTHER);
 
             Refund result = Refund.create(iyzicoRequest, buildOptions());
-            boolean success = "success".equals(result.getStatus());
+            boolean success = "success".equalsIgnoreCase(result.getStatus());
 
             return RefundResult.builder()
                 .success(success)

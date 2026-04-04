@@ -1,7 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { FiX, FiTrash2 } from 'react-icons/fi';
-import PriceDisplay from './PriceDisplay';
 
 export default function CartSidebar({ cart }) {
   if (!cart.sidebarOpen) return null;
@@ -21,19 +20,33 @@ export default function CartSidebar({ cart }) {
               <p className="text-muted small">Sepetiniz şu an boş.</p>
               <Link to="/store" className="btn btn-sm btn-outline-primary" onClick={() => cart.setSidebarOpen(false)}>Alışverişe Başla</Link>
             </div>
-          ) : cart.cart.items.map(item => (
+          ) : cart.cart.items.map(item => {
+            const hasDiscount = item.salePrice && item.salePrice > 0 && item.salePrice < item.unitPrice;
+            const discountPct = hasDiscount ? Math.round((1 - item.salePrice / item.unitPrice) * 100) : 0;
+            return (
             <div key={item.id} className="store-cart-item">
               <div className="store-cart-item-img">
                 {item.imageUrl && <img src={item.imageUrl} alt={item.productName} />}
               </div>
-              <div className="flex-grow-1">
-                <p className="mb-1 small fw-medium">{item.productName}</p>
-                <p className="mb-1 small text-muted">{item.quantity} adet</p>
-                <PriceDisplay price={item.unitPrice} salePrice={item.salePrice} />
+              <div className="flex-grow-1 min-w-0">
+                <p className="mb-1 small fw-medium text-truncate">{item.productName}</p>
+                <p className="mb-0 small text-muted">{item.quantity} adet</p>
+                <div className="d-flex align-items-center gap-2 mt-1">
+                  {hasDiscount ? (
+                    <>
+                      <span className="fw-bold small text-danger">{new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY'}).format(item.salePrice)}</span>
+                      <del className="text-muted" style={{fontSize:11}}>{new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY'}).format(item.unitPrice)}</del>
+                      <span className="badge bg-danger" style={{fontSize:9}}>%{discountPct}</span>
+                    </>
+                  ) : (
+                    <span className="fw-bold small">{new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY'}).format(item.unitPrice)}</span>
+                  )}
+                </div>
               </div>
               <button className="btn btn-sm text-danger" onClick={() => cart.removeItem(item.id)} aria-label="Ürünü kaldır"><FiTrash2 /></button>
             </div>
-          ))}
+            );
+          })}
         </div>
         <div className="p-3 border-top">
           <div className="d-flex justify-content-between mb-2"><span>Toplam</span>

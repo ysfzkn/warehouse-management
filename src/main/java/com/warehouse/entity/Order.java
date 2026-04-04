@@ -85,6 +85,15 @@ public class Order {
     @Column(name = "cargo_tracking_no", length = 100)
     private String cargoTrackingNo;
 
+    @Column(name = "cargo_provider_id")
+    private Long cargoProviderId;
+
+    @Column(name = "cargo_provider_name", length = 100)
+    private String cargoProviderName;
+
+    @Column(name = "shipping_vat", precision = 10, scale = 2)
+    private BigDecimal shippingVat = BigDecimal.ZERO;
+
     @Column(name = "estimated_delivery_date")
     private LocalDate estimatedDeliveryDate;
 

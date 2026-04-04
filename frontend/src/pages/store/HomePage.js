@@ -2,13 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
 import axios from 'axios';
 import HeroBanner from '../../components/store/HeroBanner';
-import ProductGrid from '../../components/store/ProductGrid';
-import { FiShoppingBag, FiArrowRight } from 'react-icons/fi';
+import ProductCard from '../../components/store/ProductCard';
+import { useToast } from '../../components/store/Toast';
+import { FiShoppingBag, FiArrowRight, FiStar, FiZap, FiTrendingUp } from 'react-icons/fi';
 
 export default function HomePage() {
-  const { cart, siteSettings } = useOutletContext();
+  const { cart } = useOutletContext();
+  const toast = useToast();
   const [featured, setFeatured] = useState([]);
   const [newProducts, setNewProducts] = useState([]);
+  const [saleProducts, setSaleProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -18,13 +21,49 @@ export default function HomePage() {
       axios.get('/api/store/products?size=8&sortBy=createdAt&sortDir=desc').catch(() => ({ data: { content: [] } })),
       axios.get('/api/store/categories/tree').catch(() => ({ data: [] })),
     ]).then(([featuredRes, newRes, catRes]) => {
-      setFeatured(featuredRes.data?.content || []);
-      setNewProducts(newRes.data?.content || []);
+      const allFeatured = (featuredRes.data?.content || []);
+      const allNew = (newRes.data?.content || []);
+      setFeatured(allFeatured.filter(p => p.featured));
+      setNewProducts(allNew.filter(p => p.isNew));
+      // Sale products — those with salePrice < price
+      setSaleProducts(allFeatured.filter(p => p.salePrice && p.salePrice > 0 && p.salePrice < p.price).slice(0, 8));
+      // If no featured flag, show by view count
+      if (allFeatured.filter(p => p.featured).length === 0) setFeatured(allFeatured.slice(0, 8));
+      if (allNew.filter(p => p.isNew).length === 0) setNewProducts(allNew.slice(0, 8));
       setCategories(catRes.data || []);
     }).finally(() => setLoading(false));
   }, []);
 
+  const handleAddToCart = async (id) => {
+    try { await cart.addItem(id); toast.success('Ürün sepete eklendi'); }
+    catch (e) { toast.error(e?.response?.data?.message || 'Sepete eklenemedi'); }
+  };
+
   const hasContent = featured.length > 0 || newProducts.length > 0 || categories.length > 0;
+
+  const ProductSection = ({ title, icon, products, linkTo, linkLabel, bgClass }) => (
+    <section className={`store-section ${bgClass || ''}`}>
+      <div className="container">
+        <div className="d-flex justify-content-between align-items-center mb-3">
+          <h2 className="store-section-title mb-0">
+            {icon} {title}
+          </h2>
+          {linkTo && (
+            <Link to={linkTo} className="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1">
+              {linkLabel || 'Tümünü Gör'} <FiArrowRight size={14} />
+            </Link>
+          )}
+        </div>
+        <div className="row g-3 row-cols-2 row-cols-md-3 row-cols-lg-4">
+          {products.map(p => (
+            <div key={p.id} className="col">
+              <ProductCard product={p} onAddToCart={handleAddToCart} />
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
 
   return (
     <div>
@@ -33,77 +72,66 @@ export default function HomePage() {
         <HeroBanner />
       </div>
 
-      {/* Empty Store Welcome */}
+      {/* Empty Store */}
       {!loading && !hasContent && (
         <section className="container my-5">
           <div className="text-center py-5">
             <FiShoppingBag size={64} className="text-muted mb-4" style={{ opacity: 0.3 }} />
-            <h2 className="fw-bold mb-3" style={{ color: 'var(--color-gray-700)' }}>
-              Mağazamız Hazırlanıyor
-            </h2>
+            <h2 className="fw-bold mb-3">Mağazamız Hazırlanıyor</h2>
             <p className="text-muted mb-4" style={{ maxWidth: 500, margin: '0 auto' }}>
               Çok yakında harika ürünlerle sizlerle buluşacağız. Takipte kalın!
             </p>
-            <div className="d-flex gap-3 justify-content-center flex-wrap">
-              {siteSettings.get('contact_phone') && (
-                <a href={`tel:${siteSettings.get('contact_phone')}`} className="btn btn-outline-primary">
-                  {siteSettings.get('contact_phone')}
-                </a>
-              )}
-              <Link to="/store/sayfa/iletisim" className="btn btn-primary">
-                İletişime Geçin
+          </div>
+        </section>
+      )}
+
+      {/* Categories — Compact chips */}
+      {categories.length > 0 && (
+        <section className="store-section">
+          <div className="container">
+            <div className="d-flex flex-wrap gap-2 justify-content-center">
+              <Link to="/store/kategori/tumu" className="store-cat-chip store-cat-chip-all">
+                <FiShoppingBag size={15} /> Tüm Ürünler
               </Link>
+              {categories.map(cat => (
+                <Link key={cat.id} to={`/store/kategori/${cat.slug}`} className="store-cat-chip">
+                  {cat.name}
+                </Link>
+              ))}
             </div>
           </div>
         </section>
       )}
 
-      {/* Categories */}
-      {categories.length > 0 && (
-        <section className="container my-4">
-          <div className="d-flex justify-content-between align-items-center mb-3">
-            <h2 className="store-section-title mb-0">Kategoriler</h2>
-            <Link to="/store/kategori/tumu" className="btn btn-sm btn-outline-primary d-none d-md-inline-flex align-items-center gap-1">
-              Tümünü Gör <FiArrowRight size={14} />
-            </Link>
-          </div>
-          <div className="row g-3">
-            {categories.slice(0, 6).map(cat => (
-              <div key={cat.id} className="col-6 col-md-4 col-lg-2">
-                <Link to={`/store/kategori/${cat.slug}`} className="text-decoration-none">
-                  <div className="store-category-card">
-                    {cat.imageUrl ? (
-                      <img src={cat.imageUrl} alt={cat.name} loading="lazy" />
-                    ) : (
-                      <div style={{ background: 'var(--color-gray-100)', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <FiShoppingBag size={32} style={{ color: 'var(--color-gray-400)' }} />
-                      </div>
-                    )}
-                    <div className="store-category-card-overlay">
-                      <h6 className="mb-0">{cat.name}</h6>
-                    </div>
-                  </div>
-                </Link>
-              </div>
-            ))}
-          </div>
-        </section>
+      {/* Sale Products */}
+      {saleProducts.length > 0 && (
+        <ProductSection
+          title="İndirimli Ürünler"
+          icon={<FiZap className="text-danger me-2" />}
+          products={saleProducts}
+          linkTo="/store/kategori/tumu"
+          linkLabel="Tüm İndirimler"
+        />
       )}
 
       {/* Featured Products */}
       {featured.length > 0 && (
-        <section className="container my-4">
-          <h2 className="store-section-title">Öne Çıkan Ürünler</h2>
-          <ProductGrid products={featured} onAddToCart={(id) => cart.addItem(id)} />
-        </section>
+        <ProductSection
+          title="Öne Çıkan Ürünler"
+          icon={<FiStar className="text-warning me-2" />}
+          products={featured}
+          linkTo="/store/kategori/tumu"
+        />
       )}
 
       {/* New Products */}
       {newProducts.length > 0 && (
-        <section className="container my-4">
-          <h2 className="store-section-title">Yeni Ürünler</h2>
-          <ProductGrid products={newProducts} onAddToCart={(id) => cart.addItem(id)} />
-        </section>
+        <ProductSection
+          title="Yeni Ürünler"
+          icon={<FiTrendingUp className="text-success me-2" />}
+          products={newProducts}
+          linkTo="/store/kategori/tumu"
+        />
       )}
     </div>
   );

@@ -898,6 +898,18 @@ const Navbar = () => {
                     </Link>
                   </li>
                   <li>
+                    <Link className="dropdown-item" to="/admin/stock-movements">
+                      <i className="fas fa-exchange-alt me-2 text-info"></i>
+                      Stok Hareketleri
+                    </Link>
+                  </li>
+                  <li>
+                    <Link className="dropdown-item" to="/admin/cargo-providers">
+                      <i className="fas fa-truck me-2 text-primary"></i>
+                      Kargo Firmaları
+                    </Link>
+                  </li>
+                  <li>
                     <Link className="dropdown-item" to="/admin/cms">
                       <i className="fas fa-file-alt me-2 text-info"></i>
                       İçerik Yönetimi

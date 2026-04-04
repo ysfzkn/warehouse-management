@@ -31,6 +31,8 @@ import AdminCustomers from './pages/AdminCustomers';
 import AdminPayments from './pages/AdminPayments';
 import AdminPaymentGateways from './pages/AdminPaymentGateways';
 import AdminCoupons from './pages/AdminCoupons';
+import AdminStockMovements from './pages/AdminStockMovements';
+import AdminCargoProviders from './pages/AdminCargoProviders';
 
 // Store pages (new)
 import HomePage from './pages/store/HomePage';
@@ -155,6 +157,12 @@ function App() {
           } />
           <Route path="admin/coupons" element={
             authed && role === 'ADMIN' ? <AdminCoupons /> : <Navigate to={authed ? '/stock' : '/login'} replace />
+          } />
+          <Route path="admin/stock-movements" element={
+            authed && role === 'ADMIN' ? <AdminStockMovements /> : <Navigate to={authed ? '/stock' : '/login'} replace />
+          } />
+          <Route path="admin/cargo-providers" element={
+            authed && role === 'ADMIN' ? <AdminCargoProviders /> : <Navigate to={authed ? '/stock' : '/login'} replace />
           } />
         </Route>
       </Routes>

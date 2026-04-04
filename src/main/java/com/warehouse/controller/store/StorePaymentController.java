@@ -29,14 +29,23 @@ public class StorePaymentController {
     private final JwtService jwtService;
     private final PaymentGatewayConfigRepository gatewayConfigRepo;
     private final BankPosProtocolFactory protocolFactory;
+    private final com.warehouse.service.SiteSettingService siteSettingService;
+    private final com.warehouse.service.PaymentConfigService paymentConfigService;
+
+    @org.springframework.beans.factory.annotation.Value("${app.base-url:http://localhost:3000}")
+    private String appBaseUrl;
 
     public StorePaymentController(PaymentService paymentService, JwtService jwtService,
                                    PaymentGatewayConfigRepository gatewayConfigRepo,
-                                   BankPosProtocolFactory protocolFactory) {
+                                   BankPosProtocolFactory protocolFactory,
+                                   com.warehouse.service.SiteSettingService siteSettingService,
+                                   com.warehouse.service.PaymentConfigService paymentConfigService) {
         this.paymentService = paymentService;
         this.jwtService = jwtService;
         this.gatewayConfigRepo = gatewayConfigRepo;
         this.protocolFactory = protocolFactory;
+        this.siteSettingService = siteSettingService;
+        this.paymentConfigService = paymentConfigService;
     }
 
     @PostMapping("/initialize")
@@ -67,11 +76,13 @@ public class StorePaymentController {
 
     @PostMapping("/callback")
     public void handleCallback(@RequestParam Map<String, String> params,
+                                HttpServletRequest request,
                                 HttpServletResponse response) throws Exception {
         PaymentCallbackResult result = paymentService.handlePaymentCallback(params);
 
-        String redirectUrl = "/store/odeme/sonuc?success=" + result.isSuccess();
-        if (result.getToken() != null) redirectUrl += "&token=" + result.getToken();
+        String redirectUrl = buildFrontendRedirectUrl(request,
+            "/store/odeme/sonuc?success=" + result.isSuccess()
+            + (result.getToken() != null ? "&token=" + result.getToken() : ""));
         response.sendRedirect(redirectUrl);
     }
 
@@ -83,6 +94,7 @@ public class StorePaymentController {
     @PostMapping("/callback/pos/{configCode}")
     public void posCallback(@PathVariable String configCode,
                             @RequestParam Map<String, String> params,
+                            HttpServletRequest request,
                             HttpServletResponse response) throws Exception {
         log.info("POS callback received: configCode={}, params={}", configCode,
                 params.entrySet().stream()
@@ -92,7 +104,7 @@ public class StorePaymentController {
         Optional<PaymentGatewayConfig> configOpt = gatewayConfigRepo.findByCode(configCode);
         if (configOpt.isEmpty()) {
             log.error("POS callback: Gateway config not found: {}", configCode);
-            response.sendRedirect("/store/odeme/sonuc?success=false&error=config_not_found");
+            response.sendRedirect(buildFrontendRedirectUrl(request, "/store/odeme/sonuc?success=false&error=config_not_found"));
             return;
         }
 
@@ -103,12 +115,12 @@ public class StorePaymentController {
             BankPosProtocol protocol = protocolFactory.getProtocol(config.getGatewayProtocol());
             if (!protocol.verifyCallbackHash(config, params)) {
                 log.error("SECURITY ALERT: POS callback hash verification FAILED for config={}", configCode);
-                response.sendRedirect("/store/odeme/sonuc?success=false&error=hash_failed");
+                response.sendRedirect(buildFrontendRedirectUrl(request, "/store/odeme/sonuc?success=false&error=hash_failed"));
                 return;
             }
         } catch (Exception e) {
             log.error("POS callback hash verification error: {}", e.getMessage(), e);
-            response.sendRedirect("/store/odeme/sonuc?success=false&error=verification_error");
+            response.sendRedirect(buildFrontendRedirectUrl(request, "/store/odeme/sonuc?success=false&error=verification_error"));
             return;
         }
 
@@ -118,8 +130,9 @@ public class StorePaymentController {
 
         PaymentCallbackResult result = paymentService.handlePaymentCallback(enrichedParams);
 
-        String redirectUrl = "/store/odeme/sonuc?success=" + result.isSuccess();
-        if (result.getToken() != null) redirectUrl += "&token=" + result.getToken();
+        String redirectUrl = buildFrontendRedirectUrl(request,
+            "/store/odeme/sonuc?success=" + result.isSuccess()
+            + (result.getToken() != null ? "&token=" + result.getToken() : ""));
         response.sendRedirect(redirectUrl);
     }
 
@@ -177,41 +190,51 @@ public class StorePaymentController {
     public ResponseEntity<List<Map<String, Object>>> getPaymentMethods() {
         List<Map<String, Object>> methods = new ArrayList<>();
 
-        // Check if there are active card payment gateways (virtual POS or iyzico)
-        List<PaymentGatewayConfig> activeGateways = gatewayConfigRepo.findByActiveTrueOrderByPriorityAsc();
-        boolean hasCardGateway = !activeGateways.isEmpty();
+        // Read admin toggles from site settings (default: enabled if setting missing)
+        boolean ccEnabled = !"false".equals(siteSettingService.getSetting("payment_method_credit_card_enabled"));
+        boolean btEnabled = !"false".equals(siteSettingService.getSetting("payment_method_bank_transfer_enabled"));
+        boolean doorEnabled = !"false".equals(siteSettingService.getSetting("payment_method_door_cash_enabled"));
 
-        // Always offer credit card if any gateway is configured, or iyzico is available (default fallback)
-        Map<String, Object> creditCard = new LinkedHashMap<>();
-        creditCard.put("method", "CREDIT_CARD");
-        creditCard.put("label", "Kredi / Banka Kartı");
-        creditCard.put("description", hasCardGateway
-                ? "3D Secure ile güvenli ödeme"
-                : "iyzico ile güvenli ödeme");
-        creditCard.put("icon", "fas fa-credit-card");
-        creditCard.put("installmentSupported", true);
-        creditCard.put("active", true);
-        methods.add(creditCard);
+        // Credit card — only if enabled AND gateway configured
+        if (ccEnabled) {
+            List<PaymentGatewayConfig> activeGateways = gatewayConfigRepo.findByActiveTrueOrderByPriorityAsc();
+            Map<String, Object> creditCard = new LinkedHashMap<>();
+            creditCard.put("method", "CREDIT_CARD");
+            creditCard.put("label", "Kredi / Banka Kartı");
+            creditCard.put("description", !activeGateways.isEmpty() ? "3D Secure ile güvenli ödeme" : "iyzico ile güvenli ödeme");
+            creditCard.put("icon", "fas fa-credit-card");
+            creditCard.put("installmentSupported", true);
+            creditCard.put("active", true);
+            methods.add(creditCard);
+        }
 
-        // Bank transfer
-        Map<String, Object> bankTransfer = new LinkedHashMap<>();
-        bankTransfer.put("method", "BANK_TRANSFER");
-        bankTransfer.put("label", "Havale / EFT");
-        bankTransfer.put("description", "Banka hesabımıza havale yapın");
-        bankTransfer.put("icon", "fas fa-university");
-        bankTransfer.put("installmentSupported", false);
-        bankTransfer.put("active", true);
-        methods.add(bankTransfer);
+        // Bank transfer — only if enabled AND IBAN configured
+        if (btEnabled) {
+            Map<String, String> bankCfg = paymentConfigService.getBankTransferConfig();
+            String iban = bankCfg.getOrDefault("iban", "");
+            if (!iban.isBlank()) {
+                Map<String, Object> bankTransfer = new LinkedHashMap<>();
+                bankTransfer.put("method", "BANK_TRANSFER");
+                bankTransfer.put("label", "Havale / EFT");
+                bankTransfer.put("description", "Banka hesabımıza havale yapın");
+                bankTransfer.put("icon", "fas fa-university");
+                bankTransfer.put("installmentSupported", false);
+                bankTransfer.put("active", true);
+                methods.add(bankTransfer);
+            }
+        }
 
-        // Door payment
-        Map<String, Object> doorCash = new LinkedHashMap<>();
-        doorCash.put("method", "DOOR_CASH");
-        doorCash.put("label", "Kapıda Ödeme");
-        doorCash.put("description", "Teslimat sırasında nakit veya kart ile ödeyin");
-        doorCash.put("icon", "fas fa-door-open");
-        doorCash.put("installmentSupported", false);
-        doorCash.put("active", true);
-        methods.add(doorCash);
+        // Door payment — only if enabled
+        if (doorEnabled) {
+            Map<String, Object> doorCash = new LinkedHashMap<>();
+            doorCash.put("method", "DOOR_CASH");
+            doorCash.put("label", "Kapıda Ödeme");
+            doorCash.put("description", "Teslimat sırasında nakit veya kart ile ödeyin");
+            doorCash.put("icon", "fas fa-door-open");
+            doorCash.put("installmentSupported", false);
+            doorCash.put("active", true);
+            methods.add(doorCash);
+        }
 
         return ResponseEntity.ok(methods);
     }
@@ -225,5 +248,35 @@ public class StorePaymentController {
     public ResponseEntity<InstallmentQueryResult> getInstallments(
             @RequestParam String bin, @RequestParam BigDecimal price) {
         return ResponseEntity.ok(paymentService.getInstallmentOptions(bin, price));
+    }
+
+    /**
+     * Query payment status by token — used by PaymentResultPage to show error details.
+     */
+    @GetMapping("/status-by-token")
+    public ResponseEntity<Map<String, Object>> getStatusByToken(@RequestParam String token) {
+        try {
+            var tx = paymentService.findTransactionByToken(token);
+            if (tx == null) return ResponseEntity.ok(Map.of("status", "NOT_FOUND"));
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("status", tx.getStatus().name());
+            result.put("errorCode", tx.getErrorCode() != null ? tx.getErrorCode() : "");
+            result.put("errorMessage", tx.getErrorMessage() != null ? tx.getErrorMessage() : "");
+            result.put("amount", tx.getAmount());
+            result.put("paidAmount", tx.getPaidAmount());
+            result.put("provider", tx.getPaymentProvider().name());
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            return ResponseEntity.ok(Map.of("status", "ERROR", "errorMessage", e.getMessage()));
+        }
+    }
+
+    /**
+     * Build frontend redirect URL using app.base-url property.
+     * Dev: http://localhost:3000 + path
+     * Prod: https://yourdomain.com + path
+     */
+    private String buildFrontendRedirectUrl(HttpServletRequest request, String path) {
+        return appBaseUrl.replaceAll("/$", "") + path;
     }
 }

@@ -42,14 +42,39 @@ public class StoreProductController {
             @RequestParam(required = false) Long categoryId,
             @RequestParam(required = false) Long brandId,
             @RequestParam(required = false) Long colorId,
+            @RequestParam(required = false) java.util.List<Long> brandIds,
+            @RequestParam(required = false) java.util.List<Long> colorIds,
             @RequestParam(required = false) String search,
+            @RequestParam(required = false) java.math.BigDecimal minPrice,
+            @RequestParam(required = false) java.math.BigDecimal maxPrice,
             @RequestParam(defaultValue = "createdAt") String sortBy,
             @RequestParam(defaultValue = "desc") String sortDir) {
 
         Sort sort = sortDir.equalsIgnoreCase("asc") ? Sort.by(sortBy).ascending() : Sort.by(sortBy).descending();
         Pageable pageable = PageRequest.of(page, size, sort);
 
-        Page<Product> productPage = productService.getAllActiveProducts(pageable, search, categoryId, brandId, colorId);
+        // Support multi-select: brandIds/colorIds take precedence over single brandId/colorId
+        java.util.List<Long> effectiveBrandIds = brandIds != null && !brandIds.isEmpty() ? brandIds : (brandId != null ? java.util.List.of(brandId) : null);
+        java.util.List<Long> effectiveColorIds = colorIds != null && !colorIds.isEmpty() ? colorIds : (colorId != null ? java.util.List.of(colorId) : null);
+
+        Page<Product> productPage;
+        if (effectiveBrandIds != null || effectiveColorIds != null) {
+            productPage = productService.getAllActiveProductsMultiFilter(pageable, search, categoryId, effectiveBrandIds, effectiveColorIds);
+        } else {
+            productPage = productService.getAllActiveProducts(pageable, search, categoryId, null, null);
+        }
+
+        // Apply price filter in-memory (simpler than complex JPA spec for now)
+        if (minPrice != null || maxPrice != null) {
+            final java.math.BigDecimal min = minPrice != null ? minPrice : java.math.BigDecimal.ZERO;
+            final java.math.BigDecimal max = maxPrice != null ? maxPrice : new java.math.BigDecimal("999999999");
+            java.util.List<Product> filtered = productPage.getContent().stream()
+                .filter(p -> {
+                    java.math.BigDecimal effectivePrice = p.getSalePrice() != null && p.getSalePrice().compareTo(java.math.BigDecimal.ZERO) > 0 ? p.getSalePrice() : p.getPrice();
+                    return effectivePrice != null && effectivePrice.compareTo(min) >= 0 && effectivePrice.compareTo(max) <= 0;
+                }).collect(java.util.stream.Collectors.toList());
+            productPage = new org.springframework.data.domain.PageImpl<>(filtered, pageable, filtered.size());
+        }
 
         List<StoreProductDto> dtos = productPage.getContent().stream()
             .map(this::toStoreDto)
@@ -144,11 +169,11 @@ public class StoreProductController {
             .heightCm(product.getHeightCm())
             .featured(product.isFeatured())
             .isNew(product.isNew())
-            .categoryName(product.getCategory() != null ? product.getCategory().getName() : null)
-            .categorySlug(product.getCategory() != null ? product.getCategory().getSlug() : null)
-            .brandName(product.getBrand() != null ? product.getBrand().getName() : null)
-            .brandSlug(product.getBrand() != null ? product.getBrand().getSlug() : null)
-            .colorName(product.getColor() != null ? product.getColor().getName() : null)
+            .categoryName(safe(() -> product.getCategory() != null ? product.getCategory().getName() : null))
+            .categorySlug(safe(() -> product.getCategory() != null ? product.getCategory().getSlug() : null))
+            .brandName(safe(() -> product.getBrand() != null ? product.getBrand().getName() : null))
+            .brandSlug(safe(() -> product.getBrand() != null ? product.getBrand().getSlug() : null))
+            .colorName(safe(() -> product.getColor() != null ? product.getColor().getName() : null))
             .stockStatus(stockStatus)
             .availableQuantity(totalAvailable)
             .images(imageDtos)
@@ -156,5 +181,9 @@ public class StoreProductController {
             .averageRating(avgRating)
             .reviewCount(reviewCount)
             .build();
+    }
+
+    private <T> T safe(java.util.function.Supplier<T> supplier) {
+        try { return supplier.get(); } catch (Exception e) { return null; }
     }
 }

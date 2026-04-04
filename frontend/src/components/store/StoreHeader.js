@@ -6,27 +6,66 @@ import { FiSearch, FiUser, FiShoppingCart, FiMenu, FiX, FiPhone, FiMail, FiLogOu
 export default function StoreHeader({ cart, settings }) {
   const [categories, setCategories] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [cartBounce, setCartBounce] = useState(false);
+  const prevItemCount = useRef(cart.itemCount);
   const userMenuRef = useRef(null);
+  const searchRef = useRef(null);
+  const searchTimerRef = useRef(null);
   const navigate = useNavigate();
+
+  // Animate cart badge when count changes
+  useEffect(() => {
+    if (cart.itemCount !== prevItemCount.current && cart.itemCount > 0) {
+      setCartBounce(true);
+      setTimeout(() => setCartBounce(false), 400);
+    }
+    prevItemCount.current = cart.itemCount;
+  }, [cart.itemCount]);
 
   useEffect(() => {
     axios.get('/api/store/categories/tree').then(r => setCategories(r.data || [])).catch(() => {});
   }, []);
 
-  // Close user menu on outside click
+  // Close menus on outside click
   useEffect(() => {
-    const handler = (e) => { if (userMenuRef.current && !userMenuRef.current.contains(e.target)) setUserMenuOpen(false); };
+    const handler = (e) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target)) setUserMenuOpen(false);
+      if (searchRef.current && !searchRef.current.contains(e.target)) setSearchFocused(false);
+    };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
+
+  // Debounced live search
+  const handleSearchInput = (value) => {
+    setSearchTerm(value);
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    if (value.trim().length < 2) { setSearchResults([]); return; }
+    setSearchLoading(true);
+    searchTimerRef.current = setTimeout(() => {
+      axios.get('/api/store/products', { params: { search: value.trim(), size: 6 } })
+        .then(r => {
+          const products = (r.data?.content || []).map(p => ({ type: 'product', id: p.id, name: p.name, slug: p.slug, price: p.price, salePrice: p.salePrice, image: p.primaryImageUrl, brand: p.brandName }));
+          // Also match categories
+          const matchedCats = categories.filter(c => c.name.toLowerCase().includes(value.toLowerCase())).slice(0, 3)
+            .map(c => ({ type: 'category', id: c.id, name: c.name, slug: c.slug }));
+          setSearchResults([...matchedCats, ...products]);
+        })
+        .catch(() => setSearchResults([]))
+        .finally(() => setSearchLoading(false));
+    }, 300);
+  };
 
   const handleSearch = (e) => {
     e.preventDefault();
     if (searchTerm.trim()) {
       navigate(`/store/kategori/arama?q=${encodeURIComponent(searchTerm)}`);
-      setSearchTerm('');
+      setSearchTerm(''); setSearchResults([]); setSearchFocused(false);
     }
   };
 
@@ -50,16 +89,35 @@ export default function StoreHeader({ cart, settings }) {
   } catch {}
   const isLoggedIn = !!customerToken && !!customerName;
 
+  // Smart header: hide top bars on scroll down, show on scroll up
+  const [scrolled, setScrolled] = useState(false);
+  const [hidden, setHidden] = useState(false);
+  const lastScrollY = useRef(0);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const y = window.scrollY;
+      setScrolled(y > 60);
+      setHidden(y > 120 && y > lastScrollY.current);
+      lastScrollY.current = y;
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
   return (
-    <header className="store-header">
-      {/* Announcement Bar */}
+    <header className={`store-header ${scrolled ? 'store-header--scrolled' : ''} ${hidden ? 'store-header--hidden' : ''}`}>
+      {/* Announcement Bar — hidden on scroll */}
       {announcement && (
-        <div className="store-announcement-bar">
-          <div className="container"><span>{announcement}</span></div>
+        <div className="store-header-collapsible">
+          <div className="store-announcement-bar">
+            <div className="container"><span>{announcement}</span></div>
+          </div>
         </div>
       )}
 
-      {/* Top Bar */}
+      {/* Top Bar — hidden on scroll */}
+      <div className="store-header-collapsible">
       <div className="store-header-top">
         <div className="container d-flex justify-content-between align-items-center">
           <div className="d-flex gap-3 align-items-center">
@@ -90,6 +148,7 @@ export default function StoreHeader({ cart, settings }) {
           </div>
         </div>
       </div>
+      </div>
 
       {/* Main Header */}
       <div className="store-header-main">
@@ -106,11 +165,66 @@ export default function StoreHeader({ cart, settings }) {
             )}
           </Link>
 
-          <form onSubmit={handleSearch} role="search" className="store-search-form d-none d-md-flex">
+          <form onSubmit={handleSearch} role="search" className="store-search-form d-none d-md-flex" ref={searchRef}>
             <div className="store-search-wrapper">
               <FiSearch className="store-search-icon" />
               <input type="text" className="store-search-input" placeholder="Ürün, kategori veya marka ara..."
-                value={searchTerm} onChange={e => setSearchTerm(e.target.value)} aria-label="Ürün arama" />
+                value={searchTerm} onChange={e => handleSearchInput(e.target.value)}
+                onFocus={() => setSearchFocused(true)} aria-label="Ürün arama" autoComplete="off" />
+              {/* Live Search Dropdown */}
+              {searchFocused && searchTerm.length >= 2 && (
+                <div className="store-search-dropdown" style={{
+                  position:'absolute', top:'100%', left:0, right:0, marginTop:4,
+                  background:'#fff', borderRadius:12, boxShadow:'0 12px 40px rgba(0,0,0,0.15)',
+                  zIndex:200, overflow:'hidden', animation:'fadeInDown 0.15s ease'
+                }}>
+                  {searchLoading ? (
+                    <div className="p-3 text-center"><span className="spinner-border spinner-border-sm text-primary" /></div>
+                  ) : searchResults.length === 0 ? (
+                    <div className="p-3 text-center text-muted small">"{searchTerm}" ile eşleşen sonuç bulunamadı.</div>
+                  ) : (
+                    <>
+                      {searchResults.filter(r => r.type === 'category').length > 0 && (
+                        <div className="px-3 pt-2 pb-1"><small className="text-muted fw-semibold text-uppercase" style={{fontSize:10}}>Kategoriler</small></div>
+                      )}
+                      {searchResults.filter(r => r.type === 'category').map(r => (
+                        <Link key={`cat-${r.id}`} to={`/store/kategori/${r.slug}`}
+                          className="d-flex align-items-center gap-2 px-3 py-2 text-dark text-decoration-none store-search-item"
+                          onClick={() => { setSearchFocused(false); setSearchTerm(''); setSearchResults([]); }}>
+                          <i className="fas fa-folder text-muted" style={{width:20}} />
+                          <span className="small fw-medium">{r.name}</span>
+                        </Link>
+                      ))}
+                      {searchResults.filter(r => r.type === 'product').length > 0 && (
+                        <div className="px-3 pt-2 pb-1 border-top"><small className="text-muted fw-semibold text-uppercase" style={{fontSize:10}}>Ürünler</small></div>
+                      )}
+                      {searchResults.filter(r => r.type === 'product').map(r => (
+                        <Link key={`prod-${r.id}`} to={`/store/urun/${r.slug}`}
+                          className="d-flex align-items-center gap-3 px-3 py-2 text-dark text-decoration-none store-search-item"
+                          onClick={() => { setSearchFocused(false); setSearchTerm(''); setSearchResults([]); }}>
+                          {r.image ? <img src={r.image} alt="" style={{width:36,height:36,objectFit:'contain',borderRadius:6,background:'#f8f9fa'}} /> : <div style={{width:36,height:36,borderRadius:6,background:'#f1f5f9',display:'flex',alignItems:'center',justifyContent:'center'}}><FiSearch size={14} className="text-muted" /></div>}
+                          <div className="flex-grow-1 min-w-0">
+                            <div className="small fw-medium text-truncate">{r.name}</div>
+                            {r.brand && <div className="text-muted" style={{fontSize:11}}>{r.brand}</div>}
+                          </div>
+                          <div className="text-end">
+                            {r.salePrice && r.salePrice < r.price ? (
+                              <><div className="small fw-bold text-danger">{new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY'}).format(r.salePrice)}</div><del className="text-muted" style={{fontSize:10}}>{new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY'}).format(r.price)}</del></>
+                            ) : (
+                              <div className="small fw-bold">{new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY'}).format(r.price)}</div>
+                            )}
+                          </div>
+                        </Link>
+                      ))}
+                      <Link to={`/store/kategori/arama?q=${encodeURIComponent(searchTerm)}`}
+                        className="d-block text-center py-2 border-top text-primary small fw-semibold text-decoration-none store-search-item"
+                        onClick={() => { setSearchFocused(false); setSearchTerm(''); setSearchResults([]); }}>
+                        Tüm sonuçları gör →
+                      </Link>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           </form>
 
@@ -170,7 +284,7 @@ export default function StoreHeader({ cart, settings }) {
             {/* Cart */}
             <button className="store-action-btn" onClick={() => cart.setSidebarOpen(true)} aria-label={`Sepet (${cart.itemCount} ürün)`}>
               <FiShoppingCart size={20} />
-              {cart.itemCount > 0 && <span className="store-cart-badge">{cart.itemCount}</span>}
+              {cart.itemCount > 0 && <span className={`store-cart-badge ${cartBounce ? 'bounce' : ''}`}>{cart.itemCount}</span>}
               <span className="store-action-label d-none d-lg-block">Sepetim</span>
             </button>
           </div>

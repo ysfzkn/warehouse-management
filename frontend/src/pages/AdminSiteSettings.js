@@ -9,8 +9,8 @@ const SETTING_GROUPS = [
     tooltip: 'Footer, iletişim sayfası ve e-posta bildirimlerinde gösterilir.' },
   { title: 'Sosyal Medya', icon: 'fas fa-share-alt', keys: ['social_instagram', 'social_whatsapp'],
     tooltip: 'Footer ve iletişim sayfasında ikon olarak görünür.' },
-  { title: 'Kargo & Ödeme', icon: 'fas fa-truck', keys: ['free_shipping_threshold', 'default_shipping_cost', 'currency_symbol'],
-    tooltip: 'Kargo, para birimi ve ödeme entegrasyonu ayarları.' },
+  { title: 'Kargo & Ödeme', icon: 'fas fa-truck', keys: ['free_shipping_threshold', 'default_shipping_cost', 'currency_symbol', 'payment_method_credit_card_enabled', 'payment_method_bank_transfer_enabled', 'payment_method_door_cash_enabled'],
+    tooltip: 'Kargo, para birimi, ödeme yöntemleri ve entegrasyon ayarları.' },
   { title: 'Genel', icon: 'fas fa-cog', keys: ['footer_text', 'header_announcement', 'contact_form_email'],
     tooltip: 'Footer alt bilgisi, üst bar duyuru mesajı ve form yönlendirme.' },
 ];
@@ -23,6 +23,7 @@ const LABELS = {
   footer_text: 'Alt Bilgi Metni', currency_symbol: 'Para Birimi',
   free_shipping_threshold: 'Ücretsiz Kargo Limiti (TL)', default_shipping_cost: 'Varsayılan Kargo Ücreti (TL)',
   header_announcement: 'Üst Banner Duyuru Mesajı', contact_form_email: 'İletişim Formu Hedef E-posta',
+  payment_method_credit_card_enabled: 'Kredi Kartı ile Ödeme', payment_method_bank_transfer_enabled: 'Havale / EFT ile Ödeme', payment_method_door_cash_enabled: 'Kapıda Ödeme',
 };
 
 const FIELD_TOOLTIPS = {
@@ -38,6 +39,9 @@ const FIELD_TOOLTIPS = {
   default_shipping_cost: 'Ücretsiz kargo limitinin altındaki siparişlere uygulanır',
   contact_form_email: 'İletişim formundan gelen mesajlar bu adrese yönlendirilir',
   currency_symbol: 'Mağazada ve faturalarda kullanılacak para birimi',
+  payment_method_credit_card_enabled: 'Kapatırsanız kredi kartı seçeneği müşterilere gösterilmez',
+  payment_method_bank_transfer_enabled: 'Kapatırsanız havale/EFT seçeneği gösterilmez. IBAN yapılandırılmamışsa otomatik gizlenir.',
+  payment_method_door_cash_enabled: 'Kapatırsanız kapıda ödeme seçeneği gösterilmez',
 };
 
 const CURRENCY_OPTIONS = [
@@ -216,6 +220,23 @@ export default function AdminSiteSettings() {
       return <UploadZone key={key} type="favicon" label="Favicon" currentUrl={settings[key]} uploading={faviconUploading}
         inputRef={faviconInputRef} formats="ICO, PNG, SVG" sizeHint="32×32px önerilir" />;
     }
+    // Payment method toggles
+    if (key.startsWith('payment_method_') && key.endsWith('_enabled')) {
+      const isOn = settings[key] !== 'false';
+      return (
+        <div key={key} className="col-md-4">
+          <div className={`border rounded p-3 h-100 ${isOn ? 'border-success bg-success bg-opacity-10' : 'border-light'}`}>
+            <div className="form-check form-switch">
+              <input className="form-check-input" type="checkbox" checked={isOn}
+                onChange={e => handleChange(key, e.target.checked ? 'true' : 'false')} id={key} />
+              <label className="form-check-label small fw-semibold" htmlFor={key}>{LABELS[key]}</label>
+            </div>
+            {FIELD_TOOLTIPS[key] && <small className="text-muted d-block mt-1">{FIELD_TOOLTIPS[key]}</small>}
+          </div>
+        </div>
+      );
+    }
+
     if (key === 'currency_symbol') {
       return (
         <div key={key} className="col-md-6">

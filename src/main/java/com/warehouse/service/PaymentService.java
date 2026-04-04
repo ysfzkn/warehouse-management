@@ -12,4 +12,5 @@ public interface PaymentService {
     RefundResult initiateRefund(Long orderId, BigDecimal amount, String reason, String ipAddress);
     PaymentStatusResult getPaymentStatus(Long paymentId);
     InstallmentQueryResult getInstallmentOptions(String binNumber, BigDecimal price);
+    com.warehouse.entity.PaymentTransaction findTransactionByToken(String token);
 }

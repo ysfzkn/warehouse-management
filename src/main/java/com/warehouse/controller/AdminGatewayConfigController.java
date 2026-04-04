@@ -134,8 +134,15 @@ public class AdminGatewayConfigController {
         adminSecurityService.requireSecurityCodeForAdmin(securityCode);
         return configRepo.findById(id).map(config -> {
             try {
-                BankPosProtocol protocol = protocolFactory.getProtocol(config.getGatewayProtocol());
-                boolean success = protocol.testConnection(config);
+                String protocol = config.getGatewayProtocol();
+
+                // iyzico has its own test logic (not a BankPosProtocol)
+                if ("IYZICO".equals(protocol)) {
+                    return testIyzicoConnection(config);
+                }
+
+                BankPosProtocol posProtocol = protocolFactory.getProtocol(protocol);
+                boolean success = posProtocol.testConnection(config);
                 return ResponseEntity.ok(Map.<String, Object>of(
                         "success", success,
                         "message", success ? "Bağlantı başarılı." : "Bağlantı başarısız. Yapılandırmayı kontrol edin."
@@ -144,6 +151,36 @@ public class AdminGatewayConfigController {
                 return ResponseEntity.ok(Map.<String, Object>of("success", false, "message", "Hata: " + e.getMessage()));
             }
         }).orElse(ResponseEntity.notFound().build());
+    }
+
+    /** Test iyzico connectivity by attempting a BIN query (lightweight, no payment) */
+    private ResponseEntity<Map<String, Object>> testIyzicoConnection(PaymentGatewayConfig config) {
+        try {
+            com.iyzipay.Options opts = new com.iyzipay.Options();
+            opts.setApiKey(config.getApiKey());
+            opts.setSecretKey(config.getSecretKey());
+            opts.setBaseUrl(config.getBaseUrl() != null && !config.getBaseUrl().isEmpty()
+                ? config.getBaseUrl()
+                : (config.isSandbox() ? "https://sandbox-api.iyzipay.com" : "https://api.iyzipay.com"));
+
+            // Use installment info query as a health check (lightweight API call)
+            com.iyzipay.request.RetrieveInstallmentInfoRequest req = new com.iyzipay.request.RetrieveInstallmentInfoRequest();
+            req.setLocale(com.iyzipay.model.Locale.TR.getValue());
+            req.setBinNumber("552879"); // iyzico sandbox test BIN
+            req.setPrice(new java.math.BigDecimal("100"));
+
+            com.iyzipay.model.InstallmentInfo result = com.iyzipay.model.InstallmentInfo.retrieve(req, opts);
+
+            boolean success = "success".equals(result.getStatus());
+            String msg = success
+                ? "iyzico bağlantısı başarılı. API key ve secret key geçerli."
+                : "iyzico bağlantı hatası: " + result.getErrorMessage();
+
+            return ResponseEntity.ok(Map.<String, Object>of("success", success, "message", msg));
+        } catch (Exception e) {
+            return ResponseEntity.ok(Map.<String, Object>of("success", false,
+                "message", "iyzico bağlantı hatası: " + e.getMessage()));
+        }
     }
 
     @DeleteMapping("/{id}")

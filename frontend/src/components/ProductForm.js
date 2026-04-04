@@ -550,15 +550,24 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
     } catch (error) {
       console.error('Error saving product:', error);
       const errorData = error?.response?.data;
-      const friendlyMessage = errorData?.message
-        || errorData?.error
-        || (typeof errorData === 'string' ? errorData : null)
-        || 'Ürün kaydedilirken beklenmeyen bir hata oluştu. Lütfen tekrar deneyin.';
-      setErrors({ general: friendlyMessage });
-      if (onSuccess) {
-        // Bildirim için hata da iletilsin
-        onSuccess({ error: true, message: friendlyMessage });
+      // Build friendly message from validation details or general message
+      let friendlyMessage = '';
+      if (errorData?.details && typeof errorData.details === 'object') {
+        friendlyMessage = Object.values(errorData.details).join(', ');
+      } else {
+        friendlyMessage = errorData?.message || errorData?.error || (typeof errorData === 'string' ? errorData : null)
+          || 'Ürün kaydedilirken beklenmeyen bir hata oluştu.';
       }
+      setErrors({ general: friendlyMessage });
+      // Show error toast
+      const t = document.createElement('div');
+      t.className = 'toast align-items-center text-bg-danger border-0 position-fixed top-0 end-0 m-3 show';
+      t.style.cssText = 'min-width:340px;z-index:9999;animation:fadeInDown 0.3s ease';
+      t.setAttribute('role', 'alert');
+      t.innerHTML = `<div class="d-flex align-items-center px-3 py-2"><i class="fas fa-exclamation-circle me-2"></i><div class="toast-body fw-medium">${friendlyMessage}</div><button type="button" class="btn-close btn-close-white ms-auto" onclick="this.parentElement.parentElement.remove()"></button></div>`;
+      document.body.appendChild(t);
+      setTimeout(() => { try { document.body.removeChild(t); } catch {} }, 5000);
+      // Do NOT call onSuccess on error — keep form open
     } finally {
       setLoading(false);
     }
@@ -1144,28 +1153,74 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
         </div>
       </div>
       <div className="row">
-        <div className="col-md-4">
+        <div className="col-md-6">
           <div className="mb-3">
-            <label className="form-label">İndirimli Fiyat (₺)</label>
-            <input type="number" step="0.01" min="0" className="form-control" name="salePrice"
-              value={formData.salePrice} onChange={handleChange} placeholder="İndirim yoksa boş bırakın" />
-            {formData.salePrice && formData.price && parseFloat(formData.salePrice) < parseFloat(formData.price) && (
-              <small className="text-success mt-1 d-block">
-                <i className="fas fa-tag me-1" />%{((1 - parseFloat(formData.salePrice) / parseFloat(formData.price)) * 100).toFixed(0)} indirim
-              </small>
-            )}
+            <label className="form-label fw-medium">İndirim Uygula</label>
+            {(() => {
+              const origPrice = parseFloat(formData.price) || 0;
+              const salePrice = parseFloat(formData.salePrice) || 0;
+              const hasDiscount = salePrice > 0 && origPrice > 0 && salePrice < origPrice;
+              const discountPercent = hasDiscount ? ((1 - salePrice / origPrice) * 100) : 0;
+
+              const handleSalePriceChange = (e) => {
+                setFormData(f => ({ ...f, salePrice: e.target.value }));
+              };
+
+              const handlePercentChange = (e) => {
+                const pct = parseFloat(e.target.value) || 0;
+                if (origPrice > 0 && pct > 0 && pct < 100) {
+                  const calc = (origPrice * (1 - pct / 100)).toFixed(2);
+                  setFormData(f => ({ ...f, salePrice: calc }));
+                } else if (pct === 0 || e.target.value === '') {
+                  setFormData(f => ({ ...f, salePrice: '' }));
+                }
+              };
+
+              return (
+                <div className="border rounded p-3 bg-light">
+                  <div className="row g-2 align-items-end">
+                    <div className="col-6">
+                      <label className="form-label small text-muted mb-1">Satış Fiyatı (₺)</label>
+                      <input type="number" step="0.01" min="0" className="form-control"
+                        value={formData.salePrice} onChange={handleSalePriceChange}
+                        placeholder={origPrice > 0 ? `Mevcut: ${origPrice}₺` : 'Fiyat girin'} />
+                    </div>
+                    <div className="col-6">
+                      <label className="form-label small text-muted mb-1">veya İndirim (%)</label>
+                      <div className="input-group">
+                        <span className="input-group-text">%</span>
+                        <input type="number" step="1" min="0" max="99" className="form-control"
+                          value={hasDiscount ? discountPercent.toFixed(0) : ''}
+                          onChange={handlePercentChange}
+                          placeholder="0" />
+                      </div>
+                    </div>
+                  </div>
+                  {hasDiscount && (
+                    <div className="mt-2 d-flex align-items-center gap-2">
+                      <span className="badge bg-danger">%{discountPercent.toFixed(0)} indirim</span>
+                      <small className="text-muted"><del>{origPrice.toFixed(2)}₺</del> → <strong className="text-success">{salePrice.toFixed(2)}₺</strong></small>
+                    </div>
+                  )}
+                  {formData.salePrice && origPrice > 0 && salePrice >= origPrice && (
+                    <small className="text-danger mt-1 d-block"><i className="fas fa-exclamation-triangle me-1" />Satış fiyatı orijinal fiyattan düşük olmalıdır.</small>
+                  )}
+                  <small className="text-muted d-block mt-2">Satış fiyatı girildiğinde mağazada indirimli olarak gösterilir. Boş bırakırsanız indirim uygulanmaz.</small>
+                </div>
+              );
+            })()}
           </div>
         </div>
-        <div className="col-md-4">
+        <div className="col-md-3">
           <div className="mb-3">
-            <label className="form-label">İndirim Başlangıcı</label>
+            <label className="form-label fw-medium">İndirim Başlangıcı</label>
             <input type="datetime-local" className="form-control" name="saleStart"
               value={formData.saleStart} onChange={handleChange} />
           </div>
         </div>
-        <div className="col-md-4">
+        <div className="col-md-3">
           <div className="mb-3">
-            <label className="form-label">İndirim Bitişi</label>
+            <label className="form-label fw-medium">İndirim Bitişi</label>
             <input type="datetime-local" className="form-control" name="saleEnd"
               value={formData.saleEnd} onChange={handleChange} />
           </div>
@@ -1235,7 +1290,8 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
               </div>
             )}
             {/* Upload Zone */}
-            <div className="border-2 border-dashed rounded p-3 text-center" style={{cursor:'pointer'}}
+            <div className="border-2 border-dashed rounded text-center"
+              style={{cursor:'pointer', padding:'24px 16px'}}
               onClick={() => imageInputRef.current?.click()}
               onDragOver={e => e.preventDefault()}
               onDrop={e => {
@@ -1246,12 +1302,12 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
               <input type="file" ref={imageInputRef} className="d-none" accept="image/*" multiple
                 onChange={e => { Array.from(e.target.files).forEach(f => uploadImage(f)); e.target.value=''; }} />
               {imageUploading ? (
-                <div><span className="spinner-border spinner-border-sm me-2" />Yükleniyor...</div>
+                <div className="py-2"><span className="spinner-border spinner-border-sm text-primary me-2" />Yükleniyor...</div>
               ) : (
                 <div>
-                  <i className="fas fa-cloud-upload-alt text-muted fa-lg d-block mb-1" />
-                  <div className="small text-muted">Görsel sürükleyin veya <span className="text-primary fw-medium">dosya seçin</span></div>
-                  <div className="text-muted small">PNG, JPG, WebP — Birden fazla seçebilirsiniz</div>
+                  <div className="mb-2"><i className="fas fa-cloud-upload-alt text-muted" style={{fontSize:28}} /></div>
+                  <div className="small text-muted">Görselleri sürükleyin veya <span className="text-primary fw-medium">dosya seçin</span></div>
+                  <div className="text-muted mt-1" style={{fontSize:11}}>PNG, JPG, WebP — Birden fazla seçebilirsiniz</div>
                 </div>
               )}
             </div>

@@ -17,6 +17,10 @@ import com.warehouse.service.EmailService;
 import com.warehouse.repository.OrderRepository;
 import com.warehouse.repository.OrderItemRepository;
 import com.warehouse.repository.OrderStatusHistoryRepository;
+import com.warehouse.entity.StockEvent;
+import com.warehouse.enums.StockEventType;
+import com.warehouse.enums.StockEventSource;
+import com.warehouse.repository.StockEventRepository;
 import com.warehouse.service.AdminSecurityService;
 import com.warehouse.service.PaymentService;
 import com.warehouse.util.CurrentUser;
@@ -44,6 +48,8 @@ public class AdminOrderController {
     private final PaymentService paymentService;
     private final AdminSecurityService adminSecurityService;
     private final com.warehouse.repository.PaymentTransactionRepository paymentRepo;
+    private final com.warehouse.repository.StockRepository stockRepository;
+    private final StockEventRepository stockEventRepository;
     private final EmailService emailService;
 
     public AdminOrderController(OrderRepository orderRepository,
@@ -52,6 +58,8 @@ public class AdminOrderController {
                                  PaymentService paymentService,
                                  AdminSecurityService adminSecurityService,
                                  com.warehouse.repository.PaymentTransactionRepository paymentRepo,
+                                 com.warehouse.repository.StockRepository stockRepository,
+                                 StockEventRepository stockEventRepository,
                                  EmailService emailService) {
         this.orderRepository = orderRepository;
         this.orderItemRepository = orderItemRepository;
@@ -59,6 +67,8 @@ public class AdminOrderController {
         this.paymentService = paymentService;
         this.adminSecurityService = adminSecurityService;
         this.paymentRepo = paymentRepo;
+        this.stockRepository = stockRepository;
+        this.stockEventRepository = stockEventRepository;
         this.emailService = emailService;
     }
 
@@ -166,9 +176,38 @@ public class AdminOrderController {
             order, oldStatus, newStatus,
             CurrentUser.usernameOrSystem(), "ADMIN", body.getNote()));
 
-        // If DELIVERED and door payment → auto-complete payment
-        if (newStatus == OrderStatus.DELIVERED && com.warehouse.util.OrderStatusMachine.isDoorPayment(order.getPaymentMethod())) {
+        // If DELIVERED → deduct reserved stock (convert reservation to actual sale) + log StockEvent
+        if (newStatus == OrderStatus.DELIVERED) {
             try {
+                var items = orderItemRepository.findByOrderId(order.getId());
+                for (var item : items) {
+                    if (item.getStockId() != null) {
+                        stockRepository.findById(item.getStockId()).ifPresent(stock -> {
+                            int qty = item.getQuantity();
+                            int oldQty = stock.getQuantity();
+                            stock.setQuantity(Math.max(0, oldQty - qty));
+                            stock.setReservedQuantity(Math.max(0, stock.getReservedQuantity() - qty));
+                            stockRepository.save(stock);
+
+                            // Log stock event for traceability
+                            StockEvent event = new StockEvent();
+                            event.setStockId(stock.getId());
+                            event.setProductId(item.getProduct() != null ? item.getProduct().getId() : null);
+                            event.setEventType(StockEventType.QUANTITY_CHANGED);
+                            event.setOldValue(oldQty);
+                            event.setNewValue(stock.getQuantity());
+                            event.setSource(StockEventSource.ORDER);
+                            event.setSourceDetail("Sipariş #" + order.getOrderNumber() + " teslim edildi (" + qty + " adet)");
+                            stockEventRepository.save(event);
+                        });
+                    }
+                }
+            } catch (Exception e) {
+                org.slf4j.LoggerFactory.getLogger(getClass()).warn("Stock deduction failed for order {}: {}", order.getOrderNumber(), e.getMessage());
+            }
+
+            // Door payment → auto-complete payment with audit trail
+            if (com.warehouse.util.OrderStatusMachine.isDoorPayment(order.getPaymentMethod())) {
                 var tx = paymentRepo.findByOrderIdAndStatus(order.getId(), com.warehouse.enums.PaymentStatus.INITIATED);
                 if (tx.isPresent()) {
                     var payment = tx.get();
@@ -176,8 +215,39 @@ public class AdminOrderController {
                     payment.setPaidAt(java.time.LocalDateTime.now());
                     payment.setPaidAmount(order.getGrandTotal());
                     paymentRepo.save(payment);
+                    statusHistoryRepository.save(OrderStatusHistoryFactory.create(
+                        order, "PAYMENT_INITIATED", "PAYMENT_SUCCESS",
+                        CurrentUser.usernameOrSystem(), "ADMIN", "Kapıda ödeme tahsil edildi"));
                 }
-            } catch (Exception ignored) {}
+            }
+        }
+
+        // If CANCELLED → release reserved stock + log StockEvent
+        if (newStatus == OrderStatus.CANCELLED) {
+            try {
+                var items = orderItemRepository.findByOrderId(order.getId());
+                for (var item : items) {
+                    if (item.getStockId() != null) {
+                        stockRepository.findById(item.getStockId()).ifPresent(stock -> {
+                            int oldReserved = stock.getReservedQuantity();
+                            stock.setReservedQuantity(Math.max(0, oldReserved - item.getQuantity()));
+                            stockRepository.save(stock);
+
+                            StockEvent event = new StockEvent();
+                            event.setStockId(stock.getId());
+                            event.setProductId(item.getProduct() != null ? item.getProduct().getId() : null);
+                            event.setEventType(StockEventType.RELEASED);
+                            event.setOldValue(oldReserved);
+                            event.setNewValue(stock.getReservedQuantity());
+                            event.setSource(StockEventSource.ORDER);
+                            event.setSourceDetail("Sipariş #" + order.getOrderNumber() + " iptal edildi (" + item.getQuantity() + " adet serbest)");
+                            stockEventRepository.save(event);
+                        });
+                    }
+                }
+            } catch (Exception e) {
+                org.slf4j.LoggerFactory.getLogger(getClass()).warn("Stock release failed for cancelled order {}: {}", order.getOrderNumber(), e.getMessage());
+            }
         }
 
         // Send status update email to customer

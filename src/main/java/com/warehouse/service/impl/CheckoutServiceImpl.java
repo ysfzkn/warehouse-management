@@ -37,16 +37,19 @@ public class CheckoutServiceImpl implements CheckoutService {
     private final StockService stockService;
     private final StockRepository stockRepository;
     private final CartService cartService;
+    private final CargoProviderRepository cargoProviderRepository;
 
     public CheckoutServiceImpl(CartRepository cartRepository, CartItemRepository cartItemRepository,
                                 CustomerRepository customerRepository, CustomerAddressRepository addressRepository,
                                 OrderRepository orderRepository, StockService stockService,
-                                StockRepository stockRepository, CartService cartService) {
+                                StockRepository stockRepository, CartService cartService,
+                                CargoProviderRepository cargoProviderRepository) {
         this.cartRepository = cartRepository;
         this.cartItemRepository = cartItemRepository;
         this.customerRepository = customerRepository;
         this.addressRepository = addressRepository;
         this.orderRepository = orderRepository;
+        this.cargoProviderRepository = cargoProviderRepository;
         this.stockService = stockService;
         this.stockRepository = stockRepository;
         this.cartService = cartService;
@@ -166,11 +169,46 @@ public class CheckoutServiceImpl implements CheckoutService {
             orderItems.add(oi);
         }
 
-        BigDecimal shippingCost = ShippingConstants.calculateShippingCost(subtotal);
-        BigDecimal grandTotal = subtotal.add(shippingCost).add(vatTotal);
+        // Calculate shipping cost — dynamic from CargoProvider or fallback to ShippingConstants
+        BigDecimal shippingCost;
+        BigDecimal shippingVat = BigDecimal.ZERO;
+        CargoProvider cargoProvider = null;
+
+        Long cargoProviderId = request.getCargoProviderId();
+        if (cargoProviderId != null) {
+            cargoProvider = cargoProviderRepository.findById(cargoProviderId).orElse(null);
+        }
+
+        if (cargoProvider != null) {
+            // Calculate total desi from cart items
+            BigDecimal totalDesi = BigDecimal.ZERO;
+            for (var ci : items) {
+                Product prod = ci.getProduct();
+                if (prod != null) {
+                    // Physical weight
+                    BigDecimal weight = prod.getWeight() != null ? BigDecimal.valueOf(prod.getWeight()) : BigDecimal.ZERO;
+                    // Volumetric weight: (L x W x H) / 3000
+                    BigDecimal volumetric = BigDecimal.ZERO;
+                    if (prod.getLengthCm() != null && prod.getWidthCm() != null && prod.getHeightCm() != null) {
+                        volumetric = BigDecimal.valueOf(prod.getLengthCm())
+                            .multiply(BigDecimal.valueOf(prod.getWidthCm()))
+                            .multiply(BigDecimal.valueOf(prod.getHeightCm()))
+                            .divide(new BigDecimal("3000"), 2, java.math.RoundingMode.HALF_UP);
+                    }
+                    BigDecimal desi = weight.max(volumetric);
+                    totalDesi = totalDesi.add(desi.multiply(BigDecimal.valueOf(ci.getQuantity())));
+                }
+            }
+            shippingCost = cargoProvider.calculateShippingCost(totalDesi, subtotal);
+            shippingVat = cargoProvider.calculateVat(shippingCost);
+        } else {
+            shippingCost = ShippingConstants.calculateShippingCost(subtotal);
+        }
+
+        BigDecimal grandTotal = subtotal.add(shippingCost).add(shippingVat).add(vatTotal);
 
         // Generate order number
-        String orderNumber = "ORD-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd")) + "-" + String.format("%04d", orderRepository.count() + 1);
+        String orderNumber = "ORD-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd")) + "-" + java.util.UUID.randomUUID().toString().substring(0, 6).toUpperCase();
 
         Order order = new Order();
         order.setOrderNumber(orderNumber);
@@ -180,6 +218,7 @@ public class CheckoutServiceImpl implements CheckoutService {
         order.setBillingAddressSnapshot(addressToMap(billingAddr));
         order.setSubtotal(subtotal);
         order.setShippingCost(shippingCost);
+        order.setShippingVat(shippingVat);
         order.setVatTotal(vatTotal);
         order.setGrandTotal(grandTotal);
         order.setDiscountAmount(BigDecimal.ZERO);
@@ -191,7 +230,12 @@ public class CheckoutServiceImpl implements CheckoutService {
         order.setDistanceSalesContractAccepted(true);
         order.setDistanceSalesContractAcceptedAt(LocalDateTime.now());
 
-        if (request.getCargoCompany() != null) {
+        if (cargoProvider != null) {
+            order.setCargoProviderId(cargoProvider.getId());
+            order.setCargoProviderName(cargoProvider.getName());
+            // Also set legacy enum for backward compatibility
+            try { order.setCargoCompany(com.warehouse.enums.CargoCompany.valueOf(cargoProvider.getCode())); } catch (Exception ignored) {}
+        } else if (request.getCargoCompany() != null) {
             try { order.setCargoCompany(com.warehouse.enums.CargoCompany.valueOf(request.getCargoCompany())); } catch (Exception ignored) {}
         }
 
@@ -203,8 +247,8 @@ public class CheckoutServiceImpl implements CheckoutService {
         order.setItems(orderItems);
         order = orderRepository.save(order);
 
-        // Clear cart
-        cartService.clearCart(customerId, null);
+        // NOTE: Cart is NOT cleared here — cleared after successful payment
+        // This allows cart recovery if payment fails
 
         logger.info("Order created: {} for customer {}", orderNumber, customerId);
 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
+import { useToast } from '../../components/store/Toast';
 
 const STATUS = {
   PENDING_PAYMENT: { label: 'Ödeme Bekliyor', color: 'warning', icon: 'fas fa-clock' },
@@ -9,7 +10,18 @@ const STATUS = {
   SHIPPED: { label: 'Kargoda', color: 'secondary', icon: 'fas fa-truck' },
   DELIVERED: { label: 'Teslim Edildi', color: 'success', icon: 'fas fa-check-double' },
   CANCELLED: { label: 'İptal Edildi', color: 'danger', icon: 'fas fa-times-circle' },
+  RETURN_REQUESTED: { label: 'İade Talebi', color: 'warning', icon: 'fas fa-undo' },
+  RETURNED: { label: 'İade Edildi', color: 'dark', icon: 'fas fa-undo-alt' },
+  REFUNDED: { label: 'İade Ödemesi', color: 'info', icon: 'fas fa-money-bill-wave' },
 };
+
+const RETURN_REASONS = [
+  'Hasarlı / Kırık Ürün',
+  'Yanlış Ürün Gönderildi',
+  'Ürünü Beğenmedim',
+  'Eksik Ürün',
+  'Diğer',
+];
 
 const fmt = (p) => p != null ? new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(p) : '—';
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' }) : '—';
@@ -25,6 +37,11 @@ export default function MyOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
+  const [returnModal, setReturnModal] = useState(null); // orderNumber
+  const [returnReason, setReturnReason] = useState('');
+  const [returnNote, setReturnNote] = useState('');
+  const [returnLoading, setReturnLoading] = useState(false);
+  const toast = useToast();
 
   const fetch = useCallback(() => {
     setLoading(true);
@@ -32,6 +49,19 @@ export default function MyOrdersPage() {
       .then(r => { setOrders(r.data?.content || []); setTotalPages(r.data?.totalPages || 0); })
       .catch(() => {}).finally(() => setLoading(false));
   }, [page]);
+
+  const handleReturnRequest = async () => {
+    if (!returnReason) { toast.warning('Lütfen iade nedeninizi seçin.'); return; }
+    setReturnLoading(true);
+    try {
+      await axios.post(`/api/store/orders/${returnModal}/return-request`, { reason: returnReason, note: returnNote }, { headers: getAuthHeaders() });
+      toast.success('İade talebiniz alındı. En kısa sürede değerlendirilecektir.');
+      setReturnModal(null); setReturnReason(''); setReturnNote('');
+      fetch();
+    } catch (e) {
+      toast.error(e.response?.data?.message || 'İade talebi oluşturulamadı.');
+    } finally { setReturnLoading(false); }
+  };
 
   useEffect(() => { fetch(); }, [fetch]);
 
@@ -73,6 +103,14 @@ export default function MyOrdersPage() {
                   {o.cargoTrackingNo && (
                     <div className="small text-success mt-1"><i className="fas fa-truck me-1" />Kargo Takip: <strong>{o.cargoTrackingNo}</strong></div>
                   )}
+                  {/* İade talebi butonu — sadece SHIPPED veya DELIVERED */}
+                  {(o.status === 'SHIPPED' || o.status === 'DELIVERED') && (
+                    <div className="mt-2">
+                      <button className="btn btn-sm btn-outline-warning" onClick={() => { setReturnModal(o.orderNumber); setReturnReason(''); setReturnNote(''); }}>
+                        <i className="fas fa-undo me-1" />İade Talebi Oluştur
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             );
@@ -84,6 +122,38 @@ export default function MyOrdersPage() {
               <button className="btn btn-outline-primary btn-sm" disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}>Sonraki</button>
             </div>
           )}
+        </div>
+      )}
+      {/* İade Talebi Modal */}
+      {returnModal && (
+        <div className="modal show d-block" style={{background:'rgba(0,0,0,0.5)',zIndex:3000}} onClick={() => setReturnModal(null)}>
+          <div className="modal-dialog modal-dialog-centered" onClick={e => e.stopPropagation()}>
+            <div className="modal-content border-0 shadow">
+              <div className="modal-header">
+                <h5 className="modal-title"><i className="fas fa-undo me-2 text-warning" />İade Talebi — #{returnModal}</h5>
+                <button className="btn-close" onClick={() => setReturnModal(null)} />
+              </div>
+              <div className="modal-body">
+                <div className="mb-3">
+                  <label className="form-label fw-semibold small">İade Nedeniniz <span className="text-danger">*</span></label>
+                  <select className="form-select" value={returnReason} onChange={e => setReturnReason(e.target.value)}>
+                    <option value="">Neden seçiniz...</option>
+                    {RETURN_REASONS.map(r => <option key={r} value={r}>{r}</option>)}
+                  </select>
+                </div>
+                <div className="mb-3">
+                  <label className="form-label fw-semibold small">Açıklama (isteğe bağlı)</label>
+                  <textarea className="form-control" rows={3} value={returnNote} onChange={e => setReturnNote(e.target.value)} placeholder="İade ile ilgili detayları yazabilirsiniz..." />
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button className="btn btn-outline-secondary" onClick={() => setReturnModal(null)}>İptal</button>
+                <button className="btn btn-warning" onClick={handleReturnRequest} disabled={returnLoading || !returnReason}>
+                  {returnLoading ? <><span className="spinner-border spinner-border-sm me-1" />Gönderiliyor...</> : <><i className="fas fa-paper-plane me-1" />İade Talebi Gönder</>}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

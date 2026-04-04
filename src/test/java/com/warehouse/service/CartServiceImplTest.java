@@ -30,12 +30,13 @@ class CartServiceImplTest {
     @Mock private ProductRepository productRepo;
     @Mock private CouponRepository couponRepo;
     @Mock private StockService stockService;
+    @Mock private com.warehouse.repository.ProductImageRepository productImageRepo;
 
     private CartServiceImpl cartService;
 
     @BeforeEach
     void setUp() {
-        cartService = new CartServiceImpl(cartRepo, cartItemRepo, productRepo, couponRepo, stockService);
+        cartService = new CartServiceImpl(cartRepo, cartItemRepo, productRepo, couponRepo, stockService, productImageRepo);
     }
 
     @Test

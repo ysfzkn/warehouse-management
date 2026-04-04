@@ -13,7 +13,7 @@ const PWD_RULES = [
 ];
 
 export default function StoreRegisterPage() {
-  const [form, setForm] = useState({ firstName: '', lastName: '', email: '', password: '', phone: '', kvkkConsent: false, marketingConsent: false });
+  const [form, setForm] = useState({ firstName: '', lastName: '', email: '', password: '', phone: '', kvkkConsent: false, termsConsent: false, marketingConsent: false });
   const [loading, setLoading] = useState(false);
   const [, setError] = useState(''); // display via toast
   const [success, setSuccess] = useState(false);
@@ -38,7 +38,8 @@ export default function StoreRegisterPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!allPwdValid) { toast.warning('Şifre gereksinimleri karşılanmıyor.'); return; }
-    if (!form.kvkkConsent) { toast.warning('KVKK onayı zorunludur.'); return; }
+    if (!form.termsConsent) { toast.warning('Üyelik sözleşmesini kabul etmeniz gerekmektedir.'); return; }
+    if (!form.kvkkConsent) { toast.warning('Kişisel verilerin işlenmesine ilişkin aydınlatma metnini onaylamanız gerekmektedir.'); return; }
     setLoading(true); setError('');
     try {
       const phone = form.phone ? '+90' + form.phone : '';
@@ -179,11 +180,17 @@ export default function StoreRegisterPage() {
             </div>
 
             {/* Onaylar */}
-            <div className="mb-3">
+            <div className="mb-3 p-3 bg-light rounded">
+              <div className="form-check mb-2">
+                <input className="form-check-input" type="checkbox" name="termsConsent" checked={form.termsConsent} onChange={handleChange} id="terms" />
+                <label className="form-check-label small" htmlFor="terms">
+                  <a href="/store/sayfa/uyelik-sozlesmesi" target="_blank" rel="noopener noreferrer" className="text-primary">Üyelik Sözleşmesi</a>'ni okudum ve kabul ediyorum. <span className="text-danger">*</span>
+                </label>
+              </div>
               <div className="form-check mb-2">
                 <input className="form-check-input" type="checkbox" name="kvkkConsent" checked={form.kvkkConsent} onChange={handleChange} id="kvkk" />
                 <label className="form-check-label small" htmlFor="kvkk">
-                  <a href="/store/sayfa/kvkk" target="_blank" rel="noopener noreferrer" className="text-primary">KVKK Aydınlatma Metni</a>'ni okudum ve kabul ediyorum. <span className="text-danger">*</span>
+                  Kişisel verilerin işlenmesine ilişkin <a href="/store/sayfa/kvkk" target="_blank" rel="noopener noreferrer" className="text-primary">Aydınlatma Metni</a>'ni okudum. <span className="text-danger">*</span>
                 </label>
               </div>
               <div className="form-check">
@@ -195,7 +202,7 @@ export default function StoreRegisterPage() {
             </div>
 
             {/* Kayıt Butonu */}
-            <button type="submit" className="btn btn-primary w-100 py-2 fw-semibold" disabled={loading || !allPwdValid || !form.kvkkConsent}>
+            <button type="submit" className="btn btn-primary w-100 py-2 fw-semibold" disabled={loading || !allPwdValid || !form.kvkkConsent || !form.termsConsent}>
               {loading ? <><span className="spinner-border spinner-border-sm me-2" />Hesap oluşturuluyor...</> : <><i className="fas fa-user-plus me-2" />Üye Ol</>}
             </button>
           </form>

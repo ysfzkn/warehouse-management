@@ -228,8 +228,8 @@ export default function AdminPayments() {
                           {selectedPayment.providerPaymentId && <tr><td className="text-muted">İşlem ID</td><td><code className="small">{selectedPayment.providerPaymentId}</code></td></tr>}
                           {selectedPayment.conversationId && <tr><td className="text-muted">Konuşma ID</td><td><code className="small">{selectedPayment.conversationId}</code></td></tr>}
                           {selectedPayment.cardLastFour && <tr><td className="text-muted">Kart</td><td>**** **** **** {selectedPayment.cardLastFour}</td></tr>}
-                          {selectedPayment.cardType && <tr><td className="text-muted">Kart Tipi</td><td>{selectedPayment.cardType}</td></tr>}
-                          {selectedPayment.cardAssociation && <tr><td className="text-muted">Kart Ağı</td><td>{selectedPayment.cardAssociation}</td></tr>}
+                          {selectedPayment.cardType && <tr><td className="text-muted">Kart Tipi</td><td>{({CREDIT_CARD:'Kredi Kartı',DEBIT_CARD:'Banka Kartı',PREPAID_CARD:'Ön Ödemeli Kart'})[selectedPayment.cardType] || selectedPayment.cardType}</td></tr>}
+                          {selectedPayment.cardAssociation && <tr><td className="text-muted">Kart Ağı</td><td>{({MASTER_CARD:'Mastercard',VISA:'Visa',AMERICAN_EXPRESS:'Amex',TROY:'Troy'})[selectedPayment.cardAssociation] || selectedPayment.cardAssociation}</td></tr>}
                           {selectedPayment.cardBankName && <tr><td className="text-muted">Banka</td><td>{selectedPayment.cardBankName}</td></tr>}
                           {selectedPayment.installmentCount > 1 && <tr><td className="text-muted">Taksit</td><td>{selectedPayment.installmentCount}x {selectedPayment.installmentPrice ? formatPrice(selectedPayment.installmentPrice) : ''}</td></tr>}
                           {selectedPayment.threeDSecure && <tr><td className="text-muted">3D Secure</td><td><span className="badge bg-success">Evet</span></td></tr>}

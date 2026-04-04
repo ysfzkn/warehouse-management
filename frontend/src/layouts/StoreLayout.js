@@ -5,6 +5,7 @@ import StoreFooter from '../components/store/StoreFooter';
 import MobileNav from '../components/store/MobileNav';
 import CartSidebar from '../components/store/CartSidebar';
 import { ToastProvider } from '../components/store/Toast';
+import { WishlistProvider } from '../components/store/WishlistContext';
 import { useCart } from '../hooks/useCart';
 import { useSiteSettings } from '../hooks/useSiteSettings';
 
@@ -30,6 +31,7 @@ export default function StoreLayout() {
 
   return (
     <ToastProvider>
+      <WishlistProvider>
       <div
         className="store-layout"
         style={{
@@ -48,6 +50,7 @@ export default function StoreLayout() {
         <MobileNav cart={cart} />
         <CartSidebar cart={cart} />
       </div>
+      </WishlistProvider>
     </ToastProvider>
   );
 }

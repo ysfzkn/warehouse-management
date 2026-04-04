@@ -17,6 +17,7 @@ public class StoreCategoryDto {
     private int sortOrder;
     private Long parentId;
     private String parentSlug;
+    private String parentName;
     private List<StoreCategoryDto> children;
     private long productCount;
 }

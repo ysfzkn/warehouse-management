@@ -34,6 +34,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final PaymentGatewayFactory gatewayFactory;
     private final PaymentProperties paymentProperties;
     private final PaymentGatewayConfigRepository gatewayConfigRepo;
+    private final com.warehouse.service.CartService cartService;
 
     public PaymentServiceImpl(PaymentTransactionRepository paymentRepo,
                                OrderRepository orderRepo,
@@ -42,7 +43,8 @@ public class PaymentServiceImpl implements PaymentService {
                                OrderItemRepository orderItemRepo,
                                PaymentGatewayFactory gatewayFactory,
                                PaymentProperties paymentProperties,
-                               PaymentGatewayConfigRepository gatewayConfigRepo) {
+                               PaymentGatewayConfigRepository gatewayConfigRepo,
+                               com.warehouse.service.CartService cartService) {
         this.paymentRepo = paymentRepo;
         this.orderRepo = orderRepo;
         this.statusHistoryRepo = statusHistoryRepo;
@@ -51,6 +53,7 @@ public class PaymentServiceImpl implements PaymentService {
         this.gatewayFactory = gatewayFactory;
         this.paymentProperties = paymentProperties;
         this.gatewayConfigRepo = gatewayConfigRepo;
+        this.cartService = cartService;
     }
 
     @Override
@@ -123,6 +126,9 @@ public class PaymentServiceImpl implements PaymentService {
                     tx.setExpiresAt(LocalDateTime.now().plusHours(paymentProperties.getBankTransfer().getDeadlineHours()));
                     order.setBankTransferDeadline(tx.getExpiresAt());
                     orderRepo.save(order);
+                    // Clear cart — order accepted, waiting for transfer
+                    try { if (order.getCustomer() != null) cartService.clearCart(order.getCustomer().getId(), null); }
+                    catch (Exception e) { logger.warn("Cart clear failed: {}", e.getMessage()); }
                     break;
                 case DOOR_PAYMENT:
                     // Kapıda ödeme: ödeme henüz alınmadı, sipariş hazırlanmaya başlar
@@ -131,6 +137,9 @@ public class PaymentServiceImpl implements PaymentService {
                     orderRepo.save(order);
                     logStatusChange(order, OrderStatus.PENDING_PAYMENT.name(), OrderStatus.PREPARING.name(),
                             "system", "Kapıda ödeme — teslimat sırasında tahsil edilecek");
+                    // Clear cart — door payment accepted, order is being prepared
+                    try { if (order.getCustomer() != null) cartService.clearCart(order.getCustomer().getId(), null); }
+                    catch (Exception e) { logger.warn("Cart clear failed: {}", e.getMessage()); }
                     break;
                 default:
                     break;
@@ -183,14 +192,17 @@ public class PaymentServiceImpl implements PaymentService {
                 }
             }
 
-            // Verify payment amount matches order total
+            // Verify payment amount matches order total — BLOCK if mismatch
             if (result.getPaidPrice() != null && order.getGrandTotal() != null) {
                 BigDecimal diff = result.getPaidPrice().subtract(order.getGrandTotal()).abs();
-                if (diff.compareTo(new BigDecimal("0.01")) > 0) {
-                    logger.error("Payment amount mismatch! orderId={}, expected={}, received={}",
+                if (diff.compareTo(new BigDecimal("1.00")) > 0) {
+                    logger.error("CRITICAL: Payment amount mismatch BLOCKED! orderId={}, expected={}, received={}",
                         order.getId(), order.getGrandTotal(), result.getPaidPrice());
-                    // Still process but flag for admin review
-                    tx.setErrorMessage("AMOUNT_MISMATCH: expected=" + order.getGrandTotal() + ", received=" + result.getPaidPrice());
+                    tx.setStatus(PaymentStatus.FAILED);
+                    tx.setErrorMessage("TUTAR_UYUMSUZ: Beklenen=" + order.getGrandTotal() + ", Gelen=" + result.getPaidPrice());
+                    paymentRepo.save(tx);
+                    return PaymentCallbackResult.builder().success(false)
+                        .errorMessage("Ödeme tutarı sipariş tutarı ile uyuşmuyor. İşlem reddedildi.").build();
                 }
             }
 
@@ -210,6 +222,15 @@ public class PaymentServiceImpl implements PaymentService {
             logStatusChange(order, OrderStatus.PENDING_PAYMENT.name(), OrderStatus.PAID.name(), "system", "iyzico ödeme başarılı");
 
             logger.info("Payment successful: txId={}, orderId={}", tx.getId(), order.getId());
+
+            // Clear cart after successful payment
+            try {
+                if (order.getCustomer() != null) {
+                    cartService.clearCart(order.getCustomer().getId(), null);
+                }
+            } catch (Exception e) {
+                logger.warn("Cart clear failed after payment success: {}", e.getMessage());
+            }
         } else {
             tx.setStatus(PaymentStatus.FAILED);
             tx.setErrorCode(result.getErrorCode());
@@ -245,6 +266,11 @@ public class PaymentServiceImpl implements PaymentService {
 
         PaymentTransaction tx = paymentRepo.findByOrderIdAndStatus(orderId, PaymentStatus.INITIATED)
             .orElseThrow(() -> new WarehouseManagementException(ErrorCode.PAYMENT_NOT_FOUND));
+
+        // Check deadline — warn but allow admin to override
+        if (tx.getExpiresAt() != null && tx.getExpiresAt().isBefore(LocalDateTime.now())) {
+            logger.warn("Bank transfer confirmed AFTER deadline: orderId={}, deadline={}, by={}", orderId, tx.getExpiresAt(), confirmedBy);
+        }
 
         tx.setStatus(PaymentStatus.SUCCESS);
         tx.setPaidAt(LocalDateTime.now());
@@ -321,6 +347,12 @@ public class PaymentServiceImpl implements PaymentService {
     @Transactional(readOnly = true)
     public InstallmentQueryResult getInstallmentOptions(String binNumber, BigDecimal price) {
         return gatewayFactory.getDefaultGateway().getInstallmentOptions(binNumber, price);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public com.warehouse.entity.PaymentTransaction findTransactionByToken(String token) {
+        return paymentRepo.findByToken(token).orElse(null);
     }
 
     // ── Helpers ──────────────────────────────────────

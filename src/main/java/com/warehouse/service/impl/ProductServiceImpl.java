@@ -447,6 +447,12 @@ public class ProductServiceImpl implements ProductService {
         return productRepository.findActiveByFilters(search, categoryId, brandId, colorId, pageable);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Page<Product> getAllActiveProductsMultiFilter(Pageable pageable, String search, Long categoryId, java.util.List<Long> brandIds, java.util.List<Long> colorIds) {
+        return productRepository.findActiveByMultiFilters(search, categoryId, brandIds, colorIds, pageable);
+    }
+
     private void validateSkuUniqueness(String sku) {
         if (productRepository.existsBySku(sku)) {
             logger.warn("SKU already exists: {}", sku);
@@ -534,8 +540,14 @@ public class ProductServiceImpl implements ProductService {
     private void updateProductFields(Product product, Product productDetails) {
         product.setName(productDetails.getName());
         product.setDescription(productDetails.getDescription());
+        product.setShortDescription(productDetails.getShortDescription());
         product.setSku(productDetails.getSku());
         product.setPrice(productDetails.getPrice());
+        product.setSalePrice(productDetails.getSalePrice());
+        product.setSaleStart(productDetails.getSaleStart());
+        product.setSaleEnd(productDetails.getSaleEnd());
+        product.setFeatured(productDetails.isFeatured());
+        product.setNew(productDetails.isNew());
         product.setWeight(productDetails.getWeight());
         product.setDimensions(productDetails.getDimensions());
         product.setLengthCm(productDetails.getLengthCm());

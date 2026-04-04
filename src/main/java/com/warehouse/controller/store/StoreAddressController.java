@@ -40,9 +40,11 @@ public class StoreAddressController {
         if (cid == null) return ResponseEntity.badRequest().body(Map.of("message", "Giriş yapmanız gerekiyor."));
         Customer customer = customerRepo.findById(cid).orElse(null);
         if (customer == null) return ResponseEntity.badRequest().body(Map.of("message", "Giriş yapmanız gerekiyor."));
+        List<String> errors = validateAddress(addr);
+        if (!errors.isEmpty()) return ResponseEntity.badRequest().body(Map.of("message", "Adres bilgilerinde hatalar var.", "errors", errors));
         addr.setId(null);
         addr.setCustomer(customer);
-        // If first address, set as default
+        if (addr.getPhone() != null) addr.setPhone(normalizePhone(addr.getPhone()));
         if (addressRepo.findByCustomerId(cid).isEmpty()) addr.setDefault(true);
         return ResponseEntity.ok(toDto(addressRepo.save(addr)));
     }
@@ -122,5 +124,30 @@ public class StoreAddressController {
             }
             return token != null ? jwtService.extractCustomerId(token) : null;
         } catch (Exception e) { return null; }
+    }
+
+    private List<String> validateAddress(CustomerAddress a) {
+        List<String> errors = new java.util.ArrayList<>();
+        if (a.getTitle() == null || a.getTitle().isBlank()) errors.add("Adres başlığı zorunludur.");
+        if (a.getFirstName() == null || a.getFirstName().isBlank()) errors.add("Ad zorunludur.");
+        if (a.getLastName() == null || a.getLastName().isBlank()) errors.add("Soyad zorunludur.");
+        if (a.getPhone() == null || a.getPhone().isBlank()) errors.add("Telefon numarası zorunludur.");
+        else if (!a.getPhone().replaceAll("[\\s\\-]", "").matches("^(\\+90|0)?5\\d{9}$")) errors.add("Geçerli bir telefon numarası girin (05XX XXX XX XX).");
+        if (a.getCity() == null || a.getCity().isBlank()) errors.add("İl zorunludur.");
+        if (a.getDistrict() == null || a.getDistrict().isBlank()) errors.add("İlçe zorunludur.");
+        if (a.getAddressLine() == null || a.getAddressLine().isBlank()) errors.add("Açık adres zorunludur.");
+        else if (a.getAddressLine().length() < 10) errors.add("Açık adres en az 10 karakter olmalıdır.");
+        if (a.getTcKimlikNo() != null && !a.getTcKimlikNo().isBlank()) {
+            if (!com.warehouse.util.TcKimlikValidator.isValid(a.getTcKimlikNo())) errors.add("Geçersiz TC Kimlik numarası.");
+        }
+        if (a.getPostalCode() != null && !a.getPostalCode().isBlank() && !a.getPostalCode().matches("\\d{5}")) errors.add("Posta kodu 5 haneli olmalıdır.");
+        return errors;
+    }
+
+    private String normalizePhone(String phone) {
+        String clean = phone.replaceAll("[\\s\\-]", "");
+        if (clean.startsWith("+90")) clean = "0" + clean.substring(3);
+        if (!clean.startsWith("0")) clean = "0" + clean;
+        return clean;
     }
 }

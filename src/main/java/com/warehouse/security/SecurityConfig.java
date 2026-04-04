@@ -124,6 +124,8 @@ public class SecurityConfig {
                         .requestMatchers(ApiPaths.STORE_PAYMENT_CALLBACK_POS).permitAll()
                         .requestMatchers(ApiPaths.STORE_PAYMENT_CALLBACK_PAYTR).permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, ApiPaths.STORE_PAYMENT_METHODS).permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, ApiPaths.STORE_PAYMENT_STATUS_TOKEN).permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, ApiPaths.STORE_CARGO_PROVIDERS).permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.POST, ApiPaths.STORE_NEWSLETTER).permitAll()
                         // Public settings and banners
                         .requestMatchers(org.springframework.http.HttpMethod.GET, ApiPaths.STORE_SETTINGS).permitAll()
@@ -162,8 +164,15 @@ public class SecurityConfig {
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
+        // Payment callback endpoints: allow ALL origins (iyzico, PayTR, bank servers POST here)
+        CorsConfiguration callbackConfig = new CorsConfiguration();
+        callbackConfig.setAllowedOriginPatterns(List.of("*"));
+        callbackConfig.setAllowedMethods(List.of("GET", "POST", "OPTIONS"));
+        callbackConfig.setAllowedHeaders(List.of("*"));
+        callbackConfig.setAllowCredentials(false);
+
+        // Regular API endpoints: restricted origins
         CorsConfiguration config = new CorsConfiguration();
-        // CORS_ALLOWED_ORIGINS env var: comma-separated patterns (e.g. "https://admin.mysite.com,https://mysite.com")
         config.setAllowedOriginPatterns(Arrays.asList(corsAllowedOrigins.split(",")));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         config.setAllowedHeaders(List.of("Content-Type", "Authorization", "X-Session-Id", "X-ADMIN-SECURITY-CODE", "X-Requested-With"));
@@ -171,6 +180,10 @@ public class SecurityConfig {
         config.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        // Register callback paths FIRST (more specific paths take precedence)
+        source.registerCorsConfiguration("/api/store/payment/callback", callbackConfig);
+        source.registerCorsConfiguration("/api/store/payment/callback/**", callbackConfig);
+        // Then general API paths
         source.registerCorsConfiguration("/api/**", config);
         return source;
     }

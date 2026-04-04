@@ -9,6 +9,7 @@ public class PlaceOrderRequest {
     private Long shippingAddressId;
     private Long billingAddressId;
     private String cargoCompany;
+    private Long cargoProviderId;
     private String paymentMethod;
     private String customerNote;
     private boolean distanceSalesContractAccepted;

@@ -61,7 +61,8 @@ public class Product {
     @Column(nullable = false)
     private String name;
 
-    @Size(max = 500, message = "Description cannot exceed 500 characters")
+    @Size(max = 5000, message = "Açıklama en fazla 5000 karakter olabilir")
+    @Column(columnDefinition = "TEXT")
     private String description;
 
     @NotBlank(message = "SKU is required")
