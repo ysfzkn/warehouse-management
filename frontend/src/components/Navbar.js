@@ -836,104 +836,50 @@ const Navbar = () => {
                 </Link>
               </li>
               
+              {/* ── E-TİCARET DROPDOWN ── */}
               {role === 'ADMIN' && (
               <li className="nav-item dropdown">
-                <button 
-                  className="nav-link nav-link-custom dropdown-toggle text-white border-0 bg-transparent w-100 text-start" 
-                  type="button"
-                  data-bs-toggle="dropdown" 
-                  style={{
-                    ...navLinkStyle(null),
-                    background: ['/admin-settings', '/desi'].includes(location.pathname) 
-                      ? 'rgba(255,255,255,0.2)' 
-                      : 'transparent'
-                  }}
-                >
-                  <i className="fas fa-cog me-2"></i>
-                  Araçlar
+                <button className="nav-link nav-link-custom dropdown-toggle text-white border-0 bg-transparent w-100 text-start" type="button" data-bs-toggle="dropdown"
+                  style={{ ...navLinkStyle(null), background: ['/admin/sales-dashboard','/admin/orders','/admin/customers','/admin/payments','/admin/support-tickets','/admin/stock-movements'].some(p => location.pathname.startsWith(p)) ? 'rgba(255,255,255,0.2)' : 'transparent' }}>
+                  <i className="fas fa-store me-2"></i>E-Ticaret
                 </button>
                 <ul className="dropdown-menu border-0 shadow-lg" style={{borderRadius: '12px', marginTop: '0.5rem'}}>
-                  <li>
-                    <Link className="dropdown-item" to="/desi">
-                      <i className="fas fa-calculator me-2 text-info"></i>
-                      Desi Hesaplama
-                    </Link>
-                  </li>
+                  <li><small className="dropdown-header text-uppercase fw-bold" style={{fontSize:10,letterSpacing:'0.05em'}}>Satış</small></li>
+                  <li><Link className="dropdown-item" to="/admin/sales-dashboard"><i className="fas fa-chart-line me-2 text-primary"></i>Satış Dashboard</Link></li>
+                  <li><Link className="dropdown-item" to="/admin/orders"><i className="fas fa-shopping-cart me-2 text-success"></i>Siparişler</Link></li>
+                  <li><Link className="dropdown-item" to="/admin/payments"><i className="fas fa-credit-card me-2 text-danger"></i>Ödemeler</Link></li>
                   <li><hr className="dropdown-divider" /></li>
-                  <li>
-                    <Link className="dropdown-item" to="/admin/notifications">
-                      <i className="fas fa-bell me-2 text-warning"></i>
-                      Bildirimler
-                    </Link>
-                  </li>
+                  <li><small className="dropdown-header text-uppercase fw-bold" style={{fontSize:10,letterSpacing:'0.05em'}}>Müşteri</small></li>
+                  <li><Link className="dropdown-item" to="/admin/customers"><i className="fas fa-users me-2 text-warning"></i>Müşteriler</Link></li>
+                  <li><Link className="dropdown-item" to="/admin/support-tickets"><i className="fas fa-headset me-2 text-info"></i>Destek Talepleri</Link></li>
                   <li><hr className="dropdown-divider" /></li>
-                  <li>
-                    <Link className="dropdown-item" to="/admin/orders">
-                      <i className="fas fa-shopping-cart me-2 text-success"></i>
-                      Siparişler
-                    </Link>
-                  </li>
-                  <li>
-                    <Link className="dropdown-item" to="/admin/customers">
-                      <i className="fas fa-users me-2 text-warning"></i>
-                      Müşteriler
-                    </Link>
-                  </li>
-                  <li>
-                    <Link className="dropdown-item" to="/admin/payments">
-                      <i className="fas fa-credit-card me-2 text-danger"></i>
-                      Ödemeler
-                    </Link>
-                  </li>
-                  <li>
-                    <Link className="dropdown-item" to="/admin/payment-gateways">
-                      <i className="fas fa-credit-card me-2 text-purple" style={{color:'#6f42c1'}}></i>
-                      Ödeme Ayarları
-                    </Link>
-                  </li>
-                  <li>
-                    <Link className="dropdown-item" to="/admin/coupons">
-                      <i className="fas fa-ticket-alt me-2 text-success"></i>
-                      Kuponlar
-                    </Link>
-                  </li>
-                  <li>
-                    <Link className="dropdown-item" to="/admin/stock-movements">
-                      <i className="fas fa-exchange-alt me-2 text-info"></i>
-                      Stok Hareketleri
-                    </Link>
-                  </li>
-                  <li>
-                    <Link className="dropdown-item" to="/admin/cargo-providers">
-                      <i className="fas fa-truck me-2 text-primary"></i>
-                      Kargo Ayarları
-                    </Link>
-                  </li>
-                  <li>
-                    <Link className="dropdown-item" to="/admin/support-tickets">
-                      <i className="fas fa-headset me-2 text-warning"></i>
-                      Destek Talepleri
-                    </Link>
-                  </li>
-                  <li>
-                    <Link className="dropdown-item" to="/admin/cms">
-                      <i className="fas fa-file-alt me-2 text-info"></i>
-                      İçerik Yönetimi
-                    </Link>
-                  </li>
-                  <li>
-                    <Link className="dropdown-item" to="/admin/site-settings">
-                      <i className="fas fa-globe me-2 text-primary"></i>
-                      Site Ayarları
-                    </Link>
-                  </li>
+                  <li><small className="dropdown-header text-uppercase fw-bold" style={{fontSize:10,letterSpacing:'0.05em'}}>Operasyon</small></li>
+                  <li><Link className="dropdown-item" to="/admin/stock-movements"><i className="fas fa-exchange-alt me-2 text-primary"></i>Stok Hareketleri</Link></li>
+                  <li><Link className="dropdown-item" to="/admin/coupons"><i className="fas fa-ticket-alt me-2 text-success"></i>Kuponlar</Link></li>
+                </ul>
+              </li>
+              )}
+
+              {/* ── AYARLAR DROPDOWN ── */}
+              {role === 'ADMIN' && (
+              <li className="nav-item dropdown">
+                <button className="nav-link nav-link-custom dropdown-toggle text-white border-0 bg-transparent w-100 text-start" type="button" data-bs-toggle="dropdown"
+                  style={{ ...navLinkStyle(null), background: ['/admin/payment-gateways','/admin/cargo-providers','/admin/cms','/admin/site-settings','/admin-settings','/desi','/admin/notifications'].some(p => location.pathname.startsWith(p)) ? 'rgba(255,255,255,0.2)' : 'transparent' }}>
+                  <i className="fas fa-cog me-2"></i>Ayarlar
+                </button>
+                <ul className="dropdown-menu border-0 shadow-lg" style={{borderRadius: '12px', marginTop: '0.5rem'}}>
+                  <li><small className="dropdown-header text-uppercase fw-bold" style={{fontSize:10,letterSpacing:'0.05em'}}>Ödeme & Kargo</small></li>
+                  <li><Link className="dropdown-item" to="/admin/payment-gateways"><i className="fas fa-credit-card me-2" style={{color:'#6f42c1'}}></i>Ödeme Ayarları</Link></li>
+                  <li><Link className="dropdown-item" to="/admin/cargo-providers"><i className="fas fa-truck me-2 text-primary"></i>Kargo Ayarları</Link></li>
                   <li><hr className="dropdown-divider" /></li>
-                  <li>
-                    <Link className="dropdown-item" to="/admin-settings">
-                      <i className="fas fa-tools me-2 text-danger"></i>
-                      Yönetici Ayarları
-                    </Link>
-                  </li>
+                  <li><small className="dropdown-header text-uppercase fw-bold" style={{fontSize:10,letterSpacing:'0.05em'}}>İçerik & Görünüm</small></li>
+                  <li><Link className="dropdown-item" to="/admin/cms"><i className="fas fa-file-alt me-2 text-info"></i>İçerik Yönetimi</Link></li>
+                  <li><Link className="dropdown-item" to="/admin/site-settings"><i className="fas fa-globe me-2 text-primary"></i>Site Ayarları</Link></li>
+                  <li><hr className="dropdown-divider" /></li>
+                  <li><small className="dropdown-header text-uppercase fw-bold" style={{fontSize:10,letterSpacing:'0.05em'}}>Sistem</small></li>
+                  <li><Link className="dropdown-item" to="/desi"><i className="fas fa-calculator me-2 text-info"></i>Desi Hesaplama</Link></li>
+                  <li><Link className="dropdown-item" to="/admin/notifications"><i className="fas fa-bell me-2 text-warning"></i>Bildirimler</Link></li>
+                  <li><Link className="dropdown-item" to="/admin-settings"><i className="fas fa-tools me-2 text-danger"></i>Yönetici Ayarları</Link></li>
                 </ul>
               </li>
               )}

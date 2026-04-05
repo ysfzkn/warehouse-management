@@ -193,7 +193,7 @@ public class IyzicoPaymentGateway implements PaymentGateway {
             logger.error("iyzico init exception: {}", e.getMessage(), e);
             return PaymentInitResult.builder()
                 .success(false)
-                .errorMessage("Odeme sistemi hatasi: " + e.getMessage())
+                .errorMessage("Ödeme sistemi hatası: " + e.getMessage())
                 .build();
         }
     }

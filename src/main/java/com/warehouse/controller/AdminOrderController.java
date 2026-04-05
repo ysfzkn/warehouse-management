@@ -140,6 +140,7 @@ public class AdminOrderController {
     }
 
     @GetMapping("/{id}")
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<AdminOrderDetailDto> getOrder(@PathVariable Long id) {
         Order order = orderRepository.findByIdWithCustomer(id)
             .orElseThrow(() -> new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Sipariş bulunamadı."));

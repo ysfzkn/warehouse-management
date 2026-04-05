@@ -72,7 +72,7 @@ public class BankTransferExpiryJob {
                 statusHistoryRepo.save(OrderStatusHistoryFactory.create(
                     order, OrderStatus.PENDING_PAYMENT, OrderStatus.CANCELLED,
                     "system", "BANK_TRANSFER_EXPIRY_JOB",
-                    "Havale/EFT suresi doldu (" + order.getBankTransferDeadline() + ")"));
+                    "Havale/EFT süresi doldu (" + order.getBankTransferDeadline() + ")"));
 
                 logger.info("Bank transfer expired: orderId={}, orderNumber={}", order.getId(), order.getOrderNumber());
             } catch (Exception e) {

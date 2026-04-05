@@ -50,6 +50,9 @@ public class AdminCouponController {
         adminSecurityService.requireSecurityCodeForAdmin(securityCode);
         coupon.setId(null);
         coupon.setUsedCount(0);
+        // Default dates: starts now, expires in 1 month
+        if (coupon.getStartsAt() == null) coupon.setStartsAt(java.time.LocalDateTime.now());
+        if (coupon.getExpiresAt() == null) coupon.setExpiresAt(java.time.LocalDateTime.now().plusMonths(1));
         return ResponseEntity.ok(couponRepo.save(coupon));
     }
 

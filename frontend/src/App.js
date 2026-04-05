@@ -34,6 +34,7 @@ import AdminCoupons from './pages/AdminCoupons';
 import AdminStockMovements from './pages/AdminStockMovements';
 import AdminCargoProviders from './pages/AdminCargoProviders';
 import AdminSupportTickets from './pages/AdminSupportTickets';
+import AdminSalesDashboard from './pages/AdminSalesDashboard';
 
 // Store pages (new)
 import HomePage from './pages/store/HomePage';
@@ -173,6 +174,9 @@ function App() {
           } />
           <Route path="admin/support-tickets" element={
             authed && role === 'ADMIN' ? <AdminSupportTickets /> : <Navigate to={authed ? '/stock' : '/login'} replace />
+          } />
+          <Route path="admin/sales-dashboard" element={
+            authed && role === 'ADMIN' ? <AdminSalesDashboard /> : <Navigate to={authed ? '/stock' : '/login'} replace />
           } />
         </Route>
       </Routes>

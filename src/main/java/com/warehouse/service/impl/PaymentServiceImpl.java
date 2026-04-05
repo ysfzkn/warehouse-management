@@ -244,7 +244,7 @@ public class PaymentServiceImpl implements PaymentService {
 
             order.setStatus(OrderStatus.CANCELLED);
             orderRepo.save(order);
-            logStatusChange(order, OrderStatus.PENDING_PAYMENT.name(), OrderStatus.CANCELLED.name(), "system", "Odeme basarisiz: " + result.getErrorMessage());
+            logStatusChange(order, OrderStatus.PENDING_PAYMENT.name(), OrderStatus.CANCELLED.name(), "system", "Ödeme başarısız: " + result.getErrorMessage());
 
             logger.warn("Payment failed: txId={}, error={}", tx.getId(), result.getErrorMessage());
         }

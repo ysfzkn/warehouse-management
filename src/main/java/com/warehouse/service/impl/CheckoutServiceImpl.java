@@ -106,7 +106,7 @@ public class CheckoutServiceImpl implements CheckoutService {
     @Override
     public PlaceOrderResponse placeOrder(Long customerId, PlaceOrderRequest request, String ipAddress, String userAgent) {
         if (!request.isDistanceSalesContractAccepted()) {
-            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Mesafeli satis sozlesmesini onaylamaniz gerekiyor.");
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Mesafeli satış sözleşmesini onaylamanız gerekiyor.");
         }
 
         Customer customer = customerRepository.findById(customerId)
@@ -173,7 +173,7 @@ public class CheckoutServiceImpl implements CheckoutService {
             }
             if (remaining > 0) {
                 throw new WarehouseManagementException(ErrorCode.STOCK_RESERVATION_FAILED,
-                    p.getName() + " icin yeterli stok bulunamadi.");
+                    p.getName() + " için yeterli stok bulunamadı.");
             }
 
             OrderItem oi = new OrderItem();

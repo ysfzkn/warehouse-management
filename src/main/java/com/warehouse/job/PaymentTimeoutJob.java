@@ -68,7 +68,7 @@ public class PaymentTimeoutJob {
 
                     statusHistoryRepo.save(OrderStatusHistoryFactory.create(
                         order, OrderStatus.PENDING_PAYMENT, OrderStatus.CANCELLED,
-                        "system", "TIMEOUT_JOB", "Odeme suresi doldu (3D Secure timeout)"));
+                        "system", "TIMEOUT_JOB", "Ödeme süresi doldu (3D Secure timeout)"));
 
                     logger.info("Payment timeout: txId={}, orderId={} cancelled, stock released", tx.getId(), order.getId());
                 }

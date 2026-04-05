@@ -132,7 +132,16 @@ export default function MyOrdersPage() {
                     <div className="fw-bold">{fmt(o.grandTotal)}</div>
                   </div>
                   {o.cargoTrackingNo && (
-                    <div className="small text-success mt-1"><FiTruck size={13} className="me-1" />Kargo: <strong>{o.cargoTrackingNo}</strong></div>
+                    <div className="small text-success mt-1 d-flex align-items-center gap-2" onClick={e => e.stopPropagation()}>
+                      <FiTruck size={13} />
+                      <span>Kargo: <strong>{o.cargoTrackingNo}</strong></span>
+                      {o.cargoTrackingUrl && (
+                        <a href={o.cargoTrackingUrl} target="_blank" rel="noopener noreferrer"
+                          className="btn btn-sm btn-success py-0 px-2" style={{ fontSize: 10 }}>
+                          <i className="fas fa-external-link-alt me-1" style={{ fontSize: 8 }} />Takip Et
+                        </a>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>
@@ -218,8 +227,30 @@ export default function MyOrdersPage() {
                           <div className="col-md-6">
                             <div className="rounded-3 p-3 h-100" style={{ background: '#f0fdf4', border: '1px solid #bbf7d0' }}>
                               <h6 className="small fw-semibold mb-2"><FiTruck className="me-1 text-success" />Kargo</h6>
-                              {detailOrder.cargoCompany && <div className="small">{detailOrder.cargoCompany}</div>}
-                              {detailOrder.cargoTrackingNo && <div className="small fw-medium mt-1">Takip No: <code>{detailOrder.cargoTrackingNo}</code></div>}
+                              {(detailOrder.cargoProviderName || detailOrder.cargoCompany) && (
+                                <div className="small">{detailOrder.cargoProviderName || detailOrder.cargoCompany}</div>
+                              )}
+                              {detailOrder.cargoTrackingNo && (
+                                <div className="mt-2">
+                                  <div className="small text-muted mb-1">Takip Numarası</div>
+                                  <div className="d-flex align-items-center gap-2">
+                                    <code className="fw-bold" style={{ fontSize: 13 }}>{detailOrder.cargoTrackingNo}</code>
+                                    <button className="btn btn-sm btn-outline-secondary py-0 px-1" style={{ fontSize: 10 }}
+                                      onClick={() => { navigator.clipboard.writeText(detailOrder.cargoTrackingNo); }}
+                                      title="Kopyala">
+                                      <i className="fas fa-copy" />
+                                    </button>
+                                  </div>
+                                  {detailOrder.cargoTrackingUrl && (
+                                    <a href={detailOrder.cargoTrackingUrl} target="_blank" rel="noopener noreferrer"
+                                      className="btn btn-success btn-sm w-100 mt-2 d-flex align-items-center justify-content-center gap-2">
+                                      <FiTruck size={14} />
+                                      Kargo Takip Sayfasına Git
+                                      <i className="fas fa-external-link-alt" style={{ fontSize: 10 }} />
+                                    </a>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           </div>
                         )}

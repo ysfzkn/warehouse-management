@@ -107,7 +107,7 @@ public class CartServiceImpl implements CartService {
     public CartDto applyCoupon(Long customerId, String sessionId, String couponCode) {
         Cart cart = findOrCreateCart(customerId, sessionId);
         Coupon coupon = couponRepository.findActiveByCode(couponCode, LocalDateTime.now())
-            .orElseThrow(() -> new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Gecersiz veya suresi dolmus kupon kodu."));
+            .orElseThrow(() -> new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Geçersiz veya süresi dolmuş kupon kodu."));
 
         // Store coupon code in a transient way - we'll apply it during checkout
         // For now just validate and return the cart with discount preview

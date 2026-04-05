@@ -59,7 +59,7 @@ public class StorePaymentController {
         }
         Long orderId;
         try { orderId = ((Number) body.get("orderId")).longValue(); }
-        catch (Exception e) { return ResponseEntity.badRequest().body(Map.of("message", "Gecersiz orderId.")); }
+        catch (Exception e) { return ResponseEntity.badRequest().body(Map.of("message", "Geçersiz orderId.")); }
 
         String paymentMethod = (String) body.get("paymentMethod");
         int installmentCount = 1;

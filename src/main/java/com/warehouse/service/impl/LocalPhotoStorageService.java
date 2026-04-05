@@ -254,7 +254,7 @@ public class LocalPhotoStorageService implements PhotoStorageService {
 
             // Validate content type
             if (contentType == null || (!contentType.startsWith("image/") && !contentType.equals("application/octet-stream"))) {
-                throw new IllegalArgumentException("Gecersiz dosya tipi: " + contentType);
+                throw new IllegalArgumentException("Geçersiz dosya tipi: " + contentType);
             }
 
             String extension = resolveSiteAssetExtension(originalFileName, contentType);

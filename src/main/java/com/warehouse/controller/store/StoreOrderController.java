@@ -31,17 +31,20 @@ public class StoreOrderController {
     private final JwtService jwtService;
     private final com.warehouse.repository.CustomerRepository customerRepo;
     private final com.warehouse.repository.SupportTicketRepository supportTicketRepo;
+    private final com.warehouse.repository.CargoProviderRepository cargoProviderRepo;
 
     public StoreOrderController(OrderRepository orderRepo, OrderItemRepository orderItemRepo,
                                  OrderStatusHistoryRepository statusHistoryRepo, JwtService jwtService,
                                  com.warehouse.repository.CustomerRepository customerRepo,
-                                 com.warehouse.repository.SupportTicketRepository supportTicketRepo) {
+                                 com.warehouse.repository.SupportTicketRepository supportTicketRepo,
+                                 com.warehouse.repository.CargoProviderRepository cargoProviderRepo) {
         this.orderRepo = orderRepo;
         this.orderItemRepo = orderItemRepo;
         this.statusHistoryRepo = statusHistoryRepo;
         this.jwtService = jwtService;
         this.customerRepo = customerRepo;
         this.supportTicketRepo = supportTicketRepo;
+        this.cargoProviderRepo = cargoProviderRepo;
     }
 
     @GetMapping
@@ -217,6 +220,29 @@ public class StoreOrderController {
         dto.put("itemCount", itemCount);
         dto.put("cargoTrackingNo", o.getCargoTrackingNo());
         dto.put("cargoCompany", o.getCargoCompany() != null ? o.getCargoCompany().name() : null);
+        dto.put("cargoProviderName", o.getCargoProviderName());
+        // Build tracking URL
+        String trackingUrl = null;
+        if (o.getCargoTrackingNo() != null && !o.getCargoTrackingNo().isBlank()) {
+            try {
+                // First try CargoProvider table
+                if (o.getCargoProviderId() != null) {
+                    cargoProviderRepo.findById(o.getCargoProviderId()).ifPresent(cp -> {
+                        if (cp.getTrackingUrlTemplate() != null) {
+                            dto.put("cargoTrackingUrl", cp.getTrackingUrlTemplate().replace("{trackingNo}", o.getCargoTrackingNo()));
+                        }
+                    });
+                }
+                // Fallback: match by cargo company code
+                if (!dto.containsKey("cargoTrackingUrl") && o.getCargoCompany() != null) {
+                    cargoProviderRepo.findByCode(o.getCargoCompany().name()).ifPresent(cp -> {
+                        if (cp.getTrackingUrlTemplate() != null) {
+                            dto.put("cargoTrackingUrl", cp.getTrackingUrlTemplate().replace("{trackingNo}", o.getCargoTrackingNo()));
+                        }
+                    });
+                }
+            } catch (Exception ignored) {}
+        }
         dto.put("invoiceUrl", o.getInvoiceUrl());
         dto.put("invoiceNumber", o.getInvoiceNumber());
         dto.put("createdAt", o.getCreatedAt());

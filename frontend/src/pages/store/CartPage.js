@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
 import { useToast } from '../../components/store/Toast';
-import { FiTrash2, FiMinus, FiPlus } from 'react-icons/fi';
+import { FiTrash2, FiMinus, FiPlus, FiShoppingCart } from 'react-icons/fi';
 
 export default function CartPage() {
   const { cart } = useOutletContext();
@@ -38,37 +38,65 @@ export default function CartPage() {
             const discountPct = hasDiscount ? Math.round((1 - item.salePrice / item.unitPrice) * 100) : 0;
             const effectivePrice = hasDiscount ? item.salePrice : item.unitPrice;
             return (
-            <div key={item.id} className="store-cart-item">
-              <div className="store-cart-item-img position-relative">
-                <Link to={`/store/urun/${item.productSlug}`}>{item.imageUrl && <img src={item.imageUrl} alt={item.productName} />}</Link>
-                {hasDiscount && <span className="badge bg-danger position-absolute top-0 start-0" style={{fontSize:10}}>%{discountPct}</span>}
-              </div>
-              <div className="flex-grow-1">
-                <Link to={`/store/urun/${item.productSlug}`} className="text-decoration-none"><h6 className="mb-1">{item.productName}</h6></Link>
-                <div className="d-flex align-items-center gap-2 mb-1">
-                  {hasDiscount ? (
-                    <>
-                      <span className="fw-bold text-danger">{formatPrice(item.salePrice)}</span>
-                      <del className="text-muted small">{formatPrice(item.unitPrice)}</del>
-                      <span className="badge bg-danger bg-opacity-10 text-danger" style={{fontSize:11}}>%{discountPct} indirim</span>
-                    </>
-                  ) : (
-                    <span className="fw-bold">{formatPrice(item.unitPrice)}</span>
+            <div key={item.id} className="card border-0 shadow-sm mb-3" style={{borderRadius:14}}>
+              <div className="card-body d-flex gap-3 align-items-center p-3">
+                {/* Görsel */}
+                <Link to={`/store/urun/${item.productSlug}`} className="flex-shrink-0 position-relative">
+                  <div style={{width:80,height:80,borderRadius:12,background:'#f8fafc',border:'1px solid #f1f5f9',overflow:'hidden',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                    {item.imageUrl ? <img src={item.imageUrl} alt="" style={{width:'100%',height:'100%',objectFit:'contain'}} /> : <FiShoppingCart size={24} className="text-muted" />}
+                  </div>
+                  {hasDiscount && <span className="badge bg-danger position-absolute" style={{top:-4,left:-4,fontSize:9}}>%{discountPct}</span>}
+                </Link>
+
+                {/* Ürün bilgisi */}
+                <div className="flex-grow-1 min-w-0">
+                  <Link to={`/store/urun/${item.productSlug}`} className="text-decoration-none">
+                    <div className="fw-semibold text-truncate mb-1">{item.productName}</div>
+                  </Link>
+                  <div className="d-flex align-items-center gap-2 mb-2">
+                    {hasDiscount ? (
+                      <>
+                        <span className="fw-bold text-danger">{formatPrice(item.salePrice)}</span>
+                        <del className="text-muted" style={{fontSize:12}}>{formatPrice(item.unitPrice)}</del>
+                      </>
+                    ) : (
+                      <span className="fw-bold">{formatPrice(item.unitPrice)}</span>
+                    )}
+                  </div>
+                  {item.availableStock != null && item.availableStock < item.quantity && (
+                    <small className="text-danger"><i className="fas fa-exclamation-triangle me-1" />Stokta sadece {item.availableStock} adet var</small>
                   )}
                 </div>
-                {item.availableStock < item.quantity && <small className="text-danger"><i className="fas fa-exclamation-triangle me-1" />Stokta sadece {item.availableStock} adet var</small>}
-              </div>
-              <div className="d-flex align-items-center gap-2">
-                <div className="store-qty-selector">
-                  <button onClick={() => cart.updateItem(item.id, Math.max(1, item.quantity - 1))} aria-label="Azalt"><FiMinus size={14} /></button>
-                  <input type="number" value={item.quantity} readOnly style={{width:40}} aria-label="Miktar" />
-                  <button onClick={() => cart.updateItem(item.id, item.quantity + 1)} aria-label="Artır"><FiPlus size={14} /></button>
+
+                {/* Miktar kontrol — ortalanmış */}
+                <div className="d-flex flex-column align-items-center flex-shrink-0" style={{minWidth:100}}>
+                  <div className="d-flex align-items-center" style={{border:'1.5px solid #e2e8f0',borderRadius:10,overflow:'hidden'}}>
+                    <button className="btn btn-sm d-flex align-items-center justify-content-center" style={{width:32,height:32,border:'none',background:'#f8fafc'}}
+                      onClick={() => cart.updateItem(item.id, Math.max(1, item.quantity - 1))}>
+                      <FiMinus size={13} />
+                    </button>
+                    <span className="d-flex align-items-center justify-content-center fw-bold" style={{width:36,height:32,fontSize:14,borderLeft:'1px solid #e2e8f0',borderRight:'1px solid #e2e8f0'}}>
+                      {item.quantity}
+                    </span>
+                    <button className="btn btn-sm d-flex align-items-center justify-content-center" style={{width:32,height:32,border:'none',background:'#f8fafc'}}
+                      onClick={() => cart.updateItem(item.id, item.quantity + 1)}>
+                      <FiPlus size={13} />
+                    </button>
+                  </div>
                 </div>
-                <div className="text-end" style={{minWidth:80}}>
+
+                {/* Toplam fiyat — sağa hizalı */}
+                <div className="text-end flex-shrink-0" style={{minWidth:90}}>
                   <div className="fw-bold">{formatPrice(effectivePrice * item.quantity)}</div>
                   {item.quantity > 1 && <small className="text-muted">{item.quantity} × {formatPrice(effectivePrice)}</small>}
                 </div>
-                <button className="btn btn-sm text-danger" onClick={async () => { try { await cart.removeItem(item.id); toast.info('Ürün sepetten çıkarıldı'); } catch { toast.error('Ürün çıkarılamadı'); }}} aria-label="Kaldır"><FiTrash2 /></button>
+
+                {/* Sil */}
+                <button className="btn btn-sm text-danger flex-shrink-0" style={{width:32,height:32,padding:0}}
+                  onClick={async () => { try { await cart.removeItem(item.id); toast.info('Ürün sepetten çıkarıldı'); } catch { toast.error('Ürün çıkarılamadı'); }}}
+                  aria-label="Kaldır">
+                  <FiTrash2 size={15} />
+                </button>
               </div>
             </div>
             );

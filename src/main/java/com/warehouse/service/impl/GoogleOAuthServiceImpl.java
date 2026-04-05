@@ -66,7 +66,7 @@ public class GoogleOAuthServiceImpl implements GoogleOAuthService {
             }
             logger.error("Google token exchange failed: {} — detail: {}", e.getMessage(), detail);
             throw new WarehouseManagementException(ErrorCode.AUTH_ERROR,
-                "Google kimlik dogrulama basarisiz: " + (detail != null && detail.length() < 200 ? detail : "Lutfen tekrar deneyin."));
+                "Google kimlik doğrulama başarısız: " + (detail != null && detail.length() < 200 ? detail : "Lütfen tekrar deneyin."));
         }
 
         if (tokenResponse == null || !tokenResponse.containsKey("access_token")) {

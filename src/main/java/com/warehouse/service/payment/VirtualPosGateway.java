@@ -100,7 +100,7 @@ public class VirtualPosGateway implements PaymentGateway {
             log.error("SECURITY: Hash verification FAILED for config={}, possible fraud!", config.getCode());
             return PaymentCallbackResult.builder()
                     .success(false)
-                    .errorMessage("Guvenlik dogrulamasi basarisiz. Islem reddedildi.")
+                    .errorMessage("Güvenlik doğrulaması başarısız. İşlem reddedildi.")
                     .build();
         }
 
