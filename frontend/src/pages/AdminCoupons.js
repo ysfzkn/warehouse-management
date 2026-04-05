@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import useSecurityCodePrompt from '../components/useSecurityCodePrompt';
+import { useAdminToast } from '../components/AdminToast';
 
 const DISCOUNT_TYPES = { PERCENTAGE: 'Yüzde (%)', FIXED_AMOUNT: 'Sabit Tutar (₺)', FREE_SHIPPING: 'Ücretsiz Kargo' };
 const formatDate = (d) => d ? new Date(d).toLocaleString('tr-TR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '—';
@@ -13,8 +14,8 @@ export default function AdminCoupons() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({...EMPTY_FORM});
-  const [message, setMessage] = useState('');
   const { askCode, SecurityCodePrompt } = useSecurityCodePrompt();
+  const toast = useAdminToast();
 
   const fetch = useCallback(() => {
     setLoading(true);
@@ -30,7 +31,7 @@ export default function AdminCoupons() {
   };
 
   const handleSave = async () => {
-    if (!form.code || !form.discountValue) { setMessage('error-validation'); return; }
+    if (!form.code || !form.discountValue) { toast.error('Kupon kodu ve indirim değeri zorunludur.'); return; }
     const code = await askCode({ description: 'Kupon kaydetmek için güvenlik şifresini girin.' });
     if (!code) return;
     try {
@@ -47,11 +48,11 @@ export default function AdminCoupons() {
       if (editing) await axios.put(`/api/admin/coupons/${editing}`, data, { headers });
       else await axios.post('/api/admin/coupons', data, { headers });
       setShowForm(false); setEditing(null); setForm({...EMPTY_FORM}); fetch();
-      setMessage('success');
+      toast.success('Kupon başarıyla kaydedildi.');
     } catch (e) {
-      setMessage(e.response?.status === 403 ? 'error-code' : 'error');
+      if (e.response?.status === 403) toast.error('Güvenlik şifresi hatalı.');
+      else toast.error('İşlem sırasında hata oluştu.');
     }
-    setTimeout(() => setMessage(''), 3000);
   };
 
   const handleDelete = async (c) => {
@@ -59,7 +60,7 @@ export default function AdminCoupons() {
     const code = await askCode({ description: 'Kupon silmek için güvenlik şifresini girin.' });
     if (!code) return;
     try { await axios.delete(`/api/admin/coupons/${c.id}`, { headers: { 'X-ADMIN-SECURITY-CODE': code } }); fetch(); }
-    catch { setMessage('error'); }
+    catch { toast.error('İşlem sırasında hata oluştu.'); }
   };
 
   const startEdit = (c) => {
@@ -78,11 +79,6 @@ export default function AdminCoupons() {
         <div><h2 className="mb-0">Kupon Yönetimi</h2><p className="text-muted small mb-0">İndirim kuponları oluşturun ve yönetin</p></div>
         <button className="btn btn-primary" onClick={() => { setEditing(null); setForm({...EMPTY_FORM}); setShowForm(true); }}><i className="fas fa-plus me-2" />Yeni Kupon</button>
       </div>
-
-      {message === 'success' && <div className="alert alert-success py-2 small">Kupon başarıyla kaydedildi.</div>}
-      {message === 'error-code' && <div className="alert alert-danger py-2 small">Güvenlik şifresi hatalı.</div>}
-      {message === 'error' && <div className="alert alert-danger py-2 small">İşlem sırasında hata oluştu.</div>}
-      {message === 'error-validation' && <div className="alert alert-warning py-2 small">Kupon kodu ve indirim değeri zorunludur.</div>}
 
       <div className="row g-4">
         {showForm && (

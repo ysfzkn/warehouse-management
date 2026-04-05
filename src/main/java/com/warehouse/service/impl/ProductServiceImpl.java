@@ -557,6 +557,9 @@ public class ProductServiceImpl implements ProductService {
         product.setVatRate(productDetails.getVatRate());
         product.setSctRate(productDetails.getSctRate());
         product.setActive(productDetails.isActive());
+        if (productDetails.getSlug() != null) product.setSlug(productDetails.getSlug());
+        if (productDetails.getMetaTitle() != null) product.setMetaTitle(productDetails.getMetaTitle());
+        if (productDetails.getMetaDescription() != null) product.setMetaDescription(productDetails.getMetaDescription());
     }
 
     private void updateProductStatus(Long id, boolean isActive) {

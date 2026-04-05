@@ -33,6 +33,8 @@ public class AdminOrderDetailDto {
     private String customerNote;
     private String adminNote;
     private String ipAddress;
+    private String invoiceNumber;
+    private String invoiceUrl;
     private List<OrderItemDto> items;
     private List<StatusHistoryDto> statusHistory;
     private LocalDateTime createdAt;
@@ -40,11 +42,16 @@ public class AdminOrderDetailDto {
     @Data @Builder
     public static class OrderItemDto {
         private Long id;
+        private Long productId;
         private String productName;
         private String productSku;
+        private String imageUrl;
         private int quantity;
         private BigDecimal unitPrice;
         private BigDecimal lineTotal;
+        private Long warehouseId;
+        private String warehouseName;
+        private Long stockId;
     }
 
     @Data @Builder

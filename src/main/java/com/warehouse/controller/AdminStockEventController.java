@@ -54,8 +54,8 @@ public class AdminStockEventController {
         LocalDateTime end = endDate != null && !endDate.isBlank() ? LocalDate.parse(endDate).plusDays(1).atStartOfDay() : null;
         String searchTerm = search != null && !search.isBlank() ? search : null;
 
-        Page<StockEvent> result = stockEventRepository.findByFilters(
-            sourceEnum, typeEnum, productId, start, end, searchTerm,
+        Page<StockEvent> result = stockEventRepository.findAll(
+            com.warehouse.repository.StockEventSpecifications.withFilters(sourceEnum, typeEnum, productId, start, end, searchTerm),
             PageRequest.of(page, size, Sort.by("createdAt").descending()));
 
         // Enrich with product names

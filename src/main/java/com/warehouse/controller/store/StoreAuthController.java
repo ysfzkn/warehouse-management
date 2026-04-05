@@ -55,6 +55,19 @@ public class StoreAuthController {
         return ResponseEntity.ok(Map.of("message", "E-posta adresiniz başarıyla doğrulandı."));
     }
 
+    @PostMapping("/forgot-password")
+    public ResponseEntity<Map<String, String>> forgotPassword(@RequestBody Map<String, String> body) {
+        customerAuthService.requestPasswordReset(body.get("email"));
+        // Always return success to prevent email enumeration attacks
+        return ResponseEntity.ok(Map.of("message", "Şifre sıfırlama bağlantısı e-posta adresinize gönderildi."));
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<Map<String, String>> resetPassword(@RequestBody Map<String, String> body) {
+        customerAuthService.resetPassword(body.get("token"), body.get("password"));
+        return ResponseEntity.ok(Map.of("message", "Şifreniz başarıyla değiştirildi. Yeni şifrenizle giriş yapabilirsiniz."));
+    }
+
     @PostMapping("/google")
     public ResponseEntity<CustomerLoginResponse> googleAuth(@RequestBody GoogleAuthRequest request,
                                                              HttpServletRequest httpRequest) {

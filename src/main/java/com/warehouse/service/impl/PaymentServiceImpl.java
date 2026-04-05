@@ -35,6 +35,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final PaymentProperties paymentProperties;
     private final PaymentGatewayConfigRepository gatewayConfigRepo;
     private final com.warehouse.service.CartService cartService;
+    private final StockEventRepository stockEventRepo;
 
     public PaymentServiceImpl(PaymentTransactionRepository paymentRepo,
                                OrderRepository orderRepo,
@@ -44,9 +45,11 @@ public class PaymentServiceImpl implements PaymentService {
                                PaymentGatewayFactory gatewayFactory,
                                PaymentProperties paymentProperties,
                                PaymentGatewayConfigRepository gatewayConfigRepo,
-                               com.warehouse.service.CartService cartService) {
+                               com.warehouse.service.CartService cartService,
+                               StockEventRepository stockEventRepo) {
         this.paymentRepo = paymentRepo;
         this.orderRepo = orderRepo;
+        this.stockEventRepo = stockEventRepo;
         this.statusHistoryRepo = statusHistoryRepo;
         this.stockRepo = stockRepo;
         this.orderItemRepo = orderItemRepo;
@@ -440,8 +443,19 @@ public class PaymentServiceImpl implements PaymentService {
         for (OrderItem item : items) {
             if (item.getStockId() != null) {
                 stockRepo.findByIdForUpdate(item.getStockId()).ifPresent(stock -> {
-                    stock.setReservedQuantity(Math.max(0, stock.getReservedQuantity() - item.getQuantity()));
+                    int oldReserved = stock.getReservedQuantity();
+                    stock.setReservedQuantity(Math.max(0, oldReserved - item.getQuantity()));
                     stockRepo.save(stock);
+
+                    StockEvent event = new StockEvent();
+                    event.setStockId(stock.getId());
+                    event.setProductId(item.getProduct() != null ? item.getProduct().getId() : null);
+                    event.setEventType(StockEventType.RELEASED);
+                    event.setOldValue(oldReserved);
+                    event.setNewValue(stock.getReservedQuantity());
+                    event.setSource(StockEventSource.ORDER);
+                    event.setSourceDetail("Sipariş #" + order.getOrderNumber() + " ödeme başarısız — stok serbest (" + item.getQuantity() + " adet)");
+                    stockEventRepo.save(event);
                 });
             }
         }

@@ -10,4 +10,6 @@ public interface CustomerAuthService {
     CustomerLoginResponse refreshToken(String refreshToken);
     void verifyEmail(String token);
     CustomerLoginResponse loginWithGoogle(String code, String redirectUri, String ipAddress);
+    void requestPasswordReset(String email);
+    void resetPassword(String token, String newPassword);
 }

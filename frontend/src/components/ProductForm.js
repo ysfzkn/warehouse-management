@@ -140,6 +140,9 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
       saleEnd: product.saleEnd ? product.saleEnd.substring(0, 16) : '',
       isFeatured: !!product.featured || !!product.isFeatured,
       isNew: !!product.isNew,
+      slug: product.slug || '',
+      metaTitle: product.metaTitle || '',
+      metaDescription: product.metaDescription || '',
     }));
     // Load product images
     if (product.id) {
@@ -531,7 +534,10 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
         category: { id: parseInt(formData.subcategoryId || formData.categoryId) },
         brand: brandId ? { id: brandId } : null,
         color: colorId ? { id: colorId } : null,
-        isActive: formData.isActive
+        isActive: formData.isActive,
+        slug: formData.slug || null,
+        metaTitle: formData.metaTitle || null,
+        metaDescription: formData.metaDescription || null,
       };
 
       let savedProductId = product?.id;
@@ -1315,7 +1321,52 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
         </>
       )}
 
-      <div className="d-flex justify-content-end gap-2">
+      {/* ── SEO Ayarları ── */}
+      <div className="card border-0 bg-light mt-3">
+        <div className="card-header bg-transparent border-bottom-0 d-flex align-items-center gap-2 py-2 px-3" style={{cursor:'pointer'}}
+          onClick={() => setFormData(prev => ({...prev, _seoOpen: !prev._seoOpen}))}>
+          <i className="fas fa-search text-success" />
+          <span className="small fw-semibold">SEO Ayarları</span>
+          <i className={`fas fa-chevron-${formData._seoOpen ? 'up' : 'down'} ms-auto text-muted`} style={{fontSize:11}} />
+        </div>
+        {formData._seoOpen && (
+          <div className="card-body pt-0 px-3 pb-3">
+            <div className="row g-2">
+              <div className="col-12">
+                <label className="form-label small fw-medium mb-1">Slug (URL)</label>
+                <div className="input-group input-group-sm">
+                  <span className="input-group-text text-muted" style={{fontSize:11}}>/store/urun/</span>
+                  <input className="form-control font-monospace" value={formData.slug || ''} onChange={e => setFormData(prev => ({...prev, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g,'')}))} placeholder="urun-adi-slug" />
+                  <button type="button" className="btn btn-outline-secondary" title="Ürün adından otomatik oluştur" onClick={() => {
+                    const s = (formData.name || '').toLowerCase().replace(/ş/g,'s').replace(/ç/g,'c').replace(/ğ/g,'g').replace(/ü/g,'u').replace(/ö/g,'o').replace(/ı/g,'i').replace(/İ/g,'i').replace(/[^a-z0-9\s-]/g,'').replace(/\s+/g,'-').replace(/-+/g,'-').replace(/^-|-$/g,'');
+                    setFormData(prev => ({...prev, slug: s}));
+                  }}><i className="fas fa-magic" /></button>
+                </div>
+              </div>
+              <div className="col-12">
+                <label className="form-label small fw-medium mb-1">Meta Başlık <span className="text-muted fw-normal">({(formData.metaTitle||'').length}/200)</span></label>
+                <input className="form-control form-control-sm" value={formData.metaTitle || ''} onChange={e => setFormData(prev => ({...prev, metaTitle: e.target.value}))} maxLength={200} placeholder="Arama sonuçlarında görünecek başlık" />
+              </div>
+              <div className="col-12">
+                <label className="form-label small fw-medium mb-1">Meta Açıklama <span className="text-muted fw-normal">({(formData.metaDescription||'').length}/500)</span></label>
+                <textarea className="form-control form-control-sm" rows={2} value={formData.metaDescription || ''} onChange={e => setFormData(prev => ({...prev, metaDescription: e.target.value}))} maxLength={500} placeholder="Arama sonuçlarında görünecek açıklama" />
+              </div>
+              {formData.metaTitle && (
+                <div className="col-12">
+                  <div className="border rounded p-2" style={{fontSize:12,background:'#fff'}}>
+                    <div className="text-primary" style={{fontSize:14}}>{formData.metaTitle || formData.name}</div>
+                    <div className="text-success" style={{fontSize:11}}>siteniz.com/store/urun/{formData.slug || '...'}</div>
+                    <div className="text-muted">{(formData.metaDescription || formData.shortDescription || '').substring(0, 160)}</div>
+                  </div>
+                  <small className="text-muted">Google arama sonucu önizlemesi</small>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="d-flex justify-content-end gap-2 mt-3">
         <button
           type="button"
           className="btn btn-secondary"

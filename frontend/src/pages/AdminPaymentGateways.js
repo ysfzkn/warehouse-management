@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import useSecurityCodePrompt from '../components/useSecurityCodePrompt';
+import { useAdminToast } from '../components/AdminToast';
 
 const PROTOCOLS = {
   NESTPAY: { label: 'NestPay (Asseco)', banks: ['ISBANK','AKBANK','HALKBANK','TEB','DENIZBANK','ING','ZIRAAT','KUVEYT','QNB','ANADOLU'], credentialType: 'pos' },
@@ -27,11 +28,11 @@ export default function AdminPaymentGateways() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({...EMPTY_FORM});
-  const [message, setMessage] = useState('');
   const [showStoreKey, setShowStoreKey] = useState(false);
   const [showProvPass, setShowProvPass] = useState(false);
   const [testResult, setTestResult] = useState(null);
   const { askCode, SecurityCodePrompt } = useSecurityCodePrompt();
+  const toast = useAdminToast();
 
   const fetchGateways = useCallback(() => {
     setLoading(true);
@@ -45,9 +46,8 @@ export default function AdminPaymentGateways() {
     const code = await askCode({ description: desc });
     if (!code) return;
     try { await fn(code); } catch (e) {
-      if (e.response?.status === 403) setMessage('error-code');
-      else setMessage('error');
-      setTimeout(() => setMessage(''), 4000);
+      if (e.response?.status === 403) toast.error('Güvenlik şifresi hatalı.');
+      else toast.error('İşlem sırasında hata oluştu.');
     }
   };
 
@@ -59,7 +59,7 @@ export default function AdminPaymentGateways() {
       await axios.post('/api/admin/payment-gateways', form, { headers });
     }
     setShowForm(false); setEditing(null); setForm({...EMPTY_FORM}); fetchGateways();
-    setMessage('success'); setTimeout(() => setMessage(''), 3000);
+    toast.success('Başarıyla kaydedildi.');
   });
 
   const handleToggle = (gw) => withCode(`${gw.displayName} durumunu değiştirmek için güvenlik şifresini girin.`, async (code) => {
@@ -98,20 +98,121 @@ export default function AdminPaymentGateways() {
   const isIyzico = form.gatewayProtocol === 'IYZICO';
   const isPayTR = form.gatewayProtocol === 'PAYTR';
 
+  // ── Payment method toggles & bank transfer config ──
+  const [paymentToggles, setPaymentToggles] = useState({});
+  const [bankConfig, setBankConfig] = useState(null);
+  const [bankSaving, setBankSaving] = useState(false);
+
+  useEffect(() => {
+    axios.get('/api/admin/settings/site').then(r => {
+      const map = {}; (r.data || []).forEach(s => { map[s.settingKey] = s.settingValue; }); setPaymentToggles(map);
+    }).catch(() => {});
+    axios.get('/api/admin/settings/payment/bank-transfer').then(r => setBankConfig(r.data)).catch(() => {});
+  }, []);
+
+  const handleToggleChange = async (key, value) => {
+    const updated = { ...paymentToggles, [key]: value };
+    setPaymentToggles(updated);
+    try { await axios.put('/api/admin/settings/site', updated); } catch (e) { toast.error('İşlem başarısız.'); }
+  };
+
+  const handleSaveBankConfig = async () => {
+    const code = await askCode({ description: 'Havale ayarlarını kaydetmek için güvenlik şifresini girin.' });
+    if (!code) return;
+    setBankSaving(true);
+    try {
+      await axios.put('/api/admin/settings/payment/bank-transfer', bankConfig, { headers: { 'X-ADMIN-SECURITY-CODE': code } });
+      toast.success('Başarıyla kaydedildi.');
+    } catch (e) { toast.error(e.response?.status === 403 ? 'Güvenlik şifresi hatalı.' : 'İşlem sırasında hata oluştu.'); }
+    finally { setBankSaving(false); }
+  };
+
   return (
     <div>
       {SecurityCodePrompt}
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
-          <h2 className="mb-1">Ödeme Gateway'leri</h2>
-          <p className="text-muted small mb-0">Sanal POS terminallerini yönetin</p>
+          <h2 className="mb-1">Ödeme Ayarları</h2>
+          <p className="text-muted small mb-0">Ödeme yöntemlerini, gateway'leri ve havale bilgilerini yönetin</p>
         </div>
         <button className="btn btn-primary" onClick={startCreate}><i className="fas fa-plus me-2" />Yeni Gateway Ekle</button>
       </div>
 
-      {message === 'success' && <div className="alert alert-success small"><i className="fas fa-check-circle me-2" />Gateway başarıyla kaydedildi.</div>}
-      {message === 'error-code' && <div className="alert alert-danger small"><i className="fas fa-lock me-2" />Güvenlik şifresi hatalı.</div>}
-      {message === 'error' && <div className="alert alert-danger small">İşlem sırasında hata oluştu.</div>}
+      {/* ── Payment Method Toggles ── */}
+      <div className="card border-0 shadow-sm mb-4">
+        <div className="card-header bg-transparent"><h6 className="mb-0"><i className="fas fa-toggle-on me-2 text-primary" />Aktif Ödeme Yöntemleri</h6></div>
+        <div className="card-body">
+          <div className="row g-3">
+            {[
+              { key: 'payment_method_credit_card_enabled', label: 'Kredi Kartı ile Ödeme', icon: 'fa-credit-card', color: 'primary', desc: 'Kapatırsanız kredi kartı seçeneği müşterilere gösterilmez' },
+              { key: 'payment_method_bank_transfer_enabled', label: 'Havale / EFT ile Ödeme', icon: 'fa-university', color: 'success', desc: 'Kapatırsanız havale/EFT seçeneği gösterilmez' },
+              { key: 'payment_method_door_cash_enabled', label: 'Kapıda Ödeme', icon: 'fa-door-open', color: 'warning', desc: 'Kapatırsanız kapıda ödeme seçeneği gösterilmez' },
+            ].map(m => {
+              const isOn = paymentToggles[m.key] !== 'false';
+              return (
+                <div key={m.key} className="col-md-4">
+                  <div className={`border rounded p-3 h-100 ${isOn ? `border-${m.color} bg-${m.color} bg-opacity-10` : 'border-light'}`}>
+                    <div className="form-check form-switch">
+                      <input className="form-check-input" type="checkbox" checked={isOn}
+                        onChange={e => handleToggleChange(m.key, e.target.checked ? 'true' : 'false')} id={m.key} />
+                      <label className="form-check-label small fw-semibold" htmlFor={m.key}>
+                        <i className={`fas ${m.icon} me-1 text-${m.color}`} />{m.label}
+                      </label>
+                    </div>
+                    <small className="text-muted d-block mt-1">{m.desc}</small>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Bank Transfer Config ── */}
+      <div className="card border-0 shadow-sm mb-4">
+        <div className="card-header bg-transparent d-flex justify-content-between align-items-center">
+          <h6 className="mb-0"><i className="fas fa-university me-2 text-success" />Havale / EFT Bilgileri</h6>
+          {bankConfig && <span className={`badge ${bankConfig.iban ? 'bg-success-subtle text-success' : 'bg-warning-subtle text-warning'} border`}>
+            <i className={`fas ${bankConfig.iban ? 'fa-check-circle' : 'fa-exclamation-circle'} me-1`} />{bankConfig.iban ? 'Yapılandırılmış' : 'IBAN girilmemiş'}
+          </span>}
+        </div>
+        <div className="card-body">
+          {!bankConfig ? <div className="text-center py-3"><span className="spinner-border spinner-border-sm" /></div> : (
+            <div className="row g-3">
+              <div className="col-md-6">
+                <label className="form-label small fw-medium">Banka Adı</label>
+                <input className="form-control" value={bankConfig.bankName||''} onChange={e => setBankConfig({...bankConfig, bankName: e.target.value})} placeholder="Ziraat Bankası" />
+              </div>
+              <div className="col-md-6">
+                <label className="form-label small fw-medium">Hesap Sahibi</label>
+                <input className="form-control" value={bankConfig.accountHolder||''} onChange={e => setBankConfig({...bankConfig, accountHolder: e.target.value})} placeholder="Ad Soyad / Şirket Unvanı" />
+              </div>
+              <div className="col-md-8">
+                <label className="form-label small fw-medium">IBAN</label>
+                <input className="form-control font-monospace" value={bankConfig.iban||''} onChange={e => setBankConfig({...bankConfig, iban: e.target.value.toUpperCase()})} placeholder="TR00 0000 0000 0000 0000 0000 00" maxLength={32} />
+                <small className="text-muted">Müşterilere gösterilecek IBAN numarası</small>
+              </div>
+              <div className="col-md-4">
+                <label className="form-label small fw-medium">Ödeme Süresi</label>
+                <div className="input-group">
+                  <input type="number" className="form-control" value={bankConfig.deadlineHours||48} onChange={e => setBankConfig({...bankConfig, deadlineHours: e.target.value})} min={1} max={168} />
+                  <span className="input-group-text small">saat</span>
+                </div>
+              </div>
+              <div className="col-12">
+                <button className="btn btn-success px-4" onClick={handleSaveBankConfig} disabled={bankSaving}>
+                  <i className={`fas ${bankSaving ? 'fa-spinner fa-spin' : 'fa-save'} me-2`} />{bankSaving ? 'Kaydediliyor...' : 'Havale Ayarlarını Kaydet'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Gateway Header ── */}
+      <div className="d-flex justify-content-between align-items-center mb-3">
+        <h5 className="mb-0"><i className="fas fa-plug me-2 text-primary" />Ödeme Gateway'leri</h5>
+      </div>
 
       <div className="row g-4">
         {/* Form */}

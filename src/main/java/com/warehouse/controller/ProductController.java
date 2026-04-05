@@ -319,6 +319,15 @@ public class ProductController {
         dto.shippingRate = p.getShippingRate();
         dto.vatRate = p.getVatRate();
         dto.sctRate = p.getSctRate();
+        dto.shortDescription = p.getShortDescription();
+        dto.salePrice = p.getSalePrice();
+        dto.saleStart = p.getSaleStart();
+        dto.saleEnd = p.getSaleEnd();
+        dto.featured = p.isFeatured();
+        dto.isNew = p.isNew();
+        dto.slug = p.getSlug();
+        dto.metaTitle = p.getMetaTitle();
+        dto.metaDescription = p.getMetaDescription();
         dto.createdAt = p.getCreatedAt();
         dto.updatedAt = p.getUpdatedAt();
         if (p.getCategory() != null) {

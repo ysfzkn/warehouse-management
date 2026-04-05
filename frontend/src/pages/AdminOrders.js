@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import PaginationControls from '../components/PaginationControls';
 import useSecurityCodePrompt from '../components/useSecurityCodePrompt';
+import { useAdminToast } from '../components/AdminToast';
 
 const STATUS_CONFIG = {
   PENDING_PAYMENT: { label: 'Ödeme Bekliyor', color: 'warning', icon: 'fas fa-clock' },
@@ -33,6 +34,13 @@ export default function AdminOrders() {
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
   const [statusFilter, setStatusFilter] = useState('');
+  const [search, setSearch] = useState('');
+  const [paymentFilter, setPaymentFilter] = useState('');
+  const [cargoFilter, setCargoFilter] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [orderDetail, setOrderDetail] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -44,16 +52,26 @@ export default function AdminOrders() {
   const [cargoCompany, setCargoCompany] = useState('');
   const [cargoTrackingNo, setCargoTrackingNo] = useState('');
   const [allowedTransitions, setAllowedTransitions] = useState([]);
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+  const [invoiceFile, setInvoiceFile] = useState(null);
+  const [invoiceNumber, setInvoiceNumber] = useState('');
+  const [invoiceUploading, setInvoiceUploading] = useState(false);
   const { askCode, SecurityCodePrompt } = useSecurityCodePrompt();
+  const toast = useAdminToast();
 
   const fetchOrders = useCallback(() => {
     setLoading(true);
     const params = { page, size: 15, sortBy: 'createdAt', sortDir: 'desc' };
     if (statusFilter) params.status = statusFilter;
+    if (search) params.search = search;
+    if (paymentFilter) params.paymentMethod = paymentFilter;
+    if (cargoFilter) params.cargoCompany = cargoFilter;
+    if (startDate) params.startDate = startDate;
+    if (endDate) params.endDate = endDate;
     axios.get('/api/admin/orders', { params })
       .then(r => { setOrders(r.data?.content || []); setTotalPages(r.data?.totalPages || 0); setTotalElements(r.data?.totalElements || 0); })
       .catch(() => {}).finally(() => setLoading(false));
-  }, [page, statusFilter]);
+  }, [page, statusFilter, search, paymentFilter, cargoFilter, startDate, endDate]);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
@@ -76,13 +94,13 @@ export default function AdminOrders() {
   };
 
   const updateStatus = async () => {
-    try { await axios.put(`/api/admin/orders/${selectedOrder}/status`, { status: newStatus, note: statusNote }); setShowStatusModal(false); setStatusNote(''); openDetail(selectedOrder); fetchOrders(); }
-    catch (e) { alert(e.response?.data?.message || 'Hata oluştu'); }
+    try { await axios.put(`/api/admin/orders/${selectedOrder}/status`, { status: newStatus, note: statusNote }); setShowStatusModal(false); setStatusNote(''); openDetail(selectedOrder); fetchOrders(); toast.success('Sipariş durumu güncellendi.'); }
+    catch (e) { toast.error(e.response?.data?.message || 'Hata oluştu'); }
   };
 
   const updateCargo = async () => {
-    try { await axios.put(`/api/admin/orders/${selectedOrder}/cargo`, { cargoCompany, cargoTrackingNo }); setShowCargoModal(false); openDetail(selectedOrder); fetchOrders(); }
-    catch (e) { alert(e.response?.data?.message || 'Hata oluştu'); }
+    try { await axios.put(`/api/admin/orders/${selectedOrder}/cargo`, { cargoCompany, cargoTrackingNo }); setShowCargoModal(false); openDetail(selectedOrder); fetchOrders(); toast.success('Kargo bilgisi güncellendi.'); }
+    catch (e) { toast.error(e.response?.data?.message || 'Hata oluştu'); }
   };
 
   const confirmPayment = async () => {
@@ -93,8 +111,9 @@ export default function AdminOrders() {
         headers: { 'X-ADMIN-SECURITY-CODE': code }
       });
       openDetail(selectedOrder); fetchOrders();
+      toast.success('Ödeme onaylandı.');
     } catch (e) {
-      alert(e.response?.status === 403 ? 'Güvenlik şifresi hatalı.' : (e.response?.data?.message || 'Hata oluştu'));
+      toast.error(e.response?.status === 403 ? 'Güvenlik şifresi hatalı.' : (e.response?.data?.message || 'Hata oluştu'));
     }
   };
 
@@ -103,23 +122,180 @@ export default function AdminOrders() {
     return <span className={`badge bg-${cfg.color}`}>{cfg.icon && <i className={`${cfg.icon} me-1`} />}{cfg.label}</span>;
   };
 
+  const handleInvoiceUpload = async () => {
+    if (!invoiceFile) { toast.error('Lütfen bir fatura dosyası seçin.'); return; }
+    setInvoiceUploading(true);
+    const fd = new FormData(); fd.append('file', invoiceFile);
+    try {
+      await axios.post(`/api/admin/orders/${orderDetail.id}/invoice?invoiceNumber=${encodeURIComponent(invoiceNumber)}`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      toast.success('Fatura başarıyla yüklendi.');
+      setShowInvoiceModal(false);
+      axios.get(`/api/admin/orders/${orderDetail.id}`).then(r => setOrderDetail(r.data));
+    } catch (err) { toast.error(err.response?.data?.message || 'Fatura yüklenemedi.'); }
+    finally { setInvoiceUploading(false); }
+  };
+
   return (
     <div>
       {SecurityCodePrompt}
+
+      {/* Fatura Yükleme Modal */}
+      {showInvoiceModal && (
+        <div className="modal d-block" style={{ background: 'rgba(0,0,0,0.5)', zIndex: 5000 }} onClick={() => setShowInvoiceModal(false)}>
+          <div className="modal-dialog modal-dialog-centered" onClick={e => e.stopPropagation()}>
+            <div className="modal-content border-0 shadow" style={{ borderRadius: 16 }}>
+              <div className="modal-header border-0 pb-0">
+                <div>
+                  <h5 className="modal-title fw-bold"><i className="fas fa-file-invoice me-2 text-info" />Fatura Yükle</h5>
+                  <small className="text-muted">Sipariş #{orderDetail?.orderNumber}</small>
+                </div>
+                <button className="btn-close" onClick={() => setShowInvoiceModal(false)} />
+              </div>
+              <div className="modal-body">
+                {/* Fatura Numarası */}
+                <div className="mb-3">
+                  <label className="form-label small fw-medium">Fatura Numarası <span className="text-muted fw-normal">(opsiyonel)</span></label>
+                  <input className="form-control" value={invoiceNumber} onChange={e => setInvoiceNumber(e.target.value)}
+                    placeholder="FTR-2026-001234" />
+                </div>
+
+                {/* Dosya Seçimi */}
+                <div className="mb-3">
+                  <label className="form-label small fw-medium">Fatura Dosyası <span className="text-danger">*</span></label>
+                  <div className={`border rounded-3 p-3 text-center ${invoiceFile ? 'border-success bg-success bg-opacity-10' : 'border-dashed'}`}
+                    style={{ cursor: 'pointer', borderStyle: invoiceFile ? 'solid' : 'dashed' }}
+                    onClick={() => document.getElementById('invoice-file-input').click()}
+                    onDragOver={e => e.preventDefault()}
+                    onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f) setInvoiceFile(f); }}>
+                    <input type="file" id="invoice-file-input" className="d-none" accept=".pdf,.png,.jpg,.jpeg"
+                      onChange={e => { if (e.target.files?.[0]) setInvoiceFile(e.target.files[0]); }} />
+                    {invoiceFile ? (
+                      <div>
+                        <i className="fas fa-file-check text-success mb-2 d-block" style={{ fontSize: 28 }} />
+                        <div className="fw-medium small">{invoiceFile.name}</div>
+                        <div className="text-muted" style={{ fontSize: 11 }}>{(invoiceFile.size / 1024).toFixed(0)} KB</div>
+                        <button className="btn btn-sm btn-link text-danger mt-1 p-0" onClick={e => { e.stopPropagation(); setInvoiceFile(null); }}>Dosyayı Kaldır</button>
+                      </div>
+                    ) : (
+                      <div>
+                        <i className="fas fa-cloud-upload-alt text-muted mb-2 d-block" style={{ fontSize: 28 }} />
+                        <div className="small text-muted">Dosya sürükleyin veya <span className="text-primary fw-medium">seçin</span></div>
+                        <div className="text-muted mt-1" style={{ fontSize: 11 }}>PDF, PNG, JPG — Maks. 10MB</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Mevcut fatura varsa göster */}
+                {orderDetail?.invoiceUrl && (
+                  <div className="alert alert-light small py-2 mb-0">
+                    <i className="fas fa-info-circle me-1 text-info" />
+                    Mevcut fatura değiştirilecektir.
+                    {orderDetail.invoiceNumber && <span> (#{orderDetail.invoiceNumber})</span>}
+                  </div>
+                )}
+              </div>
+              <div className="modal-footer border-0 pt-0">
+                <button className="btn btn-outline-secondary" onClick={() => setShowInvoiceModal(false)}>İptal</button>
+                <button className="btn btn-primary" onClick={handleInvoiceUpload} disabled={!invoiceFile || invoiceUploading}>
+                  {invoiceUploading ? <><span className="spinner-border spinner-border-sm me-2" />Yükleniyor...</> : <><i className="fas fa-upload me-2" />Yükle</>}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div><h2 className="mb-1">Siparişler</h2><small className="text-muted">{totalElements} sipariş</small></div>
+        <div className="d-flex gap-2">
+          <button className={`btn btn-sm ${showFilters ? 'btn-primary' : 'btn-outline-primary'}`} onClick={() => setShowFilters(!showFilters)}>
+            <i className="fas fa-filter me-1" />Filtreler {(statusFilter || paymentFilter || cargoFilter || startDate || endDate) && <span className="badge bg-white text-primary ms-1">{[statusFilter,paymentFilter,cargoFilter,startDate,endDate].filter(Boolean).length}</span>}
+          </button>
+          <button className="btn btn-outline-success btn-sm" disabled={exporting} onClick={async () => {
+            setExporting(true);
+            try {
+              const params = {};
+              if (statusFilter) params.status = statusFilter;
+              if (startDate) params.startDate = startDate;
+              if (endDate) params.endDate = endDate;
+              const res = await axios.get('/api/admin/orders/export', { params, responseType: 'blob' });
+              const url = window.URL.createObjectURL(res.data);
+              const a = document.createElement('a'); a.href = url; a.download = `siparisler-${new Date().toISOString().split('T')[0]}.xlsx`;
+              a.click(); window.URL.revokeObjectURL(url);
+              toast.success('Excel dosyası indirildi.');
+            } catch { toast.error('Excel indirilemedi.'); }
+            finally { setExporting(false); }
+          }}>
+            {exporting ? <span className="spinner-border spinner-border-sm me-1" /> : <i className="fas fa-file-excel me-1" />}
+            Excel İndir
+          </button>
+        </div>
+      </div>
+
+      {/* Search bar */}
+      <div className="mb-3">
+        <div className="input-group">
+          <span className="input-group-text bg-white"><i className="fas fa-search text-muted" /></span>
+          <input className="form-control border-start-0" placeholder="Sipariş no, müşteri adı, e-posta, telefon veya kargo takip no ara..."
+            value={search} onChange={e => { setSearch(e.target.value); setPage(0); }} />
+          {search && <button className="btn btn-outline-secondary" onClick={() => { setSearch(''); setPage(0); }}><i className="fas fa-times" /></button>}
+        </div>
       </div>
 
       {/* Filters */}
       <div className="card border-0 shadow-sm mb-4">
         <div className="card-body py-3">
+          {/* Status chips */}
           <div className="d-flex gap-2 flex-wrap align-items-center">
-            <span className="text-muted small fw-medium">Durum:</span>
             <button className={`btn btn-sm ${!statusFilter ? 'btn-primary' : 'btn-outline-secondary'}`} onClick={() => { setStatusFilter(''); setPage(0); }}>Tümü</button>
-            {Object.entries(STATUS_CONFIG).slice(0, 6).map(([key, cfg]) => (
-              <button key={key} className={`btn btn-sm ${statusFilter === key ? `btn-${cfg.color}` : 'btn-outline-secondary'}`} onClick={() => { setStatusFilter(key); setPage(0); }}>{cfg.label}</button>
+            {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
+              <button key={key} className={`btn btn-sm ${statusFilter === key ? `btn-${cfg.color}` : 'btn-outline-secondary'}`} onClick={() => { setStatusFilter(statusFilter === key ? '' : key); setPage(0); }}>
+                {cfg.icon && <i className={`${cfg.icon} me-1`} style={{fontSize:10}} />}{cfg.label}
+              </button>
             ))}
           </div>
+
+          {/* Extended filters */}
+          {showFilters && (
+            <div className="row g-2 mt-3 pt-3 border-top">
+              <div className="col-md-3">
+                <label className="form-label small fw-medium mb-1">Ödeme Yöntemi</label>
+                <select className="form-select form-select-sm" value={paymentFilter} onChange={e => { setPaymentFilter(e.target.value); setPage(0); }}>
+                  <option value="">Tümü</option>
+                  <option value="CREDIT_CARD">Kredi Kartı</option>
+                  <option value="BANK_TRANSFER">Havale/EFT</option>
+                  <option value="DOOR_CASH">Kapıda Nakit</option>
+                  <option value="DOOR_CARD">Kapıda Kart</option>
+                </select>
+              </div>
+              <div className="col-md-3">
+                <label className="form-label small fw-medium mb-1">Kargo Firması</label>
+                <select className="form-select form-select-sm" value={cargoFilter} onChange={e => { setCargoFilter(e.target.value); setPage(0); }}>
+                  <option value="">Tümü</option>
+                  <option value="YURTICI">Yurtiçi Kargo</option>
+                  <option value="ARAS">Aras Kargo</option>
+                  <option value="MNG">MNG Kargo</option>
+                  <option value="PTT">PTT Kargo</option>
+                  <option value="UPS">UPS</option>
+                </select>
+              </div>
+              <div className="col-md-3">
+                <label className="form-label small fw-medium mb-1">Başlangıç</label>
+                <input type="date" className="form-control form-control-sm" value={startDate} onChange={e => { setStartDate(e.target.value); setPage(0); }} />
+              </div>
+              <div className="col-md-3">
+                <label className="form-label small fw-medium mb-1">Bitiş</label>
+                <input type="date" className="form-control form-control-sm" value={endDate} onChange={e => { setEndDate(e.target.value); setPage(0); }} />
+              </div>
+              {(paymentFilter || cargoFilter || startDate || endDate) && (
+                <div className="col-12">
+                  <button className="btn btn-sm btn-outline-danger" onClick={() => { setPaymentFilter(''); setCargoFilter(''); setStartDate(''); setEndDate(''); setPage(0); }}>
+                    <i className="fas fa-times me-1" />Filtreleri Temizle
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -178,12 +354,48 @@ export default function AdminOrders() {
 
                       {/* Items */}
                       <div className="card mb-3">
-                        <div className="card-header bg-transparent"><h6 className="mb-0">Sipariş Kalemleri ({orderDetail.items?.length || 0})</h6></div>
+                        <div className="card-header bg-transparent"><h6 className="mb-0"><i className="fas fa-box me-2 text-primary" />Sipariş Kalemleri ({orderDetail.items?.length || 0})</h6></div>
                         <div className="card-body p-0">
-                          <table className="table mb-0"><thead className="table-light"><tr><th>Ürün</th><th>SKU</th><th className="text-center">Adet</th><th className="text-end">Birim</th><th className="text-end">Toplam</th></tr></thead>
-                          <tbody>{orderDetail.items?.map(item => (
-                            <tr key={item.id}><td className="fw-medium">{item.productName}</td><td><code className="small">{item.productSku}</code></td><td className="text-center">{item.quantity}</td><td className="text-end">{formatPrice(item.unitPrice)}</td><td className="text-end fw-bold">{formatPrice(item.lineTotal)}</td></tr>
-                          ))}</tbody></table>
+                          <div className="list-group list-group-flush">
+                            {orderDetail.items?.map(item => (
+                              <div key={item.id} className="list-group-item d-flex align-items-center gap-3 py-3">
+                                {/* Ürün görseli */}
+                                <div className="flex-shrink-0" style={{ width: 56, height: 56, borderRadius: 10, background: '#f8fafc', border: '1px solid #e2e8f0', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                  {item.imageUrl ? (
+                                    <img src={item.imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                                      onError={e => { e.target.style.display = 'none'; e.target.parentElement.innerHTML = '<i class="fas fa-box text-muted"></i>'; }} />
+                                  ) : <i className="fas fa-box text-muted" />}
+                                </div>
+                                {/* Ürün bilgisi */}
+                                <div className="flex-grow-1 min-w-0">
+                                  <div className="fw-semibold small">{item.productName}</div>
+                                  <div className="d-flex gap-2 mt-1 flex-wrap align-items-center">
+                                    {item.productSku && <span className="badge bg-light text-dark border" style={{ fontSize: 10 }}>SKU: {item.productSku}</span>}
+                                    {item.warehouseName && <span className="badge bg-info bg-opacity-10 text-info border" style={{ fontSize: 10 }}><i className="fas fa-warehouse me-1" />{item.warehouseName}</span>}
+                                  </div>
+                                  <div className="d-flex gap-2 mt-1">
+                                    {item.productId && <button className="btn btn-link btn-sm p-0 text-primary" style={{fontSize:10}} onClick={(e) => { e.stopPropagation(); window.open(`/products?highlight=${item.productId}`, '_self'); }}>Ürüne Git <i className="fas fa-external-link-alt ms-1" style={{fontSize:8}} /></button>}
+                                    {item.stockId && <button className="btn btn-link btn-sm p-0 text-info" style={{fontSize:10}} onClick={(e) => { e.stopPropagation(); window.open(`/stock?highlight=${item.stockId}`, '_self'); }}>Stok Yönetimi <i className="fas fa-external-link-alt ms-1" style={{fontSize:8}} /></button>}
+                                  </div>
+                                </div>
+                                {/* Adet */}
+                                <div className="text-center flex-shrink-0" style={{ minWidth: 50 }}>
+                                  <div className="small text-muted">Adet</div>
+                                  <div className="fw-bold">{item.quantity}</div>
+                                </div>
+                                {/* Birim fiyat */}
+                                <div className="text-end flex-shrink-0" style={{ minWidth: 90 }}>
+                                  <div className="small text-muted">Birim</div>
+                                  <div className="small">{formatPrice(item.unitPrice)}</div>
+                                </div>
+                                {/* Toplam */}
+                                <div className="text-end flex-shrink-0" style={{ minWidth: 90 }}>
+                                  <div className="small text-muted">Toplam</div>
+                                  <div className="fw-bold text-primary">{formatPrice(item.lineTotal)}</div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       </div>
 
@@ -279,7 +491,50 @@ export default function AdminOrders() {
                           <p className="text-muted mb-0">Teslimat adresi ile aynı</p>
                         )}
                         <hr />
-                        <button className="btn btn-sm btn-outline-info w-100" onClick={() => window.print()} title="Fatura/irsaliye yazdır">
+                        {/* Fatura Yükleme / Görüntüleme */}
+                        {orderDetail.invoiceUrl ? (() => {
+                          const isPdf = orderDetail.invoiceUrl.toLowerCase().includes('.pdf');
+                          const apiUrl = `/api/admin/orders/${orderDetail.id}/invoice/download`;
+                          const handleView = () => {
+                            axios.get(apiUrl + '?inline=true', { responseType: 'blob' }).then(r => {
+                              const blobUrl = window.URL.createObjectURL(r.data);
+                              window.open(blobUrl, '_blank');
+                            }).catch(() => toast.error('Fatura açılamadı.'));
+                          };
+                          const handleDownload = () => {
+                            axios.get(apiUrl, { responseType: 'blob' }).then(r => {
+                              const url = window.URL.createObjectURL(r.data);
+                              const a = document.createElement('a'); a.href = url;
+                              a.download = `fatura-${orderDetail.orderNumber}${isPdf ? '.pdf' : '.jpg'}`;
+                              a.click(); window.URL.revokeObjectURL(url);
+                            }).catch(() => toast.error('Fatura indirilemedi.'));
+                          };
+                          return (
+                          <div className="mb-2">
+                            <div className="d-flex align-items-center gap-2 mb-2">
+                              <span className="badge bg-success"><i className="fas fa-check me-1" />Fatura Yüklü</span>
+                              {orderDetail.invoiceNumber && <span className="badge bg-light text-dark border">#{orderDetail.invoiceNumber}</span>}
+                            </div>
+                            {/* Aksiyonlar */}
+                            <div className="d-flex gap-2">
+                              <button className="btn btn-sm btn-outline-primary flex-grow-1" onClick={handleView}>
+                                <i className="fas fa-eye me-1" />Görüntüle
+                              </button>
+                              <button className="btn btn-sm btn-outline-success flex-grow-1" onClick={handleDownload}>
+                                <i className="fas fa-download me-1" />İndir
+                              </button>
+                              <button className="btn btn-sm btn-outline-secondary" onClick={() => { setInvoiceFile(null); setInvoiceNumber(orderDetail.invoiceNumber || ''); setShowInvoiceModal(true); }}>
+                                <i className="fas fa-sync me-1" />Değiştir
+                              </button>
+                            </div>
+                          </div>
+                          );
+                        })() : (
+                          <button className="btn btn-sm btn-outline-success w-100 mb-2" onClick={() => { setInvoiceFile(null); setInvoiceNumber(''); setShowInvoiceModal(true); }}>
+                            <i className="fas fa-upload me-1" />Fatura Yükle
+                          </button>
+                        )}
+                        <button className="btn btn-sm btn-outline-info w-100" onClick={() => window.print()} title="Yazdır">
                           <i className="fas fa-print me-1" />Yazdır
                         </button>
                       </div></div>

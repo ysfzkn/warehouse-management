@@ -29,13 +29,19 @@ public class StoreOrderController {
     private final OrderItemRepository orderItemRepo;
     private final OrderStatusHistoryRepository statusHistoryRepo;
     private final JwtService jwtService;
+    private final com.warehouse.repository.CustomerRepository customerRepo;
+    private final com.warehouse.repository.SupportTicketRepository supportTicketRepo;
 
     public StoreOrderController(OrderRepository orderRepo, OrderItemRepository orderItemRepo,
-                                 OrderStatusHistoryRepository statusHistoryRepo, JwtService jwtService) {
+                                 OrderStatusHistoryRepository statusHistoryRepo, JwtService jwtService,
+                                 com.warehouse.repository.CustomerRepository customerRepo,
+                                 com.warehouse.repository.SupportTicketRepository supportTicketRepo) {
         this.orderRepo = orderRepo;
         this.orderItemRepo = orderItemRepo;
         this.statusHistoryRepo = statusHistoryRepo;
         this.jwtService = jwtService;
+        this.customerRepo = customerRepo;
+        this.supportTicketRepo = supportTicketRepo;
     }
 
     @GetMapping
@@ -78,6 +84,16 @@ public class StoreOrderController {
                             it.put("quantity", item.getQuantity());
                             it.put("unitPrice", item.getUnitPrice());
                             it.put("lineTotal", item.getLineTotal());
+                            // Product image
+                            String imageUrl = null;
+                            try {
+                                if (item.getProduct() != null && item.getProduct().getImages() != null && !item.getProduct().getImages().isEmpty()) {
+                                    var img = item.getProduct().getImages().stream().filter(i -> i.isPrimary()).findFirst().orElse(item.getProduct().getImages().get(0));
+                                    imageUrl = "/api/admin/products/images/" + img.getId() + "/view?thumbnail=true";
+                                }
+                            } catch (Exception ignored2) {}
+                            it.put("imageUrl", imageUrl);
+                            it.put("productSlug", item.getProduct() != null ? item.getProduct().getSlug() : null);
                             items.add(it);
                         }
                     } catch (Exception ignored) {}
@@ -85,6 +101,34 @@ public class StoreOrderController {
                     return ResponseEntity.ok(dto);
                 })
                 .orElse(ResponseEntity.notFound().build());
+    }
+
+    @PostMapping("/{orderNumber}/support")
+    @org.springframework.transaction.annotation.Transactional
+    public ResponseEntity<?> createSupportTicket(HttpServletRequest request, @PathVariable String orderNumber,
+                                                  @RequestBody Map<String, String> body) {
+        Long customerId = extractCustomerId(request);
+        if (customerId == null) return ResponseEntity.badRequest().body(Map.of("message", "Giriş yapmanız gerekiyor."));
+
+        String topic = body.getOrDefault("topic", "").trim();
+        String message = body.getOrDefault("message", "").trim();
+        if (topic.isEmpty() || message.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Konu ve mesaj alanları zorunludur."));
+        }
+
+        var customer = customerRepo.findById(customerId);
+        if (customer.isEmpty()) return ResponseEntity.notFound().build();
+
+        com.warehouse.entity.SupportTicket ticket = com.warehouse.entity.SupportTicket.builder()
+            .customer(customer.get())
+            .orderNumber(orderNumber)
+            .topic(topic)
+            .message(message)
+            .status("OPEN")
+            .build();
+        supportTicketRepo.save(ticket);
+
+        return ResponseEntity.ok(Map.of("message", "Destek talebiniz alındı. En kısa sürede size dönüş yapacağız."));
     }
 
     @PostMapping("/{orderNumber}/return-request")
@@ -126,6 +170,38 @@ public class StoreOrderController {
         return ResponseEntity.ok(Map.of("message", "İade talebiniz alındı. En kısa sürede değerlendirilecektir."));
     }
 
+    @GetMapping("/{orderNumber}/invoice")
+    public ResponseEntity<?> downloadInvoice(HttpServletRequest request, @PathVariable String orderNumber) {
+        Long customerId = extractCustomerId(request);
+        if (customerId == null) return ResponseEntity.status(401).body(Map.of("message", "Giriş yapmanız gerekiyor."));
+
+        return orderRepo.findByOrderNumber(orderNumber)
+            .filter(o -> o.getCustomer() != null && o.getCustomer().getId().equals(customerId))
+            .map(order -> {
+                if (order.getInvoiceUrl() == null || order.getInvoiceUrl().isBlank()) {
+                    return ResponseEntity.badRequest().body(Map.of("message", "Bu sipariş için henüz fatura yüklenmemiş."));
+                }
+                try {
+                    java.nio.file.Path filePath = java.nio.file.Paths.get(order.getInvoiceUrl());
+                    if (!java.nio.file.Files.exists(filePath)) {
+                        return ResponseEntity.notFound().build();
+                    }
+                    org.springframework.core.io.Resource resource = new org.springframework.core.io.UrlResource(filePath.toUri());
+                    String contentType = java.nio.file.Files.probeContentType(filePath);
+                    if (contentType == null) contentType = "application/octet-stream";
+                    String ext = order.getInvoiceUrl().contains(".") ? order.getInvoiceUrl().substring(order.getInvoiceUrl().lastIndexOf('.')) : "";
+                    return ResponseEntity.ok()
+                        .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
+                            "attachment; filename=fatura-" + order.getOrderNumber() + ext)
+                        .contentType(org.springframework.http.MediaType.parseMediaType(contentType))
+                        .body(resource);
+                } catch (Exception e) {
+                    return ResponseEntity.internalServerError().body(Map.of("message", "Fatura indirilemedi."));
+                }
+            })
+            .orElse(ResponseEntity.notFound().build());
+    }
+
     private Map<String, Object> toDto(Order o) {
         Map<String, Object> dto = new LinkedHashMap<>();
         dto.put("id", o.getId());
@@ -141,8 +217,37 @@ public class StoreOrderController {
         dto.put("itemCount", itemCount);
         dto.put("cargoTrackingNo", o.getCargoTrackingNo());
         dto.put("cargoCompany", o.getCargoCompany() != null ? o.getCargoCompany().name() : null);
+        dto.put("invoiceUrl", o.getInvoiceUrl());
+        dto.put("invoiceNumber", o.getInvoiceNumber());
         dto.put("createdAt", o.getCreatedAt());
         return dto;
+    }
+
+    // ── Müşteri destek talepleri ──
+    @GetMapping("/support-tickets")
+    @Transactional(readOnly = true)
+    public ResponseEntity<?> mySupportTickets(HttpServletRequest request) {
+        Long customerId = extractCustomerId(request);
+        if (customerId == null) return ResponseEntity.ok(java.util.List.of());
+
+        var tickets = supportTicketRepo.findByCustomerId(customerId,
+            org.springframework.data.domain.PageRequest.of(0, 50, org.springframework.data.domain.Sort.by("createdAt").descending()));
+
+        List<Map<String, Object>> dtos = tickets.getContent().stream().map(t -> {
+            Map<String, Object> dto = new LinkedHashMap<>();
+            dto.put("id", t.getId());
+            dto.put("orderNumber", t.getOrderNumber());
+            dto.put("topic", t.getTopic());
+            dto.put("message", t.getMessage());
+            dto.put("status", t.getStatus());
+            dto.put("adminReply", t.getAdminReply());
+            dto.put("repliedBy", t.getRepliedBy());
+            dto.put("repliedAt", t.getRepliedAt());
+            dto.put("createdAt", t.getCreatedAt());
+            return dto;
+        }).collect(Collectors.toList());
+
+        return ResponseEntity.ok(dtos);
     }
 
     private Long extractCustomerId(HttpServletRequest request) {

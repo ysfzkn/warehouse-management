@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react'; // eslint-disable-line
 import axios from 'axios';
 import useSecurityCodePrompt from '../components/useSecurityCodePrompt';
+import { useAdminToast } from '../components/AdminToast';
 
 const SETTING_GROUPS = [
   { title: 'Marka & Görünüm', icon: 'fas fa-palette', keys: ['site_name', 'site_logo_url', 'site_favicon_url', 'primary_color', 'secondary_color'],
@@ -9,8 +10,8 @@ const SETTING_GROUPS = [
     tooltip: 'Footer, iletişim sayfası ve e-posta bildirimlerinde gösterilir.' },
   { title: 'Sosyal Medya', icon: 'fas fa-share-alt', keys: ['social_instagram', 'social_whatsapp'],
     tooltip: 'Footer ve iletişim sayfasında ikon olarak görünür.' },
-  { title: 'Kargo & Ödeme', icon: 'fas fa-truck', keys: ['free_shipping_threshold', 'default_shipping_cost', 'currency_symbol', 'payment_method_credit_card_enabled', 'payment_method_bank_transfer_enabled', 'payment_method_door_cash_enabled'],
-    tooltip: 'Kargo, para birimi, ödeme yöntemleri ve entegrasyon ayarları.' },
+  { title: 'Para Birimi', icon: 'fas fa-coins', keys: ['currency_symbol'],
+    tooltip: 'Mağazada ve faturalarda kullanılacak para birimi.' },
   { title: 'Genel', icon: 'fas fa-cog', keys: ['footer_text', 'header_announcement', 'contact_form_email'],
     tooltip: 'Footer alt bilgisi, üst bar duyuru mesajı ve form yönlendirme.' },
 ];
@@ -54,22 +55,14 @@ const CURRENCY_OPTIONS = [
 export default function AdminSiteSettings() {
   const [settings, setSettings] = useState({});
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState('');
   const [activeGroup, setActiveGroup] = useState(0);
   const [logoUploading, setLogoUploading] = useState(false);
   const [faviconUploading, setFaviconUploading] = useState(false);
   const [dragOver, setDragOver] = useState('');
   const fileInputRef = useRef(null);
   const faviconInputRef = useRef(null);
-  const [bankConfig, setBankConfig] = useState(null);
-  const [iyzicoConfig, setIyzicoConfig] = useState(null);
-  const [bankSaving, setBankSaving] = useState(false);
-  const [iyzicoSaving, setIyzicoSaving] = useState(false);
-  const [showApiKey, setShowApiKey] = useState(false);
-  const [showSecretKey, setShowSecretKey] = useState(false);
-  const [paymentMessage, setPaymentMessage] = useState('');
-  const paymentConfigsLoaded = useRef(false);
   const { askCode, SecurityCodePrompt } = useSecurityCodePrompt();
+  const toast = useAdminToast();
 
   useEffect(() => {
     axios.get('/api/admin/settings/site').then(r => {
@@ -77,34 +70,22 @@ export default function AdminSiteSettings() {
     }).catch(() => {});
   }, []);
 
-  useEffect(() => {
-    if (activeGroup === 3 && !paymentConfigsLoaded.current) {
-      paymentConfigsLoaded.current = true;
-      Promise.all([
-        axios.get('/api/admin/settings/payment/bank-transfer'),
-        axios.get('/api/admin/settings/payment/iyzico'),
-      ]).then(([b, i]) => { setBankConfig(b.data); setIyzicoConfig(i.data); }).catch(() => {});
-    }
-  }, [activeGroup]);
-
   const handleChange = (key, value) => setSettings(s => ({ ...s, [key]: value }));
-  const showMsg = (m) => { setMessage(m); setTimeout(() => setMessage(''), 4000); };
-  const showPayMsg = (m) => { setPaymentMessage(m); setTimeout(() => setPaymentMessage(''), 4000); };
 
   const withSecurityCode = async (desc, fn) => {
     const code = await askCode({ description: desc });
     if (!code) return;
     try { await fn(code); } catch (e) {
-      if (e.response?.status === 403) showMsg('error-code');
-      else showMsg('error');
+      if (e.response?.status === 403) toast.error('Güvenlik şifresi hatalı.');
+      else toast.error('İşlem başarısız.');
     }
   };
 
   const handleSave = () => withSecurityCode('Site ayarlarını kaydetmek için güvenlik şifresini girin.', async (code) => {
-    setSaving(true); setMessage('');
+    setSaving(true);
     try {
       await axios.put('/api/admin/settings/site', settings, { headers: { 'X-ADMIN-SECURITY-CODE': code } });
-      showMsg('success');
+      toast.success('Ayarlar kaydedildi.');
     } catch (e) { throw e; }
     finally { setSaving(false); }
   });
@@ -113,8 +94,8 @@ export default function AdminSiteSettings() {
     if (!file) return;
     const isLogo = type === 'logo';
     const maxSize = isLogo ? 10 : 5;
-    if (!file.type.startsWith('image/') && file.type !== 'application/octet-stream') { showMsg(`error-${type}`); return; }
-    if (file.size > maxSize * 1024 * 1024) { showMsg(`error-${type}-size`); return; }
+    if (!file.type.startsWith('image/') && file.type !== 'application/octet-stream') { toast.error('Lütfen bir görsel dosyası seçin.'); return; }
+    if (file.size > maxSize * 1024 * 1024) { toast.error('Dosya boyutu çok büyük.'); return; }
     const code = await askCode({ description: `${isLogo ? 'Logo' : 'Favicon'} yüklemek için güvenlik şifresini girin.` });
     if (!code) return;
     isLogo ? setLogoUploading(true) : setFaviconUploading(true);
@@ -133,24 +114,12 @@ export default function AdminSiteSettings() {
         link.href = newUrl + '?v=' + Date.now();
         document.head.appendChild(link);
       }
-      showMsg(`success-${type}`);
+      toast.success(`${isLogo ? 'Logo' : 'Favicon'} başarıyla yüklendi!`);
     } catch (e) {
-      if (e.response?.status === 403) showMsg('error-code');
-      else showMsg('error');
+      if (e.response?.status === 403) toast.error('Güvenlik şifresi hatalı.');
+      else toast.error('İşlem başarısız.');
     } finally { isLogo ? setLogoUploading(false) : setFaviconUploading(false); }
   };
-
-  const handleSaveBankConfig = () => withSecurityCode('Banka havalesi ayarlarını kaydetmek için güvenlik şifresini girin.', async (code) => {
-    setBankSaving(true); setPaymentMessage('');
-    try { await axios.put('/api/admin/settings/payment/bank-transfer', bankConfig, { headers: { 'X-ADMIN-SECURITY-CODE': code } }); showPayMsg('bank-success'); }
-    catch (e) { throw e; } finally { setBankSaving(false); }
-  });
-
-  const handleSaveIyzicoConfig = () => withSecurityCode('iyzico ayarlarını kaydetmek için güvenlik şifresini girin.', async (code) => {
-    setIyzicoSaving(true); setPaymentMessage('');
-    try { await axios.put('/api/admin/settings/payment/iyzico', iyzicoConfig, { headers: { 'X-ADMIN-SECURITY-CODE': code } }); showPayMsg('iyzico-success'); }
-    catch (e) { throw e; } finally { setIyzicoSaving(false); }
-  });
 
   const group = SETTING_GROUPS[activeGroup];
 
@@ -204,9 +173,6 @@ export default function AdminSiteSettings() {
             )}
           </div>
         </div>
-        {message === `error-${type}` && <small className="text-danger mt-1 d-block">Lütfen bir görsel dosyası seçin.</small>}
-        {message === `error-${type}-size` && <small className="text-danger mt-1 d-block">Dosya boyutu çok büyük.</small>}
-        {message === `success-${type}` && <small className="text-success mt-1 d-block"><i className="fas fa-check me-1" />{label} başarıyla yüklendi!</small>}
       </div>
     );
   };
@@ -298,10 +264,6 @@ export default function AdminSiteSettings() {
         </button>
       </div>
 
-      {message === 'success' && <div className="alert alert-success py-2 small"><i className="fas fa-check-circle me-2" />Ayarlar başarıyla kaydedildi.</div>}
-      {message === 'error' && <div className="alert alert-danger py-2 small">Kaydetme sırasında hata oluştu.</div>}
-      {message === 'error-code' && <div className="alert alert-danger py-2 small"><i className="fas fa-lock me-2" />Güvenlik şifresi hatalı.</div>}
-
       <div className="row g-4">
         {/* Sidebar */}
         <div className="col-lg-3 col-md-4">
@@ -337,122 +299,6 @@ export default function AdminSiteSettings() {
             </div>
           </div>
 
-          {/* Payment Integrations — Kargo & Ödeme tab */}
-          {activeGroup === 3 && (
-            <div className="mt-4">
-              {paymentMessage === 'bank-success' && <div className="alert alert-success py-2 small"><i className="fas fa-check-circle me-2" />Banka havalesi ayarları güncellendi.</div>}
-              {paymentMessage === 'iyzico-success' && <div className="alert alert-success py-2 small"><i className="fas fa-check-circle me-2" />iyzico ayarları güncellendi.</div>}
-              {paymentMessage === 'error-code' && <div className="alert alert-danger py-2 small"><i className="fas fa-lock me-2" />Güvenlik şifresi hatalı.</div>}
-              {paymentMessage === 'error' && <div className="alert alert-danger py-2 small">Kaydetme sırasında hata oluştu.</div>}
-
-              {/* Bank Transfer */}
-              <div className="card border-0 shadow-sm mb-4">
-                <div className="card-header bg-transparent border-bottom d-flex justify-content-between align-items-center" style={{padding:'14px 20px'}}>
-                  <div className="d-flex align-items-center gap-2">
-                    <i className="fas fa-university text-success" />
-                    <h6 className="mb-0 fw-semibold">Banka Havalesi / EFT</h6>
-                  </div>
-                  {bankConfig && <StatusBadge configured={bankConfig.configured === 'true'} />}
-                </div>
-                <div className="card-body" style={{padding:'20px'}}>
-                  {!bankConfig ? <Spinner /> : (
-                    <div className="row g-3">
-                      <div className="col-md-6">
-                        <label className="form-label small fw-medium">Banka Adı</label>
-                        <input className="form-control" value={bankConfig.bankName||''} onChange={e => setBankConfig({...bankConfig, bankName: e.target.value})} placeholder="Ziraat Bankası" />
-                      </div>
-                      <div className="col-md-6">
-                        <label className="form-label small fw-medium">Hesap Sahibi</label>
-                        <input className="form-control" value={bankConfig.accountHolder||''} onChange={e => setBankConfig({...bankConfig, accountHolder: e.target.value})} placeholder="Ad Soyad / Şirket Unvanı" />
-                      </div>
-                      <div className="col-md-8">
-                        <label className="form-label small fw-medium">IBAN</label>
-                        <input className="form-control font-monospace" value={bankConfig.iban||''} onChange={e => setBankConfig({...bankConfig, iban: e.target.value.toUpperCase()})} placeholder="TR00 0000 0000 0000 0000 0000 00" maxLength={32} />
-                        <small className="text-muted">Müşterilere gösterilecek IBAN numarası</small>
-                      </div>
-                      <div className="col-md-4">
-                        <label className="form-label small fw-medium">Ödeme Süresi</label>
-                        <div className="input-group">
-                          <input type="number" className="form-control" value={bankConfig.deadlineHours||48} onChange={e => setBankConfig({...bankConfig, deadlineHours: e.target.value})} min={1} max={168} />
-                          <span className="input-group-text small">saat</span>
-                        </div>
-                      </div>
-                      <div className="col-12">
-                        <button className="btn btn-success px-4" onClick={handleSaveBankConfig} disabled={bankSaving}>
-                          <i className={`fas ${bankSaving ? 'fa-spinner fa-spin' : 'fa-save'} me-2`} />{bankSaving ? 'Kaydediliyor...' : 'Kaydet'}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* iyzico */}
-              <div className="card border-0 shadow-sm">
-                <div className="card-header bg-transparent border-bottom d-flex justify-content-between align-items-center" style={{padding:'14px 20px'}}>
-                  <div className="d-flex align-items-center gap-2">
-                    <i className="fas fa-credit-card text-primary" />
-                    <h6 className="mb-0 fw-semibold">iyzico Entegrasyonu</h6>
-                  </div>
-                  {iyzicoConfig && <StatusBadge configured={iyzicoConfig.configured === 'true'} />}
-                </div>
-                <div className="card-body" style={{padding:'20px'}}>
-                  {!iyzicoConfig ? <Spinner /> : (
-                    <div className="row g-3">
-                      <div className="col-md-6">
-                        <label className="form-label small fw-medium">API Key</label>
-                        <div className="input-group">
-                          <input type={showApiKey ? 'text' : 'password'} className="form-control font-monospace" value={iyzicoConfig.apiKey||''} onChange={e => setIyzicoConfig({...iyzicoConfig, apiKey: e.target.value})} placeholder="sandbox-..." />
-                          <button className="btn btn-outline-secondary" type="button" onClick={() => setShowApiKey(!showApiKey)}><i className={`fas fa-eye${showApiKey ? '-slash' : ''}`} /></button>
-                        </div>
-                      </div>
-                      <div className="col-md-6">
-                        <label className="form-label small fw-medium">Secret Key</label>
-                        <div className="input-group">
-                          <input type={showSecretKey ? 'text' : 'password'} className="form-control font-monospace" value={iyzicoConfig.secretKey||''} onChange={e => setIyzicoConfig({...iyzicoConfig, secretKey: e.target.value})} placeholder="sandbox-..." />
-                          <button className="btn btn-outline-secondary" type="button" onClick={() => setShowSecretKey(!showSecretKey)}><i className={`fas fa-eye${showSecretKey ? '-slash' : ''}`} /></button>
-                        </div>
-                      </div>
-                      <div className="col-md-4">
-                        <label className="form-label small fw-medium">Ortam</label>
-                        <select className="form-select" value={iyzicoConfig.sandbox === 'true' ? 'sandbox' : 'production'}
-                          onChange={e => {
-                            const sb = e.target.value === 'sandbox';
-                            setIyzicoConfig({...iyzicoConfig, sandbox: sb ? 'true' : 'false', baseUrl: sb ? 'https://sandbox-api.iyzipay.com' : 'https://api.iyzipay.com'});
-                          }}>
-                          <option value="sandbox">Sandbox (Test)</option>
-                          <option value="production">Production (Canlı)</option>
-                        </select>
-                      </div>
-                      <div className="col-md-4">
-                        <label className="form-label small fw-medium">Base URL</label>
-                        <input className="form-control small" value={iyzicoConfig.baseUrl||''} onChange={e => setIyzicoConfig({...iyzicoConfig, baseUrl: e.target.value})} />
-                      </div>
-                      <div className="col-md-4">
-                        <label className="form-label small fw-medium">Timeout</label>
-                        <div className="input-group">
-                          <input type="number" className="form-control" value={iyzicoConfig.timeoutMinutes||15} onChange={e => setIyzicoConfig({...iyzicoConfig, timeoutMinutes: e.target.value})} min={5} max={60} />
-                          <span className="input-group-text small">dk</span>
-                        </div>
-                      </div>
-                      <div className="col-12">
-                        <label className="form-label small fw-medium">Callback URL</label>
-                        <input className="form-control" value={iyzicoConfig.callbackUrl||''} onChange={e => setIyzicoConfig({...iyzicoConfig, callbackUrl: e.target.value})} placeholder="https://siteniz.com/store/odeme/callback" />
-                      </div>
-                      {iyzicoConfig.sandbox !== 'true' && (
-                        <div className="col-12"><div className="alert alert-danger py-2 small mb-0"><i className="fas fa-exclamation-triangle me-1" />Canlı moddaysınız — gerçek ödemeler işlenecektir.</div></div>
-                      )}
-                      <div className="col-12">
-                        <button className="btn btn-primary px-4" onClick={handleSaveIyzicoConfig} disabled={iyzicoSaving}>
-                          <i className={`fas ${iyzicoSaving ? 'fa-spinner fa-spin' : 'fa-save'} me-2`} />{iyzicoSaving ? 'Kaydediliyor...' : 'Kaydet'}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>
@@ -468,12 +314,3 @@ function FieldLabel({ label, tooltip }) {
   );
 }
 
-function StatusBadge({ configured }) {
-  return <span className={`badge ${configured ? 'bg-success-subtle text-success' : 'bg-warning-subtle text-warning'} border`}>
-    <i className={`fas ${configured ? 'fa-check-circle' : 'fa-exclamation-circle'} me-1`} />{configured ? 'Yapılandırılmış' : 'Yapılandırılmamış'}
-  </span>;
-}
-
-function Spinner() {
-  return <div className="text-center py-4"><span className="spinner-border spinner-border-sm text-muted" /></div>;
-}

@@ -3,6 +3,7 @@ import axios from 'axios';
 import PaginationControls from '../components/PaginationControls';
 import ConfirmModal from '../components/ConfirmModal';
 import useSecurityCodePrompt from '../components/useSecurityCodePrompt';
+import { useAdminToast } from '../components/AdminToast';
 
 const STATUS_CONFIG = {
   ACTIVE: { label: 'Aktif', color: 'success' },
@@ -28,6 +29,7 @@ export default function AdminCustomers() {
   const [statusNote, setStatusNote] = useState('');
   const [deleteTarget, setDeleteTarget] = useState(null);
   const { askCode, SecurityCodePrompt } = useSecurityCodePrompt();
+  const toast = useAdminToast();
 
   const fetchCustomers = useCallback(() => {
     setLoading(true);
@@ -52,13 +54,13 @@ export default function AdminCustomers() {
       setSelectedCustomer(null);
       setCustomerDetail(null);
       fetchCustomers();
-    } catch (e) { alert(e.response?.data?.message || 'Silinemedi.'); }
+    } catch (e) { toast.error(e.response?.data?.message || 'Silinemedi.'); }
   };
 
   const openDetail = async (id) => {
     setSelectedCustomer(id); setDetailLoading(true);
     try { const res = await axios.get(`/api/admin/customers/${id}`); setCustomerDetail(res.data); }
-    catch {} finally { setDetailLoading(false); }
+    catch (e) { toast.error('İşlem başarısız.'); } finally { setDetailLoading(false); }
   };
 
   const updateCustomerStatus = async () => {
@@ -66,7 +68,7 @@ export default function AdminCustomers() {
       await axios.put(`/api/admin/customers/${selectedCustomer}/status`, { status: newStatus, note: statusNote });
       setShowStatusModal(false); setStatusNote('');
       openDetail(selectedCustomer); fetchCustomers();
-    } catch (e) { alert(e.response?.data?.message || 'Hata oluştu'); }
+    } catch (e) { toast.error(e.response?.data?.message || 'Hata oluştu'); }
   };
 
   return (

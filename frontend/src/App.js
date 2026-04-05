@@ -33,6 +33,7 @@ import AdminPaymentGateways from './pages/AdminPaymentGateways';
 import AdminCoupons from './pages/AdminCoupons';
 import AdminStockMovements from './pages/AdminStockMovements';
 import AdminCargoProviders from './pages/AdminCargoProviders';
+import AdminSupportTickets from './pages/AdminSupportTickets';
 
 // Store pages (new)
 import HomePage from './pages/store/HomePage';
@@ -49,6 +50,9 @@ import MyOrdersPage from './pages/store/MyOrdersPage';
 import MyAddressesPage from './pages/store/MyAddressesPage';
 import MyFavoritesPage from './pages/store/MyFavoritesPage';
 import EmailVerifyPage from './pages/store/EmailVerifyPage';
+import ForgotPasswordPage from './pages/store/ForgotPasswordPage';
+import ResetPasswordPage from './pages/store/ResetPasswordPage';
+import MySupportPage from './pages/store/MySupportPage';
 import NotFoundPage from './pages/store/NotFoundPage';
 
 function App() {
@@ -85,7 +89,10 @@ function App() {
           <Route path="siparislerim" element={<MyOrdersPage />} />
           <Route path="adreslerim" element={<MyAddressesPage />} />
           <Route path="favorilerim" element={<MyFavoritesPage />} />
+          <Route path="destek" element={<MySupportPage />} />
           <Route path="hesap-dogrula" element={<EmailVerifyPage />} />
+          <Route path="sifremi-unuttum" element={<ForgotPasswordPage />} />
+          <Route path="sifre-sifirla" element={<ResetPasswordPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>
 
@@ -163,6 +170,9 @@ function App() {
           } />
           <Route path="admin/cargo-providers" element={
             authed && role === 'ADMIN' ? <AdminCargoProviders /> : <Navigate to={authed ? '/stock' : '/login'} replace />
+          } />
+          <Route path="admin/support-tickets" element={
+            authed && role === 'ADMIN' ? <AdminSupportTickets /> : <Navigate to={authed ? '/stock' : '/login'} replace />
           } />
         </Route>
       </Routes>

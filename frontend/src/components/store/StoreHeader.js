@@ -42,19 +42,56 @@ export default function StoreHeader({ cart, settings }) {
   }, []);
 
   // Debounced live search
+  // Turkish character normalization for search matching
+  const normalize = (str) => (str || '').toLowerCase()
+    .replace(/ş/g,'s').replace(/ç/g,'c').replace(/ğ/g,'g').replace(/ü/g,'u').replace(/ö/g,'o').replace(/ı/g,'i')
+    .replace(/Ş/g,'s').replace(/Ç/g,'c').replace(/Ğ/g,'g').replace(/Ü/g,'u').replace(/Ö/g,'o').replace(/İ/g,'i');
+
   const handleSearchInput = (value) => {
     setSearchTerm(value);
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     if (value.trim().length < 2) { setSearchResults([]); return; }
     setSearchLoading(true);
     searchTimerRef.current = setTimeout(() => {
-      axios.get('/api/store/products', { params: { search: value.trim(), size: 6 } })
+      const q = value.trim();
+      const qNorm = normalize(q);
+
+      axios.get('/api/store/products', { params: { search: q, size: 8 } })
         .then(r => {
-          const products = (r.data?.content || []).map(p => ({ type: 'product', id: p.id, name: p.name, slug: p.slug, price: p.price, salePrice: p.salePrice, image: p.primaryImageUrl, brand: p.brandName }));
-          // Also match categories
-          const matchedCats = categories.filter(c => c.name.toLowerCase().includes(value.toLowerCase())).slice(0, 3)
-            .map(c => ({ type: 'category', id: c.id, name: c.name, slug: c.slug }));
-          setSearchResults([...matchedCats, ...products]);
+          const products = (r.data?.content || []).map(p => ({
+            type: 'product', id: p.id, name: p.name, slug: p.slug,
+            price: p.price, salePrice: p.salePrice, image: p.primaryImageUrl,
+            brand: p.brandName, category: p.categoryName, stockStatus: p.stockStatus,
+          }));
+
+          // Match categories — including subcategories, with Turkish normalization
+          const matchedCats = [];
+          const seen = new Set();
+          categories.forEach(cat => {
+            if (normalize(cat.name).includes(qNorm) && !seen.has(cat.id)) {
+              matchedCats.push({ type: 'category', id: cat.id, name: cat.name, slug: cat.slug, parent: null });
+              seen.add(cat.id);
+            }
+            // Check subcategories
+            (cat.children || []).forEach(sub => {
+              if (normalize(sub.name).includes(qNorm) && !seen.has(sub.id)) {
+                matchedCats.push({ type: 'category', id: sub.id, name: sub.name, slug: sub.slug, parent: cat.name });
+                seen.add(sub.id);
+              }
+            });
+          });
+
+          // Match brands from product results
+          const matchedBrands = [];
+          const brandSeen = new Set();
+          products.forEach(p => {
+            if (p.brand && normalize(p.brand).includes(qNorm) && !brandSeen.has(p.brand)) {
+              matchedBrands.push({ type: 'brand', name: p.brand });
+              brandSeen.add(p.brand);
+            }
+          });
+
+          setSearchResults([...matchedCats.slice(0, 4), ...matchedBrands.slice(0, 2), ...products.slice(0, 6)]);
         })
         .catch(() => setSearchResults([]))
         .finally(() => setSearchLoading(false));
@@ -181,45 +218,94 @@ export default function StoreHeader({ cart, settings }) {
                   {searchLoading ? (
                     <div className="p-3 text-center"><span className="spinner-border spinner-border-sm text-primary" /></div>
                   ) : searchResults.length === 0 ? (
-                    <div className="p-3 text-center text-muted small">"{searchTerm}" ile eşleşen sonuç bulunamadı.</div>
+                    <div className="p-4 text-center">
+                      <FiSearch size={24} className="text-muted mb-2 d-block mx-auto" style={{opacity:0.3}} />
+                      <div className="text-muted small">"{searchTerm}" ile eşleşen sonuç bulunamadı.</div>
+                      <div className="text-muted" style={{fontSize:11}}>Farklı kelimeler deneyin veya Türkçe karakterlerle arayın.</div>
+                    </div>
                   ) : (
                     <>
+                      {/* Kategoriler */}
                       {searchResults.filter(r => r.type === 'category').length > 0 && (
-                        <div className="px-3 pt-2 pb-1"><small className="text-muted fw-semibold text-uppercase" style={{fontSize:10}}>Kategoriler</small></div>
+                        <>
+                          <div className="px-3 pt-2 pb-1"><small className="text-muted fw-semibold text-uppercase" style={{fontSize:10,letterSpacing:'0.05em'}}>Kategoriler</small></div>
+                          {searchResults.filter(r => r.type === 'category').map(r => (
+                            <Link key={`cat-${r.id}`} to={`/store/kategori/${r.slug}`}
+                              className="d-flex align-items-center gap-2 px-3 py-2 text-dark text-decoration-none store-search-item"
+                              onClick={() => { setSearchFocused(false); setSearchTerm(''); setSearchResults([]); }}>
+                              <div style={{width:28,height:28,borderRadius:8,background:'#eff6ff',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                                <i className="fas fa-th-large text-primary" style={{fontSize:11}} />
+                              </div>
+                              <div>
+                                <span className="small fw-medium">{r.name}</span>
+                                {r.parent && <span className="text-muted" style={{fontSize:10}}> — {r.parent}</span>}
+                              </div>
+                              <i className="fas fa-chevron-right ms-auto text-muted" style={{fontSize:9}} />
+                            </Link>
+                          ))}
+                        </>
                       )}
-                      {searchResults.filter(r => r.type === 'category').map(r => (
-                        <Link key={`cat-${r.id}`} to={`/store/kategori/${r.slug}`}
-                          className="d-flex align-items-center gap-2 px-3 py-2 text-dark text-decoration-none store-search-item"
-                          onClick={() => { setSearchFocused(false); setSearchTerm(''); setSearchResults([]); }}>
-                          <i className="fas fa-folder text-muted" style={{width:20}} />
-                          <span className="small fw-medium">{r.name}</span>
-                        </Link>
-                      ))}
+
+                      {/* Markalar */}
+                      {searchResults.filter(r => r.type === 'brand').length > 0 && (
+                        <>
+                          <div className="px-3 pt-2 pb-1 border-top"><small className="text-muted fw-semibold text-uppercase" style={{fontSize:10,letterSpacing:'0.05em'}}>Markalar</small></div>
+                          {searchResults.filter(r => r.type === 'brand').map(r => (
+                            <Link key={`brand-${r.name}`} to={`/store/kategori/tumu?brand=${r.name}`}
+                              className="d-flex align-items-center gap-2 px-3 py-2 text-dark text-decoration-none store-search-item"
+                              onClick={() => { setSearchFocused(false); setSearchTerm(''); setSearchResults([]); }}>
+                              <div style={{width:28,height:28,borderRadius:8,background:'#f0fdf4',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                                <i className="fas fa-tag text-success" style={{fontSize:11}} />
+                              </div>
+                              <span className="small fw-medium">{r.name}</span>
+                              <i className="fas fa-chevron-right ms-auto text-muted" style={{fontSize:9}} />
+                            </Link>
+                          ))}
+                        </>
+                      )}
+
+                      {/* Ürünler */}
                       {searchResults.filter(r => r.type === 'product').length > 0 && (
-                        <div className="px-3 pt-2 pb-1 border-top"><small className="text-muted fw-semibold text-uppercase" style={{fontSize:10}}>Ürünler</small></div>
+                        <>
+                          <div className="px-3 pt-2 pb-1 border-top"><small className="text-muted fw-semibold text-uppercase" style={{fontSize:10,letterSpacing:'0.05em'}}>Ürünler</small></div>
+                          {searchResults.filter(r => r.type === 'product').map(r => (
+                            <Link key={`prod-${r.id}`} to={`/store/urun/${r.slug}`}
+                              className="d-flex align-items-center gap-3 px-3 py-2 text-dark text-decoration-none store-search-item"
+                              onClick={() => { setSearchFocused(false); setSearchTerm(''); setSearchResults([]); }}>
+                              {r.image ? (
+                                <img src={r.image} alt="" style={{width:40,height:40,objectFit:'contain',borderRadius:8,background:'#f8f9fa',border:'1px solid #f1f5f9'}} />
+                              ) : (
+                                <div style={{width:40,height:40,borderRadius:8,background:'#f1f5f9',display:'flex',alignItems:'center',justifyContent:'center'}}><FiSearch size={14} className="text-muted" /></div>
+                              )}
+                              <div className="flex-grow-1 min-w-0">
+                                <div className="small fw-medium text-truncate">{r.name}</div>
+                                <div className="d-flex align-items-center gap-2">
+                                  {r.brand && <span className="text-muted" style={{fontSize:10}}>{r.brand}</span>}
+                                  {r.category && <span className="text-muted" style={{fontSize:10}}>· {r.category}</span>}
+                                  {r.stockStatus === 'OUT_OF_STOCK' && <span className="badge bg-danger" style={{fontSize:8}}>Tükendi</span>}
+                                </div>
+                              </div>
+                              <div className="text-end flex-shrink-0">
+                                {r.salePrice && r.salePrice > 0 && r.salePrice < r.price ? (
+                                  <>
+                                    <div className="fw-bold text-danger" style={{fontSize:12}}>{new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY'}).format(r.salePrice)}</div>
+                                    <del className="text-muted" style={{fontSize:10}}>{new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY'}).format(r.price)}</del>
+                                  </>
+                                ) : (
+                                  <div className="fw-bold" style={{fontSize:12}}>{new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY'}).format(r.price)}</div>
+                                )}
+                              </div>
+                            </Link>
+                          ))}
+                        </>
                       )}
-                      {searchResults.filter(r => r.type === 'product').map(r => (
-                        <Link key={`prod-${r.id}`} to={`/store/urun/${r.slug}`}
-                          className="d-flex align-items-center gap-3 px-3 py-2 text-dark text-decoration-none store-search-item"
-                          onClick={() => { setSearchFocused(false); setSearchTerm(''); setSearchResults([]); }}>
-                          {r.image ? <img src={r.image} alt="" style={{width:36,height:36,objectFit:'contain',borderRadius:6,background:'#f8f9fa'}} /> : <div style={{width:36,height:36,borderRadius:6,background:'#f1f5f9',display:'flex',alignItems:'center',justifyContent:'center'}}><FiSearch size={14} className="text-muted" /></div>}
-                          <div className="flex-grow-1 min-w-0">
-                            <div className="small fw-medium text-truncate">{r.name}</div>
-                            {r.brand && <div className="text-muted" style={{fontSize:11}}>{r.brand}</div>}
-                          </div>
-                          <div className="text-end">
-                            {r.salePrice && r.salePrice < r.price ? (
-                              <><div className="small fw-bold text-danger">{new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY'}).format(r.salePrice)}</div><del className="text-muted" style={{fontSize:10}}>{new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY'}).format(r.price)}</del></>
-                            ) : (
-                              <div className="small fw-bold">{new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY'}).format(r.price)}</div>
-                            )}
-                          </div>
-                        </Link>
-                      ))}
+
+                      {/* Tüm sonuçlar */}
                       <Link to={`/store/kategori/arama?q=${encodeURIComponent(searchTerm)}`}
-                        className="d-block text-center py-2 border-top text-primary small fw-semibold text-decoration-none store-search-item"
+                        className="d-flex align-items-center justify-content-center gap-2 py-3 border-top text-primary small fw-semibold text-decoration-none store-search-item"
                         onClick={() => { setSearchFocused(false); setSearchTerm(''); setSearchResults([]); }}>
-                        Tüm sonuçları gör →
+                        <FiSearch size={13} />
+                        "{searchTerm}" için tüm sonuçları gör
                       </Link>
                     </>
                   )}
@@ -266,6 +352,9 @@ export default function StoreHeader({ cart, settings }) {
                     </Link>
                     <Link to="/store/favorilerim" className="d-flex align-items-center gap-2 px-3 py-2 text-dark text-decoration-none store-user-menu-item" onClick={() => setUserMenuOpen(false)}>
                       <FiHeart size={16} className="text-muted" /><span className="small">Favorilerim</span>
+                    </Link>
+                    <Link to="/store/destek" className="d-flex align-items-center gap-2 px-3 py-2 text-dark text-decoration-none store-user-menu-item" onClick={() => setUserMenuOpen(false)}>
+                      <FiPackage size={16} className="text-muted" /><span className="small">Destek Taleplerim</span>
                     </Link>
                     <Link to="/store/adreslerim" className="d-flex align-items-center gap-2 px-3 py-2 text-dark text-decoration-none store-user-menu-item" onClick={() => setUserMenuOpen(false)}>
                       <FiMapPin size={16} className="text-muted" /><span className="small">Adreslerim</span>

@@ -10,7 +10,11 @@ import com.warehouse.repository.*;
 import com.warehouse.service.CartService;
 import com.warehouse.service.CheckoutService;
 import com.warehouse.entity.Stock;
+import com.warehouse.entity.StockEvent;
+import com.warehouse.enums.StockEventType;
+import com.warehouse.enums.StockEventSource;
 import com.warehouse.repository.StockRepository;
+import com.warehouse.repository.StockEventRepository;
 import com.warehouse.service.StockService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,18 +42,21 @@ public class CheckoutServiceImpl implements CheckoutService {
     private final StockRepository stockRepository;
     private final CartService cartService;
     private final CargoProviderRepository cargoProviderRepository;
+    private final StockEventRepository stockEventRepository;
 
     public CheckoutServiceImpl(CartRepository cartRepository, CartItemRepository cartItemRepository,
                                 CustomerRepository customerRepository, CustomerAddressRepository addressRepository,
                                 OrderRepository orderRepository, StockService stockService,
                                 StockRepository stockRepository, CartService cartService,
-                                CargoProviderRepository cargoProviderRepository) {
+                                CargoProviderRepository cargoProviderRepository,
+                                StockEventRepository stockEventRepository) {
         this.cartRepository = cartRepository;
         this.cartItemRepository = cartItemRepository;
         this.customerRepository = customerRepository;
         this.addressRepository = addressRepository;
         this.orderRepository = orderRepository;
         this.cargoProviderRepository = cargoProviderRepository;
+        this.stockEventRepository = stockEventRepository;
         this.stockService = stockService;
         this.stockRepository = stockRepository;
         this.cartService = cartService;
@@ -144,8 +151,21 @@ public class CheckoutServiceImpl implements CheckoutService {
                 int avail = stock.getAvailableQuantity();
                 if (avail <= 0) continue;
                 int toReserve = Math.min(remaining, avail);
-                stock.setReservedQuantity(stock.getReservedQuantity() + toReserve);
+                int oldReserved = stock.getReservedQuantity();
+                stock.setReservedQuantity(oldReserved + toReserve);
                 stockRepository.save(stock);
+
+                // Log stock reservation event
+                StockEvent event = new StockEvent();
+                event.setStockId(stock.getId());
+                event.setProductId(p.getId());
+                event.setEventType(StockEventType.RESERVED);
+                event.setOldValue(oldReserved);
+                event.setNewValue(stock.getReservedQuantity());
+                event.setSource(StockEventSource.ORDER);
+                event.setSourceDetail("Sipariş rezervasyonu (" + toReserve + " adet)");
+                stockEventRepository.save(event);
+
                 remaining -= toReserve;
                 reservedWarehouseId = stock.getWarehouse().getId();
                 reservedStockId = stock.getId();

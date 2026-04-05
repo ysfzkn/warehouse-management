@@ -25,16 +25,35 @@ import com.warehouse.service.AdminSecurityService;
 import com.warehouse.service.PaymentService;
 import com.warehouse.util.CurrentUser;
 import jakarta.validation.Valid;
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @RestController
@@ -77,12 +96,29 @@ public class AdminOrderController {
     public ResponseEntity<PagedResponse<AdminOrderDto>> listOrders(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
-            @RequestParam(required = false) OrderStatus status,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String paymentMethod,
+            @RequestParam(required = false) String cargoCompany,
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate,
+            @RequestParam(required = false) String search,
             @RequestParam(defaultValue = "createdAt") String sortBy,
             @RequestParam(defaultValue = "desc") String sortDir) {
 
         Sort sort = sortDir.equalsIgnoreCase("asc") ? Sort.by(sortBy).ascending() : Sort.by(sortBy).descending();
-        Page<Order> result = orderRepository.findAllWithCustomer(PageRequest.of(page, size, sort));
+
+        // Parse filters
+        String statusFilter = (status != null && !status.isBlank()) ? status : null;
+        String pmFilter = (paymentMethod != null && !paymentMethod.isBlank()) ? paymentMethod : null;
+        String cargoFilter = (cargoCompany != null && !cargoCompany.isBlank()) ? cargoCompany : null;
+        java.time.LocalDateTime startDt = null, endDt = null;
+        try { if (startDate != null && !startDate.isBlank()) startDt = java.time.LocalDate.parse(startDate).atStartOfDay(); } catch (Exception ignored) {}
+        try { if (endDate != null && !endDate.isBlank()) endDt = java.time.LocalDate.parse(endDate).plusDays(1).atStartOfDay(); } catch (Exception ignored) {}
+        String searchParam = (search != null && !search.isBlank()) ? search : null;
+
+        Page<Order> result = orderRepository.findAll(
+            com.warehouse.repository.OrderSpecifications.withFilters(statusFilter, pmFilter, cargoFilter, startDt, endDt, searchParam),
+            PageRequest.of(page, size, sort));
 
         List<AdminOrderDto> dtos = result.getContent().stream().map(o -> AdminOrderDto.builder()
             .id(o.getId())
@@ -134,14 +170,41 @@ public class AdminOrderController {
             .customerNote(order.getCustomerNote())
             .adminNote(order.getAdminNote())
             .ipAddress(order.getIpAddress())
-            .items(items.stream().map(i -> AdminOrderDetailDto.OrderItemDto.builder()
-                .id(i.getId())
-                .productName(i.getProductSnapshot() != null ? (String) i.getProductSnapshot().get("name") : "")
-                .productSku(i.getProductSnapshot() != null ? (String) i.getProductSnapshot().get("sku") : "")
-                .quantity(i.getQuantity())
-                .unitPrice(i.getUnitPrice())
-                .lineTotal(i.getLineTotal())
-                .build()).collect(Collectors.toList()))
+            .invoiceNumber(order.getInvoiceNumber())
+            .invoiceUrl(order.getInvoiceUrl())
+            .items(items.stream().map(i -> {
+                String warehouseName = "";
+                try {
+                    if (i.getWarehouseId() != null) {
+                        var wh = stockRepository.findById(i.getStockId());
+                        if (wh.isPresent()) warehouseName = wh.get().getWarehouse().getName();
+                    }
+                } catch (Exception ignored) {}
+                Long productId = null;
+                String imageUrl = null;
+                try {
+                    if (i.getProduct() != null) {
+                        productId = i.getProduct().getId();
+                        if (i.getProduct().getImages() != null && !i.getProduct().getImages().isEmpty()) {
+                            var img = i.getProduct().getImages().stream().filter(im -> im.isPrimary()).findFirst().orElse(i.getProduct().getImages().get(0));
+                            imageUrl = "/api/admin/products/images/" + img.getId() + "/view?thumbnail=true";
+                        }
+                    }
+                } catch (Exception ignored2) {}
+                return AdminOrderDetailDto.OrderItemDto.builder()
+                    .id(i.getId())
+                    .productId(productId)
+                    .productName(i.getProductSnapshot() != null ? (String) i.getProductSnapshot().get("name") : "")
+                    .productSku(i.getProductSnapshot() != null ? (String) i.getProductSnapshot().get("sku") : "")
+                    .quantity(i.getQuantity())
+                    .unitPrice(i.getUnitPrice())
+                    .lineTotal(i.getLineTotal())
+                    .warehouseId(i.getWarehouseId())
+                    .warehouseName(warehouseName)
+                    .stockId(i.getStockId())
+                    .imageUrl(imageUrl)
+                    .build();
+            }).collect(Collectors.toList()))
             .statusHistory(history.stream().map(h -> AdminOrderDetailDto.StatusHistoryDto.builder()
                 .oldStatus(h.getOldStatus())
                 .newStatus(h.getNewStatus())
@@ -181,6 +244,9 @@ public class AdminOrderController {
             try {
                 var items = orderItemRepository.findByOrderId(order.getId());
                 for (var item : items) {
+                    Long productId = null;
+                    try { productId = item.getProduct() != null ? item.getProduct().getId() : null; } catch (Exception ignored) {}
+
                     if (item.getStockId() != null) {
                         stockRepository.findById(item.getStockId()).ifPresent(stock -> {
                             int qty = item.getQuantity();
@@ -189,7 +255,6 @@ public class AdminOrderController {
                             stock.setReservedQuantity(Math.max(0, stock.getReservedQuantity() - qty));
                             stockRepository.save(stock);
 
-                            // Log stock event for traceability
                             StockEvent event = new StockEvent();
                             event.setStockId(stock.getId());
                             event.setProductId(item.getProduct() != null ? item.getProduct().getId() : null);
@@ -200,6 +265,16 @@ public class AdminOrderController {
                             event.setSourceDetail("Sipariş #" + order.getOrderNumber() + " teslim edildi (" + qty + " adet)");
                             stockEventRepository.save(event);
                         });
+                    } else {
+                        // StockId null ama yine de event logla (izlenebilirlik)
+                        StockEvent event = new StockEvent();
+                        event.setProductId(productId);
+                        event.setEventType(StockEventType.QUANTITY_CHANGED);
+                        event.setOldValue(item.getQuantity());
+                        event.setNewValue(0);
+                        event.setSource(StockEventSource.ORDER);
+                        event.setSourceDetail("Sipariş #" + order.getOrderNumber() + " teslim edildi (" + item.getQuantity() + " adet, stok kaydı yok)");
+                        stockEventRepository.save(event);
                     }
                 }
             } catch (Exception e) {
@@ -227,6 +302,9 @@ public class AdminOrderController {
             try {
                 var items = orderItemRepository.findByOrderId(order.getId());
                 for (var item : items) {
+                    Long pId = null;
+                    try { pId = item.getProduct() != null ? item.getProduct().getId() : null; } catch (Exception ignored) {}
+
                     if (item.getStockId() != null) {
                         stockRepository.findById(item.getStockId()).ifPresent(stock -> {
                             int oldReserved = stock.getReservedQuantity();
@@ -240,9 +318,18 @@ public class AdminOrderController {
                             event.setOldValue(oldReserved);
                             event.setNewValue(stock.getReservedQuantity());
                             event.setSource(StockEventSource.ORDER);
-                            event.setSourceDetail("Sipariş #" + order.getOrderNumber() + " iptal edildi (" + item.getQuantity() + " adet serbest)");
+                            event.setSourceDetail("Sipariş #" + order.getOrderNumber() + " iptal — " + item.getQuantity() + " adet serbest");
                             stockEventRepository.save(event);
                         });
+                    } else {
+                        StockEvent event = new StockEvent();
+                        event.setProductId(pId);
+                        event.setEventType(StockEventType.RELEASED);
+                        event.setOldValue(item.getQuantity());
+                        event.setNewValue(0);
+                        event.setSource(StockEventSource.ORDER);
+                        event.setSourceDetail("Sipariş #" + order.getOrderNumber() + " iptal — " + item.getQuantity() + " adet serbest (stok kaydı yok)");
+                        stockEventRepository.save(event);
                     }
                 }
             } catch (Exception e) {
@@ -318,6 +405,208 @@ public class AdminOrderController {
         String reason = (String) body.getOrDefault("reason", "Admin iade");
         paymentService.initiateRefund(id, amount, reason, request.getRemoteAddr());
         return ResponseEntity.ok(Map.of("message", "İade işlemi başlatıldı."));
+    }
+
+    // ==================== Excel Export ====================
+
+    private static final DateTimeFormatter DATE_FORMATTER =
+            DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss", Locale.forLanguageTag("tr-TR"));
+    private static final String[] ORDER_EXPORT_HEADERS = {
+        "Sipariş No", "Müşteri", "E-posta", "Tutar", "Durum", "Ödeme Yöntemi", "Kargo", "Tarih"
+    };
+
+    @GetMapping("/export")
+    @Transactional(readOnly = true)
+    public ResponseEntity<Resource> exportOrders(
+            @RequestParam(required = false) OrderStatus status,
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate) {
+
+        // Fetch all orders with customer eagerly loaded
+        List<Order> allOrders = orderRepository.findAllWithCustomer(
+                PageRequest.of(0, Integer.MAX_VALUE, Sort.by(Sort.Direction.DESC, "createdAt"))
+        ).getContent();
+
+        // Apply optional filters
+        if (status != null) {
+            allOrders = allOrders.stream()
+                    .filter(o -> o.getStatus() == status)
+                    .collect(Collectors.toList());
+        }
+        if (startDate != null && !startDate.isBlank()) {
+            LocalDateTime from = LocalDate.parse(startDate).atStartOfDay();
+            allOrders = allOrders.stream()
+                    .filter(o -> o.getCreatedAt() != null && !o.getCreatedAt().isBefore(from))
+                    .collect(Collectors.toList());
+        }
+        if (endDate != null && !endDate.isBlank()) {
+            LocalDateTime to = LocalDate.parse(endDate).atTime(23, 59, 59);
+            allOrders = allOrders.stream()
+                    .filter(o -> o.getCreatedAt() != null && !o.getCreatedAt().isAfter(to))
+                    .collect(Collectors.toList());
+        }
+
+        try (Workbook workbook = new XSSFWorkbook()) {
+            Sheet sheet = workbook.createSheet("Siparişler");
+
+            // Header style
+            CellStyle headerStyle = workbook.createCellStyle();
+            Font headerFont = workbook.createFont();
+            headerFont.setBold(true);
+            headerFont.setFontHeightInPoints((short) 11);
+            headerFont.setColor(IndexedColors.WHITE.getIndex());
+            headerStyle.setFont(headerFont);
+            headerStyle.setFillForegroundColor(IndexedColors.DARK_BLUE.getIndex());
+            headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+            headerStyle.setAlignment(HorizontalAlignment.CENTER);
+
+            // Data style
+            CellStyle dataStyle = workbook.createCellStyle();
+            Font dataFont = workbook.createFont();
+            dataFont.setFontHeightInPoints((short) 10);
+            dataStyle.setFont(dataFont);
+            dataStyle.setBorderTop(BorderStyle.THIN);
+            dataStyle.setBorderBottom(BorderStyle.THIN);
+            dataStyle.setBorderLeft(BorderStyle.THIN);
+            dataStyle.setBorderRight(BorderStyle.THIN);
+
+            // Header row
+            Row headerRow = sheet.createRow(0);
+            for (int i = 0; i < ORDER_EXPORT_HEADERS.length; i++) {
+                Cell cell = headerRow.createCell(i);
+                cell.setCellValue(ORDER_EXPORT_HEADERS[i]);
+                cell.setCellStyle(headerStyle);
+            }
+
+            // Data rows
+            int rowIndex = 1;
+            for (Order order : allOrders) {
+                Row row = sheet.createRow(rowIndex++);
+                int col = 0;
+                setCellVal(row, col++, order.getOrderNumber(), dataStyle);
+                setCellVal(row, col++, safeCustomerName(order), dataStyle);
+                setCellVal(row, col++, safeCustomerEmail(order), dataStyle);
+                setCellVal(row, col++, order.getGrandTotal() != null ? order.getGrandTotal().toPlainString() : "0", dataStyle);
+                setCellVal(row, col++, order.getStatus() != null
+                        ? com.warehouse.util.OrderStatusMachine.getLabel(order.getStatus()) : "", dataStyle);
+                setCellVal(row, col++, order.getPaymentMethod() != null ? order.getPaymentMethod() : "", dataStyle);
+                setCellVal(row, col++, order.getCargoCompany() != null ? order.getCargoCompany().name() : "", dataStyle);
+                setCellVal(row, col, order.getCreatedAt() != null ? order.getCreatedAt().format(DATE_FORMATTER) : "", dataStyle);
+            }
+
+            // Auto-size columns
+            for (int i = 0; i < ORDER_EXPORT_HEADERS.length; i++) {
+                sheet.autoSizeColumn(i);
+            }
+
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            workbook.write(out);
+
+            String filename = "siparisler-" + LocalDate.now().toString() + ".xlsx";
+            ByteArrayResource resource = new ByteArrayResource(out.toByteArray());
+
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + filename)
+                    .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                    .contentLength(out.size())
+                    .body(resource);
+
+        } catch (IOException e) {
+            throw new WarehouseManagementException(ErrorCode.INTERNAL_SERVER_ERROR,
+                    "Excel dosyası oluşturulurken hata oluştu.");
+        }
+    }
+
+    private void setCellVal(Row row, int col, String value, CellStyle style) {
+        Cell cell = row.createCell(col);
+        cell.setCellValue(value != null ? value : "");
+        cell.setCellStyle(style);
+    }
+
+    // ==================== Invoice Upload ====================
+
+    private static final String INVOICE_UPLOAD_DIR = "uploads/invoices";
+
+    @PostMapping("/{id}/invoice")
+    public ResponseEntity<Map<String, String>> uploadInvoice(
+            @PathVariable Long id,
+            @RequestParam("file") MultipartFile file,
+            @RequestParam("invoiceNumber") String invoiceNumber) {
+
+        Order order = orderRepository.findById(id)
+                .orElseThrow(() -> new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Sipariş bulunamadı."));
+
+        if (file.isEmpty()) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Dosya boş olamaz.");
+        }
+
+        try {
+            String originalFilename = file.getOriginalFilename();
+            String extension = "";
+            if (originalFilename != null && originalFilename.contains(".")) {
+                extension = originalFilename.substring(originalFilename.lastIndexOf('.'));
+            }
+            String storedFileName = UUID.randomUUID().toString() + extension;
+
+            Path uploadDir = Paths.get(INVOICE_UPLOAD_DIR);
+            Files.createDirectories(uploadDir);
+
+            Path targetPath = uploadDir.resolve(storedFileName);
+            Files.copy(file.getInputStream(), targetPath, StandardCopyOption.REPLACE_EXISTING);
+
+            order.setInvoiceNumber(invoiceNumber);
+            order.setInvoiceUrl(targetPath.toString().replace("\\", "/"));
+            orderRepository.save(order);
+
+            return ResponseEntity.ok(Map.of("message", "Fatura yüklendi.", "invoiceUrl", order.getInvoiceUrl()));
+        } catch (IOException e) {
+            throw new WarehouseManagementException(ErrorCode.INTERNAL_SERVER_ERROR,
+                    "Fatura dosyası kaydedilirken hata oluştu.");
+        }
+    }
+
+    // ==================== Invoice Download ====================
+
+    /**
+     * Fatura indirme/görüntüleme.
+     * ?inline=true → tarayıcıda görüntüle (PDF/resim)
+     * varsayılan → dosya olarak indir
+     */
+    @GetMapping("/{id}/invoice/download")
+    public ResponseEntity<Resource> downloadInvoice(@PathVariable Long id,
+            @RequestParam(defaultValue = "false") boolean inline) {
+        Order order = orderRepository.findById(id)
+                .orElseThrow(() -> new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Sipariş bulunamadı."));
+
+        if (order.getInvoiceUrl() == null || order.getInvoiceUrl().isBlank()) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Bu siparişe ait fatura bulunamadı.");
+        }
+
+        try {
+            Path filePath = Paths.get(order.getInvoiceUrl()).normalize();
+            if (!Files.exists(filePath)) {
+                throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Fatura dosyası bulunamadı.");
+            }
+
+            Resource resource = new UrlResource(filePath.toUri());
+            String contentType = Files.probeContentType(filePath);
+            if (contentType == null) contentType = "application/octet-stream";
+
+            String ext = "";
+            String fname = filePath.getFileName().toString();
+            if (fname.contains(".")) ext = fname.substring(fname.lastIndexOf('.'));
+            String filename = "fatura-" + order.getOrderNumber() + ext;
+
+            String disposition = inline ? "inline; filename=" + filename : "attachment; filename=" + filename;
+
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION, disposition)
+                    .contentType(MediaType.parseMediaType(contentType))
+                    .body(resource);
+        } catch (IOException e) {
+            throw new WarehouseManagementException(ErrorCode.INTERNAL_SERVER_ERROR,
+                    "Fatura dosyası indirilirken hata oluştu.");
+        }
     }
 
     private String safeCustomerName(Order o) {

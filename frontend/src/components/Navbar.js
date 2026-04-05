@@ -887,8 +887,8 @@ const Navbar = () => {
                   </li>
                   <li>
                     <Link className="dropdown-item" to="/admin/payment-gateways">
-                      <i className="fas fa-plug me-2 text-purple" style={{color:'#6f42c1'}}></i>
-                      Ödeme Gateway'leri
+                      <i className="fas fa-credit-card me-2 text-purple" style={{color:'#6f42c1'}}></i>
+                      Ödeme Ayarları
                     </Link>
                   </li>
                   <li>
@@ -906,7 +906,13 @@ const Navbar = () => {
                   <li>
                     <Link className="dropdown-item" to="/admin/cargo-providers">
                       <i className="fas fa-truck me-2 text-primary"></i>
-                      Kargo Firmaları
+                      Kargo Ayarları
+                    </Link>
+                  </li>
+                  <li>
+                    <Link className="dropdown-item" to="/admin/support-tickets">
+                      <i className="fas fa-headset me-2 text-warning"></i>
+                      Destek Talepleri
                     </Link>
                   </li>
                   <li>

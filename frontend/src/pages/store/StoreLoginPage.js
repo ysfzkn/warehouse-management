@@ -80,6 +80,11 @@ export default function StoreLoginPage() {
                 </button>
               </div>
             </div>
+            <div className="d-flex justify-content-end mb-3">
+              <Link to="/store/sifremi-unuttum" className="small text-muted text-decoration-none" style={{ fontSize: '0.8rem' }}>
+                Şifremi Unuttum
+              </Link>
+            </div>
             <button type="submit" className="btn btn-primary w-100 py-2 fw-semibold" disabled={loading}>
               {loading ? <><span className="spinner-border spinner-border-sm me-2" />Giriş yapılıyor...</> : <><i className="fas fa-sign-in-alt me-2" />Giriş Yap</>}
             </button>

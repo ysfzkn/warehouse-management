@@ -11,6 +11,7 @@ import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -113,6 +114,7 @@ public class Product {
     @Column(name = "is_featured", nullable = false)
     private boolean isFeatured = false;
 
+    @JsonProperty("isNew")
     @Column(name = "is_new", nullable = false)
     private boolean isNew = false;
 

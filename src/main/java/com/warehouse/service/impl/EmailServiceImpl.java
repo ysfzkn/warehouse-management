@@ -147,6 +147,36 @@ public class EmailServiceImpl implements EmailService {
 
     @Override
     @Async
+    public void sendPasswordResetConfirmation(String toEmail, String firstName) {
+        if (!enabled) {
+            log.info("Email disabled — password reset confirmation for {}", toEmail);
+            return;
+        }
+        String subject = "Şifreniz Başarıyla Değiştirildi — " + getSiteName();
+        String html = buildHeader("Şifre Değişikliği")
+                + """
+                    <p style="color:#334155;font-size:15px;">Merhaba <strong>%s</strong>,</p>
+                    <p style="color:#475569;font-size:14px;line-height:1.6;">
+                        Hesabınızın şifresi başarıyla değiştirilmiştir. Bu işlemi siz yapmadıysanız, lütfen hemen bizimle iletişime geçin.
+                    </p>
+                    <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:14px 18px;margin:20px 0;">
+                        <p style="color:#991b1b;font-size:13px;margin:0;">
+                            <strong>⚠ Güvenlik Uyarısı:</strong> Bu şifre değişikliğini siz yapmadıysanız, hesabınız tehlikede olabilir.
+                            Lütfen hemen şifrenizi tekrar değiştirin veya destek ekibimizle iletişime geçin.
+                        </p>
+                    </div>
+                    <div style="text-align:center;margin:24px 0;">
+                        <a href="%s/store/giris" style="background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;display:inline-block;">
+                            Giriş Yap
+                        </a>
+                    </div>
+                """.formatted(firstName, baseUrl)
+                + buildFooter();
+        sendHtml(toEmail, subject, html);
+    }
+
+    @Override
+    @Async
     public void sendOrderConfirmation(String toEmail, String firstName, String orderNumber) {
         if (!enabled) {
             log.info("Email disabled — order confirmation for {}: {}", toEmail, orderNumber);

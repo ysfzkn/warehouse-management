@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import useSecurityCodePrompt from '../components/useSecurityCodePrompt';
+import { useAdminToast } from '../components/AdminToast';
 
 const EMPTY_FORM = {
   name: '', code: '', logoUrl: '', baseCost: 29.99, costPerDesi: 2.00,
@@ -16,8 +17,8 @@ export default function AdminCargoProviders() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ ...EMPTY_FORM });
-  const [message, setMessage] = useState('');
   const { askCode, SecurityCodePrompt } = useSecurityCodePrompt();
+  const toast = useAdminToast();
 
   const fetchProviders = useCallback(() => {
     setLoading(true);
@@ -27,8 +28,6 @@ export default function AdminCargoProviders() {
 
   useEffect(() => { fetchProviders(); }, [fetchProviders]);
 
-  const showMsg = (m) => { setMessage(m); setTimeout(() => setMessage(''), 3500); };
-
   const handleSave = async () => {
     try {
       if (editing) {
@@ -37,15 +36,15 @@ export default function AdminCargoProviders() {
         await axios.post('/api/admin/cargo-providers', form);
       }
       setShowForm(false); setEditing(null); setForm({ ...EMPTY_FORM }); fetchProviders();
-      showMsg('success');
-    } catch (e) { showMsg(e.response?.data?.message || 'error'); }
+      toast.success('İşlem başarılı.');
+    } catch (e) { toast.error(e.response?.data?.message || 'İşlem sırasında hata oluştu.'); }
   };
 
   const handleToggle = async (p) => {
     try {
       await axios.put(`/api/admin/cargo-providers/${p.id}/toggle`);
       fetchProviders();
-    } catch {}
+    } catch (e) { toast.error('İşlem başarısız.'); }
   };
 
   const handleDelete = async (p) => {
@@ -54,8 +53,8 @@ export default function AdminCargoProviders() {
     if (!code) return;
     try {
       await axios.delete(`/api/admin/cargo-providers/${p.id}`, { headers: { 'X-ADMIN-SECURITY-CODE': code } });
-      fetchProviders(); showMsg('success');
-    } catch (e) { showMsg(e.response?.status === 403 ? 'Güvenlik şifresi hatalı.' : 'error'); }
+      fetchProviders(); toast.success('İşlem başarılı.');
+    } catch (e) { toast.error(e.response?.status === 403 ? 'Güvenlik şifresi hatalı.' : 'İşlem sırasında hata oluştu.'); }
   };
 
   const startEdit = (p) => { setEditing(p.id); setForm({ ...p }); setShowForm(true); };
@@ -68,17 +67,13 @@ export default function AdminCargoProviders() {
       {SecurityCodePrompt}
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
-          <h2 className="mb-1">Kargo Firmaları</h2>
-          <p className="text-muted small mb-0">Anlaşmalı kargo firmalarını ve fiyatlandırmayı yönetin</p>
+          <h2 className="mb-1">Kargo Ayarları</h2>
+          <p className="text-muted small mb-0">Anlaşmalı kargo firmalarını, fiyatlandırmayı ve kargo kurallarını yönetin</p>
         </div>
         <button className="btn btn-primary" onClick={startCreate}>
           <i className="fas fa-plus me-2" />Yeni Kargo Firması
         </button>
       </div>
-
-      {message === 'success' && <div className="alert alert-success small"><i className="fas fa-check-circle me-2" />İşlem başarılı.</div>}
-      {message && message !== 'success' && message !== 'error' && <div className="alert alert-danger small">{message}</div>}
-      {message === 'error' && <div className="alert alert-danger small">İşlem sırasında hata oluştu.</div>}
 
       <div className="row g-4">
         {showForm && (

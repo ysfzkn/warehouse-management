@@ -253,4 +253,65 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
         refreshTokenRepository.save(refreshToken);
         return refreshToken.getToken();
     }
+
+    @Override
+    public void requestPasswordReset(String email) {
+        if (email == null || email.isBlank()) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "E-posta adresi gereklidir.");
+        }
+        customerRepository.findByEmail(email.trim().toLowerCase()).ifPresent(customer -> {
+            // Rate limit: don't send if last request was < 2 minutes ago
+            if (customer.getPasswordResetSentAt() != null
+                && customer.getPasswordResetSentAt().plusMinutes(2).isAfter(LocalDateTime.now())) {
+                return;
+            }
+            String token = UUID.randomUUID().toString();
+            customer.setPasswordResetToken(token);
+            customer.setPasswordResetSentAt(LocalDateTime.now());
+            customerRepository.save(customer);
+
+            try {
+                emailService.sendPasswordReset(customer.getEmail(), customer.getFirstName(), token);
+            } catch (Exception e) {
+                logger.error("Password reset email failed for {}: {}", email, e.getMessage());
+            }
+        });
+        // Always return success to prevent email enumeration
+    }
+
+    @Override
+    public void resetPassword(String token, String newPassword) {
+        if (token == null || token.isBlank()) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Geçersiz sıfırlama bağlantısı.");
+        }
+        Customer customer = customerRepository.findByPasswordResetToken(token)
+            .orElseThrow(() -> new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                "Geçersiz veya süresi dolmuş sıfırlama bağlantısı."));
+
+        // Token expires after 1 hour
+        if (customer.getPasswordResetSentAt() == null
+            || customer.getPasswordResetSentAt().plusHours(1).isBefore(LocalDateTime.now())) {
+            customer.setPasswordResetToken(null);
+            customer.setPasswordResetSentAt(null);
+            customerRepository.save(customer);
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                "Sıfırlama bağlantısının süresi dolmuş. Lütfen yeni bir talep oluşturun.");
+        }
+
+        PasswordPolicyValidator.validate(newPassword);
+
+        customer.setPasswordHash(passwordEncoder.encode(newPassword));
+        customer.setPasswordResetToken(null);
+        customer.setPasswordResetSentAt(null);
+        customerRepository.save(customer);
+
+        // Send confirmation email
+        try {
+            emailService.sendPasswordResetConfirmation(customer.getEmail(), customer.getFirstName());
+        } catch (Exception e) {
+            logger.warn("Password reset confirmation email failed: {}", e.getMessage());
+        }
+
+        logger.info("Password reset completed for customer: {}", customer.getEmail());
+    }
 }

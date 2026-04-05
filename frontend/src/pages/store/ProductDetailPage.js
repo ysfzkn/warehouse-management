@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useOutletContext, Link } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
 import { useToast } from '../../components/store/Toast';
 import axios from 'axios';
 import ProductGallery from '../../components/store/ProductGallery';
@@ -58,8 +59,40 @@ export default function ProductDetailPage() {
     { label: product.name },
   ];
 
+  // JSON-LD structured data for SEO/GEO
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: product.name,
+    description: product.shortDescription || product.description || '',
+    sku: product.sku,
+    image: product.images?.length > 0 ? product.images[0].url : undefined,
+    brand: product.brandName ? { "@type": "Brand", name: product.brandName } : undefined,
+    category: product.categoryName || undefined,
+    offers: {
+      "@type": "Offer",
+      price: hasDiscount ? product.salePrice : product.price,
+      priceCurrency: "TRY",
+      availability: product.stockStatus === 'OUT_OF_STOCK'
+        ? "https://schema.org/OutOfStock"
+        : "https://schema.org/InStock",
+      seller: { "@type": "Organization", name: document.title || '' },
+    },
+  };
+
   return (
     <div className="container my-3">
+      <Helmet>
+        <title>{product.metaTitle || `${product.name}${product.brandName ? ` | ${product.brandName}` : ''}`}</title>
+        <meta name="description" content={product.metaDescription || product.shortDescription || product.description?.substring(0, 160) || ''} />
+        <meta property="og:title" content={product.metaTitle || product.name} />
+        <meta property="og:description" content={product.metaDescription || product.shortDescription || ''} />
+        {product.images?.length > 0 && <meta property="og:image" content={product.images[0].url} />}
+        <meta property="og:type" content="product" />
+        <meta property="product:price:amount" content={String(hasDiscount ? product.salePrice : product.price)} />
+        <meta property="product:price:currency" content="TRY" />
+        <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>
+      </Helmet>
       <Breadcrumb items={breadcrumbs} />
 
       <div className="row g-4">
