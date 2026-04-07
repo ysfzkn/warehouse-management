@@ -718,11 +718,11 @@ const Navbar = () => {
             to="/" 
             style={brandStyle}
           >
-            <img 
-              src="/company-logo.png" 
-              onError={(e)=>{e.currentTarget.onerror=null; e.currentTarget.src='/company-logo.png';}} 
-              alt="Logo" 
-              style={{ height: 32, marginRight: '0.75rem' }} 
+            <img
+              src="/api/store/settings/logo"
+              onError={(e)=>{e.currentTarget.onerror=null; e.currentTarget.src='/company-logo.png';}}
+              alt="Logo"
+              style={{ height: 32, marginRight: '0.75rem' }}
             />
             <span className="d-none d-xl-inline">Depo Yönetim Sistemi</span>
             <span className="d-xl-none">DYS</span>

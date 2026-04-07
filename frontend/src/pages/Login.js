@@ -50,9 +50,9 @@ const Login = () => {
             {/* Logo */}
             <div style={styles.logoContainer}>
               <img
-                src="/company-logo.png"
+                src="/api/store/settings/logo"
                 onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = '/company-logo.png'; }}
-                alt="Şahinler DTM"
+                alt="Logo"
                 style={styles.logo}
               />
             </div>
