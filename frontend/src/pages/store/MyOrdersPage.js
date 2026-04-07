@@ -71,7 +71,7 @@ export default function MyOrdersPage() {
     if (!returnReason) { toast.warning('Lütfen iade nedeninizi seçin.'); return; }
     setReturnLoading(true);
     try {
-      await axios.post(`/api/store/orders/${returnModal}/return-request`, { reason: returnReason, note: returnNote }, { headers: getAuthHeaders() });
+      await axios.post(`/api/store/orders/${returnModal}/return-requests`, { reason: returnReason, note: returnNote }, { headers: getAuthHeaders() });
       toast.success('İade talebiniz alındı.');
       setReturnModal(null); fetchOrders();
     } catch (e) { toast.error(e.response?.data?.message || 'İade talebi oluşturulamadı.'); }
@@ -82,7 +82,7 @@ export default function MyOrdersPage() {
     if (!supportTopic || !supportMessage.trim()) { toast.warning('Konu ve mesaj alanlarını doldurun.'); return; }
     setSupportLoading(true);
     try {
-      await axios.post(`/api/store/orders/${supportModal}/support`, { topic: supportTopic, message: supportMessage }, { headers: getAuthHeaders() });
+      await axios.post(`/api/store/orders/${supportModal}/support-tickets`, { topic: supportTopic, message: supportMessage }, { headers: getAuthHeaders() });
       toast.success('Destek talebiniz alındı. En kısa sürede size dönüş yapacağız.');
       setSupportModal(null); setSupportTopic(''); setSupportMessage('');
     } catch (e) {

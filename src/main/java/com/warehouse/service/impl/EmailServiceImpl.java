@@ -231,11 +231,18 @@ public class EmailServiceImpl implements EmailService {
     }
 
     private void sendHtml(String to, String subject, String html) {
+        sendHtml(to, subject, html, null);
+    }
+
+    private void sendHtml(String to, String subject, String html, String replyTo) {
         try {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
             helper.setFrom(fromEmail);
             helper.setTo(to);
+            if (replyTo != null && !replyTo.isBlank()) {
+                helper.setReplyTo(replyTo);
+            }
             helper.setSubject(subject);
             helper.setText(html, true);
             mailSender.send(message);
@@ -243,5 +250,59 @@ public class EmailServiceImpl implements EmailService {
         } catch (Exception e) {
             log.error("Failed to send email to {}: {}", to, e.getMessage(), e);
         }
+    }
+
+    /** Escape a user-supplied string so it can be safely embedded in HTML. */
+    private static String escape(String raw) {
+        if (raw == null) return "";
+        return raw
+                .replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace("\"", "&quot;")
+                .replace("'", "&#39;");
+    }
+
+    @Override
+    @Async
+    public boolean sendContactFormMessage(String toEmail, String fromName, String fromEmail,
+                                          String phone, String subject, String message) {
+        if (toEmail == null || toEmail.isBlank()) {
+            log.warn("Contact form received but no recipient configured (contact_form_email is empty)");
+            return false;
+        }
+        if (!enabled) {
+            log.info("Email disabled — contact form from {} <{}>: {}", fromName, fromEmail, subject);
+            return false;
+        }
+
+        String safeName    = escape(fromName);
+        String safeEmail   = escape(fromEmail);
+        String safePhone   = escape(phone);
+        String safeSubject = escape(subject);
+        String safeMessage = escape(message).replace("\n", "<br/>");
+
+        String phoneRow = (phone != null && !phone.isBlank())
+                ? "<tr><td style=\"padding:8px 12px;color:#64748b;font-size:13px;width:120px;\">Telefon</td><td style=\"padding:8px 12px;font-size:14px;\">" + safePhone + "</td></tr>"
+                : "";
+
+        String html = buildHeader("Yeni İletişim Mesajı")
+                + """
+                    <p style="color:#334155;font-size:15px;">Web sitenizdeki iletişim formundan yeni bir mesaj geldi:</p>
+                    <table style="width:100%%;border-collapse:collapse;background:#f8fafc;border-radius:8px;margin:20px 0;">
+                        <tr><td style="padding:8px 12px;color:#64748b;font-size:13px;width:120px;">Ad Soyad</td><td style="padding:8px 12px;font-size:14px;"><strong>%s</strong></td></tr>
+                        <tr><td style="padding:8px 12px;color:#64748b;font-size:13px;">E-posta</td><td style="padding:8px 12px;font-size:14px;"><a href="mailto:%s" style="color:#2563eb;text-decoration:none;">%s</a></td></tr>
+                        %s
+                        <tr><td style="padding:8px 12px;color:#64748b;font-size:13px;">Konu</td><td style="padding:8px 12px;font-size:14px;"><strong>%s</strong></td></tr>
+                    </table>
+                    <div style="background:#fff;border-left:3px solid #2563eb;padding:16px 20px;margin:20px 0;border-radius:4px;">
+                        <p style="color:#334155;font-size:14px;line-height:1.7;margin:0;">%s</p>
+                    </div>
+                    <p style="color:#94a3b8;font-size:12px;">Bu mesaja yanıt vermek için "Yanıtla" butonunu kullanabilirsiniz — yanıtınız doğrudan gönderene (%s) iletilecektir.</p>
+                """.formatted(safeName, safeEmail, safeEmail, phoneRow, safeSubject, safeMessage, safeEmail)
+                + buildFooter();
+
+        sendHtml(toEmail, "[İletişim Formu] " + subject, html, fromEmail);
+        return true;
     }
 }

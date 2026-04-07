@@ -127,6 +127,10 @@ public class CheckoutServiceImpl implements CheckoutService {
         CustomerAddress billingAddr = addressRepository.findById(billingAddrId)
             .orElseThrow(() -> new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Fatura adresi bulunamadı."));
 
+        // Generate order number up-front so stock events created during reservation
+        // can reference the order that caused them.
+        String orderNumber = "ORD-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd")) + "-" + java.util.UUID.randomUUID().toString().substring(0, 6).toUpperCase();
+
         // Calculate totals
         BigDecimal subtotal = BigDecimal.ZERO;
         BigDecimal vatTotal = BigDecimal.ZERO;
@@ -163,7 +167,8 @@ public class CheckoutServiceImpl implements CheckoutService {
                 event.setOldValue(oldReserved);
                 event.setNewValue(stock.getReservedQuantity());
                 event.setSource(StockEventSource.ORDER);
-                event.setSourceDetail("Sipariş rezervasyonu (" + toReserve + " adet)");
+                event.setSourceDetail("Sipariş #" + orderNumber + " rezervasyonu (" + toReserve + " adet)");
+                event.setOrderNumber(orderNumber);
                 stockEventRepository.save(event);
 
                 remaining -= toReserve;
@@ -227,9 +232,7 @@ public class CheckoutServiceImpl implements CheckoutService {
 
         BigDecimal grandTotal = subtotal.add(shippingCost).add(shippingVat).add(vatTotal);
 
-        // Generate order number
-        String orderNumber = "ORD-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd")) + "-" + java.util.UUID.randomUUID().toString().substring(0, 6).toUpperCase();
-
+        // orderNumber already generated at the top of this method so stock events could reference it
         Order order = new Order();
         order.setOrderNumber(orderNumber);
         order.setCustomer(customer);

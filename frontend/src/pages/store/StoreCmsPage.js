@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useOutletContext } from 'react-router-dom';
 import axios from 'axios';
 import Breadcrumb from '../../components/store/Breadcrumb';
+import ContactForm from '../../components/store/ContactForm';
 import { FiPhone, FiMail, FiMapPin } from 'react-icons/fi';
 
 export default function StoreCmsPage() {
@@ -83,6 +84,15 @@ export default function StoreCmsPage() {
                 </div>
               </div>
             )}
+          </div>
+          <div className="col-12">
+            <div className="card border-0 shadow-sm">
+              <div className="card-body p-4">
+                <h5 className="fw-bold mb-1">Mesaj Gönderin</h5>
+                <p className="text-muted small mb-4">Formu doldurun, en kısa sürede size dönüş yapalım.</p>
+                <ContactForm />
+              </div>
+            </div>
           </div>
         </div>
       </div>

@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import PaginationControls from '../components/PaginationControls';
 import useSecurityCodePrompt from '../components/useSecurityCodePrompt';
@@ -58,6 +59,20 @@ export default function AdminOrders() {
   const [invoiceUploading, setInvoiceUploading] = useState(false);
   const { askCode, SecurityCodePrompt } = useSecurityCodePrompt();
   const toast = useAdminToast();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const autoOpenedRef = useRef(false);
+
+  // Deep-link support: ?orderNumber=ORD-XXX prefills the search box
+  // (e.g. coming from the stock movements page).
+  useEffect(() => {
+    const qpOrder = searchParams.get('orderNumber');
+    if (qpOrder && qpOrder !== search) {
+      setSearch(qpOrder);
+      setPage(0);
+      autoOpenedRef.current = false;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const fetchOrders = useCallback(() => {
     setLoading(true);
@@ -75,6 +90,22 @@ export default function AdminOrders() {
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
+
+  // When arriving via ?orderNumber=..., auto-open the single matching order once
+  useEffect(() => {
+    const qpOrder = searchParams.get('orderNumber');
+    if (!qpOrder || autoOpenedRef.current || loading) return;
+    const match = orders.find(o => o.orderNumber === qpOrder);
+    if (match) {
+      autoOpenedRef.current = true;
+      openDetail(match.id);
+      // Clean the URL so a refresh doesn't keep re-opening the modal
+      const next = new URLSearchParams(searchParams);
+      next.delete('orderNumber');
+      setSearchParams(next, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orders, loading]);
 
   const [detailError, setDetailError] = useState('');
   const openDetail = async (orderId) => {

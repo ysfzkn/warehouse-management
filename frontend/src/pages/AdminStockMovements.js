@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import axios from 'axios';
 
 const SOURCE_LABELS = {
@@ -8,13 +9,65 @@ const TYPE_LABELS = {
   QUANTITY_CHANGED: 'Miktar Değişimi', RESERVED: 'Rezerve', RELEASED: 'Serbest Bırakıldı',
   LOW_STOCK: 'Düşük Stok', OUT_OF_STOCK: 'Stok Tükendi', BACK_IN_STOCK: 'Stok Geldi'
 };
-const SOURCE_COLORS = {
-  ORDER: 'primary', TRANSFER: 'info', ADMIN: 'warning', SYSTEM: 'secondary', IMPORT: 'success'
+
+// Monochrome icons — source type is conveyed by the icon, not by color.
+const SOURCE_ICONS = {
+  ORDER: 'fa-shopping-cart',
+  TRANSFER: 'fa-exchange-alt',
+  ADMIN: 'fa-user-shield',
+  SYSTEM: 'fa-cog',
+  IMPORT: 'fa-file-import',
 };
-const TYPE_COLORS = {
-  QUANTITY_CHANGED: 'primary', RESERVED: 'warning', RELEASED: 'success',
-  LOW_STOCK: 'danger', OUT_OF_STOCK: 'danger', BACK_IN_STOCK: 'success'
+
+// Tiny semantic dot colour per event type — the badge itself stays neutral.
+const TYPE_DOT = {
+  QUANTITY_CHANGED: '#64748b', // slate
+  RESERVED:         '#f59e0b', // amber
+  RELEASED:         '#10b981', // emerald
+  LOW_STOCK:        '#f59e0b', // amber
+  OUT_OF_STOCK:     '#ef4444', // red
+  BACK_IN_STOCK:    '#10b981', // emerald
 };
+
+// Which counter does each event type mutate?
+// 'stock' = physical quantity   |   'reserved' = reserved hold count
+const COUNTER_KIND = {
+  QUANTITY_CHANGED: 'stock',
+  LOW_STOCK:        'stock',
+  OUT_OF_STOCK:     'stock',
+  BACK_IN_STOCK:    'stock',
+  RESERVED:         'reserved',
+  RELEASED:         'reserved',
+};
+
+const COUNTER_META = {
+  stock:    { icon: 'fa-box',  label: 'Stok',    color: '#475569', tooltip: 'Bu olay fiziksel stok miktarını değiştirdi' },
+  reserved: { icon: 'fa-lock', label: 'Rezerve', color: '#b45309', tooltip: 'Bu olay rezerve (söz verilmiş) miktarı değiştirdi — fiziksel stok aynı' },
+};
+
+const pillStyle = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 6,
+  padding: '3px 10px',
+  fontSize: 11,
+  fontWeight: 500,
+  color: '#475569',
+  background: '#f1f5f9',
+  border: '1px solid #e2e8f0',
+  borderRadius: 999,
+  letterSpacing: 0.1,
+  whiteSpace: 'nowrap',
+};
+
+const dotStyle = (color) => ({
+  display: 'inline-block',
+  width: 6,
+  height: 6,
+  borderRadius: '50%',
+  background: color || '#94a3b8',
+  flexShrink: 0,
+});
 
 export default function AdminStockMovements() {
   const [events, setEvents] = useState([]);
@@ -27,6 +80,17 @@ export default function AdminStockMovements() {
   const [search, setSearch] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [copiedSku, setCopiedSku] = useState(null);
+
+  const copySku = (sku, e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!sku) return;
+    navigator.clipboard?.writeText(sku).then(() => {
+      setCopiedSku(sku);
+      setTimeout(() => setCopiedSku(current => current === sku ? null : current), 1500);
+    });
+  };
 
   const fetchEvents = useCallback(() => {
     setLoading(true);
@@ -157,24 +221,88 @@ export default function AdminStockMovements() {
                     <tr key={e.id}>
                       <td className="text-nowrap">{fmtDate(e.createdAt)}</td>
                       <td>
-                        <span className={`badge bg-${SOURCE_COLORS[e.source] || 'secondary'} bg-opacity-10 text-${SOURCE_COLORS[e.source] || 'secondary'}`}>
+                        <span style={pillStyle}>
+                          <i className={`fas ${SOURCE_ICONS[e.source] || 'fa-circle'}`} style={{fontSize:10, color:'#64748b'}} />
                           {SOURCE_LABELS[e.source] || e.source}
                         </span>
                       </td>
                       <td>
-                        <span className={`badge bg-${TYPE_COLORS[e.eventType] || 'secondary'} bg-opacity-10 text-${TYPE_COLORS[e.eventType] || 'secondary'}`}>
+                        <span style={pillStyle}>
+                          <span style={dotStyle(TYPE_DOT[e.eventType])} />
                           {TYPE_LABELS[e.eventType] || e.eventType}
                         </span>
                       </td>
                       <td>
                         <div className="fw-medium">{e.productName || '-'}</div>
-                        {e.stockId && <small className="text-muted">Stok #{e.stockId}</small>}
+                        {e.productSku ? (
+                          <div className="d-inline-flex align-items-center gap-1" style={{fontSize:11}}>
+                            <Link
+                              to={e.stockId ? `/stock?highlight=${e.stockId}` : '/stock'}
+                              className="text-decoration-none text-muted font-monospace"
+                              title={e.stockId ? `Stok yönetiminde #${e.stockId} kaydını göster` : 'Stok yönetimine git'}
+                              style={{letterSpacing: 0.2}}
+                            >
+                              {e.productSku}
+                            </Link>
+                            <button
+                              type="button"
+                              className="btn btn-link btn-sm p-0 text-muted"
+                              onClick={(ev) => copySku(e.productSku, ev)}
+                              title="SKU'yu kopyala"
+                              style={{lineHeight: 1, fontSize: 11}}
+                            >
+                              <i className={`fas ${copiedSku === e.productSku ? 'fa-check text-success' : 'fa-copy'}`} />
+                            </button>
+                          </div>
+                        ) : e.stockId ? (
+                          <small className="text-muted">Stok #{e.stockId}</small>
+                        ) : null}
                       </td>
-                      <td className="text-center">{e.oldValue ?? '-'}</td>
+                      <td className="text-center">
+                        {(() => {
+                          const kind = COUNTER_KIND[e.eventType] || 'stock';
+                          const meta = COUNTER_META[kind];
+                          return (
+                            <div className="d-flex flex-column align-items-center" style={{gap: 2}}>
+                              <span
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 4,
+                                  fontSize: 9,
+                                  fontWeight: 600,
+                                  color: meta.color,
+                                  letterSpacing: 0.3,
+                                  textTransform: 'uppercase',
+                                }}
+                                title={meta.tooltip}
+                              >
+                                <i className={`fas ${meta.icon}`} style={{fontSize: 8}} />
+                                {meta.label}
+                              </span>
+                              <span>{e.oldValue ?? '-'}</span>
+                            </div>
+                          );
+                        })()}
+                      </td>
                       <td className="text-center fw-medium">{e.newValue ?? '-'}</td>
                       <td className="text-center">{diffBadge(e.oldValue, e.newValue)}</td>
-                      <td className="text-muted" style={{maxWidth:300,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={e.sourceDetail}>
-                        {e.sourceDetail || '-'}
+                      <td style={{maxWidth:320,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={e.sourceDetail}>
+                        {e.orderNumber ? (
+                          <Link
+                            to={`/admin/orders?orderNumber=${encodeURIComponent(e.orderNumber)}`}
+                            className="text-primary"
+                            title={`Sipariş ${e.orderNumber} detayına git`}
+                            style={{textDecoration: 'none', borderBottom: '1px dashed currentColor'}}
+                            onMouseEnter={(ev) => { ev.currentTarget.style.borderBottomStyle = 'solid'; }}
+                            onMouseLeave={(ev) => { ev.currentTarget.style.borderBottomStyle = 'dashed'; }}
+                          >
+                            {e.sourceDetail || `Sipariş #${e.orderNumber}`}
+                            <i className="fas fa-arrow-up-right-from-square ms-1" style={{fontSize:9}} />
+                          </Link>
+                        ) : (
+                          <span className="text-muted">{e.sourceDetail || '-'}</span>
+                        )}
                       </td>
                     </tr>
                   ))}

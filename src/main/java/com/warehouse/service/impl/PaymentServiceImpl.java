@@ -455,6 +455,7 @@ public class PaymentServiceImpl implements PaymentService {
                     event.setNewValue(stock.getReservedQuantity());
                     event.setSource(StockEventSource.ORDER);
                     event.setSourceDetail("Sipariş #" + order.getOrderNumber() + " ödeme başarısız — stok serbest (" + item.getQuantity() + " adet)");
+                    event.setOrderNumber(order.getOrderNumber());
                     stockEventRepo.save(event);
                 });
             }

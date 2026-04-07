@@ -264,6 +264,7 @@ public class AdminOrderController {
                             event.setNewValue(stock.getQuantity());
                             event.setSource(StockEventSource.ORDER);
                             event.setSourceDetail("Sipariş #" + order.getOrderNumber() + " teslim edildi (" + qty + " adet)");
+                            event.setOrderNumber(order.getOrderNumber());
                             stockEventRepository.save(event);
                         });
                     } else {
@@ -275,6 +276,7 @@ public class AdminOrderController {
                         event.setNewValue(0);
                         event.setSource(StockEventSource.ORDER);
                         event.setSourceDetail("Sipariş #" + order.getOrderNumber() + " teslim edildi (" + item.getQuantity() + " adet, stok kaydı yok)");
+                        event.setOrderNumber(order.getOrderNumber());
                         stockEventRepository.save(event);
                     }
                 }
@@ -320,6 +322,7 @@ public class AdminOrderController {
                             event.setNewValue(stock.getReservedQuantity());
                             event.setSource(StockEventSource.ORDER);
                             event.setSourceDetail("Sipariş #" + order.getOrderNumber() + " iptal — " + item.getQuantity() + " adet serbest");
+                            event.setOrderNumber(order.getOrderNumber());
                             stockEventRepository.save(event);
                         });
                     } else {
@@ -330,6 +333,7 @@ public class AdminOrderController {
                         event.setNewValue(0);
                         event.setSource(StockEventSource.ORDER);
                         event.setSourceDetail("Sipariş #" + order.getOrderNumber() + " iptal — " + item.getQuantity() + " adet serbest (stok kaydı yok)");
+                        event.setOrderNumber(order.getOrderNumber());
                         stockEventRepository.save(event);
                     }
                 }

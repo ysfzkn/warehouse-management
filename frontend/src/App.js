@@ -34,6 +34,7 @@ import AdminCoupons from './pages/AdminCoupons';
 import AdminStockMovements from './pages/AdminStockMovements';
 import AdminCargoProviders from './pages/AdminCargoProviders';
 import AdminSupportTickets from './pages/AdminSupportTickets';
+import AdminContactMessages from './pages/AdminContactMessages';
 import AdminSalesDashboard from './pages/AdminSalesDashboard';
 import AdminHelp from './pages/AdminHelp';
 
@@ -175,6 +176,9 @@ function App() {
           } />
           <Route path="admin/support-tickets" element={
             authed && role === 'ADMIN' ? <AdminSupportTickets /> : <Navigate to={authed ? '/stock' : '/login'} replace />
+          } />
+          <Route path="admin/contact-messages" element={
+            authed && role === 'ADMIN' ? <AdminContactMessages /> : <Navigate to={authed ? '/stock' : '/login'} replace />
           } />
           <Route path="admin/sales-dashboard" element={
             authed && role === 'ADMIN' ? <AdminSalesDashboard /> : <Navigate to={authed ? '/stock' : '/login'} replace />

@@ -106,7 +106,7 @@ public class StoreOrderController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    @PostMapping("/{orderNumber}/support")
+    @PostMapping("/{orderNumber}/support-tickets")
     @org.springframework.transaction.annotation.Transactional
     public ResponseEntity<?> createSupportTicket(HttpServletRequest request, @PathVariable String orderNumber,
                                                   @RequestBody Map<String, String> body) {
@@ -134,7 +134,7 @@ public class StoreOrderController {
         return ResponseEntity.ok(Map.of("message", "Destek talebiniz alındı. En kısa sürede size dönüş yapacağız."));
     }
 
-    @PostMapping("/{orderNumber}/return-request")
+    @PostMapping("/{orderNumber}/return-requests")
     @org.springframework.transaction.annotation.Transactional
     public ResponseEntity<?> requestReturn(HttpServletRequest request, @PathVariable String orderNumber,
                                             @RequestBody Map<String, String> body) {
@@ -247,33 +247,6 @@ public class StoreOrderController {
         dto.put("invoiceNumber", o.getInvoiceNumber());
         dto.put("createdAt", o.getCreatedAt());
         return dto;
-    }
-
-    // ── Müşteri destek talepleri ──
-    @GetMapping("/support-tickets")
-    @Transactional(readOnly = true)
-    public ResponseEntity<?> mySupportTickets(HttpServletRequest request) {
-        Long customerId = extractCustomerId(request);
-        if (customerId == null) return ResponseEntity.ok(java.util.List.of());
-
-        var tickets = supportTicketRepo.findByCustomerId(customerId,
-            org.springframework.data.domain.PageRequest.of(0, 50, org.springframework.data.domain.Sort.by("createdAt").descending()));
-
-        List<Map<String, Object>> dtos = tickets.getContent().stream().map(t -> {
-            Map<String, Object> dto = new LinkedHashMap<>();
-            dto.put("id", t.getId());
-            dto.put("orderNumber", t.getOrderNumber());
-            dto.put("topic", t.getTopic());
-            dto.put("message", t.getMessage());
-            dto.put("status", t.getStatus());
-            dto.put("adminReply", t.getAdminReply());
-            dto.put("repliedBy", t.getRepliedBy());
-            dto.put("repliedAt", t.getRepliedAt());
-            dto.put("createdAt", t.getCreatedAt());
-            return dto;
-        }).collect(Collectors.toList());
-
-        return ResponseEntity.ok(dtos);
     }
 
     private Long extractCustomerId(HttpServletRequest request) {

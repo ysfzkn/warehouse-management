@@ -60,6 +60,7 @@ This project began as a multi-warehouse inventory system and has evolved into a 
 | **Returns & Refunds** | Return request workflow with status management |
 | **Coupons** | Discount codes with validity windows and usage tracking |
 | **CMS Pages** | Banners, About / Terms / Privacy pages, newsletter subscriptions |
+| **Contact Form** | Public form with honeypot + rate limit, DB-logged & forwarded to operator inbox |
 | **Support Tickets** | Customer support inbox with ticket lifecycle |
 
 ### 💳 Payment Gateways (Strategy Pattern)

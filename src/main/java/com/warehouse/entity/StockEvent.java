@@ -41,6 +41,14 @@ public class StockEvent {
     @Column(name = "source_detail", length = 200)
     private String sourceDetail;
 
+    /**
+     * Order number that caused this event (denormalised on purpose so the audit
+     * history survives if the order is later deleted). Nullable — only set for
+     * events originating from an order (checkout reservation, delivery, cancel).
+     */
+    @Column(name = "order_number", length = 30)
+    private String orderNumber;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

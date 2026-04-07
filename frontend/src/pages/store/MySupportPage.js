@@ -26,7 +26,7 @@ export default function MySupportPage() {
 
   useEffect(() => {
     setLoading(true);
-    axios.get('/api/store/orders/support-tickets', { headers: getAuthHeaders() })
+    axios.get('/api/store/support-tickets', { headers: getAuthHeaders() })
       .then(r => setTickets(r.data || []))
       .catch(() => toast.error('Destek talepleri yüklenemedi.'))
       .finally(() => setLoading(false));

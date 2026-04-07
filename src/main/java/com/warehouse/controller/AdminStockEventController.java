@@ -58,12 +58,16 @@ public class AdminStockEventController {
             com.warehouse.repository.StockEventSpecifications.withFilters(sourceEnum, typeEnum, productId, start, end, searchTerm),
             PageRequest.of(page, size, Sort.by("createdAt").descending()));
 
-        // Enrich with product names
+        // Enrich with product names + SKUs
         Set<Long> productIds = result.getContent().stream()
             .map(StockEvent::getProductId).filter(Objects::nonNull).collect(Collectors.toSet());
         Map<Long, String> productNames = new HashMap<>();
+        Map<Long, String> productSkus = new HashMap<>();
         if (!productIds.isEmpty()) {
-            productRepository.findAllById(productIds).forEach(p -> productNames.put(p.getId(), p.getName()));
+            productRepository.findAllById(productIds).forEach(p -> {
+                productNames.put(p.getId(), p.getName());
+                productSkus.put(p.getId(), p.getSku());
+            });
         }
 
         List<Map<String, Object>> dtos = result.getContent().stream().map(e -> {
@@ -72,11 +76,13 @@ public class AdminStockEventController {
             dto.put("stockId", e.getStockId());
             dto.put("productId", e.getProductId());
             dto.put("productName", productNames.getOrDefault(e.getProductId(), ""));
+            dto.put("productSku", productSkus.get(e.getProductId()));
             dto.put("eventType", e.getEventType().name());
             dto.put("oldValue", e.getOldValue());
             dto.put("newValue", e.getNewValue());
             dto.put("source", e.getSource().name());
             dto.put("sourceDetail", e.getSourceDetail());
+            dto.put("orderNumber", e.getOrderNumber());
             dto.put("createdAt", e.getCreatedAt());
             return dto;
         }).collect(Collectors.toList());
