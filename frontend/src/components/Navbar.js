@@ -880,6 +880,8 @@ const Navbar = () => {
                   <li><Link className="dropdown-item" to="/desi"><i className="fas fa-calculator me-2 text-info"></i>Desi Hesaplama</Link></li>
                   <li><Link className="dropdown-item" to="/admin/notifications"><i className="fas fa-bell me-2 text-warning"></i>Bildirimler</Link></li>
                   <li><Link className="dropdown-item" to="/admin-settings"><i className="fas fa-tools me-2 text-danger"></i>Yönetici Ayarları</Link></li>
+                  <li><hr className="dropdown-divider" /></li>
+                  <li><Link className="dropdown-item" to="/admin/help"><i className="fas fa-question-circle me-2 text-primary"></i>Yardım & Kılavuz</Link></li>
                 </ul>
               </li>
               )}

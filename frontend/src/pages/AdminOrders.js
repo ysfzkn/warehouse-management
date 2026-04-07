@@ -464,15 +464,29 @@ export default function AdminOrders() {
                         <div className="d-flex justify-content-between mb-2"><span className="text-muted">Ödeme Yöntemi</span><span className="fw-medium">{paymentLabel(orderDetail.paymentMethod)}</span></div>
                         <div className="d-flex justify-content-between mb-2"><span className="text-muted">Kargo Firması</span><span>{orderDetail.cargoCompany || '—'}</span></div>
                         {orderDetail.cargoTrackingNo ? (
-                          <div className="d-flex justify-content-between align-items-center">
-                            <span className="text-muted">Takip No</span>
-                            <span className="d-flex align-items-center gap-1">
-                              <code>{orderDetail.cargoTrackingNo}</code>
-                              <button className="btn btn-sm btn-link p-0" title="Kopyala" onClick={() => navigator.clipboard.writeText(orderDetail.cargoTrackingNo)}>
-                                <i className="fas fa-copy text-muted" />
+                          <>
+                            <div className="d-flex justify-content-between align-items-center mb-2">
+                              <span className="text-muted">Takip No</span>
+                              <span className="d-flex align-items-center gap-1">
+                                <code className="fw-bold">{orderDetail.cargoTrackingNo}</code>
+                                <button className="btn btn-sm btn-link p-0" title="Kopyala" onClick={() => { navigator.clipboard.writeText(orderDetail.cargoTrackingNo); toast.success('Kopyalandı'); }}>
+                                  <i className="fas fa-copy text-muted" />
+                                </button>
+                              </span>
+                            </div>
+                            {orderDetail.cargoCompany && (
+                              <button className="btn btn-sm btn-success w-100" onClick={() => {
+                                axios.get('/api/admin/cargo-providers').then(r => {
+                                  const provider = (r.data || []).find(p => p.code === orderDetail.cargoCompany || p.name === orderDetail.cargoCompany);
+                                  if (provider?.trackingUrlTemplate) {
+                                    window.open(provider.trackingUrlTemplate.replace('{trackingNo}', orderDetail.cargoTrackingNo), '_blank');
+                                  } else { toast.info('Bu kargo firması için takip URL tanımlı değil. Kargo Ayarlarından ekleyebilirsiniz.'); }
+                                }).catch(() => toast.error('Kargo bilgisi alınamadı.'));
+                              }}>
+                                <i className="fas fa-external-link-alt me-2" />Kargo Takip Sayfasına Git
                               </button>
-                            </span>
-                          </div>
+                            )}
+                          </>
                         ) : (
                           <div className="d-flex justify-content-between"><span className="text-muted">Takip No</span><span className="text-muted">—</span></div>
                         )}

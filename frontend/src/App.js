@@ -35,6 +35,7 @@ import AdminStockMovements from './pages/AdminStockMovements';
 import AdminCargoProviders from './pages/AdminCargoProviders';
 import AdminSupportTickets from './pages/AdminSupportTickets';
 import AdminSalesDashboard from './pages/AdminSalesDashboard';
+import AdminHelp from './pages/AdminHelp';
 
 // Store pages (new)
 import HomePage from './pages/store/HomePage';
@@ -177,6 +178,9 @@ function App() {
           } />
           <Route path="admin/sales-dashboard" element={
             authed && role === 'ADMIN' ? <AdminSalesDashboard /> : <Navigate to={authed ? '/stock' : '/login'} replace />
+          } />
+          <Route path="admin/help" element={
+            authed && role === 'ADMIN' ? <AdminHelp /> : <Navigate to={authed ? '/stock' : '/login'} replace />
           } />
         </Route>
       </Routes>
