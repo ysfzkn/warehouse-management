@@ -297,7 +297,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
-        with: { java-version: '17' }
+        with: { java-version: '21' }
       - run: mvn test
 
   build:

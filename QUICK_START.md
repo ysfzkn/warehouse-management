@@ -8,6 +8,8 @@ Get the Warehouse Management System up and running in minutes.
 
 - **Docker & Docker Compose** (recommended)
 - **Git**
+- **Java 21+** and **Maven 3.9+** (only for manual backend setup)
+- **Node.js 18+** (only for manual frontend setup)
 
 ---
 
@@ -178,7 +180,6 @@ npm test
 
 ## Next Steps
 
-- Read the [API Documentation](API_README.md)
 - Explore the [Main README](README.md)
 - Check out the [Contributing Guidelines](CONTRIBUTING.md)
 
