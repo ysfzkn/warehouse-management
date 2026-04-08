@@ -42,6 +42,17 @@ const actionMeta = (action) => {
   return map[action] || { label: action || '-', variant: 'secondary' };
 };
 
+const extractNoteFromDetails = (details) => {
+  if (!details || typeof details !== 'string') return '';
+  const match = details.match(/\|\s*Not:\s*(.+)$/i);
+  return match ? match[1].trim() : '';
+};
+
+const stripNoteSuffix = (value) => {
+  if (!value || typeof value !== 'string') return value || '';
+  return value.replace(/\s*\|\s*Not:\s*.+$/i, '').trim();
+};
+
 const WarehouseActivity = () => {
   const { warehouseId } = useParams();
   const navigate = useNavigate();
@@ -178,7 +189,11 @@ const WarehouseActivity = () => {
                 <div className="text-muted">Kayıt bulunamadı.</div>
               ) : (
                 <div className="list-group list-group-flush">
-                  {logs.map(log => (
+                  {logs.map(log => {
+                    const movementNote = (log.note && String(log.note).trim()) || extractNoteFromDetails(log.details);
+                    const displayDetails = stripNoteSuffix(log.details);
+                    const displayProductName = stripNoteSuffix(log.productName);
+                    return (
                     <div key={log.id} className="list-group-item">
                       {/* Header with action and timestamp */}
                       <div className="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
@@ -255,7 +270,7 @@ const WarehouseActivity = () => {
                                       {log.productSku}
                                     </div>
                                   )}
-                                  {log.productName && (
+                                  {displayProductName && (
                                     <div style={{
                                       fontSize: '0.9rem',
                                       fontWeight: '600',
@@ -264,7 +279,7 @@ const WarehouseActivity = () => {
                                       whiteSpace: 'normal',
                                       wordBreak: 'break-word'
                                     }}>
-                                      {log.productName}
+                                      {displayProductName}
                                     </div>
                                   )}
                                 </div>
@@ -525,8 +540,60 @@ const WarehouseActivity = () => {
                         )}
                       </div>
 
+                      {/* User Note */}
+                      {movementNote && (
+                        <div style={{
+                          marginTop: '0.75rem',
+                          padding: '0.75rem 1rem',
+                          backgroundColor: '#fefce8',
+                          borderRadius: '8px',
+                          border: '1px solid #fde68a',
+                          borderLeft: '4px solid #eab308',
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          gap: '0.6rem'
+                        }}>
+                          <div style={{
+                            width: '28px',
+                            height: '28px',
+                            borderRadius: '6px',
+                            backgroundColor: '#fde68a',
+                            color: '#92400e',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '0.75rem',
+                            flexShrink: 0,
+                            marginTop: '1px'
+                          }}>
+                            <i className="fas fa-sticky-note"></i>
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{
+                              fontSize: '0.7rem',
+                              fontWeight: '600',
+                              color: '#92400e',
+                              marginBottom: '0.25rem',
+                              textTransform: 'uppercase',
+                              letterSpacing: '0.5px'
+                            }}>
+                              Kullanıcı Notu
+                            </div>
+                            <div style={{
+                              fontSize: '0.85rem',
+                              color: '#78350f',
+                              fontWeight: '500',
+                              whiteSpace: 'pre-wrap',
+                              wordBreak: 'break-word'
+                            }}>
+                              {movementNote}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
                       {/* Details */}
-                      {log.details && (
+                      {displayDetails && (
                         <div style={{
                           marginTop: '0.75rem',
                           padding: '0.75rem',
@@ -537,11 +604,12 @@ const WarehouseActivity = () => {
                           color: '#475569',
                           whiteSpace: 'pre-wrap'
                         }}>
-                          {log.details}
+                          {displayDetails}
                         </div>
                       )}
                     </div>
-                  ))}
+                  );
+                  })}
                 </div>
               )}
               <div className="d-flex justify-content-between align-items-center mt-3 flex-wrap gap-2">

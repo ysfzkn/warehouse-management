@@ -532,31 +532,48 @@ public class StockServiceImpl implements StockService {
 
     @Override
     public Stock addToStock(Long stockId, Integer quantity) {
+        return addToStock(stockId, quantity, null);
+    }
+
+    @Override
+    public Stock addToStock(Long stockId, Integer quantity, String note) {
         logger.info("Adding {} units to stock id: {}", quantity, stockId);
         ValidationUtil.requirePositive(quantity, "Quantity to add");
         Stock stock = getStockByIdOrThrow(stockId);
         stock.setQuantity(stock.getQuantity() + quantity);
         Stock saved = stockRepository.save(stock);
         String username = CurrentUser.usernameOrSystem();
+        String normalizedNote = normalizeAdditionNote(note);
         AuditMetadata metadata = buildStockMetadata(saved, quantity);
+        metadata.setNote(normalizedNote);
+        String detailsMessage = String.format("Stok artırıldı: +%s adet → Yeni=%s | Depo=%s, Ürün=%s",
+                String.valueOf(quantity), String.valueOf(saved.getQuantity()),
+                saved.getWarehouse().getName(), saved.getProduct().getName());
+        if (normalizedNote != null) {
+            detailsMessage += String.format(" | Not: %s", normalizedNote);
+        }
         auditService.log(AuditAction.STOCK_ADD, DomainEntityType.Stock.name(), saved.getId(), username,
-                String.format("Stok artırıldı: +%s adet → Yeni=%s | Depo=%s, Ürün=%s",
-                        String.valueOf(quantity), String.valueOf(saved.getQuantity()),
-                        saved.getWarehouse().getName(), saved.getProduct().getName()),
-                metadata);
-        notificationService.create(buildNotificationRequest(
+                detailsMessage, metadata);
+        NotificationRequest notifReq = buildNotificationRequest(
                 NotificationMessages.STOCK_INCREASED_TITLE,
                 String.format("Kullanıcı %s, %s/%s stokuna %s adet ekledi (Yeni toplam: %s).", username,
                         saved.getWarehouse().getName(), saved.getProduct().getName(), String.valueOf(quantity),
                         String.valueOf(saved.getQuantity())),
                 saved,
-                quantity));
+                quantity);
+        notifReq.setNote(normalizedNote);
+        notificationService.create(notifReq);
         logger.info("Stock increased successfully. Stock id: {}, New quantity: {}", saved.getId(), saved.getQuantity());
         return saved;
     }
 
     @Override
     public Stock removeFromStock(Long stockId, Integer quantity) {
+        return removeFromStock(stockId, quantity, null);
+    }
+
+    @Override
+    public Stock removeFromStock(Long stockId, Integer quantity, String note) {
         logger.info("Removing {} units from stock id: {}", quantity, stockId);
         ValidationUtil.requirePositive(quantity, "Quantity to remove");
         Stock stock = getStockByIdOrThrow(stockId);
@@ -568,27 +585,34 @@ public class StockServiceImpl implements StockService {
         stock.setQuantity(stock.getQuantity() - quantity);
         Stock saved = stockRepository.save(stock);
         String username = CurrentUser.usernameOrSystem();
+        String normalizedNote = normalizeAdditionNote(note);
         Warehouse warehouse = saved.getWarehouse();
         boolean isEmanetDepo = warehouse != null && warehouse.getWarehouseType() == WarehouseType.EMANET_DEPO;
         String customerName = isEmanetDepo ? saved.getCustomerName() : null;
         String customerPhone = isEmanetDepo ? saved.getCustomerPhone() : null;
         
         AuditMetadata metadata = buildStockMetadata(saved, -quantity, customerName, customerPhone, null);
+        metadata.setNote(normalizedNote);
         String detailsMessage = String.format("Stok azaltıldı: -%s adet → Yeni=%s | Depo=%s, Ürün=%s",
                 String.valueOf(quantity), String.valueOf(saved.getQuantity()),
                 saved.getWarehouse().getName(), saved.getProduct().getName());
         if (isEmanetDepo && customerName != null && !customerName.trim().isEmpty()) {
             detailsMessage += String.format(" | Müşteri: %s", customerName);
         }
+        if (normalizedNote != null) {
+            detailsMessage += String.format(" | Not: %s", normalizedNote);
+        }
         auditService.log(AuditAction.STOCK_REMOVE, DomainEntityType.Stock.name(), saved.getId(), username,
                 detailsMessage, metadata);
-        notificationService.create(buildNotificationRequest(
+        NotificationRequest notifReq = buildNotificationRequest(
                 NotificationMessages.STOCK_DECREASED_TITLE,
                 String.format("Kullanıcı %s, %s/%s stokundan %s adet çıkardı (Yeni toplam: %s).", username,
                         saved.getWarehouse().getName(), saved.getProduct().getName(), String.valueOf(quantity),
                         String.valueOf(saved.getQuantity())),
                 saved,
-                -quantity));
+                -quantity);
+        notifReq.setNote(normalizedNote);
+        notificationService.create(notifReq);
         logger.info("Stock decreased successfully. Stock id: {}, New quantity: {}", saved.getId(), saved.getQuantity());
         return saved;
     }

@@ -81,7 +81,10 @@ public class AuditLog {
     private String customerPhone; // For EMANET_DEPO warehouses and transfer customer info
 
     @Column(name = "transfer_id")
-    private Long transferId; // Reference to transfer if this is a transfer-related stock movement
+    private Long transferId;
+
+    @Column(name = "note", length = 500)
+    private String note;
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;

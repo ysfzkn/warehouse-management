@@ -228,6 +228,23 @@ const AdminNotifications = () => {
                                 <span className="badge bg-info text-dark">Adet: {n.quantity}</span>
                               )}
                             </div>
+                            {n.note && (
+                              <div style={{
+                                marginTop: '0.5rem',
+                                padding: '0.5rem 0.75rem',
+                                backgroundColor: '#fefce8',
+                                borderLeft: '3px solid #eab308',
+                                borderRadius: '0 6px 6px 0',
+                                fontSize: '0.82rem',
+                                color: '#713f12',
+                                display: 'flex',
+                                alignItems: 'flex-start',
+                                gap: '0.4rem'
+                              }}>
+                                <i className="fas fa-sticky-note" style={{ marginTop: '2px', flexShrink: 0, color: '#ca8a04' }}></i>
+                                <span style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{n.note}</span>
+                              </div>
+                            )}
                           </td>
                           <td className="text-nowrap">
                             <div className="d-flex flex-column gap-1 align-items-start">

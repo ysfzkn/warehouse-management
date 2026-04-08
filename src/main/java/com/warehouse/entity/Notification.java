@@ -77,6 +77,9 @@ public class Notification {
     @Column(name = "quantity")
     private Integer quantity;
 
+    @Column(name = "note", length = 500)
+    private String note;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 

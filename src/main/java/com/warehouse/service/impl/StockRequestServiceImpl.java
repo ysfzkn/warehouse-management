@@ -178,12 +178,12 @@ public class StockRequestServiceImpl implements StockRequestService {
 
         String reviewer = CurrentUser.usernameOrSystem();
 
-        // Execute the stock operation
+        // Execute the stock operation (pass the user's note for audit/notification trail)
         Stock stock = request.getStock();
         if (request.getType() == StockRequestType.ADD) {
-            stockService.addToStock(stock.getId(), request.getQuantity());
+            stockService.addToStock(stock.getId(), request.getQuantity(), request.getNotes());
         } else {
-            stockService.removeFromStock(stock.getId(), request.getQuantity());
+            stockService.removeFromStock(stock.getId(), request.getQuantity(), request.getNotes());
         }
 
         // Update request status
