@@ -882,6 +882,11 @@ const Navbar = () => {
                   <li><Link className="dropdown-item" to="/admin/notifications"><i className="fas fa-bell me-2 text-warning"></i>Bildirimler</Link></li>
                   <li><Link className="dropdown-item" to="/admin-settings"><i className="fas fa-tools me-2 text-danger"></i>Yönetici Ayarları</Link></li>
                   <li><hr className="dropdown-divider" /></li>
+                  <li><small className="dropdown-header text-uppercase fw-bold" style={{fontSize:10,letterSpacing:'0.05em'}}>Cezeri Asistan</small></li>
+                  <li><Link className="dropdown-item" to="/admin/assistant/dashboard"><i className="fas fa-chart-pie me-2 text-info"></i>Asistan Dashboard</Link></li>
+                  <li><Link className="dropdown-item" to="/admin/assistant/documents"><i className="fas fa-file-upload me-2 text-success"></i>Doküman Yönetimi</Link></li>
+                  <li><Link className="dropdown-item" to="/admin/assistant/logs"><i className="fas fa-comments me-2 text-warning"></i>Sohbet Logları</Link></li>
+                  <li><hr className="dropdown-divider" /></li>
                   <li><Link className="dropdown-item" to="/admin/help"><i className="fas fa-question-circle me-2 text-primary"></i>Yardım & Kılavuz</Link></li>
                 </ul>
               </li>

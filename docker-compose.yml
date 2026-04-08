@@ -1,9 +1,16 @@
 version: '3.8'
 
 services:
-  # PostgreSQL Database
+  # PostgreSQL Database (with pgvector for Cezeri v2 RAG features)
+  #
+  # NOTE: we pin to pg15 to match any existing postgres_data volume created
+  # by the old postgres:15-alpine image. If you start from a clean volume
+  # you can bump to pg17 safely. Downgrading to vanilla postgres is also
+  # fine — the V42 migration detects pgvector availability at runtime and
+  # simply skips the vector-dependent tables; all other assistant features
+  # keep working and RAG is just disabled.
   db:
-    image: postgres:15-alpine
+    image: pgvector/pgvector:pg15
     environment:
       POSTGRES_DB: warehouse_db
       POSTGRES_USER: warehouse_user
