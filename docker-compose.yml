@@ -7,7 +7,7 @@ services:
     environment:
       POSTGRES_DB: warehouse_db
       POSTGRES_USER: warehouse_user
-      POSTGRES_PASSWORD: warehouse_pass
+      POSTGRES_PASSWORD: secret123
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
@@ -20,60 +20,61 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-
-  # Backend Service
-  backend:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    ports:
-      - "8080:8080"
-    environment:
-      - SPRING_PROFILES_ACTIVE=docker
-      # PostgreSQL Database Configuration (Environment variables)
-      - DATABASE_URL=jdbc:postgresql://db:5432/warehouse_db
-      - SPRING_DATASOURCE_USERNAME=warehouse_user
-      - SPRING_DATASOURCE_PASSWORD=warehouse_pass
-      - SPRING_JPA_DATABASE_PLATFORM=org.hibernate.dialect.PostgreSQLDialect
-      - SPRING_JPA_HIBERNATE_DDL_AUTO=validate
-      - SPRING_FLYWAY_ENABLED=true
-      - SPRING_FLYWAY_BASELINE_ON_MIGRATE=false
-    depends_on:
-      db:
-        condition: service_healthy
-    networks:
-      - warehouse-network
-    restart: unless-stopped
-
-  # Frontend Service
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    ports:
-      - "80:80"
-    depends_on:
-      - backend
-    networks:
-      - warehouse-network
-    restart: unless-stopped
-
-  # pgAdmin - PostgreSQL Management Tool
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    environment:
-      PGADMIN_DEFAULT_EMAIL: ozkan.development@gmail.com
-      PGADMIN_DEFAULT_PASSWORD: admin123
-      PGADMIN_CONFIG_SERVER_MODE: 'False'
-    volumes:
-      - pgadmin_data:/var/lib/pgadmin
-    ports:
-      - "5050:80"
-    depends_on:
-      - db
-    networks:
-      - warehouse-network
-    restart: unless-stopped
+#
+#  # Backend Service
+#  backend:
+#    build:
+#      context: .
+#      dockerfile: Dockerfile
+#    ports:
+#      - "8080:8080"
+#    environment:
+#      - SPRING_PROFILES_ACTIVE=docker
+#      # PostgreSQL Database Configuration (Environment variables)
+#      - DATABASE_URL=jdbc:postgresql://db:5432/warehouse_db
+#      - SPRING_DATASOURCE_USERNAME=warehouse_user
+#      - SPRING_DATASOURCE_PASSWORD=secret123
+#      - SPRING_JPA_DATABASE_PLATFORM=org.hibernate.dialect.PostgreSQLDialect
+#      - SPRING_JPA_HIBERNATE_DDL_AUTO=validate
+#      - SPRING_FLYWAY_ENABLED=true
+#      - SPRING_FLYWAY_BASELINE_ON_MIGRATE=false
+#      - CORS_ALLOWED_ORIGINS=http://localhost,http://localhost:*,https://localhost:*
+#    depends_on:
+#      db:
+#        condition: service_healthy
+#    networks:
+#      - warehouse-network
+#    restart: unless-stopped
+#
+#  # Frontend Service
+#  frontend:
+#    build:
+#      context: ./frontend
+#      dockerfile: Dockerfile
+#    ports:
+#      - "80:80"
+#    depends_on:
+#      - backend
+#    networks:
+#      - warehouse-network
+#    restart: unless-stopped
+#
+#  # pgAdmin - PostgreSQL Management Tool
+#  pgadmin:
+#    image: dpage/pgadmin4:latest
+#    environment:
+#      PGADMIN_DEFAULT_EMAIL: ozkan.development@gmail.com
+#      PGADMIN_DEFAULT_PASSWORD: admin123
+#      PGADMIN_CONFIG_SERVER_MODE: 'False'
+#    volumes:
+#      - pgadmin_data:/var/lib/pgadmin
+#    ports:
+#      - "5050:80"
+#    depends_on:
+#      - db
+#    networks:
+#      - warehouse-network
+#    restart: unless-stopped
 
   # Nginx Reverse Proxy (Optional - for production deployment)
   # nginx:

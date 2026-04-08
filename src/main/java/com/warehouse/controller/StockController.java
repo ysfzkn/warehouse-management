@@ -37,8 +37,7 @@ import java.util.Locale;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/stocks")
-@CrossOrigin(origins = "*")
+@RequestMapping("/api/admin/stocks")
 public class StockController {
 
     private final StockService stockService;

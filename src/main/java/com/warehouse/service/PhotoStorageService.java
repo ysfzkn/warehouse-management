@@ -45,6 +45,23 @@ public interface PhotoStorageService {
                                   InputStream inputStream);
 
     /**
+     * Stores the given image stream as a site asset (logo, favicon, etc.).
+     *
+     * @param assetName     logical name (e.g. "logo", "favicon")
+     * @param originalFileName original filename (used only for extension)
+     * @param contentType   mime type
+     * @param inputStream   image content
+     * @return metadata of the stored optimized image + thumbnail
+     */
+    StoredPhoto storeSiteAsset(String assetName,
+                               String originalFileName,
+                               String contentType,
+                               InputStream inputStream);
+
+    /** Returns the resolved site assets directory path */
+    java.nio.file.Path getSiteAssetDir();
+
+    /**
      * Deletes the photo files for a given relative path and thumbnail path.
      */
     void deletePhotoFiles(String relativePath, String thumbnailPath);

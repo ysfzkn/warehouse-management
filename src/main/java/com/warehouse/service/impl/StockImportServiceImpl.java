@@ -348,6 +348,8 @@ public class StockImportServiceImpl implements StockImportService {
                 .orElseGet(() -> {
                     Category category = new Category();
                     category.setName(categoryName.trim());
+                    category.setSlug(categoryName.trim().toLowerCase()
+                        .replace(" ", "-").replaceAll("[^a-z0-9\\-]", "") + "-" + System.currentTimeMillis() % 10000);
                     category.setActive(true);
                     Category saved = categoryRepository.save(category);
                     result.incrementCreatedCategories();
@@ -361,6 +363,8 @@ public class StockImportServiceImpl implements StockImportService {
                 .orElseGet(() -> {
                     Brand brand = new Brand();
                     brand.setName(brandName.trim());
+                    brand.setSlug(brandName.trim().toLowerCase()
+                        .replace(" ", "-").replaceAll("[^a-z0-9\\-]", "") + "-" + System.currentTimeMillis() % 10000);
                     brand.setActive(true);
                     Brand saved = brandRepository.save(brand);
                     result.incrementCreatedBrands();
@@ -388,6 +392,8 @@ public class StockImportServiceImpl implements StockImportService {
         Product product = new Product();
         product.setName(rowData.getName().trim());
         product.setSku(skuTrimmed);
+        product.setSlug(skuTrimmed.toLowerCase()
+            .replace(" ", "-").replaceAll("[^a-z0-9\\-]", ""));
         product.setPrice(price);
         product.setCategory(category);
         product.setBrand(brand);

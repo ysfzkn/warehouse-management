@@ -12,8 +12,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/auth")
-@CrossOrigin(origins = "*")
+@RequestMapping("/api/admin/auth")
 public class AuthController {
 
     private final UserService userService;

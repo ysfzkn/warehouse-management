@@ -29,7 +29,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/stock-imports")
+@RequestMapping("/api/admin/stock-imports")
 @RequiredArgsConstructor
 @Slf4j
 public class StockImportController {

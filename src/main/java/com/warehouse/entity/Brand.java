@@ -34,6 +34,12 @@ public class Brand {
     @Column(name = "is_active", nullable = false)
     private boolean isActive = true;
 
+    @Column(name = "slug", nullable = false, length = 100)
+    private String slug;
+
+    @Column(name = "logo_url", length = 500)
+    private String logoUrl;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

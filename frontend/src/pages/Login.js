@@ -26,7 +26,7 @@ const Login = () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await axios.post('/api/auth/login', { username, password });
+      const res = await axios.post('/api/admin/auth/login', { username, password });
       localStorage.setItem('auth_token', res.data.token);
       localStorage.setItem('auth_user', res.data.username);
       if (res.data.role) localStorage.setItem('auth_role', res.data.role);
@@ -52,9 +52,9 @@ const Login = () => {
             {/* Company logo (top) */}
             <div style={styles.logoContainer}>
               <img
-                src="/company-logo.png"
+                src="/api/store/settings/logo"
                 onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = '/company-logo.png'; }}
-                alt="Şahinler DTM"
+                alt="Logo"
                 className="brand-logo brand-logo--company"
                 style={styles.logo}
               />

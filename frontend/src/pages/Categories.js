@@ -81,6 +81,7 @@ const Categories = () => {
   // Refetch when sort changes
   useEffect(() => {
     fetchCategories();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [categorySortBy, categorySortDir]);
 
   const toggleCategoryExpansion = useCallback((categoryId) => {
@@ -120,14 +121,6 @@ const Categories = () => {
     return { code, msg, status };
   };
 
-  const requireAdminSecurityHeaders = async () => {
-    if (!isAdmin) return {};
-    const code = await askSecurityCode();
-    if (code === null) {
-      return null;
-    }
-    return { 'X-ADMIN-SECURITY-CODE': code };
-  };
 
   const handleEdit = (category) => {
     setEditingCategory(category);

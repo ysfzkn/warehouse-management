@@ -532,4 +532,17 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
             @Param("colorId") Long colorId,
             @Param("warehouseIds") java.util.List<Long> warehouseIds,
             @Param("hasWarehouseFilter") Boolean hasWarehouseFilter);
+
+    // ============================================================================
+    // Checkout: Pessimistic locking for stock reservation
+    // ============================================================================
+
+    @Query(value = "SELECT * FROM stocks WHERE product_id = :productId " +
+        "AND (quantity - COALESCE(reserved_quantity, 0) - COALESCE(consigned_quantity, 0)) > 0 " +
+        "ORDER BY (quantity - COALESCE(reserved_quantity, 0) - COALESCE(consigned_quantity, 0)) DESC " +
+        "FOR UPDATE", nativeQuery = true)
+    List<Stock> findAvailableByProductForUpdate(@Param("productId") Long productId);
+
+    @Query(value = "SELECT * FROM stocks WHERE id = :stockId FOR UPDATE", nativeQuery = true)
+    Optional<Stock> findByIdForUpdate(@Param("stockId") Long stockId);
 }

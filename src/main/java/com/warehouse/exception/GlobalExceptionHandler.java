@@ -6,6 +6,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import org.hibernate.LazyInitializationException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -146,6 +147,21 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
     }
 
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<ErrorResponse> handleOptimisticLockException(
+            ObjectOptimisticLockingFailureException ex, HttpServletRequest request) {
+
+        ErrorResponse errorResponse = new ErrorResponse(
+                "CONCURRENT_MODIFICATION",
+                HttpStatus.CONFLICT.value(),
+                HttpStatus.CONFLICT.name(),
+                "Bu kayit baska bir islem tarafindan guncellendi. Lutfen sayfayi yenileyip tekrar deneyin.",
+                request.getRequestURI()
+        );
+        logger.warn("Optimistic lock conflict at path={} entity={}", request.getRequestURI(), ex.getPersistentClassName());
+        return new ResponseEntity<>(errorResponse, HttpStatus.CONFLICT);
+    }
+
     @ExceptionHandler(LazyInitializationException.class)
     public ResponseEntity<ErrorResponse> handleLazyInitializationException(
             LazyInitializationException ex, HttpServletRequest request) {
@@ -173,7 +189,7 @@ public class GlobalExceptionHandler {
             AsyncRequestTimeoutException ex, HttpServletRequest request) {
 
         String uri = request.getRequestURI();
-        if (uri != null && uri.startsWith("/api/stream")) {
+        if (uri != null && uri.startsWith("/api/admin/stream")) {
             // Tek satırlık, düşük seviye log – hata gibi görünmesin
             logger.debug("SSE connection timeout/closed at path={}", uri);
             // SSE connection zaten kapanmış olacağı için body dönmeye gerek yok
@@ -190,7 +206,7 @@ public class GlobalExceptionHandler {
             Exception ex, HttpServletRequest request) {
         // Avoid writing JSON on SSE endpoint which uses text/event-stream
         String uri = request.getRequestURI();
-        if (uri != null && uri.startsWith("/api/stream")) {
+        if (uri != null && uri.startsWith("/api/admin/stream")) {
             logger.error("Unhandled exception on SSE stream at path={} : {}", uri, ex.getMessage(), ex);
             return new ResponseEntity<>(null, HttpStatus.INTERNAL_SERVER_ERROR);
         }

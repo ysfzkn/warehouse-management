@@ -11,6 +11,7 @@ import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -24,7 +25,8 @@ import java.util.List;
         @Index(name = "idx_products_category_id", columnList = "category_id"),
         @Index(name = "idx_products_brand_id", columnList = "brand_id"),
         @Index(name = "idx_products_color_id", columnList = "color_id"),
-        @Index(name = "idx_products_updated_at", columnList = "updated_at")
+        @Index(name = "idx_products_updated_at", columnList = "updated_at"),
+        @Index(name = "idx_products_slug", columnList = "slug")
     }
 )
 @NamedEntityGraph(
@@ -60,7 +62,8 @@ public class Product {
     @Column(nullable = false)
     private String name;
 
-    @Size(max = 500, message = "Description cannot exceed 500 characters")
+    @Size(max = 5000, message = "Açıklama en fazla 5000 karakter olabilir")
+    @Column(columnDefinition = "TEXT")
     private String description;
 
     @NotBlank(message = "SKU is required")
@@ -95,6 +98,45 @@ public class Product {
 
     @Column(name = "sct_rate", precision = 5, scale = 2)
     private BigDecimal sctRate; // ÖTV oranı (%)
+
+    @Column(name = "slug", nullable = false, length = 200)
+    private String slug;
+
+    @Column(name = "meta_title", length = 200)
+    private String metaTitle;
+
+    @Column(name = "meta_description", length = 500)
+    private String metaDescription;
+
+    @Column(name = "short_description", length = 1000)
+    private String shortDescription;
+
+    @Column(name = "is_featured", nullable = false)
+    private boolean isFeatured = false;
+
+    @JsonProperty("isNew")
+    @Column(name = "is_new", nullable = false)
+    private boolean isNew = false;
+
+    @PositiveOrZero(message = "Sale price must be positive or zero")
+    @Column(name = "sale_price", precision = 10, scale = 2)
+    private BigDecimal salePrice;
+
+    @Column(name = "sale_start")
+    private LocalDateTime saleStart;
+
+    @Column(name = "sale_end")
+    private LocalDateTime saleEnd;
+
+    @Column(name = "view_count", nullable = false)
+    private Long viewCount = 0L;
+
+    @Column(name = "sold_count", nullable = false)
+    private Integer soldCount = 0;
+
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version = 0L;
 
     @NotNull(message = "Category is required")
     @ManyToOne(fetch = FetchType.LAZY)

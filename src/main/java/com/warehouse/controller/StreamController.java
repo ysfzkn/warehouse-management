@@ -2,7 +2,6 @@ package com.warehouse.controller;
 
 import com.warehouse.service.SsePushService;
 import org.springframework.http.MediaType;
-import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -17,8 +16,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
  * snapshot event is sent, and subsequent updates are broadcast on changes.
  */
 @RestController
-@RequestMapping(value = "/api/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-@CrossOrigin(origins = "*")
+@RequestMapping(value = "/api/admin/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
 public class StreamController {
 
     private final SsePushService ssePushService;

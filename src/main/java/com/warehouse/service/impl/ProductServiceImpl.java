@@ -167,6 +167,10 @@ public class ProductServiceImpl implements ProductService {
         product.setCategory(category);
         setBrandIfPresent(product);
         setColorIfPresent(product);
+        if (product.getSlug() == null || product.getSlug().isBlank()) {
+            product.setSlug(product.getSku().toLowerCase()
+                .replace(" ", "-").replaceAll("[^a-z0-9\\-]", ""));
+        }
 
         Product saved = productRepository.save(product);
         logger.info("Product created successfully with id: {}", saved.getId());
@@ -430,6 +434,25 @@ public class ProductServiceImpl implements ProductService {
         return totalUpdated;
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Product getProductBySlug(String slug) {
+        return productRepository.findBySlug(slug)
+            .orElseThrow(() -> new WarehouseManagementException(ErrorCode.PRODUCT_NOT_FOUND, "Slug: " + slug));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<Product> getAllActiveProducts(Pageable pageable, String search, Long categoryId, Long brandId, Long colorId) {
+        return productRepository.findActiveByFilters(search, categoryId, brandId, colorId, pageable);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<Product> getAllActiveProductsMultiFilter(Pageable pageable, String search, Long categoryId, java.util.List<Long> brandIds, java.util.List<Long> colorIds) {
+        return productRepository.findActiveByMultiFilters(search, categoryId, brandIds, colorIds, pageable);
+    }
+
     private void validateSkuUniqueness(String sku) {
         if (productRepository.existsBySku(sku)) {
             logger.warn("SKU already exists: {}", sku);
@@ -517,8 +540,14 @@ public class ProductServiceImpl implements ProductService {
     private void updateProductFields(Product product, Product productDetails) {
         product.setName(productDetails.getName());
         product.setDescription(productDetails.getDescription());
+        product.setShortDescription(productDetails.getShortDescription());
         product.setSku(productDetails.getSku());
         product.setPrice(productDetails.getPrice());
+        product.setSalePrice(productDetails.getSalePrice());
+        product.setSaleStart(productDetails.getSaleStart());
+        product.setSaleEnd(productDetails.getSaleEnd());
+        product.setFeatured(productDetails.isFeatured());
+        product.setNew(productDetails.isNew());
         product.setWeight(productDetails.getWeight());
         product.setDimensions(productDetails.getDimensions());
         product.setLengthCm(productDetails.getLengthCm());
@@ -528,6 +557,9 @@ public class ProductServiceImpl implements ProductService {
         product.setVatRate(productDetails.getVatRate());
         product.setSctRate(productDetails.getSctRate());
         product.setActive(productDetails.isActive());
+        if (productDetails.getSlug() != null) product.setSlug(productDetails.getSlug());
+        if (productDetails.getMetaTitle() != null) product.setMetaTitle(productDetails.getMetaTitle());
+        if (productDetails.getMetaDescription() != null) product.setMetaDescription(productDetails.getMetaDescription());
     }
 
     private void updateProductStatus(Long id, boolean isActive) {

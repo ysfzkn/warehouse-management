@@ -64,6 +64,26 @@ public enum ErrorCode {
     CANNOT_DELETE_PRODUCT_WITH_TRANSFERS("RELATION_004", "Aktif veya geçmiş stok transferlerinde kullanılan ürün silinemez", HttpStatus.BAD_REQUEST),
     CATEGORY_INVALID_PARENT("CATEGORY_003", "Geçersiz üst kategori", HttpStatus.BAD_REQUEST),
     
+    // E-commerce Auth (400/401/409/429)
+    AUTH_ERROR("AUTH_010", "Kimlik doğrulama hatası", HttpStatus.UNAUTHORIZED),
+    ACCOUNT_LOCKED("AUTH_011", "Hesap kilitli. Lütfen daha sonra tekrar deneyin.", HttpStatus.FORBIDDEN),
+    ACCOUNT_BLACKLISTED("AUTH_012", "Hesabınız askıya alınmıştır.", HttpStatus.FORBIDDEN),
+    RATE_LIMITED("AUTH_013", "Çok fazla istek gönderdiniz. Lütfen bekleyin.", HttpStatus.TOO_MANY_REQUESTS),
+    GOOGLE_AUTH_FAILED("AUTH_014", "Google kimlik doğrulama başarısız.", HttpStatus.BAD_REQUEST),
+    DUPLICATE_KEY("ECOM_001", "Bu kayıt zaten mevcut", HttpStatus.CONFLICT),
+    VALIDATION_ERROR("ECOM_002", "Doğrulama hatası", HttpStatus.BAD_REQUEST),
+    CUSTOMER_NOT_FOUND("ECOM_003", "Müşteri bulunamadı", HttpStatus.NOT_FOUND),
+
+    // Payment (400/402/409)
+    PAYMENT_INIT_FAILED("PAY_001", "Ödeme başlatma başarısız", HttpStatus.BAD_REQUEST),
+    PAYMENT_NOT_FOUND("PAY_002", "Ödeme işlem kaydı bulunamadı", HttpStatus.NOT_FOUND),
+    PAYMENT_ALREADY_PROCESSED("PAY_003", "Bu ödeme zaten işlenmiş", HttpStatus.CONFLICT),
+    PAYMENT_CALLBACK_INVALID("PAY_004", "Geçersiz ödeme callback", HttpStatus.BAD_REQUEST),
+    PAYMENT_REFUND_FAILED("PAY_005", "İade işlemi başarısız", HttpStatus.BAD_REQUEST),
+    STOCK_RESERVATION_FAILED("PAY_006", "Stok rezervasyonu başarısız. Ürün tükenmiş olabilir.", HttpStatus.CONFLICT),
+    IDEMPOTENCY_CONFLICT("PAY_007", "Bu işlem zaten başlatılmış. Lütfen yeni işlem oluşturun.", HttpStatus.CONFLICT),
+    ORDER_PAYMENT_EXPIRED("PAY_008", "Ödeme süresi dolmuş. Lütfen yeni sipariş oluşturun.", HttpStatus.BAD_REQUEST),
+
     // Genel (500)
     INTERNAL_SERVER_ERROR("SYSTEM_001", "Beklenmeyen bir hata oluştu", HttpStatus.INTERNAL_SERVER_ERROR);
 

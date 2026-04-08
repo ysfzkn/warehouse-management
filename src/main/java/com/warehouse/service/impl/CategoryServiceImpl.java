@@ -102,6 +102,9 @@ public class CategoryServiceImpl implements CategoryService {
     public Category createCategory(Category category) {
         logger.info("Creating new category: {}", category.getName());
         validateNameUniqueness(category.getName());
+        if (category.getSlug() == null || category.getSlug().isBlank()) {
+            category.setSlug(generateSlug(category.getName()));
+        }
         Category saved = categoryRepository.save(category);
         logger.info("Category created successfully with id: {}", saved.getId());
         return saved;
@@ -311,6 +314,32 @@ public class CategoryServiceImpl implements CategoryService {
         }
 
         return rootCategories;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Category getCategoryBySlug(String slug) {
+        return categoryRepository.findBySlug(slug)
+            .orElseThrow(() -> new WarehouseManagementException(ErrorCode.CATEGORY_NOT_FOUND, "Slug: " + slug));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Category> getAllRootCategories() {
+        return categoryRepository.findActiveRootCategoriesWithChildren();
+    }
+
+    private String generateSlug(String name) {
+        if (name == null) return "item-" + System.currentTimeMillis();
+        return name.toLowerCase()
+            .replace("ı", "i").replace("ğ", "g").replace("ü", "u")
+            .replace("ş", "s").replace("ö", "o").replace("ç", "c")
+            .replace("İ", "i").replace("Ğ", "g").replace("Ü", "u")
+            .replace("Ş", "s").replace("Ö", "o").replace("Ç", "c")
+            .replaceAll("[^a-z0-9\\s-]", "")
+            .replaceAll("\\s+", "-")
+            .replaceAll("-+", "-")
+            .replaceAll("^-|-$", "");
     }
 }
 

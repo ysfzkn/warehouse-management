@@ -376,6 +376,7 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
   const allowedTabsKey = useMemo(() => JSON.stringify(allowedTabsProp ?? []), [allowedTabsProp]);
   const allowedTabs = useMemo(
     () => (Array.isArray(allowedTabsProp) && allowedTabsProp.length ? [...allowedTabsProp] : ['brand', 'color', 'users']),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [allowedTabsKey]
   );
   const [activeTab, setActiveTab] = useState(allowedTabs[0] || 'users');
@@ -435,16 +436,6 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
     }, type === 'success' ? 4000 : 7000);
   };
 
-  const promptAdminSecurityCode = () => {
-    const code = window.prompt('Yönetici güvenlik şifresi');
-    if (code === null) return null;
-    const trimmed = (code || '').trim();
-    if (!trimmed) {
-      showToast('Güvenlik şifresi zorunlu.', 'error');
-      return null;
-    }
-    return trimmed;
-  };
 
   // Hata mesajını backend'den detaylarıyla birlikte güvenli şekilde çıkarmak için helper
   const buildErrorMessage = (rawError, fallbackMessage) => {
@@ -604,6 +595,7 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
       fetchUsers: allowedTabs.includes('users'),
     });
     // allowedTabsKey keeps array reference stable to prevent needless reloads
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allowedTabsKey]);
 
   useEffect(() => {
@@ -625,6 +617,7 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
     if (!allowedTabs.includes(activeTab)) {
       setActiveTab(allowedTabs[0] || 'users');
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allowedTabs]);
 
   useEffect(() => {

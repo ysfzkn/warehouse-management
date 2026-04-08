@@ -193,6 +193,7 @@ const Products = () => {
     if (productPage !== 0) {
       setProductPage(0);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchTerm, selectedCategory, selectedSubcategory, selectedBrand, selectedColor, productSortBy, productSortDir]);
 
   useEffect(() => {
@@ -208,6 +209,7 @@ const Products = () => {
       setSubcategories([]);
       setSelectedSubcategory('');
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCategory]);
 
   const selectedCategoryOption = categories.find(category => category.id?.toString() === selectedCategory);
@@ -480,10 +482,18 @@ const Products = () => {
     }
   };
 
-  const handleFormSuccess = () => {
+  const handleFormSuccess = (data) => {
     setShowForm(false);
     setEditingProduct(null);
     fetchProducts();
+    const msg = editingProduct ? 'Ürün başarıyla güncellendi.' : 'Ürün başarıyla oluşturuldu.';
+    const t = document.createElement('div');
+    t.className = 'toast align-items-center text-bg-success border-0 position-fixed top-0 end-0 m-3 show';
+    t.style.cssText = 'min-width:340px;z-index:9999;animation:fadeInDown 0.3s ease';
+    t.setAttribute('role', 'alert');
+    t.innerHTML = `<div class="d-flex align-items-center px-3 py-2"><i class="fas fa-check-circle me-2"></i><div class="toast-body fw-medium">${msg}</div><button type="button" class="btn-close btn-close-white ms-auto" onclick="this.parentElement.parentElement.remove()"></button></div>`;
+    document.body.appendChild(t);
+    setTimeout(() => { try { document.body.removeChild(t); } catch {} }, 4000);
   };
 
   const getTotalStockQuantity = (product) => {

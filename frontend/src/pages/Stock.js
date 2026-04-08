@@ -1455,6 +1455,7 @@ const Stock = () => {
         setAuditModal({ show: true, entityType: 'StockTransfer', entityId: idNum });
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.search]);
 
   // Listen to global event to open audit directly from Navbar without navigation
@@ -1496,6 +1497,7 @@ const Stock = () => {
       const newUrl = newSearch ? `${location.pathname}?${newSearch}` : location.pathname;
       window.history.replaceState({}, '', newUrl);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.search]);
 
   // Open quick adjustment modal when stocks loaded and pendingStockId exists
@@ -1625,6 +1627,7 @@ const Stock = () => {
       });
 
     return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname, location.search, showTransferHistory, transfers]);
 
   const getEffectiveMin = useCallback((stock) => {
@@ -2214,18 +2217,6 @@ const Stock = () => {
     }
   };
 
-  const fetchStockIdByProductAndWarehouse = async (productId, warehouseId) => {
-    if (!productId || !warehouseId) return null;
-    try {
-      const res = await axios.get(`/api/stocks/product/${productId}/warehouse/${warehouseId}`);
-      return res?.data?.id || null;
-    } catch (error) {
-      if (error?.response?.status === 404) return null;
-      // For other errors, log but don't block; caller can handle as failure
-      console.warn('Stock lookup failed', { productId, warehouseId, error });
-      return null;
-    }
-  };
 
   const handleStockRequestSubmit = async (payload, meta = {}) => {
     if (!Array.isArray(payload) || payload.length === 0) {
@@ -2994,7 +2985,6 @@ const Stock = () => {
                       if (res.data.status === 'BAŞARILI' || res.data.status === 'SUCCESS') {
                         showToast('Excel dosyası başarıyla yüklendi ve stoklar aktarıldı.', 'success');
                       } else if (res.data.status === 'KISMEN' || res.data.status === 'PARTIAL') {
-                        const failedCount = res.data.totalRows - (res.data.createdStocks + res.data.updatedStocks);
                         showToast(`Excel dosyası kısmen yüklendi. Bazı satırlar atlandı. Detaylar için sonuçları kontrol edin.`, 'warning');
                       }
                     } else if (res.data && (res.data.status === 'BAŞARISIZ' || res.data.status === 'FAILED')) {
@@ -4955,13 +4945,6 @@ const Stock = () => {
                   <div className="breakpoint-1155-mobile">
                     <div className="d-flex flex-column gap-3 p-3">
                       {transfers.map((transfer) => {
-                        const statusConfig = {
-                          PENDING: { label: 'Beklemede', class: 'warning', icon: 'clock' },
-                          IN_TRANSIT: { label: 'Yolda', class: 'info', icon: 'truck' },
-                          COMPLETED: { label: 'Tamamlandı', class: 'success', icon: 'check-circle' },
-                          CANCELLED: { label: 'İptal Edildi', class: 'danger', icon: 'times-circle' }
-                        };
-                        const status = statusConfig[transfer.status] || statusConfig.PENDING;
                         const transferItemsPreview = getTransferItemsList(transfer);
                         const totalQuantity = getTransferTotalQuantity(transfer);
                         const awaitingApproval = (transfer.approvalStatus || '').toUpperCase() === 'PENDING';
@@ -4986,8 +4969,6 @@ const Stock = () => {
                           >
                             <div className="card-body p-3">
                               {(() => {
-                                const typeLabel = getTransferTypeLabel(transfer.transferType);
-                                const statusMeta = getTransferStatusMeta(transfer.status);
                                 return (
                                   <>
                                     <div className="transfer-mobile-card__header mb-2 d-flex justify-content-between align-items-center">

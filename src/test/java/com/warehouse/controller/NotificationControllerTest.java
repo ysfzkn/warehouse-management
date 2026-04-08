@@ -44,18 +44,18 @@ class NotificationControllerTest {
         n2.setMessage("Message 2");
         notificationRepository.save(n2);
 
-        mockMvc.perform(get("/api/notifications/unread")
+        mockMvc.perform(get("/api/admin/notifications/unread")
                         .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk());
 
         // mark first as read
-        mockMvc.perform(post("/api/notifications/" + n1.getId() + "/read"))
+        mockMvc.perform(post("/api/admin/notifications/" + n1.getId() + "/read"))
                 .andExpect(status().isNoContent());
 
         Notification reloaded = notificationRepository.findById(n1.getId()).orElseThrow();
         assertThat(reloaded.isRead()).isTrue();
 
-        mockMvc.perform(get("/api/notifications/recent")
+        mockMvc.perform(get("/api/admin/notifications/recent")
                         .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk());
     }

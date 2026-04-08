@@ -100,6 +100,7 @@ const WarehouseActivity = () => {
 
   useEffect(() => {
     fetchLogs();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, size, filters, warehouseId]);
 
   const totalPages = useMemo(() => {

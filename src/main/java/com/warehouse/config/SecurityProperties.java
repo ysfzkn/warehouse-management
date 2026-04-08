@@ -12,6 +12,11 @@ import org.springframework.context.annotation.Configuration;
 public class SecurityProperties {
     private String jwtSecret = "change-this-secret";
     private long jwtExpirationMinutes = 480; // 8 hours
+    private long customerTokenExpirationDays = 7;
+    private long refreshTokenExpirationDays = 30;
+    private long accountLockoutMinutes = 15;
+    private int maxFailedLoginAttempts = 5;
+    private long cartExpirationDays = 30;
 }
 
 

@@ -1,14 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import SearchableSelect from './SearchableSelect';
+import ConfirmModal from './ConfirmModal';
 import './ProductForm.css';
 
 const ProductForm = ({ product, onSuccess, onCancel }) => {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
+    shortDescription: '',
     sku: '',
     price: '',
+    salePrice: '',
+    saleStart: '',
+    saleEnd: '',
+    isFeatured: false,
+    isNew: false,
     weight: '',
     dimensions: '',
     lengthCm: '',
@@ -21,6 +28,10 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
     subcategoryId: '',
     isActive: true
   });
+  const [productImages, setProductImages] = useState([]);
+  const [imageUploading, setImageUploading] = useState(false);
+  const [deleteImageId, setDeleteImageId] = useState(null);
+  const imageInputRef = React.useRef(null);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
   const [mainCategories, setMainCategories] = useState([]);
@@ -80,6 +91,7 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
 
   useEffect(() => {
     fetchMainCategories();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -88,6 +100,7 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
     } else {
       setSubcategories([]);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData.categoryId]);
 
   useEffect(() => {
@@ -120,8 +133,21 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
       sctRate: product.sctRate || '',
       categoryId: mainCategoryIdNumeric != null ? String(mainCategoryIdNumeric) : '',
       subcategoryId: subcategoryIdNumeric != null ? String(subcategoryIdNumeric) : '',
-      isActive: product.isActive !== false
+      isActive: product.isActive !== false,
+      shortDescription: product.shortDescription || '',
+      salePrice: product.salePrice || '',
+      saleStart: product.saleStart ? product.saleStart.substring(0, 16) : '',
+      saleEnd: product.saleEnd ? product.saleEnd.substring(0, 16) : '',
+      isFeatured: !!product.featured || !!product.isFeatured,
+      isNew: !!product.isNew,
+      slug: product.slug || '',
+      metaTitle: product.metaTitle || '',
+      metaDescription: product.metaDescription || '',
     }));
+    // Load product images
+    if (product.id) {
+      axios.get(`/api/products/${product.id}/images`).then(r => setProductImages(r.data || [])).catch(() => {});
+    }
     const resolvedBrandId = product.brand?.id
       ?? (product.brandId != null ? Number(product.brandId) : null);
     const resolvedColorId = product.color?.id
@@ -140,6 +166,7 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
     } else {
       setSubcategories([]);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product]);
 
   const normalizeSubcategories = (subs = [], parentMeta = {}) => {
@@ -453,6 +480,23 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
     return Object.keys(newErrors).length === 0;
   };
 
+  const uploadImage = async (file) => {
+    if (!product?.id || !file) return;
+    setImageUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('primary', productImages.length === 0 ? 'true' : 'false');
+      await axios.post(`/api/products/${product.id}/images`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      const res = await axios.get(`/api/products/${product.id}/images`);
+      setProductImages(res.data || []);
+    } catch (e) {
+      setErrors({ general: e.response?.data?.message || 'Görsel yüklenemedi' });
+    } finally { setImageUploading(false); }
+  };
+
   const handleSubmit = async (e) => {
     if (e && typeof e.preventDefault === 'function') {
       e.preventDefault();
@@ -471,8 +515,14 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
       const dataToSend = {
         name: formData.name,
         description: formData.description,
+        shortDescription: formData.shortDescription || null,
         sku: formData.sku,
         price: parseFloat(formData.price),
+        salePrice: formData.salePrice ? parseFloat(formData.salePrice) : null,
+        saleStart: formData.saleStart ? formData.saleStart + ':00' : null,
+        saleEnd: formData.saleEnd ? formData.saleEnd + ':00' : null,
+        featured: formData.isFeatured,
+        isNew: formData.isNew,
         weight: formData.weight ? parseFloat(formData.weight) : null,
         dimensions: formData.dimensions,
         lengthCm: formData.lengthCm ? parseFloat(formData.lengthCm) : null,
@@ -484,7 +534,10 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
         category: { id: parseInt(formData.subcategoryId || formData.categoryId) },
         brand: brandId ? { id: brandId } : null,
         color: colorId ? { id: colorId } : null,
-        isActive: formData.isActive
+        isActive: formData.isActive,
+        slug: formData.slug || null,
+        metaTitle: formData.metaTitle || null,
+        metaDescription: formData.metaDescription || null,
       };
 
       let savedProductId = product?.id;
@@ -503,15 +556,24 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
     } catch (error) {
       console.error('Error saving product:', error);
       const errorData = error?.response?.data;
-      const friendlyMessage = errorData?.message
-        || errorData?.error
-        || (typeof errorData === 'string' ? errorData : null)
-        || 'Ürün kaydedilirken beklenmeyen bir hata oluştu. Lütfen tekrar deneyin.';
-      setErrors({ general: friendlyMessage });
-      if (onSuccess) {
-        // Bildirim için hata da iletilsin
-        onSuccess({ error: true, message: friendlyMessage });
+      // Build friendly message from validation details or general message
+      let friendlyMessage = '';
+      if (errorData?.details && typeof errorData.details === 'object') {
+        friendlyMessage = Object.values(errorData.details).join(', ');
+      } else {
+        friendlyMessage = errorData?.message || errorData?.error || (typeof errorData === 'string' ? errorData : null)
+          || 'Ürün kaydedilirken beklenmeyen bir hata oluştu.';
       }
+      setErrors({ general: friendlyMessage });
+      // Show error toast
+      const t = document.createElement('div');
+      t.className = 'toast align-items-center text-bg-danger border-0 position-fixed top-0 end-0 m-3 show';
+      t.style.cssText = 'min-width:340px;z-index:9999;animation:fadeInDown 0.3s ease';
+      t.setAttribute('role', 'alert');
+      t.innerHTML = `<div class="d-flex align-items-center px-3 py-2"><i class="fas fa-exclamation-circle me-2"></i><div class="toast-body fw-medium">${friendlyMessage}</div><button type="button" class="btn-close btn-close-white ms-auto" onclick="this.parentElement.parentElement.remove()"></button></div>`;
+      document.body.appendChild(t);
+      setTimeout(() => { try { document.body.removeChild(t); } catch {} }, 5000);
+      // Do NOT call onSuccess on error — keep form open
     } finally {
       setLoading(false);
     }
@@ -567,18 +629,14 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
       </div>
 
       <div className="mb-3">
-        <label htmlFor="description" className="form-label">
-          Açıklama
-        </label>
-        <textarea
-          className="form-control"
-          id="description"
-          name="description"
-          rows="3"
-          value={formData.description}
-          onChange={handleChange}
-          placeholder="Ürün açıklaması..."
-        />
+        <label htmlFor="description" className="form-label">Açıklama</label>
+        <textarea className="form-control" id="description" name="description" rows="3"
+          value={formData.description} onChange={handleChange} placeholder="Detaylı ürün açıklaması..." />
+      </div>
+      <div className="mb-3">
+        <label htmlFor="shortDescription" className="form-label">Kısa Açıklama <small className="text-muted">(mağazada listede görünür)</small></label>
+        <textarea className="form-control" id="shortDescription" name="shortDescription" rows="2"
+          value={formData.shortDescription} onChange={handleChange} placeholder="Mağazada ürün kartında görünecek kısa açıklama..." maxLength={1000} />
       </div>
 
       {/* Price and Tax Section */}
@@ -1094,7 +1152,221 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
         </div>
       )}
 
-      <div className="d-flex justify-content-end gap-2">
+      {/* ===== İndirim & Kampanya ===== */}
+      <div className="row mb-3 mt-4">
+        <div className="col-12">
+          <h6 className="text-muted mb-3"><i className="fas fa-percentage me-2" />İndirim & Kampanya</h6>
+        </div>
+      </div>
+      <div className="row">
+        <div className="col-md-6">
+          <div className="mb-3">
+            <label className="form-label fw-medium">İndirim Uygula</label>
+            {(() => {
+              const origPrice = parseFloat(formData.price) || 0;
+              const salePrice = parseFloat(formData.salePrice) || 0;
+              const hasDiscount = salePrice > 0 && origPrice > 0 && salePrice < origPrice;
+              const discountPercent = hasDiscount ? ((1 - salePrice / origPrice) * 100) : 0;
+
+              const handleSalePriceChange = (e) => {
+                setFormData(f => ({ ...f, salePrice: e.target.value }));
+              };
+
+              const handlePercentChange = (e) => {
+                const pct = parseFloat(e.target.value) || 0;
+                if (origPrice > 0 && pct > 0 && pct < 100) {
+                  const calc = (origPrice * (1 - pct / 100)).toFixed(2);
+                  setFormData(f => ({ ...f, salePrice: calc }));
+                } else if (pct === 0 || e.target.value === '') {
+                  setFormData(f => ({ ...f, salePrice: '' }));
+                }
+              };
+
+              return (
+                <div className="border rounded p-3 bg-light">
+                  <div className="row g-2 align-items-end">
+                    <div className="col-6">
+                      <label className="form-label small text-muted mb-1">Satış Fiyatı (₺)</label>
+                      <input type="number" step="0.01" min="0" className="form-control"
+                        value={formData.salePrice} onChange={handleSalePriceChange}
+                        placeholder={origPrice > 0 ? `Mevcut: ${origPrice}₺` : 'Fiyat girin'} />
+                    </div>
+                    <div className="col-6">
+                      <label className="form-label small text-muted mb-1">veya İndirim (%)</label>
+                      <div className="input-group">
+                        <span className="input-group-text">%</span>
+                        <input type="number" step="1" min="0" max="99" className="form-control"
+                          value={hasDiscount ? discountPercent.toFixed(0) : ''}
+                          onChange={handlePercentChange}
+                          placeholder="0" />
+                      </div>
+                    </div>
+                  </div>
+                  {hasDiscount && (
+                    <div className="mt-2 d-flex align-items-center gap-2">
+                      <span className="badge bg-danger">%{discountPercent.toFixed(0)} indirim</span>
+                      <small className="text-muted"><del>{origPrice.toFixed(2)}₺</del> → <strong className="text-success">{salePrice.toFixed(2)}₺</strong></small>
+                    </div>
+                  )}
+                  {formData.salePrice && origPrice > 0 && salePrice >= origPrice && (
+                    <small className="text-danger mt-1 d-block"><i className="fas fa-exclamation-triangle me-1" />Satış fiyatı orijinal fiyattan düşük olmalıdır.</small>
+                  )}
+                  <small className="text-muted d-block mt-2">Satış fiyatı girildiğinde mağazada indirimli olarak gösterilir. Boş bırakırsanız indirim uygulanmaz.</small>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+        <div className="col-md-3">
+          <div className="mb-3">
+            <label className="form-label fw-medium">İndirim Başlangıcı</label>
+            <input type="datetime-local" className="form-control" name="saleStart"
+              value={formData.saleStart} onChange={handleChange} />
+          </div>
+        </div>
+        <div className="col-md-3">
+          <div className="mb-3">
+            <label className="form-label fw-medium">İndirim Bitişi</label>
+            <input type="datetime-local" className="form-control" name="saleEnd"
+              value={formData.saleEnd} onChange={handleChange} />
+          </div>
+        </div>
+      </div>
+      <div className="row mb-3">
+        <div className="col-md-6">
+          <div className="form-check form-switch">
+            <input className="form-check-input" type="checkbox" id="isFeatured" checked={formData.isFeatured}
+              onChange={e => setFormData(f => ({...f, isFeatured: e.target.checked}))} />
+            <label className="form-check-label" htmlFor="isFeatured"><i className="fas fa-star text-warning me-1" />Öne Çıkan Ürün</label>
+          </div>
+        </div>
+        <div className="col-md-6">
+          <div className="form-check form-switch">
+            <input className="form-check-input" type="checkbox" id="isNew" checked={formData.isNew}
+              onChange={e => setFormData(f => ({...f, isNew: e.target.checked}))} />
+            <label className="form-check-label" htmlFor="isNew"><i className="fas fa-sparkles text-info me-1" />Yeni Ürün Etiketi</label>
+          </div>
+        </div>
+      </div>
+
+      {/* ===== Ürün Görselleri (sadece düzenleme modunda) ===== */}
+      {product?.id && (
+        <>
+          <div className="row mb-3 mt-4">
+            <div className="col-12">
+              <h6 className="text-muted mb-3"><i className="fas fa-images me-2" />Ürün Görselleri</h6>
+            </div>
+          </div>
+          <div className="mb-3">
+            {/* Image Grid */}
+            {productImages.length > 0 && (
+              <div className="row g-2 mb-3">
+                {productImages.sort((a,b) => a.sortOrder - b.sortOrder).map(img => (
+                  <div key={img.id} className="col-6 col-md-3">
+                    <div className={`border rounded overflow-hidden position-relative ${img.primary ? 'border-primary border-2' : ''}`}>
+                      <img src={`/api/admin/products/images/${img.id}/view?thumbnail=true`}
+                        alt="" style={{width:'100%', height:140, objectFit:'contain', background:'#f8f9fa'}}
+                        onError={e => { e.target.style.display='none'; }} />
+                      <div className="position-absolute top-0 end-0 p-1 d-flex gap-1">
+                        {!img.primary && (
+                          <button className="btn btn-sm btn-warning" title="Birincil yap"
+                            style={{width:24,height:24,padding:0,fontSize:10}}
+                            onClick={() => {
+                              axios.put(`/api/products/images/${img.id}/set-primary`).then(() => {
+                                axios.get(`/api/products/${product.id}/images`).then(r => setProductImages(r.data || []));
+                              }).catch(() => {});
+                            }}>
+                            <i className="fas fa-star" />
+                          </button>
+                        )}
+                        <button className="btn btn-sm btn-danger" title="Sil"
+                          style={{width:24,height:24,padding:0,fontSize:10}}
+                          onClick={() => setDeleteImageId(img.id)}>
+                          <i className="fas fa-times" />
+                        </button>
+                      </div>
+                      {img.primary && (
+                        <div className="position-absolute bottom-0 start-0 w-100 text-center" style={{background:'rgba(37,99,235,0.8)', padding:'2px 0'}}>
+                          <small className="text-white" style={{fontSize:10}}>Ana Görsel</small>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {/* Upload Zone */}
+            <div className="border-2 border-dashed rounded text-center"
+              style={{cursor:'pointer', padding:'24px 16px'}}
+              onClick={() => imageInputRef.current?.click()}
+              onDragOver={e => e.preventDefault()}
+              onDrop={e => {
+                e.preventDefault();
+                const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+                files.forEach(f => uploadImage(f));
+              }}>
+              <input type="file" ref={imageInputRef} className="d-none" accept="image/*" multiple
+                onChange={e => { Array.from(e.target.files).forEach(f => uploadImage(f)); e.target.value=''; }} />
+              {imageUploading ? (
+                <div className="py-2"><span className="spinner-border spinner-border-sm text-primary me-2" />Yükleniyor...</div>
+              ) : (
+                <div>
+                  <div className="mb-2"><i className="fas fa-cloud-upload-alt text-muted" style={{fontSize:28}} /></div>
+                  <div className="small text-muted">Görselleri sürükleyin veya <span className="text-primary fw-medium">dosya seçin</span></div>
+                  <div className="text-muted mt-1" style={{fontSize:11}}>PNG, JPG, WebP — Birden fazla seçebilirsiniz</div>
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── SEO Ayarları ── */}
+      <div className="card border-0 bg-light mt-3">
+        <div className="card-header bg-transparent border-bottom-0 d-flex align-items-center gap-2 py-2 px-3" style={{cursor:'pointer'}}
+          onClick={() => setFormData(prev => ({...prev, _seoOpen: !prev._seoOpen}))}>
+          <i className="fas fa-search text-success" />
+          <span className="small fw-semibold">SEO Ayarları</span>
+          <i className={`fas fa-chevron-${formData._seoOpen ? 'up' : 'down'} ms-auto text-muted`} style={{fontSize:11}} />
+        </div>
+        {formData._seoOpen && (
+          <div className="card-body pt-0 px-3 pb-3">
+            <div className="row g-2">
+              <div className="col-12">
+                <label className="form-label small fw-medium mb-1">Slug (URL)</label>
+                <div className="input-group input-group-sm">
+                  <span className="input-group-text text-muted" style={{fontSize:11}}>/store/urun/</span>
+                  <input className="form-control font-monospace" value={formData.slug || ''} onChange={e => setFormData(prev => ({...prev, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g,'')}))} placeholder="urun-adi-slug" />
+                  <button type="button" className="btn btn-outline-secondary" title="Ürün adından otomatik oluştur" onClick={() => {
+                    const s = (formData.name || '').toLowerCase().replace(/ş/g,'s').replace(/ç/g,'c').replace(/ğ/g,'g').replace(/ü/g,'u').replace(/ö/g,'o').replace(/ı/g,'i').replace(/İ/g,'i').replace(/[^a-z0-9\s-]/g,'').replace(/\s+/g,'-').replace(/-+/g,'-').replace(/^-|-$/g,'');
+                    setFormData(prev => ({...prev, slug: s}));
+                  }}><i className="fas fa-magic" /></button>
+                </div>
+              </div>
+              <div className="col-12">
+                <label className="form-label small fw-medium mb-1">Meta Başlık <span className="text-muted fw-normal">({(formData.metaTitle||'').length}/200)</span></label>
+                <input className="form-control form-control-sm" value={formData.metaTitle || ''} onChange={e => setFormData(prev => ({...prev, metaTitle: e.target.value}))} maxLength={200} placeholder="Arama sonuçlarında görünecek başlık" />
+              </div>
+              <div className="col-12">
+                <label className="form-label small fw-medium mb-1">Meta Açıklama <span className="text-muted fw-normal">({(formData.metaDescription||'').length}/500)</span></label>
+                <textarea className="form-control form-control-sm" rows={2} value={formData.metaDescription || ''} onChange={e => setFormData(prev => ({...prev, metaDescription: e.target.value}))} maxLength={500} placeholder="Arama sonuçlarında görünecek açıklama" />
+              </div>
+              {formData.metaTitle && (
+                <div className="col-12">
+                  <div className="border rounded p-2" style={{fontSize:12,background:'#fff'}}>
+                    <div className="text-primary" style={{fontSize:14}}>{formData.metaTitle || formData.name}</div>
+                    <div className="text-success" style={{fontSize:11}}>siteniz.com/store/urun/{formData.slug || '...'}</div>
+                    <div className="text-muted">{(formData.metaDescription || formData.shortDescription || '').substring(0, 160)}</div>
+                  </div>
+                  <small className="text-muted">Google arama sonucu önizlemesi</small>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="d-flex justify-content-end gap-2 mt-3">
         <button
           type="button"
           className="btn btn-secondary"
@@ -1124,6 +1396,23 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
       </div>
 
       {/* Create Modal */}
+      <ConfirmModal
+        show={!!deleteImageId}
+        title="Gorseli Sil"
+        message="Bu gorseli silmek istediginize emin misiniz? Bu islem geri alinamaz."
+        icon="trash"
+        confirmText="Sil"
+        confirmVariant="danger"
+        onConfirm={() => {
+          const imgId = deleteImageId;
+          setDeleteImageId(null);
+          axios.delete(`/api/products/images/${imgId}`).then(() => {
+            setProductImages(prev => prev.filter(i => i.id !== imgId));
+          }).catch(() => {});
+        }}
+        onCancel={() => setDeleteImageId(null)}
+      />
+
       {showCreateModal && (
         <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} tabIndex="-1">
           <div className="modal-dialog modal-dialog-centered">

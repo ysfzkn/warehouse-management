@@ -117,6 +117,7 @@ const StockForm = ({
         .map(text => text.toLocaleLowerCase('tr-TR'));
       return haystack.some(text => text.includes(query));
     });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [products, productSearchTerm]);
 
   const productOptions = useMemo(() => filteredProducts.slice(0), [filteredProducts]);
