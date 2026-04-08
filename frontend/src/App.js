@@ -22,7 +22,6 @@ import AdminAuditDetails from './pages/AdminAuditDetails';
 import StockImportHistory from './pages/StockImportHistory';
 import AdminNotifications from './pages/AdminNotifications';
 import WarehouseActivity from './pages/WarehouseActivity';
-import CezeriAssistantWidget from './components/CezeriAssistantWidget';
 import './App.css';
 
 // Admin e-commerce pages (new)
@@ -39,6 +38,9 @@ import AdminSupportTickets from './pages/AdminSupportTickets';
 import AdminContactMessages from './pages/AdminContactMessages';
 import AdminSalesDashboard from './pages/AdminSalesDashboard';
 import AdminHelp from './pages/AdminHelp';
+import AssistantDocumentsPage from './pages/AssistantDocumentsPage';
+import AssistantDashboardPage from './pages/AssistantDashboardPage';
+import AssistantLogsPage from './pages/AssistantLogsPage';
 
 // Store pages (new)
 import HomePage from './pages/store/HomePage';
@@ -88,7 +90,6 @@ function App() {
       ) : (
         <StoreRoutes />
       )}
-        <CezeriAssistantWidget />
     </div>
   );
 }
@@ -238,6 +239,16 @@ function AdminRoutes({ authed, role }) {
           } />
           <Route path="admin/help" element={
             authed && role === 'ADMIN' ? <AdminHelp /> : <Navigate to={authed ? '/stock' : '/login'} replace />
+          } />
+          {/* Cezeri v2: assistant management + observability */}
+          <Route path="admin/assistant/documents" element={
+            authed && role === 'ADMIN' ? <AssistantDocumentsPage /> : <Navigate to={authed ? '/stock' : '/login'} replace />
+          } />
+          <Route path="admin/assistant/dashboard" element={
+            authed && role === 'ADMIN' ? <AssistantDashboardPage /> : <Navigate to={authed ? '/stock' : '/login'} replace />
+          } />
+          <Route path="admin/assistant/logs" element={
+            authed && role === 'ADMIN' ? <AssistantLogsPage /> : <Navigate to={authed ? '/stock' : '/login'} replace />
           } />
         </Route>
 

@@ -52,7 +52,10 @@ public class SecurityConfig {
     @Order(1)
     public SecurityFilterChain adminFilterChain(HttpSecurity http) throws Exception {
         http
-                .securityMatcher("/api/admin/**")
+                // Include /api/cezeri/** so the WMS assistant goes through the
+                // admin auth pipeline (rate limits, JWT parsing, role check).
+                // The controller URL is preserved from v1 for frontend compat.
+                .securityMatcher("/api/admin/**", "/api/cezeri/**")
                 .csrf(csrf -> csrf.disable())
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -60,8 +63,10 @@ public class SecurityConfig {
                         .requestMatchers(ApiPaths.ADMIN_AUTH).permitAll()
                         // SSE stream available to authenticated warehouse roles
                         .requestMatchers(ApiPaths.ADMIN_STREAM).hasAnyRole("ADMIN", "STOCK_IN", "STOCK_OUT")
-                        // Cezeri AI assistant
+                        // Cezeri WMS AI assistant
                         .requestMatchers(ApiPaths.CEZERI).hasAnyRole("ADMIN", "STOCK_IN", "STOCK_OUT")
+                        // Admin assistant management (doc uploads, dashboard, logs) — admin only
+                        .requestMatchers(ApiPaths.ADMIN_ASSISTANT).hasRole("ADMIN")
                         // Stock viewing available to all authenticated users
                         .requestMatchers(org.springframework.http.HttpMethod.GET, ApiPaths.ADMIN_STOCKS).hasAnyRole("ADMIN", "STOCK_IN", "STOCK_OUT")
                         // Stock add operation - ADMIN and STOCK_IN
@@ -133,6 +138,10 @@ public class SecurityConfig {
                         .requestMatchers(org.springframework.http.HttpMethod.GET, ApiPaths.STORE_SETTINGS).permitAll()
                         // Cart: GET is public (guest carts via session), mutations require customer or session
                         .requestMatchers(ApiPaths.STORE_CART).permitAll()
+                        // Store assistant (Cezeri v2): guest + customer. Rate limits + guard
+                        // handle abuse. Authentication is resolved inside the controller via
+                        // the JWT filter + StoreAssistantGuard cookie flow.
+                        .requestMatchers(ApiPaths.STORE_ASSISTANT).permitAll()
                         // Everything else requires CUSTOMER role
                         .requestMatchers(ApiPaths.STORE_ANY).hasRole("CUSTOMER")
                 )

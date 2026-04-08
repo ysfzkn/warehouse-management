@@ -183,6 +183,19 @@
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-azure-openai-spring-boot-starter</artifactId>
         </dependency>
+
+        <!-- Spring AI: Tika document reader (used by the admin FAQ/document ingestion pipeline) -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-tika-document-reader</artifactId>
+        </dependency>
+
+        <!-- Rate limiting (assistant: guest/customer/WMS scopes) -->
+        <dependency>
+            <groupId>com.bucket4j</groupId>
+            <artifactId>bucket4j_jdk17-core</artifactId>
+            <version>8.14.0</version>
+        </dependency>
     </dependencies>
 
     <build>

@@ -21,7 +21,11 @@ public final class ApiPaths {
 
     // ── Admin paths (existing WMS) ───────────────────
     public static final String ADMIN_AUTH = API_ADMIN_BASE + "/auth/**";
-    public static final String CEZERI = API_ADMIN_BASE + "/cezeri/**";
+    // NOTE: the WMS assistant controller is physically mounted at /api/cezeri/**
+    // (preserved from v1 for frontend compatibility). The admin filter chain
+    // securityMatcher explicitly includes this path so the role check below
+    // actually applies — prior to Cezeri v2 this rule was dead code.
+    public static final String CEZERI = "/api/cezeri/**";
     public static final String ADMIN_STREAM = API_ADMIN_BASE + "/stream";
     public static final String ADMIN_STOCKS = API_ADMIN_BASE + "/stocks/**";
     public static final String ADMIN_STOCK_TRANSFERS = API_ADMIN_BASE + "/stock-transfers/**";
@@ -53,7 +57,11 @@ public final class ApiPaths {
     public static final String STORE_PAYMENT_STATUS_TOKEN = API_STORE_BASE + "/payment/status-by-token";
     public static final String STORE_CARGO_PROVIDERS = API_STORE_BASE + "/checkout/cargo-providers";
     public static final String STORE_NEWSLETTER = API_STORE_BASE + "/newsletter/**";
+    public static final String STORE_ASSISTANT = API_STORE_BASE + "/assistant/**";
     public static final String STORE_ANY = API_STORE_BASE + "/**";
+
+    // ── Admin assistant (RAG management + observability dashboard, Phase 2) ──
+    public static final String ADMIN_ASSISTANT = API_ADMIN_BASE + "/assistant/**";
 
     // ── Legacy (for backward compatibility during transition) ──
     @Deprecated

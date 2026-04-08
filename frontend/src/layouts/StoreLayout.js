@@ -8,10 +8,40 @@ import { ToastProvider } from '../components/store/Toast';
 import { WishlistProvider } from '../components/store/WishlistContext';
 import { useCart } from '../hooks/useCart';
 import { useSiteSettings } from '../hooks/useSiteSettings';
+import { useAssistantFlags } from '../hooks/useAssistantFlags';
+import AssistantWidget from '../components/AssistantWidget';
+
+/**
+ * Storefront assistant configuration. Guest-friendly: no Authorization
+ * header by default (the backend resolves the guest session cookie or the
+ * customer JWT automatically). Rate limits + login prompts are handled by
+ * the backend guard and rendered inline by the widget.
+ */
+const storeAssistantConfig = {
+  profile: 'store',
+  endpoint: '/api/store/assistant/chat',
+  storagePrefix: 'store_assistant_v1:',
+  authTokenKey: 'customer_token',
+  requiresAuth: false,
+  sendAllowMutations: false,
+  withCredentials: true,
+  title: 'Cezeri',
+  subtitle: 'Alışveriş Asistanınız',
+  placeholder: 'Ürün arayın, soru sorun…',
+  welcomeMessage:
+    'Merhaba, ben **Cezeri**. Alışverişinizde size yardımcı olmak için buradayım.\n\nÜrün arama, karşılaştırma, stok ve fiyat bilgisi, sipariş takibi veya iade/kargo sorularınızda yardımcı olabilirim. Nasıl başlayalım?',
+  hideOnPaths: ['/odeme', '/odeme/sonuc'],
+  getUserKey: (prefix) => {
+    const token = (localStorage.getItem('customer_token') || '').trim();
+    if (!token) return `${prefix}guest`;
+    return `${prefix}${token.slice(-12)}`;
+  },
+};
 
 export default function StoreLayout() {
   const cart = useCart();
   const siteSettings = useSiteSettings();
+  const { flags: assistantFlags } = useAssistantFlags();
 
   // Dynamic favicon and title from site settings
   useEffect(() => {
@@ -49,6 +79,12 @@ export default function StoreLayout() {
         <StoreFooter settings={siteSettings} />
         <MobileNav cart={cart} />
         <CartSidebar cart={cart} />
+        {/*
+         * Storefront AI shopping assistant. Same component as AdminLayout
+         * with a store-flavoured config — guest-friendly, product-focused.
+         * Controlled by the `assistant_store_enabled` site setting.
+         */}
+        {assistantFlags.storeEnabled && <AssistantWidget config={storeAssistantConfig} />}
       </div>
       </WishlistProvider>
     </ToastProvider>

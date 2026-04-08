@@ -17,8 +17,10 @@ import com.warehouse.service.ProductService;
 import com.warehouse.util.EntityValidator;
 import com.warehouse.constants.BusinessMessages;
 import com.warehouse.constants.EntityNames;
+import com.warehouse.assistant.core.rag.ProductIndexEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -43,17 +45,20 @@ public class ProductServiceImpl implements ProductService {
     private final BrandRepository brandRepository;
     private final ColorRepository colorRepository;
     private final StockTransferRepository stockTransferRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     public ProductServiceImpl(ProductRepository productRepository,
                              CategoryRepository categoryRepository,
                              BrandRepository brandRepository,
                              ColorRepository colorRepository,
-                             StockTransferRepository stockTransferRepository) {
+                             StockTransferRepository stockTransferRepository,
+                             ApplicationEventPublisher eventPublisher) {
         this.productRepository = productRepository;
         this.categoryRepository = categoryRepository;
         this.brandRepository = brandRepository;
         this.colorRepository = colorRepository;
         this.stockTransferRepository = stockTransferRepository;
+        this.eventPublisher = eventPublisher;
     }
 
     @Override
@@ -174,6 +179,7 @@ public class ProductServiceImpl implements ProductService {
 
         Product saved = productRepository.save(product);
         logger.info("Product created successfully with id: {}", saved.getId());
+        eventPublisher.publishEvent(ProductIndexEvent.upsert(saved.getId()));
         return productRepository.findByIdWithRelations(saved.getId()).orElse(saved);
     }
 
@@ -190,6 +196,7 @@ public class ProductServiceImpl implements ProductService {
 
         Product saved = productRepository.save(product);
         logger.info("Product updated successfully with id: {}", saved.getId());
+        eventPublisher.publishEvent(ProductIndexEvent.upsert(saved.getId()));
         return productRepository.findByIdWithRelations(saved.getId()).orElse(saved);
     }
 
@@ -215,6 +222,7 @@ public class ProductServiceImpl implements ProductService {
 
         productRepository.delete(product);
         logger.info("Product deleted successfully with id: {}", id);
+        eventPublisher.publishEvent(ProductIndexEvent.delete(id));
     }
 
     @Override
@@ -259,6 +267,7 @@ public class ProductServiceImpl implements ProductService {
                 
                 productRepository.delete(product);
                 successCount++;
+                eventPublisher.publishEvent(ProductIndexEvent.delete(id));
                 logger.debug("Product deleted successfully with id: {}", id);
             } catch (WarehouseManagementException e) {
                 // Domain exception'ları yakala
