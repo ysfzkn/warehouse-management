@@ -160,7 +160,7 @@ export default function CheckoutPage() {
         // DOOR_CASH / DOOR_CARD
         try { await cart.fetchCart(); } catch {}
         toast.success('Siparişiniz alındı! Teslimat sırasında ödeme yapılacaktır.');
-        navigate('/store/odeme/sonuc?success=true');
+        navigate('/odeme/sonuc?success=true');
       }
     } catch (e) {
       const msg = e.response?.data?.message || 'Sipariş oluşturulamadı.';
@@ -193,7 +193,7 @@ export default function CheckoutPage() {
       setTimeout(() => { try { t.style.animation = 'toastSlideOut 0.3s ease forwards'; setTimeout(() => { try { document.body.removeChild(t); } catch {} }, 300); } catch {} }, 6000);
       if (errorCode === 'PAY_006') {
         toast.warning('Stok yetersiz. Sepete yönlendiriliyorsunuz...');
-        setTimeout(() => navigate('/store/sepet'), 3000);
+        setTimeout(() => navigate('/sepet'), 3000);
       }
       // Refresh cart to sync badge
       try { await cart.fetchCart(); } catch {}
@@ -203,7 +203,7 @@ export default function CheckoutPage() {
   };
 
   const handleIyzicoComplete = (success) => {
-    navigate('/store/odeme/sonuc?success=' + success);
+    navigate('/odeme/sonuc?success=' + success);
   };
 
   // ===== Payment sub-phases =====
@@ -269,7 +269,7 @@ export default function CheckoutPage() {
         <h1 className="h3 fw-bold mb-4">Havale / EFT ile Ödeme</h1>
         <BankTransferInfo bankDetails={bankDetails} deadline={bankDeadline} />
         <div className="text-center mt-4">
-          <button className="btn btn-outline-primary" onClick={() => navigate('/store')}>Alışverişe Devam Et</button>
+          <button className="btn btn-outline-primary" onClick={() => navigate('/')}>Alışverişe Devam Et</button>
         </div>
       </div>
     );
@@ -437,7 +437,7 @@ export default function CheckoutPage() {
           <div className="form-check mb-3">
             <input className="form-check-input" type="checkbox" id="contract" checked={contractAccepted} onChange={e => setContractAccepted(e.target.checked)} />
             <label className="form-check-label small" htmlFor="contract">
-              <a href="/store/sayfa/mesafeli-satis-sozlesmesi" target="_blank" rel="noopener noreferrer">Mesafeli Satış Sözleşmesi</a>'ni okudum ve kabul ediyorum.
+              <a href="/sayfa/mesafeli-satis-sozlesmesi" target="_blank" rel="noopener noreferrer">Mesafeli Satış Sözleşmesi</a>'ni okudum ve kabul ediyorum.
             </label>
           </div>
           {!contractAccepted && (

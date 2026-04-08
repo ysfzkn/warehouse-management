@@ -81,8 +81,8 @@ public class PayTRProtocol implements BankPosProtocol {
             // Callback URLs
             String notifyUrl = config.getCallbackUrl();
             Map<String, Object> extra = config.getExtraConfig() != null ? config.getExtraConfig() : Map.of();
-            String okUrl = extra.getOrDefault("merchant_ok_url", "/store/odeme/sonuc?success=true").toString();
-            String failUrl = extra.getOrDefault("merchant_fail_url", "/store/odeme/sonuc?success=false").toString();
+            String okUrl = extra.getOrDefault("merchant_ok_url", "/odeme/sonuc?success=true").toString();
+            String failUrl = extra.getOrDefault("merchant_fail_url", "/odeme/sonuc?success=false").toString();
             int timeoutLimit = extra.containsKey("timeout_limit")
                     ? Integer.parseInt(extra.get("timeout_limit").toString()) : 30;
 

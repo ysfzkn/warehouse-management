@@ -21,7 +21,7 @@ export default function CartSidebar({ cart }) {
             <div className="text-center py-5">
               <FiShoppingBag size={36} className="text-muted mb-3" style={{ opacity: 0.2 }} />
               <p className="text-muted small">Sepetiniz şu an boş.</p>
-              <Link to="/store" className="btn btn-sm btn-outline-primary" onClick={() => cart.setSidebarOpen(false)}>Alışverişe Başla</Link>
+              <Link to="/" className="btn btn-sm btn-outline-primary" onClick={() => cart.setSidebarOpen(false)}>Alışverişe Başla</Link>
             </div>
           ) : cart.cart.items.map(item => {
             const hasDiscount = item.salePrice && item.salePrice > 0 && item.salePrice < item.unitPrice;
@@ -89,10 +89,10 @@ export default function CartSidebar({ cart }) {
               <strong className="text-primary" style={{ fontSize: 18 }}>{fmt(cart.cart?.total || 0)}</strong>
             </div>
             <div className="d-flex gap-2">
-              <Link to="/store/sepet" className="btn btn-outline-primary flex-grow-1" onClick={() => cart.setSidebarOpen(false)}>
+              <Link to="/sepet" className="btn btn-outline-primary flex-grow-1" onClick={() => cart.setSidebarOpen(false)}>
                 Sepete Git
               </Link>
-              <Link to="/store/odeme" className="btn btn-primary flex-grow-1" onClick={() => cart.setSidebarOpen(false)}>
+              <Link to="/odeme" className="btn btn-primary flex-grow-1" onClick={() => cart.setSidebarOpen(false)}>
                 Ödemeye Geç
               </Link>
             </div>

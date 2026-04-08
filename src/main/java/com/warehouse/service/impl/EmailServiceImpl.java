@@ -96,7 +96,7 @@ public class EmailServiceImpl implements EmailService {
             log.info("Email disabled — verification token for {}: {}", toEmail, verificationToken);
             return;
         }
-        String verifyUrl = baseUrl + "/store/hesap-dogrula?token=" + verificationToken;
+        String verifyUrl = baseUrl + "/hesap-dogrula?token=" + verificationToken;
         String subject = "E-posta Adresinizi Doğrulayın — " + getSiteName();
         String html = buildHeader("Hesap Aktivasyonu")
                 + """
@@ -125,7 +125,7 @@ public class EmailServiceImpl implements EmailService {
             log.info("Email disabled — password reset token for {}: {}", toEmail, resetToken);
             return;
         }
-        String resetUrl = baseUrl + "/store/sifre-sifirla?token=" + resetToken;
+        String resetUrl = baseUrl + "/sifre-sifirla?token=" + resetToken;
         String subject = "Şifre Sıfırlama Talebi — " + getSiteName();
         String html = buildHeader("Şifre Sıfırlama")
                 + """
@@ -166,7 +166,7 @@ public class EmailServiceImpl implements EmailService {
                         </p>
                     </div>
                     <div style="text-align:center;margin:24px 0;">
-                        <a href="%s/store/giris" style="background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;display:inline-block;">
+                        <a href="%s/giris" style="background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;display:inline-block;">
                             Giriş Yap
                         </a>
                     </div>

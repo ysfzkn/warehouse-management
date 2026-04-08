@@ -13,10 +13,10 @@ export default function NotFoundPage() {
         Aradığınız sayfa mevcut değil veya kaldırılmış olabilir.
       </p>
       <div className="d-flex gap-3 justify-content-center flex-wrap">
-        <Link to="/store" className="btn btn-primary d-inline-flex align-items-center gap-2">
+        <Link to="/" className="btn btn-primary d-inline-flex align-items-center gap-2">
           <FiHome size={16} /> Ana Sayfa
         </Link>
-        <Link to="/store/kategori/tumu" className="btn btn-outline-secondary d-inline-flex align-items-center gap-2">
+        <Link to="/kategori/tumu" className="btn btn-outline-secondary d-inline-flex align-items-center gap-2">
           <FiSearch size={16} /> Ürün Ara
         </Link>
       </div>

@@ -71,7 +71,7 @@ export default function HeroBanner() {
             <span className="theme-slide-tag">Hoş Geldiniz</span>
             <h2 className="theme-slide-title">Mağazamıza Hoş Geldiniz</h2>
             <p className="theme-slide-desc">En kaliteli ürünleri en uygun fiyatlarla keşfedin</p>
-            <Link to="/store/kategori/tumu" className="theme-slide-cta">
+            <Link to="/kategori/tumu" className="theme-slide-cta">
               Ürünleri Keşfet
             </Link>
           </div>

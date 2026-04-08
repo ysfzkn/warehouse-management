@@ -41,7 +41,7 @@ export default function ForgotPasswordPage() {
             Bağlantı 1 saat geçerlidir. Spam klasörünü de kontrol etmeyi unutmayın.
           </p>
           <div className="d-flex flex-column gap-2 align-items-center">
-            <Link to="/store/giris" className="btn btn-primary px-4">
+            <Link to="/giris" className="btn btn-primary px-4">
               <FiArrowLeft className="me-2" />Giriş Sayfasına Dön
             </Link>
             <button className="btn btn-link btn-sm text-muted" onClick={() => { setSent(false); setEmail(''); }}>
@@ -101,7 +101,7 @@ export default function ForgotPasswordPage() {
         </div>
 
         <div className="text-center mt-3">
-          <Link to="/store/giris" className="text-muted small text-decoration-none">
+          <Link to="/giris" className="text-muted small text-decoration-none">
             <FiArrowLeft size={14} className="me-1" />Giriş sayfasına dön
           </Link>
         </div>

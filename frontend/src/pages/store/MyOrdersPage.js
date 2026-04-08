@@ -103,7 +103,7 @@ export default function MyOrdersPage() {
           <div className="card-body text-center py-5">
             <FiPackage size={48} className="text-muted mb-3" style={{ opacity: 0.2 }} />
             <p className="text-muted mb-3">Henüz siparişiniz bulunmuyor.</p>
-            <Link to="/store" className="btn btn-primary">Alışverişe Başla</Link>
+            <Link to="/" className="btn btn-primary">Alışverişe Başla</Link>
           </div>
         </div>
       ) : (
@@ -187,7 +187,7 @@ export default function MyOrdersPage() {
                           {detailOrder.items.map((item, i) => (
                             <div key={i} className="d-flex align-items-center gap-3 p-3 rounded-3" style={{ background: '#f8fafc', border: '1px solid #f1f5f9' }}>
                               {item.imageUrl ? (
-                                <Link to={item.productSlug ? `/store/urun/${item.productSlug}` : '#'} style={{ flexShrink: 0 }}>
+                                <Link to={item.productSlug ? `/urun/${item.productSlug}` : '#'} style={{ flexShrink: 0 }}>
                                   <img src={item.imageUrl} alt="" style={{ width: 52, height: 52, objectFit: 'contain', borderRadius: 10, background: '#fff', border: '1px solid #e2e8f0' }} />
                                 </Link>
                               ) : (
@@ -196,7 +196,7 @@ export default function MyOrdersPage() {
                                 </div>
                               )}
                               <div className="flex-grow-1 min-w-0">
-                                <Link to={item.productSlug ? `/store/urun/${item.productSlug}` : '#'} className="text-decoration-none text-dark">
+                                <Link to={item.productSlug ? `/urun/${item.productSlug}` : '#'} className="text-decoration-none text-dark">
                                   <div className="fw-medium small">{item.productName || 'Ürün'}</div>
                                 </Link>
                                 {item.productSku && <div className="text-muted" style={{ fontSize: 11 }}>SKU: {item.productSku}</div>}

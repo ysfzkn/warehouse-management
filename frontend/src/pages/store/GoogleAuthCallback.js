@@ -21,7 +21,7 @@ export default function GoogleAuthCallback() {
         localStorage.setItem('customer_token', res.data.token);
         localStorage.setItem('customer_refresh_token', res.data.refreshToken);
         localStorage.setItem('customer_data', JSON.stringify(res.data));
-        navigate('/store');
+        navigate('/');
       })
       .catch(e => {
         setError(e.response?.data?.message || 'Google ile giriş başarısız oldu.');
@@ -36,7 +36,7 @@ export default function GoogleAuthCallback() {
             <div className="text-danger mb-3"><i className="fas fa-exclamation-circle fa-3x" /></div>
             <h5 className="fw-bold mb-3">Giriş Başarısız</h5>
             <p className="text-muted mb-4">{error}</p>
-            <a href="/store/giris" className="btn btn-primary">Giriş Sayfasına Dön</a>
+            <a href="/giris" className="btn btn-primary">Giriş Sayfasına Dön</a>
           </div>
         </div>
       </div>

@@ -90,11 +90,11 @@ export default function HomePage() {
         <section className="store-section">
           <div className="container">
             <div className="d-flex flex-wrap gap-2 justify-content-center">
-              <Link to="/store/kategori/tumu" className="store-cat-chip store-cat-chip-all">
+              <Link to="/kategori/tumu" className="store-cat-chip store-cat-chip-all">
                 <FiShoppingBag size={15} /> Tüm Ürünler
               </Link>
               {categories.map(cat => (
-                <Link key={cat.id} to={`/store/kategori/${cat.slug}`} className="store-cat-chip">
+                <Link key={cat.id} to={`/kategori/${cat.slug}`} className="store-cat-chip">
                   {cat.name}
                 </Link>
               ))}
@@ -109,7 +109,7 @@ export default function HomePage() {
           title="İndirimli Ürünler"
           icon={<FiZap className="text-danger me-2" />}
           products={saleProducts}
-          linkTo="/store/kategori/tumu"
+          linkTo="/kategori/tumu"
           linkLabel="Tüm İndirimler"
         />
       )}
@@ -120,7 +120,7 @@ export default function HomePage() {
           title="Öne Çıkan Ürünler"
           icon={<FiStar className="text-warning me-2" />}
           products={featured}
-          linkTo="/store/kategori/tumu"
+          linkTo="/kategori/tumu"
         />
       )}
 
@@ -130,7 +130,7 @@ export default function HomePage() {
           title="Yeni Ürünler"
           icon={<FiTrendingUp className="text-success me-2" />}
           products={newProducts}
-          linkTo="/store/kategori/tumu"
+          linkTo="/kategori/tumu"
         />
       )}
     </div>

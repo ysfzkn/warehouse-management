@@ -81,7 +81,7 @@ public class StorePaymentController {
         PaymentCallbackResult result = paymentService.handlePaymentCallback(params);
 
         String redirectUrl = buildFrontendRedirectUrl(request,
-            "/store/odeme/sonuc?success=" + result.isSuccess()
+            "/odeme/sonuc?success=" + result.isSuccess()
             + (result.getToken() != null ? "&token=" + result.getToken() : ""));
         response.sendRedirect(redirectUrl);
     }
@@ -104,7 +104,7 @@ public class StorePaymentController {
         Optional<PaymentGatewayConfig> configOpt = gatewayConfigRepo.findByCode(configCode);
         if (configOpt.isEmpty()) {
             log.error("POS callback: Gateway config not found: {}", configCode);
-            response.sendRedirect(buildFrontendRedirectUrl(request, "/store/odeme/sonuc?success=false&error=config_not_found"));
+            response.sendRedirect(buildFrontendRedirectUrl(request, "/odeme/sonuc?success=false&error=config_not_found"));
             return;
         }
 
@@ -115,12 +115,12 @@ public class StorePaymentController {
             BankPosProtocol protocol = protocolFactory.getProtocol(config.getGatewayProtocol());
             if (!protocol.verifyCallbackHash(config, params)) {
                 log.error("SECURITY ALERT: POS callback hash verification FAILED for config={}", configCode);
-                response.sendRedirect(buildFrontendRedirectUrl(request, "/store/odeme/sonuc?success=false&error=hash_failed"));
+                response.sendRedirect(buildFrontendRedirectUrl(request, "/odeme/sonuc?success=false&error=hash_failed"));
                 return;
             }
         } catch (Exception e) {
             log.error("POS callback hash verification error: {}", e.getMessage(), e);
-            response.sendRedirect(buildFrontendRedirectUrl(request, "/store/odeme/sonuc?success=false&error=verification_error"));
+            response.sendRedirect(buildFrontendRedirectUrl(request, "/odeme/sonuc?success=false&error=verification_error"));
             return;
         }
 
@@ -131,7 +131,7 @@ public class StorePaymentController {
         PaymentCallbackResult result = paymentService.handlePaymentCallback(enrichedParams);
 
         String redirectUrl = buildFrontendRedirectUrl(request,
-            "/store/odeme/sonuc?success=" + result.isSuccess()
+            "/odeme/sonuc?success=" + result.isSuccess()
             + (result.getToken() != null ? "&token=" + result.getToken() : ""));
         response.sendRedirect(redirectUrl);
     }

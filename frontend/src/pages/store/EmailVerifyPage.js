@@ -47,10 +47,10 @@ export default function EmailVerifyPage() {
                 E-posta adresiniz başarıyla doğrulandı. Artık hesabınızla giriş yapabilir ve alışverişe başlayabilirsiniz.
               </p>
               <div className="d-grid gap-2">
-                <Link to="/store/giris" className="btn btn-primary btn-lg">
+                <Link to="/giris" className="btn btn-primary btn-lg">
                   <i className="fas fa-sign-in-alt me-2" />Giriş Yap
                 </Link>
-                <Link to="/store" className="btn btn-outline-secondary">
+                <Link to="/" className="btn btn-outline-secondary">
                   Mağazaya Git
                 </Link>
               </div>
@@ -67,10 +67,10 @@ export default function EmailVerifyPage() {
               <h4 className="fw-bold text-danger mb-3">Doğrulama Başarısız</h4>
               <p className="text-muted mb-4">{message}</p>
               <div className="d-grid gap-2">
-                <Link to="/store/kayit" className="btn btn-primary">
+                <Link to="/kayit" className="btn btn-primary">
                   Tekrar Üye Ol
                 </Link>
-                <Link to="/store" className="btn btn-outline-secondary">
+                <Link to="/" className="btn btn-outline-secondary">
                   Mağazaya Git
                 </Link>
               </div>

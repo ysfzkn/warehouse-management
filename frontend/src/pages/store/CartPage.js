@@ -22,7 +22,7 @@ export default function CartPage() {
           <div className="store-empty-state-icon">🛒</div>
           <h3>Sepetiniz Boş</h3>
           <p>Henüz sepetinize ürün eklemediniz.</p>
-          <Link to="/store" className="btn btn-primary btn-lg mt-3">Alışverişe Başla</Link>
+          <Link to="/" className="btn btn-primary btn-lg mt-3">Alışverişe Başla</Link>
         </div>
       </div>
     );
@@ -41,7 +41,7 @@ export default function CartPage() {
             <div key={item.id} className="card border-0 shadow-sm mb-3" style={{borderRadius:14}}>
               <div className="card-body d-flex gap-3 align-items-center p-3">
                 {/* Görsel */}
-                <Link to={`/store/urun/${item.productSlug}`} className="flex-shrink-0 position-relative">
+                <Link to={`/urun/${item.productSlug}`} className="flex-shrink-0 position-relative">
                   <div style={{width:80,height:80,borderRadius:12,background:'#f8fafc',border:'1px solid #f1f5f9',overflow:'hidden',display:'flex',alignItems:'center',justifyContent:'center'}}>
                     {item.imageUrl ? <img src={item.imageUrl} alt="" style={{width:'100%',height:'100%',objectFit:'contain'}} /> : <FiShoppingCart size={24} className="text-muted" />}
                   </div>
@@ -50,7 +50,7 @@ export default function CartPage() {
 
                 {/* Ürün bilgisi */}
                 <div className="flex-grow-1 min-w-0">
-                  <Link to={`/store/urun/${item.productSlug}`} className="text-decoration-none">
+                  <Link to={`/urun/${item.productSlug}`} className="text-decoration-none">
                     <div className="fw-semibold text-truncate mb-1">{item.productName}</div>
                   </Link>
                   <div className="d-flex align-items-center gap-2 mb-2">
@@ -127,7 +127,7 @@ export default function CartPage() {
               {couponError && <small className="text-danger">{couponError}</small>}
               {cart.cart.couponCode && <small className="text-success d-block mt-1">Kupon: {cart.cart.couponCode}</small>}
             </div>
-            <Link to="/store/odeme" className="btn btn-primary w-100 mt-3 btn-lg">Ödemeye Geç</Link>
+            <Link to="/odeme" className="btn btn-primary w-100 mt-3 btn-lg">Ödemeye Geç</Link>
           </div>
         </div>
       </div>

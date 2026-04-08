@@ -43,7 +43,7 @@ export default function MySupportPage() {
             <FiMessageSquare size={48} className="text-muted mb-3" style={{ opacity: 0.2 }} />
             <p className="text-muted mb-3">Henüz destek talebiniz bulunmuyor.</p>
             <p className="text-muted small">Siparişleriniz üzerinden destek talebi oluşturabilirsiniz.</p>
-            <Link to="/store/siparislerim" className="btn btn-outline-primary btn-sm">Siparişlerime Git</Link>
+            <Link to="/siparislerim" className="btn btn-outline-primary btn-sm">Siparişlerime Git</Link>
           </div>
         </div>
       ) : (

@@ -31,22 +31,22 @@ export default function AdminCms() {
   useEffect(() => {
     const opts = [
       { group: 'Genel', items: [
-        { value: '/store', label: 'Ana Sayfa' },
-        { value: '/store/sepet', label: 'Sepet' },
+        { value: '/', label: 'Ana Sayfa' },
+        { value: '/sepet', label: 'Sepet' },
       ]},
     ];
     // Fetch categories
     const catPromise = axios.get('/api/categories').then(r => {
       const cats = (r.data || []).filter(c => c.slug);
       if (cats.length > 0) {
-        opts.push({ group: 'Kategoriler', items: cats.map(c => ({ value: `/store/kategori/${c.slug}`, label: c.name })) });
+        opts.push({ group: 'Kategoriler', items: cats.map(c => ({ value: `/kategori/${c.slug}`, label: c.name })) });
       }
     }).catch(() => {});
     // Fetch CMS pages
     const cmsPromise = axios.get('/api/admin/cms', { params: { size: 100 } }).then(r => {
       const cmsPages = (r.data?.content || []).filter(p => p.pageType !== 'BANNER' && p.slug);
       if (cmsPages.length > 0) {
-        opts.push({ group: 'Sayfalar', items: cmsPages.map(p => ({ value: `/store/sayfa/${p.slug}`, label: p.title })) });
+        opts.push({ group: 'Sayfalar', items: cmsPages.map(p => ({ value: `/sayfa/${p.slug}`, label: p.title })) });
       }
     }).catch(() => {});
     Promise.all([catPromise, cmsPromise]).then(() => setLinkOptions(opts));

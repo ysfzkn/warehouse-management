@@ -36,8 +36,8 @@ export default function StoreFooter({ settings }) {
           <div className="col-lg-2 col-md-6 col-6">
             <h6 className="store-footer-title">Kurumsal</h6>
             <ul className="store-footer-links">
-              <li><Link to="/store/sayfa/hakkimizda">Hakkımızda</Link></li>
-              <li><Link to="/store/sayfa/iletisim">İletişim</Link></li>
+              <li><Link to="/sayfa/hakkimizda">Hakkımızda</Link></li>
+              <li><Link to="/sayfa/iletisim">İletişim</Link></li>
             </ul>
           </div>
 
@@ -45,10 +45,10 @@ export default function StoreFooter({ settings }) {
           <div className="col-lg-3 col-md-6 col-6">
             <h6 className="store-footer-title">Müşteri Hizmetleri</h6>
             <ul className="store-footer-links">
-              <li><Link to="/store/sayfa/iptal-ve-iade-sartlari">İptal ve İade</Link></li>
-              <li><Link to="/store/sayfa/mesafeli-satis-sozlesmesi">Mesafeli Satış Sözleşmesi</Link></li>
-              <li><Link to="/store/sayfa/gizlilik-ve-guvenlik">Gizlilik Politikası</Link></li>
-              <li><Link to="/store/sayfa/kvkk-aydinlatma-metni">KVKK</Link></li>
+              <li><Link to="/sayfa/iptal-ve-iade-sartlari">İptal ve İade</Link></li>
+              <li><Link to="/sayfa/mesafeli-satis-sozlesmesi">Mesafeli Satış Sözleşmesi</Link></li>
+              <li><Link to="/sayfa/gizlilik-ve-guvenlik">Gizlilik Politikası</Link></li>
+              <li><Link to="/sayfa/kvkk-aydinlatma-metni">KVKK</Link></li>
             </ul>
           </div>
 
@@ -56,9 +56,9 @@ export default function StoreFooter({ settings }) {
           <div className="col-lg-3 col-md-6">
             <h6 className="store-footer-title">Hesabım</h6>
             <ul className="store-footer-links">
-              <li><Link to="/store/giris">Giriş Yap</Link></li>
-              <li><Link to="/store/kayit">Üye Ol</Link></li>
-              <li><Link to="/store/sepet">Sepetim</Link></li>
+              <li><Link to="/giris">Giriş Yap</Link></li>
+              <li><Link to="/kayit">Üye Ol</Link></li>
+              <li><Link to="/sepet">Sepetim</Link></li>
             </ul>
           </div>
         </div>

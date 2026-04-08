@@ -47,7 +47,7 @@ public class SitemapController {
         List<Product> products = productRepository.findAllActive();
         for (Product product : products) {
             xml.append("  <url>\n");
-            xml.append("    <loc>").append(escapeXml(baseUrl)).append("/store/product/")
+            xml.append("    <loc>").append(escapeXml(baseUrl)).append("/urun/")
                .append(escapeXml(product.getSlug())).append("</loc>\n");
             if (product.getUpdatedAt() != null) {
                 xml.append("    <lastmod>").append(product.getUpdatedAt().format(W3C_DATE)).append("</lastmod>\n");
@@ -61,7 +61,7 @@ public class SitemapController {
         List<Category> categories = categoryRepository.findAllActive();
         for (Category category : categories) {
             xml.append("  <url>\n");
-            xml.append("    <loc>").append(escapeXml(baseUrl)).append("/store/category/")
+            xml.append("    <loc>").append(escapeXml(baseUrl)).append("/kategori/")
                .append(escapeXml(category.getSlug())).append("</loc>\n");
             if (category.getUpdatedAt() != null) {
                 xml.append("    <lastmod>").append(category.getUpdatedAt().format(W3C_DATE)).append("</lastmod>\n");
@@ -78,7 +78,7 @@ public class SitemapController {
                 .toList();
         for (CmsPage page : cmsPages) {
             xml.append("  <url>\n");
-            xml.append("    <loc>").append(escapeXml(baseUrl)).append("/store/page/")
+            xml.append("    <loc>").append(escapeXml(baseUrl)).append("/sayfa/")
                .append(escapeXml(page.getSlug())).append("</loc>\n");
             if (page.getUpdatedAt() != null) {
                 xml.append("    <lastmod>").append(page.getUpdatedAt().format(W3C_DATE)).append("</lastmod>\n");
@@ -98,9 +98,15 @@ public class SitemapController {
     @GetMapping(value = "/robots.txt", produces = MediaType.TEXT_PLAIN_VALUE)
     public ResponseEntity<String> robots() {
         String content = "User-agent: *\n" +
-                "Allow: /store/\n" +
+                "Allow: /\n" +
                 "Disallow: /api/\n" +
                 "Disallow: /admin/\n" +
+                "Disallow: /siparislerim\n" +
+                "Disallow: /adreslerim\n" +
+                "Disallow: /favorilerim\n" +
+                "Disallow: /destek\n" +
+                "Disallow: /sepet\n" +
+                "Disallow: /odeme\n" +
                 "Sitemap: " + baseUrl + "/sitemap.xml\n";
 
         return ResponseEntity.ok()

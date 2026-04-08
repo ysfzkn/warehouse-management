@@ -18,7 +18,7 @@ export default function StoreLoginPage() {
     localStorage.setItem('customer_token', data.token);
     localStorage.setItem('customer_refresh_token', data.refreshToken);
     localStorage.setItem('customer_data', JSON.stringify(data));
-    navigate('/store');
+    navigate('/');
   };
 
   const handleSubmit = async (e) => {
@@ -81,7 +81,7 @@ export default function StoreLoginPage() {
               </div>
             </div>
             <div className="d-flex justify-content-end mb-3">
-              <Link to="/store/sifremi-unuttum" className="small text-muted text-decoration-none" style={{ fontSize: '0.8rem' }}>
+              <Link to="/sifremi-unuttum" className="small text-muted text-decoration-none" style={{ fontSize: '0.8rem' }}>
                 Şifremi Unuttum
               </Link>
             </div>
@@ -92,7 +92,7 @@ export default function StoreLoginPage() {
 
           <div className="text-center mt-4 pt-3 border-top">
             <span className="text-muted small">Hesabınız yok mu?</span>{' '}
-            <Link to="/store/kayit" className="fw-semibold small">Üye Olun</Link>
+            <Link to="/kayit" className="fw-semibold small">Üye Olun</Link>
           </div>
         </div>
       </div>

@@ -84,8 +84,8 @@ export default function StoreRegisterPage() {
               E-posta gelmedi mi? Lütfen spam veya gereksiz e-posta klasörünüzü kontrol edin. E-posta birkaç dakika içerisinde ulaşacaktır.
             </div>
             <div className="d-grid gap-2 mt-4">
-              <Link to="/store/giris" className="btn btn-primary"><i className="fas fa-sign-in-alt me-2" />Giriş Yap</Link>
-              <Link to="/store" className="btn btn-outline-secondary">Mağazaya Dön</Link>
+              <Link to="/giris" className="btn btn-primary"><i className="fas fa-sign-in-alt me-2" />Giriş Yap</Link>
+              <Link to="/" className="btn btn-outline-secondary">Mağazaya Dön</Link>
             </div>
           </div>
         </div>
@@ -184,13 +184,13 @@ export default function StoreRegisterPage() {
               <div className="form-check mb-2">
                 <input className="form-check-input" type="checkbox" name="termsConsent" checked={form.termsConsent} onChange={handleChange} id="terms" />
                 <label className="form-check-label small" htmlFor="terms">
-                  <a href="/store/sayfa/uyelik-sozlesmesi" target="_blank" rel="noopener noreferrer" className="text-primary">Üyelik Sözleşmesi</a>'ni okudum ve kabul ediyorum. <span className="text-danger">*</span>
+                  <a href="/sayfa/uyelik-sozlesmesi" target="_blank" rel="noopener noreferrer" className="text-primary">Üyelik Sözleşmesi</a>'ni okudum ve kabul ediyorum. <span className="text-danger">*</span>
                 </label>
               </div>
               <div className="form-check mb-2">
                 <input className="form-check-input" type="checkbox" name="kvkkConsent" checked={form.kvkkConsent} onChange={handleChange} id="kvkk" />
                 <label className="form-check-label small" htmlFor="kvkk">
-                  Kişisel verilerin işlenmesine ilişkin <a href="/store/sayfa/kvkk" target="_blank" rel="noopener noreferrer" className="text-primary">Aydınlatma Metni</a>'ni okudum. <span className="text-danger">*</span>
+                  Kişisel verilerin işlenmesine ilişkin <a href="/sayfa/kvkk" target="_blank" rel="noopener noreferrer" className="text-primary">Aydınlatma Metni</a>'ni okudum. <span className="text-danger">*</span>
                 </label>
               </div>
               <div className="form-check">
@@ -209,7 +209,7 @@ export default function StoreRegisterPage() {
 
           <div className="text-center mt-4 pt-3 border-top">
             <span className="text-muted small">Zaten bir hesabınız var mı?</span>{' '}
-            <Link to="/store/giris" className="fw-semibold small">Giriş Yapın</Link>
+            <Link to="/giris" className="fw-semibold small">Giriş Yapın</Link>
           </div>
         </div>
       </div>

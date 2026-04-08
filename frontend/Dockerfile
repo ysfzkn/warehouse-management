@@ -27,8 +27,10 @@ COPY --from=build /app/build /usr/share/nginx/html
 # Copy nginx configuration template
 COPY nginx.conf /etc/nginx/templates/default.conf.template
 
-# Entry point to substitute env vars into nginx config at runtime
-CMD ["/bin/sh", "-c", ": ${API_ORIGIN:=http://backend:8080}; export API_ORIGIN; envsubst '${API_ORIGIN}' < /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'" ]
+# Entry point to substitute env vars into nginx config at runtime.
+# STORE_HOST / ADMIN_HOST are used by the legacy /store/* → / redirect
+# (cross-domain bounce when an admin host receives a storefront URL).
+CMD ["/bin/sh", "-c", ": ${API_ORIGIN:=http://backend:8080}; : ${STORE_HOST:=localhost}; : ${ADMIN_HOST:=localhost}; export API_ORIGIN STORE_HOST ADMIN_HOST; envsubst '${API_ORIGIN} ${STORE_HOST} ${ADMIN_HOST}' < /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'" ]
 
 # Expose port
 EXPOSE 80

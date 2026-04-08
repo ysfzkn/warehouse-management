@@ -46,10 +46,10 @@ export default function PaymentResultPage() {
             Siparişiniz başarıyla oluşturuldu. Sipariş detaylarını hesabınızdan takip edebilirsiniz.
           </p>
           <div className="d-flex gap-3 justify-content-center mt-4">
-            <Link to="/store/siparislerim" className="btn btn-primary px-4">
+            <Link to="/siparislerim" className="btn btn-primary px-4">
               <FiShoppingBag className="me-2" />Siparişlerim
             </Link>
-            <Link to="/store" className="btn btn-outline-secondary px-4">Alışverişe Devam Et</Link>
+            <Link to="/" className="btn btn-outline-secondary px-4">Alışverişe Devam Et</Link>
           </div>
         </div>
       </div>
@@ -107,10 +107,10 @@ export default function PaymentResultPage() {
         )}
 
         <div className="d-flex gap-3 justify-content-center mt-4">
-          <Link to="/store/sepet" className="btn btn-primary px-4">
+          <Link to="/sepet" className="btn btn-primary px-4">
             <FiArrowLeft className="me-2" />Sepete Dön
           </Link>
-          <Link to="/store" className="btn btn-outline-secondary px-4">Anasayfa</Link>
+          <Link to="/" className="btn btn-outline-secondary px-4">Anasayfa</Link>
         </div>
       </div>
     </div>

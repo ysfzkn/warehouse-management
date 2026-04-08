@@ -53,7 +53,7 @@ axios.interceptors.response.use(
           window.__sessionExpiredHandling = true;
 
           // Doğru login sayfasını belirle: store isteği → store login, admin isteği → admin login
-          const loginUrl = isStoreRequest ? '/store/giris' : '/login';
+          const loginUrl = isStoreRequest ? '/giris' : '/login';
           const tokenKey = isStoreRequest ? 'customer_token' : 'auth_token';
 
           const modalId = 'session-expired-modal';

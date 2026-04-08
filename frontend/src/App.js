@@ -1,5 +1,5 @@
 import React from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import './design-tokens.css';
 import './App.css';
@@ -75,35 +75,85 @@ function App() {
     };
   }, []);
 
+  // Host-aware routing: admin.* subdomain shows admin WMS, everything else shows storefront.
+  // This lets us point both siteniz.com and admin.siteniz.com at the same frontend container.
+  const isAdminHost = typeof window !== 'undefined' && window.location.hostname.startsWith('admin.');
+
   return (
     <div className="App">
-      <Routes>
-        {/* ===== STOREFRONT (public, separate layout) ===== */}
-        <Route path="/store" element={<StoreLayout />}>
-          <Route index element={<HomePage />} />
-          <Route path="kategori/:slug" element={<CategoryPage />} />
-          <Route path="urun/:slug" element={<ProductDetailPage />} />
-          <Route path="sepet" element={<CartPage />} />
-          <Route path="odeme" element={<CheckoutPage />} />
-          <Route path="odeme/sonuc" element={<PaymentResultPage />} />
-          <Route path="sayfa/:slug" element={<StoreCmsPage />} />
-          <Route path="giris" element={<StoreLoginPage />} />
-          <Route path="kayit" element={<StoreRegisterPage />} />
-          <Route path="siparislerim" element={<MyOrdersPage />} />
-          <Route path="adreslerim" element={<MyAddressesPage />} />
-          <Route path="favorilerim" element={<MyFavoritesPage />} />
-          <Route path="destek" element={<MySupportPage />} />
-          <Route path="hesap-dogrula" element={<EmailVerifyPage />} />
-          <Route path="sifremi-unuttum" element={<ForgotPasswordPage />} />
-          <Route path="sifre-sifirla" element={<ResetPasswordPage />} />
-          <Route path="*" element={<NotFoundPage />} />
-        </Route>
+      {isAdminHost ? (
+        <AdminRoutes authed={authed} role={role} />
+      ) : (
+        <StoreRoutes />
+      )}
+    </div>
+  );
+}
 
-        {/* ===== GOOGLE AUTH CALLBACK ===== */}
-        <Route path="/auth/google/callback" element={<GoogleAuthCallback />} />
+/**
+ * When an old link like /store/urun/X reaches the store host, strip the /store
+ * prefix and client-side redirect to the new clean URL. Nginx handles this at
+ * the edge too, but keeping it here as a safety net.
+ */
+function StoreLegacyRedirect() {
+  const location = useLocation();
+  const newPath = location.pathname.replace(/^\/store/, '') || '/';
+  return <Navigate to={newPath + location.search} replace />;
+}
 
-        {/* ===== ADMIN LOGIN ===== */}
-        <Route path="/login" element={<Login />} />
+/**
+ * When someone hits admin.siteniz.com/store/X (stale bookmark from the single-domain era),
+ * bounce them across to the store domain. Full page navigation because the origin changes.
+ */
+function CrossDomainStoreRedirect() {
+  useEffect(() => {
+    const protocol = window.location.protocol;
+    const storeHost = window.location.hostname.replace(/^admin\./, '');
+    const newPath = window.location.pathname.replace(/^\/store/, '') || '/';
+    window.location.replace(`${protocol}//${storeHost}${newPath}${window.location.search}`);
+  }, []);
+  return null;
+}
+
+function StoreRoutes() {
+  return (
+    <Routes>
+      {/* ===== STOREFRONT (public, mounted at root) ===== */}
+      <Route path="/" element={<StoreLayout />}>
+        <Route index element={<HomePage />} />
+        <Route path="kategori/:slug" element={<CategoryPage />} />
+        <Route path="urun/:slug" element={<ProductDetailPage />} />
+        <Route path="sepet" element={<CartPage />} />
+        <Route path="odeme" element={<CheckoutPage />} />
+        <Route path="odeme/sonuc" element={<PaymentResultPage />} />
+        <Route path="sayfa/:slug" element={<StoreCmsPage />} />
+        <Route path="giris" element={<StoreLoginPage />} />
+        <Route path="kayit" element={<StoreRegisterPage />} />
+        <Route path="siparislerim" element={<MyOrdersPage />} />
+        <Route path="adreslerim" element={<MyAddressesPage />} />
+        <Route path="favorilerim" element={<MyFavoritesPage />} />
+        <Route path="destek" element={<MySupportPage />} />
+        <Route path="hesap-dogrula" element={<EmailVerifyPage />} />
+        <Route path="sifremi-unuttum" element={<ForgotPasswordPage />} />
+        <Route path="sifre-sifirla" element={<ResetPasswordPage />} />
+        <Route path="*" element={<NotFoundPage />} />
+      </Route>
+
+      {/* Customer-facing Google OAuth callback */}
+      <Route path="/auth/google/callback" element={<GoogleAuthCallback />} />
+
+      {/* Legacy /store/* URL rescue (nginx handles this first, this is a safety net) */}
+      <Route path="/store" element={<Navigate to="/" replace />} />
+      <Route path="/store/*" element={<StoreLegacyRedirect />} />
+    </Routes>
+  );
+}
+
+function AdminRoutes({ authed, role }) {
+  return (
+    <Routes>
+      {/* ===== ADMIN LOGIN ===== */}
+      <Route path="/login" element={<Login />} />
 
         {/* ===== ADMIN (auth required, uses AdminLayout with Outlet) ===== */}
         <Route path="/" element={<AdminLayout />}>
@@ -187,8 +237,10 @@ function App() {
             authed && role === 'ADMIN' ? <AdminHelp /> : <Navigate to={authed ? '/stock' : '/login'} replace />
           } />
         </Route>
+
+        {/* Someone hit admin.siteniz.com/store/... — bounce them to store host */}
+        <Route path="/store/*" element={<CrossDomainStoreRedirect />} />
       </Routes>
-    </div>
   );
 }
 

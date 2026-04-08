@@ -55,7 +55,7 @@ export default function ProductDetailPage() {
   const hasDiscount = product.salePrice && product.salePrice > 0 && product.salePrice < product.price;
   const discountPercent = hasDiscount ? Math.round((1 - product.salePrice / product.price) * 100) : 0;
   const breadcrumbs = [
-    ...(product.categorySlug ? [{ label: product.categoryName, href: `/store/kategori/${product.categorySlug}` }] : []),
+    ...(product.categorySlug ? [{ label: product.categoryName, href: `/kategori/${product.categorySlug}` }] : []),
     { label: product.name },
   ];
 
@@ -118,7 +118,7 @@ export default function ProductDetailPage() {
         <div className="col-lg-6">
           {/* Brand */}
           {product.brandName && (
-            <Link to={`/store/kategori/tumu?brand=${product.brandName}`} className="text-muted text-decoration-none small text-uppercase fw-semibold" style={{letterSpacing:'0.05em'}}>
+            <Link to={`/kategori/tumu?brand=${product.brandName}`} className="text-muted text-decoration-none small text-uppercase fw-semibold" style={{letterSpacing:'0.05em'}}>
               {product.brandName}
             </Link>
           )}
@@ -129,7 +129,7 @@ export default function ProductDetailPage() {
           {/* SKU + Category */}
           <div className="d-flex gap-3 text-muted small mb-3">
             {product.sku && <span>SKU: <strong>{product.sku}</strong></span>}
-            {product.categoryName && <span>Kategori: <Link to={`/store/kategori/${product.categorySlug}`} className="text-primary">{product.categoryName}</Link></span>}
+            {product.categoryName && <span>Kategori: <Link to={`/kategori/${product.categorySlug}`} className="text-primary">{product.categoryName}</Link></span>}
           </div>
 
           {/* Price Section */}

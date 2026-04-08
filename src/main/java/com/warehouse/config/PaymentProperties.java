@@ -22,7 +22,7 @@ public class PaymentProperties {
         private String apiKey = "";
         private String secretKey = "";
         private String baseUrl = "https://sandbox-api.iyzipay.com";
-        private String callbackUrl = "http://localhost:3000/store/odeme/callback";
+        private String callbackUrl = "http://localhost:3000/odeme/callback";
         private int timeoutMinutes = 15;
     }
 

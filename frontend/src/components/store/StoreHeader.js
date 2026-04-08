@@ -101,7 +101,7 @@ export default function StoreHeader({ cart, settings }) {
   const handleSearch = (e) => {
     e.preventDefault();
     if (searchTerm.trim()) {
-      navigate(`/store/kategori/arama?q=${encodeURIComponent(searchTerm)}`);
+      navigate(`/kategori/arama?q=${encodeURIComponent(searchTerm)}`);
       setSearchTerm(''); setSearchResults([]); setSearchFocused(false);
     }
   };
@@ -111,7 +111,7 @@ export default function StoreHeader({ cart, settings }) {
     localStorage.removeItem('customer_refresh_token');
     localStorage.removeItem('customer_data');
     setUserMenuOpen(false);
-    navigate('/store');
+    navigate('/');
     window.location.reload();
   };
 
@@ -172,9 +172,9 @@ export default function StoreHeader({ cart, settings }) {
           <div className="d-flex gap-3 align-items-center">
             {!isLoggedIn && (
               <>
-                <Link to="/store/giris" className="store-top-link">Giriş Yap</Link>
+                <Link to="/giris" className="store-top-link">Giriş Yap</Link>
                 <span className="store-top-divider">|</span>
-                <Link to="/store/kayit" className="store-top-link fw-semibold">Üye Ol</Link>
+                <Link to="/kayit" className="store-top-link fw-semibold">Üye Ol</Link>
               </>
             )}
             {isLoggedIn && (
@@ -194,7 +194,7 @@ export default function StoreHeader({ cart, settings }) {
             {mobileMenuOpen ? <FiX size={22} /> : <FiMenu size={22} />}
           </button>
 
-          <Link to="/store" className="store-logo-link">
+          <Link to="/" className="store-logo-link">
             {settings.get('site_logo_url') && settings.get('site_logo_url').length > 2 ? (
               <img src={settings.get('site_logo_url')} alt={settings.get('site_name', 'Mağaza')} className="store-logo" />
             ) : (
@@ -230,7 +230,7 @@ export default function StoreHeader({ cart, settings }) {
                         <>
                           <div className="px-3 pt-2 pb-1"><small className="text-muted fw-semibold text-uppercase" style={{fontSize:10,letterSpacing:'0.05em'}}>Kategoriler</small></div>
                           {searchResults.filter(r => r.type === 'category').map(r => (
-                            <Link key={`cat-${r.id}`} to={`/store/kategori/${r.slug}`}
+                            <Link key={`cat-${r.id}`} to={`/kategori/${r.slug}`}
                               className="d-flex align-items-center gap-2 px-3 py-2 text-dark text-decoration-none store-search-item"
                               onClick={() => { setSearchFocused(false); setSearchTerm(''); setSearchResults([]); }}>
                               <div style={{width:28,height:28,borderRadius:8,background:'#eff6ff',display:'flex',alignItems:'center',justifyContent:'center'}}>
@@ -251,7 +251,7 @@ export default function StoreHeader({ cart, settings }) {
                         <>
                           <div className="px-3 pt-2 pb-1 border-top"><small className="text-muted fw-semibold text-uppercase" style={{fontSize:10,letterSpacing:'0.05em'}}>Markalar</small></div>
                           {searchResults.filter(r => r.type === 'brand').map(r => (
-                            <Link key={`brand-${r.name}`} to={`/store/kategori/tumu?brand=${r.name}`}
+                            <Link key={`brand-${r.name}`} to={`/kategori/tumu?brand=${r.name}`}
                               className="d-flex align-items-center gap-2 px-3 py-2 text-dark text-decoration-none store-search-item"
                               onClick={() => { setSearchFocused(false); setSearchTerm(''); setSearchResults([]); }}>
                               <div style={{width:28,height:28,borderRadius:8,background:'#f0fdf4',display:'flex',alignItems:'center',justifyContent:'center'}}>
@@ -269,7 +269,7 @@ export default function StoreHeader({ cart, settings }) {
                         <>
                           <div className="px-3 pt-2 pb-1 border-top"><small className="text-muted fw-semibold text-uppercase" style={{fontSize:10,letterSpacing:'0.05em'}}>Ürünler</small></div>
                           {searchResults.filter(r => r.type === 'product').map(r => (
-                            <Link key={`prod-${r.id}`} to={`/store/urun/${r.slug}`}
+                            <Link key={`prod-${r.id}`} to={`/urun/${r.slug}`}
                               className="d-flex align-items-center gap-3 px-3 py-2 text-dark text-decoration-none store-search-item"
                               onClick={() => { setSearchFocused(false); setSearchTerm(''); setSearchResults([]); }}>
                               {r.image ? (
@@ -301,7 +301,7 @@ export default function StoreHeader({ cart, settings }) {
                       )}
 
                       {/* Tüm sonuçlar */}
-                      <Link to={`/store/kategori/arama?q=${encodeURIComponent(searchTerm)}`}
+                      <Link to={`/kategori/arama?q=${encodeURIComponent(searchTerm)}`}
                         className="d-flex align-items-center justify-content-center gap-2 py-3 border-top text-primary small fw-semibold text-decoration-none store-search-item"
                         onClick={() => { setSearchFocused(false); setSearchTerm(''); setSearchResults([]); }}>
                         <FiSearch size={13} />
@@ -318,7 +318,7 @@ export default function StoreHeader({ cart, settings }) {
           <div className="store-header-actions">
             {/* User Menu */}
             <div className="position-relative" ref={userMenuRef}>
-              <button className="store-action-btn" onClick={() => isLoggedIn ? setUserMenuOpen(!userMenuOpen) : navigate('/store/giris')} aria-label="Hesabım">
+              <button className="store-action-btn" onClick={() => isLoggedIn ? setUserMenuOpen(!userMenuOpen) : navigate('/giris')} aria-label="Hesabım">
                 <FiUser size={20} />
                 <span className="store-action-label d-none d-lg-block">
                   {isLoggedIn ? customerName : 'Giriş'}
@@ -347,16 +347,16 @@ export default function StoreHeader({ cart, settings }) {
                   </div>
                   {/* Menu Items */}
                   <div className="py-1">
-                    <Link to="/store/siparislerim" className="d-flex align-items-center gap-2 px-3 py-2 text-dark text-decoration-none store-user-menu-item" onClick={() => setUserMenuOpen(false)}>
+                    <Link to="/siparislerim" className="d-flex align-items-center gap-2 px-3 py-2 text-dark text-decoration-none store-user-menu-item" onClick={() => setUserMenuOpen(false)}>
                       <FiPackage size={16} className="text-muted" /><span className="small">Siparişlerim</span>
                     </Link>
-                    <Link to="/store/favorilerim" className="d-flex align-items-center gap-2 px-3 py-2 text-dark text-decoration-none store-user-menu-item" onClick={() => setUserMenuOpen(false)}>
+                    <Link to="/favorilerim" className="d-flex align-items-center gap-2 px-3 py-2 text-dark text-decoration-none store-user-menu-item" onClick={() => setUserMenuOpen(false)}>
                       <FiHeart size={16} className="text-muted" /><span className="small">Favorilerim</span>
                     </Link>
-                    <Link to="/store/destek" className="d-flex align-items-center gap-2 px-3 py-2 text-dark text-decoration-none store-user-menu-item" onClick={() => setUserMenuOpen(false)}>
+                    <Link to="/destek" className="d-flex align-items-center gap-2 px-3 py-2 text-dark text-decoration-none store-user-menu-item" onClick={() => setUserMenuOpen(false)}>
                       <FiPackage size={16} className="text-muted" /><span className="small">Destek Taleplerim</span>
                     </Link>
-                    <Link to="/store/adreslerim" className="d-flex align-items-center gap-2 px-3 py-2 text-dark text-decoration-none store-user-menu-item" onClick={() => setUserMenuOpen(false)}>
+                    <Link to="/adreslerim" className="d-flex align-items-center gap-2 px-3 py-2 text-dark text-decoration-none store-user-menu-item" onClick={() => setUserMenuOpen(false)}>
                       <FiMapPin size={16} className="text-muted" /><span className="small">Adreslerim</span>
                     </Link>
                   </div>
@@ -385,15 +385,15 @@ export default function StoreHeader({ cart, settings }) {
         <div className="container">
           <ul className="store-cat-list">
             <li className="store-cat-item store-cat-all">
-              <Link to="/store/kategori/tumu" className="store-cat-link"><FiMenu size={14} /> Tüm Kategoriler</Link>
+              <Link to="/kategori/tumu" className="store-cat-link"><FiMenu size={14} /> Tüm Kategoriler</Link>
             </li>
             {categories.slice(0, 8).map(cat => (
               <li key={cat.id} className="store-cat-item">
-                <Link to={`/store/kategori/${cat.slug}`} className="store-cat-link">{cat.name}</Link>
+                <Link to={`/kategori/${cat.slug}`} className="store-cat-link">{cat.name}</Link>
                 {cat.children && cat.children.length > 0 && (
                   <div className="store-cat-dropdown">
                     {cat.children.map(sub => (
-                      <Link key={sub.id} to={`/store/kategori/${sub.slug}`} className="store-cat-dropdown-item">{sub.name}</Link>
+                      <Link key={sub.id} to={`/kategori/${sub.slug}`} className="store-cat-dropdown-item">{sub.name}</Link>
                     ))}
                   </div>
                 )}
@@ -427,7 +427,7 @@ export default function StoreHeader({ cart, settings }) {
             <ul className="store-mobile-cat-list">
               {categories.map(cat => (
                 <li key={cat.id}>
-                  <Link to={`/store/kategori/${cat.slug}`} className="store-mobile-cat-link" onClick={() => setMobileMenuOpen(false)}>{cat.name}</Link>
+                  <Link to={`/kategori/${cat.slug}`} className="store-mobile-cat-link" onClick={() => setMobileMenuOpen(false)}>{cat.name}</Link>
                 </li>
               ))}
             </ul>

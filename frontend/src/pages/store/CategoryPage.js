@@ -151,7 +151,7 @@ export default function CategoryPage() {
   const activeFilterCount = selectedBrands.size + selectedColors.size + (priceApplied.min || priceApplied.max ? 1 : 0);
 
   const breadcrumbs = [
-    ...(category?.parentSlug ? [{ label: category.parentName, href: `/store/kategori/${category.parentSlug}` }] : []),
+    ...(category?.parentSlug ? [{ label: category.parentName, href: `/kategori/${category.parentSlug}` }] : []),
     ...(category ? [{ label: category.name }] : []),
     ...(searchQuery ? [{ label: `"${searchQuery}" araması` }] : []),
   ];

@@ -17,7 +17,7 @@ export default function ProductCard({ product, onAddToCart }) {
   const toggleWishlist = async (e) => {
     e.preventDefault(); e.stopPropagation();
     const token = localStorage.getItem('customer_token');
-    if (!token) { toast.warning('Favorilere eklemek için giriş yapın.'); navigate('/store/giris'); return; }
+    if (!token) { toast.warning('Favorilere eklemek için giriş yapın.'); navigate('/giris'); return; }
     try {
       const nowWished = await wishlist.toggle(product.id);
       if (nowWished) toast.success('Favorilere eklendi!');
@@ -27,7 +27,7 @@ export default function ProductCard({ product, onAddToCart }) {
 
   return (
     <div className="store-product-card">
-      <Link to={`/store/urun/${product.slug}`} className="text-decoration-none">
+      <Link to={`/urun/${product.slug}`} className="text-decoration-none">
         <div className="card-img-wrapper">
           {product.primaryImageUrl ? (
             <img src={product.primaryImageUrl} alt={product.name} loading="lazy" />
@@ -47,7 +47,7 @@ export default function ProductCard({ product, onAddToCart }) {
       </Link>
       <div className="card-body">
         {product.brandName && <span className="card-brand">{product.brandName}</span>}
-        <Link to={`/store/urun/${product.slug}`} className="text-decoration-none">
+        <Link to={`/urun/${product.slug}`} className="text-decoration-none">
           <p className="product-name">{product.name}</p>
         </Link>
         <div className="card-price-area">

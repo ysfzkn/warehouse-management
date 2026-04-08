@@ -39,7 +39,7 @@ export default function ResetPasswordPage() {
           </div>
           <h2 className="fw-bold mb-3" style={{ color: '#dc2626' }}>Geçersiz Bağlantı</h2>
           <p className="text-muted mb-4">Şifre sıfırlama bağlantısı geçersiz veya eksik. Lütfen yeni bir talep oluşturun.</p>
-          <Link to="/store/sifremi-unuttum" className="btn btn-primary px-4">Yeni Sıfırlama Talebi</Link>
+          <Link to="/sifremi-unuttum" className="btn btn-primary px-4">Yeni Sıfırlama Talebi</Link>
         </div>
       </div>
     );
@@ -58,7 +58,7 @@ export default function ResetPasswordPage() {
           </div>
           <h2 className="fw-bold mb-3" style={{ color: '#059669' }}>Şifreniz Değiştirildi!</h2>
           <p className="text-muted mb-4">Yeni şifreniz başarıyla ayarlandı. Artık yeni şifrenizle giriş yapabilirsiniz.</p>
-          <button className="btn btn-primary px-4" onClick={() => navigate('/store/giris')}>
+          <button className="btn btn-primary px-4" onClick={() => navigate('/giris')}>
             <FiLock className="me-2" />Giriş Yap
           </button>
         </div>
@@ -188,7 +188,7 @@ export default function ResetPasswordPage() {
         </div>
 
         <div className="text-center mt-3">
-          <Link to="/store/giris" className="text-muted small text-decoration-none">
+          <Link to="/giris" className="text-muted small text-decoration-none">
             <FiArrowLeft size={14} className="me-1" />Giriş sayfasına dön
           </Link>
         </div>

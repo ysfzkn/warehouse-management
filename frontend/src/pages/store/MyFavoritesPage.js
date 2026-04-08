@@ -42,7 +42,7 @@ export default function MyFavoritesPage() {
           <div className="card-body text-center py-5">
             <i className="fas fa-heart text-muted fa-3x mb-3 opacity-25" />
             <p className="text-muted mb-3">Favorilerinize henüz ürün eklemediniz.</p>
-            <Link to="/store" className="btn btn-primary">Ürünleri Keşfet</Link>
+            <Link to="/" className="btn btn-primary">Ürünleri Keşfet</Link>
           </div>
         </div>
       ) : (
@@ -51,7 +51,7 @@ export default function MyFavoritesPage() {
             <div key={item.id} className="col-md-6">
               <div className="card border-0 shadow-sm h-100">
                 <div className="card-body d-flex gap-3">
-                  <Link to={`/store/urun/${item.productSlug}`} className="flex-shrink-0">
+                  <Link to={`/urun/${item.productSlug}`} className="flex-shrink-0">
                     {item.imageUrl ? (
                       <img src={item.imageUrl} alt="" style={{ width: 80, height: 80, objectFit: 'contain', borderRadius: 8, background: '#f8f9fa' }} />
                     ) : (
@@ -61,7 +61,7 @@ export default function MyFavoritesPage() {
                     )}
                   </Link>
                   <div className="flex-grow-1 min-w-0">
-                    <Link to={`/store/urun/${item.productSlug}`} className="text-dark text-decoration-none">
+                    <Link to={`/urun/${item.productSlug}`} className="text-dark text-decoration-none">
                       <div className="fw-medium small text-truncate">{item.productName}</div>
                     </Link>
                     <div className="small text-muted">{item.productSku}</div>
@@ -74,7 +74,7 @@ export default function MyFavoritesPage() {
                     </div>
                   </div>
                   <div className="d-flex flex-column gap-1">
-                    <Link to={`/store/urun/${item.productSlug}`} className="btn btn-sm btn-primary"><i className="fas fa-eye" /></Link>
+                    <Link to={`/urun/${item.productSlug}`} className="btn btn-sm btn-primary"><i className="fas fa-eye" /></Link>
                     <button className="btn btn-sm btn-outline-danger" onClick={() => handleRemove(item.productId)} title="Favorilerden çıkar"><i className="fas fa-heart-broken" /></button>
                   </div>
                 </div>
