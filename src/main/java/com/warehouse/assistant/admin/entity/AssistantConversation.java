@@ -48,6 +48,9 @@ public class AssistantConversation {
     @Column(name = "username", length = 128)
     private String username;
 
+    @Column(name = "chat_session_id", length = 64)
+    private String chatSessionId;
+
     @Column(name = "started_at", nullable = false)
     private LocalDateTime startedAt;
 

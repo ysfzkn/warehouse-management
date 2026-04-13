@@ -5,6 +5,8 @@ import com.warehouse.assistant.core.api.AssistantChatService;
 import com.warehouse.assistant.core.api.AssistantProfile;
 import com.warehouse.assistant.core.observability.ConversationLogger;
 import com.warehouse.assistant.core.observability.UsageMetrics;
+import com.warehouse.assistant.core.safety.ContentSafetyPipeline;
+import com.warehouse.assistant.core.safety.SafetyCheckResult;
 import com.warehouse.assistant.core.security.AssistantContext;
 import com.warehouse.assistant.core.security.AssistantContextHolder;
 import com.warehouse.assistant.store.dto.StoreChatMessage;
@@ -47,13 +49,16 @@ public class StoreAssistantChatService implements AssistantChatService {
     private final ChatClient chatClient;
     private final StorePromptService promptService;
     private final ConversationLogger conversationLogger;
+    private final ContentSafetyPipeline safetyPipeline;
 
     public StoreAssistantChatService(ChatClient storeChatClient,
                                      StorePromptService promptService,
-                                     ConversationLogger conversationLogger) {
+                                     ConversationLogger conversationLogger,
+                                     ContentSafetyPipeline safetyPipeline) {
         this.chatClient = storeChatClient;
         this.promptService = promptService;
         this.conversationLogger = conversationLogger;
+        this.safetyPipeline = safetyPipeline;
     }
 
     @Override
@@ -65,6 +70,17 @@ public class StoreAssistantChatService implements AssistantChatService {
         AssistantContext ctx = AssistantContextHolder.get();
         boolean isGuest = ctx == null || ctx.customerId() == null;
         String displayName = ctx != null ? ctx.username() : null;
+        String userId = ctx != null && ctx.customerId() != null ? String.valueOf(ctx.customerId()) : "guest";
+
+        // ── Katman 1: Input validation ──
+        String lastUser = lastUserMessage(request != null ? request.messages : null);
+        SafetyCheckResult inputCheck = safetyPipeline.validateInput(AssistantProfile.STORE, userId, lastUser);
+        if (inputCheck.isBlocked()) {
+            StoreChatResponse blocked = new StoreChatResponse();
+            blocked.message = inputCheck.getBlockReason();
+            blocked.suggestedActions = List.of();
+            return blocked;
+        }
 
         String system = promptService.buildSystemPrompt(
                 isGuest,
@@ -92,6 +108,9 @@ public class StoreAssistantChatService implements AssistantChatService {
                     ? chatResponse.getResult().getOutput().getText()
                     : "";
             usage = extractUsage(chatResponse, startedAt);
+
+            // ── Katman 3: Output validation ──
+            assistantText = safetyPipeline.validateOutput(AssistantProfile.STORE, userId, assistantText);
         } catch (Exception e) {
             log.error("Store assistant chat failed: {}", e.getMessage());
             assistantText = """
@@ -105,7 +124,6 @@ public class StoreAssistantChatService implements AssistantChatService {
         response.suggestedActions = List.of();
 
         // Persist async — never blocks the chat path.
-        String lastUser = lastUserMessage(request != null ? request.messages : null);
         if (conversation != null && conversation.getId() != null) {
             conversationLogger.recordExchange(
                     conversation.getId(),
@@ -125,7 +143,7 @@ public class StoreAssistantChatService implements AssistantChatService {
         Usage u = metadata.getUsage();
         if (u == null) return new UsageMetrics(0, 0, latency);
         int prompt = u.getPromptTokens() != null ? u.getPromptTokens().intValue() : 0;
-        int completion = u.getGenerationTokens() != null ? u.getGenerationTokens().intValue() : 0;
+        int completion = u.getCompletionTokens() != null ? u.getCompletionTokens().intValue() : 0;
         return new UsageMetrics(prompt, completion, latency);
     }
 

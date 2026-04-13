@@ -15,6 +15,8 @@ public class AssistantProperties {
     private Cost cost = new Cost();
     private Rag rag = new Rag();
     private RateLimit ratelimit = new RateLimit();
+    private Safety safety = new Safety();
+    private EmbeddingConnection embedding = new EmbeddingConnection();
 
     public Cost getCost() { return cost; }
     public void setCost(Cost cost) { this.cost = cost; }
@@ -22,6 +24,10 @@ public class AssistantProperties {
     public void setRag(Rag rag) { this.rag = rag; }
     public RateLimit getRatelimit() { return ratelimit; }
     public void setRatelimit(RateLimit ratelimit) { this.ratelimit = ratelimit; }
+    public Safety getSafety() { return safety; }
+    public void setSafety(Safety safety) { this.safety = safety; }
+    public EmbeddingConnection getEmbedding() { return embedding; }
+    public void setEmbedding(EmbeddingConnection embedding) { this.embedding = embedding; }
 
     // ---------- cost ----------
     public static class Cost {
@@ -86,5 +92,63 @@ public class AssistantProperties {
         public void setCustomerDaily(int v) { this.customerDaily = v; }
         public int getWmsHourly() { return wmsHourly; }
         public void setWmsHourly(int v) { this.wmsHourly = v; }
+    }
+
+    // ---------- embedding connection (separate Azure resource, optional) ----------
+    public static class EmbeddingConnection {
+        private String endpoint = "";       // empty = use main chat endpoint
+        private String apiKey = "";         // empty = use main chat api-key
+        private String deploymentName = "text-embedding-3-small";
+
+        public String getEndpoint() { return endpoint; }
+        public void setEndpoint(String v) { this.endpoint = v; }
+        public String getApiKey() { return apiKey; }
+        public void setApiKey(String v) { this.apiKey = v; }
+        public String getDeploymentName() { return deploymentName; }
+        public void setDeploymentName(String v) { this.deploymentName = v; }
+
+        public boolean hasSeparateEndpoint() {
+            return endpoint != null && !endpoint.isBlank();
+        }
+    }
+
+    // ---------- safety ----------
+    public static class Safety {
+        private Input input = new Input();
+        private Output output = new Output();
+        private boolean logSanitization = true;
+
+        public Input getInput() { return input; }
+        public void setInput(Input input) { this.input = input; }
+        public Output getOutput() { return output; }
+        public void setOutput(Output output) { this.output = output; }
+        public boolean isLogSanitization() { return logSanitization; }
+        public void setLogSanitization(boolean v) { this.logSanitization = v; }
+
+        public static class Input {
+            private int maxLength = 4000;
+            private boolean piiDetection = true;
+            private String piiAction = "REDACT"; // REDACT | WARN | BLOCK
+            private boolean jailbreakDetection = true;
+
+            public int getMaxLength() { return maxLength; }
+            public void setMaxLength(int v) { this.maxLength = v; }
+            public boolean isPiiDetection() { return piiDetection; }
+            public void setPiiDetection(boolean v) { this.piiDetection = v; }
+            public String getPiiAction() { return piiAction; }
+            public void setPiiAction(String v) { this.piiAction = v; }
+            public boolean isJailbreakDetection() { return jailbreakDetection; }
+            public void setJailbreakDetection(boolean v) { this.jailbreakDetection = v; }
+        }
+
+        public static class Output {
+            private boolean piiRedaction = true;
+            private boolean hallucinationCheck = true;
+
+            public boolean isPiiRedaction() { return piiRedaction; }
+            public void setPiiRedaction(boolean v) { this.piiRedaction = v; }
+            public boolean isHallucinationCheck() { return hallucinationCheck; }
+            public void setHallucinationCheck(boolean v) { this.hallucinationCheck = v; }
+        }
     }
 }

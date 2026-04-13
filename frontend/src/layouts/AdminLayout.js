@@ -3,6 +3,7 @@ import { Outlet, Navigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import { AdminToastProvider } from '../components/AdminToast';
 import AssistantWidget from '../components/AssistantWidget';
+import { useAssistantFlags } from '../hooks/useAssistantFlags';
 
 /**
  * WMS assistant configuration. Driven by the generic AssistantWidget so the
@@ -34,6 +35,7 @@ const wmsAssistantConfig = {
 
 export default function AdminLayout() {
   const token = localStorage.getItem('auth_token');
+  const { flags } = useAssistantFlags();
 
   if (!token) {
     return <Navigate to="/login" replace />;
@@ -46,11 +48,8 @@ export default function AdminLayout() {
         <div className="container-fluid px-4 py-3">
           <Outlet />
         </div>
-        {/*
-         * WMS assistant widget — admin-only tools, requires warehouse role.
-         * The storefront uses the same component with a different config.
-         */}
-        <AssistantWidget config={wmsAssistantConfig} />
+        {/* WMS widget — only rendered when admin hasn't disabled it */}
+        {flags.wmsEnabled === true && <AssistantWidget config={wmsAssistantConfig} />}
       </div>
     </AdminToastProvider>
   );

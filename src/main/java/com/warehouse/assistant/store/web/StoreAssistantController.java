@@ -1,6 +1,7 @@
 package com.warehouse.assistant.store.web;
 
 import com.warehouse.assistant.admin.entity.AssistantConversation;
+import com.warehouse.assistant.core.api.AssistantProfile;
 import com.warehouse.assistant.core.config.AssistantFlagsService;
 import com.warehouse.assistant.core.observability.ConversationLogger;
 import com.warehouse.assistant.core.ratelimit.RateLimitDecision;
@@ -107,13 +108,16 @@ public class StoreAssistantController {
 
         AssistantConversation conversation;
         try {
-            if (actor.customerId() != null) {
-                conversation = conversationLogger.resolveCustomerConversation(
-                        actor.customerId(), displayName, actor.ipHash(), actor.userAgent());
-            } else {
-                conversation = conversationLogger.resolveGuestConversation(
-                        actor.guestSessionId(), actor.ipHash(), actor.userAgent());
-            }
+            String chatSessionId = request != null ? request.chatSessionId : null;
+            conversation = conversationLogger.resolveBySessionId(
+                    chatSessionId,
+                    AssistantProfile.STORE,
+                    null,
+                    actor.customerId(),
+                    actor.guestSessionId(),
+                    displayName,
+                    actor.ipHash(),
+                    actor.userAgent());
 
             StoreChatResponse response = chatService.chat(request, conversation);
             return ResponseEntity.ok(response);

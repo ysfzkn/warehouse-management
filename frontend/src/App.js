@@ -41,6 +41,7 @@ import AdminHelp from './pages/AdminHelp';
 import AssistantDocumentsPage from './pages/AssistantDocumentsPage';
 import AssistantDashboardPage from './pages/AssistantDashboardPage';
 import AssistantLogsPage from './pages/AssistantLogsPage';
+import AssistantSettingsPage from './pages/AssistantSettingsPage';
 
 // Store pages (new)
 import HomePage from './pages/store/HomePage';
@@ -249,6 +250,9 @@ function AdminRoutes({ authed, role }) {
           } />
           <Route path="admin/assistant/logs" element={
             authed && role === 'ADMIN' ? <AssistantLogsPage /> : <Navigate to={authed ? '/stock' : '/login'} replace />
+          } />
+          <Route path="admin/assistant/settings" element={
+            authed && role === 'ADMIN' ? <AssistantSettingsPage /> : <Navigate to={authed ? '/stock' : '/login'} replace />
           } />
         </Route>
 

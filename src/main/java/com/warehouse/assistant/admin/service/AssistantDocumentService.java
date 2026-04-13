@@ -107,6 +107,7 @@ public class AssistantDocumentService {
     }
 
     /** Admin-triggered re-index. Same async flow, runs against the existing file on disk. */
+    @Transactional
     public void reindex(Long documentId) {
         if (documentId == null) return;
         documentRepository.findById(documentId).ifPresent(doc -> {

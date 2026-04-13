@@ -21,4 +21,7 @@ public class WmsChatRequest {
      * Lightweight UI context for better help (route, selected warehouse, etc.).
      */
     public WmsUiContext ui;
+
+    /** Frontend-generated session ID for conversation grouping. */
+    public String chatSessionId;
 }

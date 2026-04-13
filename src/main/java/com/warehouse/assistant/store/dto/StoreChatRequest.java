@@ -12,4 +12,7 @@ public class StoreChatRequest {
 
     /** Store branding name (from site settings) — injected into the prompt's persona block. */
     public String siteName;
+
+    /** Frontend-generated session ID for conversation grouping. New UUID per browser session. */
+    public String chatSessionId;
 }

@@ -15,6 +15,8 @@ import java.util.Optional;
 
 public interface AssistantConversationRepository extends JpaRepository<AssistantConversation, Long> {
 
+    Optional<AssistantConversation> findTopByChatSessionIdOrderByIdDesc(String chatSessionId);
+
     Optional<AssistantConversation> findTopByGuestSessionIdOrderByIdDesc(String guestSessionId);
 
     Optional<AssistantConversation> findTopByCustomerIdAndProfileOrderByIdDesc(Long customerId, AssistantProfile profile);
@@ -24,6 +26,22 @@ public interface AssistantConversationRepository extends JpaRepository<Assistant
     Page<AssistantConversation> findByProfileOrderByStartedAtDesc(AssistantProfile profile, Pageable pageable);
 
     Page<AssistantConversation> findAllByOrderByStartedAtDesc(Pageable pageable);
+
+    @Query("""
+            select c from AssistantConversation c
+            where (:profile is null or c.profile = :profile)
+              and (:startDate is null or c.startedAt >= :startDate)
+              and (:endDate is null or c.startedAt <= :endDate)
+              and (:search is null or lower(c.username) like lower(concat('%', :search, '%'))
+                   or c.guestSessionId like concat('%', :search, '%'))
+            order by c.startedAt desc
+            """)
+    Page<AssistantConversation> findByFilters(
+            @Param("profile") AssistantProfile profile,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate,
+            @Param("search") String search,
+            Pageable pageable);
 
     long countByProfileAndStartedAtAfter(AssistantProfile profile, LocalDateTime after);
 

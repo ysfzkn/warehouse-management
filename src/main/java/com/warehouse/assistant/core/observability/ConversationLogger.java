@@ -5,6 +5,8 @@ import com.warehouse.assistant.admin.entity.AssistantMessage;
 import com.warehouse.assistant.admin.repository.AssistantConversationRepository;
 import com.warehouse.assistant.admin.repository.AssistantMessageRepository;
 import com.warehouse.assistant.core.api.AssistantProfile;
+import com.warehouse.assistant.core.config.AssistantProperties;
+import com.warehouse.assistant.core.safety.LogSanitizer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Async;
@@ -42,13 +44,57 @@ public class ConversationLogger {
     private final AssistantConversationRepository conversationRepo;
     private final AssistantMessageRepository messageRepo;
     private final CostCalculator costCalculator;
+    private final LogSanitizer logSanitizer;
+    private final AssistantProperties props;
 
     public ConversationLogger(AssistantConversationRepository conversationRepo,
                               AssistantMessageRepository messageRepo,
-                              CostCalculator costCalculator) {
+                              CostCalculator costCalculator,
+                              LogSanitizer logSanitizer,
+                              AssistantProperties props) {
         this.conversationRepo = conversationRepo;
         this.messageRepo = messageRepo;
         this.costCalculator = costCalculator;
+        this.logSanitizer = logSanitizer;
+        this.props = props;
+    }
+
+    /**
+     * Session-based conversation resolution. When the frontend provides a
+     * chatSessionId, use it as the primary key for grouping. Falls back to
+     * legacy actor-based resolution when chatSessionId is null.
+     */
+    @Transactional
+    public AssistantConversation resolveBySessionId(String chatSessionId,
+                                                     AssistantProfile profile,
+                                                     Long userId,
+                                                     Long customerId,
+                                                     String guestSessionId,
+                                                     String username,
+                                                     String ipHash,
+                                                     String userAgent) {
+        if (chatSessionId != null && !chatSessionId.isBlank()) {
+            Optional<AssistantConversation> existing =
+                    conversationRepo.findTopByChatSessionIdOrderByIdDesc(chatSessionId);
+            if (existing.isPresent()) return existing.get();
+
+            // New session — create
+            AssistantConversation c = new AssistantConversation();
+            c.setProfile(profile);
+            c.setChatSessionId(chatSessionId);
+            c.setUserId(userId);
+            c.setCustomerId(customerId);
+            c.setGuestSessionId(guestSessionId);
+            c.setUsername(truncate(username, 128));
+            c.setIpHash(ipHash);
+            c.setUserAgent(truncate(userAgent, 512));
+            return conversationRepo.save(c);
+        }
+
+        // Fallback: legacy actor-based resolution
+        if (customerId != null) return resolveCustomerConversation(customerId, username, ipHash, userAgent);
+        if (userId != null) return resolveWmsConversation(userId, username, ipHash, userAgent);
+        return resolveGuestConversation(guestSessionId, ipHash, userAgent);
     }
 
     /** Resolve or create the conversation row for a guest. */
@@ -116,10 +162,16 @@ public class ConversationLogger {
         try {
             LocalDateTime now = LocalDateTime.now();
 
+            // Sanitize PII before persistence (KVKK / defense-in-depth)
+            String safeUser = props.getSafety().isLogSanitization()
+                    ? logSanitizer.sanitize(userContent) : userContent;
+            String safeAssistant = props.getSafety().isLogSanitization()
+                    ? logSanitizer.sanitize(assistantContent) : assistantContent;
+
             AssistantMessage userMsg = new AssistantMessage();
             userMsg.setConversationId(conversationId);
             userMsg.setRole("user");
-            userMsg.setContent(truncate(userContent, 16_000));
+            userMsg.setContent(truncate(safeUser, 16_000));
             userMsg.setCreatedAt(now);
             messageRepo.save(userMsg);
 
@@ -128,7 +180,7 @@ public class ConversationLogger {
             AssistantMessage asstMsg = new AssistantMessage();
             asstMsg.setConversationId(conversationId);
             asstMsg.setRole("assistant");
-            asstMsg.setContent(truncate(assistantContent, 16_000));
+            asstMsg.setContent(truncate(safeAssistant, 16_000));
             asstMsg.setPromptTokens(usage.promptTokens());
             asstMsg.setCompletionTokens(usage.completionTokens());
             asstMsg.setLatencyMs(usage.latencyMs());

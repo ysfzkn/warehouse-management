@@ -886,6 +886,7 @@ const Navbar = () => {
                   <li><Link className="dropdown-item" to="/admin/assistant/dashboard"><i className="fas fa-chart-pie me-2 text-info"></i>Asistan Dashboard</Link></li>
                   <li><Link className="dropdown-item" to="/admin/assistant/documents"><i className="fas fa-file-upload me-2 text-success"></i>Doküman Yönetimi</Link></li>
                   <li><Link className="dropdown-item" to="/admin/assistant/logs"><i className="fas fa-comments me-2 text-warning"></i>Sohbet Logları</Link></li>
+                  <li><Link className="dropdown-item" to="/admin/assistant/settings"><i className="fas fa-cog me-2 text-danger"></i>AI Ayarları</Link></li>
                   <li><hr className="dropdown-divider" /></li>
                   <li><Link className="dropdown-item" to="/admin/help"><i className="fas fa-question-circle me-2 text-primary"></i>Yardım & Kılavuz</Link></li>
                 </ul>

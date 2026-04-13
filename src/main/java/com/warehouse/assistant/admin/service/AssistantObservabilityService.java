@@ -61,10 +61,21 @@ public class AssistantObservabilityService {
     // -------------------------------------------------------------------------
 
     public Page<AssistantConversation> listConversations(AssistantProfile profile, Pageable pageable) {
-        if (profile == null) {
+        return listConversations(profile, null, null, null, pageable);
+    }
+
+    public Page<AssistantConversation> listConversations(AssistantProfile profile,
+                                                         LocalDateTime startDate,
+                                                         LocalDateTime endDate,
+                                                         String search,
+                                                         Pageable pageable) {
+        boolean hasFilters = profile != null || startDate != null || endDate != null
+                || (search != null && !search.isBlank());
+        if (!hasFilters) {
             return conversationRepository.findAllByOrderByStartedAtDesc(pageable);
         }
-        return conversationRepository.findByProfileOrderByStartedAtDesc(profile, pageable);
+        String searchTrimmed = (search != null && !search.isBlank()) ? search.trim() : null;
+        return conversationRepository.findByFilters(profile, startDate, endDate, searchTrimmed, pageable);
     }
 
     public Map<String, Object> getConversationDetail(Long conversationId) {

@@ -1,7 +1,12 @@
 package com.warehouse.assistant.wms.service;
 
+import com.warehouse.assistant.admin.entity.AssistantConversation;
 import com.warehouse.assistant.core.api.AssistantChatService;
 import com.warehouse.assistant.core.api.AssistantProfile;
+import com.warehouse.assistant.core.observability.ConversationLogger;
+import com.warehouse.assistant.core.observability.UsageMetrics;
+import com.warehouse.assistant.core.safety.ContentSafetyPipeline;
+import com.warehouse.assistant.core.safety.SafetyCheckResult;
 import com.warehouse.assistant.wms.policy.WmsRolePolicy;
 import com.warehouse.assistant.wms.prompt.WmsPromptService;
 import com.warehouse.assistant.wms.web.WmsChatMessage;
@@ -32,13 +37,19 @@ public class WmsAssistantChatService implements AssistantChatService {
     private final ChatClient chatClientUser;
     private final ChatClient chatClientAdmin;
     private final WmsPromptService promptService;
+    private final ContentSafetyPipeline safetyPipeline;
+    private final ConversationLogger conversationLogger;
 
     public WmsAssistantChatService(ChatClient wmsChatClientUser,
                                    ChatClient wmsChatClientAdmin,
-                                   WmsPromptService promptService) {
+                                   WmsPromptService promptService,
+                                   ContentSafetyPipeline safetyPipeline,
+                                   ConversationLogger conversationLogger) {
         this.chatClientUser = wmsChatClientUser;
         this.chatClientAdmin = wmsChatClientAdmin;
         this.promptService = promptService;
+        this.safetyPipeline = safetyPipeline;
+        this.conversationLogger = conversationLogger;
     }
 
     @Override
@@ -46,11 +57,26 @@ public class WmsAssistantChatService implements AssistantChatService {
         return AssistantProfile.WMS;
     }
 
+    /** Legacy: no conversation logging (backward compat). */
     public WmsChatResponse chat(String username, String role, WmsChatRequest request) {
+        return chat(username, role, request, null);
+    }
+
+    /** With conversation logging. */
+    public WmsChatResponse chat(String username, String role, WmsChatRequest request, AssistantConversation conversation) {
         boolean allowMutations = request != null && request.allowMutations;
         String system = promptService.buildSystemPrompt(username, role, allowMutations, request != null ? request.ui : null);
 
         String lastUser = lastUserMessage(request != null ? request.messages : null);
+
+        // ── Katman 1: Input validation (PII redaction + jailbreak detect) ──
+        SafetyCheckResult inputCheck = safetyPipeline.validateInput(AssistantProfile.WMS, username, lastUser);
+        if (inputCheck.isBlocked()) {
+            WmsChatResponse resp = new WmsChatResponse();
+            resp.message = inputCheck.getBlockReason();
+            resp.suggestedActions = List.of();
+            return resp;
+        }
         // Deterministic capabilities response (no hallucination)
         if (WmsRolePolicy.isCapabilitiesQuestion(lastUser)) {
             WmsChatResponse resp = new WmsChatResponse();
@@ -95,9 +121,23 @@ public class WmsAssistantChatService implements AssistantChatService {
                     """;
         }
 
+        // ── Katman 3: Output validation (PII redaction defense-in-depth) ──
+        assistantText = safetyPipeline.validateOutput(AssistantProfile.WMS, username, assistantText);
+
         WmsChatResponse resp = new WmsChatResponse();
         resp.message = assistantText;
         resp.suggestedActions = List.of();
+
+        // Persist WMS conversation (async, never blocks)
+        if (conversation != null && conversation.getId() != null) {
+            conversationLogger.recordExchange(
+                    conversation.getId(),
+                    lastUser,
+                    assistantText,
+                    UsageMetrics.zero(), // WMS doesn't extract token usage yet (non-streaming call)
+                    null);
+        }
+
         return resp;
     }
 

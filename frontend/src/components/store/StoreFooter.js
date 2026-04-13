@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { FiPhone, FiMail, FiMapPin, FiInstagram, FiMessageCircle } from 'react-icons/fi';
+import { FiPhone, FiMail, FiMapPin, FiInstagram, FiMessageCircle, FiFacebook } from 'react-icons/fi';
 
 export default function StoreFooter({ settings }) {
   return (
@@ -25,6 +25,9 @@ export default function StoreFooter({ settings }) {
             <div className="store-footer-social">
               {settings.get('social_instagram') && (
                 <a href={settings.get('social_instagram')} target="_blank" rel="noopener noreferrer" aria-label="Instagram"><FiInstagram size={18} /></a>
+              )}
+              {settings.get('social_facebook') && (
+                <a href={settings.get('social_facebook')} target="_blank" rel="noopener noreferrer" aria-label="Facebook"><FiFacebook size={18} /></a>
               )}
               {settings.get('social_whatsapp') && (
                 <a href={`https://wa.me/${settings.get('social_whatsapp').replace(/\D/g,'')}`} target="_blank" rel="noopener noreferrer" aria-label="WhatsApp"><FiMessageCircle size={18} /></a>

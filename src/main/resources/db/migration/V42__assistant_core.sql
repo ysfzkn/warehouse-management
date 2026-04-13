@@ -63,7 +63,7 @@ CREATE TABLE assistant_conversation (
     )
 );
 
-CREATE INDEX idx_assistant_conv_profile_started
+    CREATE INDEX idx_assistant_conv_profile_started
     ON assistant_conversation (profile, started_at DESC);
 
 CREATE INDEX idx_assistant_conv_user

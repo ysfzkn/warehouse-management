@@ -32,11 +32,11 @@ import './CezeriAssistantWidget.css';
 const LEFT_AVATAR = `${process.env.PUBLIC_URL}/cezeri-left.png`;
 const FRONT_AVATAR = `${process.env.PUBLIC_URL}/cezeri-front.png`;
 const MAX_MESSAGES = 30;
-const TTL_MS = 6 * 60 * 60 * 1000;
+const TTL_MS = 1 * 60 * 60 * 1000; // 1 hour — new session after this
 const TYPING_MIN_MS = 10;
 const TYPING_MAX_MS = 24;
 
-export default function AssistantWidget({ config }) {
+export default function AssistantWidget({ config, siteName }) {
   const location = useLocation();
   const hideOnLogin = (config.hideOnPaths || []).includes((location.pathname || '').toLowerCase());
   const [open, setOpen] = useState(false);
@@ -44,7 +44,9 @@ export default function AssistantWidget({ config }) {
   const [loading, setLoading] = useState(false);
   const [avatarOk, setAvatarOk] = useState({ left: true, front: true });
   const [userKey, setUserKey] = useState(() => config.getUserKey(config.storagePrefix));
-  const [messages, setMessages] = useState(() => loadSession(config.getUserKey(config.storagePrefix), config.welcomeMessage));
+  const initialSession = loadSessionWithId(config.getUserKey(config.storagePrefix), config.welcomeMessage);
+  const [messages, setMessages] = useState(() => initialSession.messages);
+  const [chatSessionId, setChatSessionId] = useState(() => initialSession.sessionId);
   const [rateLimited, setRateLimited] = useState(null); // { friendlyMessage, reachedGuestLimit, retryAfterSeconds }
 
   const bodyRef = useRef(null);
@@ -63,7 +65,9 @@ export default function AssistantWidget({ config }) {
       setOpen(false);
       const nextKey = config.getUserKey(config.storagePrefix);
       setUserKey(nextKey);
-      setMessages(loadSession(nextKey, config.welcomeMessage));
+      const nextSession = loadSessionWithId(nextKey, config.welcomeMessage);
+      setMessages(nextSession.messages);
+      setChatSessionId(nextSession.sessionId);
     };
     window.addEventListener('storage', onAuthChanged);
     window.addEventListener('auth-changed', onAuthChanged);
@@ -75,8 +79,8 @@ export default function AssistantWidget({ config }) {
 
   useEffect(() => {
     if (messages.some((m) => m && m.isTyping)) return;
-    persistSession(userKey, messages);
-  }, [userKey, messages]);
+    persistSession(userKey, messages, chatSessionId);
+  }, [userKey, messages, chatSessionId]);
 
   useEffect(() => {
     if (!open) return;
@@ -121,10 +125,13 @@ export default function AssistantWidget({ config }) {
             messages: nextMessages,
             allowMutations: !!config.sendAllowMutations,
             ui: uiContext,
+            chatSessionId: chatSessionId,
           }
         : {
             messages: nextMessages,
             ui: uiContext,
+            siteName: siteName || '',
+            chatSessionId: chatSessionId,
           };
 
       const headers = {};
@@ -207,7 +214,10 @@ export default function AssistantWidget({ config }) {
             <div style={{ display: 'flex', gap: 8 }}>
               <button
                 className="btn btn-sm btn-outline-light"
-                onClick={() => setMessages(defaultSessionMessages(config.welcomeMessage))}
+                onClick={() => {
+                  setMessages(defaultSessionMessages(config.welcomeMessage));
+                  setChatSessionId(generateSessionId());
+                }}
                 title="Sohbeti temizle"
               >
                 Temizle
@@ -309,31 +319,53 @@ export default function AssistantWidget({ config }) {
 
 // ---------- Session helpers ----------
 
+function generateSessionId() {
+  return 'cs-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+}
+
 function defaultSessionMessages(welcomeMessage) {
   return [{ role: 'assistant', content: welcomeMessage }];
 }
 
-function loadSession(userKey, welcomeMessage) {
+/**
+ * Load session from localStorage. Returns { messages, sessionId }.
+ * If TTL expired or no session exists, generates a fresh sessionId.
+ */
+function loadSessionWithId(userKey, welcomeMessage) {
   try {
     const raw = localStorage.getItem(userKey);
-    if (!raw) return defaultSessionMessages(welcomeMessage);
+    if (!raw) return { messages: defaultSessionMessages(welcomeMessage), sessionId: generateSessionId() };
     const parsed = JSON.parse(raw);
     const ts = parsed?.ts;
     const msgs = parsed?.messages;
-    if (!Array.isArray(msgs) || msgs.length === 0) return defaultSessionMessages(welcomeMessage);
-    if (typeof ts === 'number' && Date.now() - ts > TTL_MS) return defaultSessionMessages(welcomeMessage);
-    return msgs.map((m) => ({ ...m, isTyping: false })).slice(-MAX_MESSAGES);
+    const sid = parsed?.sessionId;
+    if (!Array.isArray(msgs) || msgs.length === 0) {
+      return { messages: defaultSessionMessages(welcomeMessage), sessionId: generateSessionId() };
+    }
+    if (typeof ts === 'number' && Date.now() - ts > TTL_MS) {
+      // TTL expired → new session
+      return { messages: defaultSessionMessages(welcomeMessage), sessionId: generateSessionId() };
+    }
+    return {
+      messages: msgs.map((m) => ({ ...m, isTyping: false })).slice(-MAX_MESSAGES),
+      sessionId: sid || generateSessionId(),
+    };
   } catch (e) {
-    return defaultSessionMessages(welcomeMessage);
+    return { messages: defaultSessionMessages(welcomeMessage), sessionId: generateSessionId() };
   }
 }
 
-function persistSession(userKey, messages) {
+function persistSession(userKey, messages, sessionId) {
   try {
     const safeMessages = (Array.isArray(messages) ? messages : [])
       .map((m) => ({ ...m, isTyping: false }))
       .slice(-MAX_MESSAGES);
-    localStorage.setItem(userKey, JSON.stringify({ v: 2, ts: Date.now(), messages: safeMessages }));
+    localStorage.setItem(userKey, JSON.stringify({
+      v: 3,
+      ts: Date.now(),
+      sessionId: sessionId || generateSessionId(),
+      messages: safeMessages,
+    }));
   } catch (e) { /* ignore */ }
 }
 

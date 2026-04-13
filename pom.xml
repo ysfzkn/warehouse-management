@@ -24,7 +24,7 @@
         <flyway.version>10.20.1</flyway.version>
         <flyway.locations>filesystem:src/main/resources/db/migration</flyway.locations>
         <!-- Spring AI -->
-        <spring-ai.version>1.0.0-M6</spring-ai.version>
+        <spring-ai.version>1.0.0</spring-ai.version>
     </properties>
 
     <dependencyManagement>
@@ -178,13 +178,13 @@
             <artifactId>spring-boot-starter-mail</artifactId>
         </dependency>
 
-        <!-- Spring AI (Azure OpenAI) -->
+        <!-- Spring AI 1.0.0 GA (Azure OpenAI) -->
         <dependency>
             <groupId>org.springframework.ai</groupId>
-            <artifactId>spring-ai-azure-openai-spring-boot-starter</artifactId>
+            <artifactId>spring-ai-starter-model-azure-openai</artifactId>
         </dependency>
 
-        <!-- Spring AI: Tika document reader (used by the admin FAQ/document ingestion pipeline) -->
+        <!-- Spring AI: Tika document reader (FAQ/document ingestion pipeline) -->
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-tika-document-reader</artifactId>

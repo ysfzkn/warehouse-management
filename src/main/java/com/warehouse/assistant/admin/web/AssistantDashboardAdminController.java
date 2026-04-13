@@ -4,6 +4,7 @@ import com.warehouse.assistant.admin.entity.AssistantConversation;
 import com.warehouse.assistant.admin.service.AssistantObservabilityService;
 import com.warehouse.assistant.core.api.AssistantProfile;
 import com.warehouse.assistant.core.config.AssistantFlagsService;
+import com.warehouse.assistant.core.config.AssistantRuntimeConfig;
 import com.warehouse.assistant.core.rag.AssistantRagInitService;
 import com.warehouse.assistant.core.rag.ProductEmbeddingBackfillService;
 import com.warehouse.assistant.core.rag.VectorSearchService;
@@ -38,17 +39,33 @@ public class AssistantDashboardAdminController {
     private final AssistantRagInitService ragInitService;
     private final VectorSearchService vectorSearchService;
     private final AssistantFlagsService flagsService;
+    private final AssistantRuntimeConfig runtimeConfig;
 
     public AssistantDashboardAdminController(AssistantObservabilityService observabilityService,
                                               ProductEmbeddingBackfillService productBackfill,
                                               AssistantRagInitService ragInitService,
                                               VectorSearchService vectorSearchService,
-                                              AssistantFlagsService flagsService) {
+                                              AssistantFlagsService flagsService,
+                                              AssistantRuntimeConfig runtimeConfig) {
         this.observabilityService = observabilityService;
         this.productBackfill = productBackfill;
         this.ragInitService = ragInitService;
         this.vectorSearchService = vectorSearchService;
         this.flagsService = flagsService;
+        this.runtimeConfig = runtimeConfig;
+    }
+
+    // ── Runtime config (AI Settings page) ──
+
+    @GetMapping("/config")
+    public ResponseEntity<Map<String, Object>> getConfig() {
+        return ResponseEntity.ok(runtimeConfig.getAllForAdmin());
+    }
+
+    @PostMapping("/config")
+    public ResponseEntity<Map<String, Object>> updateConfig(@RequestBody Map<String, Object> body) {
+        runtimeConfig.updateFromAdmin(body, CurrentUser.usernameOrSystem());
+        return ResponseEntity.ok(runtimeConfig.getAllForAdmin());
     }
 
     @GetMapping("/dashboard")
@@ -62,15 +79,33 @@ public class AssistantDashboardAdminController {
     @GetMapping("/conversations")
     public ResponseEntity<Page<AssistantConversation>> conversations(
             @RequestParam(value = "profile", required = false) String profile,
+            @RequestParam(value = "startDate", required = false) String startDate,
+            @RequestParam(value = "endDate", required = false) String endDate,
+            @RequestParam(value = "search", required = false) String search,
             @RequestParam(value = "page", required = false, defaultValue = "0") int page,
             @RequestParam(value = "size", required = false, defaultValue = "25") int size) {
         AssistantProfile parsed = null;
         if (profile != null && !profile.isBlank()) {
             try { parsed = AssistantProfile.valueOf(profile.toUpperCase()); } catch (Exception ignored) {}
         }
+        java.time.LocalDateTime start = parseDateParam(startDate);
+        java.time.LocalDateTime end = parseDateParam(endDate);
+        // If endDate is date-only (no time), set to end of day
+        if (end != null && endDate != null && !endDate.contains("T")) {
+            end = end.toLocalDate().atTime(23, 59, 59);
+        }
         return ResponseEntity.ok(observabilityService.listConversations(
-                parsed,
+                parsed, start, end, search,
                 PageRequest.of(Math.max(0, page), Math.min(Math.max(size, 1), 100), Sort.by(Sort.Direction.DESC, "startedAt"))));
+    }
+
+    private java.time.LocalDateTime parseDateParam(String raw) {
+        if (raw == null || raw.isBlank()) return null;
+        try { return java.time.LocalDateTime.parse(raw); } catch (Exception e1) {
+            try { return java.time.LocalDate.parse(raw).atStartOfDay(); } catch (Exception e2) {
+                return null;
+            }
+        }
     }
 
     @GetMapping("/conversations/{id}")

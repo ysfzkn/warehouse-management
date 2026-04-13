@@ -84,7 +84,7 @@ export default function StoreLayout() {
          * with a store-flavoured config — guest-friendly, product-focused.
          * Controlled by the `assistant_store_enabled` site setting.
          */}
-        {assistantFlags.storeEnabled && <AssistantWidget config={storeAssistantConfig} />}
+        {assistantFlags.storeEnabled === true && <AssistantWidget config={storeAssistantConfig} siteName={siteSettings.get('site_name', '')} />}
       </div>
       </WishlistProvider>
     </ToastProvider>
