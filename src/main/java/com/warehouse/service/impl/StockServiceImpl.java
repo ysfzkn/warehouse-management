@@ -111,6 +111,7 @@ public class StockServiceImpl implements StockService {
                 searchPattern,
                 appliedFilter.isReservedOnly(),
                 appliedFilter.isConsignedOnly(),
+                appliedFilter.isHideOutOfStock(),
                 statusValue,
                 from,
                 to,
@@ -252,6 +253,7 @@ public class StockServiceImpl implements StockService {
                 searchPattern,
                 appliedFilter.isReservedOnly(),
                 appliedFilter.isConsignedOnly(),
+                appliedFilter.isHideOutOfStock(),
                 statusValue,
                 from,
                 to);

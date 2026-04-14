@@ -69,6 +69,7 @@ public class StockController {
             @RequestParam(required = false) Long subCategoryId,
             @RequestParam(required = false) Boolean reservedOnly,
             @RequestParam(required = false) Boolean consignedOnly,
+            @RequestParam(required = false) Boolean hideOutOfStock,
             @RequestParam(required = false) String search,
             @RequestParam(required = false, defaultValue = "all") String status,
             @RequestParam(required = false) String lastUpdatedFrom,
@@ -82,8 +83,8 @@ public class StockController {
         Sort sort = resolveSort(sortBy, sortDir);
         Pageable pageable = PageRequest.of(safePage, safeSize, sort);
 
-        StockFilter filter = buildStockFilter(brandId, colorId, warehouseId, categoryId, 
-                subCategoryId, reservedOnly, consignedOnly, search, status, lastUpdatedFrom, lastUpdatedTo, warehouseIds);
+        StockFilter filter = buildStockFilter(brandId, colorId, warehouseId, categoryId,
+                subCategoryId, reservedOnly, consignedOnly, hideOutOfStock, search, status, lastUpdatedFrom, lastUpdatedTo, warehouseIds);
 
         Page<Stock> stocks = stockService.getStocks(filter, pageable);
         List<StockDto> content = stocks.getContent().stream().map(this::toDto).toList();
@@ -190,6 +191,7 @@ public class StockController {
             @RequestParam(required = false) Long subCategoryId,
             @RequestParam(required = false) Boolean reservedOnly,
             @RequestParam(required = false) Boolean consignedOnly,
+            @RequestParam(required = false) Boolean hideOutOfStock,
             @RequestParam(required = false) String search,
             @RequestParam(required = false, defaultValue = "all") String status
     ) {
@@ -202,6 +204,7 @@ public class StockController {
         filter.setSubCategoryId(subCategoryId);
         filter.setReservedOnly(Boolean.TRUE.equals(reservedOnly));
         filter.setConsignedOnly(Boolean.TRUE.equals(consignedOnly));
+        filter.setHideOutOfStock(Boolean.TRUE.equals(hideOutOfStock));
         filter.setSearch(search != null && !search.isBlank() ? search.trim() : null);
         filter.setStatus(StockFilter.Status.from(status));
 
@@ -234,17 +237,18 @@ public class StockController {
             @RequestParam(required = false) Long subCategoryId,
             @RequestParam(required = false) Boolean reservedOnly,
             @RequestParam(required = false) Boolean consignedOnly,
+            @RequestParam(required = false) Boolean hideOutOfStock,
             @RequestParam(required = false) String search,
             @RequestParam(required = false, defaultValue = "all") String status,
             @RequestParam(required = false) String lastUpdatedFrom,
             @RequestParam(required = false) String lastUpdatedTo) {
-        
-        logger.debug("Excel export requested with filters - brandId: {}, colorId: {}, warehouseId: {}, categoryId: {}, subCategoryId: {}, status: {}", 
+
+        logger.debug("Excel export requested with filters - brandId: {}, colorId: {}, warehouseId: {}, categoryId: {}, subCategoryId: {}, status: {}",
                 brandId, colorId, warehouseId, categoryId, subCategoryId, status);
-        
+
         try {
-            StockFilter filter = buildStockFilter(brandId, colorId, warehouseId, categoryId, 
-                    subCategoryId, reservedOnly, consignedOnly, search, status, lastUpdatedFrom, lastUpdatedTo, warehouseIds);
+            StockFilter filter = buildStockFilter(brandId, colorId, warehouseId, categoryId,
+                    subCategoryId, reservedOnly, consignedOnly, hideOutOfStock, search, status, lastUpdatedFrom, lastUpdatedTo, warehouseIds);
             
             org.springframework.core.io.Resource resource = stockExportService.exportToExcel(filter);
             String filename = generateExportFilename();
@@ -260,9 +264,10 @@ public class StockController {
         }
     }
     
-    private StockFilter buildStockFilter(Long brandId, Long colorId, Long warehouseId, 
-                                        Long categoryId, Long subCategoryId, 
-                                        Boolean reservedOnly, Boolean consignedOnly, 
+    private StockFilter buildStockFilter(Long brandId, Long colorId, Long warehouseId,
+                                        Long categoryId, Long subCategoryId,
+                                        Boolean reservedOnly, Boolean consignedOnly,
+                                        Boolean hideOutOfStock,
                                         String search, String status,
                                         String lastUpdatedFrom, String lastUpdatedTo,
                                         List<Long> warehouseIds) {
@@ -275,6 +280,7 @@ public class StockController {
         filter.setSubCategoryId(subCategoryId);
         filter.setReservedOnly(Boolean.TRUE.equals(reservedOnly));
         filter.setConsignedOnly(Boolean.TRUE.equals(consignedOnly));
+        filter.setHideOutOfStock(Boolean.TRUE.equals(hideOutOfStock));
         filter.setSearch(search != null && !search.isBlank() ? search.trim() : null);
         filter.setStatus(StockFilter.Status.from(status));
         

@@ -71,6 +71,8 @@ const StockFiltersBar = ({
   setShowReserved,
   showConsigned,
   setShowConsigned,
+  hideOutOfStock,
+  setHideOutOfStock,
   stockLastUpdatedFrom,
   setStockLastUpdatedFrom,
   stockLastUpdatedTo,
@@ -672,6 +674,19 @@ const StockFiltersBar = ({
             Emanet
           </label>
         </div>
+        <div>
+          <input
+            className="btn-check"
+            type="checkbox"
+            id="hideOutOfStock"
+            checked={hideOutOfStock}
+            onChange={(e) => setHideOutOfStock(e.target.checked)}
+          />
+          <label className={`btn btn-sm btn-outline-secondary ${hideOutOfStock ? 'active' : ''}`} htmlFor="hideOutOfStock">
+            <i className="fas fa-eye-slash me-1"></i>
+            Stokta Olmayanları Gizle
+          </label>
+        </div>
         {(stockLastUpdatedFrom || stockLastUpdatedTo) && (
           <button
             className="btn btn-sm btn-outline-danger"
@@ -719,6 +734,7 @@ const StockFiltersBar = ({
           colorId ? { icon: 'fas fa-palette', label: `Renk: ${colorOpt?.name || colorId}`, onClear: () => { setColorId(null); setColorOpt(null); } } : null,
           showReserved ? { icon: 'fas fa-lock', label: 'Rezerve Olanlar', onClear: () => setShowReserved(false) } : null,
           showConsigned ? { icon: 'fas fa-handshake', label: 'Emanet Olanlar', onClear: () => setShowConsigned(false) } : null,
+          hideOutOfStock ? { icon: 'fas fa-eye-slash', label: 'Stokta Olmayanlar Gizli', onClear: () => setHideOutOfStock(false) } : null,
           stockLastUpdatedFrom || stockLastUpdatedTo ? { 
             icon: 'fas fa-calendar-alt', 
             label: `Tarih: ${stockLastUpdatedFrom ? new Date(stockLastUpdatedFrom + 'T12:00:00').toLocaleDateString('tr-TR') : '...'} - ${stockLastUpdatedTo ? new Date(stockLastUpdatedTo + 'T12:00:00').toLocaleDateString('tr-TR') : '...'}${(stockLastUpdatedFromTime || stockLastUpdatedToTime) ? ' (saatli)' : ''}`, 
@@ -738,6 +754,7 @@ const StockFiltersBar = ({
           setColorOpt(null);
           setShowReserved(false);
           setShowConsigned(false);
+          setHideOutOfStock(false);
           setStockLastUpdatedFrom('');
           setStockLastUpdatedTo('');
           setStockLastUpdatedFromTime('');
@@ -812,6 +829,7 @@ const Stock = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showReserved, setShowReserved] = useState(false);
   const [showConsigned, setShowConsigned] = useState(false);
+  const [hideOutOfStock, setHideOutOfStock] = useState(false);
   const [transferStatusFilter, setTransferStatusFilter] = useState('ALL');
   // Transfer filters
   const [transferProductName, setTransferProductName] = useState('');
@@ -894,11 +912,12 @@ const Stock = () => {
       subCategoryId: Number.isNaN(subCategoryId) ? undefined : subCategoryId,
       reservedOnly: showReserved || undefined,
       consignedOnly: showConsigned || undefined,
+      hideOutOfStock: hideOutOfStock || undefined,
       search: normalizedSearch || undefined,
       lastUpdatedFrom: lastUpdatedFrom,
       lastUpdatedTo: lastUpdatedTo
     };
-  }, [brandId, colorId, selectedWarehouseIds, selectedCategory, selectedSubcategory, showReserved, showConsigned, searchTerm, stockLastUpdatedFrom, stockLastUpdatedTo, stockLastUpdatedFromTime, stockLastUpdatedToTime]);
+  }, [brandId, colorId, selectedWarehouseIds, selectedCategory, selectedSubcategory, showReserved, showConsigned, hideOutOfStock, searchTerm, stockLastUpdatedFrom, stockLastUpdatedTo, stockLastUpdatedFromTime, stockLastUpdatedToTime]);
 
   const handleExportToExcel = useCallback(async () => {
     try {
@@ -1354,7 +1373,7 @@ const Stock = () => {
 
   useEffect(() => {
     setStockPage(0);
-  }, [filter, searchTerm, selectedCategory, selectedSubcategory, showReserved, showConsigned, brandId, colorId, selectedWarehouseIds, stockSortBy, stockSortDir, stockLastUpdatedFrom, stockLastUpdatedTo, stockLastUpdatedFromTime, stockLastUpdatedToTime]);
+  }, [filter, searchTerm, selectedCategory, selectedSubcategory, showReserved, showConsigned, hideOutOfStock, brandId, colorId, selectedWarehouseIds, stockSortBy, stockSortDir, stockLastUpdatedFrom, stockLastUpdatedTo, stockLastUpdatedFromTime, stockLastUpdatedToTime]);
 
   useEffect(() => {
     setTransferPage(0);
@@ -2832,6 +2851,8 @@ const Stock = () => {
           setShowReserved={setShowReserved}
           showConsigned={showConsigned}
           setShowConsigned={setShowConsigned}
+          hideOutOfStock={hideOutOfStock}
+          setHideOutOfStock={setHideOutOfStock}
           stockLastUpdatedFrom={stockLastUpdatedFrom}
           setStockLastUpdatedFrom={setStockLastUpdatedFrom}
           stockLastUpdatedTo={stockLastUpdatedTo}
