@@ -14,7 +14,8 @@ export default function ContactForm() {
     phone: '',
     subject: '',
     message: '',
-    website: '' // honeypot — must stay empty
+    website: '', // honeypot — must stay empty
+    kvkkConsent: false
   });
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -25,6 +26,10 @@ export default function ContactForm() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!form.kvkkConsent) {
+      toast.warning('KVKK aydınlatma metnini onaylamanız gerekmektedir.');
+      return;
+    }
     if (form.message.trim().length < 10) {
       toast.warning('Mesajınız en az 10 karakter olmalıdır.');
       return;
@@ -34,7 +39,7 @@ export default function ContactForm() {
       await axios.post('/api/store/contact-messages', form);
       toast.success('Mesajınız alındı. En kısa sürede size dönüş yapacağız.');
       setSubmitted(true);
-      setForm({ name: '', email: '', phone: '', subject: '', message: '', website: '' });
+      setForm({ name: '', email: '', phone: '', subject: '', message: '', website: '', kvkkConsent: false });
     } catch (err) {
       if (err.response?.status === 429) {
         toast.error('Çok fazla istek. Lütfen bir dakika bekleyip tekrar deneyin.');
@@ -147,7 +152,15 @@ export default function ContactForm() {
           <div className="form-text">{form.message.length} / 5000 karakter</div>
         </div>
         <div className="col-12">
-          <button type="submit" className="btn btn-primary px-4" disabled={loading}>
+          <div className="form-check mb-3">
+            <input className="form-check-input" type="checkbox" id="kvkk-consent"
+              checked={form.kvkkConsent}
+              onChange={e => setForm({ ...form, kvkkConsent: e.target.checked })} />
+            <label className="form-check-label small" htmlFor="kvkk-consent">
+              <a href="/sayfa/kvkk-aydinlatma-metni" target="_blank" rel="noopener noreferrer">KVKK Aydınlatma Metni</a>'ni okudum ve kişisel verilerimin işlenmesini kabul ediyorum. *
+            </label>
+          </div>
+          <button type="submit" className="btn btn-primary px-4" disabled={loading || !form.kvkkConsent}>
             {loading ? (
               <>
                 <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" />

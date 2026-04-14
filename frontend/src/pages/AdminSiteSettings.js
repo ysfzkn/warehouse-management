@@ -10,6 +10,10 @@ const SETTING_GROUPS = [
     tooltip: 'Footer, iletişim sayfası ve e-posta bildirimlerinde gösterilir.' },
   { title: 'Sosyal Medya', icon: 'fas fa-share-alt', keys: ['social_instagram', 'social_facebook', 'social_whatsapp'],
     tooltip: 'Footer ve iletişim sayfasında ikon olarak görünür.' },
+  { title: 'Kurumsal / Yasal Bilgiler', icon: 'fas fa-building', keys: ['company_legal_name', 'mersis_number', 'kep_address', 'tax_office', 'tax_number', 'trade_registry_number', 'chamber_of_commerce', 'etbis_qr_url'],
+    tooltip: 'Footer\'da ve yasal sayfalarda gösterilir. Canlıya almadan önce doldurulmalıdır.' },
+  { title: 'Beyaz Eşya Uyarıları', icon: 'fas fa-exclamation-triangle', keys: ['warranty_notice_text', 'bulky_shipping_notice_text'],
+    tooltip: 'Ürün detay ve ödeme sayfalarında gösterilecek yasal uyarı metinleri.' },
   { title: 'Para Birimi', icon: 'fas fa-coins', keys: ['currency_symbol'],
     tooltip: 'Mağazada ve faturalarda kullanılacak para birimi.' },
   { title: 'Genel', icon: 'fas fa-cog', keys: ['footer_text', 'header_announcement', 'contact_form_email'],
@@ -21,6 +25,10 @@ const LABELS = {
   primary_color: 'Ana Renk', secondary_color: 'İkincil Renk',
   contact_phone: 'Telefon', contact_email: 'E-posta', contact_address: 'Adres',
   contact_map_embed: 'Google Maps Embed URL', social_instagram: 'Instagram Profil URL', social_facebook: 'Facebook Sayfa URL', social_whatsapp: 'WhatsApp Numarası',
+  company_legal_name: 'Ticari Unvan', mersis_number: 'MERSİS Numarası', kep_address: 'KEP Adresi',
+  tax_office: 'Vergi Dairesi', tax_number: 'Vergi No', trade_registry_number: 'Ticaret Sicil No',
+  chamber_of_commerce: 'Ticaret/Sanayi Odası', etbis_qr_url: 'ETBİS QR Kod URL',
+  warranty_notice_text: 'Garanti Uyarı Metni', bulky_shipping_notice_text: 'Hacimli Ürün Kargo Uyarısı',
   footer_text: 'Alt Bilgi Metni', currency_symbol: 'Para Birimi',
   free_shipping_threshold: 'Ücretsiz Kargo Limiti (TL)', default_shipping_cost: 'Varsayılan Kargo Ücreti (TL)',
   header_announcement: 'Üst Banner Duyuru Mesajı', contact_form_email: 'İletişim Formu Hedef E-posta',
@@ -39,6 +47,16 @@ const FIELD_TOOLTIPS = {
   free_shipping_threshold: 'Bu tutarın üzerindeki siparişlerde kargo ücretsiz olur',
   default_shipping_cost: 'Ücretsiz kargo limitinin altındaki siparişlere uygulanır',
   contact_form_email: 'İletişim formundan gelen mesajlar bu adrese yönlendirilir',
+  company_legal_name: 'Şirketin tam resmi ticari unvanı',
+  mersis_number: 'Ticaret Sicil Gazetesi\'nden edinilebilir',
+  kep_address: 'Yasal tebligatlar için kayıtlı elektronik posta',
+  tax_office: 'Bağlı bulunulan vergi dairesi',
+  tax_number: 'Vergi kimlik numarası',
+  trade_registry_number: 'Ticaret sicil numarası',
+  chamber_of_commerce: 'Kayıtlı olduğunuz ticaret veya sanayi odası',
+  etbis_qr_url: 'ETBİS karekodunun public erişilebilir URL\'si (e-Devlet üzerinden alınır)',
+  warranty_notice_text: 'Beyaz eşya ürünlerinde garanti koşulları uyarısı (ürün detay sayfasında gösterilir)',
+  bulky_shipping_notice_text: 'Hacimli ürünlerin kargo/teslimat süresi uyarısı (checkout\'ta gösterilir)',
   currency_symbol: 'Mağazada ve faturalarda kullanılacak para birimi',
   payment_method_credit_card_enabled: 'Kapatırsanız kredi kartı seçeneği müşterilere gösterilmez',
   payment_method_bank_transfer_enabled: 'Kapatırsanız havale/EFT seçeneği gösterilmez. IBAN yapılandırılmamışsa otomatik gizlenir.',
@@ -262,6 +280,43 @@ export default function AdminSiteSettings() {
         <button className="btn btn-primary px-4" onClick={handleSave} disabled={saving}>
           <i className={`fas ${saving ? 'fa-spinner fa-spin' : 'fa-save'} me-2`} />{saving ? 'Kaydediliyor...' : 'Kaydet'}
         </button>
+      </div>
+
+      {/* ── Yasal Uyumluluk Durumu ── */}
+      <div className="card border-0 shadow-sm mb-4">
+        <div className="card-header bg-warning bg-opacity-10">
+          <strong><i className="fas fa-gavel me-2"></i>Yasal Uyumluluk Durumu</strong>
+          <span className="text-muted small ms-2">— Canlıya almadan önce tüm maddeleri tamamlayın</span>
+        </div>
+        <div className="card-body">
+          <div className="row g-2">
+            {[
+              { ok: !!settings.company_legal_name, label: 'Ticari Unvan girildi' },
+              { ok: !!settings.mersis_number, label: 'MERSİS numarası girildi' },
+              { ok: !!settings.kep_address, label: 'KEP adresi girildi' },
+              { ok: !!settings.tax_office && !!settings.tax_number, label: 'Vergi bilgileri girildi' },
+              { ok: !!settings.etbis_qr_url, label: 'ETBİS QR kodu eklendi' },
+            ].map((item, i) => (
+              <div className="col-md-6" key={i}>
+                <div className={`d-flex align-items-center gap-2 p-2 rounded ${item.ok ? 'bg-success bg-opacity-10' : 'bg-danger bg-opacity-10'}`}>
+                  <i className={`fas ${item.ok ? 'fa-check-circle text-success' : 'fa-times-circle text-danger'}`}></i>
+                  <span className="small">{item.label}</span>
+                </div>
+              </div>
+            ))}
+            <div className="col-12 mt-2">
+              <p className="text-muted small mb-0">
+                <i className="fas fa-info-circle me-1"></i>
+                Ayrıca CMS sayfalarında şu yasal içeriklerin oluşturulduğundan emin olun:
+                <strong> Mesafeli Satış Sözleşmesi</strong>,
+                <strong> Ön Bilgilendirme Formu</strong>,
+                <strong> KVKK Aydınlatma Metni</strong>,
+                <strong> Çerez Politikası</strong>,
+                <strong> İade ve Değişim Koşulları</strong>
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="row g-4">

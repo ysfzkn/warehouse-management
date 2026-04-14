@@ -23,6 +23,7 @@ export default function CheckoutPage() {
   const [cargoCompany, setCargoCompany] = useState('YURTICI');
   const [paymentMethod, setPaymentMethod] = useState('CREDIT_CARD');
   const [contractAccepted, setContractAccepted] = useState(false);
+  const [preliminaryInfoAccepted, setPreliminaryInfoAccepted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [, setError] = useState(''); // kept for setError calls, display via toast
 
@@ -96,6 +97,7 @@ export default function CheckoutPage() {
   };
 
   const handlePlaceOrder = async () => {
+    if (!preliminaryInfoAccepted) { toast.warning('Ön bilgilendirme formunu onaylayın.'); setError('Ön bilgilendirme formunu onaylayın.'); return; }
     if (!contractAccepted) { toast.warning('Mesafeli satış sözleşmesini onaylayın.'); setError('Mesafeli satış sözleşmesini onaylayın.'); return; }
     setLoading(true); setError('');
     toast.info('Siparişiniz oluşturuluyor...');
@@ -434,20 +436,26 @@ export default function CheckoutPage() {
             {cp?.estimatedDeliveryDays && <div className="store-cart-summary-row text-muted small"><span>Tahmini Teslimat</span><span>{cp.estimatedDeliveryDays} iş günü</span></div>}
             <div className="store-cart-summary-row text-muted small"><span>Ödeme Yöntemi</span><span>{getMethodLabel(paymentMethod)}</span></div>
           </div>
+          <div className="form-check mb-2">
+            <input className="form-check-input" type="checkbox" id="preliminaryInfo" checked={preliminaryInfoAccepted} onChange={e => setPreliminaryInfoAccepted(e.target.checked)} />
+            <label className="form-check-label small" htmlFor="preliminaryInfo">
+              <a href="/sayfa/on-bilgilendirme-formu" target="_blank" rel="noopener noreferrer">Ön Bilgilendirme Formu</a>'nu okudum ve kabul ediyorum.
+            </label>
+          </div>
           <div className="form-check mb-3">
             <input className="form-check-input" type="checkbox" id="contract" checked={contractAccepted} onChange={e => setContractAccepted(e.target.checked)} />
             <label className="form-check-label small" htmlFor="contract">
               <a href="/sayfa/mesafeli-satis-sozlesmesi" target="_blank" rel="noopener noreferrer">Mesafeli Satış Sözleşmesi</a>'ni okudum ve kabul ediyorum.
             </label>
           </div>
-          {!contractAccepted && (
+          {(!preliminaryInfoAccepted || !contractAccepted) && (
             <div className="alert alert-warning py-2 small mb-3">
-              <i className="fas fa-exclamation-triangle me-2" />Devam etmek için mesafeli satış sözleşmesini onaylamanız gerekmektedir.
+              <i className="fas fa-exclamation-triangle me-2" />Devam etmek için her iki sözleşmeyi de onaylamanız gerekmektedir.
             </div>
           )}
           <div className="d-flex gap-2">
             <button className="btn btn-outline-secondary" onClick={prev}>Geri</button>
-            <button className="btn btn-primary btn-lg flex-grow-1" onClick={handlePlaceOrder} disabled={loading || !contractAccepted}>
+            <button className="btn btn-primary btn-lg flex-grow-1" onClick={handlePlaceOrder} disabled={loading || !contractAccepted || !preliminaryInfoAccepted}>
               {loading ? <><span className="spinner-border spinner-border-sm me-2" />İşleniyor...</> : <><i className="fas fa-lock me-2" />Siparişi Onayla ve Öde</>}
             </button>
           </div>

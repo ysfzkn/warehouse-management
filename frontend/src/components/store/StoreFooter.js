@@ -36,12 +36,22 @@ export default function StoreFooter({ settings }) {
           </div>
 
           {/* Corporate */}
-          <div className="col-lg-2 col-md-6 col-6">
+          <div className="col-lg-3 col-md-6 col-6">
             <h6 className="store-footer-title">Kurumsal</h6>
             <ul className="store-footer-links">
               <li><Link to="/sayfa/hakkimizda">Hakkımızda</Link></li>
               <li><Link to="/sayfa/iletisim">İletişim</Link></li>
             </ul>
+            {settings.get('company_legal_name') && (
+              <div className="store-footer-corporate mt-2" style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', lineHeight: 1.6 }}>
+                <div>{settings.get('company_legal_name')}</div>
+                {settings.get('mersis_number') && <div>MERSİS: {settings.get('mersis_number')}</div>}
+                {settings.get('tax_office') && settings.get('tax_number') && (
+                  <div>Vergi: {settings.get('tax_office')} / {settings.get('tax_number')}</div>
+                )}
+                {settings.get('chamber_of_commerce') && <div>{settings.get('chamber_of_commerce')}</div>}
+              </div>
+            )}
           </div>
 
           {/* Customer Service */}
@@ -68,7 +78,17 @@ export default function StoreFooter({ settings }) {
 
         {/* Bottom Bar */}
         <div className="store-footer-bottom">
-          <p>{settings.get('footer_text', '© 2026 Tüm hakları saklıdır.')}</p>
+          <div className="d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <p className="mb-0">{settings.get('footer_text', '© 2026 Tüm hakları saklıdır.')}</p>
+            <div className="d-flex align-items-center gap-3" style={{ fontSize: 11, opacity: 0.7 }}>
+              {settings.get('kep_address') && <span>KEP: {settings.get('kep_address')}</span>}
+              {settings.get('etbis_qr_url') && (
+                <a href={settings.get('etbis_qr_url')} target="_blank" rel="noopener noreferrer" title="ETBİS">
+                  <img src={settings.get('etbis_qr_url')} alt="ETBİS" style={{ height: 40, borderRadius: 4 }} />
+                </a>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </footer>

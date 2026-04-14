@@ -121,6 +121,12 @@ public class Order {
     @Column(name = "distance_sales_contract_accepted_at")
     private LocalDateTime distanceSalesContractAcceptedAt;
 
+    @Column(name = "preliminary_info_accepted", nullable = false)
+    private boolean preliminaryInfoAccepted = false;
+
+    @Column(name = "preliminary_info_accepted_at")
+    private LocalDateTime preliminaryInfoAcceptedAt;
+
     @Column(name = "invoice_number", length = 50)
     private String invoiceNumber;
 

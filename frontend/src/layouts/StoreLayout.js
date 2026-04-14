@@ -10,6 +10,7 @@ import { useCart } from '../hooks/useCart';
 import { useSiteSettings } from '../hooks/useSiteSettings';
 import { useAssistantFlags } from '../hooks/useAssistantFlags';
 import AssistantWidget from '../components/AssistantWidget';
+import CookieBanner from '../components/store/CookieBanner';
 
 /**
  * Storefront assistant configuration. Guest-friendly: no Authorization
@@ -85,6 +86,7 @@ export default function StoreLayout() {
          * Controlled by the `assistant_store_enabled` site setting.
          */}
         {assistantFlags.storeEnabled === true && <AssistantWidget config={storeAssistantConfig} siteName={siteSettings.get('site_name', '')} />}
+        <CookieBanner />
       </div>
       </WishlistProvider>
     </ToastProvider>
