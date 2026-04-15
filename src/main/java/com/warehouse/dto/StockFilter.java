@@ -35,6 +35,7 @@ public class StockFilter {
     private Status status = Status.ALL;
     private boolean reservedOnly;
     private boolean consignedOnly;
+    private boolean hideOutOfStock;
     private LocalDateTime lastUpdatedFrom;
     private LocalDateTime lastUpdatedTo;
 
@@ -116,6 +117,14 @@ public class StockFilter {
 
     public void setConsignedOnly(boolean consignedOnly) {
         this.consignedOnly = consignedOnly;
+    }
+
+    public boolean isHideOutOfStock() {
+        return hideOutOfStock;
+    }
+
+    public void setHideOutOfStock(boolean hideOutOfStock) {
+        this.hideOutOfStock = hideOutOfStock;
     }
 
     public LocalDateTime getLastUpdatedFrom() {

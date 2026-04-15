@@ -308,6 +308,7 @@ public class StockExportServiceImpl implements StockExportService {
                     params.searchPattern(),
                     params.reservedOnly(),
                     params.consignedOnly(),
+                    params.hideOutOfStock(),
                     params.statusValue(),
                     params.lastUpdatedFrom(),
                     params.lastUpdatedTo(),
@@ -348,6 +349,7 @@ public class StockExportServiceImpl implements StockExportService {
                 searchPattern,
                 filter.isReservedOnly(),
                 filter.isConsignedOnly(),
+                filter.isHideOutOfStock(),
                 status.name(),
                 lastUpdatedFrom,
                 lastUpdatedTo
@@ -495,6 +497,7 @@ public class StockExportServiceImpl implements StockExportService {
             String searchPattern,
             boolean reservedOnly,
             boolean consignedOnly,
+            boolean hideOutOfStock,
             String statusValue,
             java.time.LocalDateTime lastUpdatedFrom,
             java.time.LocalDateTime lastUpdatedTo

@@ -90,6 +90,7 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
              OR LOWER(COALESCE(s.customerPhone, '')) LIKE :searchPattern))
           AND (:reservedOnly = false OR COALESCE(s.reservedQuantity, 0) > 0)
           AND (:consignedOnly = false OR COALESCE(s.consignedQuantity, 0) > 0)
+          AND (:hideOutOfStock = false OR s.quantity > 0)
           AND (
                 :status = 'ALL'
                 OR (:status = 'LOW' AND s.quantity > 0 AND s.quantity <= (CASE WHEN s.minStockLevel IS NULL OR s.minStockLevel = 0 THEN 2 ELSE s.minStockLevel END))
@@ -109,6 +110,7 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
                               @Param("searchPattern") String searchPattern,
                               @Param("reservedOnly") boolean reservedOnly,
                               @Param("consignedOnly") boolean consignedOnly,
+                              @Param("hideOutOfStock") boolean hideOutOfStock,
                               @Param("status") String status,
                               @Param("lastUpdatedFrom") java.time.LocalDateTime lastUpdatedFrom,
                               @Param("lastUpdatedTo") java.time.LocalDateTime lastUpdatedTo,
@@ -139,6 +141,7 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
              OR LOWER(COALESCE(s.customerPhone, '')) LIKE :searchPattern))
           AND (:reservedOnly = false OR COALESCE(s.reservedQuantity, 0) > 0)
           AND (:consignedOnly = false OR COALESCE(s.consignedQuantity, 0) > 0)
+          AND (:hideOutOfStock = false OR s.quantity > 0)
           AND (
                 :status = 'ALL'
                 OR (:status = 'LOW' AND s.quantity > 0 AND s.quantity <= (CASE WHEN s.minStockLevel IS NULL OR s.minStockLevel = 0 THEN 2 ELSE s.minStockLevel END))
@@ -158,6 +161,7 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
                               @Param("searchPattern") String searchPattern,
                               @Param("reservedOnly") boolean reservedOnly,
                               @Param("consignedOnly") boolean consignedOnly,
+                              @Param("hideOutOfStock") boolean hideOutOfStock,
                               @Param("status") String status,
                               @Param("lastUpdatedFrom") java.time.LocalDateTime lastUpdatedFrom,
                               @Param("lastUpdatedTo") java.time.LocalDateTime lastUpdatedTo);
