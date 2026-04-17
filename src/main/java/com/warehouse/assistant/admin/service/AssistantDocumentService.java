@@ -142,7 +142,14 @@ public class AssistantDocumentService {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void processDocumentAsync(Long documentId) {
         AssistantDocument doc = documentRepository.findById(documentId).orElse(null);
-        if (doc == null) return;
+        if (doc == null) {
+            log.warn("[DocIngest] document not found, id={}", documentId);
+            return;
+        }
+
+        long tStart = System.nanoTime();
+        log.info("[DocIngest] ▶ START id={} title=\"{}\" scope={} file=\"{}\"",
+                documentId, doc.getTitle(), doc.getScope(), doc.getStoragePath());
 
         try {
             doc.setStatus(AssistantDocumentStatus.INDEXING);
@@ -156,12 +163,22 @@ public class AssistantDocumentService {
                         + "Docker: pgvector/pgvector:pg15 imajı kullanın veya Postgres sunucusuna 'CREATE EXTENSION vector' yetkisi verin.");
             }
 
+            long t1 = System.nanoTime();
             String text = extractText(Paths.get(doc.getStoragePath()));
             if (text == null || text.isBlank()) {
                 throw new IllegalStateException("Dosyadan metin çıkarılamadı.");
             }
+            log.info("[DocIngest] ① text extracted — {} chars ({}ms)",
+                    text.length(), (System.nanoTime() - t1) / 1_000_000);
 
+            long t2 = System.nanoTime();
             List<String> chunks = chunker.chunk(text);
+            log.info("[DocIngest] ② chunked — {} chunks (avg {} chars, {}ms)",
+                    chunks.size(),
+                    chunks.isEmpty() ? 0 : chunks.stream().mapToInt(String::length).sum() / chunks.size(),
+                    (System.nanoTime() - t2) / 1_000_000);
+
+            long t3 = System.nanoTime();
             int indexed = 0;
             for (int i = 0; i < chunks.size(); i++) {
                 String chunkText = chunks.get(i);
@@ -169,27 +186,40 @@ public class AssistantDocumentService {
                 chunkRow.setDocumentId(documentId);
                 chunkRow.setChunkIndex(i);
                 chunkRow.setContent(chunkText);
-                // A placeholder row won't satisfy the NOT NULL embedding column, so we
-                // need the embedding FIRST, then write the row + vector together via
-                // a native insert.
+                long cT = System.nanoTime();
+                final int idx = i;
                 embeddingService.embed(chunkText).ifPresent(vec -> {
                     chunkRepository.save(chunkRow);
                     vectorSearchService.writeChunkEmbedding(chunkRow.getId(), vec);
+                    log.debug("[DocIngest]   chunk#{}/{} id={} dims={} ({}ms) preview=\"{}\"",
+                            idx + 1, chunks.size(), chunkRow.getId(), vec.length,
+                            (System.nanoTime() - cT) / 1_000_000,
+                            preview(chunkText, 80));
                 });
                 if (chunkRow.getId() != null) indexed++;
+                else log.warn("[DocIngest]   chunk#{}/{} skipped — embedding returned empty", idx + 1, chunks.size());
             }
+            log.info("[DocIngest] ③ embedded — {}/{} chunks indexed ({}ms)",
+                    indexed, chunks.size(), (System.nanoTime() - t3) / 1_000_000);
 
             doc.setChunkCount(indexed);
             doc.setStatus(AssistantDocumentStatus.READY);
             doc.setIndexedAt(LocalDateTime.now());
             documentRepository.save(doc);
-            log.info("Document {} indexed: {} chunks", documentId, indexed);
+            log.info("[DocIngest] ✓ DONE id={} — {} chunks, total {}ms",
+                    documentId, indexed, (System.nanoTime() - tStart) / 1_000_000);
         } catch (Exception e) {
-            log.error("Document ingestion failed for id={}: {}", documentId, e.getMessage(), e);
+            log.error("[DocIngest] ✗ FAILED id={} — {}", documentId, e.getMessage(), e);
             doc.setStatus(AssistantDocumentStatus.FAILED);
             doc.setErrorMessage(truncate(e.getMessage(), 1024));
             documentRepository.save(doc);
         }
+    }
+
+    private static String preview(String s, int max) {
+        if (s == null) return "";
+        String oneLine = s.replace('\n', ' ').replace('\r', ' ');
+        return oneLine.length() <= max ? oneLine : oneLine.substring(0, max) + "…";
     }
 
     // -------------------------------------------------------------------------

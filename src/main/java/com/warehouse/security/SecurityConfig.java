@@ -133,6 +133,14 @@ public class SecurityConfig {
                         .requestMatchers(org.springframework.http.HttpMethod.GET, ApiPaths.STORE_PAYMENT_METHODS).permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, ApiPaths.STORE_PAYMENT_STATUS_TOKEN).permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, ApiPaths.STORE_CARGO_PROVIDERS).permitAll()
+                        // Guest checkout: public (misafir kullanıcılar üye olmadan sipariş verebilir)
+                        .requestMatchers(org.springframework.http.HttpMethod.POST, ApiPaths.STORE_GUEST_CHECKOUT).permitAll()
+                        // Misafir sipariş odeme baslatma: public (orderId + idempotencyKey ile korunur)
+                        .requestMatchers(org.springframework.http.HttpMethod.POST, ApiPaths.STORE_PAYMENT_INITIALIZE).permitAll()
+                        // Halka acik siparis takip: orderNumber + email kombinasyonu ile korunur
+                        .requestMatchers(org.springframework.http.HttpMethod.POST, ApiPaths.STORE_PUBLIC_ORDER_TRACK).permitAll()
+                        // Stokta yoksa bildir: misafirler de abone olabilsin
+                        .requestMatchers(org.springframework.http.HttpMethod.POST, ApiPaths.STORE_PRODUCT_NOTIFY_ME).permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.POST, ApiPaths.STORE_NEWSLETTER).permitAll()
                         // Public settings and banners
                         .requestMatchers(org.springframework.http.HttpMethod.GET, ApiPaths.STORE_SETTINGS).permitAll()

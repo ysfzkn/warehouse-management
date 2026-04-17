@@ -15,6 +15,11 @@ export default function AssistantDocumentsPage() {
   const [scope, setScope] = useState('STORE');
   const [error, setError] = useState(null);
 
+  // Multi-phase progress: upload bytes → backend indexing → done
+  const [uploadPct, setUploadPct] = useState(0);            // 0-100 during HTTP upload
+  const [phase, setPhase] = useState('idle');               // idle | uploading | indexing | done | failed
+  const [phaseDoc, setPhaseDoc] = useState(null);           // last doc object from polling
+
   const token = () => localStorage.getItem('auth_token');
   const authHeader = () => ({ headers: { Authorization: `Bearer ${token()}` } });
 
@@ -38,22 +43,73 @@ export default function AssistantDocumentsPage() {
     if (!file) return;
     setUploading(true);
     setError(null);
+    setUploadPct(0);
+    setPhase('uploading');
+    setPhaseDoc(null);
+
     try {
       const form = new FormData();
       form.append('file', file);
       if (title.trim()) form.append('title', title.trim());
       form.append('scope', scope);
-      await axios.post('/api/admin/assistant/documents', form, {
+
+      // Phase 1: bytes transferring to backend
+      const resp = await axios.post('/api/admin/assistant/documents', form, {
         headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'multipart/form-data' },
+        onUploadProgress: (ev) => {
+          if (!ev.total) return;
+          const pct = Math.round((ev.loaded * 100) / ev.total);
+          setUploadPct(pct);
+        },
       });
+
+      // Phase 2: backend is now extracting/chunking/embedding async.
+      // Poll the document list until this document is READY or FAILED.
+      const createdId = resp?.data?.id;
+      if (!createdId) {
+        setPhase('done');
+        await loadDocs();
+      } else {
+        setPhase('indexing');
+        await pollUntilReady(createdId);
+      }
+
       setFile(null);
       setTitle('');
       await loadDocs();
     } catch (e) {
       setError('Yükleme başarısız: ' + (e?.response?.data?.message || e.message));
+      setPhase('failed');
     } finally {
       setUploading(false);
+      // Keep the final progress visible for a moment; auto-clear after 4s.
+      setTimeout(() => { setPhase('idle'); setUploadPct(0); setPhaseDoc(null); }, 4000);
     }
+  };
+
+  // Poll the doc list every 1.5s until target doc is READY or FAILED (max 120s).
+  const pollUntilReady = async (docId) => {
+    const started = Date.now();
+    const timeoutMs = 120_000;
+    while (Date.now() - started < timeoutMs) {
+      try {
+        const resp = await axios.get('/api/admin/assistant/documents?size=100', authHeader());
+        const list = Array.isArray(resp.data) ? resp.data : [];
+        const target = list.find(d => d.id === docId);
+        if (target) {
+          setPhaseDoc(target);
+          if (target.status === 'READY') { setPhase('done'); return; }
+          if (target.status === 'FAILED') {
+            setPhase('failed');
+            setError('İndeksleme başarısız: ' + (target.errorMessage || 'bilinmeyen hata'));
+            return;
+          }
+        }
+      } catch { /* ignore transient errors during polling */ }
+      await new Promise(r => setTimeout(r, 1500));
+    }
+    // Timed out — still show progress, list will refresh
+    setPhase('done');
   };
 
   const onReindex = async (id) => {
@@ -143,8 +199,15 @@ export default function AssistantDocumentsPage() {
               </div>
             </div>
             <button type="submit" className="btn btn-primary mt-3" disabled={!file || uploading}>
-              {uploading ? 'Yükleniyor…' : 'Yükle ve İndeksle'}
+              {uploading ? 'İşleniyor…' : 'Yükle ve İndeksle'}
             </button>
+
+            {/* Multi-phase progress indicator */}
+            {phase !== 'idle' && (
+              <div className="mt-3">
+                <UploadProgress phase={phase} uploadPct={uploadPct} doc={phaseDoc} />
+              </div>
+            )}
           </form>
         </div>
       </div>
@@ -204,6 +267,78 @@ export default function AssistantDocumentsPage() {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Two-phase progress bar:
+ *   uploading → exact byte percentage (0-100)
+ *   indexing  → indeterminate striped bar while backend extracts/chunks/embeds
+ *   done      → green 100%, shows chunk count
+ *   failed    → red bar with error
+ */
+function UploadProgress({ phase, uploadPct, doc }) {
+  const cfg = {
+    uploading: {
+      label: `Dosya yükleniyor — ${uploadPct}%`,
+      pct: uploadPct,
+      color: 'bg-primary',
+      striped: true,
+      animated: true,
+    },
+    indexing: {
+      label: doc
+        ? `İndeksleniyor… (durum: ${doc.status}${doc.chunkCount ? `, ${doc.chunkCount} chunk` : ''})`
+        : 'İndeksleniyor… (metin çıkarma → chunking → embedding)',
+      pct: 100,
+      color: 'bg-warning',
+      striped: true,
+      animated: true,
+    },
+    done: {
+      label: doc
+        ? `Tamamlandı — ${doc.chunkCount || 0} chunk oluşturuldu ve embed edildi.`
+        : 'Tamamlandı.',
+      pct: 100,
+      color: 'bg-success',
+      striped: false,
+      animated: false,
+    },
+    failed: {
+      label: 'Başarısız. Hata mesajını aşağıdan kontrol edin.',
+      pct: 100,
+      color: 'bg-danger',
+      striped: false,
+      animated: false,
+    },
+  }[phase] || { label: '', pct: 0, color: 'bg-secondary' };
+
+  return (
+    <div>
+      <div className="d-flex justify-content-between align-items-center mb-1">
+        <small className="text-muted">
+          {phase === 'uploading' && <><i className="fas fa-upload me-1"></i></>}
+          {phase === 'indexing' && <><i className="fas fa-cog fa-spin me-1"></i></>}
+          {phase === 'done'     && <><i className="fas fa-check-circle text-success me-1"></i></>}
+          {phase === 'failed'   && <><i className="fas fa-times-circle text-danger me-1"></i></>}
+          {cfg.label}
+        </small>
+        {phase === 'uploading' && <small className="text-muted"><strong>{uploadPct}%</strong></small>}
+      </div>
+      <div className="progress" style={{ height: 10 }}>
+        <div
+          className={`progress-bar ${cfg.color}${cfg.striped ? ' progress-bar-striped' : ''}${cfg.animated ? ' progress-bar-animated' : ''}`}
+          role="progressbar"
+          style={{ width: `${cfg.pct}%`, transition: 'width .25s ease' }}
+          aria-valuenow={cfg.pct} aria-valuemin="0" aria-valuemax="100"
+        ></div>
+      </div>
+      {phase === 'indexing' && (
+        <small className="text-muted d-block mt-1">
+          Büyük dokümanlarda 10-60 saniye sürebilir. Bu pencereyi kapatmanız güvenli — işlem arka planda devam eder.
+        </small>
+      )}
     </div>
   );
 }

@@ -33,4 +33,12 @@ public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecific
     List<Order> findExpiredBankTransferOrders(@Param("status") com.warehouse.enums.OrderStatus status,
                                               @Param("paymentMethod") String paymentMethod,
                                               @Param("deadline") java.time.LocalDateTime deadline);
+
+    /**
+     * Halka açık sipariş takip: sipariş numarası + müşteri e-postası ile sorgular.
+     * E-posta, müşteri hesabına kayıtlı e-posta ile eşleşmelidir.
+     */
+    @Query("SELECT o FROM Order o LEFT JOIN FETCH o.customer c WHERE o.orderNumber = :orderNumber AND LOWER(c.email) = LOWER(:email)")
+    Optional<Order> findByOrderNumberAndCustomerEmail(@Param("orderNumber") String orderNumber,
+                                                      @Param("email") String email);
 }

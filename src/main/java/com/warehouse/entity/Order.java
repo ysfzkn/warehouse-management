@@ -91,6 +91,18 @@ public class Order {
     @Column(name = "cargo_provider_name", length = 100)
     private String cargoProviderName;
 
+    /** Kargonomi / diğer API sağlayıcılarından dönen shipment ID (iptal/tracking için) */
+    @Column(name = "cargo_provider_shipment_id", length = 100)
+    private String cargoProviderShipmentId;
+
+    /** Kargo etiket PDF URL'i (yazdırmak için) */
+    @Column(name = "cargo_label_url", length = 500)
+    private String cargoLabelUrl;
+
+    /** Son kargo takip sorgulaması zamanı */
+    @Column(name = "cargo_last_tracked_at")
+    private LocalDateTime cargoLastTrackedAt;
+
     @Column(name = "shipping_vat", precision = 10, scale = 2)
     private BigDecimal shippingVat = BigDecimal.ZERO;
 

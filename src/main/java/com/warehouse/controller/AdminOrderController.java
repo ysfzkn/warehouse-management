@@ -70,6 +70,8 @@ public class AdminOrderController {
     private final com.warehouse.repository.StockRepository stockRepository;
     private final StockEventRepository stockEventRepository;
     private final EmailService emailService;
+    private final com.warehouse.service.notification.NotificationDispatchService notificationDispatchService;
+    private final com.warehouse.service.cargo.CargoApiService cargoApiService;
 
     public AdminOrderController(OrderRepository orderRepository,
                                  OrderItemRepository orderItemRepository,
@@ -79,7 +81,9 @@ public class AdminOrderController {
                                  com.warehouse.repository.PaymentTransactionRepository paymentRepo,
                                  com.warehouse.repository.StockRepository stockRepository,
                                  StockEventRepository stockEventRepository,
-                                 EmailService emailService) {
+                                 EmailService emailService,
+                                 com.warehouse.service.notification.NotificationDispatchService notificationDispatchService,
+                                 com.warehouse.service.cargo.CargoApiService cargoApiService) {
         this.orderRepository = orderRepository;
         this.orderItemRepository = orderItemRepository;
         this.statusHistoryRepository = statusHistoryRepository;
@@ -89,6 +93,8 @@ public class AdminOrderController {
         this.stockRepository = stockRepository;
         this.stockEventRepository = stockEventRepository;
         this.emailService = emailService;
+        this.notificationDispatchService = notificationDispatchService;
+        this.cargoApiService = cargoApiService;
     }
 
     @GetMapping
@@ -240,6 +246,24 @@ public class AdminOrderController {
             order, oldStatus, newStatus,
             CurrentUser.usernameOrSystem(), "ADMIN", body.getNote()));
 
+        // If SHIPPED and no tracking number yet → auto-create shipment via cargo API
+        if (newStatus == OrderStatus.SHIPPED
+                && (order.getCargoTrackingNo() == null || order.getCargoTrackingNo().isBlank())
+                && cargoApiService.isEnabled()) {
+            try {
+                com.warehouse.service.cargo.CargoShipmentResult cargoResult =
+                        cargoApiService.createShipmentForOrder(order);
+                if (cargoResult != null && !cargoResult.isSuccess()) {
+                    org.slf4j.LoggerFactory.getLogger(getClass())
+                        .warn("Kargo gönderi oluşturulamadı (sipariş {}): {}",
+                              order.getOrderNumber(), cargoResult.getErrorMessage());
+                }
+            } catch (Exception e) {
+                org.slf4j.LoggerFactory.getLogger(getClass())
+                    .error("Kargo API exception (sipariş {}): {}", order.getOrderNumber(), e.getMessage());
+            }
+        }
+
         // If DELIVERED → deduct reserved stock (convert reservation to actual sale) + log StockEvent
         if (newStatus == OrderStatus.DELIVERED) {
             try {
@@ -342,13 +366,16 @@ public class AdminOrderController {
             }
         }
 
-        // Send status update email to customer
+        // Send status update notification (email + SMS depending on preferences)
         try {
-            String custEmail = safeCustomerEmail(order);
-            String custName = safeCustomerName(order);
-            if (!custEmail.isEmpty()) {
-                emailService.sendOrderStatusUpdate(custEmail, custName, order.getOrderNumber(),
-                        com.warehouse.util.OrderStatusMachine.getLabel(newStatus), body.getNote());
+            if (order.getCustomer() != null) {
+                notificationDispatchService.notifyOrderStatusChange(
+                        order.getCustomer(),
+                        order.getOrderNumber(),
+                        newStatus.name(),
+                        order.getCargoTrackingNo(),
+                        body.getNote()
+                );
             }
         } catch (Exception ignored) {}
 

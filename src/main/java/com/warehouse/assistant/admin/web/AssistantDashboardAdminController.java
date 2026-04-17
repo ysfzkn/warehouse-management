@@ -8,7 +8,11 @@ import com.warehouse.assistant.core.config.AssistantRuntimeConfig;
 import com.warehouse.assistant.core.rag.AssistantRagInitService;
 import com.warehouse.assistant.core.rag.ProductEmbeddingBackfillService;
 import com.warehouse.assistant.core.rag.VectorSearchService;
+import com.warehouse.service.AdminSecurityService;
 import com.warehouse.util.CurrentUser;
+import jakarta.servlet.http.HttpServletRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -18,6 +22,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -34,25 +39,30 @@ import java.util.Map;
 @Profile("!test")
 public class AssistantDashboardAdminController {
 
+    private static final Logger log = LoggerFactory.getLogger(AssistantDashboardAdminController.class);
+
     private final AssistantObservabilityService observabilityService;
     private final ProductEmbeddingBackfillService productBackfill;
     private final AssistantRagInitService ragInitService;
     private final VectorSearchService vectorSearchService;
     private final AssistantFlagsService flagsService;
     private final AssistantRuntimeConfig runtimeConfig;
+    private final AdminSecurityService adminSecurityService;
 
     public AssistantDashboardAdminController(AssistantObservabilityService observabilityService,
                                               ProductEmbeddingBackfillService productBackfill,
                                               AssistantRagInitService ragInitService,
                                               VectorSearchService vectorSearchService,
                                               AssistantFlagsService flagsService,
-                                              AssistantRuntimeConfig runtimeConfig) {
+                                              AssistantRuntimeConfig runtimeConfig,
+                                              AdminSecurityService adminSecurityService) {
         this.observabilityService = observabilityService;
         this.productBackfill = productBackfill;
         this.ragInitService = ragInitService;
         this.vectorSearchService = vectorSearchService;
         this.flagsService = flagsService;
         this.runtimeConfig = runtimeConfig;
+        this.adminSecurityService = adminSecurityService;
     }
 
     // ── Runtime config (AI Settings page) ──
@@ -157,11 +167,29 @@ public class AssistantDashboardAdminController {
     }
 
     @PostMapping("/flags")
-    public ResponseEntity<Map<String, Boolean>> updateFlags(@RequestBody FlagsUpdateRequest body) {
+    public ResponseEntity<Map<String, Boolean>> updateFlags(
+            @RequestBody FlagsUpdateRequest body,
+            @RequestHeader(value = "X-ADMIN-SECURITY-CODE", required = false) String securityCode,
+            HttpServletRequest request) {
+        String user = CurrentUser.usernameOrSystem();
+        String ip = request.getRemoteAddr();
+        log.info("[AssistantFlags] POST /flags request from user='{}' ip='{}' body=(wms={}, store={})",
+                user, ip,
+                body != null ? body.wmsEnabled : null,
+                body != null ? body.storeEnabled : null);
+        try {
+            adminSecurityService.requireSecurityCodeForAdmin(securityCode);
+        } catch (RuntimeException e) {
+            log.warn("[AssistantFlags] SECURITY CODE REJECTED — user='{}' ip='{}' reason='{}'",
+                    user, ip, e.getMessage());
+            throw e;
+        }
         flagsService.updateFlags(
                 body != null ? body.wmsEnabled : null,
                 body != null ? body.storeEnabled : null,
-                CurrentUser.usernameOrSystem());
-        return ResponseEntity.ok(flagsService.getAllFlags());
+                user);
+        Map<String, Boolean> current = flagsService.getAllFlags();
+        log.info("[AssistantFlags] POST /flags OK — user='{}' ip='{}' result={}", user, ip, current);
+        return ResponseEntity.ok(current);
     }
 }

@@ -63,4 +63,15 @@ public class StoreCheckoutController {
         Long customerId = CustomerTokenExtractor.extractCustomerId(request, jwtService);
         return ResponseEntity.ok(checkoutService.placeOrder(customerId, body, request.getRemoteAddr(), request.getHeader("User-Agent")));
     }
+
+    /**
+     * Misafir (üye olmayan) müşteri için sipariş oluşturur.
+     * Yeni bir müşteri hesabı oluşturur (emailVerified=false) ve hesabı tamamlama e-postası gönderir.
+     */
+    @PostMapping("/guest-checkout")
+    public ResponseEntity<PlaceOrderResponse> guestCheckout(@Valid @RequestBody GuestPlaceOrderRequest body,
+                                                              HttpServletRequest request) {
+        return ResponseEntity.ok(checkoutService.placeGuestOrder(body,
+                request.getRemoteAddr(), request.getHeader("User-Agent")));
+    }
 }

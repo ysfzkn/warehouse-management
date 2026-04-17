@@ -17,6 +17,7 @@ public class AssistantProperties {
     private RateLimit ratelimit = new RateLimit();
     private Safety safety = new Safety();
     private EmbeddingConnection embedding = new EmbeddingConnection();
+    private ChatConnection chat = new ChatConnection();
 
     public Cost getCost() { return cost; }
     public void setCost(Cost cost) { this.cost = cost; }
@@ -28,6 +29,11 @@ public class AssistantProperties {
     public void setSafety(Safety safety) { this.safety = safety; }
     public EmbeddingConnection getEmbedding() { return embedding; }
     public void setEmbedding(EmbeddingConnection embedding) { this.embedding = embedding; }
+    public ChatConnection getChat() { return chat; }
+    public void setChat(ChatConnection chat) { this.chat = chat; }
+
+    /** AI provider types. */
+    public enum Provider { AZURE, OPENAI }
 
     // ---------- cost ----------
     public static class Cost {
@@ -57,10 +63,29 @@ public class AssistantProperties {
     // ---------- RAG ----------
     public static class Rag {
         private int embeddingDimensions = 1536;
-        private int vectorTopK = 5;
-        private double vectorDistanceThreshold = 0.35;
-        private int chunkSizeTokens = 500;
+        /** Top-K neighbours to consider. Was 5 → bumped to 8 so a borderline-relevant chunk
+         *  still has a seat at the table. */
+        private int vectorTopK = 8;
+        /** Cosine-distance cut-off. Was 0.35 (too strict for Turkish + small embedding model).
+         *  0.55 lets moderately related chunks through; the LLM filters the rest. */
+        private double vectorDistanceThreshold = 0.55;
+        /** Chunk size in words. Was 500 (too coarse — multi-topic chunks dilute embedding).
+         *  200 words ≈ 1 paragraph, keeps each chunk semantically focused. */
+        private int chunkSizeTokens = 200;
+        /** Overlap between consecutive chunks, in words. 50 = 25% overlap, preserves context
+         *  across chunk boundaries. */
         private int chunkOverlapTokens = 50;
+        /** Neighbor window: when a chunk matches, also include this many chunks before
+         *  and after from the same document to preserve context (small chunks read well
+         *  but may lose the parent section). 0 = disabled, 2 = hit±2 chunks (recommended). */
+        private int neighborWindow = 2;
+        /** Enable hybrid retrieval: combines pgvector semantic search with
+         *  PostgreSQL full-text BM25-ish scoring via Reciprocal Rank Fusion.
+         *  Catches exact-term queries (SKU, "MADDE 6") that vector search alone
+         *  may miss. */
+        private boolean hybridEnabled = true;
+        /** RRF constant k — standard value is 60. Larger = less weight to top ranks. */
+        private int hybridRrfK = 60;
 
         public int getEmbeddingDimensions() { return embeddingDimensions; }
         public void setEmbeddingDimensions(int v) { this.embeddingDimensions = v; }
@@ -72,6 +97,12 @@ public class AssistantProperties {
         public void setChunkSizeTokens(int v) { this.chunkSizeTokens = v; }
         public int getChunkOverlapTokens() { return chunkOverlapTokens; }
         public void setChunkOverlapTokens(int v) { this.chunkOverlapTokens = v; }
+        public int getNeighborWindow() { return neighborWindow; }
+        public void setNeighborWindow(int v) { this.neighborWindow = v; }
+        public boolean isHybridEnabled() { return hybridEnabled; }
+        public void setHybridEnabled(boolean v) { this.hybridEnabled = v; }
+        public int getHybridRrfK() { return hybridRrfK; }
+        public void setHybridRrfK(int v) { this.hybridRrfK = v; }
     }
 
     // ---------- rate limit ----------
@@ -94,12 +125,15 @@ public class AssistantProperties {
         public void setWmsHourly(int v) { this.wmsHourly = v; }
     }
 
-    // ---------- embedding connection (separate Azure resource, optional) ----------
+    // ---------- embedding connection (Azure or vanilla OpenAI) ----------
     public static class EmbeddingConnection {
-        private String endpoint = "";       // empty = use main chat endpoint
-        private String apiKey = "";         // empty = use main chat api-key
-        private String deploymentName = "text-embedding-3-small";
+        private Provider provider = Provider.AZURE;
+        private String endpoint = "";          // Azure endpoint; empty = use main chat endpoint
+        private String apiKey = "";            // empty = use main chat api-key
+        private String deploymentName = "text-embedding-3-small"; // Azure deployment OR OpenAI model id
 
+        public Provider getProvider() { return provider; }
+        public void setProvider(Provider v) { this.provider = v; }
         public String getEndpoint() { return endpoint; }
         public void setEndpoint(String v) { this.endpoint = v; }
         public String getApiKey() { return apiKey; }
@@ -110,6 +144,23 @@ public class AssistantProperties {
         public boolean hasSeparateEndpoint() {
             return endpoint != null && !endpoint.isBlank();
         }
+    }
+
+    // ---------- chat connection (Azure or vanilla OpenAI) ----------
+    public static class ChatConnection {
+        private Provider provider = Provider.AZURE;
+        private String endpoint = "";              // Azure endpoint; OpenAI uses default https://api.openai.com
+        private String apiKey = "";
+        private String model = "gpt-4o-mini";      // Azure deployment name OR OpenAI model id
+
+        public Provider getProvider() { return provider; }
+        public void setProvider(Provider v) { this.provider = v; }
+        public String getEndpoint() { return endpoint; }
+        public void setEndpoint(String v) { this.endpoint = v; }
+        public String getApiKey() { return apiKey; }
+        public void setApiKey(String v) { this.apiKey = v; }
+        public String getModel() { return model; }
+        public void setModel(String v) { this.model = v; }
     }
 
     // ---------- safety ----------

@@ -184,6 +184,12 @@
             <artifactId>spring-ai-starter-model-azure-openai</artifactId>
         </dependency>
 
+        <!-- Spring AI: vanilla OpenAI model classes (no auto-config; used dynamically) -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-openai</artifactId>
+        </dependency>
+
         <!-- Spring AI: Tika document reader (FAQ/document ingestion pipeline) -->
         <dependency>
             <groupId>org.springframework.ai</groupId>
@@ -195,6 +201,12 @@
             <groupId>com.bucket4j</groupId>
             <artifactId>bucket4j_jdk17-core</artifactId>
             <version>8.14.0</version>
+        </dependency>
+
+        <!-- AOP (used for @Tool call logging across the assistant tool set) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-aop</artifactId>
         </dependency>
     </dependencies>
 

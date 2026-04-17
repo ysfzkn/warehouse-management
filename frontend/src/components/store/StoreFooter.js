@@ -58,6 +58,7 @@ export default function StoreFooter({ settings }) {
           <div className="col-lg-3 col-md-6 col-6">
             <h6 className="store-footer-title">Müşteri Hizmetleri</h6>
             <ul className="store-footer-links">
+              <li><Link to="/siparis-takip">Sipariş Takip</Link></li>
               <li><Link to="/sayfa/iptal-ve-iade-sartlari">İptal ve İade</Link></li>
               <li><Link to="/sayfa/mesafeli-satis-sozlesmesi">Mesafeli Satış Sözleşmesi</Link></li>
               <li><Link to="/sayfa/gizlilik-ve-guvenlik">Gizlilik Politikası</Link></li>

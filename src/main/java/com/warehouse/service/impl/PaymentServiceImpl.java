@@ -36,6 +36,8 @@ public class PaymentServiceImpl implements PaymentService {
     private final PaymentGatewayConfigRepository gatewayConfigRepo;
     private final com.warehouse.service.CartService cartService;
     private final StockEventRepository stockEventRepo;
+    private final com.warehouse.service.InvoiceService invoiceService;
+    private final com.warehouse.service.notification.NotificationDispatchService notificationDispatchService;
 
     public PaymentServiceImpl(PaymentTransactionRepository paymentRepo,
                                OrderRepository orderRepo,
@@ -46,7 +48,9 @@ public class PaymentServiceImpl implements PaymentService {
                                PaymentProperties paymentProperties,
                                PaymentGatewayConfigRepository gatewayConfigRepo,
                                com.warehouse.service.CartService cartService,
-                               StockEventRepository stockEventRepo) {
+                               StockEventRepository stockEventRepo,
+                               com.warehouse.service.InvoiceService invoiceService,
+                               com.warehouse.service.notification.NotificationDispatchService notificationDispatchService) {
         this.paymentRepo = paymentRepo;
         this.orderRepo = orderRepo;
         this.stockEventRepo = stockEventRepo;
@@ -57,6 +61,8 @@ public class PaymentServiceImpl implements PaymentService {
         this.paymentProperties = paymentProperties;
         this.gatewayConfigRepo = gatewayConfigRepo;
         this.cartService = cartService;
+        this.invoiceService = invoiceService;
+        this.notificationDispatchService = notificationDispatchService;
     }
 
     @Override
@@ -226,6 +232,20 @@ public class PaymentServiceImpl implements PaymentService {
 
             logger.info("Payment successful: txId={}, orderId={}", tx.getId(), order.getId());
 
+            // Auto-generate e-fatura
+            try {
+                invoiceService.createInvoiceForOrder(order.getId());
+            } catch (Exception e) {
+                logger.warn("E-fatura otomatik oluşturma başarısız (sipariş {}): {}", order.getOrderNumber(), e.getMessage());
+            }
+
+            // Send order confirmation notification (email + SMS)
+            try {
+                notificationDispatchService.notifyOrderConfirmed(order.getCustomer(), order.getOrderNumber());
+            } catch (Exception e) {
+                logger.warn("Sipariş onay bildirimi gönderilemedi (sipariş {}): {}", order.getOrderNumber(), e.getMessage());
+            }
+
             // Clear cart after successful payment
             try {
                 if (order.getCustomer() != null) {
@@ -285,6 +305,21 @@ public class PaymentServiceImpl implements PaymentService {
         logStatusChange(order, OrderStatus.PENDING_PAYMENT.name(), OrderStatus.PAID.name(), confirmedBy, "Havale/EFT onayı");
 
         logger.info("Bank transfer confirmed: orderId={}, by={}", orderId, confirmedBy);
+
+        // Auto-generate e-fatura
+        try {
+            invoiceService.createInvoiceForOrder(order.getId());
+        } catch (Exception e) {
+            logger.warn("E-fatura otomatik oluşturma başarısız (sipariş {}): {}", order.getOrderNumber(), e.getMessage());
+        }
+
+        // Send payment received + order confirmed notifications
+        try {
+            notificationDispatchService.notifyPaymentReceived(order.getCustomer(), order.getOrderNumber());
+            notificationDispatchService.notifyOrderConfirmed(order.getCustomer(), order.getOrderNumber());
+        } catch (Exception e) {
+            logger.warn("Havale onay bildirimi gönderilemedi (sipariş {}): {}", order.getOrderNumber(), e.getMessage());
+        }
     }
 
     @Override

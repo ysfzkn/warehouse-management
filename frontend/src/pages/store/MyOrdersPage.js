@@ -278,12 +278,21 @@ export default function MyOrdersPage() {
 
                     {/* Footer Actions */}
                     <div className="modal-footer border-0 pt-0 flex-wrap gap-2">
-                      {/* Fatura */}
-                      {detailOrder.invoiceUrl && (
+                      {/* Fatura (e-Fatura sistemi veya mevcut invoiceUrl) */}
+                      {(detailOrder.invoiceUrl || detailOrder.invoiceNumber) && (
                         <button className="btn btn-sm btn-outline-info" onClick={() => {
-                          axios.get(`/api/store/orders/${detailOrder.orderNumber}/invoice`, { headers: getAuthHeaders(), responseType: 'blob' })
+                          axios.get(`/api/store/orders/${detailOrder.orderNumber}/invoice/pdf`, { headers: getAuthHeaders(), responseType: 'blob' })
                             .then(r => { const url = window.URL.createObjectURL(r.data); const a = document.createElement('a'); a.href = url; a.download = `fatura-${detailOrder.orderNumber}.pdf`; a.click(); window.URL.revokeObjectURL(url); })
-                            .catch(() => toast.error('Fatura indirilemedi.'));
+                            .catch(() => {
+                              // Fallback: eski fatura indirme endpoint'i
+                              if (detailOrder.invoiceUrl) {
+                                axios.get(`/api/store/orders/${detailOrder.orderNumber}/invoice`, { headers: getAuthHeaders(), responseType: 'blob' })
+                                  .then(r => { const url = window.URL.createObjectURL(r.data); const a = document.createElement('a'); a.href = url; a.download = `fatura-${detailOrder.orderNumber}.pdf`; a.click(); window.URL.revokeObjectURL(url); })
+                                  .catch(() => toast.error('Fatura indirilemedi.'));
+                              } else {
+                                toast.error('Fatura indirilemedi.');
+                              }
+                            });
                         }}>
                           <FiDownload size={14} className="me-1" />Fatura İndir
                         </button>

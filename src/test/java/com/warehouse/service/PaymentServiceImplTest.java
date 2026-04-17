@@ -39,13 +39,16 @@ class PaymentServiceImplTest {
     @Mock private com.warehouse.repository.PaymentGatewayConfigRepository gatewayConfigRepo;
     @Mock private com.warehouse.service.CartService cartService;
     @Mock private StockEventRepository stockEventRepo;
+    @Mock private com.warehouse.service.InvoiceService invoiceService;
+    @Mock private com.warehouse.service.notification.NotificationDispatchService notificationDispatchService;
 
     private PaymentServiceImpl paymentService;
 
     @BeforeEach
     void setUp() {
         paymentService = new PaymentServiceImpl(paymentRepo, orderRepo, statusHistoryRepo,
-            stockRepo, orderItemRepo, gatewayFactory, paymentProperties, gatewayConfigRepo, cartService, stockEventRepo);
+            stockRepo, orderItemRepo, gatewayFactory, paymentProperties, gatewayConfigRepo, cartService, stockEventRepo,
+            invoiceService, notificationDispatchService);
 
         PaymentProperties.IyzicoConfig iyzicoConfig = new PaymentProperties.IyzicoConfig();
         iyzicoConfig.setTimeoutMinutes(15);

@@ -69,6 +69,20 @@ export function useCart() {
     }
   }, []);
 
+  /** Sepeti tamamen boşalt (tüm ürünleri kaldır) */
+  const clearCart = useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await axios.delete(`${API_BASE}/cart`, { headers: getHeaders() });
+      setCart(res.data);
+    } catch (e) {
+      console.error('Clear cart error:', e);
+      throw e;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   const applyCoupon = useCallback(async (code) => {
     const res = await axios.post(`${API_BASE}/cart/coupon`, { code }, { headers: getHeaders() });
     setCart(res.data);
@@ -87,7 +101,7 @@ export function useCart() {
 
   return {
     cart, loading, sidebarOpen, setSidebarOpen,
-    fetchCart, addItem, updateItem, removeItem, applyCoupon, removeCoupon,
+    fetchCart, addItem, updateItem, removeItem, clearCart, applyCoupon, removeCoupon,
     itemCount: cart?.itemCount || 0
   };
 }

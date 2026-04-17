@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
+import useSecurityCodePrompt from '../components/useSecurityCodePrompt';
 
 /**
  * Admin dashboard for the Cezeri assistant platform. Shows per-profile
@@ -17,6 +18,7 @@ export default function AssistantDashboardPage() {
   const [initRagResult, setInitRagResult] = useState(null);
   const [flags, setFlags] = useState({ wmsEnabled: true, storeEnabled: true });
   const [flagSaving, setFlagSaving] = useState(false);
+  const { askCode, SecurityCodePrompt } = useSecurityCodePrompt();
 
   const token = () => localStorage.getItem('auth_token');
   const authHeader = () => ({ headers: { Authorization: `Bearer ${token()}` } });
@@ -44,20 +46,46 @@ export default function AssistantDashboardPage() {
   };
 
   const toggleFlag = async (key) => {
-    const next = { ...flags, [key]: !flags[key] };
+    const willEnable = !flags[key];
+    const label = key === 'storeEnabled' ? 'Store Chatbot' : 'WMS Asistanı';
+    console.log(`[AssistantFlags] toggleFlag called — key=${key}, current=${flags[key]}, willBe=${willEnable}`);
+
+    const code = await askCode({
+      description: `${label} için durumu "${willEnable ? 'AÇIK' : 'KAPALI'}" olarak değiştirmek istiyor musunuz? Güvenlik şifresini girin.`
+    });
+    if (!code) {
+      console.log('[AssistantFlags] toggle cancelled by user (no security code)');
+      return;
+    }
+
+    const next = { ...flags, [key]: willEnable };
     setFlagSaving(true);
     try {
-      const resp = await axios.post('/api/admin/assistant/flags', next, authHeader());
+      console.log('[AssistantFlags] POST /api/admin/assistant/flags →', next);
+      const resp = await axios.post('/api/admin/assistant/flags', next, {
+        headers: {
+          ...authHeader().headers,
+          'X-ADMIN-SECURITY-CODE': code,
+        }
+      });
+      console.log('[AssistantFlags] POST response:', resp.data);
       if (resp.data) {
         setFlags({
           wmsEnabled: resp.data.wmsEnabled !== false,
           storeEnabled: resp.data.storeEnabled !== false,
         });
       }
-      // Broadcast so Admin/Store layouts re-fetch without a full page reload.
+      // Broadcast so Admin layout re-fetches immediately.
+      // Note: cross-tab (store tab) relies on focus/visibility handlers.
       window.dispatchEvent(new Event('assistant-flags-changed'));
+      setError(null);
     } catch (e) {
-      setError('Toggle kaydedilemedi: ' + (e?.response?.data?.message || e.message));
+      console.error('[AssistantFlags] toggle failed:', e);
+      if (e?.response?.status === 403) {
+        setError('Güvenlik şifresi hatalı.');
+      } else {
+        setError('Toggle kaydedilemedi: ' + (e?.response?.data?.message || e.message));
+      }
     } finally {
       setFlagSaving(false);
     }
@@ -126,6 +154,7 @@ export default function AssistantDashboardPage() {
 
   return (
     <div className="container-fluid">
+      {SecurityCodePrompt}
       <div className="d-flex justify-content-between align-items-center mb-3">
         <h2>Cezeri Asistan Dashboard</h2>
         <div>

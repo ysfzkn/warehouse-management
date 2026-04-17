@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { FiSearch, FiUser, FiShoppingCart, FiMenu, FiX, FiPhone, FiMail, FiLogOut, FiHeart, FiPackage, FiMapPin, FiChevronDown } from 'react-icons/fi';
+import { FiSearch, FiUser, FiShoppingCart, FiMenu, FiX, FiPhone, FiMail, FiLogOut, FiHeart, FiPackage, FiMapPin, FiChevronDown, FiBell } from 'react-icons/fi';
 
 export default function StoreHeader({ cart, settings }) {
   const [categories, setCategories] = useState([]);
@@ -172,6 +172,8 @@ export default function StoreHeader({ cart, settings }) {
           <div className="d-flex gap-3 align-items-center">
             {!isLoggedIn && (
               <>
+                <Link to="/siparis-takip" className="store-top-link">Sipariş Takip</Link>
+                <span className="store-top-divider">|</span>
                 <Link to="/giris" className="store-top-link">Giriş Yap</Link>
                 <span className="store-top-divider">|</span>
                 <Link to="/kayit" className="store-top-link fw-semibold">Üye Ol</Link>
@@ -358,6 +360,9 @@ export default function StoreHeader({ cart, settings }) {
                     </Link>
                     <Link to="/adreslerim" className="d-flex align-items-center gap-2 px-3 py-2 text-dark text-decoration-none store-user-menu-item" onClick={() => setUserMenuOpen(false)}>
                       <FiMapPin size={16} className="text-muted" /><span className="small">Adreslerim</span>
+                    </Link>
+                    <Link to="/hesabim/bildirimler" className="d-flex align-items-center gap-2 px-3 py-2 text-dark text-decoration-none store-user-menu-item" onClick={() => setUserMenuOpen(false)}>
+                      <FiBell size={16} className="text-muted" /><span className="small">Bildirim Tercihleri</span>
                     </Link>
                   </div>
                   {/* Logout */}

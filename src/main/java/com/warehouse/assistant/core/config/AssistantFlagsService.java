@@ -1,6 +1,8 @@
 package com.warehouse.assistant.core.config;
 
 import com.warehouse.service.SiteSettingService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.util.HashMap;
@@ -19,6 +21,8 @@ import java.util.Map;
 @Service
 public class AssistantFlagsService {
 
+    private static final Logger log = LoggerFactory.getLogger(AssistantFlagsService.class);
+
     public static final String KEY_WMS_ENABLED   = "assistant_wms_enabled";
     public static final String KEY_STORE_ENABLED = "assistant_store_enabled";
 
@@ -29,33 +33,53 @@ public class AssistantFlagsService {
     }
 
     public boolean isWmsEnabled() {
-        return readBool(KEY_WMS_ENABLED, true);
+        boolean v = readBool(KEY_WMS_ENABLED, true);
+        log.trace("[AssistantFlags] read wmsEnabled={}", v);
+        return v;
     }
 
     public boolean isStoreEnabled() {
-        return readBool(KEY_STORE_ENABLED, true);
+        boolean v = readBool(KEY_STORE_ENABLED, true);
+        log.trace("[AssistantFlags] read storeEnabled={}", v);
+        return v;
     }
 
     public Map<String, Boolean> getAllFlags() {
         Map<String, Boolean> out = new HashMap<>();
         out.put("wmsEnabled", isWmsEnabled());
         out.put("storeEnabled", isStoreEnabled());
+        log.debug("[AssistantFlags] public read → {}", out);
         return out;
     }
 
     public void updateFlags(Boolean wmsEnabled, Boolean storeEnabled, String updatedBy) {
+        boolean beforeWms = isWmsEnabled();
+        boolean beforeStore = isStoreEnabled();
+
         Map<String, String> patch = new HashMap<>();
         if (wmsEnabled != null)   patch.put(KEY_WMS_ENABLED,   wmsEnabled   ? "true" : "false");
         if (storeEnabled != null) patch.put(KEY_STORE_ENABLED, storeEnabled ? "true" : "false");
-        if (!patch.isEmpty()) {
-            siteSettingService.updateSettings(patch, updatedBy);
+
+        if (patch.isEmpty()) {
+            log.warn("[AssistantFlags] updateFlags called with nothing to change (user={})", updatedBy);
+            return;
         }
+
+        log.info("[AssistantFlags] TOGGLE by user='{}' — wms: {} → {}, store: {} → {}",
+                updatedBy,
+                beforeWms, (wmsEnabled != null ? wmsEnabled : "unchanged"),
+                beforeStore, (storeEnabled != null ? storeEnabled : "unchanged"));
+
+        siteSettingService.updateSettings(patch, updatedBy);
+
+        boolean afterWms = isWmsEnabled();
+        boolean afterStore = isStoreEnabled();
+        log.info("[AssistantFlags] persisted state → wmsEnabled={}, storeEnabled={}", afterWms, afterStore);
     }
 
     private boolean readBool(String key, boolean defaultValue) {
         String raw = siteSettingService.getSetting(key);
         if (raw == null || raw.isBlank()) return defaultValue;
-        // Accept "true"/"false", "1"/"0", "on"/"off", case-insensitive.
         String v = raw.trim().toLowerCase();
         return !(v.equals("false") || v.equals("0") || v.equals("off") || v.equals("no"));
     }

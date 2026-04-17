@@ -12,4 +12,14 @@ public interface CustomerAuthService {
     CustomerLoginResponse loginWithGoogle(String code, String redirectUri, String ipAddress);
     void requestPasswordReset(String email);
     void resetPassword(String token, String newPassword);
+
+    /**
+     * Misafir checkout sonrası oluşturulan hesabı tamamlar:
+     * - Şifre oluşturur
+     * - E-postayı doğrulanmış olarak işaretler
+     * - Kullanıcıyı login yapar (JWT döner)
+     *
+     * Token 7 gün geçerlidir.
+     */
+    CustomerLoginResponse completeGuestAccount(String token, String newPassword, String ipAddress);
 }

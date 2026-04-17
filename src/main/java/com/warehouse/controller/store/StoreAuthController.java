@@ -68,6 +68,21 @@ public class StoreAuthController {
         return ResponseEntity.ok(Map.of("message", "Şifreniz başarıyla değiştirildi. Yeni şifrenizle giriş yapabilirsiniz."));
     }
 
+    /**
+     * Misafir checkout sonrası oluşturulan hesabı tamamlar.
+     * Şifreyi belirler, e-postayı doğrular ve otomatik login yapar.
+     */
+    @PostMapping("/complete-account")
+    public ResponseEntity<CustomerLoginResponse> completeAccount(@RequestBody Map<String, String> body,
+                                                                   HttpServletRequest httpRequest) {
+        String ip = httpRequest.getRemoteAddr();
+        CustomerLoginResponse response = customerAuthService.completeGuestAccount(
+                body.get("token"), body.get("password"), ip);
+        return ResponseEntity.ok()
+            .headers(buildAuthCookies(response.getToken(), response.getRefreshToken()))
+            .body(response);
+    }
+
     @PostMapping("/google")
     public ResponseEntity<CustomerLoginResponse> googleAuth(@RequestBody GoogleAuthRequest request,
                                                              HttpServletRequest httpRequest) {

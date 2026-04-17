@@ -147,6 +147,130 @@ public class EmailServiceImpl implements EmailService {
 
     @Override
     @Async
+    public void sendBackInStockNotification(String toEmail, String productName, String productUrl,
+                                             String productImage, String price) {
+        if (!enabled) {
+            log.info("Email disabled — back-in-stock notification for {} product={}", toEmail, productName);
+            return;
+        }
+        String subject = "Beklediğiniz ürün stoklarda! — " + getSiteName();
+        String html = buildHeader("Beklediğiniz Ürün Stoklarda!")
+                + """
+                    <p style="color:#334155;font-size:15px;">Merhaba,</p>
+                    <p style="color:#475569;font-size:14px;line-height:1.6;">
+                        Sizi bilgilendirmemizi istediğiniz ürün <strong>stoklarımıza geri geldi</strong>! Fiyat güncel olabilir, hızlıca kontrol etmenizi öneririz.
+                    </p>
+                    <div style="border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin:24px 0;background:#fafafa;">
+                        %s
+                        <div style="color:#0f172a;font-size:16px;font-weight:700;margin-bottom:4px;">%s</div>
+                        %s
+                    </div>
+                    <div style="text-align:center;margin:28px 0;">
+                        <a href="%s" style="background:linear-gradient(135deg,#10b981,#059669);color:#fff;padding:14px 36px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;display:inline-block;box-shadow:0 4px 12px rgba(16,185,129,0.3);">
+                            Şimdi İncele
+                        </a>
+                    </div>
+                    <div style="background:#fefce8;border:1px solid #fde047;border-radius:8px;padding:12px 16px;margin:16px 0;">
+                        <p style="color:#713f12;font-size:13px;margin:0;">
+                            <strong>⚡ Hızlı Olun:</strong> Stoklar sınırlı, başkalarının önüne geçmek için hemen sipariş verin.
+                        </p>
+                    </div>
+                """.formatted(
+                    productImage != null && !productImage.isBlank()
+                        ? String.format("<img src=\"%s\" alt=\"%s\" style=\"width:100%%;max-width:320px;height:auto;border-radius:8px;margin-bottom:12px;display:block;\" />",
+                            productImage, escapeHtmlAttr(productName))
+                        : "",
+                    escapeHtmlAttr(productName),
+                    price != null && !price.isBlank()
+                        ? String.format("<div style=\"color:#2563eb;font-size:18px;font-weight:700;\">%s</div>", escapeHtmlAttr(price))
+                        : "",
+                    productUrl
+                )
+                + buildFooter();
+
+        sendHtml(toEmail, subject, html);
+    }
+
+    @Override
+    @Async
+    public void sendAbandonedCartReminder(String toEmail, String firstName, int itemCount, String itemsHtml, String cartTotal) {
+        if (!enabled) {
+            log.info("Email disabled — abandoned cart reminder for {} ({} items)", toEmail, itemCount);
+            return;
+        }
+        String cartUrl = baseUrl + "/sepet";
+        String subject = "Sepetinizde bıraktığınız ürünler — " + getSiteName();
+        String html = buildHeader("Sepetinizi Unuttunuz Mu?")
+                + """
+                    <p style="color:#334155;font-size:15px;">Merhaba <strong>%s</strong>,</p>
+                    <p style="color:#475569;font-size:14px;line-height:1.6;">
+                        Sepetinizde <strong>%d ürün</strong> sizi bekliyor. Aşağıdaki butona tıklayarak alışverişinizi kaldığınız yerden tamamlayabilirsiniz:
+                    </p>
+                    %s
+                    <div style="background:#f8fafc;border-radius:8px;padding:14px 18px;margin:20px 0;text-align:right;">
+                        <span style="color:#64748b;font-size:13px;">Sepet Toplamı: </span>
+                        <strong style="color:#0f172a;font-size:16px;">%s</strong>
+                    </div>
+                    <div style="text-align:center;margin:28px 0;">
+                        <a href="%s" style="background:linear-gradient(135deg,#ef4444,#dc2626);color:#fff;padding:14px 40px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;display:inline-block;box-shadow:0 4px 12px rgba(239,68,68,0.3);">
+                            Sepetime Dön
+                        </a>
+                    </div>
+                    <div style="background:#fefce8;border:1px solid #fde047;border-radius:8px;padding:12px 16px;margin:16px 0;">
+                        <p style="color:#713f12;font-size:13px;margin:0;">
+                            <strong>💡 Not:</strong> Stoklar sınırlı olduğundan, ürünleriniz tükenmeden siparişinizi tamamlamanızı öneririz.
+                        </p>
+                    </div>
+                    <p style="color:#94a3b8;font-size:12px;">Butona tıklayamıyorsanız aşağıdaki bağlantıyı tarayıcınıza yapıştırın:</p>
+                    <p style="color:#94a3b8;font-size:11px;word-break:break-all;background:#f1f5f9;padding:10px;border-radius:6px;">%s</p>
+                """.formatted(firstName, itemCount, itemsHtml != null ? itemsHtml : "", cartTotal, cartUrl, cartUrl)
+                + buildFooter();
+
+        sendHtml(toEmail, subject, html);
+    }
+
+    @Override
+    @Async
+    public void sendCompleteAccountSetup(String toEmail, String firstName, String orderNumber, String setupToken) {
+        if (!enabled) {
+            log.info("Email disabled — complete account setup token for {}: {}", toEmail, setupToken);
+            return;
+        }
+        String setupUrl = baseUrl + "/hesap-tamamla?token=" + setupToken;
+        String subject = "Siparişiniz Alındı! Hesabınızı Tamamlayın — " + getSiteName();
+        String html = buildHeader("Siparişiniz Alındı!")
+                + """
+                    <p style="color:#334155;font-size:15px;">Merhaba <strong>%s</strong>,</p>
+                    <p style="color:#475569;font-size:14px;line-height:1.6;">
+                        <strong>%s</strong> numaralı siparişiniz başarıyla alındı! 🎉
+                    </p>
+                    <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:16px 20px;margin:20px 0;">
+                        <p style="color:#075985;font-size:14px;margin:0 0 8px;font-weight:600;">
+                            Bir sonraki alışverişinizi kolaylaştırmak için hesabınızı tamamlayın:
+                        </p>
+                        <ul style="color:#0c4a6e;font-size:13px;margin:8px 0;padding-left:20px;">
+                            <li>Hızlı checkout yapın</li>
+                            <li>Siparişlerinizi takip edin</li>
+                            <li>Adreslerinizi kaydedin</li>
+                            <li>Favori ürünlerinizi saklayın</li>
+                        </ul>
+                    </div>
+                    <div style="text-align:center;margin:28px 0;">
+                        <a href="%s" style="background:linear-gradient(135deg,#10b981,#059669);color:#fff;padding:14px 36px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;display:inline-block;box-shadow:0 4px 12px rgba(16,185,129,0.3);">
+                            Hesabımı Tamamla
+                        </a>
+                    </div>
+                    <p style="color:#64748b;font-size:13px;">Bu bağlantı 7 gün geçerlidir. Sadece şifrenizi belirlemeniz yeterlidir.</p>
+                    <p style="color:#94a3b8;font-size:12px;">Butona tıklayamıyorsanız aşağıdaki bağlantıyı tarayıcınıza yapıştırın:</p>
+                    <p style="color:#94a3b8;font-size:11px;word-break:break-all;background:#f1f5f9;padding:10px;border-radius:6px;">%s</p>
+                """.formatted(firstName, orderNumber, setupUrl, setupUrl)
+                + buildFooter();
+
+        sendHtml(toEmail, subject, html);
+    }
+
+    @Override
+    @Async
     public void sendPasswordResetConfirmation(String toEmail, String firstName) {
         if (!enabled) {
             log.info("Email disabled — password reset confirmation for {}", toEmail);
@@ -304,5 +428,15 @@ public class EmailServiceImpl implements EmailService {
 
         sendHtml(toEmail, "[İletişim Formu] " + subject, html, fromEmail);
         return true;
+    }
+
+    /** HTML attribute/content escape helper */
+    private String escapeHtmlAttr(String s) {
+        if (s == null) return "";
+        return s.replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace("\"", "&quot;")
+                .replace("'", "&#39;");
     }
 }

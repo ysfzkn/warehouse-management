@@ -51,6 +51,18 @@ public class StoreCartController {
         return ResponseEntity.ok(cartService.removeItem(customerId, sessionId, itemId));
     }
 
+    /**
+     * Sepeti tamamen boşaltır (tüm ürünleri kaldırır).
+     */
+    @DeleteMapping
+    public ResponseEntity<CartDto> clearCart(HttpServletRequest request) {
+        Long customerId = CustomerTokenExtractor.extractCustomerId(request, jwtService);
+        String sessionId = request.getHeader("X-Session-Id");
+        cartService.clearCart(customerId, sessionId);
+        // Temizlendikten sonra güncel (boş) cart state'i döndür
+        return ResponseEntity.ok(cartService.getCart(customerId, sessionId));
+    }
+
     @PostMapping("/coupon")
     public ResponseEntity<CartDto> applyCoupon(@Valid @RequestBody ApplyCouponRequest body, HttpServletRequest request) {
         Long customerId = CustomerTokenExtractor.extractCustomerId(request, jwtService);

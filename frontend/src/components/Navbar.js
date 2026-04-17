@@ -840,7 +840,7 @@ const Navbar = () => {
               {role === 'ADMIN' && (
               <li className="nav-item dropdown">
                 <button className="nav-link nav-link-custom dropdown-toggle text-white border-0 bg-transparent w-100 text-start" type="button" data-bs-toggle="dropdown"
-                  style={{ ...navLinkStyle(null), background: ['/admin/sales-dashboard','/admin/orders','/admin/customers','/admin/payments','/admin/support-tickets','/admin/contact-messages','/admin/stock-movements'].some(p => location.pathname.startsWith(p)) ? 'rgba(255,255,255,0.2)' : 'transparent' }}>
+                  style={{ ...navLinkStyle(null), background: ['/admin/sales-dashboard','/admin/orders','/admin/customers','/admin/payments','/admin/invoices','/admin/support-tickets','/admin/contact-messages','/admin/stock-movements'].some(p => location.pathname.startsWith(p)) ? 'rgba(255,255,255,0.2)' : 'transparent' }}>
                   <i className="fas fa-store me-2"></i>E-Ticaret
                 </button>
                 <ul className="dropdown-menu border-0 shadow-lg" style={{borderRadius: '12px', marginTop: '0.5rem'}}>
@@ -848,6 +848,7 @@ const Navbar = () => {
                   <li><Link className="dropdown-item" to="/admin/sales-dashboard"><i className="fas fa-chart-line me-2 text-primary"></i>Satış Dashboard</Link></li>
                   <li><Link className="dropdown-item" to="/admin/orders"><i className="fas fa-shopping-cart me-2 text-success"></i>Siparişler</Link></li>
                   <li><Link className="dropdown-item" to="/admin/payments"><i className="fas fa-credit-card me-2 text-danger"></i>Ödemeler</Link></li>
+                  <li><Link className="dropdown-item" to="/admin/invoices"><i className="fas fa-file-invoice me-2 text-info"></i>E-Fatura</Link></li>
                   <li><hr className="dropdown-divider" /></li>
                   <li><small className="dropdown-header text-uppercase fw-bold" style={{fontSize:10,letterSpacing:'0.05em'}}>Müşteri</small></li>
                   <li><Link className="dropdown-item" to="/admin/customers"><i className="fas fa-users me-2 text-warning"></i>Müşteriler</Link></li>
@@ -887,6 +888,7 @@ const Navbar = () => {
                   <li><Link className="dropdown-item" to="/admin/assistant/documents"><i className="fas fa-file-upload me-2 text-success"></i>Doküman Yönetimi</Link></li>
                   <li><Link className="dropdown-item" to="/admin/assistant/logs"><i className="fas fa-comments me-2 text-warning"></i>Sohbet Logları</Link></li>
                   <li><Link className="dropdown-item" to="/admin/assistant/settings"><i className="fas fa-cog me-2 text-danger"></i>AI Ayarları</Link></li>
+                  <li><Link className="dropdown-item" to="/admin/assistant/diagnostics"><i className="fas fa-microscope me-2 text-info"></i>RAG Tanılama</Link></li>
                   <li><hr className="dropdown-divider" /></li>
                   <li><Link className="dropdown-item" to="/admin/help"><i className="fas fa-question-circle me-2 text-primary"></i>Yardım & Kılavuz</Link></li>
                 </ul>

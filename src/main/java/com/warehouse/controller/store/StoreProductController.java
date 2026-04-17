@@ -25,13 +25,55 @@ public class StoreProductController {
     private final ProductService productService;
     private final StockService stockService;
     private final ReviewRepository reviewRepository;
+    private final com.warehouse.service.StockNotificationService stockNotificationService;
+    private final com.warehouse.security.JwtService jwtService;
 
     public StoreProductController(ProductService productService,
                                    StockService stockService,
-                                   ReviewRepository reviewRepository) {
+                                   ReviewRepository reviewRepository,
+                                   com.warehouse.service.StockNotificationService stockNotificationService,
+                                   com.warehouse.security.JwtService jwtService) {
         this.productService = productService;
         this.stockService = stockService;
         this.reviewRepository = reviewRepository;
+        this.stockNotificationService = stockNotificationService;
+        this.jwtService = jwtService;
+    }
+
+    /**
+     * Stokta yoksa bildir: müşteri ürün tekrar stoğa girdiğinde haber almak için abone olur.
+     * Giriş yapmış müşteri için token'dan email alınır, misafirler body'de email gönderir.
+     */
+    @PostMapping("/{id}/notify-me")
+    public ResponseEntity<java.util.Map<String, Object>> notifyMe(
+            @PathVariable Long id,
+            @RequestBody(required = false) java.util.Map<String, String> body,
+            jakarta.servlet.http.HttpServletRequest request) {
+
+        Long customerId = com.warehouse.util.CustomerTokenExtractor.extractCustomerId(request, jwtService);
+        String email = body != null ? body.getOrDefault("email", "") : "";
+        email = email != null ? email.trim() : "";
+
+        // Giriş yapmış kullanıcıda token'dan email'i alabiliriz (opsiyonel — frontend zaten gönderir)
+        if (email.isBlank()) {
+            return ResponseEntity.badRequest().body(java.util.Map.of("error", "E-posta adresi zorunludur."));
+        }
+        if (!email.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) {
+            return ResponseEntity.badRequest().body(java.util.Map.of("error", "Geçerli bir e-posta adresi giriniz."));
+        }
+
+        try {
+            boolean newSubscription = stockNotificationService.subscribe(id, email, customerId);
+            return ResponseEntity.ok(java.util.Map.of(
+                "success", true,
+                "alreadySubscribed", !newSubscription,
+                "message", newSubscription
+                    ? "Ürün stoklara geldiğinde size bildireceğiz."
+                    : "Bu ürün için zaten bir bildirim aboneliğiniz var."
+            ));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(java.util.Map.of("error", e.getMessage()));
+        }
     }
 
     @GetMapping

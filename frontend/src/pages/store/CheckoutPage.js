@@ -27,6 +27,12 @@ export default function CheckoutPage() {
   const [loading, setLoading] = useState(false);
   const [, setError] = useState(''); // kept for setError calls, display via toast
 
+  // --- Misafir (guest) checkout state ---
+  const [isGuest, setIsGuest] = useState(!localStorage.getItem('customer_token'));
+  const [guestEmail, setGuestEmail] = useState('');
+  const [guestKvkkConsent, setGuestKvkkConsent] = useState(false);
+  const [guestErrors, setGuestErrors] = useState({});
+
   // Payment state
   const [paymentPhase, setPaymentPhase] = useState(null);
   const [savedAddresses, setSavedAddresses] = useState([]);
@@ -41,8 +47,12 @@ export default function CheckoutPage() {
   // Dynamic payment methods from API
   const [paymentMethods, setPaymentMethods] = useState([]);
 
-  // Load saved addresses
+  // Load saved addresses (only for authenticated customers)
   useEffect(() => {
+    if (isGuest) {
+      setShowNewAddress(true);
+      return;
+    }
     axios.get('/api/store/addresses').then(r => {
       const addrs = r.data || [];
       setSavedAddresses(addrs);
@@ -52,7 +62,7 @@ export default function CheckoutPage() {
         if (def) setAddress(def);
       }
     }).catch(() => setShowNewAddress(true));
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isGuest]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load cargo providers
   useEffect(() => {
@@ -99,19 +109,62 @@ export default function CheckoutPage() {
   const handlePlaceOrder = async () => {
     if (!preliminaryInfoAccepted) { toast.warning('Ön bilgilendirme formunu onaylayın.'); setError('Ön bilgilendirme formunu onaylayın.'); return; }
     if (!contractAccepted) { toast.warning('Mesafeli satış sözleşmesini onaylayın.'); setError('Mesafeli satış sözleşmesini onaylayın.'); return; }
+
+    // Guest validation
+    if (isGuest) {
+      const errs = {};
+      if (!guestEmail || !/^\S+@\S+\.\S+$/.test(guestEmail)) errs.email = 'Geçerli bir e-posta girin.';
+      if (!address || !address.firstName || !address.lastName || !address.phone || !address.addressLine
+          || !address.city || !address.district) {
+        errs.address = 'Teslimat adresi bilgilerini eksiksiz girin.';
+      }
+      if (!guestKvkkConsent) errs.kvkk = 'KVKK aydınlatma metnini onaylamalısınız.';
+      if (Object.keys(errs).length > 0) {
+        setGuestErrors(errs);
+        toast.warning(Object.values(errs)[0]);
+        return;
+      }
+      setGuestErrors({});
+    }
+
     setLoading(true); setError('');
     toast.info('Siparişiniz oluşturuluyor...');
 
     try {
-      // Phase 1: Create order
-      const orderRes = await axios.post('/api/store/checkout/place-order', {
-        shippingAddressId: address?.id || 1,
-        billingAddressId: address?.id || 1,
-        cargoCompany,
-        cargoProviderId: selectedCargoProvider?.id || null,
-        paymentMethod,
-        distanceSalesContractAccepted: true,
-      }, { headers: getAuthHeaders() });
+      let orderRes;
+
+      if (isGuest) {
+        // Guest checkout - inline address + contact info
+        const sessionId = localStorage.getItem('store_session_id');
+        orderRes = await axios.post('/api/store/checkout/guest-checkout', {
+          email: guestEmail.trim(),
+          firstName: address.firstName,
+          lastName: address.lastName,
+          phone: address.phone,
+          shippingAddressLine: address.addressLine,
+          shippingCity: address.city,
+          shippingDistrict: address.district,
+          shippingPostalCode: address.postalCode || '',
+          billingSameAsShipping: true,
+          cargoCompany,
+          cargoProviderId: selectedCargoProvider?.id || null,
+          paymentMethod,
+          distanceSalesContractAccepted: true,
+          preliminaryInfoAccepted: true,
+          kvkkConsent: guestKvkkConsent,
+          sessionId
+        });
+      } else {
+        // Authenticated checkout
+        orderRes = await axios.post('/api/store/checkout/place-order', {
+          shippingAddressId: address?.id || 1,
+          billingAddressId: address?.id || 1,
+          cargoCompany,
+          cargoProviderId: selectedCargoProvider?.id || null,
+          paymentMethod,
+          distanceSalesContractAccepted: true,
+        }, { headers: getAuthHeaders() });
+      }
 
       const orderId = orderRes.data.orderId;
 
@@ -286,6 +339,51 @@ export default function CheckoutPage() {
 
       {step === 'address' && (
         <div>
+          {/* Guest contact info */}
+          {isGuest && (
+            <div className="card mb-3 border-primary border-2">
+              <div className="card-body">
+                <div className="d-flex justify-content-between align-items-start mb-3">
+                  <h5 className="mb-0"><i className="fas fa-user me-2 text-primary"></i>Misafir Olarak Devam Ediyorsunuz</h5>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline-primary"
+                    onClick={() => navigate('/giris?redirect=/odeme')}>
+                    <i className="fas fa-sign-in-alt me-1"></i>Üye Girişi Yap
+                  </button>
+                </div>
+                <p className="small text-muted mb-3">
+                  Üye olmadan siparişi tamamlayabilirsiniz. E-postanıza "hesabımı tamamla" bağlantısı gönderilecek; dilediğinizde şifre belirleyip hesabınızı aktif edebilirsiniz.
+                </p>
+                <div className="mb-3">
+                  <label className="form-label small fw-semibold">E-posta Adresi <span className="text-danger">*</span></label>
+                  <input
+                    type="email"
+                    className={`form-control ${guestErrors.email ? 'is-invalid' : ''}`}
+                    placeholder="ornek@eposta.com"
+                    value={guestEmail}
+                    onChange={(e) => { setGuestEmail(e.target.value); setGuestErrors(prev => ({...prev, email: ''})); }}
+                  />
+                  {guestErrors.email && <div className="invalid-feedback">{guestErrors.email}</div>}
+                  <small className="text-muted">Sipariş onayı ve hesap tamamlama bağlantısı bu adrese gönderilecektir.</small>
+                </div>
+                <div className="form-check">
+                  <input
+                    className="form-check-input"
+                    type="checkbox"
+                    id="guestKvkk"
+                    checked={guestKvkkConsent}
+                    onChange={(e) => { setGuestKvkkConsent(e.target.checked); setGuestErrors(prev => ({...prev, kvkk: ''})); }}
+                  />
+                  <label className="form-check-label small" htmlFor="guestKvkk">
+                    <a href="/sayfa/kvkk" target="_blank" rel="noopener noreferrer">KVKK Aydınlatma Metni</a>'ni okudum ve onaylıyorum. <span className="text-danger">*</span>
+                  </label>
+                  {guestErrors.kvkk && <div className="text-danger small mt-1">{guestErrors.kvkk}</div>}
+                </div>
+              </div>
+            </div>
+          )}
+
           <h5 className="mb-3">Teslimat Adresi</h5>
           {/* Saved addresses */}
           {savedAddresses.length > 0 && !showNewAddress && (

@@ -6,13 +6,21 @@ import { BrowserRouter } from 'react-router-dom';
 import { HelmetProvider } from 'react-helmet-async';
 import axios from 'axios';
 
-// Rewrite legacy /api/* paths to /api/admin/* (matches nginx rewrite rule)
-// Store paths (/api/store/*) and public paths (/api/info) are not rewritten
+// Rewrite legacy /api/* paths to /api/admin/* (matches nginx rewrite rule).
+// Excluded:
+//   /api/store/*        — storefront endpoints
+//   /api/info           — public public info
+//   /api/cezeri/*       — WMS assistant chat (physically at /api/cezeri on backend)
+//   /api/assistant/*    — public assistant endpoints (flags) consumed by BOTH
+//                          admin and store layouts — rewriting to /api/admin would
+//                          require admin auth and fail 403 in the store tab.
 axios.interceptors.request.use((config) => {
   if (config.url && config.url.startsWith('/api/') &&
       !config.url.startsWith('/api/admin/') &&
       !config.url.startsWith('/api/store/') &&
-      !config.url.startsWith('/api/info')) {
+      !config.url.startsWith('/api/info') &&
+      !config.url.startsWith('/api/cezeri/') &&
+      !config.url.startsWith('/api/assistant/')) {
     config.url = config.url.replace('/api/', '/api/admin/');
   }
   // attach Bearer auth header — admin or customer token based on request path
@@ -57,55 +65,85 @@ axios.interceptors.response.use(
           const tokenKey = isStoreRequest ? 'customer_token' : 'auth_token';
 
           const modalId = 'session-expired-modal';
-          if (!document.getElementById(modalId)) {
-            const wrapper = document.createElement('div');
-            wrapper.id = modalId;
-            wrapper.innerHTML = `
-              <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5); z-index: 2000;">
-                <div class="modal-dialog modal-dialog-centered">
-                  <div class="modal-content shadow-lg border-0">
-                    <div class="modal-header border-0 pb-0">
-                      <div class="w-100 text-center pt-3">
-                        <div class="text-warning mb-3">
-                          <i class="fas fa-clock fa-3x"></i>
-                        </div>
-                        <h5 class="modal-title fw-bold">Oturum Süresi Doldu</h5>
+
+          // Önce eski/orphan instance varsa temizle
+          const existing = document.getElementById(modalId);
+          if (existing) {
+            try { existing.remove(); } catch {}
+          }
+
+          const wrapper = document.createElement('div');
+          wrapper.id = modalId;
+          wrapper.innerHTML = `
+            <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5); z-index: 2000;">
+              <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content shadow-lg border-0">
+                  <div class="modal-header border-0 pb-0">
+                    <div class="w-100 text-center pt-3">
+                      <div class="text-warning mb-3">
+                        <i class="fas fa-clock fa-3x"></i>
                       </div>
-                    </div>
-                    <div class="modal-body text-center px-4 py-3">
-                      <p class="text-muted mb-0">Güvenliğiniz için tekrar giriş yapmanız gerekiyor.</p>
-                    </div>
-                    <div class="modal-footer border-0 justify-content-center gap-2 pb-4">
-                      <button type="button" id="session-expired-ok" class="btn btn-primary px-4">
-                        <i class="fas fa-sign-in-alt me-2"></i>
-                        Giriş Ekranına Git
-                      </button>
+                      <h5 class="modal-title fw-bold">Oturum Süresi Doldu</h5>
                     </div>
                   </div>
+                  <div class="modal-body text-center px-4 py-3">
+                    <p class="text-muted mb-0">Güvenliğiniz için tekrar giriş yapmanız gerekiyor.</p>
+                  </div>
+                  <div class="modal-footer border-0 justify-content-center gap-2 pb-4">
+                    <button type="button" id="session-expired-ok" class="btn btn-primary px-4">
+                      <i class="fas fa-sign-in-alt me-2"></i>
+                      Giriş Ekranına Git
+                    </button>
+                  </div>
                 </div>
-              </div>`;
-            document.body.appendChild(wrapper);
+              </div>
+            </div>`;
+          document.body.appendChild(wrapper);
 
-            const cleanup = () => {
-              try { document.body.removeChild(wrapper); } catch {}
-              window.__sessionExpiredHandling = false;
-            };
+          const cleanup = () => {
+            try {
+              const el = document.getElementById(modalId);
+              if (el) el.remove();
+            } catch {}
+            window.__sessionExpiredHandling = false;
+          };
 
-            const onOk = () => {
-              try {
-                localStorage.removeItem(tokenKey);
-                if (!isStoreRequest) {
-                  localStorage.removeItem('auth_user');
-                  localStorage.removeItem('auth_role');
-                }
-                window.dispatchEvent(new Event('auth-changed'));
-              } catch {}
-              cleanup();
-              window.location.replace(loginUrl);
-            };
+          const onOk = () => {
+            try {
+              localStorage.removeItem(tokenKey);
+              if (!isStoreRequest) {
+                localStorage.removeItem('auth_user');
+                localStorage.removeItem('auth_role');
+              }
+              window.dispatchEvent(new Event('auth-changed'));
+            } catch {}
+            cleanup();
+            window.location.replace(loginUrl);
+          };
 
-            document.getElementById('session-expired-ok')?.addEventListener('click', onOk);
-          }
+          // Event delegation: wrapper üzerinden click yakala (düğme koparılsa bile çalışır)
+          wrapper.addEventListener('click', (e) => {
+            if (e.target.closest('#session-expired-ok')) {
+              onOk();
+            }
+          });
+
+          // Escape tuşuyla da kapanabilsin (ve login'e git)
+          const onKey = (e) => {
+            if (e.key === 'Escape' || e.key === 'Enter') {
+              document.removeEventListener('keydown', onKey);
+              onOk();
+            }
+          };
+          document.addEventListener('keydown', onKey);
+
+          // Failsafe: 60 saniye sonra hâlâ açıksa zorla login sayfasına git
+          setTimeout(() => {
+            if (document.getElementById(modalId)) {
+              console.warn('[session-expired] Modal 60 saniyedir açık, otomatik login\'e yönlendiriliyor');
+              onOk();
+            }
+          }, 60000);
         }
       }
     }

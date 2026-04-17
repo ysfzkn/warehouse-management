@@ -23,6 +23,13 @@ public class Cart {
     @Column(name = "expires_at")
     private LocalDateTime expiresAt;
 
+    /**
+     * Terk edilmiş sepet hatırlatma e-postasının gönderildiği zaman.
+     * null ise henüz gönderilmemiş demektir. Duplicate gönderimi engeller.
+     */
+    @Column(name = "abandoned_cart_reminder_sent_at")
+    private LocalDateTime abandonedCartReminderSentAt;
+
     @OneToMany(mappedBy = "cart", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @JsonIgnore
     private List<CartItem> items;

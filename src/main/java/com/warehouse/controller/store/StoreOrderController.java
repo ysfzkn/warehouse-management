@@ -32,12 +32,14 @@ public class StoreOrderController {
     private final com.warehouse.repository.CustomerRepository customerRepo;
     private final com.warehouse.repository.SupportTicketRepository supportTicketRepo;
     private final com.warehouse.repository.CargoProviderRepository cargoProviderRepo;
+    private final com.warehouse.service.InvoiceService invoiceService;
 
     public StoreOrderController(OrderRepository orderRepo, OrderItemRepository orderItemRepo,
                                  OrderStatusHistoryRepository statusHistoryRepo, JwtService jwtService,
                                  com.warehouse.repository.CustomerRepository customerRepo,
                                  com.warehouse.repository.SupportTicketRepository supportTicketRepo,
-                                 com.warehouse.repository.CargoProviderRepository cargoProviderRepo) {
+                                 com.warehouse.repository.CargoProviderRepository cargoProviderRepo,
+                                 com.warehouse.service.InvoiceService invoiceService) {
         this.orderRepo = orderRepo;
         this.orderItemRepo = orderItemRepo;
         this.statusHistoryRepo = statusHistoryRepo;
@@ -45,6 +47,7 @@ public class StoreOrderController {
         this.customerRepo = customerRepo;
         this.supportTicketRepo = supportTicketRepo;
         this.cargoProviderRepo = cargoProviderRepo;
+        this.invoiceService = invoiceService;
     }
 
     @GetMapping
@@ -247,6 +250,66 @@ public class StoreOrderController {
         dto.put("invoiceNumber", o.getInvoiceNumber());
         dto.put("createdAt", o.getCreatedAt());
         return dto;
+    }
+
+    /**
+     * Müşterinin kendi siparişi için e-fatura PDF'ini indirir.
+     */
+    @GetMapping("/{orderNumber}/invoice/pdf")
+    @Transactional(readOnly = true)
+    public ResponseEntity<?> downloadInvoicePdf(HttpServletRequest request, @PathVariable String orderNumber) {
+        Long customerId = extractCustomerId(request);
+        if (customerId == null) return ResponseEntity.status(401).body(Map.of("error", "Giriş yapmanız gerekiyor."));
+
+        Order order = orderRepo.findByOrderNumber(orderNumber).orElse(null);
+        if (order == null || !order.getCustomer().getId().equals(customerId)) {
+            return ResponseEntity.status(404).body(Map.of("error", "Sipariş bulunamadı."));
+        }
+
+        var invoiceOpt = invoiceService.getInvoiceByOrderId(order.getId());
+        if (invoiceOpt.isEmpty() || !invoiceOpt.get().isHasPdf()) {
+            return ResponseEntity.status(404).body(Map.of("error", "Bu sipariş için fatura henüz oluşturulmamış."));
+        }
+
+        try {
+            byte[] pdf = invoiceService.downloadInvoicePdf(invoiceOpt.get().getId());
+            return ResponseEntity.ok()
+                    .header("Content-Disposition", "attachment; filename=\"fatura-" + orderNumber + ".pdf\"")
+                    .contentType(org.springframework.http.MediaType.APPLICATION_PDF)
+                    .body(pdf);
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(Map.of("error", "Fatura indirilemedi."));
+        }
+    }
+
+    /**
+     * Müşterinin siparişi için fatura bilgilerini getirir (e-Fatura sistem bilgisi).
+     */
+    @GetMapping("/{orderNumber}/invoice/info")
+    @Transactional(readOnly = true)
+    public ResponseEntity<?> getInvoiceInfo(HttpServletRequest request, @PathVariable String orderNumber) {
+        Long customerId = extractCustomerId(request);
+        if (customerId == null) return ResponseEntity.status(401).body(Map.of("error", "Giriş yapmanız gerekiyor."));
+
+        Order order = orderRepo.findByOrderNumber(orderNumber).orElse(null);
+        if (order == null || !order.getCustomer().getId().equals(customerId)) {
+            return ResponseEntity.status(404).body(Map.of("error", "Sipariş bulunamadı."));
+        }
+
+        var invoiceOpt = invoiceService.getInvoiceByOrderId(order.getId());
+        if (invoiceOpt.isEmpty()) {
+            return ResponseEntity.ok(Map.of("hasInvoice", false));
+        }
+
+        var inv = invoiceOpt.get();
+        return ResponseEntity.ok(Map.of(
+                "hasInvoice", true,
+                "invoiceNumber", inv.getInvoiceNumber() != null ? inv.getInvoiceNumber() : "",
+                "status", inv.getStatus().name(),
+                "invoiceType", inv.getInvoiceType().name(),
+                "hasPdf", inv.isHasPdf(),
+                "issuedAt", inv.getIssuedAt() != null ? inv.getIssuedAt().toString() : ""
+        ));
     }
 
     private Long extractCustomerId(HttpServletRequest request) {

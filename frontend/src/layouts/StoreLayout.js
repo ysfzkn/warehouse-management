@@ -11,6 +11,7 @@ import { useSiteSettings } from '../hooks/useSiteSettings';
 import { useAssistantFlags } from '../hooks/useAssistantFlags';
 import AssistantWidget from '../components/AssistantWidget';
 import CookieBanner from '../components/store/CookieBanner';
+import AnalyticsScripts from '../components/store/AnalyticsScripts';
 
 /**
  * Storefront assistant configuration. Guest-friendly: no Authorization
@@ -43,6 +44,12 @@ export default function StoreLayout() {
   const cart = useCart();
   const siteSettings = useSiteSettings();
   const { flags: assistantFlags } = useAssistantFlags();
+
+  // Debug visibility decision — helps diagnose "chatbot doesn't appear after admin toggle".
+  useEffect(() => {
+    console.log('[StoreLayout] assistantFlags changed:', assistantFlags,
+      '→ widget will render:', assistantFlags.storeEnabled === true);
+  }, [assistantFlags]);
 
   // Dynamic favicon and title from site settings
   useEffect(() => {
@@ -87,6 +94,10 @@ export default function StoreLayout() {
          */}
         {assistantFlags.storeEnabled === true && <AssistantWidget config={storeAssistantConfig} siteName={siteSettings.get('site_name', '')} />}
         <CookieBanner />
+        <AnalyticsScripts
+          googleAnalyticsId={siteSettings.get('analytics_google_id', '')}
+          facebookPixelId={siteSettings.get('analytics_facebook_pixel_id', '')}
+        />
       </div>
       </WishlistProvider>
     </ToastProvider>

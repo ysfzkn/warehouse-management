@@ -84,6 +84,16 @@ public enum ErrorCode {
     IDEMPOTENCY_CONFLICT("PAY_007", "Bu işlem zaten başlatılmış. Lütfen yeni işlem oluşturun.", HttpStatus.CONFLICT),
     ORDER_PAYMENT_EXPIRED("PAY_008", "Ödeme süresi dolmuş. Lütfen yeni sipariş oluşturun.", HttpStatus.BAD_REQUEST),
 
+    // Order (404)
+    ORDER_NOT_FOUND("ORDER_001", "Sipariş bulunamadı", HttpStatus.NOT_FOUND),
+
+    // Invoice / E-Fatura (400/404)
+    INVOICE_NOT_FOUND("INV_001", "Fatura bulunamadı", HttpStatus.NOT_FOUND),
+    INVOICE_CANNOT_REGENERATE("INV_002", "Sadece DRAFT veya ERROR durumundaki faturalar yeniden oluşturulabilir", HttpStatus.BAD_REQUEST),
+    INVOICE_ALREADY_CANCELLED("INV_003", "Fatura zaten iptal edilmiş", HttpStatus.BAD_REQUEST),
+    INVOICE_PDF_NOT_AVAILABLE("INV_004", "Fatura PDF'i henüz mevcut değil", HttpStatus.BAD_REQUEST),
+    INVOICE_CREATION_FAILED("INV_005", "Fatura oluşturma başarısız", HttpStatus.BAD_REQUEST),
+
     // Genel (500)
     INTERNAL_SERVER_ERROR("SYSTEM_001", "Beklenmeyen bir hata oluştu", HttpStatus.INTERNAL_SERVER_ERROR);
 

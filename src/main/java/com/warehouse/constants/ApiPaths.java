@@ -55,7 +55,11 @@ public final class ApiPaths {
     public static final String STORE_PAYMENT_CALLBACK_PAYTR = API_STORE_BASE + "/payment/callback/paytr/**";
     public static final String STORE_PAYMENT_METHODS = API_STORE_BASE + "/payment/methods";
     public static final String STORE_PAYMENT_STATUS_TOKEN = API_STORE_BASE + "/payment/status-by-token";
+    public static final String STORE_PAYMENT_INITIALIZE = API_STORE_BASE + "/payment/initialize";
     public static final String STORE_CARGO_PROVIDERS = API_STORE_BASE + "/checkout/cargo-providers";
+    public static final String STORE_GUEST_CHECKOUT = API_STORE_BASE + "/checkout/guest-checkout";
+    public static final String STORE_PUBLIC_ORDER_TRACK = API_STORE_BASE + "/public/orders/track";
+    public static final String STORE_PRODUCT_NOTIFY_ME = API_STORE_BASE + "/products/*/notify-me";
     public static final String STORE_NEWSLETTER = API_STORE_BASE + "/newsletter/**";
     public static final String STORE_ASSISTANT = API_STORE_BASE + "/assistant/**";
     public static final String STORE_ANY = API_STORE_BASE + "/**";

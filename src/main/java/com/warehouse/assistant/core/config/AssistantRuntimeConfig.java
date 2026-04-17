@@ -83,8 +83,21 @@ public class AssistantRuntimeConfig {
     public int getChunkOverlapTokens() {
         return getInt("assistant.rag.chunk-overlap-tokens", defaults.getRag().getChunkOverlapTokens());
     }
+    public int getNeighborWindow() {
+        return getInt("assistant.rag.neighbor-window", defaults.getRag().getNeighborWindow());
+    }
+    public boolean isHybridEnabled() {
+        return getBool("assistant.rag.hybrid-enabled", defaults.getRag().isHybridEnabled());
+    }
+    public int getHybridRrfK() {
+        return getInt("assistant.rag.hybrid-rrf-k", defaults.getRag().getHybridRrfK());
+    }
 
-    // ── Embedding connection (separate Azure resource, optional) ──
+    // ── Embedding connection (Azure or OpenAI) ──
+    public String getEmbeddingProvider() {
+        String v = getString("assistant.embedding.provider", defaults.getEmbedding().getProvider().name());
+        return normalizeProvider(v);
+    }
     public String getEmbeddingEndpoint() {
         return getString("assistant.embedding.endpoint", defaults.getEmbedding().getEndpoint());
     }
@@ -93,6 +106,27 @@ public class AssistantRuntimeConfig {
     }
     public String getEmbeddingDeploymentName() {
         return getString("assistant.embedding.deployment-name", defaults.getEmbedding().getDeploymentName());
+    }
+
+    // ── Chat connection (Azure or OpenAI) ──
+    public String getChatProvider() {
+        String v = getString("assistant.chat.provider", defaults.getChat().getProvider().name());
+        return normalizeProvider(v);
+    }
+    public String getChatEndpoint() {
+        return getString("assistant.chat.endpoint", defaults.getChat().getEndpoint());
+    }
+    public String getChatApiKey() {
+        return getString("assistant.chat.api-key", defaults.getChat().getApiKey());
+    }
+    public String getChatModel() {
+        return getString("assistant.chat.model", defaults.getChat().getModel());
+    }
+
+    private String normalizeProvider(String v) {
+        if (v == null) return "AZURE";
+        String up = v.trim().toUpperCase();
+        return ("OPENAI".equals(up)) ? "OPENAI" : "AZURE";
     }
 
     // ── Max Tokens ──
@@ -122,12 +156,21 @@ public class AssistantRuntimeConfig {
         m.put("rag.vectorDistanceThreshold", getVectorDistanceThreshold());
         m.put("rag.chunkSizeTokens", getChunkSizeTokens());
         m.put("rag.chunkOverlapTokens", getChunkOverlapTokens());
+        m.put("rag.neighborWindow", getNeighborWindow());
+        m.put("rag.hybridEnabled", isHybridEnabled());
+        m.put("rag.hybridRrfK", getHybridRrfK());
         // Max tokens
         m.put("maxResponseTokens", getMaxResponseTokens());
         // Embedding connection
+        m.put("embedding.provider", getEmbeddingProvider());
         m.put("embedding.endpoint", getEmbeddingEndpoint());
         m.put("embedding.apiKey", maskSecret(getEmbeddingApiKey()));
         m.put("embedding.deploymentName", getEmbeddingDeploymentName());
+        // Chat connection
+        m.put("chat.provider", getChatProvider());
+        m.put("chat.endpoint", getChatEndpoint());
+        m.put("chat.apiKey", maskSecret(getChatApiKey()));
+        m.put("chat.model", getChatModel());
         return m;
     }
 
@@ -153,14 +196,26 @@ public class AssistantRuntimeConfig {
         putIfPresent(values, patch, "rag.vectorDistanceThreshold", "assistant.rag.vector-distance-threshold");
         putIfPresent(values, patch, "rag.chunkSizeTokens", "assistant.rag.chunk-size-tokens");
         putIfPresent(values, patch, "rag.chunkOverlapTokens", "assistant.rag.chunk-overlap-tokens");
+        putIfPresent(values, patch, "rag.neighborWindow", "assistant.rag.neighbor-window");
+        putIfPresent(values, patch, "rag.hybridEnabled", "assistant.rag.hybrid-enabled");
+        putIfPresent(values, patch, "rag.hybridRrfK", "assistant.rag.hybrid-rrf-k");
         putIfPresent(values, patch, "maxResponseTokens", "assistant.max-response-tokens");
+        // Embedding connection
+        putIfPresent(values, patch, "embedding.provider", "assistant.embedding.provider");
         putIfPresent(values, patch, "embedding.endpoint", "assistant.embedding.endpoint");
-        // Only update API key if the value is NOT masked (UI sends "****..." for unchanged keys)
-        Object apiKeyVal = values.get("embedding.apiKey");
-        if (apiKeyVal != null && !String.valueOf(apiKeyVal).contains("****")) {
-            patch.put("assistant.embedding.api-key", String.valueOf(apiKeyVal));
+        Object embKey = values.get("embedding.apiKey");
+        if (embKey != null && !String.valueOf(embKey).contains("****")) {
+            patch.put("assistant.embedding.api-key", String.valueOf(embKey));
         }
         putIfPresent(values, patch, "embedding.deploymentName", "assistant.embedding.deployment-name");
+        // Chat connection
+        putIfPresent(values, patch, "chat.provider", "assistant.chat.provider");
+        putIfPresent(values, patch, "chat.endpoint", "assistant.chat.endpoint");
+        Object chatKey = values.get("chat.apiKey");
+        if (chatKey != null && !String.valueOf(chatKey).contains("****")) {
+            patch.put("assistant.chat.api-key", String.valueOf(chatKey));
+        }
+        putIfPresent(values, patch, "chat.model", "assistant.chat.model");
         if (!patch.isEmpty()) {
             siteSettings.updateSettings(patch, updatedBy);
         }

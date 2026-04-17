@@ -3,6 +3,9 @@ import { useParams, useOutletContext, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import ProductCard from '../../components/store/ProductCard';
 import Breadcrumb from '../../components/store/Breadcrumb';
+import SeoHead from '../../components/store/SeoHead';
+import { useSiteSettings } from '../../hooks/useSiteSettings';
+import { buildCollectionPageSchema, buildBreadcrumbSchema } from '../../utils/seo';
 import { useToast } from '../../components/store/Toast';
 import { FiFilter, FiGrid, FiList, FiX, FiSearch, FiChevronDown, FiChevronUp, FiSliders, FiCheck } from 'react-icons/fi';
 import { SkeletonProductGrid } from '../../components/store/Skeleton';
@@ -57,6 +60,7 @@ export default function CategoryPage() {
   const { cart } = useOutletContext();
   const [searchParams] = useSearchParams();
   const toast = useToast();
+  const { settings } = useSiteSettings();
   const [products, setProducts] = useState([]);
   const [category, setCategory] = useState(null);
   const [categories, setCategories] = useState([]);
@@ -279,8 +283,33 @@ export default function CategoryPage() {
     </>
   );
 
+  // SEO: meta tags + structured data
+  const seoTitle = category?.metaTitle || category?.name || (searchQuery ? `"${searchQuery}" araması` : 'Tüm Ürünler');
+  const seoDescription = category?.metaDescription || (category?.description) ||
+    (category ? `${category.name} kategorisindeki tüm ürünler` : 'Tüm ürün kategorilerimizi keşfedin');
+  const seoPath = category?.slug ? `/kategori/${category.slug}` : '/kategori/tumu';
+
+  const schemaBreadcrumbs = [
+    { name: 'Ana Sayfa', url: '/' },
+    ...(category?.parentSlug ? [{ name: category.parentName, url: `/kategori/${category.parentSlug}` }] : []),
+    ...(category ? [{ name: category.name, url: `/kategori/${category.slug}` }] : [])
+  ];
+
+  const jsonLd = [
+    category ? buildCollectionPageSchema(category, settings) : null,
+    schemaBreadcrumbs.length > 1 ? buildBreadcrumbSchema(schemaBreadcrumbs, settings) : null
+  ].filter(Boolean);
+
   return (
     <div className="container my-3">
+      <SeoHead
+        title={seoTitle}
+        description={seoDescription}
+        path={seoPath}
+        image={category?.imageUrl}
+        type="website"
+        jsonLd={jsonLd}
+      />
       <Breadcrumb items={breadcrumbs.length > 0 ? breadcrumbs : [{ label: 'Tüm Ürünler' }]} />
 
       <div className="row g-4">

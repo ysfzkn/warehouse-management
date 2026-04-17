@@ -3,12 +3,16 @@ import { Link, useOutletContext } from 'react-router-dom';
 import axios from 'axios';
 import HeroBanner from '../../components/store/HeroBanner';
 import ProductCard from '../../components/store/ProductCard';
+import SeoHead from '../../components/store/SeoHead';
 import { useToast } from '../../components/store/Toast';
+import { useSiteSettings } from '../../hooks/useSiteSettings';
+import { buildOrganizationSchema, buildWebSiteSchema } from '../../utils/seo';
 import { FiShoppingBag, FiArrowRight, FiStar, FiZap, FiTrendingUp } from 'react-icons/fi';
 
 export default function HomePage() {
   const { cart } = useOutletContext();
   const toast = useToast();
+  const { settings } = useSiteSettings();
   const [featured, setFeatured] = useState([]);
   const [newProducts, setNewProducts] = useState([]);
   const [saleProducts, setSaleProducts] = useState([]);
@@ -65,8 +69,18 @@ export default function HomePage() {
     </section>
   );
 
+  const orgSchema = buildOrganizationSchema(settings);
+  const siteSchema = buildWebSiteSchema(settings);
+
   return (
     <div>
+      <SeoHead
+        title={settings?.seo_meta_title_home || null}
+        description={settings?.seo_default_meta_description}
+        path="/"
+        type="website"
+        jsonLd={[orgSchema, siteSchema].filter(Boolean)}
+      />
       {/* Hero Banner */}
       <div className="container mt-3">
         <HeroBanner />

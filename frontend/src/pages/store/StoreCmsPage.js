@@ -3,11 +3,15 @@ import { useParams, useOutletContext } from 'react-router-dom';
 import axios from 'axios';
 import Breadcrumb from '../../components/store/Breadcrumb';
 import ContactForm from '../../components/store/ContactForm';
+import SeoHead from '../../components/store/SeoHead';
+import { useSiteSettings } from '../../hooks/useSiteSettings';
+import { buildArticleSchema, buildBreadcrumbSchema } from '../../utils/seo';
 import { FiPhone, FiMail, FiMapPin } from 'react-icons/fi';
 
 export default function StoreCmsPage() {
   const { slug } = useParams();
   const { siteSettings } = useOutletContext();
+  const { settings } = useSiteSettings();
   const [page, setPage] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -24,11 +28,29 @@ export default function StoreCmsPage() {
     </div>
   );
 
+  // SEO: CMS article schema + breadcrumbs
+  const articleSchema = buildArticleSchema(page, settings);
+  const breadcrumbSchema = buildBreadcrumbSchema([
+    { name: 'Ana Sayfa', url: '/' },
+    { name: page.title, url: `/sayfa/${page.slug}` }
+  ], settings);
+
+  const SeoHeader = (
+    <SeoHead
+      title={page.metaTitle || page.title}
+      description={page.metaDescription}
+      path={`/sayfa/${page.slug}`}
+      type="article"
+      jsonLd={[articleSchema, breadcrumbSchema]}
+    />
+  );
+
   // Special template for contact page
   if (slug === 'iletisim') {
     const mapEmbed = siteSettings.get('contact_map_embed', '');
     return (
       <div className="container my-4">
+        {SeoHeader}
         <Breadcrumb items={[{ label: 'İletişim' }]} />
         <h1 className="h3 fw-bold mb-4">İletişim</h1>
         <div className="row g-4">
@@ -102,6 +124,7 @@ export default function StoreCmsPage() {
   // Standard CMS page
   return (
     <div className="container my-4" style={{maxWidth: 800}}>
+      {SeoHeader}
       <Breadcrumb items={[{ label: page.title }]} />
       <h1 className="h3 fw-bold mb-4">{page.title}</h1>
       <div className="cms-content" dangerouslySetInnerHTML={{ __html: page.content }} />

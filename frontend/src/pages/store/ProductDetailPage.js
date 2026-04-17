@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useOutletContext, Link } from 'react-router-dom';
-import { Helmet } from 'react-helmet-async';
 import { useToast } from '../../components/store/Toast';
 import axios from 'axios';
 import ProductGallery from '../../components/store/ProductGallery';
@@ -8,20 +7,30 @@ import Breadcrumb from '../../components/store/Breadcrumb';
 import PriceDisplay from '../../components/store/PriceDisplay';
 import StockBadge from '../../components/store/StockBadge';
 import ProductCard from '../../components/store/ProductCard';
+import SeoHead from '../../components/store/SeoHead';
 import { SkeletonProductDetail } from '../../components/store/Skeleton';
-import { FiHeart, FiShoppingCart, FiTruck, FiShield, FiRefreshCw, FiPackage, FiStar } from 'react-icons/fi';
+import { FiHeart, FiShoppingCart, FiTruck, FiShield, FiRefreshCw, FiPackage, FiStar, FiBell, FiMail, FiX } from 'react-icons/fi';
 import { useWishlist } from '../../components/store/WishlistContext';
+import { useSiteSettings } from '../../hooks/useSiteSettings';
+import { buildProductSchema, buildBreadcrumbSchema } from '../../utils/seo';
 
 export default function ProductDetailPage() {
   const { slug } = useParams();
   const { cart } = useOutletContext();
   const toast = useToast();
   const wishlist = useWishlist();
+  const { settings } = useSiteSettings();
   const [product, setProduct] = useState(null);
   const [quantity, setQuantity] = useState(1);
   const [related, setRelated] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('description');
+
+  // Back-in-stock subscription
+  const [notifyModalOpen, setNotifyModalOpen] = useState(false);
+  const [notifyEmail, setNotifyEmail] = useState('');
+  const [notifyLoading, setNotifyLoading] = useState(false);
+  const [notifySubmitted, setNotifySubmitted] = useState(false);
 
   const wishlisted = product ? wishlist.has(product.id) : false;
 
@@ -59,40 +68,38 @@ export default function ProductDetailPage() {
     { label: product.name },
   ];
 
-  // JSON-LD structured data for SEO/GEO
-  const jsonLd = {
-    "@context": "https://schema.org",
-    "@type": "Product",
-    name: product.name,
-    description: product.shortDescription || product.description || '',
-    sku: product.sku,
-    image: product.images?.length > 0 ? product.images[0].url : undefined,
-    brand: product.brandName ? { "@type": "Brand", name: product.brandName } : undefined,
-    category: product.categoryName || undefined,
-    offers: {
-      "@type": "Offer",
-      price: hasDiscount ? product.salePrice : product.price,
-      priceCurrency: "TRY",
-      availability: product.stockStatus === 'OUT_OF_STOCK'
-        ? "https://schema.org/OutOfStock"
-        : "https://schema.org/InStock",
-      seller: { "@type": "Organization", name: document.title || '' },
-    },
-  };
+  // SEO: Schema.org JSON-LD + meta tags
+  const productSchema = buildProductSchema(product, settings);
+  const breadcrumbSchema = buildBreadcrumbSchema([
+    { name: 'Ana Sayfa', url: '/' },
+    ...(product.categorySlug ? [{ name: product.categoryName, url: `/kategori/${product.categorySlug}` }] : []),
+    { name: product.name, url: `/urun/${product.slug}` }
+  ], settings);
+
+  const seoTitle = product.metaTitle
+    || `${product.name}${product.brandName ? ` | ${product.brandName}` : ''}`;
+  const seoDescription = product.metaDescription
+    || product.shortDescription
+    || (product.description ? product.description.substring(0, 160) : '');
+  const ogImage = product.images?.length > 0 ? product.images[0].url : product.primaryImageUrl;
 
   return (
     <div className="container my-3">
-      <Helmet>
-        <title>{product.metaTitle || `${product.name}${product.brandName ? ` | ${product.brandName}` : ''}`}</title>
-        <meta name="description" content={product.metaDescription || product.shortDescription || product.description?.substring(0, 160) || ''} />
-        <meta property="og:title" content={product.metaTitle || product.name} />
-        <meta property="og:description" content={product.metaDescription || product.shortDescription || ''} />
-        {product.images?.length > 0 && <meta property="og:image" content={product.images[0].url} />}
-        <meta property="og:type" content="product" />
+      <SeoHead
+        title={seoTitle}
+        description={seoDescription}
+        path={`/urun/${product.slug}`}
+        image={ogImage}
+        type="product"
+        jsonLd={[productSchema, breadcrumbSchema]}
+      >
+        {/* Product-specific OG tags (extend SeoHead) */}
         <meta property="product:price:amount" content={String(hasDiscount ? product.salePrice : product.price)} />
         <meta property="product:price:currency" content="TRY" />
-        <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>
-      </Helmet>
+        {product.sku && <meta property="product:retailer_item_id" content={product.sku} />}
+        {product.brandName && <meta property="product:brand" content={product.brandName} />}
+        <meta property="product:availability" content={product.stockStatus === 'OUT_OF_STOCK' ? 'out of stock' : 'in stock'} />
+      </SeoHead>
       <Breadcrumb items={breadcrumbs} />
 
       <div className="row g-4">
@@ -173,14 +180,32 @@ export default function ProductDetailPage() {
               <input type="number" value={quantity} onChange={e => setQuantity(Math.max(1, parseInt(e.target.value) || 1))} min="1" />
               <button onClick={() => setQuantity(quantity + 1)}>+</button>
             </div>
-            <button className="btn btn-primary btn-lg flex-grow-1 d-flex align-items-center justify-content-center gap-2"
-              onClick={async () => {
-                try { await cart.addItem(product.id, quantity); toast.success(`${product.name} sepete eklendi`); }
-                catch (e) { toast.error(e?.response?.data?.message || 'Sepete eklenemedi'); }
-              }} disabled={product.stockStatus === 'OUT_OF_STOCK'}>
-              <FiShoppingCart size={18} />
-              {product.stockStatus === 'OUT_OF_STOCK' ? 'Tükendi' : 'Sepete Ekle'}
-            </button>
+            {product.stockStatus === 'OUT_OF_STOCK' ? (
+              <button
+                className="btn btn-warning btn-lg flex-grow-1 d-flex align-items-center justify-content-center gap-2"
+                onClick={() => {
+                  setNotifySubmitted(false);
+                  // Auto-fill email from customer token if logged in
+                  const token = localStorage.getItem('customer_token');
+                  if (token) {
+                    // Token payload'dan email'i çıkartamayız güvenli şekilde, boş bırakıyoruz
+                  }
+                  setNotifyModalOpen(true);
+                }}
+              >
+                <FiBell size={18} />
+                Stoklara Gelince Haber Ver
+              </button>
+            ) : (
+              <button className="btn btn-primary btn-lg flex-grow-1 d-flex align-items-center justify-content-center gap-2"
+                onClick={async () => {
+                  try { await cart.addItem(product.id, quantity); toast.success(`${product.name} sepete eklendi`); }
+                  catch (e) { toast.error(e?.response?.data?.message || 'Sepete eklenemedi'); }
+                }}>
+                <FiShoppingCart size={18} />
+                Sepete Ekle
+              </button>
+            )}
             <button className={`btn btn-lg ${wishlisted ? 'btn-danger' : 'btn-outline-danger'}`} onClick={toggleWishlist} title="Favorilere ekle">
               <FiHeart size={18} style={wishlisted ? {fill:'currentColor'} : {}} />
             </button>
@@ -309,6 +334,123 @@ export default function ProductDetailPage() {
             </div>
           ))}</div>
         </section>
+      )}
+
+      {/* Back-in-stock notification modal */}
+      {notifyModalOpen && (
+        <div
+          className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
+          style={{ background: 'rgba(0,0,0,0.5)', zIndex: 2000 }}
+          onClick={() => setNotifyModalOpen(false)}
+        >
+          <div
+            className="bg-white rounded-3 shadow-lg p-4 mx-3"
+            style={{ maxWidth: 440, width: '100%' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="d-flex justify-content-between align-items-start mb-3">
+              <div className="d-flex align-items-center gap-3">
+                <div style={{
+                  width: 48, height: 48, borderRadius: 12,
+                  background: 'linear-gradient(135deg, #fffbeb, #fde68a)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }}>
+                  <FiBell size={22} color="#d97706" />
+                </div>
+                <div>
+                  <h5 className="mb-0 fw-bold">Stoklara Gelince Haber Ver</h5>
+                  <small className="text-muted">{product.name}</small>
+                </div>
+              </div>
+              <button type="button" className="btn-close" onClick={() => setNotifyModalOpen(false)} aria-label="Kapat"></button>
+            </div>
+
+            {notifySubmitted ? (
+              <div className="text-center py-3">
+                <div style={{
+                  width: 64, height: 64, borderRadius: '50%',
+                  background: '#ecfdf5', display: 'inline-flex',
+                  alignItems: 'center', justifyContent: 'center', marginBottom: 12
+                }}>
+                  <FiBell size={28} color="#059669" />
+                </div>
+                <h6 className="fw-bold mb-2" style={{color:'#059669'}}>Aboneliğiniz Alındı!</h6>
+                <p className="text-muted small mb-3">
+                  Bu ürün stoklarımıza geri geldiğinde <strong>{notifyEmail}</strong> adresinize e-posta göndereceğiz.
+                </p>
+                <button className="btn btn-outline-secondary" onClick={() => setNotifyModalOpen(false)}>
+                  Kapat
+                </button>
+              </div>
+            ) : (
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!notifyEmail || !/^\S+@\S+\.\S+$/.test(notifyEmail)) {
+                    toast.error('Geçerli bir e-posta giriniz.');
+                    return;
+                  }
+                  setNotifyLoading(true);
+                  try {
+                    const token = localStorage.getItem('customer_token');
+                    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+                    const res = await axios.post(
+                      `/api/store/products/${product.id}/notify-me`,
+                      { email: notifyEmail },
+                      { headers }
+                    );
+                    if (res.data?.alreadySubscribed) {
+                      toast.info('Bu ürün için zaten bir aboneliğiniz var.');
+                    }
+                    setNotifySubmitted(true);
+                  } catch (err) {
+                    toast.error(err.response?.data?.error || 'Abonelik oluşturulamadı.');
+                  } finally {
+                    setNotifyLoading(false);
+                  }
+                }}
+              >
+                <p className="text-muted small mb-3">
+                  E-posta adresinizi girin, ürün stoklarımıza geri geldiği anda size bildireceğiz. İstediğiniz zaman abonelikten çıkabilirsiniz.
+                </p>
+                <div className="mb-3">
+                  <label className="form-label small fw-semibold">
+                    <FiMail className="me-1" />E-posta Adresi
+                  </label>
+                  <input
+                    type="email"
+                    className="form-control"
+                    placeholder="ornek@eposta.com"
+                    value={notifyEmail}
+                    onChange={e => setNotifyEmail(e.target.value)}
+                    required
+                    autoFocus
+                  />
+                </div>
+                <div className="d-flex gap-2">
+                  <button
+                    type="button"
+                    className="btn btn-outline-secondary flex-shrink-0"
+                    onClick={() => setNotifyModalOpen(false)}
+                  >
+                    İptal
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn btn-warning flex-grow-1"
+                    disabled={notifyLoading}
+                  >
+                    {notifyLoading ? (
+                      <><span className="spinner-border spinner-border-sm me-2" />Gönderiliyor...</>
+                    ) : (
+                      <><FiBell className="me-2" />Bildirim Aboneliği</>
+                    )}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

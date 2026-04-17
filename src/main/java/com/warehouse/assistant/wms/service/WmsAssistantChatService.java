@@ -7,6 +7,7 @@ import com.warehouse.assistant.core.observability.ConversationLogger;
 import com.warehouse.assistant.core.observability.UsageMetrics;
 import com.warehouse.assistant.core.safety.ContentSafetyPipeline;
 import com.warehouse.assistant.core.safety.SafetyCheckResult;
+import com.warehouse.assistant.wms.config.WmsAssistantConfig;
 import com.warehouse.assistant.wms.policy.WmsRolePolicy;
 import com.warehouse.assistant.wms.prompt.WmsPromptService;
 import com.warehouse.assistant.wms.web.WmsChatMessage;
@@ -34,19 +35,16 @@ public class WmsAssistantChatService implements AssistantChatService {
 
     private static final Logger log = LoggerFactory.getLogger(WmsAssistantChatService.class);
 
-    private final ChatClient chatClientUser;
-    private final ChatClient chatClientAdmin;
+    private final WmsAssistantConfig chatClients;
     private final WmsPromptService promptService;
     private final ContentSafetyPipeline safetyPipeline;
     private final ConversationLogger conversationLogger;
 
-    public WmsAssistantChatService(ChatClient wmsChatClientUser,
-                                   ChatClient wmsChatClientAdmin,
+    public WmsAssistantChatService(WmsAssistantConfig chatClients,
                                    WmsPromptService promptService,
                                    ContentSafetyPipeline safetyPipeline,
                                    ConversationLogger conversationLogger) {
-        this.chatClientUser = wmsChatClientUser;
-        this.chatClientAdmin = wmsChatClientAdmin;
+        this.chatClients = chatClients;
         this.promptService = promptService;
         this.safetyPipeline = safetyPipeline;
         this.conversationLogger = conversationLogger;
@@ -105,7 +103,7 @@ public class WmsAssistantChatService implements AssistantChatService {
 
         String assistantText;
         try {
-            ChatClient client = WmsRolePolicy.isAdmin(role) ? chatClientAdmin : chatClientUser;
+            ChatClient client = WmsRolePolicy.isAdmin(role) ? chatClients.adminClient() : chatClients.userClient();
             assistantText = client
                     .prompt()
                     .system(system)

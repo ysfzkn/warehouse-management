@@ -9,6 +9,7 @@ import com.warehouse.assistant.core.safety.ContentSafetyPipeline;
 import com.warehouse.assistant.core.safety.SafetyCheckResult;
 import com.warehouse.assistant.core.security.AssistantContext;
 import com.warehouse.assistant.core.security.AssistantContextHolder;
+import com.warehouse.assistant.store.config.StoreAssistantConfig;
 import com.warehouse.assistant.store.dto.StoreChatMessage;
 import com.warehouse.assistant.store.dto.StoreChatRequest;
 import com.warehouse.assistant.store.dto.StoreChatResponse;
@@ -46,16 +47,16 @@ public class StoreAssistantChatService implements AssistantChatService {
 
     private static final Logger log = LoggerFactory.getLogger(StoreAssistantChatService.class);
 
-    private final ChatClient chatClient;
+    private final StoreAssistantConfig chatClients;
     private final StorePromptService promptService;
     private final ConversationLogger conversationLogger;
     private final ContentSafetyPipeline safetyPipeline;
 
-    public StoreAssistantChatService(ChatClient storeChatClient,
+    public StoreAssistantChatService(StoreAssistantConfig chatClients,
                                      StorePromptService promptService,
                                      ConversationLogger conversationLogger,
                                      ContentSafetyPipeline safetyPipeline) {
-        this.chatClient = storeChatClient;
+        this.chatClients = chatClients;
         this.promptService = promptService;
         this.conversationLogger = conversationLogger;
         this.safetyPipeline = safetyPipeline;
@@ -97,7 +98,7 @@ public class StoreAssistantChatService implements AssistantChatService {
         UsageMetrics usage = UsageMetrics.zero();
         long startedAt = System.currentTimeMillis();
         try {
-            ChatResponse chatResponse = chatClient
+            ChatResponse chatResponse = chatClients.client()
                     .prompt()
                     .system(system)
                     .messages(messages)

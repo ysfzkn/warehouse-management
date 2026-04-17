@@ -1,43 +1,151 @@
 package com.warehouse.assistant.core.rag;
 
 import com.warehouse.assistant.core.config.AssistantProperties;
+import com.warehouse.assistant.core.config.AssistantRuntimeConfig;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Sliding-window chunker for documents before embedding.
- * <p>
- * We avoid a true BPE tokenizer (would pull another dependency) and use a
- * whitespace-word approximation: one token ≈ one word. This gives the LLM
- * roughly the right-sized chunks for {@code text-embedding-3-small} (which
- * has an 8192-token context, so 500-word chunks leave plenty of headroom).
- * <p>
- * The chunker tries to end each window at a Turkish sentence boundary
- * (. ! ? or newline) so chunks read naturally, falling back to a hard cut
- * at the word limit if no boundary is within the last 20% of the window.
+ * Two-mode chunker for document embedding:
+ *
+ * <ol>
+ *   <li><b>Structural (default for legal/policy docs):</b> splits on numbered
+ *       headers (<code>2.2.2</code>, <code>BÖLÜM N</code>, <code>MADDE N</code>,
+ *       <code>EK N</code>) so each chunk is exactly one semantic section.
+ *       Each section is then word-window-trimmed so no chunk exceeds the
+ *       configured word limit. The parent header is prepended to every chunk
+ *       for retrieval context ("2.2.2 Özel Nitelikli Kişisel Verilerin İşlenmesi —
+ *       Kanun'un 6. maddesinde …").</li>
+ *
+ *   <li><b>Sliding-window (fallback):</b> used when no clear structure is
+ *       detected (the heuristic fires fewer than 3 headers per document).
+ *       Splits on word count with sentence-boundary snap in the last 20%
+ *       of each window.</li>
+ * </ol>
+ *
+ * The structural path dramatically improves retrieval for Turkish KVKK /
+ * policy / yönetmelik documents because each chunk is a single topic rather
+ * than a multi-topic average.
  */
 @Component
 public class DocumentChunker {
 
+    private static final Logger log = LoggerFactory.getLogger(DocumentChunker.class);
     private static final Pattern WS = Pattern.compile("\\s+");
-    private static final Pattern SENTENCE_END = Pattern.compile(".*[.!?]\\s*$", Pattern.DOTALL);
+
+    /**
+     * Turkish legal/policy header markers. Must match at line start (we anchor
+     * with {@code (?m)^} when scanning). Captured groups: full header line.
+     * Examples that match:
+     * <ul>
+     *   <li>{@code 2.2.2 Özel Nitelikli Kişisel Verilerin İşlenmesi}</li>
+     *   <li>{@code 1. BÖLÜM TANIMLAR}</li>
+     *   <li>{@code BÖLÜM 5}</li>
+     *   <li>{@code MADDE 6 — İşleme Şartları}</li>
+     *   <li>{@code EK 1 – Tanımlar}</li>
+     * </ul>
+     */
+    private static final Pattern HEADER = Pattern.compile(
+            "(?m)^\\s*(" +
+                    // numbered like 1., 2.1, 2.2.2, 2.2.2.1 followed by title
+                    "\\d+(?:\\.\\d+){0,4}\\.?\\s+[^\\n]{3,200}" +
+                    "|" +
+                    // BÖLÜM N — title
+                    "(?:\\d+\\.\\s*)?BÖLÜM\\s+\\d+[^\\n]{0,200}" +
+                    "|" +
+                    // MADDE N — title
+                    "MADDE\\s+\\d+[^\\n]{0,200}" +
+                    "|" +
+                    // EK N - title
+                    "EK\\s+\\d+[^\\n]{0,200}" +
+                    ")\\s*$");
 
     private final AssistantProperties props;
+    private final AssistantRuntimeConfig runtimeConfig;
 
-    public DocumentChunker(AssistantProperties props) {
+    public DocumentChunker(AssistantProperties props, AssistantRuntimeConfig runtimeConfig) {
         this.props = props;
+        this.runtimeConfig = runtimeConfig;
     }
 
     public List<String> chunk(String text) {
-        if (text == null || text.isBlank()) return List.of();
-        int size = Math.max(50, props.getRag().getChunkSizeTokens());
-        int overlap = Math.max(0, Math.min(size / 2, props.getRag().getChunkOverlapTokens()));
-        return chunk(text, size, overlap);
+        if (text == null || text.isBlank()) {
+            log.debug("[Chunker] blank input, returning empty");
+            return List.of();
+        }
+        int size = Math.max(50, runtimeConfig.getChunkSizeTokens());
+        int overlap = Math.max(0, Math.min(size / 2, runtimeConfig.getChunkOverlapTokens()));
+
+        // Try structural first. If it produces few sections (< 3), fall back.
+        List<String> structural = chunkStructural(text, size);
+        if (structural != null && structural.size() >= 3) {
+            log.info("[Chunker] structural — {} chars → {} chunks (max {} words/chunk)",
+                    text.length(), structural.size(), size);
+            return structural;
+        }
+
+        List<String> sliding = chunk(text, size, overlap);
+        log.info("[Chunker] sliding-window — {} chars → {} chunks (window={}, overlap={} words)",
+                text.length(), sliding.size(), size, overlap);
+        return sliding;
     }
 
+    /**
+     * Structural chunker: splits on numbered / named headers, then trims each
+     * section to {@code maxWords}. Returns {@code null} if no headers were
+     * detected (signals the caller to fall back to sliding-window).
+     */
+    List<String> chunkStructural(String text, int maxWords) {
+        String normalized = text.replace("\r\n", "\n").replace("\r", "\n");
+        Matcher m = HEADER.matcher(normalized);
+
+        List<int[]> marks = new ArrayList<>();
+        List<String> headers = new ArrayList<>();
+        while (m.find()) {
+            marks.add(new int[]{ m.start(), m.end() });
+            headers.add(m.group(1).trim());
+        }
+        if (marks.size() < 3) return null; // not enough structure; use fallback
+
+        List<String> out = new ArrayList<>();
+        for (int i = 0; i < marks.size(); i++) {
+            int sectionStart = marks.get(i)[0];
+            int sectionEnd = (i + 1 < marks.size()) ? marks.get(i + 1)[0] : normalized.length();
+            String header = headers.get(i);
+            String body = normalized.substring(sectionStart, sectionEnd).trim();
+
+            // Drop sections that are just the header with no body
+            String bodyOnly = body.substring(Math.min(body.length(), header.length())).trim();
+            if (bodyOnly.isEmpty() && body.equals(header)) continue;
+
+            // If the section itself is still huge (> maxWords), split it with
+            // sliding-window, prefixing every sub-chunk with the header so the
+            // embedding is anchored to the topic.
+            String[] words = WS.split(body);
+            if (words.length <= maxWords) {
+                out.add(body);
+            } else {
+                List<String> pieces = chunk(body, maxWords, Math.min(50, maxWords / 4));
+                for (int p = 0; p < pieces.size(); p++) {
+                    String piece = pieces.get(p);
+                    if (p == 0 || piece.startsWith(header)) {
+                        out.add(piece);
+                    } else {
+                        out.add(header + " — " + piece);
+                    }
+                }
+            }
+        }
+        return out;
+    }
+
+    /** Original sliding-window chunker (sentence-boundary snap). */
     public List<String> chunk(String text, int windowSize, int overlap) {
         String normalized = text.strip().replace("\r\n", "\n");
         String[] words = WS.split(normalized);

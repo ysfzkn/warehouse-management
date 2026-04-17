@@ -314,4 +314,47 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
 
         logger.info("Password reset completed for customer: {}", customer.getEmail());
     }
+
+    @Override
+    public CustomerLoginResponse completeGuestAccount(String token, String newPassword, String ipAddress) {
+        if (token == null || token.isBlank()) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Geçersiz bağlantı.");
+        }
+        Customer customer = customerRepository.findByPasswordResetToken(token)
+            .orElseThrow(() -> new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                "Geçersiz veya süresi dolmuş hesap tamamlama bağlantısı."));
+
+        // Misafir hesabı tamamlama token'ı 7 gün geçerli
+        if (customer.getPasswordResetSentAt() == null
+            || customer.getPasswordResetSentAt().plusDays(7).isBefore(LocalDateTime.now())) {
+            customer.setPasswordResetToken(null);
+            customer.setPasswordResetSentAt(null);
+            customerRepository.save(customer);
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                "Hesap tamamlama bağlantısının süresi dolmuş. Lütfen şifremi unuttum bağlantısını kullanın.");
+        }
+
+        PasswordPolicyValidator.validate(newPassword);
+
+        // Şifre belirle ve e-postayı doğrulanmış olarak işaretle (müşteri token sahibi, e-postaya erişebiliyor)
+        customer.setPasswordHash(passwordEncoder.encode(newPassword));
+        customer.setPasswordResetToken(null);
+        customer.setPasswordResetSentAt(null);
+        customer.setEmailVerified(true);
+        customer.setEmailVerifyToken(null);
+        customer.setLastLoginAt(LocalDateTime.now());
+        customer.setLastLoginIp(ipAddress);
+        customerRepository.save(customer);
+
+        logger.info("Guest account completed and verified: {}", customer.getEmail());
+
+        // JWT + refresh token üret (kullanıcıyı doğrudan login yap)
+        String jwtToken = jwtService.generateCustomerToken(customer.getId(), customer.getEmail());
+        String refreshToken = createRefreshToken(customer);
+
+        return new CustomerLoginResponse(
+            customer.getId(), customer.getEmail(), customer.getFirstName(),
+            jwtToken, refreshToken
+        );
+    }
 }

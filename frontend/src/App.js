@@ -32,6 +32,7 @@ import AdminCustomers from './pages/AdminCustomers';
 import AdminPayments from './pages/AdminPayments';
 import AdminPaymentGateways from './pages/AdminPaymentGateways';
 import AdminCoupons from './pages/AdminCoupons';
+import AdminInvoices from './pages/AdminInvoices';
 import AdminStockMovements from './pages/AdminStockMovements';
 import AdminCargoProviders from './pages/AdminCargoProviders';
 import AdminSupportTickets from './pages/AdminSupportTickets';
@@ -42,6 +43,7 @@ import AssistantDocumentsPage from './pages/AssistantDocumentsPage';
 import AssistantDashboardPage from './pages/AssistantDashboardPage';
 import AssistantLogsPage from './pages/AssistantLogsPage';
 import AssistantSettingsPage from './pages/AssistantSettingsPage';
+import AssistantDiagnosticsPage from './pages/AssistantDiagnosticsPage';
 
 // Store pages (new)
 import HomePage from './pages/store/HomePage';
@@ -57,9 +59,12 @@ import GoogleAuthCallback from './pages/store/GoogleAuthCallback';
 import MyOrdersPage from './pages/store/MyOrdersPage';
 import MyAddressesPage from './pages/store/MyAddressesPage';
 import MyFavoritesPage from './pages/store/MyFavoritesPage';
+import NotificationPreferencesPage from './pages/store/NotificationPreferencesPage';
 import EmailVerifyPage from './pages/store/EmailVerifyPage';
 import ForgotPasswordPage from './pages/store/ForgotPasswordPage';
 import ResetPasswordPage from './pages/store/ResetPasswordPage';
+import CompleteAccountPage from './pages/store/CompleteAccountPage';
+import OrderTrackingPage from './pages/store/OrderTrackingPage';
 import MySupportPage from './pages/store/MySupportPage';
 import NotFoundPage from './pages/store/NotFoundPage';
 
@@ -137,10 +142,13 @@ function StoreRoutes() {
         <Route path="siparislerim" element={<MyOrdersPage />} />
         <Route path="adreslerim" element={<MyAddressesPage />} />
         <Route path="favorilerim" element={<MyFavoritesPage />} />
+        <Route path="hesabim/bildirimler" element={<NotificationPreferencesPage />} />
         <Route path="destek" element={<MySupportPage />} />
         <Route path="hesap-dogrula" element={<EmailVerifyPage />} />
         <Route path="sifremi-unuttum" element={<ForgotPasswordPage />} />
         <Route path="sifre-sifirla" element={<ResetPasswordPage />} />
+        <Route path="hesap-tamamla" element={<CompleteAccountPage />} />
+        <Route path="siparis-takip" element={<OrderTrackingPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
 
@@ -223,6 +231,9 @@ function AdminRoutes({ authed, role }) {
           <Route path="admin/coupons" element={
             authed && role === 'ADMIN' ? <AdminCoupons /> : <Navigate to={authed ? '/stock' : '/login'} replace />
           } />
+          <Route path="admin/invoices" element={
+            authed && role === 'ADMIN' ? <AdminInvoices /> : <Navigate to={authed ? '/stock' : '/login'} replace />
+          } />
           <Route path="admin/stock-movements" element={
             authed && role === 'ADMIN' ? <AdminStockMovements /> : <Navigate to={authed ? '/stock' : '/login'} replace />
           } />
@@ -253,6 +264,9 @@ function AdminRoutes({ authed, role }) {
           } />
           <Route path="admin/assistant/settings" element={
             authed && role === 'ADMIN' ? <AssistantSettingsPage /> : <Navigate to={authed ? '/stock' : '/login'} replace />
+          } />
+          <Route path="admin/assistant/diagnostics" element={
+            authed && role === 'ADMIN' ? <AssistantDiagnosticsPage /> : <Navigate to={authed ? '/stock' : '/login'} replace />
           } />
         </Route>
 

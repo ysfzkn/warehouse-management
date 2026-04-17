@@ -3,12 +3,14 @@ package com.warehouse.service.impl;
 import com.warehouse.dto.store.*;
 import com.warehouse.entity.*;
 import com.warehouse.constants.ShippingConstants;
+import com.warehouse.enums.AddressType;
 import com.warehouse.enums.OrderStatus;
 import com.warehouse.exception.ErrorCode;
 import com.warehouse.exception.WarehouseManagementException;
 import com.warehouse.repository.*;
 import com.warehouse.service.CartService;
 import com.warehouse.service.CheckoutService;
+import com.warehouse.service.EmailService;
 import com.warehouse.entity.Stock;
 import com.warehouse.entity.StockEvent;
 import com.warehouse.enums.StockEventType;
@@ -18,6 +20,7 @@ import com.warehouse.repository.StockEventRepository;
 import com.warehouse.service.StockService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,7 +28,6 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Service
 @Transactional
@@ -43,13 +45,17 @@ public class CheckoutServiceImpl implements CheckoutService {
     private final CartService cartService;
     private final CargoProviderRepository cargoProviderRepository;
     private final StockEventRepository stockEventRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final EmailService emailService;
 
     public CheckoutServiceImpl(CartRepository cartRepository, CartItemRepository cartItemRepository,
                                 CustomerRepository customerRepository, CustomerAddressRepository addressRepository,
                                 OrderRepository orderRepository, StockService stockService,
                                 StockRepository stockRepository, CartService cartService,
                                 CargoProviderRepository cargoProviderRepository,
-                                StockEventRepository stockEventRepository) {
+                                StockEventRepository stockEventRepository,
+                                PasswordEncoder passwordEncoder,
+                                EmailService emailService) {
         this.cartRepository = cartRepository;
         this.cartItemRepository = cartItemRepository;
         this.customerRepository = customerRepository;
@@ -60,6 +66,8 @@ public class CheckoutServiceImpl implements CheckoutService {
         this.stockService = stockService;
         this.stockRepository = stockRepository;
         this.cartService = cartService;
+        this.passwordEncoder = passwordEncoder;
+        this.emailService = emailService;
     }
 
     @Override
@@ -127,6 +135,111 @@ public class CheckoutServiceImpl implements CheckoutService {
         CustomerAddress billingAddr = addressRepository.findById(billingAddrId)
             .orElseThrow(() -> new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Fatura adresi bulunamadı."));
 
+        return createOrderInternal(customer, items, shippingAddr, billingAddr,
+                request.getCargoCompany(), request.getCargoProviderId(),
+                request.getPaymentMethod(), request.getCustomerNote(),
+                ipAddress, userAgent, false);
+    }
+
+    @Override
+    public PlaceOrderResponse placeGuestOrder(GuestPlaceOrderRequest request, String ipAddress, String userAgent) {
+        // --- Doğrulama ---
+        if (!request.isDistanceSalesContractAccepted()) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Mesafeli satış sözleşmesini onaylamanız gerekiyor.");
+        }
+
+        // E-posta zaten kayıtlı mı?
+        Optional<Customer> existing = customerRepository.findByEmail(request.getEmail().toLowerCase().trim());
+        if (existing.isPresent()) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                "Bu e-posta ile daha önce kayıt olunmuş. Lütfen giriş yapın ya da farklı bir e-posta kullanın.");
+        }
+
+        // Misafir sepeti bul
+        if (request.getSessionId() == null || request.getSessionId().isBlank()) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Sepet bulunamadı. Lütfen sayfayı yenileyin.");
+        }
+        Cart cart = cartRepository.findBySessionId(request.getSessionId())
+            .orElseThrow(() -> new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Sepet bulunamadı. Lütfen sayfayı yenileyin."));
+
+        List<CartItem> items = cartItemRepository.findByCartId(cart.getId());
+        if (items.isEmpty()) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Sepetiniz boş. Lütfen ürün ekleyerek devam edin.");
+        }
+
+        // --- Yeni müşteri kaydı oluştur (misafir) ---
+        Customer customer = new Customer();
+        customer.setEmail(request.getEmail().toLowerCase().trim());
+        // Geçici rastgele şifre; müşteri "hesabımı tamamla" akışında gerçek şifresini belirleyecek
+        String tempPassword = UUID.randomUUID().toString();
+        customer.setPasswordHash(passwordEncoder.encode(tempPassword));
+        customer.setFirstName(request.getFirstName().trim());
+        customer.setLastName(request.getLastName().trim());
+        customer.setPhone(request.getPhone().trim());
+        customer.setEmailVerified(false);
+        customer.setActive(true);
+
+        // "Hesabı tamamla" için password reset token mekanizmasını kullan (7 gün geçerli)
+        String setupToken = UUID.randomUUID().toString();
+        customer.setPasswordResetToken(setupToken);
+        customer.setPasswordResetSentAt(LocalDateTime.now());
+
+        customer.setKvkkConsent(request.isKvkkConsent());
+        if (request.isKvkkConsent()) {
+            customer.setKvkkConsentAt(LocalDateTime.now());
+        }
+
+        customer = customerRepository.save(customer);
+        logger.info("Misafir müşteri oluşturuldu: id={}, email={}", customer.getId(), customer.getEmail());
+
+        // --- Teslimat ve fatura adreslerini oluştur ---
+        CustomerAddress shippingAddr = buildGuestAddress(customer, request, true);
+        shippingAddr = addressRepository.save(shippingAddr);
+
+        CustomerAddress billingAddr;
+        if (request.isBillingSameAsShipping()
+                || request.getBillingAddressLine() == null || request.getBillingAddressLine().isBlank()) {
+            billingAddr = shippingAddr;
+        } else {
+            billingAddr = buildGuestAddress(customer, request, false);
+            billingAddr = addressRepository.save(billingAddr);
+        }
+
+        // --- Misafir sepetini yeni müşteriye bağla ---
+        cart.setCustomer(customer);
+        cart.setSessionId(null);
+        cartRepository.save(cart);
+
+        // --- Siparişi oluştur ---
+        PlaceOrderResponse response = createOrderInternal(customer, items, shippingAddr, billingAddr,
+                request.getCargoCompany(), request.getCargoProviderId(),
+                request.getPaymentMethod(), request.getCustomerNote(),
+                ipAddress, userAgent, true);
+
+        // --- "Hesabını tamamla" e-postası gönder ---
+        try {
+            emailService.sendCompleteAccountSetup(
+                customer.getEmail(),
+                customer.getFirstName(),
+                response.getOrderNumber(),
+                setupToken
+            );
+        } catch (Exception e) {
+            logger.warn("Hesabi tamamla e-postasi gonderilemedi (misafir siparisi {}): {}",
+                    response.getOrderNumber(), e.getMessage());
+        }
+
+        return response;
+    }
+
+    /**
+     * Üye ve misafir siparişlerinin ortak sipariş oluşturma mantığı.
+     */
+    private PlaceOrderResponse createOrderInternal(Customer customer, List<CartItem> items,
+                                                    CustomerAddress shippingAddr, CustomerAddress billingAddr,
+                                                    String cargoCompanyStr, Long cargoProviderId,
+                                                    String paymentMethod, String customerNote,
+                                                    String ipAddress, String userAgent, boolean isGuest) {
         // Generate order number up-front so stock events created during reservation
         // can reference the order that caused them.
         String orderNumber = "ORD-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd")) + "-" + java.util.UUID.randomUUID().toString().substring(0, 6).toUpperCase();
@@ -199,7 +312,6 @@ public class CheckoutServiceImpl implements CheckoutService {
         BigDecimal shippingVat = BigDecimal.ZERO;
         CargoProvider cargoProvider = null;
 
-        Long cargoProviderId = request.getCargoProviderId();
         if (cargoProviderId != null) {
             cargoProvider = cargoProviderRepository.findById(cargoProviderId).orElse(null);
         }
@@ -232,7 +344,6 @@ public class CheckoutServiceImpl implements CheckoutService {
 
         BigDecimal grandTotal = subtotal.add(shippingCost).add(shippingVat).add(vatTotal);
 
-        // orderNumber already generated at the top of this method so stock events could reference it
         Order order = new Order();
         order.setOrderNumber(orderNumber);
         order.setCustomer(customer);
@@ -246,8 +357,8 @@ public class CheckoutServiceImpl implements CheckoutService {
         order.setGrandTotal(grandTotal);
         order.setDiscountAmount(BigDecimal.ZERO);
         order.setSctTotal(BigDecimal.ZERO);
-        order.setPaymentMethod(request.getPaymentMethod());
-        order.setCustomerNote(request.getCustomerNote());
+        order.setPaymentMethod(paymentMethod);
+        order.setCustomerNote(customerNote);
         order.setIpAddress(ipAddress);
         order.setUserAgent(userAgent);
         order.setDistanceSalesContractAccepted(true);
@@ -258,8 +369,8 @@ public class CheckoutServiceImpl implements CheckoutService {
             order.setCargoProviderName(cargoProvider.getName());
             // Also set legacy enum for backward compatibility
             try { order.setCargoCompany(com.warehouse.enums.CargoCompany.valueOf(cargoProvider.getCode())); } catch (Exception ignored) {}
-        } else if (request.getCargoCompany() != null) {
-            try { order.setCargoCompany(com.warehouse.enums.CargoCompany.valueOf(request.getCargoCompany())); } catch (Exception ignored) {}
+        } else if (cargoCompanyStr != null) {
+            try { order.setCargoCompany(com.warehouse.enums.CargoCompany.valueOf(cargoCompanyStr)); } catch (Exception ignored) {}
         }
 
         order = orderRepository.save(order);
@@ -273,7 +384,7 @@ public class CheckoutServiceImpl implements CheckoutService {
         // NOTE: Cart is NOT cleared here — cleared after successful payment
         // This allows cart recovery if payment fails
 
-        logger.info("Order created: {} for customer {}", orderNumber, customerId);
+        logger.info("Order created: {} for customer {} (guest={})", orderNumber, customer.getId(), isGuest);
 
         return PlaceOrderResponse.builder()
             .orderId(order.getId())
@@ -281,6 +392,33 @@ public class CheckoutServiceImpl implements CheckoutService {
             .grandTotal(order.getGrandTotal())
             .status(order.getStatus().name())
             .build();
+    }
+
+    /**
+     * Misafir checkout request'inden CustomerAddress nesnesi oluşturur.
+     */
+    private CustomerAddress buildGuestAddress(Customer customer, GuestPlaceOrderRequest request, boolean shipping) {
+        CustomerAddress addr = new CustomerAddress();
+        addr.setCustomer(customer);
+        addr.setFirstName(request.getFirstName().trim());
+        addr.setLastName(request.getLastName().trim());
+        addr.setPhone(request.getPhone().trim());
+        addr.setTitle(shipping ? "Teslimat Adresi" : "Fatura Adresi");
+        addr.setAddressType(shipping ? AddressType.SHIPPING : AddressType.BILLING);
+        addr.setDefault(false);
+
+        if (shipping) {
+            addr.setAddressLine(request.getShippingAddressLine().trim());
+            addr.setCity(request.getShippingCity().trim());
+            addr.setDistrict(request.getShippingDistrict().trim());
+            addr.setPostalCode(request.getShippingPostalCode());
+        } else {
+            addr.setAddressLine(request.getBillingAddressLine().trim());
+            addr.setCity(request.getBillingCity().trim());
+            addr.setDistrict(request.getBillingDistrict().trim());
+            addr.setPostalCode(request.getBillingPostalCode());
+        }
+        return addr;
     }
 
     private Map<String, Object> addressToMap(CustomerAddress addr) {

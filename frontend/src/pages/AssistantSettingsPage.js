@@ -2,10 +2,29 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 
 /**
- * Admin page for tuning assistant safety, rate limits, RAG and response
- * parameters. Changes are persisted to site_settings and take effect on
- * the next chat request — no restart required.
+ * Admin page for tuning assistant safety, rate limits, RAG, provider (Azure / OpenAI)
+ * and model parameters. Changes are persisted to site_settings and take effect on
+ * the next chat/embedding request — no restart required.
  */
+
+// Compatible models per provider (UI hints; free-text is still allowed)
+const OPENAI_CHAT_MODELS = [
+  { value: 'gpt-4o',         label: 'gpt-4o — En güçlü (multimodal)',        note: '128K context' },
+  { value: 'gpt-4o-mini',    label: 'gpt-4o-mini — Hızlı ve ucuz (önerilen)', note: '128K context' },
+  { value: 'gpt-4.1',        label: 'gpt-4.1 — Yüksek performans',            note: '1M context' },
+  { value: 'gpt-4.1-mini',   label: 'gpt-4.1-mini — Dengeli',                 note: '1M context' },
+  { value: 'gpt-4-turbo',    label: 'gpt-4-turbo',                            note: '128K context' },
+  { value: 'gpt-3.5-turbo',  label: 'gpt-3.5-turbo — Çok ucuz',               note: '16K context' },
+  { value: 'o1-mini',        label: 'o1-mini — Reasoning',                    note: 'Reasoning model' },
+  { value: 'o3-mini',        label: 'o3-mini — Reasoning (yeni)',             note: 'Reasoning model' },
+];
+
+const OPENAI_EMBEDDING_MODELS = [
+  { value: 'text-embedding-3-small', label: 'text-embedding-3-small — Önerilen',  note: '1536 dim, ucuz' },
+  { value: 'text-embedding-3-large', label: 'text-embedding-3-large — Yüksek kalite', note: '3072 dim' },
+  { value: 'text-embedding-ada-002', label: 'text-embedding-ada-002 — Eski',      note: '1536 dim, legacy' },
+];
+
 export default function AssistantSettingsPage() {
   const [config, setConfig] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -34,7 +53,7 @@ export default function AssistantSettingsPage() {
     try {
       const resp = await axios.post('/api/admin/assistant/config', config, authHeader());
       setConfig(resp.data);
-      setToast({ type: 'success', msg: 'Ayarlar kaydedildi.' });
+      setToast({ type: 'success', msg: 'Ayarlar kaydedildi. Yeni sağlayıcı/model bir sonraki istekte devreye girecek.' });
     } catch (e) {
       setToast({ type: 'error', msg: 'Kayıt başarısız: ' + (e?.response?.data?.message || e.message) });
     } finally {
@@ -46,6 +65,9 @@ export default function AssistantSettingsPage() {
 
   if (loading) return <div className="container-fluid"><div className="text-muted py-4">Yükleniyor…</div></div>;
   if (!config) return <div className="container-fluid"><div className="alert alert-danger">Ayarlar yüklenemedi.</div></div>;
+
+  const chatProvider = (config['chat.provider'] || 'AZURE').toUpperCase();
+  const embProvider  = (config['embedding.provider'] || 'AZURE').toUpperCase();
 
   return (
     <div className="container-fluid">
@@ -76,6 +98,152 @@ export default function AssistantSettingsPage() {
       </p>
 
       <div className="row g-4">
+        {/* ── Chat Bağlantısı (Provider seçimli) ── */}
+        <div className="col-12">
+          <div className="card border-0 shadow-sm border-start border-primary border-4">
+            <div className="card-header bg-primary bg-opacity-10 d-flex justify-content-between align-items-center">
+              <strong><i className="fas fa-comment-dots me-1"></i> Chat Modeli (LLM)</strong>
+              <span className={`badge bg-${chatProvider === 'OPENAI' ? 'success' : 'info'}`}>
+                {chatProvider === 'OPENAI' ? 'OpenAI (direkt)' : 'Azure OpenAI'}
+              </span>
+            </div>
+            <div className="card-body">
+              <div className="row g-3">
+                <div className="col-md-4">
+                  <ProviderSelect
+                    name="chat-provider"
+                    label="Sağlayıcı"
+                    value={chatProvider}
+                    onChange={v => set('chat.provider', v)}
+                    help="Azure OpenAI veya düz OpenAI API arasında seçim yapın."
+                  />
+                </div>
+                <div className="col-md-8">
+                  {chatProvider === 'AZURE' ? (
+                    <TextField
+                      label="Azure Endpoint"
+                      value={config['chat.endpoint']}
+                      onChange={v => set('chat.endpoint', v)}
+                      placeholder="https://your-resource.openai.azure.com/"
+                      help="Boş = application.properties'teki ana Azure endpoint kullanılır." />
+                  ) : (
+                    <TextField
+                      label="OpenAI Base URL (opsiyonel)"
+                      value={config['chat.endpoint']}
+                      onChange={v => set('chat.endpoint', v)}
+                      placeholder="https://api.openai.com"
+                      help="Varsayılan: api.openai.com — proxy veya uyumlu bir endpoint kullanıyorsanız girin." />
+                  )}
+                </div>
+                <div className="col-md-6">
+                  <TextField
+                    label={chatProvider === 'AZURE' ? 'API Key (Azure)' : 'OpenAI API Key (sk-...)'}
+                    value={config['chat.apiKey']}
+                    onChange={v => set('chat.apiKey', v)}
+                    placeholder={chatProvider === 'AZURE' ? 'Boş = ana API key' : 'sk-proj-...'}
+                    help="Değiştirmezseniz mevcut değer korunur (****maskelenir)." />
+                </div>
+                <div className="col-md-6">
+                  {chatProvider === 'OPENAI' ? (
+                    <ModelSelect
+                      label="Model"
+                      value={config['chat.model']}
+                      onChange={v => set('chat.model', v)}
+                      options={OPENAI_CHAT_MODELS}
+                      help="OpenAI public modelleri. Hesabınızın erişebildiği bir modeli seçin." />
+                  ) : (
+                    <TextField
+                      label="Azure Deployment Adı"
+                      value={config['chat.model']}
+                      onChange={v => set('chat.model', v)}
+                      placeholder="gpt-4o-mini"
+                      help="Azure portalında oluşturduğunuz deployment adı (model adı değil)." />
+                  )}
+                </div>
+              </div>
+              {chatProvider === 'OPENAI' && (
+                <div className="alert alert-info small mt-3 mb-0">
+                  <i className="fas fa-info-circle me-1"></i>
+                  <strong>OpenAI direkt bağlantı:</strong> Azure'a ihtiyaç yok.
+                  <code className="ms-1">platform.openai.com</code>'dan aldığınız <code>sk-proj-...</code> formatındaki
+                  API anahtarı ile çalışır.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* ── Embedding Bağlantısı (Provider seçimli) ── */}
+        <div className="col-12">
+          <div className="card border-0 shadow-sm border-start border-success border-4">
+            <div className="card-header bg-success bg-opacity-10 d-flex justify-content-between align-items-center">
+              <strong><i className="fas fa-link me-1"></i> Embedding Modeli (RAG / Vektör Arama)</strong>
+              <span className={`badge bg-${embProvider === 'OPENAI' ? 'success' : 'info'}`}>
+                {embProvider === 'OPENAI' ? 'OpenAI (direkt)' : 'Azure OpenAI'}
+              </span>
+            </div>
+            <div className="card-body">
+              <div className="row g-3">
+                <div className="col-md-4">
+                  <ProviderSelect
+                    name="embedding-provider"
+                    label="Sağlayıcı"
+                    value={embProvider}
+                    onChange={v => set('embedding.provider', v)}
+                    help="Chat'ten farklı bir sağlayıcı seçebilirsiniz (örn. Chat=Azure, Embedding=OpenAI)." />
+                </div>
+                <div className="col-md-8">
+                  {embProvider === 'AZURE' ? (
+                    <TextField
+                      label="Azure Endpoint (opsiyonel)"
+                      value={config['embedding.endpoint']}
+                      onChange={v => set('embedding.endpoint', v)}
+                      placeholder="https://your-resource.openai.azure.com/"
+                      help="Boş = chat ile aynı Azure resource. Farklı region için ayrı endpoint girebilirsiniz." />
+                  ) : (
+                    <TextField
+                      label="OpenAI Base URL (opsiyonel)"
+                      value={config['embedding.endpoint']}
+                      onChange={v => set('embedding.endpoint', v)}
+                      placeholder="https://api.openai.com"
+                      help="Varsayılan: api.openai.com" />
+                  )}
+                </div>
+                <div className="col-md-6">
+                  <TextField
+                    label={embProvider === 'AZURE' ? 'Azure API Key' : 'OpenAI API Key'}
+                    value={config['embedding.apiKey']}
+                    onChange={v => set('embedding.apiKey', v)}
+                    placeholder={embProvider === 'AZURE' ? 'Boş = chat ile aynı' : 'sk-proj-...'}
+                    help="Değiştirmezseniz mevcut değer korunur (****maskelenir)." />
+                </div>
+                <div className="col-md-6">
+                  {embProvider === 'OPENAI' ? (
+                    <ModelSelect
+                      label="Embedding Model"
+                      value={config['embedding.deploymentName']}
+                      onChange={v => set('embedding.deploymentName', v)}
+                      options={OPENAI_EMBEDDING_MODELS}
+                      help="OpenAI embedding modelleri. text-embedding-3-small en iyi fiyat/performans." />
+                  ) : (
+                    <TextField
+                      label="Azure Deployment Adı"
+                      value={config['embedding.deploymentName']}
+                      onChange={v => set('embedding.deploymentName', v)}
+                      placeholder="text-embedding-3-small"
+                      help="Azure portalındaki embedding deployment adı." />
+                  )}
+                </div>
+              </div>
+              <div className="alert alert-warning small mt-3 mb-0">
+                <i className="fas fa-exclamation-triangle me-1"></i>
+                <strong>Dikkat:</strong> Embedding modelini değiştirirseniz mevcut vektörler yeni modelle uyumsuz olabilir.
+                Yeni indekslenecek dokümanlar için yeniden embedding oluşturulması gerekir.
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* ── Güvenlik: Input ── */}
         <div className="col-md-6">
           <div className="card border-0 shadow-sm">
@@ -175,33 +343,15 @@ export default function AssistantSettingsPage() {
               <NumberField label="Chunk overlap (kelime)" value={config['rag.chunkOverlapTokens']}
                 onChange={v => set('rag.chunkOverlapTokens', v)} min={0} max={200}
                 help="Ardışık parçalar arasındaki örtüşme. 50 kelime önerilen." />
-            </div>
-          </div>
-        </div>
-
-        {/* ── Embedding Bağlantısı ── */}
-        <div className="col-md-6">
-          <div className="card border-0 shadow-sm">
-            <div className="card-header bg-primary bg-opacity-10">
-              <strong><i className="fas fa-link me-1"></i> Embedding Bağlantısı</strong>
-            </div>
-            <div className="card-body">
-              <p className="text-muted mb-3" style={{ fontSize: 13 }}>
-                Boş bırakılırsa ana Azure OpenAI endpoint ve API key kullanılır.
-                Farklı region/subscription için ayrı bir Azure resource girebilirsiniz.
-              </p>
-              <TextField label="Embedding Endpoint" value={config['embedding.endpoint']}
-                onChange={v => set('embedding.endpoint', v)}
-                placeholder="https://your-resource.openai.azure.com/"
-                help="Boş = ana chat endpoint'i kullanılır." />
-              <TextField label="Embedding API Key" value={config['embedding.apiKey']}
-                onChange={v => set('embedding.apiKey', v)}
-                placeholder="Boş = ana API key kullanılır"
-                help="Değiştirmezseniz mevcut değer korunur (maskelenmiş görünür)." />
-              <TextField label="Embedding Deployment Adı" value={config['embedding.deploymentName']}
-                onChange={v => set('embedding.deploymentName', v)}
-                placeholder="text-embedding-3-small"
-                help="Azure'daki embedding model deployment adı." />
+              <NumberField label="Komşu pencere (neighbor window)" value={config['rag.neighborWindow']}
+                onChange={v => set('rag.neighborWindow', v)} min={0} max={10}
+                help="Match bulunan chunk'a ek olarak önce/sonra kaç chunk da LLM'e gönderilsin. 0=kapalı, 2=önerilen. Context loss'u önler (küçük chunk iyi match, ama yalıtık kalmasın)." />
+              <ToggleField label="Hibrit Arama (Vector + BM25)" checked={config['rag.hybridEnabled']}
+                onChange={v => set('rag.hybridEnabled', v)}
+                help="Anlamsal (pgvector) + kelime-tabanlı (PostgreSQL full-text) aramayı Reciprocal Rank Fusion ile birleştirir. 'MADDE 6', ürün SKU'su gibi spesifik terimli sorgularda anlamsal aramanın kaçırdığı eşleşmeleri yakalar. Önerilen: AÇIK." />
+              <NumberField label="RRF k sabiti" value={config['rag.hybridRrfK']}
+                onChange={v => set('rag.hybridRrfK', v)} min={10} max={200}
+                help="Reciprocal Rank Fusion sabiti. Standart değer 60. Yüksek = üst sıraları daha az önceliklendirir." />
             </div>
           </div>
         </div>
@@ -258,6 +408,48 @@ function TextField({ label, value, onChange, placeholder, help }) {
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder || ''} />
       {help && <small className="text-muted">{help}</small>}
+    </div>
+  );
+}
+
+function ProviderSelect({ label, value, onChange, help, name }) {
+  // Unique group name so chat/embedding radios don't share state
+  const groupName = name || `prov-${label}`;
+  const azureId = `${groupName}-azure`;
+  const openaiId = `${groupName}-openai`;
+  return (
+    <div className="mb-3">
+      <label className="form-label fw-semibold">{label}</label>
+      <div className="btn-group w-100" role="group">
+        <input type="radio" name={groupName} className="btn-check" id={azureId}
+          checked={value === 'AZURE'} onChange={() => onChange('AZURE')} />
+        <label className="btn btn-outline-primary" htmlFor={azureId}>
+          <i className="fab fa-microsoft me-1"></i>Azure OpenAI
+        </label>
+        <input type="radio" name={groupName} className="btn-check" id={openaiId}
+          checked={value === 'OPENAI'} onChange={() => onChange('OPENAI')} />
+        <label className="btn btn-outline-success" htmlFor={openaiId}>
+          <i className="fas fa-robot me-1"></i>OpenAI (direkt)
+        </label>
+      </div>
+      {help && <small className="text-muted d-block mt-1">{help}</small>}
+    </div>
+  );
+}
+
+function ModelSelect({ label, value, onChange, options, help }) {
+  const currentOption = options.find(o => o.value === value);
+  return (
+    <div className="mb-3">
+      <label className="form-label fw-semibold">{label}</label>
+      <select className="form-select" value={value || ''} onChange={e => onChange(e.target.value)}>
+        {!currentOption && value && <option value={value}>{value} (özel)</option>}
+        {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+      {currentOption?.note && <small className="text-muted d-block mt-1">
+        <i className="fas fa-info-circle me-1"></i>{currentOption.note}
+      </small>}
+      {help && <small className="text-muted d-block">{help}</small>}
     </div>
   );
 }
