@@ -1,5 +1,7 @@
 package com.warehouse.assistant.store.tools;
 
+import com.warehouse.assistant.core.rag.VectorSearchResult;
+import com.warehouse.assistant.core.rag.VectorSearchService;
 import com.warehouse.assistant.store.dto.StoreProductCard;
 import com.warehouse.entity.Product;
 import com.warehouse.service.ProductService;
@@ -32,18 +34,25 @@ public class StoreProductSearchTool {
 
     private final ProductService productService;
     private final StockService stockService;
+    private final VectorSearchService vectorSearchService;
 
-    public StoreProductSearchTool(ProductService productService, StockService stockService) {
+    public StoreProductSearchTool(ProductService productService,
+                                  StockService stockService,
+                                  VectorSearchService vectorSearchService) {
         this.productService = productService;
         this.stockService = stockService;
+        this.vectorSearchService = vectorSearchService;
     }
 
-    @Tool(description = "STORE: Yapılandırılmış ürün arama. Kullanıcı bir ürün tarif ettiğinde ÖNCE bu tool'u çağır. Parametreler: "
-            + "search (serbest metin — ürün adı veya anahtar kelimeler, örn '7 kilo çamaşır makinesi A+++'), "
-            + "categoryId, brandId (önce brand search tool ile id'yi çöz), "
-            + "minPrice, maxPrice (TL cinsinden), page (0'dan başlar), size (1-20). "
-            + "Yalnızca aktif ve stokta ürünler döner. Sonuç olarak ürün kartı listesi verir; "
-            + "bu listedeki ürünleri markdown ile kısa özet + 'Aşağıda size uygun seçenekler:' şeklinde sunmalısın.")
+    @Tool(description = "STORE: Ürün arama. Kullanıcı bir ürün, kategori veya marka ismi (ör. 'televizyon', "
+            + "'buzdolabı', 'Samsung', 'LG çamaşır makinesi') söylediğinde bu tool'u çağır — search parametresine "
+            + "kullanıcının söylediği kelimeyi olduğu gibi ver. Tool kelimeyi ürün adı, SKU, kategori adı VE marka "
+            + "adında arar; o yüzden 'televizyon' → Televizyon kategorisindeki ürünler, 'Samsung' → Samsung markalı "
+            + "ürünler dönecektir. Yapılandırılmış arama boş dönerse tool otomatik olarak semantik aramaya düşer — "
+            + "yine de boşsa gerçekten stokta yok demektir. Parametreler: "
+            + "search (serbest metin), categoryId, brandId (opsiyonel; id biliniyorsa kullan), "
+            + "minPrice, maxPrice (TL), page (0'dan başlar), size (1-20, default 8). "
+            + "Sadece aktif ürünler döner. Sonuç listesini 'Aşağıda size uygun seçenekler:' öncülüyle sun.")
     public List<StoreProductCard> searchProducts(
             @ToolParam(description = "Ürün adı veya anahtar kelimeler (Türkçe)", required = false) String search,
             @ToolParam(description = "Kategori id'si (opsiyonel)", required = false) Long categoryId,
@@ -67,14 +76,45 @@ public class StoreProductSearchTool {
                     .filter(p -> maxPrice == null || p.getPrice() == null || p.getPrice().compareTo(maxPrice) <= 0)
                     .toList();
 
-            if (filtered.isEmpty()) return List.of();
+            if (!filtered.isEmpty()) {
+                List<Long> ids = filtered.stream().map(Product::getId).toList();
+                Map<Long, Long> stockTotals = stockService.getTotalQuantitiesByProductIds(ids);
+                return filtered.stream().map(p -> toCard(p, stockTotals.getOrDefault(p.getId(), 0L))).toList();
+            }
 
-            List<Long> ids = filtered.stream().map(Product::getId).toList();
-            Map<Long, Long> stockTotals = stockService.getTotalQuantitiesByProductIds(ids);
-
-            return filtered.stream().map(p -> toCard(p, stockTotals.getOrDefault(p.getId(), 0L))).toList();
+            // Structured search returned nothing — auto-fallback to semantic (pgvector) search
+            // so the LLM doesn't need a second tool call for the common "not in my exact phrasing"
+            // case. Only triggers when the user actually provided search text; id-only queries
+            // are never overridden.
+            if (normalized != null && categoryId == null && brandId == null) {
+                log.debug("Structured search empty for '{}' → falling back to semantic.", normalized);
+                return semanticFallback(normalized, safeSize, minPrice, maxPrice);
+            }
+            return List.of();
         } catch (Exception e) {
             log.warn("StoreProductSearchTool failed: {}", e.getMessage());
+            return List.of();
+        }
+    }
+
+    /** pgvector semantic fallback when name/SKU/category/brand text search misses. */
+    private List<StoreProductCard> semanticFallback(String query, int size, BigDecimal minPrice, BigDecimal maxPrice) {
+        try {
+            List<VectorSearchResult> hits = vectorSearchService.searchProducts(query);
+            if (hits.isEmpty()) return List.of();
+            List<Long> ids = hits.stream().map(VectorSearchResult::id).toList();
+            Map<Long, Long> stockTotals = stockService.getTotalQuantitiesByProductIds(ids);
+            return ids.stream()
+                    .map(productService::getProductByIdWithRelations)
+                    .flatMap(java.util.Optional::stream)
+                    .filter(Product::isActive)
+                    .filter(p -> minPrice == null || p.getPrice() == null || p.getPrice().compareTo(minPrice) >= 0)
+                    .filter(p -> maxPrice == null || p.getPrice() == null || p.getPrice().compareTo(maxPrice) <= 0)
+                    .limit(size)
+                    .map(p -> toCard(p, stockTotals.getOrDefault(p.getId(), 0L)))
+                    .toList();
+        } catch (Exception e) {
+            log.debug("Semantic fallback failed: {}", e.getMessage());
             return List.of();
         }
     }

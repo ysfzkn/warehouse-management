@@ -105,12 +105,19 @@ public class WmsCatalogTools {
         return colorService.getAllColors();
     }
 
-    @Tool(description = "Search products by name query. Returns lightweight product info plus total quantity.")
+    @Tool(description = "Search products by query text. The query matches against product NAME, SKU, "
+            + "CATEGORY name, and BRAND name — so 'televizyon' finds products in the Televizyon category, "
+            + "'Samsung' finds all Samsung products, and exact SKU matches also work. Returns up to 50 "
+            + "lightweight product records with total quantity across all warehouses.")
     public List<ProductDto> searchProducts(String query) {
         if (query == null || query.isBlank()) {
             return List.of();
         }
-        List<com.warehouse.entity.Product> products = productService.searchProductsByName(query.trim());
+        // Use the filter-aware query so name/SKU/category/brand are all searched.
+        Pageable pageable = PageRequest.of(0, 50, Sort.by(Sort.Direction.DESC, "updatedAt"));
+        Page<com.warehouse.entity.Product> page =
+                productService.getAllProducts(pageable, query.trim(), null, null, null);
+        List<com.warehouse.entity.Product> products = page.getContent();
         if (products.isEmpty()) {
             return List.of();
         }

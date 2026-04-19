@@ -153,7 +153,12 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
         LEFT JOIN c.parent cp
         LEFT JOIN p.brand b
         LEFT JOIN p.color col
-        WHERE (:search IS NULL OR LOWER(p.name) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')) OR LOWER(p.sku) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')))
+        WHERE (:search IS NULL
+               OR LOWER(p.name)  LIKE LOWER(CONCAT('%', CAST(:search AS string), '%'))
+               OR LOWER(p.sku)   LIKE LOWER(CONCAT('%', CAST(:search AS string), '%'))
+               OR LOWER(c.name)  LIKE LOWER(CONCAT('%', CAST(:search AS string), '%'))
+               OR LOWER(cp.name) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%'))
+               OR LOWER(b.name)  LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')))
           AND (:categoryId IS NULL OR c.id = :categoryId OR cp.id = :categoryId)
           AND (:brandId IS NULL OR b.id = :brandId)
           AND (:colorId IS NULL OR col.id = :colorId)
