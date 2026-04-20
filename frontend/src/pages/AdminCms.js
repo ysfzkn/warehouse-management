@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import useSecurityCodePrompt from '../components/useSecurityCodePrompt';
+import RichTextEditor from '../components/RichTextEditor';
 
 const PAGE_TYPES = { CONTENT: 'İçerik Sayfası', LEGAL: 'Yasal Sayfa', FAQ: 'SSS', BANNER: 'Banner / Slayt' };
 const BANNER_POSITIONS = { HERO: 'Ana Sayfa (Hero)', SIDEBAR: 'Yan Panel', FOOTER: 'Alt Kısım' };
@@ -128,6 +129,48 @@ export default function AdminCms() {
   const banners = pages.filter(p => p.pageType === 'BANNER');
   const contentPages = pages.filter(p => p.pageType !== 'BANNER');
 
+  // Checkout + footer'da linklenen zorunlu yasal sayfa slug'ları
+  const REQUIRED_LEGAL = [
+    { slug: 'kvkk',                        title: 'KVKK Aydınlatma Metni',       reason: 'Checkout KVKK onay kutusu',        template: 'kvkk' },
+    { slug: 'on-bilgilendirme-formu',      title: 'Ön Bilgilendirme Formu',      reason: 'Checkout ön bilgilendirme onayı', template: 'on-bilgilendirme' },
+    { slug: 'mesafeli-satis-sozlesmesi',   title: 'Mesafeli Satış Sözleşmesi',   reason: 'Checkout sözleşme onayı',          template: 'mesafeli' },
+    { slug: 'iade-ve-degisim',             title: 'İade ve Değişim Koşulları',   reason: 'İade politikası linki',            template: 'iade' },
+    { slug: 'cerez-politikasi',            title: 'Çerez Politikası',            reason: 'Çerez banner onayı',                template: 'cerez' },
+  ];
+  const existingSlugs = new Set(pages.map(p => p.slug));
+  const missingLegal = REQUIRED_LEGAL.filter(r => !existingSlugs.has(r.slug));
+
+  const LEGAL_TEMPLATES = {
+    kvkk: '<h2>KVKK Aydınlatma Metni</h2><p>Bu aydınlatma metni 6698 sayılı Kanun kapsamında hazırlanmıştır...</p><h3>İşlenen Veriler</h3><p>Ad-soyad, iletişim, adres, sipariş bilgileriniz işlenir.</p><p><em>Bu varsayılan şablonu düzenleyin.</em></p>',
+    'on-bilgilendirme': '<h2>Ön Bilgilendirme Formu</h2><p>6502 sayılı Tüketici Kanunu uyarınca sipariş öncesi bilgilendirme amacıyla hazırlanmıştır.</p><h3>Satıcı Bilgileri</h3><p>Ünvan / Adres / Telefon / E-posta</p><h3>Cayma Hakkı</h3><p>14 gün içinde gerekçe göstermeden iade hakkınız vardır.</p><p><em>Bu varsayılan şablonu düzenleyin.</em></p>',
+    mesafeli: '<h2>Mesafeli Satış Sözleşmesi</h2><p>İşbu sözleşme, alıcı ile satıcı arasında akdedilmiştir.</p><h3>Konu</h3><p>Sözleşmenin konusu, alıcının sipariş verdiği ürünlerin satışı ve tesliminin koşullarıdır.</p><p><em>Bu varsayılan şablonu düzenleyin.</em></p>',
+    iade: '<h2>İade ve Değişim Koşulları</h2><p>Cayma hakkınızı malın teslim tarihinden itibaren 14 gün içinde kullanabilirsiniz.</p><p><em>Bu varsayılan şablonu düzenleyin.</em></p>',
+    cerez: '<h2>Çerez Politikası</h2><p>Sitemizde kullanıcı deneyimini iyileştirmek için çerezler kullanılmaktadır.</p><p><em>Bu varsayılan şablonu düzenleyin.</em></p>',
+  };
+
+  const createMissingLegal = async (item) => {
+    try {
+      await axios.post('/api/admin/cms', {
+        slug: item.slug,
+        title: item.title,
+        content: LEGAL_TEMPLATES[item.template] || '<p>İçerik hazırlanacak</p>',
+        pageType: 'LEGAL',
+        active: true,
+        sortOrder: 0,
+      });
+      fetchPages();
+    } catch (e) {
+      alert(e.response?.data?.message || 'Sayfa oluşturulamadı');
+    }
+  };
+
+  const createAllMissing = async () => {
+    for (const item of missingLegal) {
+      // eslint-disable-next-line no-await-in-loop
+      await createMissingLegal(item);
+    }
+  };
+
   return (
     <div>
       {SecurityCodePrompt}
@@ -136,6 +179,58 @@ export default function AdminCms() {
         <div className="d-flex gap-2">
           <button className="btn btn-outline-primary" onClick={startNewPage}><i className="fas fa-file-alt me-1" />Yeni Sayfa</button>
           <button className="btn btn-primary" onClick={startNewBanner}><i className="fas fa-images me-1" />Yeni Banner</button>
+        </div>
+      </div>
+
+      {/* Zorunlu Yasal Sayfalar check-list */}
+      <div className={`card border-0 shadow-sm mb-4 ${missingLegal.length ? 'border-start border-warning border-4' : ''}`}>
+        <div className={`card-header d-flex justify-content-between align-items-center ${missingLegal.length ? 'bg-warning bg-opacity-10' : 'bg-success bg-opacity-10'}`}>
+          <div>
+            <strong>
+              <i className={`fas ${missingLegal.length ? 'fa-exclamation-triangle text-warning' : 'fa-check-circle text-success'} me-2`}></i>
+              Zorunlu Yasal Sayfalar
+            </strong>
+            <span className="text-muted small ms-2">
+              {missingLegal.length === 0
+                ? 'Tüm zorunlu sayfalar mevcut 👍'
+                : `${missingLegal.length} sayfa eksik — checkout/footer linkleri kırık.`}
+            </span>
+          </div>
+          {missingLegal.length > 1 && (
+            <button className="btn btn-sm btn-warning" onClick={createAllMissing}>
+              <i className="fas fa-magic me-1"></i>Tümünü Şablonla Oluştur
+            </button>
+          )}
+        </div>
+        <div className="card-body py-2">
+          <div className="row g-2">
+            {REQUIRED_LEGAL.map(item => {
+              const exists = existingSlugs.has(item.slug);
+              const page = pages.find(p => p.slug === item.slug);
+              return (
+                <div className="col-md-6" key={item.slug}>
+                  <div className={`p-2 rounded d-flex align-items-center gap-2 ${exists ? 'bg-success bg-opacity-10' : 'bg-danger bg-opacity-10'}`}>
+                    <i className={`fas ${exists ? 'fa-check-circle text-success' : 'fa-times-circle text-danger'}`}></i>
+                    <div className="flex-grow-1 min-w-0">
+                      <div className="small fw-semibold text-truncate">{item.title}</div>
+                      <div className="small text-muted text-truncate">
+                        <code>/sayfa/{item.slug}</code> · {item.reason}
+                      </div>
+                    </div>
+                    {exists ? (
+                      <button className="btn btn-sm btn-outline-primary" onClick={() => startEdit(page)}>
+                        <i className="fas fa-pen me-1"></i>Düzenle
+                      </button>
+                    ) : (
+                      <button className="btn btn-sm btn-warning" onClick={() => createMissingLegal(item)}>
+                        <i className="fas fa-plus me-1"></i>Oluştur
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
 
@@ -258,9 +353,24 @@ export default function AdminCms() {
 
                 {!isBanner && (
                   <div className="mb-3">
-                    <label className="form-label small fw-medium">İçerik (HTML)</label>
-                    <textarea className="form-control" rows={8} value={form.content} onChange={e => setForm({...form, content: e.target.value})} placeholder="<h2>Başlık</h2><p>İçerik...</p>" />
-                    <small className="text-muted">HTML formatında sayfa içeriği girebilirsiniz.</small>
+                    <label className="form-label small fw-medium d-flex justify-content-between align-items-center">
+                      <span>İçerik</span>
+                      <small className="text-muted fw-normal">
+                        <i className="fas fa-keyboard me-1"></i>
+                        <kbd>Ctrl+B</kbd> kalın · <kbd>Ctrl+I</kbd> italik · <kbd>Ctrl+K</kbd> link
+                      </small>
+                    </label>
+                    <RichTextEditor
+                      value={form.content}
+                      onChange={(html) => setForm({...form, content: html})}
+                      placeholder="Sayfa içeriğini buraya yazın. Üst çubuktan başlık, kalın, liste, link seçebilirsiniz…"
+                      minHeight={340}
+                    />
+                    <small className="text-muted d-block mt-1">
+                      <i className="fas fa-info-circle me-1"></i>
+                      Word veya Google Docs'tan yapıştırırsanız stiller otomatik temizlenir.
+                      Metin zaten yayında, arka planda HTML olarak kaydedilir.
+                    </small>
                   </div>
                 )}
 
