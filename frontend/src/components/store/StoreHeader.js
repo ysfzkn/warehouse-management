@@ -126,20 +126,56 @@ export default function StoreHeader({ cart, settings }) {
   } catch {}
   const isLoggedIn = !!customerToken && !!customerName;
 
-  // Smart header: hide top bars on scroll down, show on scroll up
+  // Smart header scroll behavior.
+  // Jitter fix stratejisi:
+  //   • rAF (requestAnimationFrame) ile throttle — scroll event başına state set değil,
+  //     frame başına bir kere.
+  //   • Hysteresis — açma/kapama eşikleri FARKLI, bu sayede eşik civarında salınım yapan
+  //     scroll'lar rapid toggle tetiklemez (scrolled: aç≥100, kapat<40; hidden: gizle≥240, göster≤delta-up).
+  //   • Minimum scroll delta — 5px altındaki oynamaları yok say (trackpad kinetic residue).
   const [scrolled, setScrolled] = useState(false);
   const [hidden, setHidden] = useState(false);
   const lastScrollY = useRef(0);
+  const ticking = useRef(false);
 
   useEffect(() => {
-    const handleScroll = () => {
+    const SHOW_SCROLLED_AT = 100;   // >= bu değerde "scrolled" true
+    const CLEAR_SCROLLED_AT = 40;   // <= bu değerde false'a döner — 60px deadband
+    const HIDE_AT = 240;            // bu değerin altında header gizlenmez
+    const MIN_DELTA = 5;            // 5px altı oynamaları yok say
+
+    const apply = () => {
       const y = window.scrollY;
-      setScrolled(y > 60);
-      setHidden(y > 120 && y > lastScrollY.current);
-      lastScrollY.current = y;
+      const last = lastScrollY.current;
+      const delta = y - last;
+
+      setScrolled(prev => {
+        if (!prev && y >= SHOW_SCROLLED_AT) return true;
+        if (prev && y <= CLEAR_SCROLLED_AT) return false;
+        return prev;
+      });
+
+      if (Math.abs(delta) >= MIN_DELTA) {
+        setHidden(prev => {
+          if (y < HIDE_AT) return false;             // üstte her zaman görünür
+          if (delta > 0) return true;                 // aşağı kaydır → gizle
+          if (delta < 0) return false;                // yukarı kaydır → göster
+          return prev;
+        });
+        lastScrollY.current = y;
+      }
+      ticking.current = false;
     };
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
+
+    const onScroll = () => {
+      if (!ticking.current) {
+        ticking.current = true;
+        window.requestAnimationFrame(apply);
+      }
+    };
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
   return (

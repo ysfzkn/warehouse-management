@@ -63,4 +63,17 @@ public interface InvoiceProvider {
      * @return PDF byte dizisi
      */
     byte[] downloadPdf(String providerInvoiceId);
+
+    /**
+     * GİB'de bu VKN/TCKN için kayıtlı e-Fatura mükellefi var mı kontrol eder.
+     * Tüzel müşteriler için E_FATURA ya da E_ARSIV seçimi bu sonuca göre yapılır.
+     *
+     * @param taxId 10 haneli VKN ya da 11 haneli TCKN
+     * @return {@code true} = GİB kayıtlı e-Fatura mükellefi → E_FATURA kesilebilir
+     *         {@code false} = kayıtlı değil → E_ARSIV kesilmelidir
+     *         Provider desteklemiyorsa varsayılan {@code false} döner (güvenli taraf).
+     */
+    default boolean isGibRegistered(String taxId) {
+        return false;
+    }
 }

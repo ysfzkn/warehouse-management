@@ -12,6 +12,8 @@ import { useAssistantFlags } from '../hooks/useAssistantFlags';
 import AssistantWidget from '../components/AssistantWidget';
 import CookieBanner from '../components/store/CookieBanner';
 import AnalyticsScripts from '../components/store/AnalyticsScripts';
+import { useSessionGuard } from '../hooks/useSessionGuard';
+import SessionWarningModal from '../components/SessionWarningModal';
 
 /**
  * Storefront assistant configuration. Guest-friendly: no Authorization
@@ -44,6 +46,17 @@ export default function StoreLayout() {
   const cart = useCart();
   const siteSettings = useSiteSettings();
   const { flags: assistantFlags } = useAssistantFlags();
+
+  // Session guard for logged-in customers. For guests this hook is harmless
+  // (no token → tick loop short-circuits).
+  const { warningOpen: sessWarn, secondsLeft: sessSec, dismiss: sessDismiss, logoutNow: sessLogout } =
+    useSessionGuard({
+      tokenKey: 'customer_token',
+      loginPath: '/giris',
+      idleMinutes: 60,          // storefront: longer idle window is OK
+      warnBeforeSeconds: 120,
+      extraKeysToClear: ['customer_refresh_token'],
+    });
 
   // Debug visibility decision — helps diagnose "chatbot doesn't appear after admin toggle".
   useEffect(() => {
@@ -93,6 +106,12 @@ export default function StoreLayout() {
          * Controlled by the `assistant_store_enabled` site setting.
          */}
         {assistantFlags.storeEnabled === true && <AssistantWidget config={storeAssistantConfig} siteName={siteSettings.get('site_name', '')} />}
+        <SessionWarningModal
+          open={sessWarn}
+          secondsLeft={sessSec}
+          onContinue={sessDismiss}
+          onLogout={() => sessLogout('manual')}
+        />
         <CookieBanner />
         <AnalyticsScripts
           googleAnalyticsId={siteSettings.get('analytics_google_id', '')}

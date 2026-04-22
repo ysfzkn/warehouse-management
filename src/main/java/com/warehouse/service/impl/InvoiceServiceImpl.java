@@ -15,8 +15,11 @@ import com.warehouse.repository.OrderItemRepository;
 import com.warehouse.repository.OrderRepository;
 import com.warehouse.service.InvoiceService;
 import com.warehouse.service.SiteSettingService;
+import com.warehouse.service.EmailService;
+import com.warehouse.service.invoice.InvoiceNumberGenerator;
 import com.warehouse.service.invoice.InvoiceProvider;
 import com.warehouse.service.invoice.InvoiceResult;
+import com.warehouse.service.invoice.logo.UblTrInvoiceBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
@@ -39,17 +42,23 @@ public class InvoiceServiceImpl implements InvoiceService {
     private final OrderItemRepository orderItemRepository;
     private final List<InvoiceProvider> providers;
     private final SiteSettingService settingService;
+    private final InvoiceNumberGenerator invoiceNumberGenerator;
+    private final EmailService emailService;
 
     public InvoiceServiceImpl(InvoiceRepository invoiceRepository,
                                OrderRepository orderRepository,
                                OrderItemRepository orderItemRepository,
                                List<InvoiceProvider> providers,
-                               SiteSettingService settingService) {
+                               SiteSettingService settingService,
+                               InvoiceNumberGenerator invoiceNumberGenerator,
+                               EmailService emailService) {
         this.invoiceRepository = invoiceRepository;
         this.orderRepository = orderRepository;
         this.orderItemRepository = orderItemRepository;
         this.providers = providers;
         this.settingService = settingService;
+        this.invoiceNumberGenerator = invoiceNumberGenerator;
+        this.emailService = emailService;
     }
 
     /**
@@ -182,6 +191,47 @@ public class InvoiceServiceImpl implements InvoiceService {
                 .map(this::toDto);
     }
 
+    @Override
+    @Transactional
+    public int refreshPendingStatuses() {
+        InvoiceProvider activeProvider = getActiveProvider();
+        if (activeProvider == null) return 0;
+
+        var pageable = org.springframework.data.domain.PageRequest.of(0, 50);
+        List<Invoice> pending = invoiceRepository.findByStatusWithProviderId(
+                InvoiceStatus.PENDING, pageable);
+        if (pending.isEmpty()) return 0;
+
+        int updated = 0;
+        for (Invoice inv : pending) {
+            try {
+                InvoiceResult result = activeProvider.queryStatus(inv.getProviderInvoiceId());
+                if (result == null || result.getStatus() == null) continue;
+                if (result.getStatus() == InvoiceStatus.PENDING) continue;  // unchanged
+
+                InvoiceStatus oldStatus = inv.getStatus();
+                inv.setStatus(result.getStatus());
+                if (result.getGibResponse() != null) inv.setGibResponse(result.getGibResponse());
+                if (result.getPdfUrl() != null) inv.setPdfUrl(result.getPdfUrl());
+                if (result.getStatus() == InvoiceStatus.APPROVED && inv.getIssuedAt() == null) {
+                    inv.setIssuedAt(LocalDateTime.now());
+                }
+                invoiceRepository.save(inv);
+                updated++;
+                logger.info("Fatura statüsü güncellendi: {} → {} (invoiceId={})",
+                        oldStatus, result.getStatus(), inv.getId());
+
+                // PENDING → APPROVED geçişinde müşteriye mail
+                if (oldStatus == InvoiceStatus.PENDING && result.getStatus() == InvoiceStatus.APPROVED) {
+                    notifyCustomerInvoiceReady(inv);
+                }
+            } catch (Exception e) {
+                logger.warn("Status polling hatası (invoiceId={}): {}", inv.getId(), e.getMessage());
+            }
+        }
+        return updated;
+    }
+
     // === Private helpers ===
 
     private InvoiceDto createAndSendInvoice(Order order, InvoiceType type, String note) {
@@ -198,11 +248,28 @@ public class InvoiceServiceImpl implements InvoiceService {
         String tcKimlikNo = extractBillingField(billing, "tcKimlikNo", "");
         boolean individual = companyName.isBlank() && taxNumber.isBlank();
 
-        // E-Fatura mı e-Arşiv mi? Tüzel kişiler için E_FATURA, bireyseller için E_ARSIV
-        InvoiceType resolvedType = (type != null) ? type : (individual ? InvoiceType.E_ARSIV : InvoiceType.E_FATURA);
-
         InvoiceProvider activeProvider = getActiveProvider();
         String providerName = activeProvider != null ? activeProvider.getProviderName() : "NONE";
+
+        // E-Fatura vs E-Arşiv seçimi:
+        //   - Caller explicit bir tip verdiyse ona saygı göster
+        //   - Bireysel müşteri → E_ARSIV
+        //   - Tüzel müşteri: GİB'de e-Fatura mükellefi kayıtlıysa → E_FATURA,
+        //     değilse zorunlu E_ARSIV (yanlışsa Logo reddeder)
+        InvoiceType resolvedType;
+        if (type != null) {
+            resolvedType = type;
+        } else if (individual) {
+            resolvedType = InvoiceType.E_ARSIV;
+        } else {
+            boolean gibRegistered = activeProvider != null
+                    && activeProvider.isGibRegistered(taxNumber);
+            resolvedType = gibRegistered ? InvoiceType.E_FATURA : InvoiceType.E_ARSIV;
+            if (!gibRegistered) {
+                logger.info("Tüzel müşteri (VKN={}) GİB kayıtlı değil — E_ARSIV kesilecek",
+                        taxNumber);
+            }
+        }
 
         Invoice invoice = Invoice.builder()
                 .order(order)
@@ -240,6 +307,15 @@ public class InvoiceServiceImpl implements InvoiceService {
 
     private InvoiceDto sendToProvider(Invoice invoice) {
         try {
+            // 1) Assign invoice number BEFORE sending (GİB requires the seller to
+            //    provide the number). Regeneration keeps the existing number.
+            if (invoice.getInvoiceNumber() == null || invoice.getInvoiceNumber().isBlank()) {
+                String number = invoiceNumberGenerator.next(invoice.getInvoiceType());
+                invoice.setInvoiceNumber(number);
+                logger.info("Fatura numarası atandı: {} (sipariş: {})",
+                        number, invoice.getOrder().getOrderNumber());
+            }
+
             invoice.setStatus(InvoiceStatus.PENDING);
             invoiceRepository.save(invoice);
 
@@ -255,23 +331,45 @@ public class InvoiceServiceImpl implements InvoiceService {
             Order order = invoice.getOrder();
             List<OrderItem> items = orderItemRepository.findByOrderId(order.getId());
 
+            // 2) Build UBL-TR XML once and persist it BEFORE sending — even if
+            //    Logo rejects, we still have the submitted payload for audit.
+            try {
+                Map<String, String> companyInfo = getCompanyInfoMap();
+                String ublXml = UblTrInvoiceBuilder.build(invoice, order,
+                        items != null ? items : List.of(), companyInfo);
+                invoice.setXmlContent(ublXml);
+                invoiceRepository.save(invoice);
+            } catch (Exception xmlEx) {
+                logger.warn("UBL XML üretilip kaydedilemedi (yine de provider'a iletilecek): {}", xmlEx.getMessage());
+            }
+
+            // Order tablosundaki fatura numarasını önceden set et — böylece provider
+            // başarısız olsa bile müşteri "fatura hazırlanıyor" gösterimine sahip olabilir.
+            order.setInvoiceNumber(invoice.getInvoiceNumber());
+            orderRepository.save(order);
+
             InvoiceResult result = activeProvider.createInvoice(invoice, order, items);
 
             if (result.isSuccess()) {
-                invoice.setInvoiceNumber(result.getInvoiceNumber());
+                if (result.getInvoiceNumber() != null && !result.getInvoiceNumber().isBlank()) {
+                    invoice.setInvoiceNumber(result.getInvoiceNumber());
+                    order.setInvoiceNumber(result.getInvoiceNumber());
+                    orderRepository.save(order);
+                }
                 invoice.setProviderInvoiceId(result.getProviderInvoiceId());
                 invoice.setStatus(result.getStatus());
                 invoice.setGibResponse(result.getGibResponse());
-                invoice.setPdfUrl(result.getPdfUrl());
+                if (result.getPdfUrl() != null) invoice.setPdfUrl(result.getPdfUrl());
                 invoice.setIssuedAt(LocalDateTime.now());
                 invoice.setErrorMessage(null);
 
-                // Order tablosundaki invoice bilgilerini de güncelle
-                order.setInvoiceNumber(result.getInvoiceNumber());
-                orderRepository.save(order);
-
                 logger.info("Fatura başarıyla oluşturuldu: {} (sipariş: {})",
-                        result.getInvoiceNumber(), order.getOrderNumber());
+                        invoice.getInvoiceNumber(), order.getOrderNumber());
+
+                // Müşteriye "Faturanız Hazır" bildirimi — sadece APPROVED olanlarda
+                if (result.getStatus() == InvoiceStatus.APPROVED) {
+                    notifyCustomerInvoiceReady(invoice);
+                }
             } else {
                 invoice.setStatus(InvoiceStatus.ERROR);
                 invoice.setErrorMessage(result.getErrorMessage());
@@ -288,6 +386,48 @@ public class InvoiceServiceImpl implements InvoiceService {
         }
 
         return toDto(invoice);
+    }
+
+    /** Fatura APPROVED olunca müşteriye "Faturanız Hazır" mail'i — hata mail akışını bloklamaz. */
+    private void notifyCustomerInvoiceReady(Invoice invoice) {
+        try {
+            Order order = invoice.getOrder();
+            if (order == null || order.getCustomer() == null) return;
+            String email = order.getCustomer().getEmail();
+            if (email == null || email.isBlank()) return;
+
+            String firstName = order.getCustomer().getFirstName();
+            String total = new java.text.DecimalFormat("#,##0.00 'TL'",
+                    new java.text.DecimalFormatSymbols(new java.util.Locale("tr", "TR")))
+                    .format(invoice.getTotalAmount() != null ? invoice.getTotalAmount() : java.math.BigDecimal.ZERO);
+
+            emailService.sendInvoiceReady(
+                    email,
+                    firstName,
+                    order.getOrderNumber(),
+                    invoice.getInvoiceNumber(),
+                    invoice.getInvoiceType() != null ? invoice.getInvoiceType().name() : "E_ARSIV",
+                    total);
+        } catch (Exception e) {
+            logger.warn("Fatura hazır bildirim mail'i gönderilemedi (invoiceId={}): {}",
+                    invoice.getId(), e.getMessage());
+        }
+    }
+
+    /** Satıcı firma bilgileri — UBL-TR XML içi için site_settings'ten toplanır. */
+    private Map<String, String> getCompanyInfoMap() {
+        String[] keys = {
+                "logo_company_vkn", "logo_company_title", "logo_company_tax_office",
+                "logo_company_mersis_no", "logo_company_trade_registry",
+                "logo_company_address", "logo_company_city", "logo_company_district",
+                "logo_company_postal_code", "logo_company_country",
+                "logo_company_email", "logo_company_phone", "logo_company_website",
+                "logo_company_bank_name", "logo_company_bank_iban",
+                "logo_customer_alias"
+        };
+        Map<String, String> map = new java.util.HashMap<>();
+        for (String k : keys) map.put(k, settingService.getSetting(k));
+        return map;
     }
 
     private InvoiceDto toDto(Invoice invoice) {

@@ -278,21 +278,58 @@ export default function MyOrdersPage() {
 
                     {/* Footer Actions */}
                     <div className="modal-footer border-0 pt-0 flex-wrap gap-2">
-                      {/* Fatura (e-Fatura sistemi veya mevcut invoiceUrl) */}
+                      {/* Fatura indirme — önce e-Fatura sistemini, yoksa manuel yüklenmiş
+                          dosyayı dener. Backend'ten gelen hata mesajı olduğu gibi gösterilir
+                          (yanıltıcı "doküman yüklenmedi" fallback yok). */}
                       {(detailOrder.invoiceUrl || detailOrder.invoiceNumber) && (
-                        <button className="btn btn-sm btn-outline-info" onClick={() => {
-                          axios.get(`/api/store/orders/${detailOrder.orderNumber}/invoice/pdf`, { headers: getAuthHeaders(), responseType: 'blob' })
-                            .then(r => { const url = window.URL.createObjectURL(r.data); const a = document.createElement('a'); a.href = url; a.download = `fatura-${detailOrder.orderNumber}.pdf`; a.click(); window.URL.revokeObjectURL(url); })
-                            .catch(() => {
-                              // Fallback: eski fatura indirme endpoint'i
-                              if (detailOrder.invoiceUrl) {
-                                axios.get(`/api/store/orders/${detailOrder.orderNumber}/invoice`, { headers: getAuthHeaders(), responseType: 'blob' })
-                                  .then(r => { const url = window.URL.createObjectURL(r.data); const a = document.createElement('a'); a.href = url; a.download = `fatura-${detailOrder.orderNumber}.pdf`; a.click(); window.URL.revokeObjectURL(url); })
-                                  .catch(() => toast.error('Fatura indirilemedi.'));
-                              } else {
-                                toast.error('Fatura indirilemedi.');
+                        <button className="btn btn-sm btn-outline-info" onClick={async () => {
+                          const tryDownload = async (url, errPrefix) => {
+                            try {
+                              const r = await axios.get(url, { headers: getAuthHeaders(), responseType: 'blob' });
+                              const blobUrl = window.URL.createObjectURL(r.data);
+                              const a = document.createElement('a');
+                              a.href = blobUrl;
+                              a.download = `fatura-${detailOrder.orderNumber}.pdf`;
+                              a.click();
+                              window.URL.revokeObjectURL(blobUrl);
+                              return { ok: true };
+                            } catch (e) {
+                              // Blob error → response body'deki JSON mesajı oku
+                              let msg = errPrefix;
+                              if (e?.response?.data) {
+                                try {
+                                  const text = await e.response.data.text();
+                                  const parsed = JSON.parse(text);
+                                  if (parsed.error || parsed.message) msg = parsed.error || parsed.message;
+                                } catch { /* not json */ }
                               }
-                            });
+                              return { ok: false, status: e?.response?.status, msg };
+                            }
+                          };
+
+                          // 1) e-Fatura sistemi (öncelik)
+                          if (detailOrder.invoiceNumber) {
+                            const r = await tryDownload(
+                              `/api/store/orders/${detailOrder.orderNumber}/invoice/pdf`,
+                              'Fatura indirilemedi.'
+                            );
+                            if (r.ok) return;
+                            // e-fatura hazır değilse ve manuel yüklü dosya da yoksa:
+                            if (!detailOrder.invoiceUrl) {
+                              if (r.status === 404) toast.info(r.msg || 'Fatura henüz hazırlanıyor — birkaç dakika sonra tekrar deneyin.');
+                              else toast.error(r.msg || 'Fatura indirilemedi.');
+                              return;
+                            }
+                          }
+
+                          // 2) Manuel yüklenmiş fatura (legacy)
+                          if (detailOrder.invoiceUrl) {
+                            const r = await tryDownload(
+                              `/api/store/orders/${detailOrder.orderNumber}/invoice`,
+                              'Fatura indirilemedi.'
+                            );
+                            if (!r.ok) toast.error(r.msg || 'Fatura indirilemedi.');
+                          }
                         }}>
                           <FiDownload size={14} className="me-1" />Fatura İndir
                         </button>

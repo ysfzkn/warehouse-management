@@ -60,6 +60,13 @@ export default function AdminInvoices() {
   const [copiedId, setCopiedId] = useState(null);
   const searchInputRef = useRef(null);
 
+  // Manuel "Sipariş için fatura oluştur" modalı state'leri
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createSearch, setCreateSearch] = useState('');
+  const [createSearchResults, setCreateSearchResults] = useState([]);
+  const [createSearchLoading, setCreateSearchLoading] = useState(false);
+  const [createBusyOrderId, setCreateBusyOrderId] = useState(null);
+
   const showToast = (message, type = 'success') => {
     setToast({ show: true, message, type });
     setTimeout(() => setToast({ show: false, message: '', type: 'success' }), 3500);
@@ -215,6 +222,50 @@ export default function AdminInvoices() {
     }
   };
 
+  // ── Manuel "Sipariş için fatura oluştur" ──
+
+  // Debounce'lu order arama — order no veya müşteri adı
+  useEffect(() => {
+    if (!createOpen) return;
+    const q = createSearch.trim();
+    if (!q) { setCreateSearchResults([]); return; }
+    const t = setTimeout(async () => {
+      setCreateSearchLoading(true);
+      try {
+        const res = await axios.get('/api/admin/orders', {
+          params: { page: 0, size: 15, search: q, sortBy: 'createdAt', sortDir: 'desc' },
+        });
+        setCreateSearchResults(res.data?.content || res.data?.items || []);
+      } catch {
+        setCreateSearchResults([]);
+      } finally {
+        setCreateSearchLoading(false);
+      }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [createSearch, createOpen]);
+
+  const openCreateModal = () => {
+    setCreateOpen(true);
+    setCreateSearch('');
+    setCreateSearchResults([]);
+  };
+
+  const handleCreateForOrder = async (orderId, orderNumber) => {
+    setCreateBusyOrderId(orderId);
+    try {
+      const res = await axios.post(`/api/admin/invoices/auto/${orderId}`);
+      const inv = res.data;
+      showToast(`Fatura oluşturuldu: ${inv.invoiceNumber || '(numara atanıyor)'} — sipariş ${orderNumber}`);
+      setCreateOpen(false);
+      fetchInvoices(0); // liste yenile
+    } catch (e) {
+      showToast(e?.response?.data?.message || 'Fatura oluşturulamadı.', 'danger');
+    } finally {
+      setCreateBusyOrderId(null);
+    }
+  };
+
   const toggleSelect = (id) => {
     setSelectedIds(prev => {
       const next = new Set(prev);
@@ -299,6 +350,10 @@ export default function AdminInvoices() {
           </div>
           <button className="btn btn-sm btn-outline-primary" onClick={() => fetchInvoices(page)} title="Listeyi yenile">
             <i className="fas fa-sync-alt me-1"></i>Yenile
+          </button>
+          <button className="btn btn-sm btn-primary" onClick={openCreateModal}
+            title="Mevcut bir sipariş için manuel fatura oluştur">
+            <i className="fas fa-plus me-1"></i>Sipariş İçin Fatura Oluştur
           </button>
         </div>
       </div>
@@ -846,6 +901,110 @@ export default function AdminInvoices() {
                 >
                   {actionLoading ? <><span className="spinner-border spinner-border-sm me-1"></span>İşleniyor...</> : confirmAction.btnLabel}
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Sipariş için manuel fatura oluştur — modal */}
+      {createOpen && (
+        <div
+          className="modal show d-block"
+          tabIndex="-1"
+          style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
+          onClick={() => setCreateOpen(false)}
+        >
+          <div className="modal-dialog modal-lg" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">
+                  <i className="fas fa-plus-circle text-primary me-2"></i>
+                  Sipariş İçin Fatura Oluştur
+                </h5>
+                <button type="button" className="btn-close" onClick={() => setCreateOpen(false)}></button>
+              </div>
+              <div className="modal-body">
+                <div className="alert alert-info small py-2 mb-3">
+                  <i className="fas fa-info-circle me-1"></i>
+                  Sipariş numarası veya müşteri adıyla arayın, ilgili siparişin yanındaki butonla fatura oluşturun.
+                  Tip (e-Arşiv / e-Fatura) müşterinin vergi bilgilerine göre otomatik belirlenir.
+                </div>
+
+                <div className="input-group input-group-sm mb-3">
+                  <span className="input-group-text"><i className="fas fa-search"></i></span>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="Sipariş no (örn: ORD-2026-001) veya müşteri adı..."
+                    value={createSearch}
+                    onChange={(e) => setCreateSearch(e.target.value)}
+                    autoFocus
+                  />
+                  {createSearchLoading && (
+                    <span className="input-group-text">
+                      <span className="spinner-border spinner-border-sm"></span>
+                    </span>
+                  )}
+                </div>
+
+                {!createSearch.trim() ? (
+                  <div className="text-center text-muted py-4">
+                    <i className="fas fa-keyboard fa-2x mb-2 opacity-25"></i>
+                    <p className="small mb-0">Aramaya başlamak için yukarıya yazın.</p>
+                  </div>
+                ) : createSearchResults.length === 0 && !createSearchLoading ? (
+                  <div className="text-center text-muted py-4">
+                    <i className="fas fa-search fa-2x mb-2 opacity-25"></i>
+                    <p className="small mb-0">Eşleşen sipariş bulunamadı.</p>
+                  </div>
+                ) : (
+                  <div className="list-group" style={{ maxHeight: 420, overflowY: 'auto' }}>
+                    {createSearchResults.map(o => {
+                      const busy = createBusyOrderId === o.id;
+                      const hasInvoice = !!o.invoiceNumber;
+                      return (
+                        <div key={o.id} className="list-group-item d-flex justify-content-between align-items-center gap-3">
+                          <div className="flex-grow-1 min-w-0">
+                            <div className="d-flex flex-wrap align-items-center gap-2 mb-1">
+                              <code className="text-primary">{o.orderNumber}</code>
+                              <span className="badge bg-light text-dark border">{o.status}</span>
+                              {hasInvoice && (
+                                <span className="badge bg-success bg-opacity-25 text-success-emphasis">
+                                  <i className="fas fa-check me-1"></i>Fatura: {o.invoiceNumber}
+                                </span>
+                              )}
+                            </div>
+                            <div className="small text-muted text-truncate">
+                              <i className="fas fa-user me-1"></i>{o.customerName || 'İsimsiz'}
+                              {' · '}
+                              <i className="fas fa-calendar me-1"></i>{formatDate(o.createdAt)}
+                              {' · '}
+                              <strong className="text-dark">{formatPrice(o.grandTotal)}</strong>
+                            </div>
+                          </div>
+                          <button
+                            className={`btn btn-sm ${hasInvoice ? 'btn-outline-secondary' : 'btn-primary'} text-nowrap`}
+                            disabled={busy}
+                            onClick={() => handleCreateForOrder(o.id, o.orderNumber)}
+                            title={hasInvoice ? 'Bu siparişin zaten bir faturası var — yeni deneme için tıklayın' : 'Bu sipariş için fatura oluştur'}
+                          >
+                            {busy ? (
+                              <><span className="spinner-border spinner-border-sm me-1"></span>İşleniyor…</>
+                            ) : hasInvoice ? (
+                              <><i className="fas fa-redo me-1"></i>Yeniden Dene</>
+                            ) : (
+                              <><i className="fas fa-file-invoice me-1"></i>Fatura Oluştur</>
+                            )}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+              <div className="modal-footer">
+                <button className="btn btn-secondary" onClick={() => setCreateOpen(false)}>Kapat</button>
               </div>
             </div>
           </div>

@@ -331,9 +331,12 @@ public class EmailServiceImpl implements EmailService {
             log.info("Email disabled — order status update for {}: {} → {}", toEmail, orderNumber, newStatus);
             return;
         }
+        // İngilizce enum name'i Türkçe etikete çevir — müşteri "SHIPPED" yerine
+        // "Kargoya Verildi" görmeli.
+        String statusLabel = localizeOrderStatus(newStatus);
         String subject = "Sipariş Durumu Güncellendi — " + orderNumber;
         String noteHtml = (note != null && !note.isBlank())
-                ? "<p style=\"color:#475569;font-size:13px;background:#f1f5f9;padding:12px;border-radius:6px;border-left:3px solid #2563eb;\"><strong>Not:</strong> " + note + "</p>"
+                ? "<p style=\"color:#475569;font-size:13px;background:#f1f5f9;padding:12px;border-radius:6px;border-left:3px solid #2563eb;\"><strong>Not:</strong> " + escape(note) + "</p>"
                 : "";
         String html = buildHeader("Sipariş Durumu Güncellendi")
                 + """
@@ -348,10 +351,172 @@ public class EmailServiceImpl implements EmailService {
                     </div>
                     %s
                     <p style="color:#475569;font-size:14px;">Siparişinizin detaylarını hesabınızdan takip edebilirsiniz.</p>
-                """.formatted(firstName, orderNumber, newStatus, noteHtml)
+                """.formatted(escape(firstName), escape(orderNumber), escape(statusLabel), noteHtml)
                 + buildFooter();
 
         sendHtml(toEmail, subject, html);
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    //  E-Fatura bildirimleri
+    // ─────────────────────────────────────────────────────────────
+
+    @Override
+    @Async
+    public void sendInvoiceReady(String toEmail, String firstName, String orderNumber,
+                                  String invoiceNumber, String invoiceType, String totalFormatted) {
+        if (!enabled) {
+            log.info("Email disabled — invoice ready for {}: {}", toEmail, invoiceNumber);
+            return;
+        }
+        String typeLabel = localizeInvoiceType(invoiceType);
+        String safeName = escape(firstName != null ? firstName : "Müşterimiz");
+        String subject = "E-Faturanız Hazır — " + orderNumber;
+        String baseUrl = getBaseUrl();
+        String downloadLink = baseUrl + "/siparislerim";
+
+        String html = buildHeader("E-Faturanız Hazır")
+                + """
+                    <p style="color:#334155;font-size:15px;">Merhaba <strong>%s</strong>,</p>
+                    <p style="color:#475569;font-size:14px;line-height:1.6;">
+                        <strong>%s</strong> numaralı siparişinizin %s'ı başarıyla oluşturuldu ve GİB tarafından onaylandı.
+                    </p>
+
+                    <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:20px;margin:20px 0;">
+                        <table style="width:100%%;border-collapse:collapse;">
+                            <tr>
+                                <td style="padding:6px 0;color:#64748b;font-size:13px;">Fatura No</td>
+                                <td style="padding:6px 0;color:#0f172a;font-size:14px;font-weight:600;text-align:right;">%s</td>
+                            </tr>
+                            <tr>
+                                <td style="padding:6px 0;color:#64748b;font-size:13px;">Fatura Tipi</td>
+                                <td style="padding:6px 0;color:#0f172a;font-size:14px;text-align:right;">%s</td>
+                            </tr>
+                            <tr>
+                                <td style="padding:6px 0;color:#64748b;font-size:13px;">Toplam Tutar</td>
+                                <td style="padding:6px 0;color:#0f172a;font-size:14px;font-weight:600;text-align:right;">%s</td>
+                            </tr>
+                        </table>
+                    </div>
+
+                    <div style="text-align:center;margin:28px 0;">
+                        <a href="%s" style="display:inline-block;background:#2563eb;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;">Faturayı Görüntüle / İndir</a>
+                    </div>
+
+                    <p style="color:#64748b;font-size:12px;line-height:1.5;">
+                        Faturanız yasal olarak geçerlidir ve GİB sistemlerinde kayıtlıdır.
+                        İstediğiniz zaman hesabınızdan PDF olarak indirebilirsiniz.
+                    </p>
+                """.formatted(safeName, escape(orderNumber), typeLabel,
+                        escape(invoiceNumber != null ? invoiceNumber : "-"),
+                        typeLabel,
+                        escape(totalFormatted != null ? totalFormatted : "-"),
+                        downloadLink)
+                + buildFooter();
+
+        sendHtml(toEmail, subject, html);
+    }
+
+    @Override
+    @Async
+    public void sendAdminInvoiceDigest(String toEmail,
+                                        java.util.List<java.util.Map<String,Object>> errorRows,
+                                        java.util.List<java.util.Map<String,Object>> stuckPendingRows) {
+        if (!enabled) return;
+        int errorCount = errorRows != null ? errorRows.size() : 0;
+        int stuckCount = stuckPendingRows != null ? stuckPendingRows.size() : 0;
+        if (errorCount == 0 && stuckCount == 0) return; // zero-noise
+
+        String subject = "[E-Fatura Uyarısı] " + errorCount + " hata, " + stuckCount + " bekleyen";
+
+        StringBuilder body = new StringBuilder();
+        body.append(buildHeader("E-Fatura Günlük Özet"));
+        body.append("<p style=\"color:#334155;font-size:15px;\">Aşağıdaki fatura(lar) yönetici dikkati bekliyor:</p>");
+
+        if (errorCount > 0) {
+            body.append("<h3 style=\"color:#dc2626;font-size:16px;margin-top:24px;\"><span style=\"font-size:18px;\">⚠</span> Hatalı Faturalar (").append(errorCount).append(")</h3>");
+            body.append(renderDigestTable(errorRows, "#fef2f2", "#991b1b"));
+        }
+
+        if (stuckCount > 0) {
+            body.append("<h3 style=\"color:#d97706;font-size:16px;margin-top:24px;\"><span style=\"font-size:18px;\">⏳</span> 24 Saatten Uzun Bekleyen (").append(stuckCount).append(")</h3>");
+            body.append(renderDigestTable(stuckPendingRows, "#fffbeb", "#854d0e"));
+        }
+
+        String baseUrl = getBaseUrl();
+        body.append("<div style=\"text-align:center;margin:28px 0;\">")
+            .append("<a href=\"").append(baseUrl).append("/admin/invoices\" style=\"display:inline-block;background:#2563eb;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;\">Admin Paneli'nde Aç</a>")
+            .append("</div>");
+
+        body.append(buildFooter());
+        sendHtml(toEmail, subject, body.toString());
+    }
+
+    private String renderDigestTable(java.util.List<java.util.Map<String,Object>> rows, String bg, String fg) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("<table style=\"width:100%;border-collapse:collapse;background:").append(bg).append(";border-radius:6px;overflow:hidden;margin-top:8px;\">");
+        sb.append("<tr style=\"color:").append(fg).append(";font-size:12px;text-align:left;\">")
+          .append("<th style=\"padding:10px 12px;\">Fatura No</th>")
+          .append("<th style=\"padding:10px 12px;\">Sipariş</th>")
+          .append("<th style=\"padding:10px 12px;\">Alıcı</th>")
+          .append("<th style=\"padding:10px 12px;\">Tutar</th>")
+          .append("<th style=\"padding:10px 12px;\">Not</th>")
+          .append("</tr>");
+        for (var r : rows) {
+            sb.append("<tr style=\"border-top:1px solid rgba(0,0,0,0.06);color:#0f172a;font-size:13px;\">");
+            sb.append("<td style=\"padding:10px 12px;font-family:monospace;\">").append(escape(String.valueOf(r.getOrDefault("invoiceNumber", "-")))).append("</td>");
+            sb.append("<td style=\"padding:10px 12px;\">").append(escape(String.valueOf(r.getOrDefault("orderNumber", "-")))).append("</td>");
+            sb.append("<td style=\"padding:10px 12px;\">").append(escape(String.valueOf(r.getOrDefault("recipientName", "-")))).append("</td>");
+            sb.append("<td style=\"padding:10px 12px;\">").append(escape(String.valueOf(r.getOrDefault("totalAmount", "-")))).append("</td>");
+            sb.append("<td style=\"padding:10px 12px;font-size:11px;color:#64748b;\">").append(escape(String.valueOf(r.getOrDefault("errorMessage", "-")))).append("</td>");
+            sb.append("</tr>");
+        }
+        sb.append("</table>");
+        return sb.toString();
+    }
+
+    private String getBaseUrl() {
+        try {
+            String v = settingService.getSetting("seo_canonical_domain");
+            if (v != null && !v.isBlank()) return v.trim().replaceAll("/$", "");
+        } catch (Exception ignored) {}
+        return "http://localhost:3000";
+    }
+
+    /** Invoice type label mapping for user-facing emails. */
+    private static String localizeInvoiceType(String type) {
+        if (type == null) return "e-Belge";
+        return switch (type.toUpperCase()) {
+            case "E_FATURA" -> "e-Faturası";
+            case "E_ARSIV"  -> "e-Arşiv Faturası";
+            default -> "e-Belgesi";
+        };
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    //  Status → Türkçe etiket (enum name'ler mail'de görünmesin)
+    // ─────────────────────────────────────────────────────────────
+
+    private static final java.util.Map<String, String> ORDER_STATUS_TR = java.util.Map.ofEntries(
+            java.util.Map.entry("PENDING_PAYMENT",   "Ödeme Bekleniyor"),
+            java.util.Map.entry("PAID",              "Ödeme Alındı"),
+            java.util.Map.entry("PROCESSING",        "Hazırlanıyor"),
+            java.util.Map.entry("READY_TO_SHIP",     "Kargoya Hazırlandı"),
+            java.util.Map.entry("SHIPPED",           "Kargoya Verildi"),
+            java.util.Map.entry("DELIVERED",         "Teslim Edildi"),
+            java.util.Map.entry("CANCELLED",         "İptal Edildi"),
+            java.util.Map.entry("CANCELED",          "İptal Edildi"),
+            java.util.Map.entry("REFUNDED",          "İade Edildi"),
+            java.util.Map.entry("RETURNED",          "İade Alındı"),
+            java.util.Map.entry("FAILED",            "Başarısız"),
+            java.util.Map.entry("BANK_TRANSFER_PENDING", "Havale Bekleniyor"),
+            java.util.Map.entry("PAYMENT_PENDING",   "Ödeme Bekleniyor")
+    );
+
+    static String localizeOrderStatus(String status) {
+        if (status == null || status.isBlank()) return "-";
+        String up = status.trim().toUpperCase().replace('-', '_').replace(' ', '_');
+        return ORDER_STATUS_TR.getOrDefault(up, status); // bilinmeyenleri olduğu gibi bırak
     }
 
     private void sendHtml(String to, String subject, String html) {

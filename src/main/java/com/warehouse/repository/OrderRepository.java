@@ -17,6 +17,12 @@ import java.util.Optional;
 public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecificationExecutor<Order> {
     Optional<Order> findByOrderNumber(String orderNumber);
 
+    /** Kargo webhook ile gelen shipment id'si ile Order arama. */
+    Optional<Order> findByCargoProviderShipmentId(String cargoProviderShipmentId);
+
+    /** Takip no ile Order arama — kargo firma-specific. */
+    Optional<Order> findByCargoTrackingNo(String cargoTrackingNo);
+
     @Query("SELECT o FROM Order o LEFT JOIN FETCH o.customer WHERE o.id = :id")
     Optional<Order> findByIdWithCustomer(@Param("id") Long id);
 

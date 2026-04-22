@@ -51,5 +51,19 @@ public interface EmailService {
     boolean sendContactFormMessage(String toEmail, String fromName, String fromEmail,
                                    String phone, String subject, String message);
 
+    /**
+     * Sipariş için e-Fatura GİB tarafından onaylandığında müşteriye bildirim mail'i.
+     * İçerik: fatura numarası, tutar, sipariş numarası, "Hesabımdan İndir" CTA.
+     */
+    void sendInvoiceReady(String toEmail, String firstName, String orderNumber,
+                          String invoiceNumber, String invoiceType, String totalFormatted);
+
+    /**
+     * Admin'e günlük e-Fatura durum özeti: ERROR/REJECTED ve 24h+ PENDING faturalar.
+     * Hiç sorun yoksa gönderilmez (zero-noise digest).
+     */
+    void sendAdminInvoiceDigest(String toEmail, java.util.List<java.util.Map<String,Object>> errorRows,
+                                java.util.List<java.util.Map<String,Object>> stuckPendingRows);
+
     boolean isEnabled();
 }

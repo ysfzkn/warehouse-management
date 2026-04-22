@@ -23,15 +23,21 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
 
     Optional<Invoice> findByInvoiceNumber(String invoiceNumber);
 
+    /**
+     * PostgreSQL + Hibernate 6 type-inference fix: bir sorgu parametresi {@code null}
+     * geldiğinde PG onun tipini {@code bytea} olarak çıkarır ve {@code lower(bytea)}
+     * fonksiyonu olmadığı için patlar. {@code CAST(:search AS string)} açık tip ipucu
+     * verir — aynı pattern {@code ProductRepository.findByFilters}'ta da kullanılıyor.
+     */
     @Query("""
         SELECT i FROM Invoice i
         JOIN i.order o
         WHERE (:status IS NULL OR i.status = :status)
           AND (:invoiceType IS NULL OR i.invoiceType = :invoiceType)
           AND (:search IS NULL OR (
-                LOWER(i.invoiceNumber) LIKE LOWER(CONCAT('%', :search, '%'))
-                OR LOWER(i.recipientName) LIKE LOWER(CONCAT('%', :search, '%'))
-                OR LOWER(o.orderNumber) LIKE LOWER(CONCAT('%', :search, '%'))
+                LOWER(i.invoiceNumber) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%'))
+                OR LOWER(i.recipientName) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%'))
+                OR LOWER(o.orderNumber) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%'))
           ))
           AND i.createdAt >= :from
           AND i.createdAt <= :to
@@ -46,6 +52,37 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
             Pageable pageable);
 
     long countByStatus(InvoiceStatus status);
+
+    /**
+     * PENDING durumundaki ve Logo'ya gönderilmiş (providerInvoiceId != null) faturaları
+     * döner. InvoiceStatusPollingJob tarafından kullanılır.
+     */
+    @Query("""
+        SELECT i FROM Invoice i
+         WHERE i.status = :status
+           AND i.providerInvoiceId IS NOT NULL
+         ORDER BY i.createdAt ASC
+    """)
+    List<Invoice> findByStatusWithProviderId(@Param("status") InvoiceStatus status, Pageable pageable);
+
+    /** Admin digest için: son 24 saat içinde oluşturulan ERROR veya REJECTED faturalar. */
+    @Query("""
+        SELECT i FROM Invoice i
+         WHERE (i.status = com.warehouse.enums.InvoiceStatus.ERROR
+             OR i.status = com.warehouse.enums.InvoiceStatus.REJECTED)
+           AND i.updatedAt >= :since
+         ORDER BY i.updatedAt DESC
+    """)
+    List<Invoice> findRecentErrors(@Param("since") LocalDateTime since);
+
+    /** Admin digest için: 24 saatten uzun süredir PENDING kalan faturalar. */
+    @Query("""
+        SELECT i FROM Invoice i
+         WHERE i.status = com.warehouse.enums.InvoiceStatus.PENDING
+           AND i.createdAt < :olderThan
+         ORDER BY i.createdAt ASC
+    """)
+    List<Invoice> findStuckPending(@Param("olderThan") LocalDateTime olderThan);
 
     @Query("SELECT COUNT(i) FROM Invoice i WHERE i.createdAt >= :from AND i.createdAt <= :to")
     long countByDateRange(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);

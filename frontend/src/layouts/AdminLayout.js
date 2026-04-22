@@ -4,6 +4,8 @@ import Navbar from '../components/Navbar';
 import { AdminToastProvider } from '../components/AdminToast';
 import AssistantWidget from '../components/AssistantWidget';
 import { useAssistantFlags } from '../hooks/useAssistantFlags';
+import { useSessionGuard } from '../hooks/useSessionGuard';
+import SessionWarningModal from '../components/SessionWarningModal';
 
 /**
  * WMS assistant configuration. Driven by the generic AssistantWidget so the
@@ -37,6 +39,15 @@ export default function AdminLayout() {
   const token = localStorage.getItem('auth_token');
   const { flags } = useAssistantFlags();
 
+  // Session guard — warn 2 min before JWT expiry, idle logout after 30 min inactivity
+  const { warningOpen, secondsLeft, dismiss, logoutNow } = useSessionGuard({
+    tokenKey: 'auth_token',
+    loginPath: '/login',
+    idleMinutes: 30,
+    warnBeforeSeconds: 120,
+    extraKeysToClear: ['auth_user', 'auth_role'],
+  });
+
   if (!token) {
     return <Navigate to="/login" replace />;
   }
@@ -48,8 +59,13 @@ export default function AdminLayout() {
         <div className="container-fluid px-4 py-3">
           <Outlet />
         </div>
-        {/* WMS widget — only rendered when admin hasn't disabled it */}
         {flags.wmsEnabled === true && <AssistantWidget config={wmsAssistantConfig} />}
+        <SessionWarningModal
+          open={warningOpen}
+          secondsLeft={secondsLeft}
+          onContinue={dismiss}
+          onLogout={() => logoutNow('manual')}
+        />
       </div>
     </AdminToastProvider>
   );

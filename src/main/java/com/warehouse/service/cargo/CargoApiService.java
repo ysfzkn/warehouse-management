@@ -145,12 +145,66 @@ public class CargoApiService {
         return result;
     }
 
+    /**
+     * Order'ın kargo etiketini (PDF) indirir. Yalnızca Kargonomi gibi etiket indirmeyi
+     * destekleyen sağlayıcılar için çalışır.
+     *
+     * @return PDF byte[], yoksa boş array
+     */
+    public byte[] downloadShipmentLabel(Order order) {
+        if (!isEnabled() || order.getCargoProviderShipmentId() == null) return new byte[0];
+        CargoApiProvider provider = getActiveProvider();
+        if (provider instanceof KargonomiCargoProvider k) {
+            return k.downloadBarcodePdf(order.getCargoProviderShipmentId());
+        }
+        if (provider instanceof MockCargoProvider m) {
+            return m.downloadLabelPdf(order.getCargoProviderShipmentId());
+        }
+        return new byte[0];
+    }
+
+    /** Aktif sağlayıcının hesap bakiyesi. Destek yoksa {@code null}. */
+    public BigDecimal getProviderBalance() {
+        if (!isEnabled()) return null;
+        CargoApiProvider provider = getActiveProvider();
+        if (provider instanceof KargonomiCargoProvider k) {
+            return k.getBalance();
+        }
+        return null;
+    }
+
+    /**
+     * Webhook ya da polling'den gelen tracking update'ini Order'a uygular.
+     * @return true ise Order güncellendi, false ise değişiklik yok
+     */
+    @Transactional
+    public boolean applyTrackingUpdate(Order order, CargoTrackingStatus status) {
+        if (order == null || status == null) return false;
+        boolean changed = false;
+        order.setCargoLastTrackedAt(LocalDateTime.now());
+
+        if (status.getStatus() == CargoTrackingStatus.CargoStatus.DELIVERED
+                && status.getDeliveredAt() != null
+                && order.getActualDeliveryDate() == null) {
+            order.setActualDeliveryDate(status.getDeliveredAt().toLocalDate());
+            changed = true;
+        }
+        // Tracking code ilk kez geldiyse kaydet
+        if ((order.getCargoTrackingNo() == null || order.getCargoTrackingNo().isBlank())
+                && status.getTrackingNumber() != null) {
+            order.setCargoTrackingNo(status.getTrackingNumber());
+            changed = true;
+        }
+        if (changed) orderRepository.save(order);
+        return changed;
+    }
+
     // === Private helpers ===
 
     /**
      * Aktif (isEnabled()==true) sağlayıcıyı bulur.
      */
-    private CargoApiProvider getActiveProvider() {
+    public CargoApiProvider getActiveProvider() {
         return providers.stream()
                 .filter(CargoApiProvider::isEnabled)
                 .findFirst()

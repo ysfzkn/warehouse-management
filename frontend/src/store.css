@@ -78,29 +78,37 @@
 .store-user-menu-item { transition: background 0.15s; border-radius: 6px; margin: 0 4px; }
 .store-user-menu-item:hover { background: #f0f7ff; }
 
-/* Header */
+/* Header
+ * Scroll jitter fix notes:
+ *  • Sadece `transform` animasyonu bırakıldı → GPU composite layer, reflow YOK.
+ *  • `max-height` animasyonu kaldırıldı (her frame reflow tetikliyordu).
+ *  • Collapsible blocklar artık `display:none` ile aniden yok olur — görsel smooth,
+ *    layout sabit.
+ *  • `will-change: transform` + `transform: translateZ(0)` promotion hint'leri.
+ */
 .store-header {
   background: #fff; border-bottom: 1px solid var(--color-gray-200);
   position: sticky; top: 0; z-index: 1000;
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  transform: translateZ(0);
+  will-change: transform;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+  backface-visibility: hidden;
 }
 .store-header--scrolled { box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
-.store-header--hidden { transform: translateY(-100%); }
+.store-header--hidden { transform: translate3d(0, -100%, 0); }
 
-/* Collapsible top sections — animate out on scroll */
+/* Top sections — scrolled halinde display:none (animasyon yok, reflow yok) */
 .store-header-collapsible {
-  max-height: 200px; overflow: hidden;
-  transition: max-height 0.3s ease, opacity 0.3s ease;
-  opacity: 1;
+  overflow: hidden;
 }
 .store-header--scrolled .store-header-collapsible {
-  max-height: 0; opacity: 0;
+  display: none;
 }
-/* Compact main header on scroll */
-.store-header--scrolled .store-header-main { padding: 6px 0; }
-.store-header--scrolled .store-logo { max-height: 32px; }
-.store-header--scrolled .store-search-input { padding: 7px 16px 7px 36px; font-size: 0.8rem; }
-.store-header--scrolled .store-cat-link { padding: 6px 12px; font-size: 0.8rem; }
+/* Main header ölçü değişiklikleri: tek seferlik hafif compact, layout shift yok */
+.store-header-main { padding: 10px 0; transition: padding 0.2s ease; }
+.store-header--scrolled .store-header-main { padding: 8px 0; }
+.store-logo { max-height: 40px; transition: max-height 0.2s ease; }
+.store-header--scrolled .store-logo { max-height: 34px; }
 
 /* Announcement Bar */
 .store-announcement-bar { background: var(--color-gray-900); color: #fff; font-size: var(--text-xs); padding: 6px 0; text-align: center; font-weight: var(--font-medium); letter-spacing: 0.02em; }

@@ -28,12 +28,12 @@ const SETTING_GROUPS = [
   { id: 'sms',         section: 'Entegrasyonlar',title: 'SMS Bildirimleri',        icon: 'fas fa-sms',                   keys: ['sms_enabled', 'sms_provider', 'netgsm_username', 'netgsm_password', 'netgsm_sender'],
     tooltip: 'SMS sağlayıcı yapılandırması. Sipariş ve kargo bildirimleri için kullanılır.',
     enabledKey: 'sms_enabled' },
-  { id: 'cargo',       section: 'Entegrasyonlar',title: 'Kargo API',               icon: 'fas fa-truck',                 keys: ['cargo_api_enabled', 'cargo_api_provider', 'cargo_api_auto_create', 'kargonomi_api_token', 'kargonomi_app_key', 'kargonomi_api_base_url'],
+  { id: 'cargo',       section: 'Entegrasyonlar',title: 'Kargo API',               icon: 'fas fa-truck',                 keys: ['cargo_api_enabled', 'cargo_api_provider', 'cargo_api_auto_create', 'kargonomi_api_token', 'kargonomi_app_key', 'kargonomi_api_base_url', 'kargonomi_webhook_secret', 'kargonomi_warehouse_id'],
     tooltip: 'Kargo gönderi oluşturma ve takip API entegrasyonu. Aktif edince sipariş SHIPPED olunca otomatik kargo oluşturulur.',
     enabledKey: 'cargo_api_enabled' },
   { id: 'sender',      section: 'Entegrasyonlar',title: 'Gönderici Bilgileri',     icon: 'fas fa-store',                 keys: ['sender_name', 'sender_phone', 'sender_address', 'sender_city', 'sender_district', 'sender_postal_code'],
     tooltip: 'Kargo gönderisinde "gönderici" olarak gösterilecek mağaza bilgileri.' },
-  { id: 'invoice',     section: 'E-Fatura',      title: 'E-Fatura (Logo)',         icon: 'fas fa-file-invoice',          keys: ['invoice_provider', 'invoice_auto_generate', 'logo_efatura_endpoint', 'logo_efatura_username', 'logo_efatura_password', 'logo_efatura_test_mode', 'logo_customer_alias', 'logo_earsiv_design_file', 'logo_efatura_design_file'],
+  { id: 'invoice',     section: 'E-Fatura',      title: 'E-Fatura (Logo)',         icon: 'fas fa-file-invoice',          keys: ['invoice_provider', 'invoice_auto_generate', 'logo_efatura_endpoint', 'logo_efatura_username', 'logo_efatura_password', 'logo_efatura_test_mode', 'logo_customer_alias', 'logo_earsiv_design_file', 'logo_efatura_design_file', 'invoice_admin_digest_email'],
     tooltip: 'Logo eLogo SOAP API ile e-Fatura / e-Arşiv entegrasyonu. Sipariş PAID olunca otomatik fatura oluşturulur.',
     enabledKey: 'invoice_auto_generate' },
   { id: 'inv-company', section: 'E-Fatura',      title: 'Satıcı Firma',            icon: 'fas fa-building',              keys: ['logo_company_vkn', 'logo_company_title', 'logo_company_tax_office', 'logo_company_mersis_no', 'logo_company_trade_registry', 'logo_company_address', 'logo_company_city', 'logo_company_district', 'logo_company_postal_code', 'logo_company_email', 'logo_company_phone', 'logo_company_website', 'logo_company_bank_name', 'logo_company_bank_iban'],
@@ -61,6 +61,8 @@ const LABELS = {
   cargo_api_enabled: 'Kargo API Entegrasyonu', cargo_api_provider: 'Kargo API Sağlayıcı',
   cargo_api_auto_create: 'Otomatik Kargo Oluştur', kargonomi_api_token: 'Kargonomi API Token (Bearer)',
   kargonomi_app_key: 'Kargonomi APP KEY', kargonomi_api_base_url: 'Kargonomi API URL',
+  kargonomi_webhook_secret: 'Kargonomi Webhook Secret',
+  kargonomi_warehouse_id: 'Kargonomi Warehouse ID',
   sender_name: 'Gönderici Adı / Firma', sender_phone: 'Gönderici Telefon', sender_address: 'Gönderici Adresi',
   sender_city: 'Gönderici Şehir', sender_district: 'Gönderici İlçe', sender_postal_code: 'Gönderici Posta Kodu',
   invoice_provider: 'E-Fatura Sağlayıcı', invoice_auto_generate: 'Otomatik Fatura Oluştur',
@@ -68,6 +70,7 @@ const LABELS = {
   logo_efatura_password: 'Logo Şifre', logo_efatura_test_mode: 'Test Modu',
   logo_customer_alias: 'Müşteri Alias (tüzel)',
   logo_earsiv_design_file: 'e-Arşiv Tasarım Dosyası', logo_efatura_design_file: 'e-Fatura Tasarım Dosyası',
+  invoice_admin_digest_email: 'Günlük Fatura Özeti E-posta',
   logo_company_vkn: 'Vergi / TC Kimlik No', logo_company_title: 'Ticari Unvan', logo_company_tax_office: 'Vergi Dairesi',
   logo_company_mersis_no: 'MERSİS No', logo_company_trade_registry: 'Ticaret Sicil No',
   logo_company_address: 'Firma Adresi', logo_company_city: 'Şehir', logo_company_district: 'İlçe',
@@ -123,6 +126,8 @@ const FIELD_TOOLTIPS = {
   kargonomi_api_token: 'Kargonomi hesabınızdan alınan Bearer token',
   kargonomi_app_key: 'Kargonomi APP KEY (partner uygulaması için)',
   kargonomi_api_base_url: 'Kargonomi API URL (varsayılan: https://app.kargonomi.com.tr/api/v1)',
+  kargonomi_webhook_secret: 'Kargonomi webhook POST\'larının HMAC-SHA256 imzasını doğrulamak için paylaşılan secret. Kargonomi panelinde webhook oluştururken aynı değeri girin.',
+  kargonomi_warehouse_id: 'Kargonomi\'de oluşturulan gönderici depo ID\'si. Boşsa her shipment\'ta "Gönderici Bilgileri" kullanılır. Admin → Kargo API → "Webhook Kaydet" butonu ile de senkronize edebilirsiniz.',
   sender_name: 'Faturada ve kargoda "gönderici" olarak gözükecek firma adı',
   sender_phone: 'Kargo iletişimi için telefon',
   sender_address: 'Kargo çıkış adresi',
@@ -138,6 +143,7 @@ const FIELD_TOOLTIPS = {
   logo_customer_alias: 'Tüzel müşterilerin e-Fatura alias\'ı (opsiyonel). Boş bırakılırsa Logo panelindeki varsayılan kullanılır.',
   logo_earsiv_design_file: 'e-Arşiv tasarım dosyası adı (Logo panelinden alınır, bireysel müşteri faturalarında kullanılır)',
   logo_efatura_design_file: 'e-Fatura tasarım dosyası adı (Logo panelinden alınır, tüzel müşteri faturalarında kullanılır)',
+  invoice_admin_digest_email: 'Her gün 08:00\'da hatalı ve 24h+ beklemede kalan faturaların özeti bu adrese gönderilir. Boşsa "İletişim Formu Hedef E-posta" kullanılır.',
   logo_company_vkn: 'Şahıs işletmesi ise 11 haneli TC Kimlik No; tüzel kişi ise 10 haneli Vergi No',
   logo_company_title: 'Firmanın resmi ticari unvanı (Vergi levhanızdaki tam isim)',
   logo_company_tax_office: 'Kayıtlı olduğunuz vergi dairesi (örn: Ankara Kurumlar Vergi Dairesi)',
@@ -439,7 +445,7 @@ export default function AdminSiteSettings() {
     if (key === 'currency_symbol') return renderSelect(key, CURRENCY_OPTIONS.map(c => ({v:c.value, l:c.label})), '₺', isDirtyField, validation);
 
     // Password-style fields
-    if (['kargonomi_api_token','kargonomi_app_key','logo_efatura_password','netgsm_password'].includes(key)) {
+    if (['kargonomi_api_token','kargonomi_app_key','kargonomi_webhook_secret','logo_efatura_password','netgsm_password'].includes(key)) {
       const visible = !!visiblePasswords[key];
       return (
         <div key={key} className="col-md-6">

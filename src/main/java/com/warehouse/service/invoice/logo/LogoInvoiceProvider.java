@@ -206,6 +206,59 @@ public class LogoInvoiceProvider implements InvoiceProvider {
         }
     }
 
+    /**
+     * Logo CheckGibUser → GİB'de e-Fatura kayıtlı mı sorgular. Tüzel müşterilere
+     * E_FATURA yerine yanlışlıkla E_ARSIV kesmemek (ve tersi) için kullanılır.
+     * Geçersiz credential / session problem'i olursa güvenli tarafta {@code false} döner.
+     */
+    @Override
+    public boolean isGibRegistered(String taxId) {
+        if (!isEnabled() || taxId == null || taxId.isBlank()) return false;
+        try {
+            String sessionId = getOrRefreshSession();
+            if (sessionId == null) return false;
+
+            String soap = buildCheckGibUserSoap(sessionId, taxId.trim());
+            String response = callSoap(soap, "CheckGibUser");
+
+            // Response format: <item><vknTckn>...</vknTckn><isGibUser>true/false</isGibUser>...
+            // Ya da tek item → extractXmlValue bize ilk değeri döner.
+            String flag = extractXmlValue(response, "isGibUser");
+            if (flag == null) flag = extractXmlValue(response, "gibUser");
+            if (flag == null) flag = extractXmlValue(response, "isRegistered");
+            boolean registered = "true".equalsIgnoreCase(flag);
+            logger.debug("Logo CheckGibUser[{}] → registered={}", taxId, registered);
+            return registered;
+        } catch (LogoAuthException e) {
+            invalidateSession();
+            return false;
+        } catch (Exception e) {
+            logger.warn("Logo CheckGibUser hatası ({}): {}", taxId, e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * CheckGibUser SOAP request — vknTcknList listesinde gönderilir.
+     */
+    private String buildCheckGibUserSoap(String sessionId, String taxId) {
+        return """
+            <?xml version="1.0" encoding="utf-8"?>
+            <soapenv:Envelope xmlns:soapenv="%s" xmlns:tem="%s" xmlns:arr="%s">
+              <soapenv:Header/>
+              <soapenv:Body>
+                <tem:CheckGibUser>
+                  <tem:sessionID>%s</tem:sessionID>
+                  <tem:vknTcknList>
+                    <arr:string>%s</arr:string>
+                  </tem:vknTcknList>
+                </tem:CheckGibUser>
+              </soapenv:Body>
+            </soapenv:Envelope>
+            """.formatted(SOAPENV_NS, SERVICE_NS, ARRAYS_NS,
+                xmlEscape(sessionId), xmlEscape(taxId));
+    }
+
     @Override
     public byte[] downloadPdf(String ettn) {
         if (!isEnabled() || ettn == null) return new byte[0];

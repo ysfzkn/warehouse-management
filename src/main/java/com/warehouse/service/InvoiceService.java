@@ -57,4 +57,11 @@ public interface InvoiceService {
     Page<InvoiceDto> getInvoices(InvoiceStatus status, InvoiceType invoiceType,
                                   String search, LocalDateTime from, LocalDateTime to,
                                   Pageable pageable);
+
+    /**
+     * PENDING durumundaki faturaları Logo'dan sorgular ve güncel statülerini yazar.
+     * Scheduled job tarafından çağrılır.
+     * @return güncellenen fatura sayısı
+     */
+    int refreshPendingStatuses();
 }

@@ -506,7 +506,7 @@ export default function AdminOrders() {
                               </span>
                             </div>
                             {orderDetail.cargoCompany && (
-                              <button className="btn btn-sm btn-success w-100" onClick={() => {
+                              <button className="btn btn-sm btn-success w-100 mb-2" onClick={() => {
                                 axios.get('/api/admin/cargo-providers').then(r => {
                                   const provider = (r.data || []).find(p => p.code === orderDetail.cargoCompany || p.name === orderDetail.cargoCompany);
                                   if (provider?.trackingUrlTemplate) {
@@ -517,6 +517,28 @@ export default function AdminOrders() {
                                 <i className="fas fa-external-link-alt me-2" />Kargo Takip Sayfasına Git
                               </button>
                             )}
+                            {/* Kargonomi etiket PDF indirme — cargoProviderShipmentId varsa */}
+                            <button className="btn btn-sm btn-outline-primary w-100" onClick={() => {
+                              axios.get(`/api/admin/cargo/orders/${orderDetail.id}/label`, { responseType: 'blob' })
+                                .then(r => {
+                                  const url = window.URL.createObjectURL(r.data);
+                                  const a = document.createElement('a');
+                                  a.href = url;
+                                  a.download = `kargo-etiket-${orderDetail.orderNumber}.pdf`;
+                                  a.click();
+                                  window.URL.revokeObjectURL(url);
+                                })
+                                .catch(async (err) => {
+                                  let msg = 'Etiket indirilemedi.';
+                                  try {
+                                    const body = await err.response?.data?.text?.();
+                                    if (body) { const j = JSON.parse(body); if (j.message) msg = j.message; }
+                                  } catch { /* ignore */ }
+                                  toast.error(msg);
+                                });
+                            }}>
+                              <i className="fas fa-download me-2" />Kargo Etiketi İndir (PDF)
+                            </button>
                           </>
                         ) : (
                           <div className="d-flex justify-content-between"><span className="text-muted">Takip No</span><span className="text-muted">—</span></div>
