@@ -61,6 +61,15 @@ public class CargoProvider {
     @Column(name = "tracking_url_template", length = 500)
     private String trackingUrlTemplate;
 
+    /**
+     * Kargonomi tarafındaki carrier slug'ı ("yurtici", "aras", "mng" vb).
+     * Müşteri bu provider'ı seçince Kargonomi API'ye bu slug ile "bu carrier ile gönder"
+     * talimatı verilir. Boşsa Kargonomi otomatik (en ucuz) carrier seçer.
+     */
+    @Size(max = 40)
+    @Column(name = "kargonomi_slug", length = 40)
+    private String kargonomiSlug;
+
     @Column(nullable = false)
     @Builder.Default
     private boolean active = true;

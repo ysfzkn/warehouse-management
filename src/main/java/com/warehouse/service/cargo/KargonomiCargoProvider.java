@@ -115,8 +115,10 @@ public class KargonomiCargoProvider implements CargoApiProvider {
                         "Kargonomi shipment id dönmedi — response: " + truncate(respBody.toString(), 300));
             }
 
-            // ── Phase 2: taşıyıcı seçimini onayla (otomatik en ucuz) ──
-            int preferredProviderId = resolvePreferredProviderId(request.getPreferredCarrier());
+            // ── Phase 2: taşıyıcı seçimini onayla ──
+            // preferredCarrier varsa (ör. "yurtici") price-comparison'dan o carrier'ın
+            // provider_id'sini çözüp onunla onaylıyoruz. Yoksa -1 = Kargonomi otomatik en ucuz.
+            int preferredProviderId = resolvePreferredProviderId(shipmentId, request.getPreferredCarrier());
             CargoShipmentResult confirmResult = confirmShippingPrice(shipmentId, preferredProviderId);
             if (!confirmResult.isSuccess()) return confirmResult;
 
@@ -160,13 +162,43 @@ public class KargonomiCargoProvider implements CargoApiProvider {
     }
 
     /**
-     * Kullanıcının belirttiği slug'ı (örn. "yurtici") provider_id'ye çevir.
-     * Şu an basit yaklaşım: -1 (auto-cheapest) dön. Spesifik carrier zorlaması
-     * istenirse, GET /shipment-price-comparison/{id}'den slug→id mapping yapılır.
+     * Slug (örn. "yurtici") → Kargonomi {@code shipping_provider_id}.
+     * <p>Draft shipment için {@code GET /shipment-price-comparison/{id}} çağrılır; dönen
+     * carrier listesinde slug eşleşmesi aranır. Bulunamazsa (örn. o carrier Kargonomi
+     * hesabında aktif değil) otomatik en ucuza {@code -1} düşülür.
      */
-    private int resolvePreferredProviderId(String preferredSlug) {
-        // TODO: preferredSlug doluysa price-comparison endpoint'inden eşleşen id'yi bul
-        return AUTO_CHEAPEST_PROVIDER_ID;
+    @SuppressWarnings("unchecked")
+    private int resolvePreferredProviderId(String shipmentId, String preferredSlug) {
+        if (preferredSlug == null || preferredSlug.isBlank()) {
+            return AUTO_CHEAPEST_PROVIDER_ID;
+        }
+        try {
+            String url = getBaseUrl() + "/shipment-price-comparison/" + shipmentId;
+            HttpEntity<Void> entity = new HttpEntity<>(buildAuthHeaders());
+            ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.GET, entity, Map.class);
+            Map<String, Object> body = unwrapData(response.getBody());
+
+            Object providers = body.get("shipping_provider_with_price");
+            if (!(providers instanceof List<?> list)) return AUTO_CHEAPEST_PROVIDER_ID;
+
+            for (Object o : list) {
+                if (!(o instanceof Map<?, ?> m)) continue;
+                String slug = strVal(m.get("slug"));
+                if (slug != null && slug.equalsIgnoreCase(preferredSlug.trim())) {
+                    Object id = m.get("id");
+                    if (id instanceof Number n) {
+                        logger.info("[Kargonomi] preferred carrier '{}' → provider_id={}", slug, n.intValue());
+                        return n.intValue();
+                    }
+                }
+            }
+            logger.info("[Kargonomi] '{}' slug Kargonomi listesinde yok — auto-cheapest ile devam",
+                    preferredSlug);
+            return AUTO_CHEAPEST_PROVIDER_ID;
+        } catch (Exception e) {
+            logger.warn("price-comparison çözümleme hatası: {} — auto-cheapest kullanılıyor", e.getMessage());
+            return AUTO_CHEAPEST_PROVIDER_ID;
+        }
     }
 
     // ─────────────────────────────────────────────────────────────

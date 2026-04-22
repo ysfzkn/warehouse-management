@@ -224,32 +224,62 @@ public class StoreOrderController {
         dto.put("cargoTrackingNo", o.getCargoTrackingNo());
         dto.put("cargoCompany", o.getCargoCompany() != null ? o.getCargoCompany().name() : null);
         dto.put("cargoProviderName", o.getCargoProviderName());
-        // Build tracking URL
-        String trackingUrl = null;
+        // Tracking URL öncelik sırası:
+        //   1. cargo_providers.trackingUrlTemplate (admin-configured; en güvenilir)
+        //   2. kargonomi_slug → KargonomiCargoProvider.buildCarrierTrackingUrl generic mapping
+        //   3. null
         if (o.getCargoTrackingNo() != null && !o.getCargoTrackingNo().isBlank()) {
             try {
-                // First try CargoProvider table
+                String trackingNo = o.getCargoTrackingNo();
+                String[] urlHolder = { null };
+
+                // 1) CargoProvider.id ile DB'den
                 if (o.getCargoProviderId() != null) {
                     cargoProviderRepo.findById(o.getCargoProviderId()).ifPresent(cp -> {
-                        if (cp.getTrackingUrlTemplate() != null) {
-                            dto.put("cargoTrackingUrl", cp.getTrackingUrlTemplate().replace("{trackingNo}", o.getCargoTrackingNo()));
+                        if (cp.getTrackingUrlTemplate() != null && !cp.getTrackingUrlTemplate().isBlank()) {
+                            urlHolder[0] = cp.getTrackingUrlTemplate().replace("{trackingNo}", trackingNo);
                         }
                     });
                 }
-                // Fallback: match by cargo company code
-                if (!dto.containsKey("cargoTrackingUrl") && o.getCargoCompany() != null) {
+                // 2) Code ile
+                if (urlHolder[0] == null && o.getCargoCompany() != null) {
                     cargoProviderRepo.findByCode(o.getCargoCompany().name()).ifPresent(cp -> {
-                        if (cp.getTrackingUrlTemplate() != null) {
-                            dto.put("cargoTrackingUrl", cp.getTrackingUrlTemplate().replace("{trackingNo}", o.getCargoTrackingNo()));
+                        if (cp.getTrackingUrlTemplate() != null && !cp.getTrackingUrlTemplate().isBlank()) {
+                            urlHolder[0] = cp.getTrackingUrlTemplate().replace("{trackingNo}", trackingNo);
                         }
                     });
                 }
+                // 3) Generic fallback — taşıyıcı slug'ına göre public takip URL'i
+                if (urlHolder[0] == null && o.getCargoCompany() != null) {
+                    String slug = o.getCargoCompany().name().toLowerCase();
+                    urlHolder[0] = genericCarrierTrackingUrl(slug, trackingNo);
+                }
+
+                if (urlHolder[0] != null) dto.put("cargoTrackingUrl", urlHolder[0]);
             } catch (Exception ignored) {}
         }
         dto.put("invoiceUrl", o.getInvoiceUrl());
         dto.put("invoiceNumber", o.getInvoiceNumber());
         dto.put("createdAt", o.getCreatedAt());
         return dto;
+    }
+
+    /**
+     * cargo_providers.trackingUrlTemplate tanımlı değilse kullanılacak fallback.
+     * Türkiye'deki yaygın carrier'ların public takip URL pattern'i.
+     */
+    private static String genericCarrierTrackingUrl(String slug, String trackingNo) {
+        if (slug == null || trackingNo == null) return null;
+        return switch (slug.toLowerCase()) {
+            case "yurtici" -> "https://selfservis.yurticikargo.com/takip?code=" + trackingNo;
+            case "aras"    -> "https://kargotakip.araskargo.com.tr/mainpage.aspx?code=" + trackingNo;
+            case "mng"     -> "https://kargotakip.mngkargo.com.tr/?takipNo=" + trackingNo;
+            case "ptt"     -> "https://gonderitakip.ptt.gov.tr/Track/Verify?q=" + trackingNo;
+            case "surat"   -> "https://www.suratkargo.com.tr/KargoTakip/?kargotakipno=" + trackingNo;
+            case "ups"     -> "https://www.ups.com/track?tracknum=" + trackingNo;
+            case "sendeo"  -> "https://sendeo.com.tr/gonderi-takibi?tno=" + trackingNo;
+            default -> null;
+        };
     }
 
     /**

@@ -6,8 +6,19 @@ import { useAdminToast } from '../components/AdminToast';
 const EMPTY_FORM = {
   name: '', code: '', logoUrl: '', baseCost: 29.99, costPerDesi: 2.00,
   freeShippingThreshold: 500, estimatedDeliveryDays: 3, vatRate: 20,
-  trackingUrlTemplate: '', active: true, sortOrder: 100,
+  trackingUrlTemplate: '', kargonomiSlug: '', active: true, sortOrder: 100,
 };
+
+const KARGONOMI_SLUG_HINTS = [
+  { slug: 'yurtici', label: 'Yurtiçi Kargo' },
+  { slug: 'aras',    label: 'Aras Kargo' },
+  { slug: 'mng',     label: 'MNG Kargo' },
+  { slug: 'ptt',     label: 'PTT Kargo' },
+  { slug: 'surat',   label: 'Sürat Kargo' },
+  { slug: 'ups',     label: 'UPS' },
+  { slug: 'sendeo',  label: 'Sendeo' },
+  { slug: 'bolt',    label: 'Bolt' },
+];
 
 const fmt = (v) => v != null ? new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(v) : '—';
 
@@ -133,6 +144,29 @@ export default function AdminCargoProviders() {
                     <input className="form-control small font-monospace" value={form.trackingUrlTemplate || ''} onChange={e => f('trackingUrlTemplate', e.target.value)}
                       placeholder="https://www.yurticikargo.com/...?code={trackingNo}" />
                     <small className="text-muted"><code>{'{trackingNo}'}</code> kısmı otomatik takip numarasıyla değiştirilir</small>
+                  </div>
+
+                  <div className="col-12">
+                    <label className="form-label small fw-medium d-flex align-items-center justify-content-between">
+                      <span>Kargonomi Slug <small className="text-muted fw-normal">(opsiyonel)</small></span>
+                      <small className="text-muted fw-normal">
+                        <i className="fas fa-info-circle me-1"></i>
+                        Müşteri bu firmayı seçince Kargonomi'ye bu slug ile iletilir
+                      </small>
+                    </label>
+                    <input className="form-control small font-monospace" value={form.kargonomiSlug || ''}
+                      onChange={e => f('kargonomiSlug', e.target.value.toLowerCase().trim())}
+                      placeholder="yurtici / aras / mng / ptt / ..." list="kargonomi-slug-list" />
+                    <datalist id="kargonomi-slug-list">
+                      {KARGONOMI_SLUG_HINTS.map(o => (
+                        <option key={o.slug} value={o.slug}>{o.label}</option>
+                      ))}
+                    </datalist>
+                    <small className="text-muted">
+                      Boş bırakılırsa Kargonomi <strong>otomatik en ucuz</strong> taşıyıcıyı seçer.
+                      Doluysa spesifik olarak bu taşıyıcı ile gönderilir. Kargonomi hesabınızda hangi
+                      carrier'ların aktif olduğunu <a href="https://app.kargonomi.com.tr" target="_blank" rel="noreferrer">paneldeki Taşıyıcılar</a> sekmesinden kontrol edin.
+                    </small>
                   </div>
 
                   <div className="col-md-6">

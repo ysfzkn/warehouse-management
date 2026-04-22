@@ -1,8 +1,10 @@
 package com.warehouse.service.cargo;
 
+import com.warehouse.entity.CargoProvider;
 import com.warehouse.entity.Order;
 import com.warehouse.entity.OrderItem;
 import com.warehouse.entity.Product;
+import com.warehouse.repository.CargoProviderRepository;
 import com.warehouse.repository.OrderItemRepository;
 import com.warehouse.repository.OrderRepository;
 import com.warehouse.service.SiteSettingService;
@@ -35,15 +37,18 @@ public class CargoApiService {
     private final SiteSettingService settingService;
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
+    private final CargoProviderRepository cargoProviderRepository;
 
     public CargoApiService(List<CargoApiProvider> providers,
                             SiteSettingService settingService,
                             OrderRepository orderRepository,
-                            OrderItemRepository orderItemRepository) {
+                            OrderItemRepository orderItemRepository,
+                            CargoProviderRepository cargoProviderRepository) {
         this.providers = providers;
         this.settingService = settingService;
         this.orderRepository = orderRepository;
         this.orderItemRepository = orderItemRepository;
+        this.cargoProviderRepository = cargoProviderRepository;
     }
 
     /**
@@ -86,13 +91,18 @@ public class CargoApiService {
                 order.setCargoTrackingNo(result.getTrackingNumber());
                 order.setCargoProviderShipmentId(result.getProviderShipmentId());
                 order.setCargoLabelUrl(result.getLabelUrl());
+
+                // Önemli: order.cargoCompany (müşterinin checkout'ta seçtiği) DOKUNULMAZ.
+                // cargoProviderName sadece görsel — Kargonomi'nin döndürdüğü carrier adı
+                // (genelde müşteri seçimi ile aynı; farklıysa "auto-cheapest" seçilmiş demektir).
                 if (result.getCarrierName() != null) {
                     order.setCargoProviderName(result.getCarrierName());
                 }
                 orderRepository.save(order);
 
-                logger.info("Cargo shipment created: order={}, tracking={}, provider={}",
-                        order.getOrderNumber(), result.getTrackingNumber(), provider.getProviderName());
+                logger.info("Cargo shipment created: order={}, tracking={}, chosenCarrier={}, provider={}",
+                        order.getOrderNumber(), result.getTrackingNumber(),
+                        result.getCarrierName(), provider.getProviderName());
             } else {
                 logger.error("Cargo shipment creation failed: order={}, error={}",
                         order.getOrderNumber(), result.getErrorMessage());
@@ -202,6 +212,29 @@ public class CargoApiService {
     // === Private helpers ===
 
     /**
+     * Müşterinin seçtiği {@code Order.cargoCompany} için Kargonomi slug'ını bulur.
+     * <ol>
+     *   <li>cargo_providers.kargonomi_slug (explicit DB mapping) — ideal</li>
+     *   <li>Enum adının lowercase hali (YURTICI → "yurtici") — fallback</li>
+     *   <li>null → Kargonomi otomatik en ucuz seçer</li>
+     * </ol>
+     */
+    private String resolveKargonomiSlug(Order order) {
+        if (order.getCargoCompany() == null) return null;
+        String code = order.getCargoCompany().name();
+
+        // 1) cargo_providers'tan explicit slug
+        var provider = cargoProviderRepository.findByCode(code).orElse(null);
+        if (provider != null && provider.getKargonomiSlug() != null
+                && !provider.getKargonomiSlug().isBlank()) {
+            return provider.getKargonomiSlug().trim().toLowerCase();
+        }
+
+        // 2) Fallback: enum adı lowercase
+        return code.toLowerCase();
+    }
+
+    /**
      * Aktif (isEnabled()==true) sağlayıcıyı bulur.
      */
     public CargoApiProvider getActiveProvider() {
@@ -268,11 +301,11 @@ public class CargoApiService {
             totalPackages += oi.getQuantity();
         }
 
-        // Kargonomi slug'ı: cargo_company veya cargoProviderName
-        String carrierSlug = null;
-        if (order.getCargoCompany() != null) {
-            carrierSlug = order.getCargoCompany().name().toLowerCase();
-        }
+        // Kargonomi slug'ı — müşterinin checkout'ta seçtiği kargo firmasına karşılık gelen
+        // Kargonomi carrier slug'ı. cargo_providers.kargonomi_slug'tan çekilir (explicit mapping).
+        // Eşleşme yoksa enum adının lowercase hali fallback (örn. YURTICI → "yurtici"),
+        // hiçbiri yoksa null → Kargonomi otomatik (en ucuz) seçer.
+        String carrierSlug = resolveKargonomiSlug(order);
 
         return CargoShipmentRequest.builder()
                 .orderId(order.getId())
