@@ -61,7 +61,7 @@ export default function ProductDetailPage() {
   if (loading) return <div className="container my-3"><SkeletonProductDetail /></div>;
   if (!product) return <div className="container my-5 text-center"><h3>Ürün bulunamadı</h3></div>;
 
-  const hasDiscount = product.salePrice && product.salePrice > 0 && product.salePrice < product.price;
+  const hasDiscount = !!(product.salePrice && product.salePrice > 0 && product.salePrice < product.price);
   const discountPercent = hasDiscount ? Math.round((1 - product.salePrice / product.price) * 100) : 0;
   const breadcrumbs = [
     ...(product.categorySlug ? [{ label: product.categoryName, href: `/kategori/${product.categorySlug}` }] : []),

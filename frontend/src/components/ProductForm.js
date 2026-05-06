@@ -497,6 +497,112 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
     } finally { setImageUploading(false); }
   };
 
+  // ─── Profilo / 3rd-party URL crawler ──────────────────────────────
+  // Backend allowlist'iyle senkron tutulan client-side check (UX için).
+  // Yanlış URL girildiğinde anında uyarı gösterir, gereksiz API çağrısını engeller.
+  const SUPPORTED_DOMAINS = [
+    'profilo.com','profilo.com.tr','siemens.com.tr','siemens-home.com.tr','siemens-home.bsh-group.com',
+    'bosch-home.com','bosch-home.com.tr','arcelik.com','arcelik.com.tr','beko.com','beko.com.tr',
+    'vestel.com','vestel.com.tr','samsung.com','samsung.com.tr','lg.com','lg.com.tr',
+    'miele.com','miele.com.tr','haier.com','haier.com.tr',
+  ];
+  const isLikelySupportedUrl = (url) => {
+    if (!url || typeof url !== 'string') return false;
+    try {
+      const u = new URL(url.trim());
+      if (!/^https?:$/.test(u.protocol)) return false;
+      const host = u.hostname.toLowerCase();
+      return SUPPORTED_DOMAINS.some(d => host === d || host.endsWith('.' + d));
+    } catch {
+      return false;
+    }
+  };
+
+  const [crawlOpen, setCrawlOpen] = useState(false);
+  const [crawlUrl, setCrawlUrl] = useState('');
+  const [crawlLoading, setCrawlLoading] = useState(false);
+  const [crawlError, setCrawlError] = useState('');
+  const [crawlPreview, setCrawlPreview] = useState(null); // { url, title, images: [] }
+  const [crawlSelected, setCrawlSelected] = useState(new Set());
+  const [crawlReplace, setCrawlReplace] = useState(false);
+  const [crawlImporting, setCrawlImporting] = useState(false);
+  const [crawlResult, setCrawlResult] = useState(null); // { success, total, errors: [] }
+
+  const openCrawlModal = () => {
+    setCrawlOpen(true);
+    setCrawlUrl('');
+    setCrawlError('');
+    setCrawlPreview(null);
+    setCrawlSelected(new Set());
+    setCrawlReplace(false);
+    setCrawlResult(null);
+  };
+
+  const fetchCrawlPreview = async () => {
+    if (!product?.id) {
+      setCrawlError('Önce ürünü kaydetmeniz gerekiyor.');
+      return;
+    }
+    if (!crawlUrl.trim()) return;
+    setCrawlLoading(true);
+    setCrawlError('');
+    setCrawlPreview(null);
+    setCrawlResult(null);
+    try {
+      const res = await axios.post(
+        `/api/admin/products/${product.id}/crawl-images/preview`,
+        { url: crawlUrl.trim() }
+      );
+      const data = res.data || {};
+      setCrawlPreview(data);
+      // Default: hepsini seç
+      setCrawlSelected(new Set(data.images || []));
+    } catch (e) {
+      setCrawlError(e.response?.data?.message || 'Görseller çekilemedi');
+    } finally {
+      setCrawlLoading(false);
+    }
+  };
+
+  const toggleCrawlSelection = (url) => {
+    setCrawlSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(url)) next.delete(url); else next.add(url);
+      return next;
+    });
+  };
+
+  const selectAllCrawl = () => {
+    if (!crawlPreview) return;
+    setCrawlSelected(new Set(crawlPreview.images || []));
+  };
+
+  const deselectAllCrawl = () => setCrawlSelected(new Set());
+
+  const importCrawled = async () => {
+    if (!product?.id || crawlSelected.size === 0) return;
+    setCrawlImporting(true);
+    setCrawlError('');
+    try {
+      const res = await axios.post(
+        `/api/admin/products/${product.id}/crawl-images/import`,
+        {
+          imageUrls: Array.from(crawlSelected),
+          replaceExisting: crawlReplace,
+          markFirstAsPrimary: productImages.length === 0 || crawlReplace,
+        }
+      );
+      setCrawlResult(res.data);
+      // Reload product images
+      const imgs = await axios.get(`/api/products/${product.id}/images`);
+      setProductImages(imgs.data || []);
+    } catch (e) {
+      setCrawlError(e.response?.data?.message || 'İçe aktarma başarısız');
+    } finally {
+      setCrawlImporting(false);
+    }
+  };
+
   const handleSubmit = async (e) => {
     if (e && typeof e.preventDefault === 'function') {
       e.preventDefault();
@@ -1317,8 +1423,199 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
                 </div>
               )}
             </div>
+
+            {/* URL'den otomatik çek */}
+            <div className="mt-3 d-flex justify-content-center">
+              <button type="button" className="btn btn-sm btn-outline-info"
+                onClick={openCrawlModal} disabled={!product?.id}>
+                <i className="fas fa-globe me-2" />Üretici Sayfasından Görsel Çek (Profilo, Siemens, Bosch...)
+              </button>
+            </div>
+            {!product?.id && (
+              <div className="text-center small text-muted mt-1">
+                URL'den çekmek için önce ürünü kaydedin
+              </div>
+            )}
           </div>
         </>
+      )}
+
+      {/* ─── Crawl modal ─── */}
+      {crawlOpen && (
+        <div className="modal show d-block" tabIndex="-1"
+          style={{ background: 'rgba(0,0,0,0.5)' }}
+          onClick={() => !crawlLoading && !crawlImporting && setCrawlOpen(false)}>
+          <div className="modal-dialog modal-lg modal-dialog-scrollable" onClick={e => e.stopPropagation()}>
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">
+                  <i className="fas fa-globe text-info me-2" />
+                  Üretici Sayfasından Görsel İndir
+                </h5>
+                <button type="button" className="btn-close"
+                  onClick={() => setCrawlOpen(false)}
+                  disabled={crawlLoading || crawlImporting}></button>
+              </div>
+              <div className="modal-body">
+                <div className="alert alert-info py-2 mb-3">
+                  <div className="small mb-2">
+                    <i className="fas fa-info-circle me-1" />
+                    Ürün detay sayfasının URL'ini yapıştırın → görseller otomatik bulunup gösterilecek.
+                  </div>
+                  <div className="d-flex flex-wrap gap-1">
+                    <small className="text-muted me-1" style={{lineHeight: '24px'}}>Desteklenen:</small>
+                    {['profilo.com','siemens.com.tr','bosch-home.com.tr','arcelik.com.tr','beko.com.tr',
+                      'vestel.com.tr','samsung.com','lg.com','miele.com','haier.com'].map(d => (
+                      <span key={d} className="badge bg-white text-dark border" style={{fontWeight: 400}}>
+                        {d}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="mb-3">
+                  <div className="input-group input-group-sm">
+                    <span className="input-group-text"><i className="fas fa-link" /></span>
+                    <input type="url"
+                      className={`form-control ${crawlUrl && !isLikelySupportedUrl(crawlUrl) ? 'is-invalid' : ''}`}
+                      placeholder="https://www.profilo.com/tr/tr/product/..."
+                      value={crawlUrl}
+                      onChange={e => setCrawlUrl(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); fetchCrawlPreview(); } }}
+                      disabled={crawlLoading || crawlImporting}
+                      autoFocus />
+                    <button className="btn btn-primary" onClick={fetchCrawlPreview}
+                      disabled={crawlLoading || crawlImporting || !crawlUrl.trim()}>
+                      {crawlLoading ? (
+                        <><span className="spinner-border spinner-border-sm me-1" />Çekiliyor</>
+                      ) : <><i className="fas fa-search me-1" />Görselleri Bul</>}
+                    </button>
+                  </div>
+                  {crawlUrl && !isLikelySupportedUrl(crawlUrl) && (
+                    <small className="text-danger d-block mt-1">
+                      <i className="fas fa-exclamation-circle me-1" />
+                      Bu domain desteklenmiyor görünüyor. Yukarıdaki listeden bir site kullanın.
+                    </small>
+                  )}
+                  {crawlUrl && isLikelySupportedUrl(crawlUrl) && (
+                    <small className="text-success d-block mt-1">
+                      <i className="fas fa-check-circle me-1" />
+                      Geçerli — "Görselleri Bul"a tıklayın.
+                    </small>
+                  )}
+                </div>
+
+                {crawlError && (
+                  <div className="alert alert-danger d-flex align-items-start gap-2 mb-3">
+                    <i className="fas fa-exclamation-triangle mt-1" style={{fontSize: 18}} />
+                    <div className="flex-grow-1">
+                      <strong className="d-block mb-1">URL kabul edilmedi</strong>
+                      <div className="small">{crawlError}</div>
+                      {crawlError.includes('Desteklenen') && (
+                        <div className="mt-2 small">
+                          <strong>İpucu:</strong> Yapıştırdığınız URL'in başlangıcı doğru mu?
+                          Profilo için: <code className="bg-white px-1 rounded">https://www.profilo.com/...</code>
+                        </div>
+                      )}
+                    </div>
+                    <button type="button" className="btn-close btn-close-sm"
+                      onClick={() => setCrawlError('')}></button>
+                  </div>
+                )}
+
+                {crawlResult && (
+                  <div className={`alert ${crawlResult.success > 0 ? 'alert-success' : 'alert-warning'} py-2 small mb-3`}>
+                    <i className="fas fa-check-circle me-1" />
+                    <strong>{crawlResult.success}/{crawlResult.total}</strong> görsel başarıyla yüklendi.
+                    {crawlResult.errors?.length > 0 && (
+                      <ul className="mb-0 mt-2" style={{fontSize: 11}}>
+                        {crawlResult.errors.slice(0, 5).map((e, i) => <li key={i}>{e}</li>)}
+                        {crawlResult.errors.length > 5 && <li>...ve {crawlResult.errors.length - 5} daha</li>}
+                      </ul>
+                    )}
+                  </div>
+                )}
+
+                {crawlPreview && crawlPreview.images && crawlPreview.images.length > 0 && (
+                  <>
+                    <div className="d-flex justify-content-between align-items-center mb-2">
+                      <div>
+                        <strong className="me-2">{crawlPreview.images.length} görsel bulundu</strong>
+                        <span className="text-muted small">— {crawlSelected.size} seçili</span>
+                        {crawlPreview.title && (
+                          <div className="small text-muted text-truncate" style={{maxWidth: 400}}>
+                            <i className="fas fa-tag me-1" />{crawlPreview.title}
+                          </div>
+                        )}
+                      </div>
+                      <div className="btn-group btn-group-sm">
+                        <button type="button" className="btn btn-outline-secondary" onClick={selectAllCrawl}>Tümünü Seç</button>
+                        <button type="button" className="btn btn-outline-secondary" onClick={deselectAllCrawl}>Temizle</button>
+                      </div>
+                    </div>
+
+                    <div className="row g-2 mb-3" style={{ maxHeight: 400, overflowY: 'auto' }}>
+                      {crawlPreview.images.map((u, idx) => {
+                        const selected = crawlSelected.has(u);
+                        return (
+                          <div key={u} className="col-4 col-md-3">
+                            <div
+                              className={`border rounded position-relative overflow-hidden ${selected ? 'border-primary border-2' : ''}`}
+                              style={{ cursor: 'pointer', aspectRatio: '1/1', background: '#f8f9fa' }}
+                              onClick={() => toggleCrawlSelection(u)}
+                              title={u}
+                            >
+                              <img src={u} alt="" loading="lazy"
+                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                onError={e => { e.target.style.display = 'none'; }} />
+                              <div className="position-absolute top-0 start-0 m-1">
+                                <span className="badge bg-dark bg-opacity-75 small">#{idx + 1}</span>
+                              </div>
+                              {selected && (
+                                <div className="position-absolute top-0 end-0 m-1">
+                                  <span className="badge bg-primary"><i className="fas fa-check" /></span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <div className="form-check mb-2">
+                      <input className="form-check-input" type="checkbox" id="crawlReplaceCheck"
+                        checked={crawlReplace}
+                        onChange={e => setCrawlReplace(e.target.checked)} />
+                      <label className="form-check-label small" htmlFor="crawlReplaceCheck">
+                        <strong>Mevcut ürün görsellerini sil</strong>
+                        <span className="text-muted ms-1">(işaretlenmezse yenileri ek olarak yüklenir)</span>
+                      </label>
+                    </div>
+                  </>
+                )}
+
+                {crawlPreview && (!crawlPreview.images || crawlPreview.images.length === 0) && (
+                  <div className="alert alert-warning py-2 small mb-0">
+                    Bu sayfada otomatik bulunabilen görsel yok. Sayfanın HTML yapısı standart dışı olabilir.
+                  </div>
+                )}
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={() => setCrawlOpen(false)}
+                  disabled={crawlLoading || crawlImporting}>Kapat</button>
+                <button type="button" className="btn btn-primary"
+                  disabled={!crawlPreview || crawlSelected.size === 0 || crawlImporting || crawlLoading}
+                  onClick={importCrawled}>
+                  {crawlImporting ? (
+                    <><span className="spinner-border spinner-border-sm me-1" />Yükleniyor...</>
+                  ) : (
+                    <><i className="fas fa-download me-1" />{crawlSelected.size} Görseli İndir</>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ── SEO Ayarları ── */}

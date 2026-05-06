@@ -108,7 +108,7 @@ export default function CartSidebar({ cart }) {
               </Link>
             </div>
           ) : cart.cart.items.map(item => {
-            const hasDiscount = item.salePrice && item.salePrice > 0 && item.salePrice < item.unitPrice;
+            const hasDiscount = !!(item.salePrice && item.salePrice > 0 && item.salePrice < item.unitPrice);
             const discountPct = hasDiscount ? Math.round((1 - item.salePrice / item.unitPrice) * 100) : 0;
             const price = hasDiscount ? item.salePrice : item.unitPrice;
             return (

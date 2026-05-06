@@ -7,7 +7,7 @@ import { useToast } from './Toast';
 import { useWishlist } from './WishlistContext';
 
 export default function ProductCard({ product, onAddToCart }) {
-  const hasDiscount = product.salePrice && product.salePrice > 0 && product.salePrice < product.price;
+  const hasDiscount = !!(product.salePrice && product.salePrice > 0 && product.salePrice < product.price);
   const discountPercent = hasDiscount ? Math.round((1 - product.salePrice / product.price) * 100) : 0;
   const toast = useToast();
   const navigate = useNavigate();

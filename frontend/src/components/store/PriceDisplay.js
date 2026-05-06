@@ -5,7 +5,7 @@ export default function PriceDisplay({ price, salePrice, size = 'normal', showVa
     if (p == null) return '—';
     return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', minimumFractionDigits: 2 }).format(p);
   };
-  const hasDiscount = salePrice && salePrice > 0 && salePrice < price;
+  const hasDiscount = !!(salePrice && salePrice > 0 && salePrice < price);
   const isLarge = size === 'large';
 
   return (
