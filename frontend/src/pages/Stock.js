@@ -2748,7 +2748,7 @@ const Stock = () => {
               )}
               <button className="btn btn-outline-primary" onClick={handleCreateStock}>
                 <i className="fas fa-plus me-2"></i>
-                Yeni Stok Kaydı
+                Yeni Stok / Stok Ekle
               </button>
               {!showTransferHistory && (
                 <button className="btn btn-info text-white" onClick={handleExportToExcel}>
@@ -2787,7 +2787,7 @@ const Stock = () => {
                     onClick={handleCreateStockRequest}
                   >
                     <i className="fas fa-plus me-2"></i>
-                    Yeni Stok Kaydı (Talep)
+                    Yeni Stok / Stok Ekle (Talep)
                   </button>
                 )}
                 {canTransfer && (
@@ -3619,7 +3619,7 @@ const Stock = () => {
                 </h5>
                 <p className="text-muted">
                   {filter === 'all'
-                    ? 'İlk stok kaydını oluşturmak için "Yeni Stok Kaydı" butonuna tıklayın.'
+                    ? 'İlk stok kaydını oluşturmak için "Yeni Stok / Stok Ekle" butonuna tıklayın.'
                     : 'Farklı filtre seçeneği deneyin.'
                   }
                 </p>
@@ -3635,7 +3635,7 @@ const Stock = () => {
           <div className="modal-dialog modal-xl" style={{ maxWidth: '1200px' }}>
             <div className="modal-content">
               <div className="modal-header">
-                <h5 className="modal-title">Yeni Stok Kaydı</h5>
+                <h5 className="modal-title">Yeni Stok / Stok Ekle</h5>
                 <button
                   type="button"
                   className="btn-close"

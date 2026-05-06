@@ -294,14 +294,42 @@ public class StockServiceImpl implements StockService {
 
     @Override
     public Stock createStock(Stock stock) {
-        logger.info("Creating new stock for product id: {} and warehouse id: {}",
+        logger.info("Creating or merging stock for product id: {} and warehouse id: {}",
                 stock.getProduct().getId(), stock.getWarehouse().getId());
         EntityValidator.validateStockForCreation(stock);
 
         Product product = findProductOrThrow(stock.getProduct().getId());
         Warehouse warehouse = findWarehouseOrThrow(stock.getWarehouse().getId());
 
-        validateStockUniqueness(product, warehouse, stock.getCustomerName());
+        // EMANET_DEPO: customerName must be present BEFORE the existence lookup —
+        // otherwise a blank name would fall through to the STANDART branch and
+        // wrongly merge into another customer's row.
+        if (warehouse.getWarehouseType() == WarehouseType.EMANET_DEPO) {
+            if (stock.getCustomerName() == null || stock.getCustomerName().trim().isEmpty()) {
+                throw new WarehouseManagementException(ErrorCode.REQUIRED_FIELD_MISSING,
+                        "Emanet depo için müşteri adı gereklidir.");
+            }
+        }
+
+        Optional<Stock> existing;
+        if (warehouse.getWarehouseType() == WarehouseType.EMANET_DEPO) {
+            existing = stockRepository.findByProductAndWarehouseAndCustomerName(
+                    product, warehouse, stock.getCustomerName().trim());
+        } else {
+            existing = stockRepository.findByProductAndWarehouse(product, warehouse);
+        }
+
+        if (existing.isPresent()) {
+            Integer addQty = stock.getQuantity();
+            if (addQty == null || addQty <= 0) {
+                throw new WarehouseManagementException(ErrorCode.REQUIRED_FIELD_MISSING,
+                        "Eklenecek miktar pozitif bir değer olmalıdır.");
+            }
+            String note = normalizeAdditionNote(stock.getAdditionNote());
+            logger.info("Existing stock found (id={}); merging quantity {} via addToStock",
+                    existing.get().getId(), addQty);
+            return addToStock(existing.get().getId(), addQty, note);
+        }
 
         stock.setProduct(product);
         stock.setWarehouse(warehouse);
@@ -312,11 +340,6 @@ public class StockServiceImpl implements StockService {
             stock.setCustomerName(null);
             stock.setCustomerPhone(null);
         } else if (warehouse.getWarehouseType() == WarehouseType.EMANET_DEPO) {
-            // For EMANET_DEPO, customerPhone is required
-            if (stock.getCustomerName() == null || stock.getCustomerName().trim().isEmpty()) {
-                throw new WarehouseManagementException(ErrorCode.REQUIRED_FIELD_MISSING,
-                        "Emanet depo için müşteri adı gereklidir.");
-            }
             if (stock.getCustomerPhone() == null || stock.getCustomerPhone().trim().isEmpty()) {
                 throw new WarehouseManagementException(ErrorCode.REQUIRED_FIELD_MISSING,
                         "Emanet depo için müşteri telefon numarası gereklidir.");
@@ -796,37 +819,6 @@ public class StockServiceImpl implements StockService {
                     logger.warn("Warehouse not found with id: {}", warehouseId);
                     return new WarehouseManagementException(ErrorCode.WAREHOUSE_NOT_FOUND);
                 });
-    }
-
-    private void validateStockUniqueness(Product product, Warehouse warehouse, String customerName) {
-        // For EMANET_DEPO warehouses, check uniqueness with customerName
-        if (warehouse.getWarehouseType() == WarehouseType.EMANET_DEPO) {
-            if (customerName == null || customerName.trim().isEmpty()) {
-                throw new WarehouseManagementException(ErrorCode.REQUIRED_FIELD_MISSING,
-                        "Emanet depo için müşteri adı gereklidir.");
-            }
-            Optional<Stock> existingStock = stockRepository.findByProductAndWarehouseAndCustomerName(
-                    product, warehouse, customerName.trim());
-            if (existingStock.isPresent()) {
-                logger.warn("Stock already exists for product id: {}, warehouse id: {}, customer: {}",
-                        product.getId(), warehouse.getId(), customerName);
-                String message = String.format(
-                        "Bu ürün için %s müşterisi adına zaten bir stok kaydı mevcut. Lütfen mevcut kaydı düzenleyin.",
-                        customerName);
-                throw new WarehouseManagementException(ErrorCode.STOCK_ALREADY_EXISTS, message);
-            }
-        } else {
-            // For STANDART warehouses, check uniqueness without customerName
-            Optional<Stock> existingStock = stockRepository.findByProductAndWarehouse(product, warehouse);
-            if (existingStock.isPresent()) {
-                logger.warn("Stock already exists for product id: {} and warehouse id: {}",
-                        product.getId(), warehouse.getId());
-                String message = String.format(
-                        "Stock record already exists. Product %s already has a stock record in warehouse %s. Please edit the existing record from Stock Management screen.",
-                        product.getName(), warehouse.getName());
-                throw new WarehouseManagementException(ErrorCode.STOCK_ALREADY_EXISTS, message);
-            }
-        }
     }
 
     // In-memory matchers removed; filtering is handled by the repository query now
