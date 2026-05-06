@@ -28,10 +28,10 @@ COPY --from=build /app/build /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/templates/default.conf.template
 
 # Entry point to substitute env vars into nginx config at runtime
-CMD ["/bin/sh", "-c", ": ${API_ORIGIN:=http://backend:8080}; export API_ORIGIN; envsubst '${API_ORIGIN}' < /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'" ]
+CMD ["/bin/sh", "-c", ": ${API_ORIGIN:=http://backend:8080}; export API_ORIGIN; : ${PORT:=80}; export PORT; envsubst '${API_ORIGIN} ${PORT}' < /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'" ]
 
 # Expose port
-EXPOSE 80
+EXPOSE ${PORT:-80}
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
