@@ -531,7 +531,7 @@ const StockForm = ({
         const createdCount = Array.isArray(response.data) ? response.data.length : payload.length;
         setFeedback({
           type: 'success',
-          message: `${createdCount} stok kaydı başarıyla oluşturuldu.`
+          message: `${createdCount} stok kaydı işlendi.`
         });
         setItems([]);
         setProductSearchTerm('');
@@ -539,7 +539,7 @@ const StockForm = ({
         setCustomerName('');
         setCustomerPhone('');
         if (onSuccess) {
-          onSuccess({ close: false, message: 'Stok kayıtları başarıyla oluşturuldu.' });
+          onSuccess({ close: false, message: 'Stok kayıtları işlendi.' });
         }
       }
     } catch (error) {

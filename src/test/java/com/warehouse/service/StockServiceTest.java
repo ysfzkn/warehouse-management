@@ -3,6 +3,9 @@ package com.warehouse.service;
 import com.warehouse.entity.Product;
 import com.warehouse.entity.Stock;
 import com.warehouse.entity.Warehouse;
+import com.warehouse.enums.AuditAction;
+import com.warehouse.enums.WarehouseType;
+import com.warehouse.exception.ErrorCode;
 import com.warehouse.exception.WarehouseManagementException;
 import com.warehouse.repository.ProductRepository;
 import com.warehouse.repository.StockRepository;
@@ -21,6 +24,8 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -115,14 +120,151 @@ class StockServiceTest {
     }
 
     @Test
-    void createStock_WhenDuplicate_ShouldThrowException() {
+    void createStock_WhenDuplicate_ShouldMergeIntoExisting() {
+        Stock existing = new Stock();
+        existing.setId(1L);
+        existing.setProduct(product);
+        existing.setWarehouse(warehouse);
+        existing.setQuantity(100);
+        existing.setMinStockLevel(10);
+        existing.setReservedQuantity(0);
+        existing.setConsignedQuantity(0);
+
+        Stock request = new Stock();
+        request.setProduct(product);
+        request.setWarehouse(warehouse);
+        request.setQuantity(30);
+
         when(productRepository.findById(1L)).thenReturn(Optional.of(product));
         when(warehouseRepository.findById(1L)).thenReturn(Optional.of(warehouse));
-        when(stockRepository.findByProductAndWarehouse(product, warehouse)).thenReturn(Optional.of(stock));
+        when(stockRepository.findByProductAndWarehouse(product, warehouse)).thenReturn(Optional.of(existing));
+        when(stockRepository.findById(1L)).thenReturn(Optional.of(existing));
+        when(stockRepository.save(any(Stock.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        assertThrows(WarehouseManagementException.class, () -> 
-            stockService.createStock(stock)
-        );
+        Stock result = stockService.createStock(request);
+
+        assertNotNull(result);
+        assertEquals(130, result.getQuantity());
+        verify(stockRepository, times(1)).save(any(Stock.class));
+        verify(auditService, times(1)).log(eq(AuditAction.STOCK_ADD), anyString(), anyLong(), anyString(),
+                anyString(), any());
+        verify(auditService, never()).log(eq(AuditAction.STOCK_CREATE), anyString(), anyLong(), anyString(),
+                anyString(), any());
+    }
+
+    @Test
+    void createStock_WhenDuplicateEmanetDepo_ShouldMergeForSameCustomer() {
+        Warehouse emanet = new Warehouse();
+        emanet.setId(2L);
+        emanet.setName("Emanet Depo");
+        emanet.setWarehouseType(WarehouseType.EMANET_DEPO);
+
+        Stock existing = new Stock();
+        existing.setId(7L);
+        existing.setProduct(product);
+        existing.setWarehouse(emanet);
+        existing.setQuantity(20);
+        existing.setCustomerName("Acme");
+        existing.setCustomerPhone("5551112233");
+
+        Stock request = new Stock();
+        request.setProduct(product);
+        request.setWarehouse(emanet);
+        request.setQuantity(10);
+        request.setCustomerName("Acme");
+        request.setCustomerPhone("5551112233");
+
+        when(productRepository.findById(1L)).thenReturn(Optional.of(product));
+        when(warehouseRepository.findById(2L)).thenReturn(Optional.of(emanet));
+        when(stockRepository.findByProductAndWarehouseAndCustomerName(product, emanet, "Acme"))
+                .thenReturn(Optional.of(existing));
+        when(stockRepository.findById(7L)).thenReturn(Optional.of(existing));
+        when(stockRepository.save(any(Stock.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        Stock result = stockService.createStock(request);
+
+        assertNotNull(result);
+        assertEquals(30, result.getQuantity());
+        verify(auditService, times(1)).log(eq(AuditAction.STOCK_ADD), anyString(), anyLong(), anyString(),
+                anyString(), any());
+    }
+
+    @Test
+    void createStock_WhenDuplicateEmanetDepo_DifferentCustomer_ShouldCreateNew() {
+        Warehouse emanet = new Warehouse();
+        emanet.setId(2L);
+        emanet.setName("Emanet Depo");
+        emanet.setWarehouseType(WarehouseType.EMANET_DEPO);
+
+        Stock request = new Stock();
+        request.setProduct(product);
+        request.setWarehouse(emanet);
+        request.setQuantity(5);
+        request.setCustomerName("Beta");
+        request.setCustomerPhone("5559998877");
+
+        when(productRepository.findById(1L)).thenReturn(Optional.of(product));
+        when(warehouseRepository.findById(2L)).thenReturn(Optional.of(emanet));
+        when(stockRepository.findByProductAndWarehouseAndCustomerName(product, emanet, "Beta"))
+                .thenReturn(Optional.empty());
+        when(stockRepository.save(any(Stock.class))).thenAnswer(inv -> {
+            Stock s = inv.getArgument(0);
+            s.setId(99L);
+            return s;
+        });
+
+        Stock result = stockService.createStock(request);
+
+        assertNotNull(result);
+        assertEquals(5, result.getQuantity());
+        assertEquals("Beta", result.getCustomerName());
+        verify(auditService, times(1)).log(eq(AuditAction.STOCK_CREATE), anyString(), anyLong(), anyString(),
+                anyString(), any());
+    }
+
+    @Test
+    void createStock_WhenEmanetDepoMissingCustomerName_ShouldThrow() {
+        Warehouse emanet = new Warehouse();
+        emanet.setId(2L);
+        emanet.setName("Emanet Depo");
+        emanet.setWarehouseType(WarehouseType.EMANET_DEPO);
+
+        Stock request = new Stock();
+        request.setProduct(product);
+        request.setWarehouse(emanet);
+        request.setQuantity(5);
+        request.setCustomerName(null);
+
+        when(productRepository.findById(1L)).thenReturn(Optional.of(product));
+        when(warehouseRepository.findById(2L)).thenReturn(Optional.of(emanet));
+
+        WarehouseManagementException ex = assertThrows(WarehouseManagementException.class,
+                () -> stockService.createStock(request));
+        assertEquals(ErrorCode.REQUIRED_FIELD_MISSING, ex.getErrorCode());
+        verify(stockRepository, never()).save(any(Stock.class));
+    }
+
+    @Test
+    void createStock_WhenMergeWithZeroQuantity_ShouldThrow() {
+        Stock existing = new Stock();
+        existing.setId(1L);
+        existing.setProduct(product);
+        existing.setWarehouse(warehouse);
+        existing.setQuantity(50);
+
+        Stock request = new Stock();
+        request.setProduct(product);
+        request.setWarehouse(warehouse);
+        request.setQuantity(0);
+
+        when(productRepository.findById(1L)).thenReturn(Optional.of(product));
+        when(warehouseRepository.findById(1L)).thenReturn(Optional.of(warehouse));
+        when(stockRepository.findByProductAndWarehouse(product, warehouse)).thenReturn(Optional.of(existing));
+
+        WarehouseManagementException ex = assertThrows(WarehouseManagementException.class,
+                () -> stockService.createStock(request));
+        assertEquals(ErrorCode.REQUIRED_FIELD_MISSING, ex.getErrorCode());
+        verify(stockRepository, never()).save(any(Stock.class));
     }
 
     @Test
