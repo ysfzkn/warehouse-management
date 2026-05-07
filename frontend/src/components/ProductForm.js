@@ -4,6 +4,47 @@ import SearchableSelect from './SearchableSelect';
 import ConfirmModal from './ConfirmModal';
 import './ProductForm.css';
 
+/**
+ * Crawler önizleme thumbnail'ı: backend proxy üzerinden Referer'lı
+ * indirme (hotlink korumalı CDN'ler için) + axios ile JWT Bearer ekleme.
+ * <img src=...> direkt çalışmıyor çünkü browser Authorization header eklemiyor.
+ */
+function CrawlThumbnail({ url, referer }) {
+  const [blobUrl, setBlobUrl] = useState(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    let createdBlobUrl = null;
+    setBlobUrl(null); setFailed(false);
+    (async () => {
+      try {
+        const res = await axios.get(`/api/admin/products/crawl-images/proxy`, {
+          params: { url, referer },
+          responseType: 'blob',
+        });
+        if (cancelled) return;
+        createdBlobUrl = URL.createObjectURL(res.data);
+        setBlobUrl(createdBlobUrl);
+      } catch {
+        if (!cancelled) setFailed(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (createdBlobUrl) URL.revokeObjectURL(createdBlobUrl);
+    };
+  }, [url, referer]);
+  if (failed) return null;
+  if (!blobUrl) {
+    return (
+      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af', fontSize: '0.75rem' }}>
+        Yükleniyor…
+      </div>
+    );
+  }
+  return <img src={blobUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />;
+}
+
 const ProductForm = ({ product, onSuccess, onCancel }) => {
   const [formData, setFormData] = useState({
     name: '',
@@ -505,6 +546,7 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
     'bosch-home.com','bosch-home.com.tr','arcelik.com','arcelik.com.tr','beko.com','beko.com.tr',
     'vestel.com','vestel.com.tr','samsung.com','samsung.com.tr','lg.com','lg.com.tr',
     'miele.com','miele.com.tr','haier.com','haier.com.tr',
+    'fakir.com.tr','fakir.com','altus.com.tr','altus.com',
   ];
   const isLikelySupportedUrl = (url) => {
     if (!url || typeof url !== 'string') return false;
@@ -590,14 +632,26 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
           imageUrls: Array.from(crawlSelected),
           replaceExisting: crawlReplace,
           markFirstAsPrimary: productImages.length === 0 || crawlReplace,
+          pageUrl: crawlUrl.trim(),
         }
       );
       setCrawlResult(res.data);
       // Reload product images
       const imgs = await axios.get(`/api/products/${product.id}/images`);
       setProductImages(imgs.data || []);
+      // Toast bildirimi
+      const { success = 0, total = 0, errors = [] } = res.data || {};
+      if (success > 0 && errors.length === 0) {
+        showToast(`${success}/${total} görsel başarıyla yüklendi`, 'success');
+      } else if (success > 0 && errors.length > 0) {
+        showToast(`${success}/${total} yüklendi — ${errors.length} hata`, 'warning');
+      } else {
+        showToast(`Hiçbir görsel yüklenemedi (${errors.length} hata)`, 'error');
+      }
     } catch (e) {
-      setCrawlError(e.response?.data?.message || 'İçe aktarma başarısız');
+      const msg = e.response?.data?.message || 'İçe aktarma başarısız';
+      setCrawlError(msg);
+      showToast(msg, 'error');
     } finally {
       setCrawlImporting(false);
     }
@@ -1465,7 +1519,8 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
                   <div className="d-flex flex-wrap gap-1">
                     <small className="text-muted me-1" style={{lineHeight: '24px'}}>Desteklenen:</small>
                     {['profilo.com','siemens.com.tr','bosch-home.com.tr','arcelik.com.tr','beko.com.tr',
-                      'vestel.com.tr','samsung.com','lg.com','miele.com','haier.com'].map(d => (
+                      'vestel.com.tr','samsung.com','lg.com','miele.com','haier.com',
+                      'fakir.com.tr','altus.com.tr'].map(d => (
                       <span key={d} className="badge bg-white text-dark border" style={{fontWeight: 400}}>
                         {d}
                       </span>
@@ -1565,9 +1620,7 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
                               onClick={() => toggleCrawlSelection(u)}
                               title={u}
                             >
-                              <img src={u} alt="" loading="lazy"
-                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                onError={e => { e.target.style.display = 'none'; }} />
+                              <CrawlThumbnail url={u} referer={crawlUrl.trim()} />
                               <div className="position-absolute top-0 start-0 m-1">
                                 <span className="badge bg-dark bg-opacity-75 small">#{idx + 1}</span>
                               </div>
@@ -1601,17 +1654,33 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
                 )}
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setCrawlOpen(false)}
-                  disabled={crawlLoading || crawlImporting}>Kapat</button>
-                <button type="button" className="btn btn-primary"
-                  disabled={!crawlPreview || crawlSelected.size === 0 || crawlImporting || crawlLoading}
-                  onClick={importCrawled}>
-                  {crawlImporting ? (
-                    <><span className="spinner-border spinner-border-sm me-1" />Yükleniyor...</>
-                  ) : (
-                    <><i className="fas fa-download me-1" />{crawlSelected.size} Görseli İndir</>
-                  )}
-                </button>
+                {crawlResult && crawlResult.success > 0 ? (
+                  <>
+                    <button type="button" className="btn btn-outline-secondary" onClick={() => setCrawlOpen(false)}>
+                      <i className="fas fa-images me-1" />Daha Fazla Görsel Ekle
+                    </button>
+                    <button type="button" className="btn btn-success" onClick={() => {
+                      setCrawlOpen(false);
+                      if (onSuccess) onSuccess({ id: product?.id });
+                    }}>
+                      <i className="fas fa-arrow-right me-1" />Ürün Detayına Dön
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button type="button" className="btn btn-secondary" onClick={() => setCrawlOpen(false)}
+                      disabled={crawlLoading || crawlImporting}>Kapat</button>
+                    <button type="button" className="btn btn-primary"
+                      disabled={!crawlPreview || crawlSelected.size === 0 || crawlImporting || crawlLoading}
+                      onClick={importCrawled}>
+                      {crawlImporting ? (
+                        <><span className="spinner-border spinner-border-sm me-1" />Yükleniyor...</>
+                      ) : (
+                        <><i className="fas fa-download me-1" />{crawlSelected.size} Görseli İndir</>
+                      )}
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           </div>

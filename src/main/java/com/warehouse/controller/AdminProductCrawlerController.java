@@ -3,9 +3,12 @@ package com.warehouse.controller;
 import com.warehouse.service.crawler.ProductImageCrawlerService;
 import com.warehouse.service.crawler.ProductImageCrawlerService.CrawlException;
 import com.warehouse.service.crawler.ProductImageCrawlerService.CrawlPreview;
+import com.warehouse.service.crawler.ProductImageCrawlerService.ImageDownload;
 import com.warehouse.service.crawler.ProductImageCrawlerService.ImportResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -81,7 +84,8 @@ public class AdminProductCrawlerController {
                     id,
                     req.imageUrls,
                     Boolean.TRUE.equals(req.replaceExisting),
-                    Boolean.TRUE.equals(req.markFirstAsPrimary)
+                    Boolean.TRUE.equals(req.markFirstAsPrimary),
+                    req.pageUrl
             );
             return ResponseEntity.ok(Map.of(
                     "success", result.success(),
@@ -93,6 +97,30 @@ public class AdminProductCrawlerController {
         } catch (Exception e) {
             log.error("[Crawler] import unexpected error", e);
             return ResponseEntity.internalServerError().body(Map.of("message", "Beklenmedik hata: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * Hotlink korumalı CDN görselleri için proxy: admin UI thumbnail'larında
+     * "HOTLINK IMAGE NOT FOUND" placeholder'ı yerine gerçek görseli göstermek için kullanılır.
+     * Backend Referer header'ını ekler, browser yapamadığı için.
+     */
+    @GetMapping("/crawl-images/proxy")
+    public ResponseEntity<byte[]> proxyImage(@RequestParam("url") String url,
+                                              @RequestParam(value = "referer", required = false) String referer) {
+        try {
+            ImageDownload dl = crawler.proxyImage(url, referer);
+            if (dl == null || dl.bytes() == null || dl.bytes().length == 0) {
+                return ResponseEntity.notFound().build();
+            }
+            String ct = dl.contentType() != null ? dl.contentType() : "image/jpeg";
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_TYPE, ct)
+                    .header(HttpHeaders.CACHE_CONTROL, "private, max-age=300")
+                    .body(dl.bytes());
+        } catch (Exception e) {
+            log.warn("[Crawler] proxy image fail: {}", e.getMessage());
+            return ResponseEntity.notFound().build();
         }
     }
 
@@ -111,5 +139,7 @@ public class AdminProductCrawlerController {
         public List<String> imageUrls;
         public Boolean replaceExisting;
         public Boolean markFirstAsPrimary;
+        /** Hotlink korumalı CDN'ler (WitCDN/Fakir vb.) için Referer olarak kullanılacak orijinal sayfa URL'i. */
+        public String pageUrl;
     }
 }

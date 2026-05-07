@@ -79,7 +79,9 @@ public class ProductImageCrawlerService {
             "samsung.com",          "samsung.com.tr",
             "lg.com",               "lg.com.tr",
             "miele.com",            "miele.com.tr",
-            "haier.com",            "haier.com.tr"
+            "haier.com",            "haier.com.tr",
+            "fakir.com.tr",         "fakir.com",
+            "altus.com.tr",         "altus.com"
     );
 
     private static final int MAX_IMAGES = 20;
@@ -155,6 +157,15 @@ public class ProductImageCrawlerService {
                                       List<String> imageUrls,
                                       boolean replaceExisting,
                                       boolean markFirstAsPrimary) {
+        return importImages(productId, imageUrls, replaceExisting, markFirstAsPrimary, null);
+    }
+
+    /** Referer'lı varyant — hotlink koruması olan CDN'ler (WitCDN/Fakir vb.) için sayfa URL'i geçirilir. */
+    public ImportResult importImages(Long productId,
+                                      List<String> imageUrls,
+                                      boolean replaceExisting,
+                                      boolean markFirstAsPrimary,
+                                      String referer) {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new CrawlException("Ürün bulunamadı: " + productId));
 
@@ -183,7 +194,7 @@ public class ProductImageCrawlerService {
 
         for (String url : imageUrls) {
             try {
-                ImageDownload dl = downloadImage(url);
+                ImageDownload dl = downloadImage(url, referer);
                 if (dl == null) {
                     errors.add(shortenUrl(url) + ": indirilemedi");
                     continue;
@@ -379,6 +390,25 @@ public class ProductImageCrawlerService {
     // ─────────────────────────────────────────────────────────────
 
     private ImageDownload downloadImage(String url) {
+        return downloadImage(url, null);
+    }
+
+    /**
+     * Public proxy: hotlink korumalı CDN'lerin görsellerini admin UI thumbnail'larında
+     * göstermek için backend üzerinden Referer'lı şekilde çek.
+     * SSRF guards aynen uygulanır (private IP yok, allowlist gerekli değil çünkü görseller CDN'de olabilir).
+     */
+    public ImageDownload proxyImage(String url, String referer) {
+        if (url == null || url.isBlank()) return null;
+        return downloadImage(url, referer);
+    }
+
+    /**
+     * Referer'lı varyant — bazı CDN'ler (WitCDN/Fakir vb.) hotlink korumalı:
+     * Referer header'ı olmadan veya yanlış origin'den gelen istekleri
+     * placeholder ile cevaplar. Sayfa URL'ini Referer olarak göndermek bunu çözer.
+     */
+    private ImageDownload downloadImage(String url, String referer) {
         // Resmin host'u de allowlist'te olabilir veya CDN olabilir — esnek.
         // Yine de SSRF için scheme + IP kontrolü.
         try {
@@ -389,6 +419,9 @@ public class ProductImageCrawlerService {
             HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
             conn.setRequestProperty("User-Agent", USER_AGENT);
             conn.setRequestProperty("Accept", "image/avif,image/webp,image/png,image/jpeg,image/*,*/*;q=0.8");
+            if (referer != null && !referer.isBlank()) {
+                conn.setRequestProperty("Referer", referer);
+            }
             conn.setConnectTimeout(IMAGE_DOWNLOAD_TIMEOUT_MS);
             conn.setReadTimeout(IMAGE_DOWNLOAD_TIMEOUT_MS);
             conn.setInstanceFollowRedirects(true);
@@ -542,5 +575,5 @@ public class ProductImageCrawlerService {
         public CrawlException(String message) { super(message); }
         public CrawlException(String message, Throwable cause) { super(message, cause); }
     }
-    private record ImageDownload(byte[] bytes, String contentType) {}
+    public record ImageDownload(byte[] bytes, String contentType) {}
 }
