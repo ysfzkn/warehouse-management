@@ -40,6 +40,56 @@ export function SkeletonProductGrid({ count = 8 }) {
   );
 }
 
+/**
+ * Tablo iskeleti (admin / liste sayfaları için).
+ * Spinner yerine bunu kullanmak perceived performance artırır.
+ */
+export function SkeletonTable({ rows = 5, columns = 4 }) {
+  return (
+    <div aria-busy="true" aria-label="Yükleniyor" className="w-100">
+      {/* Header */}
+      <div className="d-flex gap-2 px-2 py-2 mb-2"
+        style={{ borderBottom: '1px solid var(--border-subtle, #e5e7eb)' }}>
+        {Array.from({ length: columns }).map((_, i) => (
+          <SkeletonBlock key={i} height="12px" width={i === 0 ? '20%' : '15%'} />
+        ))}
+      </div>
+      {Array.from({ length: rows }).map((_, r) => (
+        <div key={r} className="d-flex gap-2 px-2 py-3 align-items-center"
+          style={{ borderBottom: '1px solid var(--border-subtle, #f3f4f6)' }}>
+          {Array.from({ length: columns }).map((_, c) => (
+            <SkeletonBlock
+              key={c}
+              height="14px"
+              width={c === 0 ? '20%' : c === columns - 1 ? '80px' : '15%'}
+            />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Checkout aşamasında step yüklenirken iskelet (adres listesi, kargo seçenekleri vb.) */
+export function SkeletonCheckoutStep() {
+  return (
+    <div aria-busy="true" aria-label="Yükleniyor" className="w-100">
+      <SkeletonBlock height="20px" width="40%" className="mb-3" />
+      {[1, 2, 3].map(i => (
+        <div key={i} className="d-flex gap-3 align-items-center p-3 mb-2"
+          style={{ border: '1px solid var(--border-subtle, #e5e7eb)', borderRadius: 8 }}>
+          <SkeletonBlock height="20px" width="20px" style={{ borderRadius: '50%' }} />
+          <div className="flex-grow-1">
+            <SkeletonBlock height="14px" width="60%" className="mb-2" />
+            <SkeletonBlock height="12px" width="40%" />
+          </div>
+          <SkeletonBlock height="16px" width="60px" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function SkeletonProductDetail() {
   return (
     <div className="row g-4" aria-busy="true" aria-label="Yükleniyor">

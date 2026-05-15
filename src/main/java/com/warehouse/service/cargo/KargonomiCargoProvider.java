@@ -1,6 +1,8 @@
 package com.warehouse.service.cargo;
 
 import com.warehouse.service.SiteSettingService;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpEntity;
@@ -78,6 +80,8 @@ public class KargonomiCargoProvider implements CargoApiProvider {
     // ─────────────────────────────────────────────────────────────
 
     @Override
+    @Retry(name = "kargonomi", fallbackMethod = "createShipmentFallback")
+    @CircuitBreaker(name = "kargonomi", fallbackMethod = "createShipmentFallback")
     public CargoShipmentResult createShipment(CargoShipmentRequest request) {
         if (!isEnabled()) {
             return CargoShipmentResult.failure("NOT_CONFIGURED", "Kargonomi API yapılandırılmamış");
@@ -384,6 +388,172 @@ public class KargonomiCargoProvider implements CargoApiProvider {
         }
     }
 
+    /** GET /webhooks — kayıtlı tüm webhook'ları listeler. */
+    @SuppressWarnings("unchecked")
+    public List<Map<String, Object>> listWebhooks() {
+        if (!isEnabled()) return List.of();
+        try {
+            String url = getBaseUrl() + "/webhooks";
+            HttpEntity<Void> entity = new HttpEntity<>(buildAuthHeaders());
+            ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.GET, entity, Map.class);
+            Map<String, Object> body = response.getBody();
+            if (body == null) return List.of();
+            Object data = body.getOrDefault("data", body);
+            if (data instanceof List<?> list) return (List<Map<String, Object>>) list;
+            return List.of();
+        } catch (Exception e) {
+            logger.warn("Webhook listesi alınamadı: {}", e.getMessage());
+            return List.of();
+        }
+    }
+
+    /** GET /webhooks/{id} — belirli bir webhook detayı. */
+    public Map<String, Object> getWebhook(long webhookId) {
+        if (!isEnabled()) return null;
+        try {
+            String url = getBaseUrl() + "/webhooks/" + webhookId;
+            HttpEntity<Void> entity = new HttpEntity<>(buildAuthHeaders());
+            ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.GET, entity, Map.class);
+            return response.getBody();
+        } catch (Exception e) {
+            logger.warn("Webhook detay alınamadı (id={}): {}", webhookId, e.getMessage());
+            return null;
+        }
+    }
+
+    /** PUT /webhooks/{id} — webhook güncelleme (URL veya is_active değişimi). */
+    public boolean updateWebhook(long webhookId, String url, Boolean isActive) {
+        if (!isEnabled()) return false;
+        try {
+            String endpoint = getBaseUrl() + "/webhooks/" + webhookId;
+            Map<String, Object> body = new LinkedHashMap<>();
+            if (url != null) body.put("url", url);
+            if (isActive != null) body.put("is_active", isActive);
+            HttpHeaders headers = buildAuthHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            restTemplate.exchange(endpoint, HttpMethod.PUT, new HttpEntity<>(body, headers), Map.class);
+            logger.info("[Kargonomi] Webhook güncellendi: id={}", webhookId);
+            return true;
+        } catch (Exception e) {
+            logger.warn("Webhook güncelleme hatası (id={}): {}", webhookId, e.getMessage());
+            return false;
+        }
+    }
+
+    /** DELETE /webhooks/{id} — webhook silme. */
+    public boolean deleteWebhook(long webhookId) {
+        if (!isEnabled()) return false;
+        try {
+            String url = getBaseUrl() + "/webhooks/" + webhookId;
+            HttpEntity<Void> entity = new HttpEntity<>(buildAuthHeaders());
+            restTemplate.exchange(url, HttpMethod.DELETE, entity, Map.class);
+            logger.info("[Kargonomi] Webhook silindi: id={}", webhookId);
+            return true;
+        } catch (Exception e) {
+            logger.warn("Webhook silme hatası (id={}): {}", webhookId, e.getMessage());
+            return false;
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    //  List shipments (admin reconciliation)
+    // ─────────────────────────────────────────────────────────────
+
+    /**
+     * GET /shipments — Kargonomi tarafındaki shipment listesi (sayfa başına 50).
+     * Admin reconciliation panelinde "bizim DB ile Kargonomi senkron mu?" check için.
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> listShipments(int page) {
+        if (!isEnabled()) return Map.of("data", List.of());
+        try {
+            String url = getBaseUrl() + "/shipments?page=" + Math.max(1, page);
+            HttpEntity<Void> entity = new HttpEntity<>(buildAuthHeaders());
+            ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.GET, entity, Map.class);
+            return response.getBody() != null ? response.getBody() : Map.of();
+        } catch (Exception e) {
+            logger.warn("Shipments listesi alınamadı (page={}): {}", page, e.getMessage());
+            return Map.of("data", List.of(), "error", e.getMessage());
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    //  Warehouse registration (POST /warehouses)
+    // ─────────────────────────────────────────────────────────────
+
+    /**
+     * POST /warehouses — Kargonomi'ye yeni depo (gönderici adresi) kaydı.
+     * İlk kurulumda admin panelden bir kez çağrılır; dönen warehouse_id
+     * shipment yaratırken {@code shipment.warehouse_id} olarak kullanılır.
+     */
+    public Long registerWarehouse(WarehouseRegistrationRequest req) {
+        if (!isEnabled()) return null;
+        try {
+            // Sender şehir/ilçe → Kargonomi state_id/city_id lookup
+            int[] geo = geoLookup.lookupStateAndCity(req.getCity(), req.getDistrict());
+            if (geo == null) {
+                logger.warn("[Kargonomi] Warehouse register: il/ilçe bulunamadı ({}/{})", req.getCity(), req.getDistrict());
+                return null;
+            }
+            String url = getBaseUrl() + "/warehouses";
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("name", req.getName());
+            body.put("is_main", req.isMain());
+            body.put("contact_name", req.getContactName());
+            body.put("address", req.getAddress());
+            body.put("contact_phone", normalizePhone(req.getContactPhone()));
+            body.put("state_id", geo[0]);
+            body.put("city_id", geo[1]);
+            if (req.getTaxNumber() != null) body.put("tax_number", req.getTaxNumber());
+
+            HttpHeaders headers = buildAuthHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            ResponseEntity<Map> response = restTemplate.postForEntity(url, new HttpEntity<>(body, headers), Map.class);
+            Map<String, Object> resp = response.getBody();
+            if (resp == null) return null;
+            Object data = resp.getOrDefault("data", resp);
+            if (data instanceof Map<?,?> m) {
+                Object id = m.get("id");
+                if (id instanceof Number n) return n.longValue();
+                if (id != null) return Long.parseLong(id.toString());
+            }
+            return null;
+        } catch (Exception e) {
+            logger.warn("Warehouse register hatası: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /** POST /warehouses request DTO. */
+    public static class WarehouseRegistrationRequest {
+        private String name;
+        private boolean main;
+        private String contactName;
+        private String contactPhone;
+        private String address;
+        private String city;
+        private String district;
+        private String taxNumber;
+
+        // ── getters/setters ──
+        public String getName() { return name; }
+        public void setName(String name) { this.name = name; }
+        public boolean isMain() { return main; }
+        public void setMain(boolean main) { this.main = main; }
+        public String getContactName() { return contactName; }
+        public void setContactName(String contactName) { this.contactName = contactName; }
+        public String getContactPhone() { return contactPhone; }
+        public void setContactPhone(String contactPhone) { this.contactPhone = contactPhone; }
+        public String getAddress() { return address; }
+        public void setAddress(String address) { this.address = address; }
+        public String getCity() { return city; }
+        public void setCity(String city) { this.city = city; }
+        public String getDistrict() { return district; }
+        public void setDistrict(String district) { this.district = district; }
+        public String getTaxNumber() { return taxNumber; }
+        public void setTaxNumber(String taxNumber) { this.taxNumber = taxNumber; }
+    }
+
     // ─────────────────────────────────────────────────────────────
     //  Request/Response builders
     // ─────────────────────────────────────────────────────────────
@@ -620,5 +790,18 @@ public class KargonomiCargoProvider implements CargoApiProvider {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    //  Resilience4j fallback methods
+    //  (Tüm retry tükenince veya circuit breaker open iken çağrılır)
+    // ─────────────────────────────────────────────────────────────
+
+    /** createShipment için fallback — kuyruğa alıp admin'i uyaran "PENDING_RETRY" sonucu döner. */
+    @SuppressWarnings("unused")
+    public CargoShipmentResult createShipmentFallback(CargoShipmentRequest request, Throwable t) {
+        logger.error("[Kargonomi] createShipment retry/CB fallback: {}", t.getMessage());
+        return CargoShipmentResult.failure("UPSTREAM_UNAVAILABLE",
+                "Kargo sağlayıcı şu anda yanıt vermiyor; sipariş kuyruğa alındı, ekibimiz manuel oluşturacak.");
     }
 }

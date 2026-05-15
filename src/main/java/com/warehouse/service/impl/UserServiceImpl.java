@@ -49,6 +49,7 @@ public class UserServiceImpl implements UserService {
             logger.warn("Username already exists: {}", username);
             throw new IllegalArgumentException(com.warehouse.constants.BusinessMessages.USERNAME_ALREADY_EXISTS);
         }
+        com.warehouse.util.PasswordPolicyValidator.validate(rawPassword);
         User user = new User();
         user.setUsername(username);
         user.setPasswordHash(passwordEncoder.encode(rawPassword));
@@ -80,6 +81,7 @@ public class UserServiceImpl implements UserService {
                     logger.warn("User not found with id: {}", userId);
                     return new IllegalArgumentException(com.warehouse.constants.BusinessMessages.USER_NOT_FOUND);
                 });
+        com.warehouse.util.PasswordPolicyValidator.validate(newRawPassword);
         user.setPasswordHash(passwordEncoder.encode(newRawPassword));
         userRepository.save(user);
         logger.info("User password reset successfully");

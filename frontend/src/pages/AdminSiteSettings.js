@@ -21,9 +21,11 @@ const SETTING_GROUPS = [
     tooltip: 'Mağazada ve faturalarda kullanılacak para birimi.' },
   { id: 'general',     section: 'Mağaza',        title: 'Genel',                   icon: 'fas fa-cog',                   keys: ['footer_text', 'header_announcement', 'contact_form_email'],
     tooltip: 'Footer alt bilgisi, üst bar duyuru mesajı ve form yönlendirme.' },
+  { id: 'shipping',    section: 'Mağaza',        title: 'Kargo Ücretlendirme',     icon: 'fas fa-truck-loading',         keys: ['free_shipping_threshold', 'default_shipping_cost'],
+    tooltip: 'Ücretsiz kargo eşiği ve varsayılan kargo ücreti. Provider tabanlı detaylar Kargo Sağlayıcıları sayfasında.' },
   { id: 'abandon',     section: 'Pazarlama',     title: 'Sepet Kurtarma',          icon: 'fas fa-shopping-cart',         keys: ['abandoned_cart_enabled', 'abandoned_cart_delay_hours', 'abandoned_cart_reminder_window_hours'],
     tooltip: 'Terk edilmiş sepetler için otomatik hatırlatma e-postası ayarları.' },
-  { id: 'seo',         section: 'Pazarlama',     title: 'SEO & Analytics',         icon: 'fas fa-search',                keys: ['seo_canonical_domain', 'seo_organization_name', 'seo_default_meta_description', 'seo_default_og_image', 'seo_twitter_handle', 'analytics_google_id', 'analytics_facebook_pixel_id'],
+  { id: 'seo',         section: 'Pazarlama',     title: 'SEO & Analytics',         icon: 'fas fa-search',                keys: ['seo_canonical_domain', 'seo_organization_name', 'seo_default_meta_description', 'seo_default_og_image', 'seo_twitter_handle', 'analytics_google_id', 'analytics_facebook_pixel_id', 'analytics_hotjar_id', 'analytics_clarity_id'],
     tooltip: 'Arama motoru optimizasyonu ve web analytics ayarları. Ürün/kategori sayfalarında kullanılır.' },
   { id: 'sms',         section: 'Entegrasyonlar',title: 'SMS Bildirimleri',        icon: 'fas fa-sms',                   keys: ['sms_enabled', 'sms_provider', 'netgsm_username', 'netgsm_password', 'netgsm_sender'],
     tooltip: 'SMS sağlayıcı yapılandırması. Sipariş ve kargo bildirimleri için kullanılır.',
@@ -58,6 +60,7 @@ const LABELS = {
   seo_canonical_domain: 'Canonical Domain', seo_organization_name: 'Kuruluş Adı', seo_default_meta_description: 'Varsayılan Meta Açıklama',
   seo_default_og_image: 'Varsayılan Paylaşım Görseli (OG Image)', seo_twitter_handle: 'Twitter / X Hesabı',
   analytics_google_id: 'Google Analytics 4 ID', analytics_facebook_pixel_id: 'Facebook Pixel ID',
+  analytics_hotjar_id: 'Hotjar Site ID', analytics_clarity_id: 'Microsoft Clarity Project ID',
   cargo_api_enabled: 'Kargo API Entegrasyonu', cargo_api_provider: 'Kargo API Sağlayıcı',
   cargo_api_auto_create: 'Otomatik Kargo Oluştur', kargonomi_api_token: 'Kargonomi API Token (Bearer)',
   kargonomi_app_key: 'Kargonomi APP KEY', kargonomi_api_base_url: 'Kargonomi API URL',
@@ -255,8 +258,29 @@ export default function AdminSiteSettings() {
     const code = await askCode({ description: desc });
     if (!code) return;
     try { await fn(code); } catch (e) {
-      if (e.response?.status === 403) toast.error('Güvenlik şifresi hatalı.');
-      else toast.error('İşlem başarısız.');
+      const status = e.response?.status;
+      const backendMsg = e.response?.data?.message
+        || e.response?.data?.error
+        || (typeof e.response?.data === 'string' ? e.response.data : null);
+
+      // 403: güvenlik kodu, 400: validation, 401: oturum, 500: server, no response: network
+      if (status === 403) {
+        toast.error('Güvenlik şifresi hatalı.');
+      } else if (status === 401) {
+        toast.error('Oturumunuz sona ermiş. Lütfen tekrar giriş yapın.');
+      } else if (status === 400 || status === 422) {
+        toast.error(backendMsg || 'Geçersiz değer. Lütfen alanları kontrol edin.');
+      } else if (status >= 500) {
+        toast.error(backendMsg || `Sunucu hatası (${status}). Loglara bakın.`);
+      } else if (!e.response) {
+        // Network hatası — sunucu yanıt vermedi
+        toast.error('Sunucuya ulaşılamadı. Bağlantınızı kontrol edin.');
+      } else {
+        toast.error(backendMsg || `Hata (${status || 'unknown'})`);
+      }
+      // Geliştirici için console'a tam hatayı yaz
+      // eslint-disable-next-line no-console
+      console.error('[AdminSiteSettings] Save failed:', { status, message: backendMsg, error: e });
     }
   };
 
@@ -640,6 +664,44 @@ export default function AdminSiteSettings() {
           </button>
         </div>
       </div>
+
+      {/* ── Yasal Uyumluluk Uyarısı (Faz 0 BLOCKER) ──
+          ETBİS QR, KEP, MERSİS, vergi no vb. kritik alanlar boşsa kırmızı banner.
+          Lansman öncesi mutlaka doldurulmalı. */}
+      {(() => {
+        const CRITICAL_LEGAL_KEYS = [
+          'company_legal_name', 'mersis_number', 'kep_address',
+          'tax_office', 'tax_number', 'etbis_qr_url',
+          'contact_phone', 'contact_email', 'contact_address',
+        ];
+        const missing = CRITICAL_LEGAL_KEYS.filter(k => {
+          const v = settings[k];
+          return !v || (typeof v === 'string' && !v.trim());
+        });
+        if (missing.length === 0) return null;
+        const LABEL_MAP = {
+          company_legal_name: 'Ticari Unvan', mersis_number: 'MERSİS', kep_address: 'KEP Adresi',
+          tax_office: 'Vergi Dairesi', tax_number: 'Vergi No', etbis_qr_url: 'ETBİS QR',
+          contact_phone: 'Telefon', contact_email: 'E-posta', contact_address: 'Adres',
+        };
+        return (
+          <div className="alert alert-danger d-flex align-items-start gap-2 mb-3" role="alert">
+            <i className="fas fa-shield-alt fs-4 mt-1" />
+            <div className="flex-grow-1">
+              <strong>Yasal uyumluluk eksikliği:</strong> Aşağıdaki alanlar Türkiye e-ticaret mevzuatı (6563 sayılı kanun, ETBİS, KVKK) gereği zorunludur ve henüz doldurulmamıştır.
+              Lansman öncesi mutlaka doldurun:
+              <div className="mt-2">
+                {missing.map(k => (
+                  <span key={k} className="badge bg-danger me-1 mb-1">{LABEL_MAP[k] || k}</span>
+                ))}
+              </div>
+              <small className="text-muted d-block mt-2">
+                Bu bilgiler footer'da ve müşteri faturalarında otomatik olarak görüntülenir.
+              </small>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── Overall Completion Bar ── */}
       <div className="card border-0 shadow-sm mb-3">

@@ -55,13 +55,18 @@ public class AdminProductCrawlerController {
         }
         try {
             CrawlPreview p = crawler.preview(req.url);
-            log.info("[Crawler] preview productId={} url={} → {} images",
-                    id, req.url, p.images().size());
-            return ResponseEntity.ok(Map.of(
-                    "url", p.url(),
-                    "title", p.title() != null ? p.title() : "",
-                    "images", p.images()
-            ));
+            log.info("[Crawler] preview productId={} url={} → {} images, desc={} chars",
+                    id, req.url, p.images().size(),
+                    p.description() != null ? p.description().length() : 0);
+            java.util.Map<String, Object> body = new java.util.LinkedHashMap<>();
+            body.put("url", p.url());
+            body.put("title", p.title() != null ? p.title() : "");
+            body.put("images", p.images());
+            body.put("description", p.description());
+            body.put("shortDescription", p.shortDescription());
+            body.put("specs", p.specs());
+            body.put("brand", p.brand());
+            return ResponseEntity.ok(body);
         } catch (CrawlException e) {
             return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
         } catch (Exception e) {

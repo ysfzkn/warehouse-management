@@ -107,7 +107,12 @@ public class GvpProtocol implements BankPosProtocol {
             String hashInput = orderId + terminalId + response + mdStatus + storeKey;
             String calculatedHash = sha512Hex(hashInput);
 
-            boolean valid = calculatedHash.equalsIgnoreCase(receivedHash);
+            // Timing-safe karşılaştırma. GVP hex çıktı verir; ikisini de aynı case'e
+            // çevirip MessageDigest.isEqual ile karşılaştır.
+            boolean valid = receivedHash != null && calculatedHash != null
+                    && java.security.MessageDigest.isEqual(
+                            calculatedHash.toLowerCase().getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                            receivedHash.toLowerCase().getBytes(java.nio.charset.StandardCharsets.UTF_8));
             if (!valid) {
                 log.error("GVP HASH VERIFICATION FAILED! orderId={}", orderId);
             }

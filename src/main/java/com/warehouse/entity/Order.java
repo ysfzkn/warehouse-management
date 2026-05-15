@@ -139,6 +139,14 @@ public class Order {
     @Column(name = "preliminary_info_accepted_at")
     private LocalDateTime preliminaryInfoAcceptedAt;
 
+    /**
+     * Sipariş anında KVKK rızasının verildiği zaman damgası.
+     * Misafir checkout için kritik kanıt (authenticated kullanıcılarda Customer entity'sinde
+     * ayrıca kvkkConsentAt vardır; bu sütun sipariş anındaki snapshot).
+     */
+    @Column(name = "kvkk_consent_at")
+    private LocalDateTime kvkkConsentAt;
+
     @Column(name = "invoice_number", length = 50)
     private String invoiceNumber;
 

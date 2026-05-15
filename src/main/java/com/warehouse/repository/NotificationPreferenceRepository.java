@@ -16,4 +16,9 @@ public interface NotificationPreferenceRepository extends JpaRepository<Notifica
             Long customerId, NotificationChannelType channel, NotificationType type);
 
     List<NotificationPreference> findByCustomerId(Long customerId);
+
+    @org.springframework.transaction.annotation.Transactional
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.data.jpa.repository.Query("DELETE FROM NotificationPreference np WHERE np.customer.id = :customerId")
+    void deleteByCustomerId(@org.springframework.data.repository.query.Param("customerId") Long customerId);
 }

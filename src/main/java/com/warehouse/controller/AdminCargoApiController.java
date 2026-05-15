@@ -110,4 +110,90 @@ public class AdminCargoApiController {
         log.info("[Cargo] webhook register → url={}, ok={}", callbackUrl, ok);
         return ResponseEntity.ok(Map.of("success", ok, "callbackUrl", callbackUrl));
     }
+
+    /** Kayıtlı tüm webhook'ları listele. */
+    @GetMapping("/webhooks")
+    public ResponseEntity<?> listWebhooks() {
+        CargoApiProvider provider = cargoApiService.getActiveProvider();
+        if (!(provider instanceof KargonomiCargoProvider k)) {
+            return ResponseEntity.status(400).body(Map.of("message", "Aktif sağlayıcı Kargonomi değil."));
+        }
+        return ResponseEntity.ok(Map.of("items", k.listWebhooks()));
+    }
+
+    /** Webhook detayı (id ile). */
+    @GetMapping("/webhooks/{id}")
+    public ResponseEntity<?> getWebhook(@PathVariable long id) {
+        CargoApiProvider provider = cargoApiService.getActiveProvider();
+        if (!(provider instanceof KargonomiCargoProvider k)) {
+            return ResponseEntity.status(400).body(Map.of("message", "Aktif sağlayıcı Kargonomi değil."));
+        }
+        Map<String, Object> data = k.getWebhook(id);
+        return data != null ? ResponseEntity.ok(data) : ResponseEntity.notFound().build();
+    }
+
+    /** Webhook güncelleme (url veya is_active). */
+    @org.springframework.web.bind.annotation.PutMapping("/webhooks/{id}")
+    public ResponseEntity<?> updateWebhook(@PathVariable long id, @RequestBody Map<String, Object> body,
+                                            @RequestHeader(value = "X-ADMIN-SECURITY-CODE", required = false) String securityCode) {
+        adminSecurityService.requireSecurityCodeForAdmin(securityCode);
+        CargoApiProvider provider = cargoApiService.getActiveProvider();
+        if (!(provider instanceof KargonomiCargoProvider k)) {
+            return ResponseEntity.status(400).body(Map.of("message", "Aktif sağlayıcı Kargonomi değil."));
+        }
+        String url = (String) body.get("url");
+        Boolean isActive = (Boolean) body.get("is_active");
+        boolean ok = k.updateWebhook(id, url, isActive);
+        return ResponseEntity.ok(Map.of("success", ok));
+    }
+
+    /** Webhook silme. */
+    @org.springframework.web.bind.annotation.DeleteMapping("/webhooks/{id}")
+    public ResponseEntity<?> deleteWebhook(@PathVariable long id,
+                                            @RequestHeader(value = "X-ADMIN-SECURITY-CODE", required = false) String securityCode) {
+        adminSecurityService.requireSecurityCodeForAdmin(securityCode);
+        CargoApiProvider provider = cargoApiService.getActiveProvider();
+        if (!(provider instanceof KargonomiCargoProvider k)) {
+            return ResponseEntity.status(400).body(Map.of("message", "Aktif sağlayıcı Kargonomi değil."));
+        }
+        boolean ok = k.deleteWebhook(id);
+        return ResponseEntity.ok(Map.of("success", ok));
+    }
+
+    /**
+     * Reconciliation: Kargonomi tarafındaki son shipment'ları listele.
+     * Bizim DB'mizdeki ile karşılaştırmak için useful.
+     */
+    @GetMapping("/shipments")
+    public ResponseEntity<?> listShipments(@RequestParam(defaultValue = "1") int page) {
+        CargoApiProvider provider = cargoApiService.getActiveProvider();
+        if (!(provider instanceof KargonomiCargoProvider k)) {
+            return ResponseEntity.status(400).body(Map.of("message", "Aktif sağlayıcı Kargonomi değil."));
+        }
+        return ResponseEntity.ok(k.listShipments(page));
+    }
+
+    /**
+     * İlk kurulumda Kargonomi'ye depo (gönderici adresi) kaydı yapar.
+     * Dönen warehouse_id site_settings'e {@code kargonomi_warehouse_id} olarak
+     * yazılır (admin manuel olarak da girebilir).
+     */
+    @PostMapping("/warehouses")
+    public ResponseEntity<?> registerWarehouse(
+            @RequestBody KargonomiCargoProvider.WarehouseRegistrationRequest req,
+            @RequestHeader(value = "X-ADMIN-SECURITY-CODE", required = false) String securityCode) {
+        adminSecurityService.requireSecurityCodeForAdmin(securityCode);
+        CargoApiProvider provider = cargoApiService.getActiveProvider();
+        if (!(provider instanceof KargonomiCargoProvider k)) {
+            return ResponseEntity.status(400).body(Map.of("message", "Aktif sağlayıcı Kargonomi değil."));
+        }
+        Long warehouseId = k.registerWarehouse(req);
+        if (warehouseId == null) {
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Depo kaydı başarısız. İl/ilçe lookup veya API hatası olabilir."));
+        }
+        log.info("[Cargo] Kargonomi warehouse registered: id={}, name={}", warehouseId, req.getName());
+        return ResponseEntity.ok(Map.of("warehouseId", warehouseId,
+                "message", "Depo Kargonomi'ye kaydedildi. Bu ID'yi 'kargonomi_warehouse_id' ayarına yazın."));
+    }
 }

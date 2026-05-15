@@ -53,6 +53,10 @@ public class VirtualPosGateway implements PaymentGateway {
                 : request.getCallbackUrl();
         if (callbackUrl == null) callbackUrl = "";
 
+        // Customer ad-soyad birleştir — PayTR user_name tek alan
+        String fullName = ((request.getBuyerName() != null ? request.getBuyerName() : "")
+                + (request.getBuyerSurname() != null ? " " + request.getBuyerSurname() : "")).trim();
+
         PosPaymentRequest posRequest = PosPaymentRequest.builder()
                 .orderId(String.valueOf(request.getOrderId()))
                 .orderNumber(request.getOrderNumber())
@@ -61,6 +65,9 @@ public class VirtualPosGateway implements PaymentGateway {
                 .installmentCount(request.getInstallmentCount())
                 .customerIp(request.getBuyerIp())
                 .customerEmail(request.getBuyerEmail())
+                .customerName(fullName)
+                .customerPhone(request.getBuyerPhone())
+                .customerAddress(request.getBuyerAddress())
                 .okUrl(callbackUrl)
                 .failUrl(callbackUrl)
                 .build();

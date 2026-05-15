@@ -16,6 +16,8 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
+import org.springframework.security.web.header.writers.XXssProtectionHeaderWriter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -32,16 +34,65 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final RateLimitFilter rateLimitFilter;
     private final CustomerStatusCheckFilter customerStatusCheckFilter;
+    private final HostValidationFilter hostValidationFilter;
 
     @org.springframework.beans.factory.annotation.Value("${CORS_ALLOWED_ORIGINS:http://localhost,http://localhost:*,https://localhost:*}")
     private String corsAllowedOrigins;
 
     public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter,
                           RateLimitFilter rateLimitFilter,
-                          CustomerStatusCheckFilter customerStatusCheckFilter) {
+                          CustomerStatusCheckFilter customerStatusCheckFilter,
+                          HostValidationFilter hostValidationFilter) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
         this.rateLimitFilter = rateLimitFilter;
         this.customerStatusCheckFilter = customerStatusCheckFilter;
+        this.hostValidationFilter = hostValidationFilter;
+    }
+
+    /**
+     * Üretim güvenlik header'larını her filter chain'e tek noktadan uygular.
+     *
+     * <ul>
+     *   <li><b>HSTS</b> — HTTPS zorunluluğu (1 yıl, subdomain dahil, preload)</li>
+     *   <li><b>X-Content-Type-Options: nosniff</b> — MIME-sniff saldırılarına karşı</li>
+     *   <li><b>X-Frame-Options: DENY</b> — Clickjacking koruması (CSP frame-ancestors backup)</li>
+     *   <li><b>Referrer-Policy</b> — strict-origin-when-cross-origin (default leak'i azaltır)</li>
+     *   <li><b>Permissions-Policy</b> — kamera/mikrofon/coğrafi konum vb. APIs varsayılan kapalı</li>
+     *   <li><b>CSP</b> — XSS savunması; React ihtiyaçları için 'unsafe-inline' style allow, script-src self + analytics + iyzico/PayTR; ileride nonce'lu hale getirilebilir.</li>
+     * </ul>
+     */
+    private void applySecurityHeaders(HttpSecurity http) throws Exception {
+        http.headers(headers -> headers
+                .httpStrictTransportSecurity(hsts -> hsts
+                        .includeSubDomains(true)
+                        .preload(true)
+                        .maxAgeInSeconds(31536000) // 1 yıl
+                )
+                .contentTypeOptions(opts -> {})
+                .frameOptions(frame -> frame.deny())
+                .referrerPolicy(rp -> rp.policy(ReferrerPolicyHeaderWriter.ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN))
+                .xssProtection(xss -> xss.headerValue(XXssProtectionHeaderWriter.HeaderValue.ENABLED_MODE_BLOCK))
+                .addHeaderWriter((req, resp) -> {
+                    // Permissions-Policy: agresif default-deny (e-ticaret site'i bu API'lere ihtiyaç duymaz)
+                    resp.setHeader("Permissions-Policy",
+                            "geolocation=(), camera=(), microphone=(), payment=(self), usb=(), fullscreen=(self)");
+                    // Content-Security-Policy: e-ticaret + admin uyumu için pratik bir başlangıç.
+                    // Inline style React tarafında zorunlu (CSS-in-JS, Helmet); script-src 'self' + analytics + payment gateways.
+                    if (!resp.containsHeader("Content-Security-Policy")) {
+                        resp.setHeader("Content-Security-Policy",
+                                "default-src 'self'; " +
+                                "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://connect.facebook.net https://static.iyzipay.com https://www.iyzico.com https://www.paytr.com https://kargonomi.com.tr; " +
+                                "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; " +
+                                "font-src 'self' data: https://cdnjs.cloudflare.com https://fonts.gstatic.com; " +
+                                "img-src 'self' data: blob: https:; " +
+                                "connect-src 'self' https://www.google-analytics.com https://api.iyzipay.com https://api.kargonomi.com.tr; " +
+                                "frame-src 'self' https://www.iyzico.com https://static.iyzipay.com https://www.paytr.com; " +
+                                "frame-ancestors 'none'; " +
+                                "base-uri 'self'; " +
+                                "form-action 'self' https://www.iyzipay.com https://sandbox-api.iyzipay.com https://www.paytr.com;");
+                    }
+                })
+        );
     }
 
     /**
@@ -51,6 +102,7 @@ public class SecurityConfig {
     @Bean
     @Order(1)
     public SecurityFilterChain adminFilterChain(HttpSecurity http) throws Exception {
+        applySecurityHeaders(http);
         http
                 // Include /api/cezeri/** so the WMS assistant goes through the
                 // admin auth pipeline (rate limits, JWT parsing, role check).
@@ -103,6 +155,10 @@ public class SecurityConfig {
                 .exceptionHandling(exceptions -> exceptions
                         .accessDeniedHandler(new SilentAccessDeniedHandler())
                 )
+                // Admin auth login için brute-force koruması (RateLimitService'te
+                // /api/admin/auth/login için 15dk içinde 5 deneme limiti tanımlı).
+                .addFilterBefore(hostValidationFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(rateLimitFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
@@ -114,6 +170,7 @@ public class SecurityConfig {
     @Bean
     @Order(2)
     public SecurityFilterChain storeFilterChain(HttpSecurity http) throws Exception {
+        applySecurityHeaders(http);
         http
                 .securityMatcher("/api/store/**")
                 .csrf(csrf -> csrf.disable())
@@ -156,6 +213,7 @@ public class SecurityConfig {
                 .exceptionHandling(exceptions -> exceptions
                         .accessDeniedHandler(new SilentAccessDeniedHandler())
                 )
+                .addFilterBefore(hostValidationFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(rateLimitFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterAfter(customerStatusCheckFilter, JwtAuthenticationFilter.class);
@@ -168,13 +226,20 @@ public class SecurityConfig {
     @Bean
     @Order(3)
     public SecurityFilterChain publicFilterChain(HttpSecurity http) throws Exception {
+        applySecurityHeaders(http);
         http
                 .securityMatcher("/**")
                 .csrf(csrf -> csrf.disable())
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+                        // /actuator/health, /actuator/info, /info, /error → herkese açık
                         .requestMatchers(ApiPaths.ACTUATOR, ApiPaths.INFO, ApiPaths.ERROR).permitAll()
+                        // Diğer tüm actuator endpoint'leri (env, configprops, loggers, beans, metrics, prometheus)
+                        // sadece ADMIN — secrets ve internal state sızdırmasın.
+                        .requestMatchers("/actuator/**").hasRole("ADMIN")
+                        // Swagger UI + OpenAPI docs — sadece ADMIN
+                        .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").hasRole("ADMIN")
                         .anyRequest().permitAll()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
@@ -183,18 +248,29 @@ public class SecurityConfig {
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
-        // Payment callback endpoints: allow ALL origins (iyzico, PayTR, bank servers POST here)
+        // Payment / webhook callback endpoints: kısıtlı whitelist.
+        // Iyzico, PayTR, Logo eLogo, Kargonomi sunucu→sunucu POST yaparken
+        // genelde Origin header'ı GÖNDERMEZ (CORS preflight gerekmez), bu CORS
+        // ayarı sadece tarayıcıdan açılan iframe / redirect dönüşleri için.
         CorsConfiguration callbackConfig = new CorsConfiguration();
-        callbackConfig.setAllowedOriginPatterns(List.of("*"));
+        callbackConfig.setAllowedOriginPatterns(List.of(
+                "https://*.iyzipay.com",
+                "https://*.iyzico.com",
+                "https://*.paytr.com",
+                "https://*.kargonomi.com.tr",
+                "https://*.elogo.com.tr",
+                "https://*.efinans.com.tr"
+        ));
         callbackConfig.setAllowedMethods(List.of("GET", "POST", "OPTIONS"));
-        callbackConfig.setAllowedHeaders(List.of("*"));
+        callbackConfig.setAllowedHeaders(List.of("Content-Type", "X-Signature"));
         callbackConfig.setAllowCredentials(false);
 
         // Regular API endpoints: restricted origins
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowedOriginPatterns(Arrays.asList(corsAllowedOrigins.split(",")));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
-        config.setAllowedHeaders(List.of("Content-Type", "Authorization", "X-Session-Id", "X-ADMIN-SECURITY-CODE", "X-Requested-With"));
+        config.setAllowedHeaders(List.of("Content-Type", "Authorization", "X-Session-Id",
+                "X-ADMIN-SECURITY-CODE", "X-Requested-With", "Idempotency-Key"));
         config.setAllowCredentials(true);
         config.setMaxAge(3600L);
 
@@ -202,6 +278,9 @@ public class SecurityConfig {
         // Register callback paths FIRST (more specific paths take precedence)
         source.registerCorsConfiguration("/api/store/payment/callback", callbackConfig);
         source.registerCorsConfiguration("/api/store/payment/callback/**", callbackConfig);
+        // Webhook'lar (Kargonomi, Logo): callback gibi davranır
+        source.registerCorsConfiguration("/api/admin/cargo/webhook/**", callbackConfig);
+        source.registerCorsConfiguration("/api/admin/invoice/webhook/**", callbackConfig);
         // Then general API paths
         source.registerCorsConfiguration("/api/**", config);
         return source;

@@ -11,6 +11,7 @@ import com.warehouse.service.notification.NotificationDispatchService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -51,6 +52,7 @@ public class CargoTrackingJob {
      * Her 30 dakikada bir çalışır. Uygulama başlangıcından 3 dakika sonra ilk çalışma.
      */
     @Scheduled(fixedRate = 30 * 60 * 1000, initialDelay = 3 * 60 * 1000)
+    @SchedulerLock(name = "cargoTracking", lockAtMostFor = "PT15M", lockAtLeastFor = "PT5M")
     @Transactional
     public void pollShippedOrders() {
         if (!cargoApiService.isEnabled()) return;

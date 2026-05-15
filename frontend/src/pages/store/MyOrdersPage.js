@@ -188,7 +188,7 @@ export default function MyOrdersPage() {
                             <div key={i} className="d-flex align-items-center gap-3 p-3 rounded-3" style={{ background: '#f8fafc', border: '1px solid #f1f5f9' }}>
                               {item.imageUrl ? (
                                 <Link to={item.productSlug ? `/urun/${item.productSlug}` : '#'} style={{ flexShrink: 0 }}>
-                                  <img src={item.imageUrl} alt="" style={{ width: 52, height: 52, objectFit: 'contain', borderRadius: 10, background: '#fff', border: '1px solid #e2e8f0' }} />
+                                  <img src={item.imageUrl} alt={item.productName || 'Ürün görseli'} style={{ width: 52, height: 52, objectFit: 'contain', borderRadius: 10, background: '#fff', border: '1px solid #e2e8f0' }} loading="lazy" />
                                 </Link>
                               ) : (
                                 <div className="d-flex align-items-center justify-content-center" style={{ width: 52, height: 52, borderRadius: 10, background: '#e2e8f0', flexShrink: 0 }}>

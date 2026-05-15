@@ -56,6 +56,7 @@ public class StockImportServiceImpl implements StockImportService {
     private final AuditService auditService;
     private final NotificationService notificationService;
     private final ImportProperties importProperties;
+    private final com.warehouse.service.PhotoStorageService photoStorageService;
 
     public StockImportServiceImpl(ProductRepository productRepository,
                                   CategoryRepository categoryRepository,
@@ -65,7 +66,8 @@ public class StockImportServiceImpl implements StockImportService {
                                   StockImportHistoryRepository historyRepository,
                                   AuditService auditService,
                                   NotificationService notificationService,
-                                  ImportProperties importProperties) {
+                                  ImportProperties importProperties,
+                                  com.warehouse.service.PhotoStorageService photoStorageService) {
         this.productRepository = productRepository;
         this.categoryRepository = categoryRepository;
         this.brandRepository = brandRepository;
@@ -75,6 +77,7 @@ public class StockImportServiceImpl implements StockImportService {
         this.auditService = auditService;
         this.notificationService = notificationService;
         this.importProperties = importProperties;
+        this.photoStorageService = photoStorageService;
     }
 
     @Override
@@ -120,12 +123,23 @@ public class StockImportServiceImpl implements StockImportService {
                     return new IllegalArgumentException("Warehouse not found: " + warehouseId);
                 });
 
-        String storedFilename = System.currentTimeMillis() + "_" + sanitizeFilename(file.getOriginalFilename());
-        Path targetFile = storeFile(file, storedFilename);
-        com.warehouse.entity.StockImportHistory history = createImportHistory(file, warehouse, storedFilename);
+        // Audit/redownload için orijinal dosyayı storage'a yedekle (S3/MinIO).
+        // Storage key history.storedFilename olarak persist edilir.
+        String storageKey;
+        byte[] fileBytes = file.getBytes();
+        try (InputStream uploadStream = new java.io.ByteArrayInputStream(fileBytes)) {
+            storageKey = photoStorageService.storeDocument(
+                    "imports/" + warehouseId,
+                    file.getOriginalFilename(),
+                    file.getContentType(),
+                    uploadStream
+            );
+        }
+        com.warehouse.entity.StockImportHistory history = createImportHistory(file, warehouse, storageKey);
 
         try {
-            ImportResult result = processExcelFile(targetFile, warehouse);
+            // Excel'i in-memory işle (yüklenen byte'lardan) — disk path'i gerekmez.
+            ImportResult result = processExcelBytes(fileBytes, warehouse);
             updateHistoryWithResult(history, result);
             logger.info("Stock import completed. Status: {}, Processed: {}/{}, Failed: {}", 
                     history.getStatus(), result.getProcessedRows(), result.getTotalRows(), result.getFailedRows().size());
@@ -155,6 +169,12 @@ public class StockImportServiceImpl implements StockImportService {
         return headerStyle;
     }
 
+    /**
+     * @deprecated artık {@link com.warehouse.service.PhotoStorageService#storeDocument}
+     * kullanılıyor. Bu metod local-only fallback için kalsın (silinmeyecek; eski
+     * test'leri kırmasın), ama production code path'inde çağrılmaz.
+     */
+    @Deprecated
     private Path storeFile(MultipartFile file, String storedFilename) throws IOException {
         Path dir = resolveImportDir();
         Files.createDirectories(dir);
@@ -209,12 +229,20 @@ public class StockImportServiceImpl implements StockImportService {
         return historyRepository.save(history);
     }
 
-    private ImportResult processExcelFile(Path filePath, Warehouse warehouse) throws IOException {
+    /**
+     * Excel'i in-memory byte array'den okur. Disk I/O yok → S3/MinIO için ideal.
+     */
+    private ImportResult processExcelBytes(byte[] bytes, Warehouse warehouse) throws IOException {
+        try (InputStream is = new java.io.ByteArrayInputStream(bytes)) {
+            return processExcelStream(is, warehouse);
+        }
+    }
+
+    private ImportResult processExcelStream(InputStream is, Warehouse warehouse) throws IOException {
         ImportResult result = new ImportResult();
         ObjectMapper objectMapper = new ObjectMapper();
 
-        try (InputStream is = Files.newInputStream(filePath);
-             XSSFWorkbook workbook = new XSSFWorkbook(is)) {
+        try (XSSFWorkbook workbook = new XSSFWorkbook(is)) {
 
             Sheet sheet = workbook.getSheetAt(0);
             logger.debug("Processing Excel file with {} rows", sheet.getLastRowNum());

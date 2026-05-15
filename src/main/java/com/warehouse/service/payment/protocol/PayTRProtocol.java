@@ -61,12 +61,29 @@ public class PayTRProtocol implements BankPosProtocol {
             String merchantSalt = config.getSecretKey();
             boolean testMode = config.isSandbox();
 
+            // ── Doğrulama (PayTR API katı validasyon yapar; erken fail-fast) ──
+            if (merchantId == null || merchantKey == null || merchantSalt == null
+                    || merchantId.isBlank() || merchantKey.isBlank() || merchantSalt.isBlank()) {
+                return PosPaymentInitResult.builder().success(false)
+                        .errorMessage("PayTR yapılandırması eksik: merchant_id/key/salt").build();
+            }
+
             String merchantOid = request.getOrderNumber();
+            // PayTR sadece alfanumerik kabul eder, max 64 karakter
+            if (merchantOid == null || !merchantOid.matches("[A-Za-z0-9]{1,64}")) {
+                return PosPaymentInitResult.builder().success(false)
+                        .errorMessage("PayTR: geçersiz merchant_oid (sadece A-Z, 0-9; max 64 char)").build();
+            }
+
             String email = request.getCustomerEmail() != null ? request.getCustomerEmail() : "musteri@site.com";
             String userIp = request.getCustomerIp() != null ? request.getCustomerIp() : "127.0.0.1";
 
-            // PayTR expects amount * 100 (kuruş)
-            int paymentAmount = request.getAmount().multiply(new BigDecimal("100")).intValue();
+            // PayTR expects amount * 100 (kuruş) — long olarak (büyük tutarlarda int overflow riski)
+            long paymentAmount = request.getAmount().multiply(new BigDecimal("100")).longValueExact();
+            if (paymentAmount <= 0) {
+                return PosPaymentInitResult.builder().success(false)
+                        .errorMessage("PayTR: tutar pozitif olmalı").build();
+            }
 
             // Basket: JSON array [[name, price*100, quantity], ...]
             String userBasket = Base64.getEncoder().encodeToString(
@@ -78,11 +95,23 @@ public class PayTRProtocol implements BankPosProtocol {
             int maxInstallment = config.getMaxInstallments() != null ? config.getMaxInstallments() : 12;
             String testModeStr = testMode ? "1" : "0";
 
-            // Callback URLs
+            // Callback URLs — PayTR ABSOLUTE URL gerektirir (relative path KIRILIR)
             String notifyUrl = config.getCallbackUrl();
             Map<String, Object> extra = config.getExtraConfig() != null ? config.getExtraConfig() : Map.of();
-            String okUrl = extra.getOrDefault("merchant_ok_url", "/odeme/sonuc?success=true").toString();
-            String failUrl = extra.getOrDefault("merchant_fail_url", "/odeme/sonuc?success=false").toString();
+            String okUrl = extra.getOrDefault("merchant_ok_url", "").toString();
+            String failUrl = extra.getOrDefault("merchant_fail_url", "").toString();
+            if (!isAbsoluteUrl(okUrl)) {
+                return PosPaymentInitResult.builder().success(false)
+                        .errorMessage("PayTR: merchant_ok_url absolute URL olmalı (https://...). Admin panelden düzeltin.").build();
+            }
+            if (!isAbsoluteUrl(failUrl)) {
+                return PosPaymentInitResult.builder().success(false)
+                        .errorMessage("PayTR: merchant_fail_url absolute URL olmalı (https://...). Admin panelden düzeltin.").build();
+            }
+            if (!isAbsoluteUrl(notifyUrl)) {
+                return PosPaymentInitResult.builder().success(false)
+                        .errorMessage("PayTR: callback URL (notify_url) absolute olmalı. Admin panelden düzeltin.").build();
+            }
             int timeoutLimit = extra.containsKey("timeout_limit")
                     ? Integer.parseInt(extra.get("timeout_limit").toString()) : 30;
 
@@ -110,10 +139,19 @@ public class PayTRProtocol implements BankPosProtocol {
             formData.add("timeout_limit", String.valueOf(timeoutLimit));
             formData.add("lang", "tr");
 
-            // Customer info (optional but recommended)
-            if (request.getCustomerEmail() != null) formData.add("user_name", "");
-            formData.add("user_address", "");
-            formData.add("user_phone", "");
+            // Customer info — PayTR prod'da bazı bankalar fraud detection için
+            // bu alanları zorunlu görür. Bilinmiyorsa email'i fallback olarak kullan.
+            String userName = (request.getCustomerName() != null && !request.getCustomerName().isBlank())
+                    ? request.getCustomerName() : "Müşteri";
+            String userPhone = request.getCustomerPhone() != null ? request.getCustomerPhone() : "";
+            String userAddress = request.getCustomerAddress() != null ? request.getCustomerAddress() : "";
+            // PayTR API alanlar için 256 char limit uygular — kırpalım
+            if (userName.length() > 60) userName = userName.substring(0, 60);
+            if (userAddress.length() > 400) userAddress = userAddress.substring(0, 400);
+            if (userPhone.length() > 32) userPhone = userPhone.substring(0, 32);
+            formData.add("user_name", userName);
+            formData.add("user_address", userAddress);
+            formData.add("user_phone", userPhone);
 
             // Notify URL (server-to-server callback)
             if (notifyUrl != null && !notifyUrl.isEmpty()) {
@@ -182,7 +220,13 @@ public class PayTRProtocol implements BankPosProtocol {
             String dataToHash = merchantOid + merchantSalt + status + totalAmount;
             String calculatedHash = generateHmacSha256(dataToHash, merchantKey);
 
-            boolean valid = calculatedHash.equals(incomingHash);
+            // KRİTİK: timing-safe karşılaştırma. String.equals byte-by-byte erken çıkış yapar
+            // (ilk farklı byte'ta dönmesi karşılaştırma süresini değiştirir — timing attack
+            // ile saldırgan hash byte'larını tek tek tahmin edebilir). MessageDigest.isEqual
+            // JVM-level constant-time karşılaştırma garanti eder.
+            boolean valid = java.security.MessageDigest.isEqual(
+                    calculatedHash.getBytes(StandardCharsets.UTF_8),
+                    incomingHash.getBytes(StandardCharsets.UTF_8));
             if (!valid) {
                 log.error("PayTR HASH VERIFICATION FAILED! merchantOid={}, incoming={}, calculated={}",
                         merchantOid, incomingHash, calculatedHash);
@@ -246,15 +290,91 @@ public class PayTRProtocol implements BankPosProtocol {
                 .build();
     }
 
+    /**
+     * PayTR API'sini kullanarak iade (refund).
+     *
+     * <p>PayTR refund endpoint: {@code POST /odeme/iade}
+     * Parametreler:
+     *   merchant_id, merchant_oid, return_amount (kuruş cinsinden int),
+     *   reference_no (opsiyonel, idempotency key olarak da işlev görür),
+     *   paytr_token (HMAC-SHA256(merchant_id+merchant_oid+return_amount+merchant_salt, merchant_key))
+     * Yanıt: {"status":"success", "merchant_oid":"...", "return_amount":"..."}
+     * veya {"status":"error", "err_no":"...", "err_msg":"..."}</p>
+     *
+     * <p>Kısmi iade desteklenir; PayTR tek bir order için birden fazla refund kabul eder
+     * (toplam orijinal tutarı aşmadığı sürece). Refund tutarı 0 ise tüm tutar iade edilir.</p>
+     */
     @Override
     public PosRefundResult refund(PaymentGatewayConfig config, PosRefundRequest request) {
-        // PayTR has a separate refund API endpoint
-        // For now, indicate manual process
-        log.info("PayTR refund requested: merchantOid={}, amount={}", request.getOrderId(), request.getAmount());
-        return PosRefundResult.builder()
-                .success(false)
-                .errorMessage("PayTR iade islemi PayTR magaza panelinden yapilmalidir.")
-                .build();
+        try {
+            String merchantId = config.getMerchantId();
+            String merchantKey = config.getApiKey();
+            String merchantSalt = config.getSecretKey();
+            String merchantOid = request.getOrderId();
+
+            if (merchantId == null || merchantKey == null || merchantSalt == null) {
+                return PosRefundResult.builder().success(false)
+                        .errorMessage("PayTR iade: yapılandırma eksik (merchant_id/key/salt)").build();
+            }
+            if (merchantOid == null || !merchantOid.matches("[A-Za-z0-9]{1,64}")) {
+                return PosRefundResult.builder().success(false)
+                        .errorMessage("PayTR iade: geçersiz merchant_oid").build();
+            }
+            if (request.getAmount() == null || request.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
+                return PosRefundResult.builder().success(false)
+                        .errorMessage("PayTR iade: tutar pozitif olmalı").build();
+            }
+
+            // PayTR amount kuruş cinsinden long
+            long returnAmount = request.getAmount().multiply(new BigDecimal("100")).longValueExact();
+
+            // HMAC: merchant_id + merchant_oid + return_amount + merchant_salt → key
+            String hashStr = merchantId + merchantOid + returnAmount + merchantSalt;
+            String paytrToken = generateHmacSha256(hashStr, merchantKey);
+
+            MultiValueMap<String, String> formData = new LinkedMultiValueMap<>();
+            formData.add("merchant_id", merchantId);
+            formData.add("merchant_oid", merchantOid);
+            formData.add("return_amount", String.valueOf(returnAmount));
+            formData.add("paytr_token", paytrToken);
+            // Opsiyonel reference_no — admin tarafından verilebilir (idempotency)
+            if (request.getTransactionId() != null && !request.getTransactionId().isBlank()) {
+                formData.add("reference_no", request.getTransactionId());
+            }
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+            HttpEntity<MultiValueMap<String, String>> entity = new HttpEntity<>(formData, headers);
+
+            ResponseEntity<Map> response = restTemplate.postForEntity(
+                    "https://www.paytr.com/odeme/iade", entity, Map.class);
+
+            @SuppressWarnings("unchecked")
+            Map<String, Object> body = (Map<String, Object>) response.getBody();
+            if (body != null && "success".equals(body.get("status"))) {
+                log.info("PayTR refund OK: merchantOid={}, amount={} TL", merchantOid, request.getAmount());
+                return PosRefundResult.builder()
+                        .success(true)
+                        .refundedAmount(request.getAmount())
+                        .rawResponse(new LinkedHashMap<>(body))
+                        .build();
+            }
+            String errMsg = body != null
+                    ? String.format("err_no=%s err_msg=%s", body.get("err_no"), body.get("err_msg"))
+                    : "Bilinmeyen hata";
+            log.error("PayTR refund failed: merchantOid={}, error={}", merchantOid, errMsg);
+            return PosRefundResult.builder()
+                    .success(false)
+                    .errorMessage("PayTR iade reddedildi: " + errMsg)
+                    .rawResponse(body != null ? new LinkedHashMap<>(body) : Map.<String, Object>of())
+                    .build();
+        } catch (Exception e) {
+            log.error("PayTR refund exception: {}", e.getMessage(), e);
+            return PosRefundResult.builder()
+                    .success(false)
+                    .errorMessage("PayTR iade hatası: " + e.getMessage())
+                    .build();
+        }
     }
 
     @Override
@@ -328,5 +448,17 @@ public class PayTRProtocol implements BankPosProtocol {
         if (input == null) return "";
         return input.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
                 .replace("\"", "&quot;").replace("'", "&#39;");
+    }
+
+    /**
+     * PayTR ABSOLUTE URL gerektirir (http:// veya https://). Relative path verirse
+     * "https://www.paytr.com/odeme/sonuc?success=true" gibi yanlış redirect olur.
+     * Dev'de localhost da kabul (http://localhost...); prod'da admin'in https'i
+     * doldurması zorunlu.
+     */
+    private boolean isAbsoluteUrl(String url) {
+        if (url == null || url.isBlank()) return false;
+        String lower = url.trim().toLowerCase();
+        return lower.startsWith("http://") || lower.startsWith("https://");
     }
 }

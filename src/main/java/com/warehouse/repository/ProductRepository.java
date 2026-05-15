@@ -174,6 +174,12 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     @EntityGraph(value = Product.GRAPH_WITH_RELATIONS, type = EntityGraph.EntityGraphType.LOAD)
     Optional<Product> findBySlug(String slug);
 
+    /**
+     * Store search — ürün adı + SKU + kategori + marka + alt-marka + renk + kısa açıklama
+     * üzerinden arama yapar. Tsvector (V52 idx_products_search_tsv) hâlâ JPQL'den
+     * doğrudan kullanılamıyor; geniş LIKE pattern ürün kataloğunda 1000+ ürüne kadar
+     * yeterli performans verir. Daha büyük katalog için native query'e geçilir.
+     */
     @Query("""
         SELECT p FROM Product p
         LEFT JOIN p.category c
@@ -181,7 +187,14 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
         LEFT JOIN p.brand b
         LEFT JOIN p.color col
         WHERE p.isActive = true
-          AND (:search IS NULL OR LOWER(p.name) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')) OR LOWER(p.sku) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')))
+          AND (:search IS NULL
+               OR LOWER(p.name)             LIKE LOWER(CONCAT('%', CAST(:search AS string), '%'))
+               OR LOWER(p.sku)              LIKE LOWER(CONCAT('%', CAST(:search AS string), '%'))
+               OR LOWER(p.shortDescription) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%'))
+               OR LOWER(c.name)             LIKE LOWER(CONCAT('%', CAST(:search AS string), '%'))
+               OR LOWER(cp.name)            LIKE LOWER(CONCAT('%', CAST(:search AS string), '%'))
+               OR LOWER(b.name)             LIKE LOWER(CONCAT('%', CAST(:search AS string), '%'))
+               OR LOWER(col.name)           LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')))
           AND (:categoryId IS NULL OR c.id = :categoryId OR cp.id = :categoryId)
           AND (:brandId IS NULL OR b.id = :brandId)
           AND (:colorId IS NULL OR col.id = :colorId)

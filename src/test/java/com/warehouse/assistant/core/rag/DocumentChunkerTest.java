@@ -1,6 +1,7 @@
 package com.warehouse.assistant.core.rag;
 
 import com.warehouse.assistant.core.config.AssistantProperties;
+import com.warehouse.assistant.core.config.AssistantRuntimeConfig;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -12,12 +13,25 @@ class DocumentChunkerTest {
 
     private DocumentChunker chunker;
 
+    /**
+     * Test-only stub. AssistantRuntimeConfig normally pulls live values from
+     * the site_settings table; in unit tests we override the two getters
+     * DocumentChunker actually calls and pass {@code null} for the service
+     * (never touched because the overridden methods short-circuit).
+     */
+    private static AssistantRuntimeConfig stubRuntime(int chunkSize, int overlap) {
+        return new AssistantRuntimeConfig(null, new AssistantProperties()) {
+            @Override public int getChunkSizeTokens() { return chunkSize; }
+            @Override public int getChunkOverlapTokens() { return overlap; }
+        };
+    }
+
     @BeforeEach
     void setUp() {
         AssistantProperties props = new AssistantProperties();
         props.getRag().setChunkSizeTokens(10);
         props.getRag().setChunkOverlapTokens(2);
-        chunker = new DocumentChunker(props);
+        chunker = new DocumentChunker(props, stubRuntime(10, 2));
     }
 
     @Test
@@ -69,7 +83,7 @@ class DocumentChunkerTest {
         AssistantProperties big = new AssistantProperties();
         big.getRag().setChunkSizeTokens(1000);
         big.getRag().setChunkOverlapTokens(50);
-        DocumentChunker bigChunker = new DocumentChunker(big);
+        DocumentChunker bigChunker = new DocumentChunker(big, stubRuntime(1000, 50));
         String text = "Kısa bir metin.";
         List<String> chunks = bigChunker.chunk(text);
         assertEquals(1, chunks.size());

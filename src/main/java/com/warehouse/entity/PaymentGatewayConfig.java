@@ -1,5 +1,6 @@
 package com.warehouse.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -35,15 +36,22 @@ public class PaymentGatewayConfig {
     @Column(name = "terminal_id", length = 200)
     private String terminalId;
 
+    // --- Secret credentials: @JsonIgnore ile JSON serialization'da hiç dışarı çıkmaz.
+    // --- Admin response DTO'su (AdminGatewayConfigController) bunları masked ("ABCD****WXYZ") gönderir.
+    // --- Servis bean'leri Lombok @Data getter'larını JVM içinde okur — koruma sadece HTTP boundary'sinde.
+    @JsonIgnore
     @Column(name = "store_key", columnDefinition = "TEXT")
     private String storeKey;
 
+    @JsonIgnore
     @Column(name = "provision_password", columnDefinition = "TEXT")
     private String provisionPassword;
 
+    @JsonIgnore
     @Column(name = "api_key", columnDefinition = "TEXT")
     private String apiKey;
 
+    @JsonIgnore
     @Column(name = "secret_key", columnDefinition = "TEXT")
     private String secretKey;
 

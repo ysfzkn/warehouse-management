@@ -509,12 +509,22 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
       newErrors.sku = 'Stok kodu gereklidir';
     }
 
-    if (!formData.price || parseFloat(formData.price) < 0) {
-      newErrors.price = 'Geçerli bir fiyat giriniz';
+    // Price: parseFloat NaN check + pozitif olmalı (e-ticarette 0 fiyat kullanılamaz)
+    const priceNum = parseFloat(formData.price);
+    if (!formData.price || isNaN(priceNum) || priceNum <= 0) {
+      newErrors.price = 'Geçerli bir fiyat giriniz (sıfırdan büyük olmalı)';
     }
 
     if (!formData.categoryId) {
       newErrors.categoryId = 'Kategori seçiniz';
+    }
+
+    // Backend constraint'leri ile uyumlu uzunluk kontrolü
+    if (formData.description && formData.description.length > 5000) {
+      newErrors.description = `Açıklama 5000 karakteri aşamaz (şu an ${formData.description.length}).`;
+    }
+    if (formData.shortDescription && formData.shortDescription.length > 1000) {
+      newErrors.shortDescription = `Kısa açıklama 1000 karakteri aşamaz (şu an ${formData.shortDescription.length}).`;
     }
 
     setErrors(newErrors);
@@ -564,11 +574,17 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
   const [crawlUrl, setCrawlUrl] = useState('');
   const [crawlLoading, setCrawlLoading] = useState(false);
   const [crawlError, setCrawlError] = useState('');
-  const [crawlPreview, setCrawlPreview] = useState(null); // { url, title, images: [] }
+  const [crawlPreview, setCrawlPreview] = useState(null); // { url, title, images, description, shortDescription, specs, brand }
   const [crawlSelected, setCrawlSelected] = useState(new Set());
   const [crawlReplace, setCrawlReplace] = useState(false);
   const [crawlImporting, setCrawlImporting] = useState(false);
   const [crawlResult, setCrawlResult] = useState(null); // { success, total, errors: [] }
+  // Description preview state — admin metni düzenleyebilir, sonra "Uygula" ile ProductForm'a aktarır
+  const [crawlEditableDesc, setCrawlEditableDesc] = useState('');
+  const [crawlEditableShortDesc, setCrawlEditableShortDesc] = useState('');
+  const [crawlEditableSpecs, setCrawlEditableSpecs] = useState([]); // [{key, value}]
+  const [crawlActiveTab, setCrawlActiveTab] = useState('images'); // 'images' | 'description'
+  const [crawlDescAppliedToast, setCrawlDescAppliedToast] = useState(false);
 
   const openCrawlModal = () => {
     setCrawlOpen(true);
@@ -599,6 +615,16 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
       setCrawlPreview(data);
       // Default: hepsini seç
       setCrawlSelected(new Set(data.images || []));
+      // Description state'ini hydrate et (admin düzenleyebilir)
+      setCrawlEditableDesc(data.description || '');
+      setCrawlEditableShortDesc(data.shortDescription || '');
+      // Specs Map → düzenlenebilir array
+      const specsObj = data.specs || {};
+      setCrawlEditableSpecs(Object.entries(specsObj).map(([k, v]) => ({ key: k, value: v })));
+      // Eğer description çekilmediyse görsel tab'da kal; varsa description tab'ını da öner
+      if (data.description || data.shortDescription) {
+        setCrawlActiveTab('images'); // default başlangıç hala images
+      }
     } catch (e) {
       setCrawlError(e.response?.data?.message || 'Görseller çekilemedi');
     } finally {
@@ -620,6 +646,107 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
   };
 
   const deselectAllCrawl = () => setCrawlSelected(new Set());
+
+  /**
+   * Düzenlenmiş açıklama + specs'i ProductForm'un asıl alanlarına aktarır.
+   *
+   * Bug fix'ler:
+   *   - Backend description @Size(max=5000) — 4800 char'da kırp (HTML tag margin'i için)
+   *   - shortDescription @Column(length=1000) — 1000'de kırp
+   *   - setFormData callback formu ile asenkron güncelleme garantili
+   *   - Modal'ı otomatik kapatıp formdaki alanları flash ile vurgula (görsel feedback)
+   *   - Save tuşunu hatırlatan toast (kullanıcı "Aktarınca otomatik kaydedildi mi?" sanmasın)
+   */
+  const applyCrawlDescriptionToProduct = () => {
+    const updates = {};
+
+    // Kısa açıklama (1000 char limit)
+    if (crawlEditableShortDesc && crawlEditableShortDesc.trim()) {
+      const trimmed = crawlEditableShortDesc.trim();
+      updates.shortDescription = trimmed.length > 1000 ? trimmed.substring(0, 997) + '...' : trimmed;
+    }
+
+    // Uzun açıklama + specs (HTML tablo append). Toplam 5000 char limiti backend'de var.
+    let fullDesc = (crawlEditableDesc || '').trim();
+    if (crawlEditableSpecs.length > 0) {
+      const validSpecs = crawlEditableSpecs.filter(s => s.key.trim() && s.value.trim());
+      if (validSpecs.length > 0) {
+        const table = '\n\n<h3>Teknik Özellikler</h3>\n<table class="product-specs-table">\n'
+          + validSpecs.map(s =>
+              `  <tr><td><strong>${escapeHtmlEntity(s.key)}</strong></td>`
+              + `<td>${escapeHtmlEntity(s.value)}</td></tr>`).join('\n')
+          + '\n</table>';
+        fullDesc = fullDesc + table;
+      }
+    }
+    // Backend description @Size(max=5000) — 4800 char ile güvenli kalan; aşılırsa graceful kırp
+    if (fullDesc.length > 4800) {
+      fullDesc = fullDesc.substring(0, 4800) + '\n\n<p><em>... (açıklama 4800 karaktere kısaltıldı)</em></p>';
+    }
+    if (fullDesc) {
+      updates.description = fullDesc;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      showToast('Aktarılacak açıklama veya özellik yok', 'warning');
+      return;
+    }
+
+    // KRİTİK: prev callback formu ile state güncelle — race condition önlenir
+    setFormData(prev => ({ ...prev, ...updates }));
+    setCrawlDescAppliedToast(true);
+
+    const fieldList = [];
+    if (updates.shortDescription) fieldList.push('Kısa Açıklama');
+    if (updates.description) fieldList.push('Açıklama');
+
+    showToast(
+      `✓ ${fieldList.join(' + ')} forma aktarıldı. KAYDET'e basmayı unutmayın!`,
+      'success'
+    );
+
+    // Modal'ı otomatik kapat ve formdaki alanlara scroll + flash highlight
+    setTimeout(() => {
+      setCrawlOpen(false);
+      // Form alanlarına scroll + 2 saniyelik flash highlight
+      const descField = document.getElementById('description');
+      const shortField = document.getElementById('shortDescription');
+      const target = descField || shortField;
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        [descField, shortField].filter(Boolean).forEach(el => {
+          el.style.transition = 'box-shadow 0.3s ease, background-color 0.3s ease';
+          el.style.boxShadow = '0 0 0 3px rgba(34, 197, 94, 0.4)';
+          el.style.backgroundColor = '#dcfce7';
+          setTimeout(() => {
+            el.style.boxShadow = '';
+            el.style.backgroundColor = '';
+          }, 2500);
+        });
+      }
+      setCrawlDescAppliedToast(false);
+    }, 400);
+  };
+
+  // Simple HTML entity escape (XSS koruması)
+  const escapeHtmlEntity = (s) => String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+  const updateCrawlSpec = (index, field, value) => {
+    setCrawlEditableSpecs(prev => prev.map((s, i) => i === index ? { ...s, [field]: value } : s));
+  };
+
+  const removeCrawlSpec = (index) => {
+    setCrawlEditableSpecs(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const addCrawlSpec = () => {
+    setCrawlEditableSpecs(prev => [...prev, { key: '', value: '' }]);
+  };
 
   const importCrawled = async () => {
     if (!product?.id || crawlSelected.size === 0) return;
@@ -789,14 +916,33 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
       </div>
 
       <div className="mb-3">
-        <label htmlFor="description" className="form-label">Açıklama</label>
-        <textarea className="form-control" id="description" name="description" rows="3"
-          value={formData.description} onChange={handleChange} placeholder="Detaylı ürün açıklaması..." />
+        <label htmlFor="description" className="form-label d-flex justify-content-between">
+          <span>Açıklama</span>
+          <span className={`small ${(formData.description || '').length > 5000 ? 'text-danger fw-semibold' : 'text-muted'}`}>
+            {(formData.description || '').length} / 5000
+          </span>
+        </label>
+        <textarea className={`form-control ${errors.description ? 'is-invalid' : ''}`}
+          id="description" name="description" rows="5"
+          value={formData.description || ''}
+          onChange={handleChange}
+          placeholder="Detaylı ürün açıklaması..." />
+        {errors.description && <div className="invalid-feedback">{errors.description}</div>}
       </div>
       <div className="mb-3">
-        <label htmlFor="shortDescription" className="form-label">Kısa Açıklama <small className="text-muted">(mağazada listede görünür)</small></label>
-        <textarea className="form-control" id="shortDescription" name="shortDescription" rows="2"
-          value={formData.shortDescription} onChange={handleChange} placeholder="Mağazada ürün kartında görünecek kısa açıklama..." maxLength={1000} />
+        <label htmlFor="shortDescription" className="form-label d-flex justify-content-between">
+          <span>Kısa Açıklama <small className="text-muted">(mağazada listede görünür)</small></span>
+          <span className={`small ${(formData.shortDescription || '').length > 1000 ? 'text-danger fw-semibold' : 'text-muted'}`}>
+            {(formData.shortDescription || '').length} / 1000
+          </span>
+        </label>
+        <textarea className={`form-control ${errors.shortDescription ? 'is-invalid' : ''}`}
+          id="shortDescription" name="shortDescription" rows="2"
+          value={formData.shortDescription || ''}
+          onChange={handleChange}
+          placeholder="Mağazada ürün kartında görünecek kısa açıklama..."
+          maxLength={1000} />
+        {errors.shortDescription && <div className="invalid-feedback">{errors.shortDescription}</div>}
       </div>
 
       {/* Price and Tax Section */}
@@ -1591,65 +1737,220 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
                   </div>
                 )}
 
-                {crawlPreview && crawlPreview.images && crawlPreview.images.length > 0 && (
+                {crawlPreview && (
                   <>
-                    <div className="d-flex justify-content-between align-items-center mb-2">
+                    {/* ── Preview header: title + brand + tab navigation ── */}
+                    <div className="border-bottom pb-2 mb-3">
+                      {crawlPreview.title && (
+                        <div className="small text-muted text-truncate mb-2" style={{maxWidth: '100%'}}>
+                          <i className="fas fa-tag me-1" />{crawlPreview.title}
+                          {crawlPreview.brand && (
+                            <span className="badge bg-info bg-opacity-10 text-info ms-2">
+                              <i className="fas fa-trademark me-1" />{crawlPreview.brand}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      {/* Tab nav */}
+                      <ul className="nav nav-tabs nav-tabs-sm mb-0" style={{borderBottom: 'none'}}>
+                        <li className="nav-item">
+                          <button type="button"
+                            className={`nav-link ${crawlActiveTab === 'images' ? 'active' : ''}`}
+                            onClick={() => setCrawlActiveTab('images')}>
+                            <i className="fas fa-images me-1" />Görseller
+                            {crawlPreview.images?.length > 0 && (
+                              <span className="badge bg-primary ms-2">{crawlPreview.images.length}</span>
+                            )}
+                          </button>
+                        </li>
+                        <li className="nav-item">
+                          <button type="button"
+                            className={`nav-link ${crawlActiveTab === 'description' ? 'active' : ''}`}
+                            onClick={() => setCrawlActiveTab('description')}>
+                            <i className="fas fa-align-left me-1" />Açıklama & Özellikler
+                            {(crawlPreview.description || crawlEditableSpecs.length > 0) && (
+                              <span className="badge bg-success ms-2">
+                                <i className="fas fa-check" style={{fontSize: 9}} />
+                              </span>
+                            )}
+                          </button>
+                        </li>
+                      </ul>
+                    </div>
+
+                    {/* ── Tab: Görseller ── */}
+                    {crawlActiveTab === 'images' && crawlPreview.images && crawlPreview.images.length > 0 && (
+                      <>
+                        <div className="d-flex justify-content-between align-items-center mb-2">
+                          <div>
+                            <strong className="me-2">{crawlPreview.images.length} görsel bulundu</strong>
+                            <span className="text-muted small">— {crawlSelected.size} seçili</span>
+                          </div>
+                          <div className="btn-group btn-group-sm">
+                            <button type="button" className="btn btn-outline-secondary" onClick={selectAllCrawl}>Tümünü Seç</button>
+                            <button type="button" className="btn btn-outline-secondary" onClick={deselectAllCrawl}>Temizle</button>
+                          </div>
+                        </div>
+
+                        <div className="row g-2 mb-3" style={{ maxHeight: 400, overflowY: 'auto' }}>
+                          {crawlPreview.images.map((u, idx) => {
+                            const selected = crawlSelected.has(u);
+                            return (
+                              <div key={u} className="col-4 col-md-3">
+                                <div
+                                  className={`border rounded position-relative overflow-hidden ${selected ? 'border-primary border-2' : ''}`}
+                                  style={{ cursor: 'pointer', aspectRatio: '1/1', background: '#f8f9fa' }}
+                                  onClick={() => toggleCrawlSelection(u)}
+                                  title={u}
+                                >
+                                  <CrawlThumbnail url={u} referer={crawlUrl.trim()} />
+                                  <div className="position-absolute top-0 start-0 m-1">
+                                    <span className="badge bg-dark bg-opacity-75 small">#{idx + 1}</span>
+                                  </div>
+                                  {selected && (
+                                    <div className="position-absolute top-0 end-0 m-1">
+                                      <span className="badge bg-primary"><i className="fas fa-check" /></span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        <div className="form-check mb-2">
+                          <input className="form-check-input" type="checkbox" id="crawlReplaceCheck"
+                            checked={crawlReplace}
+                            onChange={e => setCrawlReplace(e.target.checked)} />
+                          <label className="form-check-label small" htmlFor="crawlReplaceCheck">
+                            <strong>Mevcut ürün görsellerini sil</strong>
+                            <span className="text-muted ms-1">(işaretlenmezse yenileri ek olarak yüklenir)</span>
+                          </label>
+                        </div>
+                      </>
+                    )}
+
+                    {/* ── Tab: Açıklama & Özellikler ── */}
+                    {crawlActiveTab === 'description' && (
                       <div>
-                        <strong className="me-2">{crawlPreview.images.length} görsel bulundu</strong>
-                        <span className="text-muted small">— {crawlSelected.size} seçili</span>
-                        {crawlPreview.title && (
-                          <div className="small text-muted text-truncate" style={{maxWidth: 400}}>
-                            <i className="fas fa-tag me-1" />{crawlPreview.title}
+                        {!crawlPreview.description && !crawlPreview.shortDescription && crawlEditableSpecs.length === 0 ? (
+                          <div className="alert alert-warning small mb-3">
+                            <i className="fas fa-exclamation-triangle me-1" />
+                            Bu sayfadan açıklama veya teknik özellik çıkarılamadı.
+                            Manuel olarak ekleyebilir veya ürün formuna kendiniz yazabilirsiniz.
+                          </div>
+                        ) : (
+                          <div className="alert alert-info small mb-3 py-2">
+                            <i className="fas fa-magic me-1" />
+                            <strong>Açıklama bulundu!</strong> Aşağıda düzenleyip "Ürün Formuna Aktar" diyerek
+                            doğrudan formdaki "Açıklama" ve "Kısa Açıklama" alanlarına yazdırabilirsiniz.
                           </div>
                         )}
-                      </div>
-                      <div className="btn-group btn-group-sm">
-                        <button type="button" className="btn btn-outline-secondary" onClick={selectAllCrawl}>Tümünü Seç</button>
-                        <button type="button" className="btn btn-outline-secondary" onClick={deselectAllCrawl}>Temizle</button>
-                      </div>
-                    </div>
 
-                    <div className="row g-2 mb-3" style={{ maxHeight: 400, overflowY: 'auto' }}>
-                      {crawlPreview.images.map((u, idx) => {
-                        const selected = crawlSelected.has(u);
-                        return (
-                          <div key={u} className="col-4 col-md-3">
-                            <div
-                              className={`border rounded position-relative overflow-hidden ${selected ? 'border-primary border-2' : ''}`}
-                              style={{ cursor: 'pointer', aspectRatio: '1/1', background: '#f8f9fa' }}
-                              onClick={() => toggleCrawlSelection(u)}
-                              title={u}
-                            >
-                              <CrawlThumbnail url={u} referer={crawlUrl.trim()} />
-                              <div className="position-absolute top-0 start-0 m-1">
-                                <span className="badge bg-dark bg-opacity-75 small">#{idx + 1}</span>
-                              </div>
-                              {selected && (
-                                <div className="position-absolute top-0 end-0 m-1">
-                                  <span className="badge bg-primary"><i className="fas fa-check" /></span>
-                                </div>
-                              )}
-                            </div>
+                        {/* Kısa açıklama */}
+                        <div className="mb-3">
+                          <label htmlFor="crawl-short-desc" className="form-label small fw-semibold d-flex justify-content-between">
+                            <span>Kısa Açıklama</span>
+                            <span className="text-muted" style={{fontSize: 11}}>
+                              {crawlEditableShortDesc.length} / 300
+                            </span>
+                          </label>
+                          <textarea id="crawl-short-desc"
+                            className="form-control form-control-sm"
+                            rows={2}
+                            maxLength={300}
+                            value={crawlEditableShortDesc}
+                            onChange={e => setCrawlEditableShortDesc(e.target.value)}
+                            placeholder="Listeleme sayfalarında ürün adının altında görünür..." />
+                        </div>
+
+                        {/* Uzun açıklama */}
+                        <div className="mb-3">
+                          <label htmlFor="crawl-long-desc" className="form-label small fw-semibold d-flex justify-content-between">
+                            <span>Açıklama</span>
+                            <span className="text-muted" style={{fontSize: 11}}>
+                              {crawlEditableDesc.length} karakter
+                            </span>
+                          </label>
+                          <textarea id="crawl-long-desc"
+                            className="form-control"
+                            rows={6}
+                            value={crawlEditableDesc}
+                            onChange={e => setCrawlEditableDesc(e.target.value)}
+                            placeholder="Ürün detay sayfasında gösterilecek tam açıklama (HTML/Markdown desteklenir)..." />
+                          <small className="text-muted">
+                            HTML etiketleri korunur. "Ürün Formuna Aktar"a basınca formdaki zengin metin editörüne yapıştırılır.
+                          </small>
+                        </div>
+
+                        {/* Specs editor */}
+                        <div className="mb-3">
+                          <div className="d-flex justify-content-between align-items-center mb-2">
+                            <label className="form-label small fw-semibold mb-0">
+                              Teknik Özellikler ({crawlEditableSpecs.length})
+                            </label>
+                            <button type="button" className="btn btn-sm btn-outline-primary" onClick={addCrawlSpec}>
+                              <i className="fas fa-plus me-1" />Yeni Özellik
+                            </button>
                           </div>
-                        );
-                      })}
-                    </div>
+                          {crawlEditableSpecs.length === 0 ? (
+                            <div className="text-muted small text-center py-3 border rounded bg-light">
+                              Özellik çıkarılamadı. "Yeni Özellik" butonu ile elle ekleyebilirsiniz.
+                            </div>
+                          ) : (
+                            <div style={{maxHeight: 280, overflowY: 'auto'}}>
+                              {crawlEditableSpecs.map((spec, idx) => (
+                                <div key={idx} className="d-flex gap-2 mb-2">
+                                  <input type="text" className="form-control form-control-sm"
+                                    placeholder="Özellik adı (örn. Kapasite)"
+                                    value={spec.key}
+                                    onChange={e => updateCrawlSpec(idx, 'key', e.target.value)}
+                                    style={{flexBasis: '40%'}} />
+                                  <input type="text" className="form-control form-control-sm"
+                                    placeholder="Değer (örn. 9 kg)"
+                                    value={spec.value}
+                                    onChange={e => updateCrawlSpec(idx, 'value', e.target.value)}
+                                    style={{flexBasis: '55%'}} />
+                                  <button type="button" className="btn btn-sm btn-outline-danger"
+                                    onClick={() => removeCrawlSpec(idx)}
+                                    title="Sil">
+                                    <i className="fas fa-trash" />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          <small className="text-muted">
+                            Aktarınca açıklamanın altına "Teknik Özellikler" tablosu olarak eklenir.
+                          </small>
+                        </div>
 
-                    <div className="form-check mb-2">
-                      <input className="form-check-input" type="checkbox" id="crawlReplaceCheck"
-                        checked={crawlReplace}
-                        onChange={e => setCrawlReplace(e.target.checked)} />
-                      <label className="form-check-label small" htmlFor="crawlReplaceCheck">
-                        <strong>Mevcut ürün görsellerini sil</strong>
-                        <span className="text-muted ms-1">(işaretlenmezse yenileri ek olarak yüklenir)</span>
-                      </label>
-                    </div>
+                        {/* Apply button */}
+                        <div className="d-flex gap-2 align-items-center">
+                          <button type="button" className="btn btn-success"
+                            onClick={applyCrawlDescriptionToProduct}
+                            disabled={!crawlEditableDesc && !crawlEditableShortDesc && crawlEditableSpecs.length === 0}>
+                            <i className="fas fa-arrow-right me-1" />
+                            Ürün Formuna Aktar
+                          </button>
+                          {crawlDescAppliedToast && (
+                            <span className="badge bg-success">
+                              <i className="fas fa-check me-1" />Aktarıldı
+                            </span>
+                          )}
+                          <small className="text-muted ms-auto">
+                            <i className="fas fa-info-circle me-1" />
+                            Formdaki mevcut değerler üzerine yazılır
+                          </small>
+                        </div>
+                      </div>
+                    )}
                   </>
                 )}
 
-                {crawlPreview && (!crawlPreview.images || crawlPreview.images.length === 0) && (
+                {crawlPreview && crawlActiveTab === 'images' && (!crawlPreview.images || crawlPreview.images.length === 0) && (
                   <div className="alert alert-warning py-2 small mb-0">
-                    Bu sayfada otomatik bulunabilen görsel yok. Sayfanın HTML yapısı standart dışı olabilir.
+                    Bu sayfada otomatik bulunabilen görsel yok. "Açıklama & Özellikler" sekmesini deneyebilir veya elle ekleyebilirsiniz.
                   </div>
                 )}
               </div>

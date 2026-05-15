@@ -1,0 +1,60 @@
+{
+  "common": {
+    "loading": "Yükleniyor...",
+    "error": "Bir hata oluştu",
+    "save": "Kaydet",
+    "cancel": "Vazgeç",
+    "delete": "Sil",
+    "edit": "Düzenle",
+    "back": "Geri",
+    "next": "Devam",
+    "close": "Kapat",
+    "search": "Ara",
+    "yes": "Evet",
+    "no": "Hayır",
+    "tryAgain": "Tekrar Dene"
+  },
+  "nav": {
+    "home": "Ana Sayfa",
+    "products": "Ürünler",
+    "cart": "Sepet",
+    "favorites": "Favorilerim",
+    "myAccount": "Hesabım",
+    "orders": "Siparişlerim",
+    "login": "Giriş Yap",
+    "register": "Üye Ol",
+    "logout": "Çıkış Yap",
+    "contact": "İletişim"
+  },
+  "checkout": {
+    "title": "Sipariş Onay",
+    "shippingAddress": "Teslimat Adresi",
+    "billingAddress": "Fatura Adresi",
+    "paymentMethod": "Ödeme Yöntemi",
+    "orderSummary": "Sipariş Özeti",
+    "subtotal": "Ara Toplam",
+    "shipping": "Kargo",
+    "vat": "KDV",
+    "discount": "İndirim",
+    "total": "Toplam",
+    "placeOrder": "Siparişi Onayla ve Öde",
+    "contractAccept": "okudum ve kabul ediyorum",
+    "guestCheckout": "Üye Olmadan Devam Et"
+  },
+  "product": {
+    "addToCart": "Sepete Ekle",
+    "outOfStock": "Tükendi",
+    "inStock": "Stokta Var",
+    "lowStock": "Son Birkaç Ürün",
+    "freeShipping": "Ücretsiz Kargo",
+    "reviews": "Yorumlar",
+    "description": "Ürün Açıklaması",
+    "specs": "Özellikler"
+  },
+  "kvkk": {
+    "title": "KVKK & Gizlilik",
+    "downloadData": "Verilerimi İndir",
+    "deleteAccount": "Hesabımı Sil",
+    "confirmDelete": "HESABIMI SİL"
+  }
+}

@@ -4,6 +4,7 @@ import com.warehouse.dto.store.CustomerLoginRequest;
 import com.warehouse.dto.store.CustomerLoginResponse;
 import com.warehouse.dto.store.CustomerRegisterRequest;
 import com.warehouse.dto.store.GoogleAuthRequest;
+import com.warehouse.security.CaptchaService;
 import com.warehouse.service.CustomerAuthService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -20,13 +21,22 @@ import java.util.Map;
 public class StoreAuthController {
 
     private final CustomerAuthService customerAuthService;
+    private final CaptchaService captchaService;
 
-    public StoreAuthController(CustomerAuthService customerAuthService) {
+    public StoreAuthController(CustomerAuthService customerAuthService, CaptchaService captchaService) {
         this.customerAuthService = customerAuthService;
+        this.captchaService = captchaService;
     }
 
     @PostMapping("/register")
-    public ResponseEntity<CustomerLoginResponse> register(@Valid @RequestBody CustomerRegisterRequest request) {
+    public ResponseEntity<?> register(@Valid @RequestBody CustomerRegisterRequest request,
+                                       @RequestHeader(value = "X-Captcha-Token", required = false) String captchaToken,
+                                       HttpServletRequest httpRequest) {
+        // CAPTCHA (env'den feature flag; default off)
+        if (!captchaService.verify(captchaToken, httpRequest.getRemoteAddr())) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("message", "CAPTCHA doğrulaması başarısız. Lütfen tekrar deneyin."));
+        }
         CustomerLoginResponse response = customerAuthService.register(request);
         return ResponseEntity.status(HttpStatus.CREATED)
             .headers(buildAuthCookies(response.getToken(), response.getRefreshToken()))
@@ -56,7 +66,13 @@ public class StoreAuthController {
     }
 
     @PostMapping("/forgot-password")
-    public ResponseEntity<Map<String, String>> forgotPassword(@RequestBody Map<String, String> body) {
+    public ResponseEntity<?> forgotPassword(@RequestBody Map<String, String> body,
+                                              @RequestHeader(value = "X-Captcha-Token", required = false) String captchaToken,
+                                              HttpServletRequest httpRequest) {
+        if (!captchaService.verify(captchaToken, httpRequest.getRemoteAddr())) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("message", "CAPTCHA doğrulaması başarısız."));
+        }
         customerAuthService.requestPasswordReset(body.get("email"));
         // Always return success to prevent email enumeration attacks
         return ResponseEntity.ok(Map.of("message", "Şifre sıfırlama bağlantısı e-posta adresinize gönderildi."));

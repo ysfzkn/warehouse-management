@@ -43,10 +43,18 @@ public class AdminSiteSettingsController {
 
     @PutMapping("/site")
     public ResponseEntity<Map<String, String>> update(
-            @RequestBody Map<String, String> settings,
+            @RequestBody(required = false) Map<String, String> settings,
             @RequestHeader(value = "X-ADMIN-SECURITY-CODE", required = false) String securityCode) {
         adminSecurityService.requireSecurityCodeForAdmin(securityCode);
-        siteSettingService.updateSettings(settings, CurrentUser.usernameOrSystem());
+        if (settings == null || settings.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Güncellenecek ayar yok."));
+        }
+        try {
+            siteSettingService.updateSettings(settings, CurrentUser.usernameOrSystem());
+        } catch (IllegalStateException ex) {
+            // Tek setting'in patlaması — açıklayıcı mesaj döndür
+            return ResponseEntity.badRequest().body(Map.of("message", ex.getMessage()));
+        }
         return ResponseEntity.ok(Map.of("message", "Ayarlar güncellendi."));
     }
 

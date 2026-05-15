@@ -733,11 +733,93 @@
 .store-gallery-thumb.active { border-color: var(--store-primary, #2563eb); box-shadow: 0 0 0 3px rgba(37,99,235,0.15); }
 .store-gallery-thumb img { width: 100%; height: 100%; object-fit: contain; }
 
-/* Quantity Selector */
-.store-qty-selector { display: flex; align-items: center; border: 1px solid var(--color-gray-200); border-radius: var(--radius-md); overflow: hidden; }
-.store-qty-selector button { width: 40px; height: 40px; border: none; background: var(--color-gray-100); font-size: 1.2rem; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-.store-qty-selector button:hover { background: var(--color-gray-200); }
-.store-qty-selector input { width: 50px; text-align: center; border: none; border-left: 1px solid var(--color-gray-200); border-right: 1px solid var(--color-gray-200); font-weight: 600; }
+/* ============================================================
+ * Quantity Selector — modern, brand-aligned, WCAG AA touch targets
+ * Önceki sürümde input alanı dark mode'da siyah arka plan + gri yazı
+ * olarak görünüyordu (explicit color/bg tanımlı olmadığı için).
+ * Şimdi: temiz beyaz zemin, brand mavi vurgu, hover/active feedback.
+ * ============================================================ */
+.store-qty-selector {
+  display: inline-flex;
+  align-items: center;
+  background: #ffffff;
+  border: 1.5px solid var(--color-gray-200, #e5e7eb);
+  border-radius: var(--radius-lg, 10px);
+  overflow: hidden;
+  transition: border-color var(--transition-fast, 150ms) ease,
+              box-shadow var(--transition-fast, 150ms) ease;
+}
+.store-qty-selector:focus-within {
+  border-color: var(--store-primary, #2563eb);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.store-qty-selector button {
+  width: 44px;
+  height: 44px;
+  border: none;
+  background: transparent;
+  color: var(--color-gray-700, #374151);
+  font-size: 1.25rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--transition-fast, 150ms) ease,
+              color var(--transition-fast, 150ms) ease;
+  user-select: none;
+}
+.store-qty-selector button:hover:not(:disabled) {
+  background: var(--store-primary, #2563eb);
+  color: #ffffff;
+}
+.store-qty-selector button:active:not(:disabled) {
+  background: var(--store-secondary, #1e40af);
+  transform: scale(0.92);
+}
+.store-qty-selector button:disabled {
+  color: var(--color-gray-300, #d1d5db);
+  cursor: not-allowed;
+}
+
+.store-qty-selector input {
+  /* Tüm explicit renkler — dark mode'da OS default'undan zarar görmesin */
+  width: 54px;
+  height: 44px;
+  text-align: center;
+  border: none;
+  border-left: 1.5px solid var(--color-gray-200, #e5e7eb);
+  border-right: 1.5px solid var(--color-gray-200, #e5e7eb);
+  background: #ffffff;
+  color: var(--color-gray-900, #111827);
+  font-weight: 700;
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+  outline: none;
+  /* Sayı input okları görünmesin — temiz görünüm */
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+.store-qty-selector input::-webkit-outer-spin-button,
+.store-qty-selector input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Dark mode override — input siyah olmasın, yumuşak koyu zemin */
+:root[data-theme="dark"] .store-qty-selector {
+  background: var(--surface-card, #1e293b);
+  border-color: var(--border-strong, rgba(255,255,255,0.16));
+}
+:root[data-theme="dark"] .store-qty-selector input {
+  background: var(--surface-card, #1e293b);
+  color: var(--text-primary, #f1f5f9);
+  border-color: var(--border-strong, rgba(255,255,255,0.16));
+}
+:root[data-theme="dark"] .store-qty-selector button {
+  color: var(--text-secondary, #cbd5e1);
+}
 
 /* Specs Table */
 .store-specs-table td { padding: 8px 12px; border-bottom: 1px solid var(--color-gray-100); }
@@ -1041,8 +1123,8 @@
   .store-gallery-arrow-right { right: 8px; }
   .store-gallery-thumbs { gap: 4px; }
   .store-gallery-thumb { width: 48px; height: 48px; }
-  .store-qty-selector button { width: 36px; height: 36px; }
-  .store-qty-selector input { width: 44px; }
+  /* Quantity selector mobile için aynı 44px touch target — WCAG 2.1 AA */
+  .store-qty-selector input { width: 48px; }
   .store-footer { padding: 32px 0 0; }
   .store-footer-title { font-size: 0.75rem; }
   .store-category-card { aspect-ratio: 1.2; }
@@ -1132,4 +1214,47 @@
 
 @media print {
   .store-header, .store-footer, .store-mobile-nav, .btn-add-cart { display: none !important; }
+}
+
+/* ============================================================
+ * PDP Mobile Sticky Add-to-Cart bar (Faz 3 UX iyileştirme)
+ * <768px ekranlarda PDP'nin alt kısmında sabit kalır.
+ * Bottom-nav (z:1030) üstünde değil, onunla yan yana — bottom nav'ın
+ * üstünde kalsın diye `bottom: 56px` (bottom-nav yüksekliği).
+ * ============================================================ */
+.store-pdp-sticky-cta {
+  position: fixed;
+  bottom: 56px; /* MobileNav yüksekliğinin üstüne */
+  left: 0;
+  right: 0;
+  z-index: 1029; /* MobileNav (1030) altında */
+  background: var(--surface-card, #fff);
+  border-top: 1px solid var(--border-subtle, #e5e7eb);
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 -4px 12px rgba(0,0,0,0.06);
+}
+
+.store-pdp-sticky-price {
+  flex-shrink: 0;
+  min-width: 90px;
+}
+
+/* MobileNav olmadığında bottom: 0 — gelecek kullanım için */
+@media (max-width: 767.98px) {
+  body:has(.store-mobile-nav) .store-pdp-sticky-cta { bottom: 56px; }
+}
+
+/* PDP'nin alt boşluğu — sticky CTA içeriği örtmesin */
+@media (max-width: 767.98px) {
+  .store-pdp-content,
+  .container:has(.store-pdp-sticky-cta) { padding-bottom: 130px; }
+}
+
+/* Dark mode uyum */
+:root[data-theme="dark"] .store-pdp-sticky-cta {
+  background: var(--surface-card);
+  border-top-color: var(--border-subtle);
 }

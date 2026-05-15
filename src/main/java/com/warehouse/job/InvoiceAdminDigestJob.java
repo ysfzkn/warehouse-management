@@ -7,6 +7,7 @@ import com.warehouse.service.SiteSettingService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -53,6 +54,7 @@ public class InvoiceAdminDigestJob {
      * Cron: saniye dakika saat gün ay haftagünü
      */
     @Scheduled(cron = "0 0 8 * * *", zone = "Europe/Istanbul")
+    @SchedulerLock(name = "invoiceAdminDigest", lockAtMostFor = "PT5M", lockAtLeastFor = "PT1M")
     public void sendDailyDigest() {
         try {
             LocalDateTime now = LocalDateTime.now();

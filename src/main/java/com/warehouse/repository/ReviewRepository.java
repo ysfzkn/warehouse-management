@@ -11,6 +11,8 @@ import org.springframework.stereotype.Repository;
 public interface ReviewRepository extends JpaRepository<Review, Long> {
     Page<Review> findByProductIdAndApprovedTrue(Long productId, Pageable pageable);
     Page<Review> findByCustomerId(Long customerId, Pageable pageable);
+    java.util.List<Review> findAllByCustomerId(Long customerId);
+    Page<Review> findByApproved(boolean approved, Pageable pageable);
     boolean existsByCustomerIdAndProductIdAndOrderId(Long customerId, Long productId, Long orderId);
 
     @Query("SELECT AVG(r.rating) FROM Review r WHERE r.product.id = :productId AND r.approved = true")

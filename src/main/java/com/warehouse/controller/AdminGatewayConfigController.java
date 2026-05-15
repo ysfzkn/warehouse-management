@@ -45,21 +45,32 @@ public class AdminGatewayConfigController {
     }
 
     @PostMapping
-    public ResponseEntity<Map<String, Object>> create(
+    public ResponseEntity<?> create(
             @RequestBody PaymentGatewayConfig config,
             @RequestHeader(value = "X-ADMIN-SECURITY-CODE", required = false) String securityCode) {
         adminSecurityService.requireSecurityCodeForAdmin(securityCode);
+        // Protokol-spesifik zorunlu alan + güvenlik validasyonu (URL HTTPS, vb.)
+        try {
+            validateConfig(config, false);
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.badRequest().body(Map.of("message", ex.getMessage()));
+        }
         config.setId(null);
         PaymentGatewayConfig saved = configRepo.save(config);
         return ResponseEntity.ok(toMaskedDto(saved));
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> update(
+    public ResponseEntity<?> update(
             @PathVariable Long id,
             @RequestBody PaymentGatewayConfig update,
             @RequestHeader(value = "X-ADMIN-SECURITY-CODE", required = false) String securityCode) {
         adminSecurityService.requireSecurityCodeForAdmin(securityCode);
+        try {
+            validateConfig(update, true);
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.badRequest().body(Map.of("message", ex.getMessage()));
+        }
         return configRepo.findById(id).map(existing -> {
             if (hasValue(update.getDisplayName())) existing.setDisplayName(update.getDisplayName());
             if (hasValue(update.getGatewayProtocol())) existing.setGatewayProtocol(update.getGatewayProtocol());
@@ -79,7 +90,7 @@ public class AdminGatewayConfigController {
             if (update.getSupportedCards() != null) existing.setSupportedCards(update.getSupportedCards());
             if (update.getMaxInstallments() != null) existing.setMaxInstallments(update.getMaxInstallments());
             if (update.getExtraConfig() != null) existing.setExtraConfig(update.getExtraConfig());
-            return ResponseEntity.ok(toMaskedDto(configRepo.save(existing)));
+            return ResponseEntity.ok((Object) toMaskedDto(configRepo.save(existing)));
         }).orElse(ResponseEntity.notFound().build());
     }
 
@@ -107,24 +118,50 @@ public class AdminGatewayConfigController {
         }).orElse(ResponseEntity.notFound().build());
     }
 
+    /**
+     * Varsayılan gateway atama — atomik (race condition önlenir).
+     * Önceki implementasyon iki ayrı save loop'u yapıyordu; iki admin aynı anda
+     * farklı gateway'leri default yaparsa iki kayıt birden is_default=true kalabilirdi.
+     * Şimdi tek transaction içinde bulk UPDATE yapıyoruz.
+     */
     @PutMapping("/{id}/set-default")
+    @org.springframework.transaction.annotation.Transactional
     public ResponseEntity<Map<String, String>> setDefault(
             @PathVariable Long id,
             @RequestHeader(value = "X-ADMIN-SECURITY-CODE", required = false) String securityCode) {
         adminSecurityService.requireSecurityCodeForAdmin(securityCode);
         return configRepo.findById(id).map(c -> {
-            // Remove default from all others
-            configRepo.findAll().forEach(other -> {
-                if (other.isDefaultGateway() && !other.getId().equals(id)) {
-                    other.setDefaultGateway(false);
-                    configRepo.save(other);
-                }
-            });
+            // 1) Hedef gateway aktif değilse veya credential eksikse default atanmamalı
+            if (!isReadyForDefault(c)) {
+                return ResponseEntity.badRequest().body(Map.of(
+                        "message", "Gateway eksik yapılandırılmış (credential veya callback URL). Önce tamamlayın."));
+            }
+            // 2) Tek SQL ile tüm default'ları kapat (atomik)
+            configRepo.clearAllDefaults();
+            // 3) Hedefi default + aktif yap
             c.setDefaultGateway(true);
             c.setActive(true);
             configRepo.save(c);
             return ResponseEntity.ok(Map.of("message", c.getDisplayName() + " varsayilan gateway olarak ayarlandi."));
         }).orElse(ResponseEntity.notFound().build());
+    }
+
+    /** Default yapmadan önce minimum yapılandırma kontrolü. */
+    private boolean isReadyForDefault(PaymentGatewayConfig c) {
+        if (c.getGatewayProtocol() == null) return false;
+        String p = c.getGatewayProtocol();
+        if ("IYZICO".equals(p)) {
+            return hasValue(c.getApiKey()) && hasValue(c.getSecretKey()) && hasValue(c.getBaseUrl());
+        }
+        if ("PAYTR".equals(p)) {
+            return hasValue(c.getMerchantId()) && hasValue(c.getApiKey()) && hasValue(c.getSecretKey())
+                    && hasValue(c.getCallbackUrl());
+        }
+        if ("NESTPAY".equals(p) || "GVP".equals(p)) {
+            return hasValue(c.getMerchantId()) && hasValue(c.getTerminalId())
+                    && hasValue(c.getStoreKey()) && hasValue(c.getCallbackUrl());
+        }
+        return false;
     }
 
     @PostMapping("/{id}/test")
@@ -204,10 +241,15 @@ public class AdminGatewayConfigController {
         dto.put("bankCode", c.getBankCode());
         dto.put("merchantId", c.getMerchantId());
         dto.put("terminalId", c.getTerminalId());
+        // Secret'lar: hem mask (preview) hem `*HasValue` flag (UI'da "set" durumu)
         dto.put("storeKey", mask(c.getStoreKey()));
+        dto.put("storeKeySet", hasValue(c.getStoreKey()));
         dto.put("provisionPassword", mask(c.getProvisionPassword()));
+        dto.put("provisionPasswordSet", hasValue(c.getProvisionPassword()));
         dto.put("apiKey", mask(c.getApiKey()));
+        dto.put("apiKeySet", hasValue(c.getApiKey()));
         dto.put("secretKey", mask(c.getSecretKey()));
+        dto.put("secretKeySet", hasValue(c.getSecretKey()));
         dto.put("baseUrl", c.getBaseUrl());
         dto.put("threeDUrl", c.getThreeDUrl());
         dto.put("callbackUrl", c.getCallbackUrl());
@@ -217,6 +259,8 @@ public class AdminGatewayConfigController {
         dto.put("priority", c.getPriority());
         dto.put("supportedCards", c.getSupportedCards());
         dto.put("maxInstallments", c.getMaxInstallments());
+        // PayTR için merchant_ok_url, merchant_fail_url, timeout_limit gibi alanlar burada
+        dto.put("extraConfig", c.getExtraConfig());
         dto.put("createdAt", c.getCreatedAt());
         dto.put("updatedAt", c.getUpdatedAt());
         return dto;
@@ -228,5 +272,104 @@ public class AdminGatewayConfigController {
         if (value == null || value.isEmpty()) return "";
         if (value.length() > 8) return value.substring(0, 4) + "****" + value.substring(value.length() - 4);
         return "****";
+    }
+
+    /**
+     * Protokol-spesifik validasyon + güvenlik kontrolleri.
+     *
+     * Production'a gönderilen tüm URL'lerin HTTPS olması zorunlu (sandbox modunda
+     * localhost http://'a izin verilir). Eksik credential'lar protokol başına farklı.
+     *
+     * @param config doğrulanacak gateway
+     * @param isUpdate true ise secret'lar boş gelebilir (mevcut korunur); false (create) ise
+     *                 zorunlu secret'lar dolu olmalı
+     */
+    private void validateConfig(PaymentGatewayConfig config, boolean isUpdate) {
+        if (config == null) throw new IllegalArgumentException("Gateway yapılandırması boş.");
+        String protocol = config.getGatewayProtocol();
+        if (!hasValue(protocol)) throw new IllegalArgumentException("Protokol seçilmedi.");
+        if (!hasValue(config.getCode())) throw new IllegalArgumentException("Gateway kodu zorunludur.");
+        if (!hasValue(config.getDisplayName())) throw new IllegalArgumentException("Görünen ad zorunludur.");
+
+        boolean sandbox = config.isSandbox();
+
+        // URL kontrolü — production'da kesinlikle HTTPS; sandbox'ta http://localhost OK
+        validateUrl("Callback URL", config.getCallbackUrl(), sandbox, true);
+        validateUrl("3D Secure URL", config.getThreeDUrl(), sandbox, false);
+        validateUrl("Base URL", config.getBaseUrl(), sandbox, false);
+
+        // Protokol-spesifik zorunlu alanlar
+        switch (protocol) {
+            case "IYZICO" -> {
+                if (!isUpdate) {
+                    if (!hasValue(config.getApiKey()))
+                        throw new IllegalArgumentException("Iyzico için API Key zorunludur.");
+                    if (!hasValue(config.getSecretKey()))
+                        throw new IllegalArgumentException("Iyzico için Secret Key zorunludur.");
+                }
+                if (!hasValue(config.getBaseUrl()))
+                    throw new IllegalArgumentException("Iyzico için Base URL zorunludur (örn. https://api.iyzipay.com).");
+            }
+            case "PAYTR" -> {
+                if (!hasValue(config.getMerchantId()))
+                    throw new IllegalArgumentException("PayTR için Mağaza No (merchant_id) zorunludur.");
+                if (!isUpdate) {
+                    if (!hasValue(config.getApiKey()))
+                        throw new IllegalArgumentException("PayTR için Mağaza Parolası (merchant_key) zorunludur.");
+                    if (!hasValue(config.getSecretKey()))
+                        throw new IllegalArgumentException("PayTR için Gizli Anahtar (merchant_salt) zorunludur.");
+                }
+                if (!hasValue(config.getCallbackUrl()))
+                    throw new IllegalArgumentException("PayTR için Callback URL (notify_url) zorunludur.");
+                // PayTR'in extraConfig'inde merchant_ok_url / merchant_fail_url da olmalı
+                Map<String, Object> extra = config.getExtraConfig();
+                if (extra != null) {
+                    Object okUrl = extra.get("merchant_ok_url");
+                    Object failUrl = extra.get("merchant_fail_url");
+                    if (okUrl instanceof String s && !s.isBlank()) validateUrl("Başarı URL", s, sandbox, true);
+                    if (failUrl instanceof String s && !s.isBlank()) validateUrl("Hata URL", s, sandbox, true);
+                }
+            }
+            case "NESTPAY", "GVP" -> {
+                if (!hasValue(config.getMerchantId()))
+                    throw new IllegalArgumentException(protocol + " için Merchant ID zorunludur.");
+                if (!hasValue(config.getTerminalId()))
+                    throw new IllegalArgumentException(protocol + " için Terminal ID zorunludur.");
+                if (!isUpdate && !hasValue(config.getStoreKey()))
+                    throw new IllegalArgumentException(protocol + " için Store Key zorunludur.");
+                if ("GVP".equals(protocol) && !isUpdate && !hasValue(config.getProvisionPassword()))
+                    throw new IllegalArgumentException("GVP için Provision Password zorunludur.");
+                if (!hasValue(config.getBankCode()))
+                    throw new IllegalArgumentException(protocol + " için banka seçimi zorunludur.");
+                if (!hasValue(config.getCallbackUrl()))
+                    throw new IllegalArgumentException(protocol + " için Callback URL zorunludur.");
+            }
+            default -> throw new IllegalArgumentException("Bilinmeyen protokol: " + protocol);
+        }
+    }
+
+    /**
+     * URL doğrulama: sandbox değilse mutlaka https://; sandbox'ta http://localhost,
+     * http://127.0.0.1 veya http://*.local kabul edilir (geliştirme rahatlığı).
+     */
+    private void validateUrl(String label, String url, boolean sandbox, boolean required) {
+        if (!hasValue(url)) {
+            if (required) throw new IllegalArgumentException(label + " zorunludur.");
+            return;
+        }
+        String lower = url.trim().toLowerCase();
+        if (lower.startsWith("https://")) return;
+        if (!sandbox) {
+            throw new IllegalArgumentException(label + " production modunda HTTPS olmalıdır (örn. https://...).");
+        }
+        // Sandbox: sadece localhost-benzeri HTTP'ye izin
+        boolean isLocal = lower.startsWith("http://localhost")
+                || lower.startsWith("http://127.0.0.1")
+                || lower.startsWith("http://0.0.0.0")
+                || lower.matches("^http://[a-z0-9.-]+\\.local(:\\d+)?(/|$).*");
+        if (!isLocal) {
+            throw new IllegalArgumentException(label + " sandbox modunda bile HTTPS önerilir; "
+                    + "lokal test için http://localhost veya http://...local izinli.");
+        }
     }
 }

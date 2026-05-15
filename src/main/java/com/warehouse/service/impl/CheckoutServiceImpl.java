@@ -116,6 +116,9 @@ public class CheckoutServiceImpl implements CheckoutService {
         if (!request.isDistanceSalesContractAccepted()) {
             throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Mesafeli satış sözleşmesini onaylamanız gerekiyor.");
         }
+        if (!request.isPreliminaryInfoAccepted()) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Ön bilgilendirme formunu onaylamanız gerekiyor.");
+        }
 
         Customer customer = customerRepository.findById(customerId)
             .orElseThrow(() -> new WarehouseManagementException(ErrorCode.CUSTOMER_NOT_FOUND));
@@ -135,17 +138,28 @@ public class CheckoutServiceImpl implements CheckoutService {
         CustomerAddress billingAddr = addressRepository.findById(billingAddrId)
             .orElseThrow(() -> new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Fatura adresi bulunamadı."));
 
+        ConsentSnapshot consents = new ConsentSnapshot(
+                request.getDistanceSalesContractAcceptedAt(),
+                request.getPreliminaryInfoAcceptedAt(),
+                null /* kvkk timestamp not collected on auth checkout; comes from Customer */
+        );
         return createOrderInternal(customer, items, shippingAddr, billingAddr,
                 request.getCargoCompany(), request.getCargoProviderId(),
                 request.getPaymentMethod(), request.getCustomerNote(),
-                ipAddress, userAgent, false);
+                ipAddress, userAgent, false, consents);
     }
 
     @Override
     public PlaceOrderResponse placeGuestOrder(GuestPlaceOrderRequest request, String ipAddress, String userAgent) {
-        // --- Doğrulama ---
+        // --- Doğrulama (6502 sayılı Tüketicinin Korunması + KVKK 6698) ---
         if (!request.isDistanceSalesContractAccepted()) {
             throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Mesafeli satış sözleşmesini onaylamanız gerekiyor.");
+        }
+        if (!request.isPreliminaryInfoAccepted()) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Ön bilgilendirme formunu onaylamanız gerekiyor.");
+        }
+        if (!request.isKvkkConsent()) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "KVKK aydınlatma metnini onaylamanız gerekiyor.");
         }
 
         // E-posta zaten kayıtlı mı?
@@ -210,11 +224,16 @@ public class CheckoutServiceImpl implements CheckoutService {
         cart.setSessionId(null);
         cartRepository.save(cart);
 
-        // --- Siparişi oluştur ---
+        // --- Siparişi oluştur (yasal sözleşme zaman damgaları snapshot olarak Order'a iliştirilir) ---
+        ConsentSnapshot consents = new ConsentSnapshot(
+                request.getDistanceSalesContractAcceptedAt(),
+                request.getPreliminaryInfoAcceptedAt(),
+                request.getKvkkConsentAt() != null ? request.getKvkkConsentAt() : LocalDateTime.now()
+        );
         PlaceOrderResponse response = createOrderInternal(customer, items, shippingAddr, billingAddr,
                 request.getCargoCompany(), request.getCargoProviderId(),
                 request.getPaymentMethod(), request.getCustomerNote(),
-                ipAddress, userAgent, true);
+                ipAddress, userAgent, true, consents);
 
         // --- "Hesabını tamamla" e-postası gönder ---
         try {
@@ -235,11 +254,23 @@ public class CheckoutServiceImpl implements CheckoutService {
     /**
      * Üye ve misafir siparişlerinin ortak sipariş oluşturma mantığı.
      */
+    /**
+     * Yasal sözleşme kabul zaman damgalarını taşıyan immutable snapshot.
+     * Client tarafında yakalanan timestamp'ler (sözleşmeyi okuduğu an) bu kayda
+     * dahil edilir; null ise server-now() fallback'i kullanılır.
+     */
+    private record ConsentSnapshot(
+            LocalDateTime distanceSalesAcceptedAt,
+            LocalDateTime preliminaryInfoAcceptedAt,
+            LocalDateTime kvkkConsentAt
+    ) {}
+
     private PlaceOrderResponse createOrderInternal(Customer customer, List<CartItem> items,
                                                     CustomerAddress shippingAddr, CustomerAddress billingAddr,
                                                     String cargoCompanyStr, Long cargoProviderId,
                                                     String paymentMethod, String customerNote,
-                                                    String ipAddress, String userAgent, boolean isGuest) {
+                                                    String ipAddress, String userAgent, boolean isGuest,
+                                                    ConsentSnapshot consents) {
         // Generate order number up-front so stock events created during reservation
         // can reference the order that caused them.
         String orderNumber = "ORD-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd")) + "-" + java.util.UUID.randomUUID().toString().substring(0, 6).toUpperCase();
@@ -361,8 +392,22 @@ public class CheckoutServiceImpl implements CheckoutService {
         order.setCustomerNote(customerNote);
         order.setIpAddress(ipAddress);
         order.setUserAgent(userAgent);
+        // Yasal sözleşme kanıtları (client-side capture, yoksa server-now fallback)
+        LocalDateTime now = LocalDateTime.now();
         order.setDistanceSalesContractAccepted(true);
-        order.setDistanceSalesContractAcceptedAt(LocalDateTime.now());
+        order.setDistanceSalesContractAcceptedAt(
+                consents != null && consents.distanceSalesAcceptedAt() != null
+                        ? consents.distanceSalesAcceptedAt() : now);
+        order.setPreliminaryInfoAccepted(true);
+        order.setPreliminaryInfoAcceptedAt(
+                consents != null && consents.preliminaryInfoAcceptedAt() != null
+                        ? consents.preliminaryInfoAcceptedAt() : now);
+        if (consents != null && consents.kvkkConsentAt() != null) {
+            order.setKvkkConsentAt(consents.kvkkConsentAt());
+        } else if (customer.getKvkkConsentAt() != null) {
+            // Authenticated kullanıcı için customer'dan snapshot
+            order.setKvkkConsentAt(customer.getKvkkConsentAt());
+        }
 
         if (cargoProvider != null) {
             order.setCargoProviderId(cargoProvider.getId());

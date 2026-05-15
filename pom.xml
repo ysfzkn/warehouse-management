@@ -215,6 +215,58 @@
             <artifactId>jsoup</artifactId>
             <version>1.18.1</version>
         </dependency>
+
+        <!-- Thymeleaf — HTML email templates (Faz 1 HIGH).
+             EmailServiceImpl mevcut string-builder mantığıyla çalışmaya devam ediyor,
+             ileride templates/email/*.html dosyaları üzerinden Thymeleaf render'a geçişle
+             tekrar kullanılabilir hale getirilecek. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-thymeleaf</artifactId>
+        </dependency>
+
+        <!-- ShedLock — multi-instance scheduled job locking (Faz 1 HIGH) -->
+        <dependency>
+            <groupId>net.javacrumbs.shedlock</groupId>
+            <artifactId>shedlock-spring</artifactId>
+            <version>5.16.0</version>
+        </dependency>
+        <dependency>
+            <groupId>net.javacrumbs.shedlock</groupId>
+            <artifactId>shedlock-provider-jdbc-template</artifactId>
+            <version>5.16.0</version>
+        </dependency>
+
+        <!-- Resilience4j — retry/circuit breaker for Iyzico/Logo/Kargonomi -->
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-spring-boot3</artifactId>
+            <version>2.2.0</version>
+        </dependency>
+
+        <!-- AWS SDK v2 S3 — MinIO (dev) + AWS S3 / Cloudflare R2 / Backblaze B2 (prod)
+             ile %100 uyumlu storage client. STORAGE_PROVIDER=s3 olduğunda devreye girer. -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+            <version>2.28.16</version>
+        </dependency>
+
+        <!-- Logback JSON encoder — structured logging Loki/Grafana için.
+             logback-spring.xml prod profile'inde JSON output kullanır. -->
+        <dependency>
+            <groupId>net.logstash.logback</groupId>
+            <artifactId>logstash-logback-encoder</artifactId>
+            <version>8.0</version>
+        </dependency>
+
+        <!-- Springdoc OpenAPI — admin API documentation (Faz 3 NICE-TO-HAVE).
+             /swagger-ui.html ve /v3/api-docs admin-only erişilebilir. -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <version>2.6.0</version>
+        </dependency>
     </dependencies>
 
     <build>

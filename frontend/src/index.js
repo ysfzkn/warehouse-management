@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App';
+import ErrorBoundary from './components/ErrorBoundary';
 import { BrowserRouter } from 'react-router-dom';
 import { HelmetProvider } from 'react-helmet-async';
 import axios from 'axios';
@@ -223,10 +224,31 @@ axios.interceptors.response.use(
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>
-    <HelmetProvider>
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
-    </HelmetProvider>
+    <ErrorBoundary>
+      <HelmetProvider>
+        <BrowserRouter>
+          <App />
+        </BrowserRouter>
+      </HelmetProvider>
+    </ErrorBoundary>
   </React.StrictMode>
 );
+
+// ── Service Worker (PWA) — sadece production, sadece store domain'i ──
+// REACT_APP_DISABLE_SW=true ile devre dışı bırakılabilir.
+// Admin/WMS hostlarında SW yüklenmez (gerçek zamanlı veri gerekli).
+if ('serviceWorker' in navigator
+    && process.env.NODE_ENV === 'production'
+    && process.env.REACT_APP_DISABLE_SW !== 'true') {
+  const host = window.location.hostname || '';
+  const adminPrefixes = (process.env.REACT_APP_ADMIN_HOSTS || 'admin,wms').split(',').map(s => s.trim());
+  const isAdmin = adminPrefixes.some(p => host.startsWith(p + '.'));
+  if (!isAdmin) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/service-worker.js').catch(err => {
+        // eslint-disable-next-line no-console
+        console.warn('Service worker registration failed:', err);
+      });
+    });
+  }
+}

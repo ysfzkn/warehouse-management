@@ -127,6 +127,26 @@ public class Invoice {
     @Column(name = "note", length = 500)
     private String note;
 
+    // --- İade faturası (Credit Note) alanları ---
+    //
+    // Türkiye e-fatura iade akışı:
+    //   - e-Arşiv 8 gün içinde iptal edilebilir (CANCELLED status)
+    //   - e-Fatura iptal edilemez → credit note kesilir (yeni Invoice satırı)
+    //
+    // creditNote=true ise bu fatura kendisi bir iade faturasıdır;
+    // creditedInvoice referansı orijinal faturayı gösterir.
+    // Orijinal fatura UNCHANGED kalır — yasal kanıt korunur.
+
+    @Column(name = "is_credit_note", nullable = false)
+    private boolean creditNote = false;
+
+    @jakarta.persistence.ManyToOne(fetch = jakarta.persistence.FetchType.LAZY)
+    @jakarta.persistence.JoinColumn(name = "credited_invoice_id")
+    private Invoice creditedInvoice;
+
+    @Column(name = "credit_note_reason", length = 500)
+    private String creditNoteReason;
+
     // --- Zaman damgaları ---
 
     @Column(name = "issued_at")

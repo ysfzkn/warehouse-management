@@ -2,25 +2,18 @@ import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import useSecurityCodePrompt from '../components/useSecurityCodePrompt';
 import { useAdminToast } from '../components/AdminToast';
+import GatewayFormField from '../components/GatewayFormField';
+import {
+  PROTOCOLS,
+  BANK_LABELS,
+  emptyFormForProtocol,
+  hydrateFormFromGateway,
+  buildPayloadForProtocol,
+  validateForm,
+  suggestCallbackUrl,
+} from './paymentGatewaySchema';
 
-const PROTOCOLS = {
-  NESTPAY: { label: 'NestPay (Asseco)', banks: ['ISBANK','AKBANK','HALKBANK','TEB','DENIZBANK','ING','ZIRAAT','KUVEYT','QNB','ANADOLU'], credentialType: 'pos' },
-  GVP: { label: 'GVP (Garanti)', banks: ['GARANTI'], credentialType: 'pos' },
-  PAYTR: { label: 'PayTR', banks: [], credentialType: 'paytr' },
-  IYZICO: { label: 'iyzico', banks: [], credentialType: 'iyzico' },
-};
-
-const BANK_LABELS = {
-  ISBANK: 'İş Bankası', AKBANK: 'Akbank', HALKBANK: 'Halkbank', TEB: 'TEB',
-  DENIZBANK: 'DenizBank', ING: 'ING Bank', ZIRAAT: 'Ziraat Bankası', KUVEYT: 'Kuveyt Türk',
-  QNB: 'QNB Finansbank', ANADOLU: 'Anadolubank', GARANTI: 'Garanti BBVA', YAPI_KREDI: 'Yapı Kredi',
-};
-
-const EMPTY_FORM = {
-  code:'', displayName:'', gatewayProtocol:'NESTPAY', bankCode:'', merchantId:'', terminalId:'',
-  storeKey:'', provisionPassword:'', apiKey:'', secretKey:'', baseUrl:'', threeDUrl:'', callbackUrl:'',
-  active:false, defaultGateway:false, sandbox:true, priority:100, supportedCards:'VISA,MASTERCARD,TROY', maxInstallments:12,
-};
+const EMPTY_FORM = emptyFormForProtocol('IYZICO');
 
 export default function AdminPaymentGateways() {
   const [gateways, setGateways] = useState([]);
@@ -28,8 +21,7 @@ export default function AdminPaymentGateways() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({...EMPTY_FORM});
-  const [showStoreKey, setShowStoreKey] = useState(false);
-  const [showProvPass, setShowProvPass] = useState(false);
+  const [formError, setFormError] = useState(null);
   const [testResult, setTestResult] = useState(null);
   const { askCode, SecurityCodePrompt } = useSecurityCodePrompt();
   const toast = useAdminToast();
@@ -46,21 +38,41 @@ export default function AdminPaymentGateways() {
     const code = await askCode({ description: desc });
     if (!code) return;
     try { await fn(code); } catch (e) {
-      if (e.response?.status === 403) toast.error('Güvenlik şifresi hatalı.');
-      else toast.error('İşlem sırasında hata oluştu.');
+      const status = e.response?.status;
+      const msg = e.response?.data?.message || e.response?.data?.error;
+      if (status === 403) toast.error('Güvenlik şifresi hatalı.');
+      else if (status === 401) toast.error('Oturumunuz sona ermiş. Tekrar giriş yapın.');
+      else if (status === 400 && msg) toast.error(msg);
+      else if (status >= 500) toast.error(msg || `Sunucu hatası (${status}).`);
+      else if (!e.response) toast.error('Sunucuya ulaşılamadı.');
+      else toast.error(msg || `Hata (${status || 'unknown'})`);
+      // eslint-disable-next-line no-console
+      console.error('[AdminPaymentGateways] action failed:', { status, msg, error: e });
     }
   };
 
-  const handleSave = () => withCode('Gateway ayarlarını kaydetmek için güvenlik şifresini girin.', async (code) => {
-    const headers = { 'X-ADMIN-SECURITY-CODE': code };
-    if (editing) {
-      await axios.put(`/api/admin/payment-gateways/${editing}`, form, { headers });
-    } else {
-      await axios.post('/api/admin/payment-gateways', form, { headers });
+  const handleSave = () => {
+    // Frontend validation — kullanıcı hata mesajını anında görür, backend round-trip gerekmez
+    const err = validateForm(form, form.gatewayProtocol, !!editing);
+    if (err) {
+      setFormError(err);
+      toast.error(err);
+      return;
     }
-    setShowForm(false); setEditing(null); setForm({...EMPTY_FORM}); fetchGateways();
-    toast.success('Başarıyla kaydedildi.');
-  });
+    setFormError(null);
+    withCode('Gateway ayarlarını kaydetmek için güvenlik şifresini girin.', async (code) => {
+      const headers = { 'X-ADMIN-SECURITY-CODE': code };
+      // Protokole özgü payload'u oluştur (gereksiz alanları kırp)
+      const payload = buildPayloadForProtocol(form, form.gatewayProtocol);
+      if (editing) {
+        await axios.put(`/api/admin/payment-gateways/${editing}`, payload, { headers });
+      } else {
+        await axios.post('/api/admin/payment-gateways', payload, { headers });
+      }
+      setShowForm(false); setEditing(null); setForm({...EMPTY_FORM}); fetchGateways();
+      toast.success('Başarıyla kaydedildi.');
+    });
+  };
 
   const handleToggle = (gw) => withCode(`${gw.displayName} durumunu değiştirmek için güvenlik şifresini girin.`, async (code) => {
     const headers = { 'X-ADMIN-SECURITY-CODE': code };
@@ -86,17 +98,19 @@ export default function AdminPaymentGateways() {
 
   const startEdit = (gw) => {
     setEditing(gw.id);
-    setForm({ ...gw, storeKey:'', provisionPassword:'', apiKey:'', secretKey:'' }); // don't prefill masked secrets
+    setForm(hydrateFormFromGateway(gw));
+    setFormError(null);
     setShowForm(true);
   };
 
-  const startCreate = () => { setEditing(null); setForm({...EMPTY_FORM}); setShowForm(true); };
+  const startCreate = () => {
+    setEditing(null);
+    setForm({...EMPTY_FORM});
+    setFormError(null);
+    setShowForm(true);
+  };
 
   const protocolConfig = PROTOCOLS[form.gatewayProtocol] || {};
-  const isNestPay = form.gatewayProtocol === 'NESTPAY';
-  const isGvp = form.gatewayProtocol === 'GVP';
-  const isIyzico = form.gatewayProtocol === 'IYZICO';
-  const isPayTR = form.gatewayProtocol === 'PAYTR';
 
   // ── Payment method toggles & bank transfer config ──
   const [paymentToggles, setPaymentToggles] = useState({});
@@ -110,10 +124,55 @@ export default function AdminPaymentGateways() {
     axios.get('/api/admin/settings/payment/bank-transfer').then(r => setBankConfig(r.data)).catch(() => {});
   }, []);
 
+  /**
+   * Ödeme yöntemi toggle'ı (kredi kartı / havale / kapıda ödeme aç/kapat).
+   *
+   * Backend admin endpoint'leri güvenlik şifresi (X-ADMIN-SECURITY-CODE) zorunlu kılar.
+   * Önceki sürümde header gönderilmiyordu → her toggle "400 Güvenlik şifresi zorunludur" alıyordu.
+   *
+   * Şimdi:
+   *   1. Toggle değişimi optimistic olarak UI'a yansıtılır
+   *   2. Şifre prompt'u açılır
+   *   3. Kullanıcı şifreyi girerse PUT atılır (success toast)
+   *   4. Kullanıcı iptal eder veya hata olursa UI önceki haline geri alınır
+   */
   const handleToggleChange = async (key, value) => {
+    const previous = paymentToggles[key];
     const updated = { ...paymentToggles, [key]: value };
-    setPaymentToggles(updated);
-    try { await axios.put('/api/admin/settings/site', updated); } catch (e) { toast.error('İşlem başarısız.'); }
+    setPaymentToggles(updated); // Optimistic UI
+
+    const label = key.includes('credit_card') ? 'Kredi kartı'
+                : key.includes('bank_transfer') ? 'Havale/EFT'
+                : key.includes('door') ? 'Kapıda ödeme'
+                : 'Ödeme yöntemi';
+    const action = value === 'true' ? 'Aktif et' : 'Devre dışı bırak';
+
+    const code = await askCode({
+      description: `${action}: ${label.toLowerCase()} — onaylamak için güvenlik şifresini girin.`,
+    });
+    if (!code) {
+      // Kullanıcı iptal etti — UI revert
+      setPaymentToggles(p => ({ ...p, [key]: previous }));
+      return;
+    }
+    try {
+      await axios.put('/api/admin/settings/site', updated,
+          { headers: { 'X-ADMIN-SECURITY-CODE': code } });
+      toast.success(`${label} ${value === 'true' ? 'aktif edildi' : 'devre dışı bırakıldı'}.`);
+    } catch (e) {
+      // Hata → UI revert + açıklayıcı mesaj
+      setPaymentToggles(p => ({ ...p, [key]: previous }));
+      const status = e.response?.status;
+      const msg = e.response?.data?.message || e.response?.data?.error;
+      if (status === 403) toast.error('Güvenlik şifresi hatalı.');
+      else if (status === 401) toast.error('Oturumunuz sona ermiş. Tekrar giriş yapın.');
+      else if (status === 400 && msg) toast.error(msg);
+      else if (status >= 500) toast.error(msg || `Sunucu hatası (${status}).`);
+      else if (!e.response) toast.error('Sunucuya ulaşılamadı.');
+      else toast.error(msg || `Hata (${status || 'unknown'})`);
+      // eslint-disable-next-line no-console
+      console.error('[AdminPaymentGateways] toggle failed:', { key, status, msg, error: e });
+    }
   };
 
   const handleSaveBankConfig = async () => {
@@ -217,191 +276,267 @@ export default function AdminPaymentGateways() {
       <div className="row g-4">
         {/* Form */}
         {showForm && (
-          <div className="col-lg-5">
-            <div className="card border-0 shadow-sm">
-              <div className="card-header bg-transparent d-flex justify-content-between">
-                <h6 className="mb-0">{editing ? 'Gateway Düzenle' : 'Yeni Gateway'}</h6>
-                <button className="btn-close" onClick={() => setShowForm(false)} />
+          <div className="col-lg-6">
+            <div className="card border-0 shadow-sm sticky-top" style={{top: 16}}>
+              <div className="card-header bg-transparent d-flex justify-content-between align-items-center">
+                <h6 className="mb-0">
+                  <i className={`fas ${protocolConfig.icon || 'fa-plug'} me-2 text-${protocolConfig.color || 'primary'}`} />
+                  {editing ? 'Gateway Düzenle' : 'Yeni Gateway Ekle'}
+                </h6>
+                <button className="btn-close" onClick={() => setShowForm(false)} aria-label="Kapat" />
               </div>
-              <div className="card-body">
+              <div className="card-body" style={{maxHeight: 'calc(100vh - 200px)', overflowY: 'auto'}}>
                 <div className="row g-3">
-                  <div className="col-12">
-                    <label className="form-label small fw-medium">Protokol</label>
-                    <select className="form-select" value={form.gatewayProtocol} onChange={e => setForm({...form, gatewayProtocol: e.target.value, bankCode:''})}>
-                      {Object.entries(PROTOCOLS).map(([k,v]) => <option key={k} value={k}>{v.label}</option>)}
-                    </select>
-                  </div>
-                  {protocolConfig.banks?.length > 0 && (
-                    <div className="col-12">
-                      <label className="form-label small fw-medium">Banka <span className="text-danger">*</span></label>
-                      <select className="form-select" value={form.bankCode} onChange={e => setForm({...form, bankCode: e.target.value})}>
-                        <option value="">Banka seçiniz...</option>
-                        {protocolConfig.banks.map(b => <option key={b} value={b}>{BANK_LABELS[b] || b}</option>)}
-                      </select>
-                      <small className="text-muted">Bu protokolün bağlı olduğu banka. POS terminal bilgileriniz bu bankadan alınmalıdır.</small>
-                    </div>
-                  )}
-                  {(isPayTR || isIyzico) && (
-                    <div className="col-12">
-                      <div className="alert alert-light small border mb-0">
-                        <i className="fas fa-info-circle me-1 text-primary" />
-                        {isPayTR ? 'PayTR tüm Türk bankalarını tek entegrasyonda destekler. Ayrıca banka seçimi gerekmez.' : 'iyzico tüm banka kartlarını tek entegrasyonda destekler. Ayrıca banka seçimi gerekmez.'}
-                      </div>
-                    </div>
-                  )}
-                  <div className="col-md-6">
-                    <label className="form-label small fw-medium">Kod (benzersiz)</label>
-                    <input className="form-control font-monospace" value={form.code} onChange={e => setForm({...form, code: e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g,'')})} placeholder="GARANTI_POS_1" disabled={!!editing} />
-                  </div>
-                  <div className="col-md-6">
-                    <label className="form-label small fw-medium">Görünen Ad</label>
-                    <input className="form-control" value={form.displayName} onChange={e => setForm({...form, displayName: e.target.value})} placeholder="Garanti BBVA Sanal POS" />
-                  </div>
 
-                  {/* Protocol-specific credentials */}
-                  {(isNestPay || isGvp) && (
-                    <>
-                      <div className="col-md-6">
-                        <label className="form-label small fw-medium">Merchant ID</label>
-                        <input className="form-control font-monospace" value={form.merchantId} onChange={e => setForm({...form, merchantId: e.target.value})} />
-                      </div>
-                      <div className="col-md-6">
-                        <label className="form-label small fw-medium">Terminal ID</label>
-                        <input className="form-control font-monospace" value={form.terminalId} onChange={e => setForm({...form, terminalId: e.target.value})} />
-                      </div>
-                      <div className="col-12">
-                        <label className="form-label small fw-medium">Store Key</label>
-                        <div className="input-group">
-                          <input type={showStoreKey ? 'text' : 'password'} className="form-control font-monospace" value={form.storeKey} onChange={e => setForm({...form, storeKey: e.target.value})} placeholder={editing ? '(değiştirmek için yeni değer girin)' : ''} />
-                          <button className="btn btn-outline-secondary" type="button" onClick={() => setShowStoreKey(!showStoreKey)}><i className={`fas fa-eye${showStoreKey ? '-slash' : ''}`} /></button>
-                        </div>
-                      </div>
-                      {isGvp && (
-                        <div className="col-12">
-                          <label className="form-label small fw-medium">Provision Password</label>
-                          <div className="input-group">
-                            <input type={showProvPass ? 'text' : 'password'} className="form-control font-monospace" value={form.provisionPassword} onChange={e => setForm({...form, provisionPassword: e.target.value})} />
-                            <button className="btn btn-outline-secondary" type="button" onClick={() => setShowProvPass(!showProvPass)}><i className={`fas fa-eye${showProvPass ? '-slash' : ''}`} /></button>
+                  {/* ── Protokol seçici (visual card picker) ── */}
+                  <div className="col-12">
+                    <label className="form-label small fw-semibold mb-2">Protokol Seçin <span className="text-danger" aria-hidden="true">*</span></label>
+                    <div className="row g-2">
+                      {Object.entries(PROTOCOLS).map(([code, p]) => {
+                        const selected = form.gatewayProtocol === code;
+                        return (
+                          <div key={code} className="col-6">
+                            <button type="button"
+                              className={`w-100 h-100 border-2 rounded p-3 text-start position-relative ${selected ? `border-${p.color}` : 'border-light'}`}
+                              style={{
+                                cursor: editing ? 'not-allowed' : 'pointer',
+                                opacity: editing ? 0.6 : 1,
+                                background: '#ffffff',
+                                borderWidth: selected ? '2px' : '1px',
+                                boxShadow: selected ? `0 0 0 3px rgba(var(--bs-${p.color}-rgb, 13,110,253), 0.12)` : 'none',
+                                transition: 'all 0.15s ease',
+                              }}
+                              disabled={!!editing}
+                              onClick={() => setForm({...EMPTY_FORM,
+                                gatewayProtocol: code,
+                                code: form.code,
+                                displayName: form.displayName,
+                                sandbox: form.sandbox,
+                                priority: form.priority,
+                                supportedCards: form.supportedCards,
+                                maxInstallments: form.maxInstallments,
+                              })}>
+                              {selected && (
+                                <i className={`fas fa-check-circle text-${p.color} position-absolute top-0 end-0 m-2`}
+                                   style={{fontSize: 16}} aria-hidden="true" />
+                              )}
+                              <div className="d-flex align-items-center gap-2 mb-1">
+                                <i className={`fas ${p.icon} text-${p.color}`} style={{fontSize: 18}} />
+                                <strong className="text-dark" style={{fontSize: 14}}>{p.label}</strong>
+                              </div>
+                              <div className="text-secondary" style={{fontSize: 12, lineHeight: 1.4, color: '#4b5563'}}>
+                                {p.description}
+                              </div>
+                            </button>
                           </div>
-                        </div>
-                      )}
-                      <div className="col-12">
-                        <label className="form-label small fw-medium">3D Secure URL</label>
-                        <input className="form-control small" value={form.threeDUrl} onChange={e => setForm({...form, threeDUrl: e.target.value})} placeholder={isNestPay ? 'https://entegrasyon.asseco-see.com.tr/fim/est3Dgate' : 'https://sanalposprov.garanti.com.tr/servlet/gt3dengine'} />
-                      </div>
-                    </>
-                  )}
-                  {isIyzico && (
-                    <>
-                      <div className="col-md-6">
-                        <label className="form-label small fw-medium">API Key</label>
-                        <input className="form-control font-monospace" value={form.apiKey} onChange={e => setForm({...form, apiKey: e.target.value})} />
-                      </div>
-                      <div className="col-md-6">
-                        <label className="form-label small fw-medium">Secret Key</label>
-                        <input className="form-control font-monospace" value={form.secretKey} onChange={e => setForm({...form, secretKey: e.target.value})} />
-                      </div>
-                      <div className="col-12">
-                        <label className="form-label small fw-medium">Base URL</label>
-                        <input className="form-control small" value={form.baseUrl} onChange={e => setForm({...form, baseUrl: e.target.value})} />
-                      </div>
-                    </>
-                  )}
-                  {isPayTR && (
-                    <>
-                      <div className="col-12">
-                        <div className="alert alert-info small mb-3">
-                          <i className="fas fa-info-circle me-2" />
-                          PayTR iFrame API entegrasyonu. Kart bilgileri PayTR'ın güvenli sayfasında işlenir.
-                          Bilgilerinizi <a href="https://www.paytr.com" target="_blank" rel="noopener noreferrer">PayTR Mağaza Paneli</a> → Bilgi sayfasından alabilirsiniz.
-                        </div>
-                      </div>
-                      <div className="col-md-4">
-                        <label className="form-label small fw-medium">Mağaza No (merchant_id)</label>
-                        <input className="form-control font-monospace" value={form.merchantId} onChange={e => setForm({...form, merchantId: e.target.value})} placeholder="123456" />
-                      </div>
-                      <div className="col-md-4">
-                        <label className="form-label small fw-medium">Mağaza Parolası (merchant_key)</label>
-                        <div className="input-group">
-                          <input type={showStoreKey ? 'text' : 'password'} className="form-control font-monospace" value={form.apiKey} onChange={e => setForm({...form, apiKey: e.target.value})} placeholder={editing ? '(değiştirmek için yeni değer)' : ''} />
-                          <button className="btn btn-outline-secondary" type="button" onClick={() => setShowStoreKey(!showStoreKey)}><i className={`fas fa-eye${showStoreKey ? '-slash' : ''}`} /></button>
-                        </div>
-                      </div>
-                      <div className="col-md-4">
-                        <label className="form-label small fw-medium">Gizli Anahtar (merchant_salt)</label>
-                        <div className="input-group">
-                          <input type={showProvPass ? 'text' : 'password'} className="form-control font-monospace" value={form.secretKey} onChange={e => setForm({...form, secretKey: e.target.value})} placeholder={editing ? '(değiştirmek için yeni değer)' : ''} />
-                          <button className="btn btn-outline-secondary" type="button" onClick={() => setShowProvPass(!showProvPass)}><i className={`fas fa-eye${showProvPass ? '-slash' : ''}`} /></button>
-                        </div>
-                      </div>
-                    </>
-                  )}
-                  <div className="col-12">
-                    <label className="form-label small fw-medium">Callback URL {isPayTR && '(Bildirim URL)'}</label>
-                    <input className="form-control small" value={form.callbackUrl} onChange={e => setForm({...form, callbackUrl: e.target.value})} placeholder={isPayTR ? `https://siteniz.com/api/store/payment/callback/paytr/${form.code || 'CODE'}` : `https://siteniz.com/api/store/payment/callback/pos/${form.code || 'CODE'}`} />
-                    <small className="text-muted">Banka ödeme sonucu bu URL'ye POST yapar</small>
+                        );
+                      })}
+                    </div>
+                    {editing && (
+                      <small className="text-muted d-block mt-1">
+                        <i className="fas fa-lock me-1" />Protokol değiştirilemez (mevcut gateway).
+                      </small>
+                    )}
                   </div>
 
-                  {/* Behavior */}
-                  <div className="col-12">
-                    <label className="form-label small fw-medium d-flex align-items-center gap-2">
-                      Ortam
-                      <span className="text-muted" title="Sandbox: Test ortamı — gerçek para çekilmez, test kart numaralarıyla deneyebilirsiniz. Production: Canlı ortam — gerçek ödemeler işlenir." style={{cursor:'help'}}>
-                        <i className="fas fa-info-circle" />
-                      </span>
+                  {/* ── Protokol help info ── */}
+                  {protocolConfig.helpText && (
+                    <div className="col-12">
+                      <div className={`alert alert-${protocolConfig.color === 'danger' ? 'warning' : protocolConfig.color || 'info'} small mb-0 py-2`}>
+                        <i className="fas fa-info-circle me-1" />
+                        {protocolConfig.helpText}
+                        {protocolConfig.helpUrl && (
+                          <a href={protocolConfig.helpUrl} target="_blank" rel="noopener noreferrer" className="ms-1">
+                            Panel <i className="fas fa-external-link-alt" style={{fontSize: 10}} />
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── Banka seçici (sadece NESTPAY/GVP) ── */}
+                  {protocolConfig.bankSelect && (
+                    <div className="col-12">
+                      <label className="form-label small fw-semibold">
+                        Banka <span className="text-danger" aria-hidden="true">*</span>
+                      </label>
+                      <select className="form-select" value={form.bankCode}
+                        onChange={e => setForm({...form, bankCode: e.target.value})}>
+                        <option value="">Banka seçiniz...</option>
+                        {protocolConfig.banks.map(b => (
+                          <option key={b} value={b}>{BANK_LABELS[b] || b}</option>
+                        ))}
+                      </select>
+                      <small className="text-muted">POS terminal bilgilerini bu bankadan almış olmalısınız.</small>
+                    </div>
+                  )}
+
+                  {/* ── Temel bilgiler ── */}
+                  <div className="col-md-6">
+                    <label className="form-label small fw-semibold">
+                      Kod (benzersiz) <span className="text-danger" aria-hidden="true">*</span>
                     </label>
-                    <div className="d-flex gap-3">
-                      <div className={`flex-fill border rounded p-3 text-center ${form.sandbox ? 'border-warning bg-warning bg-opacity-10' : 'border-light'}`} style={{cursor:'pointer'}} onClick={() => setForm({...form, sandbox: true})}>
-                        <i className="fas fa-flask text-warning mb-1 d-block" />
-                        <div className="small fw-medium">Sandbox (Test)</div>
-                        <div className="text-muted small">Gerçek para çekilmez</div>
+                    <input className="form-control font-monospace" value={form.code}
+                      onChange={e => setForm({...form, code: e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g,'')})}
+                      placeholder="IYZICO_MAIN"
+                      disabled={!!editing}
+                      maxLength={50} />
+                    <small className="text-muted">A-Z, 0-9, _ — callback URL'de görünür.</small>
+                  </div>
+                  <div className="col-md-6">
+                    <label className="form-label small fw-semibold">
+                      Görünen Ad <span className="text-danger" aria-hidden="true">*</span>
+                    </label>
+                    <input className="form-control" value={form.displayName}
+                      onChange={e => setForm({...form, displayName: e.target.value})}
+                      placeholder="iyzico Ana" />
+                    <small className="text-muted">Admin tablo görünümünde kullanılır.</small>
+                  </div>
+
+                  {/* ── Protokol-spesifik alanlar (dinamik) ── */}
+                  {Object.entries(protocolConfig.fields || {}).map(([fieldKey, def]) => (
+                    <div key={fieldKey} className="col-12">
+                      <GatewayFormField
+                        def={def}
+                        value={form[fieldKey]}
+                        onChange={(v) => setForm({...form, [fieldKey]: v})}
+                        editingExistingSecret={!!editing && def.type === 'password'
+                          && form['_' + fieldKey + 'Set']}
+                      />
+                      {/* Code → callback URL otomatik öneri */}
+                      {fieldKey === 'callbackUrl' && form.code && !form.callbackUrl && (
+                        <button type="button" className="btn btn-link btn-sm p-0 mt-1"
+                          onClick={() => setForm({...form, callbackUrl: suggestCallbackUrl(form.code, form.gatewayProtocol)})}>
+                          <i className="fas fa-magic me-1" />Otomatik öner
+                        </button>
+                      )}
+                    </div>
+                  ))}
+
+                  {/* ── extraConfig alanları (PayTR için merchant_ok_url vb.) ── */}
+                  {protocolConfig.extraFields && Object.keys(protocolConfig.extraFields).length > 0 && (
+                    <>
+                      <div className="col-12 mt-3">
+                        <hr className="my-2" />
+                        <h6 className="small fw-semibold mb-2 text-muted text-uppercase" style={{fontSize: 11, letterSpacing: 0.5}}>
+                          Yönlendirme & Ek Ayarlar
+                        </h6>
                       </div>
-                      <div className={`flex-fill border rounded p-3 text-center ${!form.sandbox ? 'border-success bg-success bg-opacity-10' : 'border-light'}`} style={{cursor:'pointer'}} onClick={() => setForm({...form, sandbox: false})}>
-                        <i className="fas fa-globe text-success mb-1 d-block" />
-                        <div className="small fw-medium">Production (Canlı)</div>
-                        <div className="text-muted small">Gerçek ödemeler işlenir</div>
-                      </div>
+                      {Object.entries(protocolConfig.extraFields).map(([fieldKey, def]) => (
+                        <div key={fieldKey} className="col-12">
+                          <GatewayFormField
+                            def={def}
+                            value={form['extra_' + fieldKey]}
+                            onChange={(v) => setForm({...form, ['extra_' + fieldKey]: v})}
+                          />
+                        </div>
+                      ))}
+                    </>
+                  )}
+
+                  {/* ── Ortam seçici (Sandbox / Production) ── */}
+                  <div className="col-12 mt-3">
+                    <hr className="my-2" />
+                    <label className="form-label small fw-semibold">Ortam</label>
+                    <div className="d-flex gap-2">
+                      <button type="button"
+                        className={`flex-fill rounded p-3 text-center position-relative ${form.sandbox ? 'border-warning' : 'border-light'}`}
+                        style={{
+                          cursor:'pointer', background: '#ffffff',
+                          border: `${form.sandbox ? '2px' : '1px'} solid ${form.sandbox ? '#f59e0b' : '#e5e7eb'}`,
+                          boxShadow: form.sandbox ? '0 0 0 3px rgba(245, 158, 11, 0.12)' : 'none',
+                          transition: 'all 0.15s ease',
+                        }}
+                        onClick={() => setForm({...form, sandbox: true})}>
+                        {form.sandbox && <i className="fas fa-check-circle text-warning position-absolute top-0 end-0 m-2" style={{fontSize: 16}} />}
+                        <i className="fas fa-flask text-warning mb-1 d-block" style={{fontSize: 20}} />
+                        <div className="fw-semibold text-dark" style={{fontSize: 13}}>Sandbox (Test)</div>
+                        <div style={{fontSize: 11, color: '#6b7280'}}>Gerçek para çekilmez</div>
+                      </button>
+                      <button type="button"
+                        className={`flex-fill rounded p-3 text-center position-relative ${!form.sandbox ? 'border-success' : 'border-light'}`}
+                        style={{
+                          cursor:'pointer', background: '#ffffff',
+                          border: `${!form.sandbox ? '2px' : '1px'} solid ${!form.sandbox ? '#10b981' : '#e5e7eb'}`,
+                          boxShadow: !form.sandbox ? '0 0 0 3px rgba(16, 185, 129, 0.12)' : 'none',
+                          transition: 'all 0.15s ease',
+                        }}
+                        onClick={() => setForm({...form, sandbox: false})}>
+                        {!form.sandbox && <i className="fas fa-check-circle text-success position-absolute top-0 end-0 m-2" style={{fontSize: 16}} />}
+                        <i className="fas fa-globe text-success mb-1 d-block" style={{fontSize: 20}} />
+                        <div className="fw-semibold text-dark" style={{fontSize: 13}}>Production (Canlı)</div>
+                        <div style={{fontSize: 11, color: '#6b7280'}}>Gerçek ödemeler</div>
+                      </button>
                     </div>
                   </div>
 
+                  {/* ── Davranış parametreleri ── */}
                   <div className="col-md-6">
-                    <label className="form-label small fw-medium">Öncelik</label>
-                    <input type="number" className="form-control" value={form.priority} onChange={e => setForm({...form, priority: parseInt(e.target.value)||100})} min={1} max={999} />
-                    <small className="text-muted">Düşük sayı = yüksek öncelik. Birden fazla aktif gateway varsa önce düşük öncelikli denenir.</small>
+                    <label className="form-label small fw-semibold">Öncelik</label>
+                    <input type="number" className="form-control" value={form.priority}
+                      onChange={e => setForm({...form, priority: parseInt(e.target.value)||100})}
+                      min={1} max={999} />
+                    <small className="text-muted">Düşük sayı = önce denenir.</small>
                   </div>
                   <div className="col-md-6">
-                    <label className="form-label small fw-medium">Max Taksit Sayısı</label>
-                    <input type="number" className="form-control" value={form.maxInstallments} onChange={e => setForm({...form, maxInstallments: parseInt(e.target.value)||12})} min={1} max={24} />
+                    <label className="form-label small fw-semibold">Max Taksit</label>
+                    <input type="number" className="form-control" value={form.maxInstallments}
+                      onChange={e => setForm({...form, maxInstallments: parseInt(e.target.value)||12})}
+                      min={1} max={24} />
                   </div>
 
                   <div className="col-12">
-                    <label className="form-label small fw-medium">Desteklenen Kart Tipleri</label>
+                    <label className="form-label small fw-semibold">Desteklenen Kart Tipleri</label>
                     <div className="d-flex flex-wrap gap-2">
                       {['VISA', 'MASTERCARD', 'TROY', 'AMEX'].map(card => {
-                        const cards = (form.supportedCards || '').split(',').map(c => c.trim());
+                        const cards = (form.supportedCards || '').split(',').map(c => c.trim()).filter(Boolean);
                         const checked = cards.includes(card);
                         return (
-                          <div key={card} className={`border rounded px-3 py-2 d-flex align-items-center gap-2 ${checked ? 'border-primary bg-primary bg-opacity-10' : 'border-light'}`}
-                            style={{cursor:'pointer'}} onClick={() => {
-                              const updated = checked ? cards.filter(c => c !== card) : [...cards.filter(c=>c), card];
+                          <button key={card} type="button"
+                            className="rounded px-3 py-2 d-flex align-items-center gap-2"
+                            style={{
+                              cursor:'pointer',
+                              background: '#ffffff',
+                              border: `${checked ? '2px' : '1px'} solid ${checked ? '#2563eb' : '#e5e7eb'}`,
+                              boxShadow: checked ? '0 0 0 2px rgba(37, 99, 235, 0.10)' : 'none',
+                              transition: 'all 0.15s ease',
+                              minWidth: 110,
+                            }}
+                            onClick={() => {
+                              const updated = checked ? cards.filter(c => c !== card) : [...cards, card];
                               setForm({...form, supportedCards: updated.join(',')});
                             }}>
                             <input type="checkbox" className="form-check-input m-0" checked={checked} readOnly />
-                            <span className="small fw-medium">{card}</span>
-                          </div>
+                            <span className="fw-semibold text-dark" style={{fontSize: 13}}>{card}</span>
+                          </button>
                         );
                       })}
                     </div>
                   </div>
 
-                  {!form.sandbox && (
+                  {/* Validation hatası göstergesi */}
+                  {formError && (
                     <div className="col-12">
-                      <div className="alert alert-danger small mb-0"><i className="fas fa-exclamation-triangle me-1" /><strong>Dikkat:</strong> Production (canlı) moddasınız. Bu gateway üzerinden gerçek ödemeler işlenecektir!</div>
+                      <div className="alert alert-danger small mb-0">
+                        <i className="fas fa-exclamation-circle me-1" />{formError}
+                      </div>
                     </div>
                   )}
 
-                  <div className="col-12 d-flex gap-2">
-                    <button className="btn btn-primary" onClick={handleSave}><i className="fas fa-save me-1" />{editing ? 'Güncelle' : 'Oluştur'}</button>
+                  {/* Production uyarısı */}
+                  {!form.sandbox && (
+                    <div className="col-12">
+                      <div className="alert alert-danger small mb-0">
+                        <i className="fas fa-exclamation-triangle me-1" />
+                        <strong>Dikkat:</strong> Production modu — gerçek ödemeler işlenecek.
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="col-12 d-flex gap-2 sticky-bottom bg-white pt-2 border-top">
+                    <button className="btn btn-primary flex-grow-1" onClick={handleSave}>
+                      <i className="fas fa-save me-1" />{editing ? 'Güncelle' : 'Oluştur'}
+                    </button>
                     <button className="btn btn-outline-secondary" onClick={() => setShowForm(false)}>İptal</button>
                   </div>
                 </div>
@@ -411,7 +546,7 @@ export default function AdminPaymentGateways() {
         )}
 
         {/* Gateway List */}
-        <div className={showForm ? 'col-lg-7' : 'col-12'}>
+        <div className={showForm ? 'col-lg-6' : 'col-12'}>
           <div className="card border-0 shadow-sm">
             <div className="card-body p-0">
               {loading ? (

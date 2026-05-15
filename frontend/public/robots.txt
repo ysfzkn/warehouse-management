@@ -1,0 +1,23 @@
+# Robots.txt — root e-ticaret domain'i için.
+# WMS subdomain (wms.*) için ayrı bir robots.txt deploy edilecek
+# (Disallow: / + noindex meta tag) — bkz. nginx config.
+
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /admin/
+Disallow: /hesabim/
+Disallow: /sepet
+Disallow: /odeme/
+Disallow: /siparis-takip
+Disallow: /*?*sort=
+Disallow: /*?*page=
+
+# AI crawlers — opsiyonel, müşteri ürün içeriklerini koruma altına almak isterseniz aktif edin
+# User-agent: GPTBot
+# Disallow: /
+# User-agent: CCBot
+# Disallow: /
+
+# Sitemap (backend dinamik üretiyor)
+Sitemap: /sitemap.xml

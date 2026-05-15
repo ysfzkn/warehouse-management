@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:text="${subject ?: 'Bildirim'}">Bildirim</title>
+</head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+<!--
+    Email layout iskeleti. Diğer template'ler bunu fragment olarak include eder.
+    Brand renkleri admin site_settings'ten geçirilebilir (email_primary_color setting).
+-->
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f3f4f6;padding:20px 0;">
+    <tr>
+        <td align="center">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
+                <!-- Header -->
+                <tr>
+                    <td th:style="'background:' + ${primaryColor ?: '#2563eb'} + ';padding:24px 32px;text-align:center;color:white;'">
+                        <h1 style="margin:0;font-size:20px;font-weight:600;color:white;" th:text="${siteName ?: 'Mağaza'}">Mağaza</h1>
+                    </td>
+                </tr>
+                <!-- Content (template-specific) -->
+                <tr>
+                    <td style="padding:32px;color:#374151;line-height:1.6;font-size:14px;">
+                        <div th:replace="${content}">Content here</div>
+                    </td>
+                </tr>
+                <!-- Footer -->
+                <tr>
+                    <td style="background:#f9fafb;padding:20px 32px;text-align:center;color:#6b7280;font-size:12px;border-top:1px solid #e5e7eb;">
+                        <p style="margin:0 0 8px 0;">
+                            <span th:text="${footerText ?: 'Bu e-postayı sipariş/hesap işlemleriniz nedeniyle aldınız.'}">Footer</span>
+                        </p>
+                        <p style="margin:0;">
+                            © <span th:text="${#dates.format(#dates.createNow(), 'yyyy')}">2026</span>
+                            <span th:text="${siteName ?: 'Mağaza'}">Mağaza</span>. Tüm hakları saklıdır.
+                        </p>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
+</body>
+</html>

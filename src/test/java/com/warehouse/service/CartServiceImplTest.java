@@ -31,12 +31,14 @@ class CartServiceImplTest {
     @Mock private CouponRepository couponRepo;
     @Mock private StockService stockService;
     @Mock private com.warehouse.repository.ProductImageRepository productImageRepo;
+    @Mock private com.warehouse.service.ShippingCostService shippingCostService;
 
     private CartServiceImpl cartService;
 
     @BeforeEach
     void setUp() {
-        cartService = new CartServiceImpl(cartRepo, cartItemRepo, productRepo, couponRepo, stockService, productImageRepo);
+        cartService = new CartServiceImpl(cartRepo, cartItemRepo, productRepo, couponRepo,
+                stockService, productImageRepo, shippingCostService);
     }
 
     @Test
@@ -231,6 +233,8 @@ class CartServiceImplTest {
         when(cartRepo.findByCustomerId(customer.getId())).thenReturn(Optional.of(cart));
         when(cartItemRepo.findByCartId(cart.getId())).thenReturn(List.of(item));
         when(stockService.getStocksByProduct(any())).thenReturn(List.of());
+        // Subtotal 600 → ShippingCostService eşik üstünde ücretsiz kargo döner
+        when(shippingCostService.calculate(any(), any())).thenReturn(BigDecimal.ZERO);
 
         CartDto result = cartService.getCart(customer.getId(), null);
 
@@ -248,6 +252,8 @@ class CartServiceImplTest {
         when(cartRepo.findByCustomerId(customer.getId())).thenReturn(Optional.of(cart));
         when(cartItemRepo.findByCartId(cart.getId())).thenReturn(List.of(item));
         when(stockService.getStocksByProduct(any())).thenReturn(List.of());
+        // Subtotal 100 → ShippingCostService eşik altında 29.99 TL kargo döner
+        when(shippingCostService.calculate(any(), any())).thenReturn(new BigDecimal("29.99"));
 
         CartDto result = cartService.getCart(customer.getId(), null);
 

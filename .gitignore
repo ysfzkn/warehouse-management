@@ -38,6 +38,16 @@ jspm_packages/
 .env.test.local
 .env.production.local
 
+# Sensitive Spring properties — dev/local secrets must NEVER be committed.
+# Use environment variables or external secrets manager (Railway, Doppler vb.)
+# NOTE: application-dev.properties tarihsel olarak commit'lendi; production'a
+# yakın hala temizlenmemiş dummy değerler içeriyor — bunu da .gitignore'a alıp
+# git history'sinden temizlemek için: git filter-repo --path src/main/resources/application-dev.properties --invert-paths
+src/main/resources/application-local.properties
+src/main/resources/application-secrets.properties
+src/main/resources/application-*-local.properties
+.spring-boot-devtools.properties
+
 # IDE files
 .vscode/
 .idea/

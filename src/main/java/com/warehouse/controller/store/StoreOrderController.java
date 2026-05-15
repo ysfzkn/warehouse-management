@@ -176,6 +176,17 @@ public class StoreOrderController {
         return ResponseEntity.ok(Map.of("message", "İade talebiniz alındı. En kısa sürede değerlendirilecektir."));
     }
 
+    /**
+     * Müşterinin sipariş faturasını indirme endpoint'i.
+     *
+     * <p>Akış (öncelik sırasıyla):
+     * <ol>
+     *   <li><b>Modern:</b> {@code InvoiceService} üzerinden Logo'nun ürettiği PDF
+     *       (Caffeine cache'li, KVKK/güvenli — customer-id eşleşmesi kontrol ediliyor).</li>
+     *   <li><b>Legacy:</b> {@code Order.invoiceUrl} alanında bir dosya yolu varsa
+     *       eski sistem fallback.</li>
+     * </ol></p>
+     */
     @GetMapping("/{orderNumber}/invoice")
     public ResponseEntity<?> downloadInvoice(HttpServletRequest request, @PathVariable String orderNumber) {
         Long customerId = extractCustomerId(request);
@@ -184,8 +195,29 @@ public class StoreOrderController {
         return orderRepo.findByOrderNumber(orderNumber)
             .filter(o -> o.getCustomer() != null && o.getCustomer().getId().equals(customerId))
             .map(order -> {
+                // 1) Modern: InvoiceService üzerinden Logo PDF (cache'li)
+                try {
+                    var invoiceDto = invoiceService.getInvoiceByOrderId(order.getId());
+                    if (invoiceDto.isPresent()
+                            && invoiceDto.get().getStatus() == com.warehouse.enums.InvoiceStatus.APPROVED) {
+                        byte[] pdf = invoiceService.downloadInvoicePdf(invoiceDto.get().getId());
+                        if (pdf != null && pdf.length > 0) {
+                            return ResponseEntity.ok()
+                                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
+                                    "attachment; filename=fatura-" + order.getOrderNumber() + ".pdf")
+                                .contentType(org.springframework.http.MediaType.APPLICATION_PDF)
+                                .body((Object) pdf);
+                        }
+                    }
+                } catch (Exception e) {
+                    // InvoiceService yolu çalışmadıysa legacy'ye düş
+                }
+
+                // 2) Legacy: Order.invoiceUrl varsa dosya sisteminden serve et
                 if (order.getInvoiceUrl() == null || order.getInvoiceUrl().isBlank()) {
-                    return ResponseEntity.badRequest().body(Map.of("message", "Bu sipariş için henüz fatura yüklenmemiş."));
+                    return ResponseEntity.badRequest().body(Map.of(
+                            "message", "Bu sipariş için henüz fatura hazır değil. " +
+                                       "Genelde sipariş ödendikten sonra 5-10 dakika içinde hazırlanır."));
                 }
                 try {
                     java.nio.file.Path filePath = java.nio.file.Paths.get(order.getInvoiceUrl());

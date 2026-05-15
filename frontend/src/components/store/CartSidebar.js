@@ -115,7 +115,7 @@ export default function CartSidebar({ cart }) {
               <div key={item.id} className="d-flex gap-3 py-3 border-bottom align-items-center">
                 {/* Product image */}
                 <div style={{ width: 56, height: 56, borderRadius: 10, background: '#f8fafc', border: '1px solid #f1f5f9', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  {item.imageUrl ? <img src={item.imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <FiShoppingBag className="text-muted" />}
+                  {item.imageUrl ? <img src={item.imageUrl} alt={item.productName || 'Ürün görseli'} style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <FiShoppingBag className="text-muted" />}
                 </div>
 
                 {/* Info + quantity */}

@@ -8,7 +8,11 @@ import com.warehouse.repository.InvoiceRepository;
 import com.warehouse.service.SiteSettingService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
+import jakarta.annotation.PostConstruct;
 
 import java.math.BigDecimal;
 import java.text.NumberFormat;
@@ -22,8 +26,18 @@ import java.util.concurrent.atomic.AtomicLong;
  * Mock e-fatura sağlayıcısı.
  * Gerçek bir sağlayıcı entegre edilene kadar geliştirme/test amaçlı kullanılır.
  * Fatura numarası üretir ve APPROVED durumu döner.
+ *
+ * <p><b>Production Guard:</b> {@code invoice.mock-enabled=false} prop'u ile bean
+ * tamamen oluşturulmaz (Spring context'inde yer almaz). Varsayılan {@code true}
+ * — dev/test ortamlarında otomatik aktif. application-prod.properties'te
+ * {@code invoice.mock-enabled=false} ayarlanır. Bu sayede prod'da yanlışlıkla
+ * MOCK fatura kesmek imkansız hale gelir.</p>
+ *
+ * <p>Ek olarak {@link PostConstruct} ile prod profile'inde aktif olursa loud
+ * warning emit edilir (gözden kaçmasın diye).</p>
  */
 @Component
+@ConditionalOnProperty(name = "invoice.mock-enabled", havingValue = "true", matchIfMissing = true)
 public class MockInvoiceProvider implements InvoiceProvider {
 
     private static final Logger logger = LoggerFactory.getLogger(MockInvoiceProvider.class);
@@ -32,11 +46,37 @@ public class MockInvoiceProvider implements InvoiceProvider {
 
     private final SiteSettingService settingService;
     private final InvoiceRepository invoiceRepository;
+    private final Environment environment;
 
     public MockInvoiceProvider(SiteSettingService settingService,
-                               InvoiceRepository invoiceRepository) {
+                               InvoiceRepository invoiceRepository,
+                               Environment environment) {
         this.settingService = settingService;
         this.invoiceRepository = invoiceRepository;
+        this.environment = environment;
+    }
+
+    /**
+     * Production profile'inde MockInvoiceProvider yanlışlıkla aktif olursa
+     * loud warning at startup — operatör hemen fark etsin.
+     * @ConditionalOnProperty zaten beans'i prevent etmeli ama defense-in-depth
+     * için ek uyarı.
+     */
+    @PostConstruct
+    void warnIfProd() {
+        String[] activeProfiles = environment.getActiveProfiles();
+        boolean isProd = false;
+        for (String p : activeProfiles) if ("prod".equalsIgnoreCase(p) || "production".equalsIgnoreCase(p)) { isProd = true; break; }
+        if (isProd) {
+            logger.error("╔══════════════════════════════════════════════════════════════════╗");
+            logger.error("║  🚨 MockInvoiceProvider AKTIF — PRODUCTION ORTAMI!              ║");
+            logger.error("║  Gerçek müşterilere SAHTE fatura kesilebilir. Yasal risk var.    ║");
+            logger.error("║  application-prod.properties'te invoice.mock-enabled=false       ║");
+            logger.error("║  ayarlandığından emin olun ve gerçek bir provider'ı aktive edin. ║");
+            logger.error("╚══════════════════════════════════════════════════════════════════╝");
+        } else {
+            logger.info("MockInvoiceProvider hazır (profil: {}). Production'da disable edilmelidir.", String.join(",", activeProfiles));
+        }
     }
 
     @Override

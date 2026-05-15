@@ -86,4 +86,8 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
 
     @Query("SELECT COUNT(i) FROM Invoice i WHERE i.createdAt >= :from AND i.createdAt <= :to")
     long countByDateRange(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
+    /** Bir orijinal faturanın tüm credit note'larını döner. */
+    @Query("SELECT i FROM Invoice i WHERE i.creditedInvoice.id = :originalId ORDER BY i.createdAt DESC")
+    List<Invoice> findByCreditedInvoiceId(@Param("originalId") Long originalInvoiceId);
 }

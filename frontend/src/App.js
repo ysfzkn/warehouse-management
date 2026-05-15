@@ -8,6 +8,7 @@ import './store.css';
 // Layouts
 import StoreLayout from './layouts/StoreLayout';
 import AdminLayout from './layouts/AdminLayout';
+import ScrollToTop from './components/ScrollToTop';
 
 // Admin pages (existing)
 import Dashboard from './pages/Dashboard';
@@ -36,6 +37,7 @@ import AdminInvoices from './pages/AdminInvoices';
 import AdminStockMovements from './pages/AdminStockMovements';
 import AdminCargoProviders from './pages/AdminCargoProviders';
 import AdminSupportTickets from './pages/AdminSupportTickets';
+import AdminReviews from './pages/AdminReviews';
 import AdminContactMessages from './pages/AdminContactMessages';
 import AdminSalesDashboard from './pages/AdminSalesDashboard';
 import AdminHelp from './pages/AdminHelp';
@@ -60,6 +62,7 @@ import MyOrdersPage from './pages/store/MyOrdersPage';
 import MyAddressesPage from './pages/store/MyAddressesPage';
 import MyFavoritesPage from './pages/store/MyFavoritesPage';
 import NotificationPreferencesPage from './pages/store/NotificationPreferencesPage';
+import MyPrivacyPage from './pages/store/MyPrivacyPage';
 import EmailVerifyPage from './pages/store/EmailVerifyPage';
 import ForgotPasswordPage from './pages/store/ForgotPasswordPage';
 import ResetPasswordPage from './pages/store/ResetPasswordPage';
@@ -85,12 +88,21 @@ function App() {
     };
   }, []);
 
-  // Host-aware routing: admin.* subdomain shows admin WMS, everything else shows storefront.
-  // This lets us point both siteniz.com and admin.siteniz.com at the same frontend container.
-  const isAdminHost = typeof window !== 'undefined' && window.location.hostname.startsWith('admin.');
+  // Host-aware routing: admin.* veya wms.* subdomain → admin WMS, diğer her şey → storefront.
+  // siteniz.com + admin.siteniz.com (legacy) + wms.siteniz.com (yeni lansman) aynı frontend container'ı
+  // paylaşır; sadece bu host kontrolü hangi route ağacının çizileceğini belirler.
+  // REACT_APP_ADMIN_HOSTS env değişkeni ile özelleştirilebilir (örn. "admin,wms,panel").
+  const ADMIN_HOST_PREFIXES = (process.env.REACT_APP_ADMIN_HOSTS || 'admin,wms')
+      .split(',').map(s => s.trim()).filter(Boolean);
+  const isAdminHost = typeof window !== 'undefined' && (() => {
+    const h = window.location.hostname || '';
+    return ADMIN_HOST_PREFIXES.some(p => h.startsWith(p + '.'));
+  })();
 
   return (
     <div className="App">
+      {/* Sayfa geçişlerinde otomatik yukarı kaydır — kullanıcı her zaman sayfanın başında başlar */}
+      <ScrollToTop />
       {isAdminHost ? (
         <AdminRoutes authed={authed} role={role} />
       ) : (
@@ -143,6 +155,7 @@ function StoreRoutes() {
         <Route path="adreslerim" element={<MyAddressesPage />} />
         <Route path="favorilerim" element={<MyFavoritesPage />} />
         <Route path="hesabim/bildirimler" element={<NotificationPreferencesPage />} />
+        <Route path="hesabim/gizlilik" element={<MyPrivacyPage />} />
         <Route path="destek" element={<MySupportPage />} />
         <Route path="hesap-dogrula" element={<EmailVerifyPage />} />
         <Route path="sifremi-unuttum" element={<ForgotPasswordPage />} />
@@ -242,6 +255,9 @@ function AdminRoutes({ authed, role }) {
           } />
           <Route path="admin/support-tickets" element={
             authed && role === 'ADMIN' ? <AdminSupportTickets /> : <Navigate to={authed ? '/stock' : '/login'} replace />
+          } />
+          <Route path="admin/reviews" element={
+            authed && role === 'ADMIN' ? <AdminReviews /> : <Navigate to={authed ? '/stock' : '/login'} replace />
           } />
           <Route path="admin/contact-messages" element={
             authed && role === 'ADMIN' ? <AdminContactMessages /> : <Navigate to={authed ? '/stock' : '/login'} replace />

@@ -1,9 +1,9 @@
 package com.warehouse.config;
 
-import org.springframework.context.annotation.Configuration;
-import org.springframework.scheduling.annotation.EnableScheduling;
-
-@Configuration
-@EnableScheduling
+/**
+ * @deprecated {@link SchedulerConfig} bunu kapsadı (ShedLock + @EnableScheduling).
+ * Bu class'a artık ihtiyaç yok; sınıf gövdesi kaldırıldı.
+ */
+@Deprecated
 public class SchedulingConfig {
 }

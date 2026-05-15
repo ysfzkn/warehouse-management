@@ -1,0 +1,106 @@
+{
+  "uid": "warehouse-logs",
+  "title": "Warehouse — Live Logs",
+  "tags": ["warehouse", "loki"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "10s",
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Error Rate (last 5m)",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "targets": [
+        { "expr": "sum(rate({service=\"warehouse-backend\", level=\"ERROR\"}[5m]))", "refId": "A" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 0.1 },
+              { "color": "red", "value": 1 }
+            ]
+          },
+          "unit": "logs/s"
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Warnings (last 5m)",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "targets": [
+        { "expr": "sum(rate({service=\"warehouse-backend\", level=\"WARN\"}[5m]))", "refId": "A" }
+      ],
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "fixed", "fixedColor": "yellow" }, "unit": "logs/s" }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Total Logs (last 1h)",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "targets": [
+        { "expr": "sum(count_over_time({service=\"warehouse-backend\"}[1h]))", "refId": "A" }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Unique Errors (1h)",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "targets": [
+        { "expr": "count(count by (logger) ({service=\"warehouse-backend\", level=\"ERROR\"} | json))", "refId": "A" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Log Volume by Level",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 4 },
+      "targets": [
+        {
+          "expr": "sum by (level) (rate({service=\"warehouse-backend\"} | json | __error__ = \"\"[1m]))",
+          "refId": "A",
+          "legendFormat": "{{level}}"
+        }
+      ]
+    },
+    {
+      "type": "logs",
+      "title": "Recent ERRORS",
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 12 },
+      "options": {
+        "showTime": true,
+        "showLabels": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending"
+      },
+      "targets": [
+        {
+          "expr": "{service=\"warehouse-backend\", level=\"ERROR\"} | json | line_format \"{{.timestamp}} [{{.logger}}] {{.message}} {{.stack_trace}}\"",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "logs",
+      "title": "All Logs (live tail)",
+      "gridPos": { "h": 14, "w": 24, "x": 0, "y": 24 },
+      "options": {
+        "showTime": true,
+        "showLabels": false,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending"
+      },
+      "targets": [
+        {
+          "expr": "{service=\"warehouse-backend\"} | json | line_format \"[{{.level}}] {{.logger}} — {{.message}}\"",
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}

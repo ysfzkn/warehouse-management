@@ -59,11 +59,14 @@ public class GuestPlaceOrderRequest {
 
     private String customerNote;
 
-    // --- Sözleşmeler ---
+    // --- Sözleşmeler (Türkiye 6502 sayılı kanun + KVKK 6698 gereği) ---
 
     private boolean distanceSalesContractAccepted;
+    private java.time.LocalDateTime distanceSalesContractAcceptedAt;
     private boolean preliminaryInfoAccepted;
+    private java.time.LocalDateTime preliminaryInfoAcceptedAt;
     private boolean kvkkConsent;
+    private java.time.LocalDateTime kvkkConsentAt;
 
     /** Misafir sepeti ile bağlantı için (localStorage'daki session ID) */
     private String sessionId;

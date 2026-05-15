@@ -45,25 +45,28 @@ import java.util.UUID;
 public class AssistantDocumentService {
 
     private static final Logger log = LoggerFactory.getLogger(AssistantDocumentService.class);
-    private static final String STORAGE_ROOT = "uploads/assistant-documents";
+    private static final String STORAGE_PREFIX = "assistant-documents";
 
     private final AssistantDocumentRepository documentRepository;
     private final AssistantDocumentChunkRepository chunkRepository;
     private final DocumentChunker chunker;
     private final EmbeddingService embeddingService;
     private final VectorSearchService vectorSearchService;
+    private final com.warehouse.service.PhotoStorageService photoStorageService;
     private final Tika tika = new Tika();
 
     public AssistantDocumentService(AssistantDocumentRepository documentRepository,
                                     AssistantDocumentChunkRepository chunkRepository,
                                     DocumentChunker chunker,
                                     EmbeddingService embeddingService,
-                                    VectorSearchService vectorSearchService) {
+                                    VectorSearchService vectorSearchService,
+                                    com.warehouse.service.PhotoStorageService photoStorageService) {
         this.documentRepository = documentRepository;
         this.chunkRepository = chunkRepository;
         this.chunker = chunker;
         this.embeddingService = embeddingService;
         this.vectorSearchService = vectorSearchService;
+        this.photoStorageService = photoStorageService;
     }
 
     /**
@@ -88,13 +91,22 @@ public class AssistantDocumentService {
             throw new IllegalArgumentException("Yüklenecek dosya boş olamaz.");
         }
         String fileName = file.getOriginalFilename() != null ? file.getOriginalFilename() : "document";
-        Path storedPath = persistToDisk(file, fileName);
+        // Storage abstraction üzerinden kaydet → dev'de local fs, prod'da S3/MinIO.
+        String storageKey;
+        try (InputStream in = file.getInputStream()) {
+            storageKey = photoStorageService.storeDocument(
+                    STORAGE_PREFIX,
+                    fileName,
+                    file.getContentType(),
+                    in
+            );
+        }
 
         AssistantDocument doc = new AssistantDocument();
         doc.setTitle(title != null && !title.isBlank() ? title.trim() : fileName);
         doc.setScope(scope != null ? scope : AssistantDocumentScope.STORE);
         doc.setFileName(fileName);
-        doc.setStoragePath(storedPath.toString());
+        doc.setStoragePath(storageKey);
         doc.setMimeType(file.getContentType());
         doc.setSizeBytes(file.getSize());
         doc.setUploadedBy(uploadedBy);
@@ -126,9 +138,9 @@ public class AssistantDocumentService {
         documentRepository.findById(documentId).ifPresent(doc -> {
             chunkRepository.deleteByDocumentId(documentId);
             try {
-                Files.deleteIfExists(Paths.get(doc.getStoragePath()));
-            } catch (IOException e) {
-                log.warn("Could not delete file {}: {}", doc.getStoragePath(), e.getMessage());
+                photoStorageService.deleteDocument(doc.getStoragePath());
+            } catch (Exception e) {
+                log.warn("Could not delete document {}: {}", doc.getStoragePath(), e.getMessage());
             }
             documentRepository.delete(doc);
         });
@@ -164,7 +176,10 @@ public class AssistantDocumentService {
             }
 
             long t1 = System.nanoTime();
-            String text = extractText(Paths.get(doc.getStoragePath()));
+            String text;
+            try (InputStream in = photoStorageService.openDocumentStream(doc.getStoragePath())) {
+                text = tika.parseToString(in);
+            }
             if (text == null || text.isBlank()) {
                 throw new IllegalStateException("Dosyadan metin çıkarılamadı.");
             }
@@ -226,29 +241,8 @@ public class AssistantDocumentService {
     // Helpers
     // -------------------------------------------------------------------------
 
-    private Path persistToDisk(MultipartFile file, String fileName) throws IOException {
-        Path dir = Paths.get(STORAGE_ROOT);
-        if (!Files.exists(dir)) Files.createDirectories(dir);
-        String ext = extensionOf(fileName);
-        String safeName = UUID.randomUUID() + ext;
-        Path target = dir.resolve(safeName);
-        try (InputStream in = file.getInputStream()) {
-            Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
-        }
-        return target;
-    }
-
-    private String extensionOf(String fileName) {
-        if (fileName == null) return "";
-        int dot = fileName.lastIndexOf('.');
-        return dot > 0 ? fileName.substring(dot).toLowerCase() : "";
-    }
-
-    private String extractText(Path file) throws IOException, TikaException {
-        try (InputStream in = Files.newInputStream(file)) {
-            return tika.parseToString(in);
-        }
-    }
+    // persistToDisk / extractText artık kullanılmıyor — tüm I/O
+    // PhotoStorageService.storeDocument + openDocumentStream üzerinden.
 
     private String truncate(String s, int max) {
         if (s == null) return null;

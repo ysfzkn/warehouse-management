@@ -171,14 +171,24 @@ public class StorePaymentController {
         // Process the payment callback
         Map<String, String> enrichedParams = new HashMap<>(params);
         enrichedParams.put("_configCode", configCode);
+        // KRİTİK: PayTR callback'inde "token" parametresi YOK — sadece "merchant_oid".
+        // PaymentServiceImpl.handlePaymentCallback() tx'i token alanından bulur ve
+        // initializePayment sırasında tx.token = orderNumber (= merchant_oid) olarak set edilmişti.
+        // Burada manuel mapping ile boşluğu kapatıyoruz.
+        if (!enrichedParams.containsKey("token") && enrichedParams.containsKey("merchant_oid")) {
+            enrichedParams.put("token", enrichedParams.get("merchant_oid"));
+        }
 
         try {
             paymentService.handlePaymentCallback(enrichedParams);
         } catch (Exception e) {
-            log.error("PayTR callback processing error: {}", e.getMessage(), e);
+            // ÖNEMLİ: Hata olsa bile PayTR'a "OK" dönerin; aksi halde dakikada 1 retry yapar.
+            // Hata loglanır + InvoiceAdminDigestJob benzeri mekanizma yakalar.
+            log.error("PayTR callback processing error (merchant_oid={}): {}",
+                    params.get("merchant_oid"), e.getMessage(), e);
         }
 
-        // PayTR requires plain text "OK" response
+        // PayTR requires plain text "OK" response — retry'ları durdurmak için
         return ResponseEntity.ok("OK");
     }
 

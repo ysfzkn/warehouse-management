@@ -43,7 +43,7 @@ export default function CartPage() {
                 {/* Görsel */}
                 <Link to={`/urun/${item.productSlug}`} className="flex-shrink-0 position-relative">
                   <div style={{width:80,height:80,borderRadius:12,background:'#f8fafc',border:'1px solid #f1f5f9',overflow:'hidden',display:'flex',alignItems:'center',justifyContent:'center'}}>
-                    {item.imageUrl ? <img src={item.imageUrl} alt="" style={{width:'100%',height:'100%',objectFit:'contain'}} /> : <FiShoppingCart size={24} className="text-muted" />}
+                    {item.imageUrl ? <img src={item.imageUrl} alt={item.productName || 'Ürün görseli'} style={{width:'100%',height:'100%',objectFit:'contain'}} /> : <FiShoppingCart size={24} className="text-muted" />}
                   </div>
                   {hasDiscount && <span className="badge bg-danger position-absolute" style={{top:-4,left:-4,fontSize:9}}>%{discountPct}</span>}
                 </Link>

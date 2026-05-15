@@ -33,7 +33,9 @@ public class CacheConfig {
             "storeCatalog",        // Product listing cache
             "categoryTree",        // Category hierarchy cache
             "productDetail",       // Single product detail cache
-            "stockAvailability"    // Stock availability (short TTL, evicted on stock events)
+            "stockAvailability",   // Stock availability (short TTL, evicted on stock events)
+            "sitemap",             // Dinamik sitemap.xml — 6h TTL (controller-level header de var)
+            "invoicePdf"           // E-fatura PDF — Logo'dan tekrar tekrar çekmemek için 24h cache
         );
         
         cacheManager.setCaffeine(Caffeine.newBuilder()

@@ -23,4 +23,9 @@ public interface StockNotificationSubscriptionRepository extends JpaRepository<S
     List<Long> findProductIdsWithPendingSubscriptions();
 
     long countByProductIdAndNotifiedFalse(Long productId);
+
+    @org.springframework.transaction.annotation.Transactional
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("DELETE FROM StockNotificationSubscription s WHERE s.customer.id = :customerId")
+    void deleteByCustomerId(@Param("customerId") Long customerId);
 }

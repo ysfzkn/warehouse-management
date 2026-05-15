@@ -37,6 +37,25 @@ public interface InvoiceService {
     InvoiceDto cancelInvoice(Long invoiceId);
 
     /**
+     * İade faturası (Credit Note) oluşturur.
+     *
+     * <p>Türkiye e-fatura mevzuatı:
+     * <ul>
+     *   <li>e-Arşiv 8 gün içinde iptal edilebilir → bu durumda credit note değil,
+     *       doğrudan {@link #cancelInvoice(Long)} kullanın.</li>
+     *   <li>8 gün sonrasındaki e-Arşiv veya herhangi bir zamandaki e-Fatura için
+     *       credit note kesilmelidir. Bu metot UBL-TR ProfileID="IADE" + orijinal
+     *       faturanın BillingReference'ını içeren yeni bir Invoice satırı yaratır.</li>
+     * </ul></p>
+     *
+     * @param originalInvoiceId iadeye konu orijinal fatura
+     * @param refundAmount     iade tutarı (null ise orijinalin tamamı)
+     * @param reason           İade nedeni (UBL Note alanına yazılır)
+     * @return yeni oluşturulan credit note Invoice DTO'su
+     */
+    InvoiceDto createCreditNote(Long originalInvoiceId, java.math.BigDecimal refundAmount, String reason);
+
+    /**
      * ID ile fatura getirir.
      */
     Optional<InvoiceDto> getInvoiceById(Long invoiceId);

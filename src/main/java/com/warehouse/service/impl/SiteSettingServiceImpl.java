@@ -3,6 +3,8 @@ package com.warehouse.service.impl;
 import com.warehouse.entity.SiteSetting;
 import com.warehouse.repository.SiteSettingRepository;
 import com.warehouse.service.SiteSettingService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -13,6 +15,13 @@ import java.util.stream.Collectors;
 @Service
 @Transactional
 public class SiteSettingServiceImpl implements SiteSettingService {
+
+    private static final Logger log = LoggerFactory.getLogger(SiteSettingServiceImpl.class);
+
+    /** site_settings.setting_key VARCHAR(100) — DB limit */
+    private static final int MAX_KEY_LENGTH = 100;
+    /** site_settings.updated_by VARCHAR(100) — DB limit */
+    private static final int MAX_UPDATED_BY_LENGTH = 100;
 
     private final SiteSettingRepository repository;
 
@@ -35,17 +44,49 @@ public class SiteSettingServiceImpl implements SiteSettingService {
 
     @Override
     public void updateSettings(Map<String, String> settings, String updatedBy) {
-        for (var entry : settings.entrySet()) {
-            SiteSetting setting = repository.findBySettingKey(entry.getKey()).orElse(null);
-            if (setting == null) {
-                setting = new SiteSetting();
-                setting.setSettingKey(entry.getKey());
-                setting.setSettingType("STRING");
-            }
-            setting.setSettingValue(entry.getValue() != null ? entry.getValue() : "");
-            setting.setUpdatedBy(updatedBy);
-            repository.save(setting);
+        if (settings == null || settings.isEmpty()) {
+            log.warn("updateSettings called with empty/null map — ignoring");
+            return;
         }
+        // updated_by alanını DB limitine kırp (CurrentUser.usernameOrSystem() çok uzunsa hata vermez)
+        final String safeUpdatedBy = updatedBy == null ? "system"
+                : (updatedBy.length() > MAX_UPDATED_BY_LENGTH
+                    ? updatedBy.substring(0, MAX_UPDATED_BY_LENGTH) : updatedBy);
+
+        int updated = 0, skipped = 0;
+        for (var entry : settings.entrySet()) {
+            String key = entry.getKey();
+            // Skip invalid keys: null, blank, çok uzun
+            if (key == null || key.isBlank()) {
+                log.warn("Skipping setting with null/blank key");
+                skipped++;
+                continue;
+            }
+            if (key.length() > MAX_KEY_LENGTH) {
+                log.warn("Skipping setting key too long ({} > {}): {}", key.length(), MAX_KEY_LENGTH, key);
+                skipped++;
+                continue;
+            }
+            try {
+                SiteSetting setting = repository.findBySettingKey(key).orElse(null);
+                if (setting == null) {
+                    setting = new SiteSetting();
+                    setting.setSettingKey(key);
+                    setting.setSettingType("STRING");
+                }
+                // PostgreSQL TEXT NOT NULL constraint — null → ""
+                setting.setSettingValue(entry.getValue() != null ? entry.getValue() : "");
+                setting.setUpdatedBy(safeUpdatedBy);
+                repository.save(setting);
+                updated++;
+            } catch (Exception ex) {
+                // Tek setting hata atarsa diğerlerini de kaybetmeyelim — bu key'i atla
+                log.error("Failed to save setting key='{}': {}", key, ex.getMessage(), ex);
+                throw new IllegalStateException(
+                        "Ayar kaydedilemedi (key=" + key + "): " + ex.getMessage(), ex);
+            }
+        }
+        log.info("Site settings updated: {} keys, {} skipped, updatedBy={}", updated, skipped, safeUpdatedBy);
     }
 
     @Override

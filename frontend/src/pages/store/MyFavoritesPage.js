@@ -53,7 +53,7 @@ export default function MyFavoritesPage() {
                 <div className="card-body d-flex gap-3">
                   <Link to={`/urun/${item.productSlug}`} className="flex-shrink-0">
                     {item.imageUrl ? (
-                      <img src={item.imageUrl} alt="" style={{ width: 80, height: 80, objectFit: 'contain', borderRadius: 8, background: '#f8f9fa' }} />
+                      <img src={item.imageUrl} alt={item.productName || 'Ürün görseli'} style={{ width: 80, height: 80, objectFit: 'contain', borderRadius: 8, background: '#f8f9fa' }} loading="lazy" />
                     ) : (
                       <div style={{ width: 80, height: 80, borderRadius: 8, background: '#f8f9fa', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <i className="fas fa-image text-muted" />

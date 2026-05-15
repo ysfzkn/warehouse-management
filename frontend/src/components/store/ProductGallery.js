@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { FiChevronLeft, FiChevronRight, FiZoomIn } from 'react-icons/fi';
 
-export default function ProductGallery({ images }) {
+export default function ProductGallery({ images, productName }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [zoomed, setZoomed] = useState(false);
@@ -86,7 +86,7 @@ export default function ProductGallery({ images }) {
       >
         <img
           src={mainImage.url || mainImage.thumbnailUrl}
-          alt="Ürün görseli"
+          alt={productName ? `${productName} - görsel ${activeIndex + 1}` : 'Ürün görseli'}
           style={{
             transition: 'opacity 0.35s ease, transform 0.35s ease',
             opacity: isTransitioning ? 0.6 : 1,
@@ -137,7 +137,9 @@ export default function ProductGallery({ images }) {
               aria-selected={i === activeIndex}
               aria-label={`Görsel ${i + 1}`}
             >
-              <img src={img.thumbnailUrl || img.url} alt="" />
+              <img src={img.thumbnailUrl || img.url}
+                   alt={productName ? `${productName} - görsel ${i + 1}` : `Ürün görseli ${i + 1}`}
+                   loading="lazy" />
             </button>
           ))}
         </div>

@@ -106,7 +106,7 @@ export default function ProductDetailPage() {
         {/* Gallery */}
         <div className="col-lg-6">
           <div className="position-relative">
-            <ProductGallery images={product.images} />
+            <ProductGallery images={product.images} productName={product.name} />
             {/* Discount badge on gallery */}
             {hasDiscount && (
               <div className="position-absolute top-0 start-0 m-3" style={{zIndex:5}}>
@@ -450,6 +450,36 @@ export default function ProductDetailPage() {
               </form>
             )}
           </div>
+        </div>
+      )}
+
+      {/*
+        Mobile sticky "Sepete Ekle" — yalnızca <768px ekrana sahip cihazlarda görünür.
+        PDP uzun olduğunda kullanıcı scroll edip butonu kaybetmesin diye altta sabit kalır.
+        Trust badge'lerden sonra geliyor; CSS @media ile mobile-only.
+      */}
+      {product.stockStatus !== 'OUT_OF_STOCK' && (
+        <div className="store-pdp-sticky-cta d-md-none" role="region" aria-label="Hızlı satın alma">
+          <div className="store-pdp-sticky-price">
+            <small className="text-muted d-block" style={{ fontSize: 11, lineHeight: 1 }}>Fiyat</small>
+            <strong style={{ fontSize: '1.05rem' }}>
+              {hasDiscount
+                ? new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(product.salePrice)
+                : new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(product.price)}
+            </strong>
+          </div>
+          <button
+            className="btn btn-primary flex-grow-1 d-flex align-items-center justify-content-center gap-2"
+            onClick={async () => {
+              try { await cart.addItem(product.id, 1); toast.success(`${product.name} sepete eklendi`); }
+              catch (e) { toast.error(e?.response?.data?.message || 'Sepete eklenemedi'); }
+            }}
+            aria-label="Sepete ekle"
+            style={{ minHeight: 48, fontWeight: 600 }}
+          >
+            <i className="fas fa-shopping-cart" aria-hidden="true" />
+            Sepete Ekle
+          </button>
         </div>
       )}
     </div>

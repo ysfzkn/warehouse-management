@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { FiUser, FiPhone, FiMapPin, FiHome, FiCreditCard, FiCheck, FiAlertCircle } from 'react-icons/fi';
+import { TR_PROVINCES, getDistrictsForProvince } from '../../data/tr-locations';
 
 // TC Kimlik No validation
 function validateTcKimlik(tc) {
@@ -29,16 +30,8 @@ function validatePhone(phone) {
   return /^(05)\d{9}$/.test(digits);
 }
 
-const CITIES = [
-  'Adana','Adıyaman','Afyonkarahisar','Ağrı','Aksaray','Amasya','Ankara','Antalya','Ardahan','Artvin',
-  'Aydın','Balıkesir','Bartın','Batman','Bayburt','Bilecik','Bingöl','Bitlis','Bolu','Burdur',
-  'Bursa','Çanakkale','Çankırı','Çorum','Denizli','Diyarbakır','Düzce','Edirne','Elazığ','Erzincan',
-  'Erzurum','Eskişehir','Gaziantep','Giresun','Gümüşhane','Hakkari','Hatay','Iğdır','Isparta','İstanbul',
-  'İzmir','Kahramanmaraş','Karabük','Karaman','Kars','Kastamonu','Kayseri','Kırıkkale','Kırklareli','Kırşehir',
-  'Kilis','Kocaeli','Konya','Kütahya','Malatya','Manisa','Mardin','Mersin','Muğla','Muş',
-  'Nevşehir','Niğde','Ordu','Osmaniye','Rize','Sakarya','Samsun','Şanlıurfa','Siirt','Sinop',
-  'Şırnak','Sivas','Tekirdağ','Tokat','Trabzon','Tunceli','Uşak','Van','Yalova','Yozgat','Zonguldak',
-];
+// İller artık `data/tr-locations.js`'ten geliyor (cascading select için ilçe veri seti).
+const CITIES = TR_PROVINCES;
 
 export default function AddressForm({ onSubmit, initialData, submitLabel, onCancel }) {
   const [form, setForm] = useState({
@@ -141,33 +134,56 @@ export default function AddressForm({ onSubmit, initialData, submitLabel, onCanc
         <div className="col-12"><hr className="my-1" /><div className="small fw-semibold text-muted"><FiUser size={13} className="me-1" />Kişisel Bilgiler</div></div>
 
         <div className="col-md-6">
-          <label className="form-label small fw-medium">Ad <span className="text-danger">*</span></label>
-          <input className={inputClass('firstName')} name="firstName" value={form.firstName}
+          <label htmlFor="addr-firstName" className="form-label small fw-medium">
+            Ad <span className="text-danger" aria-hidden="true">*</span>
+            <span className="visually-hidden">(zorunlu)</span>
+          </label>
+          <input id="addr-firstName" className={inputClass('firstName')} name="firstName" value={form.firstName}
             onChange={e => f('firstName', e.target.value)} onBlur={() => touch('firstName')}
-            placeholder="Adınız" />
-          {errors.firstName && <div className="invalid-feedback">{errors.firstName}</div>}
+            placeholder="Adınız"
+            autoComplete="given-name"
+            aria-required="true"
+            aria-invalid={!!errors.firstName}
+            aria-describedby={errors.firstName ? 'addr-firstName-error' : undefined} />
+          {errors.firstName && <div id="addr-firstName-error" className="invalid-feedback">{errors.firstName}</div>}
         </div>
 
         <div className="col-md-6">
-          <label className="form-label small fw-medium">Soyad <span className="text-danger">*</span></label>
-          <input className={inputClass('lastName')} name="lastName" value={form.lastName}
+          <label htmlFor="addr-lastName" className="form-label small fw-medium">
+            Soyad <span className="text-danger" aria-hidden="true">*</span>
+            <span className="visually-hidden">(zorunlu)</span>
+          </label>
+          <input id="addr-lastName" className={inputClass('lastName')} name="lastName" value={form.lastName}
             onChange={e => f('lastName', e.target.value)} onBlur={() => touch('lastName')}
-            placeholder="Soyadınız" />
-          {errors.lastName && <div className="invalid-feedback">{errors.lastName}</div>}
+            placeholder="Soyadınız"
+            autoComplete="family-name"
+            aria-required="true"
+            aria-invalid={!!errors.lastName}
+            aria-describedby={errors.lastName ? 'addr-lastName-error' : undefined} />
+          {errors.lastName && <div id="addr-lastName-error" className="invalid-feedback">{errors.lastName}</div>}
         </div>
 
         <div className="col-md-6">
-          <label className="form-label small fw-medium"><FiPhone size={13} className="me-1" />Telefon <span className="text-danger">*</span></label>
+          <label htmlFor="addr-phone" className="form-label small fw-medium">
+            <FiPhone size={13} className="me-1" aria-hidden="true" />Telefon
+            <span className="text-danger" aria-hidden="true"> *</span>
+            <span className="visually-hidden">(zorunlu)</span>
+          </label>
           <div className="input-group">
-            <span className="input-group-text" style={{ fontSize: 13 }}>+90</span>
-            <input className={inputClass('phone')} value={form.phone}
+            <span className="input-group-text" style={{ fontSize: 13 }} aria-hidden="true">+90</span>
+            <input id="addr-phone" className={inputClass('phone')} value={form.phone}
               onChange={e => f('phone', formatPhone(e.target.value))} onBlur={() => touch('phone')}
-              placeholder="5XX XXX XX XX" inputMode="tel" maxLength={14} />
+              placeholder="5XX XXX XX XX"
+              inputMode="tel" maxLength={14}
+              autoComplete="tel-national"
+              aria-required="true"
+              aria-invalid={!!errors.phone}
+              aria-describedby={errors.phone ? 'addr-phone-error' : undefined} />
             {touched.phone && !errors.phone && form.phone && (
-              <span className="input-group-text text-success bg-transparent border-success"><FiCheck size={14} /></span>
+              <span className="input-group-text text-success bg-transparent border-success" aria-hidden="true"><FiCheck size={14} /></span>
             )}
           </div>
-          {errors.phone && <div className="text-danger" style={{ fontSize: '0.75rem', marginTop: 4 }}><FiAlertCircle size={12} className="me-1" />{errors.phone}</div>}
+          {errors.phone && <div id="addr-phone-error" className="text-danger" role="alert" style={{ fontSize: '0.75rem', marginTop: 4 }}><FiAlertCircle size={12} className="me-1" aria-hidden="true" />{errors.phone}</div>}
         </div>
 
         <div className="col-md-6">
@@ -192,7 +208,15 @@ export default function AddressForm({ onSubmit, initialData, submitLabel, onCanc
         <div className="col-md-4">
           <label className="form-label small fw-medium">İl <span className="text-danger">*</span></label>
           <select className={`form-select ${touched.city ? (errors.city ? 'is-invalid' : form.city ? 'is-valid' : '') : ''}`}
-            value={form.city} onChange={e => f('city', e.target.value)} onBlur={() => touch('city')}>
+            value={form.city}
+            onChange={e => {
+              // İl değişince ilçe seçimi geçersiz olur — temizle
+              if (e.target.value !== form.city) {
+                setForm(prev => ({ ...prev, city: e.target.value, district: '' }));
+                setErrors(prev => ({ ...prev, city: '', district: '' }));
+              }
+            }}
+            onBlur={() => touch('city')}>
             <option value="">İl seçiniz...</option>
             {CITIES.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
@@ -201,9 +225,28 @@ export default function AddressForm({ onSubmit, initialData, submitLabel, onCanc
 
         <div className="col-md-4">
           <label className="form-label small fw-medium">İlçe <span className="text-danger">*</span></label>
-          <input className={inputClass('district')} value={form.district}
-            onChange={e => f('district', e.target.value)} onBlur={() => touch('district')}
-            placeholder="İlçe adı" />
+          {(() => {
+            const districts = getDistrictsForProvince(form.city);
+            if (districts.length > 0) {
+              // İl seçildi ve elimizde ilçe listesi var — cascading select
+              return (
+                <select className={`form-select ${touched.district ? (errors.district ? 'is-invalid' : form.district ? 'is-valid' : '') : ''}`}
+                  value={form.district}
+                  onChange={e => f('district', e.target.value)}
+                  onBlur={() => touch('district')}>
+                  <option value="">İlçe seçiniz...</option>
+                  {districts.map(d => <option key={d} value={d}>{d}</option>)}
+                </select>
+              );
+            }
+            // İl seçilmedi veya küçük il (veri yok) — free text fallback
+            return (
+              <input className={inputClass('district')} value={form.district}
+                onChange={e => f('district', e.target.value)} onBlur={() => touch('district')}
+                placeholder={form.city ? 'İlçe adı' : 'Önce il seçiniz'}
+                disabled={!form.city} />
+            );
+          })()}
           {errors.district && <div className="invalid-feedback">{errors.district}</div>}
         </div>
 

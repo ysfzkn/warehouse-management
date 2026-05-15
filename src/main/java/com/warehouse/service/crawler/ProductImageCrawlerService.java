@@ -128,9 +128,20 @@ public class ProductImageCrawlerService {
                     doc.title());
 
             List<String> images = extractImageUrls(doc, pageUrl);
+
+            // Description + shortDescription + specs + brand
+            String description = extractDescription(doc);
+            String shortDescription = extractShortDescription(doc, description);
+            java.util.Map<String, String> specs = extractSpecs(doc);
+            String brand = extractBrand(doc);
+
             long ms = System.currentTimeMillis() - t0;
-            log.info("[Crawler] preview {} → {} images ({}ms)", pageUrl, images.size(), ms);
-            return new CrawlPreview(pageUrl, title.trim(), images, null);
+            log.info("[Crawler] preview {} → {} images, desc={} chars, specs={} ({}ms)",
+                    pageUrl, images.size(),
+                    description != null ? description.length() : 0,
+                    specs.size(), ms);
+            return new CrawlPreview(pageUrl, title.trim(), images,
+                    description, shortDescription, specs, brand, null);
         } catch (org.jsoup.HttpStatusException e) {
             throw new CrawlException("Sayfa erişilemez (" + e.getStatusCode() + ")", e);
         } catch (java.net.SocketTimeoutException e) {
@@ -234,6 +245,240 @@ public class ProductImageCrawlerService {
     // ─────────────────────────────────────────────────────────────
     //  Image extraction strategies
     // ─────────────────────────────────────────────────────────────
+
+    // ─────────────────────────────────────────────────────────────
+    //  Description / specs extraction
+    // ─────────────────────────────────────────────────────────────
+
+    /**
+     * Uzun açıklamayı 5 farklı stratejiyle çıkarır (öncelik sırasıyla):
+     * <ol>
+     *   <li>schema.org JSON-LD Product.description</li>
+     *   <li>meta[itemprop=description]</li>
+     *   <li>section.product-description / div.tab-pane (Bosch/Siemens/Beko pattern)</li>
+     *   <li>article > div.description / .product-details</li>
+     *   <li>og:description (genelde kısa olur ama fallback)</li>
+     * </ol>
+     * Maksimum 5000 karakter; HTML tag'leri korunur ama temizlenir (script/style yok).
+     */
+    String extractDescription(Document doc) {
+        // 1) JSON-LD
+        try {
+            for (var el : doc.select("script[type=application/ld+json]")) {
+                String json = el.data();
+                if (json == null || json.isBlank()) continue;
+                // Basit regex — tam JSON parse riski (\n vb.) yerine description "..." ara
+                java.util.regex.Matcher m = java.util.regex.Pattern.compile(
+                        "\"description\"\\s*:\\s*\"((?:\\\\\"|[^\"])*)\"")
+                        .matcher(json);
+                if (m.find()) {
+                    String s = m.group(1)
+                            .replace("\\\"", "\"")
+                            .replace("\\n", "\n")
+                            .replace("\\/", "/");
+                    if (s.length() > 50) return truncateSmart(cleanHtml(s), 5000);
+                }
+            }
+        } catch (Exception ignored) {}
+
+        // 2) Itemprop description
+        var ip = doc.selectFirst("[itemprop=description]");
+        if (ip != null) {
+            String txt = ip.text();
+            if (txt != null && txt.length() > 30) return truncateSmart(txt, 5000);
+        }
+
+        // 3) Common product detail selectors
+        String[] selectors = {
+                ".product-description", ".product-details-description",
+                ".tab-content .product-description", "#description",
+                ".product-info .description", ".product-detail-content",
+                "section.description", "div[class*=description]",
+                ".product-overview", "#productDescription",
+        };
+        for (String sel : selectors) {
+            var el = doc.selectFirst(sel);
+            if (el != null) {
+                String html = el.html();
+                String txt = el.text();
+                if (txt != null && txt.length() > 80) {
+                    // HTML preserve et — bu admin'e zengin metin gösterir
+                    return truncateSmart(cleanHtml(html), 5000);
+                }
+            }
+        }
+
+        // 4) Tüm <p> taglerinin birleşimi (ana içerik area)
+        try {
+            var paragraphs = doc.select("main p, article p, .product p");
+            if (paragraphs.isEmpty()) paragraphs = doc.select("p");
+            StringBuilder sb = new StringBuilder();
+            for (var p : paragraphs) {
+                String t = p.text();
+                if (t == null || t.length() < 40) continue;
+                // Navigation/footer text'i atla
+                String clsParent = p.parent() != null ? String.valueOf(p.parent().className()) : "";
+                if (clsParent.toLowerCase().matches(".*(menu|nav|footer|header|breadcrumb).*")) continue;
+                sb.append(t).append("\n\n");
+                if (sb.length() > 3000) break;
+            }
+            if (sb.length() > 100) return truncateSmart(sb.toString().trim(), 5000);
+        } catch (Exception ignored) {}
+
+        // 5) og:description fallback (genelde kısa)
+        String og = doc.select("meta[property=og:description]").attr("content");
+        if (og != null && og.length() > 30) return truncateSmart(og, 5000);
+
+        return null;
+    }
+
+    /** Kısa açıklama — meta description veya description'ın ilk cümlesi. */
+    String extractShortDescription(Document doc, String longDescription) {
+        // 1) meta name="description"
+        String meta = doc.select("meta[name=description]").attr("content");
+        if (meta != null && meta.length() > 30 && meta.length() < 300) {
+            return meta.trim();
+        }
+        // 2) og:description
+        String og = doc.select("meta[property=og:description]").attr("content");
+        if (og != null && og.length() > 30 && og.length() < 300) {
+            return og.trim();
+        }
+        // 3) long description'ın ilk 200 karakteri
+        if (longDescription != null && longDescription.length() > 50) {
+            String plain = longDescription.replaceAll("<[^>]+>", " ").replaceAll("\\s+", " ").trim();
+            if (plain.length() > 200) return plain.substring(0, 197) + "...";
+            return plain;
+        }
+        return null;
+    }
+
+    /**
+     * Teknik özellikleri tablo/dl/ul yapılarından çıkarır.
+     * Örn. "Kapasite: 9 kg", "Enerji Sınıfı: A++", "Renk: Beyaz" gibi.
+     */
+    java.util.Map<String, String> extractSpecs(Document doc) {
+        java.util.Map<String, String> specs = new java.util.LinkedHashMap<>();
+
+        // 1) schema.org Product.additionalProperty (JSON-LD)
+        try {
+            for (var el : doc.select("script[type=application/ld+json]")) {
+                String json = el.data();
+                if (json == null || json.isBlank()) continue;
+                // additionalProperty: [{ "name": "...", "value": "..." }, ...]
+                java.util.regex.Matcher m = java.util.regex.Pattern.compile(
+                        "\\{\\s*\"@type\"\\s*:\\s*\"PropertyValue\"\\s*,[^}]*\"name\"\\s*:\\s*\"([^\"]+)\"[^}]*\"value\"\\s*:\\s*\"([^\"]+)\"")
+                        .matcher(json);
+                while (m.find() && specs.size() < 30) {
+                    String k = m.group(1).trim();
+                    String v = m.group(2).trim();
+                    if (!k.isEmpty() && !v.isEmpty()) specs.put(k, v);
+                }
+            }
+        } catch (Exception ignored) {}
+
+        // 2) <table> içindeki "spec table" (key-value pattern)
+        if (specs.size() < 5) {
+            for (var table : doc.select("table.product-specs, table.specs, table.specifications, .specs-table, table[class*=spec]")) {
+                for (var row : table.select("tr")) {
+                    var cells = row.select("td, th");
+                    if (cells.size() >= 2) {
+                        String k = cells.get(0).text().trim();
+                        String v = cells.get(1).text().trim();
+                        if (!k.isEmpty() && !v.isEmpty() && k.length() < 80 && v.length() < 200) {
+                            specs.putIfAbsent(k, v);
+                        }
+                    }
+                    if (specs.size() >= 30) break;
+                }
+            }
+        }
+
+        // 3) <dl> definition list
+        if (specs.size() < 5) {
+            for (var dl : doc.select("dl.specs, dl.product-attributes, dl[class*=spec]")) {
+                var dts = dl.select("dt");
+                var dds = dl.select("dd");
+                int n = Math.min(dts.size(), dds.size());
+                for (int i = 0; i < n && specs.size() < 30; i++) {
+                    String k = dts.get(i).text().trim();
+                    String v = dds.get(i).text().trim();
+                    if (!k.isEmpty() && !v.isEmpty()) specs.putIfAbsent(k, v);
+                }
+            }
+        }
+
+        // 4) "Key: Value" pattern li
+        if (specs.size() < 3) {
+            for (var li : doc.select("ul.features li, ul.specs li, .product-features li")) {
+                String txt = li.text().trim();
+                if (txt.contains(":")) {
+                    String[] kv = txt.split(":", 2);
+                    if (kv.length == 2) {
+                        String k = kv[0].trim();
+                        String v = kv[1].trim();
+                        if (!k.isEmpty() && !v.isEmpty() && k.length() < 80 && v.length() < 200) {
+                            specs.putIfAbsent(k, v);
+                        }
+                    }
+                }
+                if (specs.size() >= 30) break;
+            }
+        }
+
+        return specs;
+    }
+
+    /** Marka adı extraction (schema.org brand veya meta). */
+    String extractBrand(Document doc) {
+        // 1) JSON-LD brand.name
+        try {
+            for (var el : doc.select("script[type=application/ld+json]")) {
+                String json = el.data();
+                if (json == null) continue;
+                java.util.regex.Matcher m = java.util.regex.Pattern.compile(
+                        "\"brand\"\\s*:\\s*\\{[^}]*\"name\"\\s*:\\s*\"([^\"]+)\"")
+                        .matcher(json);
+                if (m.find()) return m.group(1).trim();
+            }
+        } catch (Exception ignored) {}
+
+        // 2) Itemprop brand
+        var b = doc.selectFirst("[itemprop=brand]");
+        if (b != null) {
+            String txt = b.text();
+            if (txt != null && !txt.isBlank() && txt.length() < 50) return txt.trim();
+        }
+
+        // 3) Meta product:brand (OG product extension)
+        String og = doc.select("meta[property=product:brand]").attr("content");
+        if (og != null && !og.isBlank() && og.length() < 50) return og.trim();
+
+        return null;
+    }
+
+    /** HTML temizleme — script/style kaldır, fazla whitespace sadeleştir. */
+    private String cleanHtml(String html) {
+        if (html == null) return null;
+        // Tehlikeli tag'leri kaldır (script, style, on* handlers)
+        String cleaned = html
+                .replaceAll("(?is)<script[^>]*>.*?</script>", "")
+                .replaceAll("(?is)<style[^>]*>.*?</style>", "")
+                .replaceAll("(?i)\\son[a-z]+\\s*=\\s*\"[^\"]*\"", "")
+                .replaceAll("(?i)\\son[a-z]+\\s*=\\s*'[^']*'", "");
+        // İzin verilen tag'ler: p, br, strong, b, em, i, ul, ol, li, h2-h6, span, div
+        // Diğer tag'leri text olarak bırak (Jsoup safelist daha güçlü ama bu basit)
+        return cleaned.trim();
+    }
+
+    /** Description için sentence-aware truncate (max içinde son cümle sonunda kes). */
+    private String truncateSmart(String s, int max) {
+        if (s == null) return null;
+        if (s.length() <= max) return s;
+        int idx = s.lastIndexOf('.', max);
+        if (idx > max - 200) return s.substring(0, idx + 1);
+        return s.substring(0, max) + "...";
+    }
 
     private List<String> extractImageUrls(Document doc, String baseUrl) {
         Set<String> urls = new LinkedHashSet<>();
@@ -567,7 +812,33 @@ public class ProductImageCrawlerService {
     //  DTOs / Records
     // ─────────────────────────────────────────────────────────────
 
-    public record CrawlPreview(String url, String title, List<String> images, String error) {}
+    /**
+     * Crawler önizleme sonucu — admin'e gösterilecek bilgiler.
+     *
+     * @param url           kaynak URL
+     * @param title         sayfa başlığı (og:title veya &lt;title&gt;)
+     * @param images        adayı görsel URL'leri
+     * @param description   uzun açıklama (HTML olabilir; düz metin tercih)
+     * @param shortDescription kısa açıklama (1-2 cümle, meta description'dan)
+     * @param specs         teknik özellikler (anahtar→değer çiftleri)
+     * @param brand         marka adı (schema.org/brand'den)
+     * @param error         hata mesajı (varsa)
+     */
+    public record CrawlPreview(
+            String url,
+            String title,
+            List<String> images,
+            String description,
+            String shortDescription,
+            java.util.Map<String, String> specs,
+            String brand,
+            String error) {
+
+        /** Legacy 4-arg constructor — geriye uyumluluk için. */
+        public CrawlPreview(String url, String title, List<String> images, String error) {
+            this(url, title, images, null, null, java.util.Map.of(), null, error);
+        }
+    }
     public record ImportResult(int success, int total, List<String> errors) {
         public boolean isOk() { return success > 0 && errors.isEmpty(); }
     }

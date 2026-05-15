@@ -4,6 +4,7 @@ import com.warehouse.service.InvoiceService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -32,6 +33,7 @@ public class InvoiceStatusPollingJob {
     }
 
     @Scheduled(fixedRate = 5 * 60 * 1000, initialDelay = 2 * 60 * 1000)
+    @SchedulerLock(name = "invoiceStatusPolling", lockAtMostFor = "PT4M", lockAtLeastFor = "PT1M")
     public void pollPendingInvoices() {
         try {
             int updated = invoiceService.refreshPendingStatuses();

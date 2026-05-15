@@ -41,6 +41,7 @@ class PaymentServiceImplTest {
     @Mock private StockEventRepository stockEventRepo;
     @Mock private com.warehouse.service.InvoiceService invoiceService;
     @Mock private com.warehouse.service.notification.NotificationDispatchService notificationDispatchService;
+    @Mock private org.springframework.context.ApplicationEventPublisher eventPublisher;
 
     private PaymentServiceImpl paymentService;
 
@@ -48,7 +49,7 @@ class PaymentServiceImplTest {
     void setUp() {
         paymentService = new PaymentServiceImpl(paymentRepo, orderRepo, statusHistoryRepo,
             stockRepo, orderItemRepo, gatewayFactory, paymentProperties, gatewayConfigRepo, cartService, stockEventRepo,
-            invoiceService, notificationDispatchService);
+            invoiceService, notificationDispatchService, eventPublisher);
 
         PaymentProperties.IyzicoConfig iyzicoConfig = new PaymentProperties.IyzicoConfig();
         iyzicoConfig.setTimeoutMinutes(15);

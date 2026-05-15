@@ -15,6 +15,10 @@ public interface CmsPageRepository extends JpaRepository<CmsPage, Long> {
     Optional<CmsPage> findBySlugAndActiveTrue(String slug);
     List<CmsPage> findByPageTypeAndActiveTrue(CmsPageType pageType);
 
+    /** Sitemap üretimi için: aktif tüm sayfalar (CONTENT/LEGAL tipler; BANNER hariç). */
+    @Query("SELECT c FROM CmsPage c WHERE c.active = true AND c.pageType <> 'BANNER'")
+    List<CmsPage> findByIsPublishedTrue();
+
     @Query("SELECT c FROM CmsPage c WHERE c.pageType = 'BANNER' AND c.active = true " +
            "AND (c.bannerPosition = :position OR :position IS NULL) " +
            "AND (c.bannerStart IS NULL OR c.bannerStart <= :now) " +

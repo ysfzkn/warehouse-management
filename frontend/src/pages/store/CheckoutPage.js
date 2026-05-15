@@ -5,6 +5,7 @@ import CheckoutStepper from '../../components/store/CheckoutStepper';
 import AddressForm from '../../components/store/AddressForm';
 import IyzicoCheckoutForm from '../../components/store/IyzicoCheckoutForm';
 import BankTransferInfo from '../../components/store/BankTransferInfo';
+import LegalContractModal from '../../components/store/LegalContractModal';
 import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -23,7 +24,11 @@ export default function CheckoutPage() {
   const [cargoCompany, setCargoCompany] = useState('YURTICI');
   const [paymentMethod, setPaymentMethod] = useState('CREDIT_CARD');
   const [contractAccepted, setContractAccepted] = useState(false);
+  const [contractAcceptedAt, setContractAcceptedAt] = useState(null);
   const [preliminaryInfoAccepted, setPreliminaryInfoAccepted] = useState(false);
+  const [preliminaryInfoAcceptedAt, setPreliminaryInfoAcceptedAt] = useState(null);
+  // Yasal sözleşme modal'ları (Mesafeli Satış / Ön Bilgilendirme)
+  const [legalModal, setLegalModal] = useState(null); // { type: 'contract' | 'preInfo' }
   const [loading, setLoading] = useState(false);
   const [, setError] = useState(''); // kept for setError calls, display via toast
 
@@ -133,6 +138,13 @@ export default function CheckoutPage() {
     try {
       let orderRes;
 
+      // Çift tıklamaya karşı idempotency-key — aynı checkout submit'i tek sipariş yaratır.
+      // Frontend baştan üretip aynı 24h boyunca cache'lenebilir; her render'da yeniden
+      // üretmemek için useState ile tutmak ideal — burada submit anında üretiyoruz çünkü
+      // submit'ten önce zaten button disabled.
+      const checkoutIdempotencyKey = generateIdempotencyKey();
+      const checkoutHeaders = { 'Idempotency-Key': checkoutIdempotencyKey };
+
       if (isGuest) {
         // Guest checkout - inline address + contact info
         const sessionId = localStorage.getItem('store_session_id');
@@ -150,10 +162,13 @@ export default function CheckoutPage() {
           cargoProviderId: selectedCargoProvider?.id || null,
           paymentMethod,
           distanceSalesContractAccepted: true,
+          distanceSalesContractAcceptedAt: contractAcceptedAt,
           preliminaryInfoAccepted: true,
+          preliminaryInfoAcceptedAt: preliminaryInfoAcceptedAt,
           kvkkConsent: guestKvkkConsent,
+          kvkkConsentAt: guestKvkkConsent ? new Date().toISOString() : null,
           sessionId
-        });
+        }, { headers: checkoutHeaders });
       } else {
         // Authenticated checkout
         orderRes = await axios.post('/api/store/checkout/place-order', {
@@ -163,7 +178,10 @@ export default function CheckoutPage() {
           cargoProviderId: selectedCargoProvider?.id || null,
           paymentMethod,
           distanceSalesContractAccepted: true,
-        }, { headers: getAuthHeaders() });
+          distanceSalesContractAcceptedAt: contractAcceptedAt,
+          preliminaryInfoAccepted: true,
+          preliminaryInfoAcceptedAt: preliminaryInfoAcceptedAt,
+        }, { headers: { ...getAuthHeaders(), ...checkoutHeaders } });
       }
 
       const orderId = orderRes.data.orderId;
@@ -518,13 +536,22 @@ export default function CheckoutPage() {
         <div>
           <h5 className="mb-3">Sipariş Onay</h5>
           <div className="store-cart-summary mb-3">
-            <div className="store-cart-summary-row"><span>Ürün Toplamı</span><strong>{formatPrice(subtotal)}</strong></div>
+            <div className="store-cart-summary-row"><span>Ürün Toplamı <small className="text-muted">(KDV dahil)</small></span><strong>{formatPrice(subtotal)}</strong></div>
+            {/* KDV breakdown — Türkiye e-fatura mevzuatı gereği KDV ayrıştırması */}
+            {cart.cart?.vatBreakdown && Object.keys(cart.cart.vatBreakdown).length > 0 && (
+              Object.entries(cart.cart.vatBreakdown).map(([rate, amount]) => (
+                <div key={rate} className="store-cart-summary-row text-muted small">
+                  <span>↳ İçindeki KDV (%{rate})</span>
+                  <span>{formatPrice(Number(amount))}</span>
+                </div>
+              ))
+            )}
             <div className="store-cart-summary-row">
               <span>Kargo ({cp?.name || cargoCompany})</span>
               <span>{isFreeShipping ? <span className="badge bg-success">Ücretsiz</span> : formatPrice(shippingCost)}</span>
             </div>
             {shippingVat > 0 && (
-              <div className="store-cart-summary-row text-muted small"><span>Kargo KDV (%{cp?.vatRate})</span><span>{formatPrice(shippingVat)}</span></div>
+              <div className="store-cart-summary-row text-muted small"><span>↳ Kargo KDV (%{cp?.vatRate})</span><span>{formatPrice(shippingVat)}</span></div>
             )}
             {discount > 0 && <div className="store-cart-summary-row text-success"><span>İndirim</span><span>-{formatPrice(discount)}</span></div>}
             <div className="store-cart-summary-row store-cart-summary-total">
@@ -534,16 +561,44 @@ export default function CheckoutPage() {
             {cp?.estimatedDeliveryDays && <div className="store-cart-summary-row text-muted small"><span>Tahmini Teslimat</span><span>{cp.estimatedDeliveryDays} iş günü</span></div>}
             <div className="store-cart-summary-row text-muted small"><span>Ödeme Yöntemi</span><span>{getMethodLabel(paymentMethod)}</span></div>
           </div>
+          {/* Yasal Sözleşmeler — inline modal ile gösterim (6502 sayılı Tüketici Kanunu) */}
           <div className="form-check mb-2">
-            <input className="form-check-input" type="checkbox" id="preliminaryInfo" checked={preliminaryInfoAccepted} onChange={e => setPreliminaryInfoAccepted(e.target.checked)} />
+            <input className="form-check-input" type="checkbox" id="preliminaryInfo"
+              checked={preliminaryInfoAccepted}
+              onChange={e => {
+                if (e.target.checked) {
+                  // Onay kutusuna tıklandığında otomatik modal açılır (zorunlu okuma)
+                  setLegalModal({ type: 'preInfo' });
+                } else {
+                  setPreliminaryInfoAccepted(false);
+                  setPreliminaryInfoAcceptedAt(null);
+                }
+              }} />
             <label className="form-check-label small" htmlFor="preliminaryInfo">
-              <a href="/sayfa/on-bilgilendirme-formu" target="_blank" rel="noopener noreferrer">Ön Bilgilendirme Formu</a>'nu okudum ve kabul ediyorum.
+              <button type="button" className="btn btn-link btn-sm p-0 align-baseline"
+                onClick={(e) => { e.preventDefault(); setLegalModal({ type: 'preInfo' }); }}>
+                Ön Bilgilendirme Formu
+              </button>
+              'nu okudum ve kabul ediyorum.
             </label>
           </div>
           <div className="form-check mb-3">
-            <input className="form-check-input" type="checkbox" id="contract" checked={contractAccepted} onChange={e => setContractAccepted(e.target.checked)} />
+            <input className="form-check-input" type="checkbox" id="contract"
+              checked={contractAccepted}
+              onChange={e => {
+                if (e.target.checked) {
+                  setLegalModal({ type: 'contract' });
+                } else {
+                  setContractAccepted(false);
+                  setContractAcceptedAt(null);
+                }
+              }} />
             <label className="form-check-label small" htmlFor="contract">
-              <a href="/sayfa/mesafeli-satis-sozlesmesi" target="_blank" rel="noopener noreferrer">Mesafeli Satış Sözleşmesi</a>'ni okudum ve kabul ediyorum.
+              <button type="button" className="btn btn-link btn-sm p-0 align-baseline"
+                onClick={(e) => { e.preventDefault(); setLegalModal({ type: 'contract' }); }}>
+                Mesafeli Satış Sözleşmesi
+              </button>
+              'ni okudum ve kabul ediyorum.
             </label>
           </div>
           {(!preliminaryInfoAccepted || !contractAccepted) && (
@@ -560,6 +615,24 @@ export default function CheckoutPage() {
         </div>
         );
       })()}
+
+      {/* Yasal sözleşme modal'ı (Mesafeli Satış / Ön Bilgilendirme) */}
+      <LegalContractModal
+        open={!!legalModal}
+        slug={legalModal?.type === 'contract' ? 'mesafeli-satis-sozlesmesi' : 'on-bilgilendirme-formu'}
+        title={legalModal?.type === 'contract' ? 'Mesafeli Satış Sözleşmesi' : 'Ön Bilgilendirme Formu'}
+        onClose={() => setLegalModal(null)}
+        onConfirm={(timestamp) => {
+          if (legalModal?.type === 'contract') {
+            setContractAccepted(true);
+            setContractAcceptedAt(timestamp);
+          } else if (legalModal?.type === 'preInfo') {
+            setPreliminaryInfoAccepted(true);
+            setPreliminaryInfoAcceptedAt(timestamp);
+          }
+          setLegalModal(null);
+        }}
+      />
     </div>
   );
 }

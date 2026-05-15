@@ -28,17 +28,20 @@ public class CartServiceImpl implements CartService {
     private final CouponRepository couponRepository;
     private final StockService stockService;
     private final com.warehouse.repository.ProductImageRepository productImageRepository;
+    private final com.warehouse.service.ShippingCostService shippingCostService;
 
     public CartServiceImpl(CartRepository cartRepository, CartItemRepository cartItemRepository,
                            ProductRepository productRepository, CouponRepository couponRepository,
                            StockService stockService,
-                           com.warehouse.repository.ProductImageRepository productImageRepository) {
+                           com.warehouse.repository.ProductImageRepository productImageRepository,
+                           com.warehouse.service.ShippingCostService shippingCostService) {
         this.cartRepository = cartRepository;
         this.cartItemRepository = cartItemRepository;
         this.productRepository = productRepository;
         this.couponRepository = couponRepository;
         this.stockService = stockService;
         this.productImageRepository = productImageRepository;
+        this.shippingCostService = shippingCostService;
     }
 
     @Override
@@ -188,13 +191,30 @@ public class CartServiceImpl implements CartService {
             }
         }
 
-        BigDecimal shippingCost = ShippingConstants.calculateShippingCost(subtotal);
+        // Kargo ücreti: admin panelden ayarlanabilen site setting'lerden okunur
+        // (provider seçimi olmadan; checkout aşamasında provider seçildiğinde
+        // CheckoutServiceImpl tarafından ayrıca hesaplanır).
+        BigDecimal shippingCost = shippingCostService.calculate(subtotal, null);
+        if (shippingCost == null) shippingCost = BigDecimal.ZERO;
         if (coupon != null && coupon.getDiscountType() == com.warehouse.enums.DiscountType.FREE_SHIPPING) {
             shippingCost = BigDecimal.ZERO;
         }
 
         BigDecimal total = subtotal.subtract(discountAmount).add(shippingCost);
         if (total.compareTo(BigDecimal.ZERO) < 0) total = BigDecimal.ZERO;
+
+        // KDV oranı bazlı kırılım (Türkiye'de fiyatlar KDV dahil olduğundan
+        // gross fiyattan ayrıştırma: vatAmount = gross * (rate / (100 + rate)))
+        java.util.Map<String, BigDecimal> vatBreakdown = new java.util.LinkedHashMap<>();
+        for (CartItemDto it : itemDtos) {
+            if (it.getVatRate() == null || it.getVatRate().compareTo(BigDecimal.ZERO) <= 0) continue;
+            String rateKey = it.getVatRate().stripTrailingZeros().toPlainString();
+            BigDecimal lineGross = it.getLineTotal() != null ? it.getLineTotal() : BigDecimal.ZERO;
+            BigDecimal divisor = BigDecimal.valueOf(100).add(it.getVatRate());
+            BigDecimal vatAmount = lineGross.multiply(it.getVatRate())
+                    .divide(divisor, 2, java.math.RoundingMode.HALF_UP);
+            vatBreakdown.merge(rateKey, vatAmount, BigDecimal::add);
+        }
 
         return CartDto.builder()
             .id(cart.getId())
@@ -206,6 +226,7 @@ public class CartServiceImpl implements CartService {
             .total(total)
             .couponCode(couponCode)
             .couponDescription(couponDesc)
+            .vatBreakdown(vatBreakdown)
             .build();
     }
 
@@ -241,6 +262,7 @@ public class CartServiceImpl implements CartService {
             .unitPrice(unitPrice)
             .salePrice(salePrice)
             .lineTotal(lineTotal)
+            .vatRate(product.getVatRate())
             .quantity(item.getQuantity())
             .availableStock(available)
             .stockStatus(available > 0 ? "IN_STOCK" : "OUT_OF_STOCK")

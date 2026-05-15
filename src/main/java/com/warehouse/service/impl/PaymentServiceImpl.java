@@ -38,6 +38,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final StockEventRepository stockEventRepo;
     private final com.warehouse.service.InvoiceService invoiceService;
     private final com.warehouse.service.notification.NotificationDispatchService notificationDispatchService;
+    private final org.springframework.context.ApplicationEventPublisher eventPublisher;
 
     public PaymentServiceImpl(PaymentTransactionRepository paymentRepo,
                                OrderRepository orderRepo,
@@ -50,7 +51,8 @@ public class PaymentServiceImpl implements PaymentService {
                                com.warehouse.service.CartService cartService,
                                StockEventRepository stockEventRepo,
                                com.warehouse.service.InvoiceService invoiceService,
-                               com.warehouse.service.notification.NotificationDispatchService notificationDispatchService) {
+                               com.warehouse.service.notification.NotificationDispatchService notificationDispatchService,
+                               org.springframework.context.ApplicationEventPublisher eventPublisher) {
         this.paymentRepo = paymentRepo;
         this.orderRepo = orderRepo;
         this.stockEventRepo = stockEventRepo;
@@ -63,6 +65,7 @@ public class PaymentServiceImpl implements PaymentService {
         this.cartService = cartService;
         this.invoiceService = invoiceService;
         this.notificationDispatchService = notificationDispatchService;
+        this.eventPublisher = eventPublisher;
     }
 
     @Override
@@ -129,6 +132,17 @@ public class PaymentServiceImpl implements PaymentService {
                     tx.setToken(result.getToken());
                     tx.setExpiresAt(LocalDateTime.now().plusMinutes(paymentProperties.getIyzico().getTimeoutMinutes()));
                     break;
+                case PAYTR:
+                case NESTPAY:
+                case GVP:
+                    // Direct bank POS / PayTR iframe — kart girişi gateway tarafında,
+                    // server-to-server callback (notify_url) ile sonuç gelir.
+                    // PayTR retry: 1dk aralıklarla 24 saat boyunca "OK" alana kadar.
+                    tx.setStatus(PaymentStatus.PROCESSING);
+                    // result.getToken() — VirtualPosGateway tarafından transactionId (=merchant_oid=orderNumber) olarak set edilir
+                    tx.setToken(result.getToken());
+                    tx.setExpiresAt(LocalDateTime.now().plusMinutes(30)); // PayTR iframe timeout default
+                    break;
                 case BANK_TRANSFER:
                     tx.setStatus(PaymentStatus.INITIATED);
                     tx.setBankTransferRef(result.getBankTransferReference());
@@ -181,10 +195,43 @@ public class PaymentServiceImpl implements PaymentService {
         PaymentTransaction tx = paymentRepo.findByToken(token)
             .orElseThrow(() -> new WarehouseManagementException(ErrorCode.PAYMENT_NOT_FOUND, "Token: " + token));
 
+        // ── Idempotency koruması (PayTR her dakika retry yapar "OK" alana kadar) ──
+        // SUCCESS olmuş bir tx'e tekrar callback gelirse:
+        //   - PAID order tekrar PAID set'lenmesin (audit log şişer)
+        //   - OrderPaidEvent tekrar publish edilmesin (çift fatura/email/stok hareketi)
+        //   - Müşteriye tekrar onay maili gitmesin
+        if (tx.getStatus() == PaymentStatus.SUCCESS) {
+            logger.info("Idempotent callback hit (already SUCCESS): txId={}, token={}", tx.getId(), token);
+            return PaymentCallbackResult.builder()
+                    .success(true)
+                    .token(token)
+                    .paymentId(tx.getProviderPaymentId())
+                    .paidPrice(tx.getPaidAmount())
+                    .threeDSecure(tx.isThreeDSecure())
+                    .cardLastFour(tx.getCardLastFour())
+                    .cardType(tx.getCardType())
+                    .build();
+        }
+        if (tx.getStatus() == PaymentStatus.FAILED || tx.getStatus() == PaymentStatus.REFUNDED) {
+            logger.info("Idempotent callback hit (terminal {}): txId={}, token={}",
+                    tx.getStatus(), tx.getId(), token);
+            return PaymentCallbackResult.builder()
+                    .success(false)
+                    .token(token)
+                    .errorCode(tx.getErrorCode())
+                    .errorMessage(tx.getErrorMessage())
+                    .build();
+        }
+
         PaymentGateway gateway = gatewayFactory.getGateway(tx.getPaymentProvider());
         PaymentCallbackResult result = gateway.handleCallback(params);
 
         Order order = tx.getOrder();
+
+        // Provider adı dinamik — log + event için (önceden hardcoded "iyzico" idi)
+        final String providerName = tx.getPaymentProvider() != null
+                ? tx.getPaymentProvider().name().toLowerCase()
+                : "unknown";
 
         if (result.isSuccess()) {
             // Handle late callback (after timeout cleanup)
@@ -228,18 +275,20 @@ public class PaymentServiceImpl implements PaymentService {
 
             order.setStatus(OrderStatus.PAID);
             orderRepo.save(order);
-            logStatusChange(order, OrderStatus.PENDING_PAYMENT.name(), OrderStatus.PAID.name(), "system", "iyzico ödeme başarılı");
+            logStatusChange(order, OrderStatus.PENDING_PAYMENT.name(), OrderStatus.PAID.name(),
+                    "system", providerName + " ödeme başarılı");
 
-            logger.info("Payment successful: txId={}, orderId={}", tx.getId(), order.getId());
+            logger.info("Payment successful: txId={}, orderId={}, provider={}",
+                    tx.getId(), order.getId(), providerName);
 
-            // Auto-generate e-fatura
-            try {
-                invoiceService.createInvoiceForOrder(order.getId());
-            } catch (Exception e) {
-                logger.warn("E-fatura otomatik oluşturma başarısız (sipariş {}): {}", order.getOrderNumber(), e.getMessage());
-            }
+            // OrderPaid event yayınla — fatura otomatik kesimi (async, AFTER_COMMIT)
+            // ve diğer abonelerin (notification, kargo vb.) tetiklenmesi için.
+            // Sync invoice çağrısı transaction'ı blokluyordu; event-driven mimari
+            // ile checkout response time'ı düşer + fail-soft davranır.
+            eventPublisher.publishEvent(new com.warehouse.event.OrderPaidEvent(
+                    this, order.getId(), order.getOrderNumber(), providerName));
 
-            // Send order confirmation notification (email + SMS)
+            // Send order confirmation notification (email + SMS) — sync (kritik bildirim)
             try {
                 notificationDispatchService.notifyOrderConfirmed(order.getCustomer(), order.getOrderNumber());
             } catch (Exception e) {
@@ -306,12 +355,9 @@ public class PaymentServiceImpl implements PaymentService {
 
         logger.info("Bank transfer confirmed: orderId={}, by={}", orderId, confirmedBy);
 
-        // Auto-generate e-fatura
-        try {
-            invoiceService.createInvoiceForOrder(order.getId());
-        } catch (Exception e) {
-            logger.warn("E-fatura otomatik oluşturma başarısız (sipariş {}): {}", order.getOrderNumber(), e.getMessage());
-        }
+        // OrderPaid event — fatura otomatik kesimi (async)
+        eventPublisher.publishEvent(new com.warehouse.event.OrderPaidEvent(
+                this, order.getId(), order.getOrderNumber(), "bank_transfer:" + confirmedBy));
 
         // Send payment received + order confirmed notifications
         try {

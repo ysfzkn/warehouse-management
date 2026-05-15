@@ -128,6 +128,37 @@ public class AdminInvoiceController {
     }
 
     /**
+     * İade faturası (Credit Note) oluştur.
+     *
+     * <p>Türkiye e-fatura iade kuralları:
+     * <ul>
+     *   <li>e-Arşiv 8 gün içinde → {@code /cancel} endpoint'i kullanın (CANCELEARCHIVEINVOICE)</li>
+     *   <li>e-Fatura veya 8 gün geçmiş e-Arşiv → bu endpoint (yeni IADE faturası kesilir)</li>
+     * </ul>
+     * Otomatik olarak da RETURNED/REFUNDED order status değişimi sonrası
+     * {@code InvoiceCancellationListener} tetiklenir; bu endpoint manuel/retry için.</p>
+     */
+    @PostMapping("/{id}/credit-note")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<InvoiceDto> createCreditNote(@PathVariable Long id,
+                                                        @RequestBody(required = false) CreditNoteRequest body) {
+        java.math.BigDecimal refundAmount = body != null ? body.refundAmount : null;
+        String reason = body != null ? body.reason : null;
+        logger.info("Credit note manuel kesim: originalInvoiceId={}, refund={}, reason={}",
+                id, refundAmount, reason);
+        InvoiceDto creditNote = invoiceService.createCreditNote(id, refundAmount, reason);
+        return ResponseEntity.ok(creditNote);
+    }
+
+    /** Manuel credit note için request body. */
+    public static class CreditNoteRequest {
+        /** Null ise orijinal faturanın tamamı iade edilir. */
+        public java.math.BigDecimal refundAmount;
+        /** UBL Note alanına yazılacak iade nedeni. */
+        public String reason;
+    }
+
+    /**
      * Fatura PDF indir.
      */
     @GetMapping("/{id}/pdf")

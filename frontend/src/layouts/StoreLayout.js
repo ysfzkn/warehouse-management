@@ -116,6 +116,8 @@ export default function StoreLayout() {
         <AnalyticsScripts
           googleAnalyticsId={siteSettings.get('analytics_google_id', '')}
           facebookPixelId={siteSettings.get('analytics_facebook_pixel_id', '')}
+          hotjarId={siteSettings.get('analytics_hotjar_id', '')}
+          clarityId={siteSettings.get('analytics_clarity_id', '')}
         />
       </div>
       </WishlistProvider>

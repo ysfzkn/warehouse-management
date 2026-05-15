@@ -1,0 +1,40 @@
+{
+  "short_name": "Mağaza",
+  "name": "Mağaza",
+  "description": "Online alışveriş — beyaz eşya, elektronik ve daha fazlası",
+  "lang": "tr",
+  "dir": "ltr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#2563eb",
+  "background_color": "#ffffff",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/favicon.ico",
+      "sizes": "16x16 32x32 48x48",
+      "type": "image/x-icon"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Siparişlerim",
+      "short_name": "Siparişler",
+      "url": "/siparislerim"
+    },
+    {
+      "name": "Sepetim",
+      "short_name": "Sepet",
+      "url": "/sepet"
+    }
+  ],
+  "categories": ["shopping", "lifestyle"],
+  "prefer_related_applications": false
+}

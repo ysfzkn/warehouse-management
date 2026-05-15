@@ -36,13 +36,40 @@ public class IyzicoPaymentGateway implements PaymentGateway {
     private final PaymentConfigService paymentConfigService;
     private final PaymentGatewayConfigRepository gatewayConfigRepo;
     private final PaymentProperties.IyzicoConfig fallbackConfig;
+    private final com.warehouse.service.SiteSettingService settingService;
 
     public IyzicoPaymentGateway(PaymentConfigService paymentConfigService,
                                  PaymentGatewayConfigRepository gatewayConfigRepo,
-                                 PaymentProperties paymentProperties) {
+                                 PaymentProperties paymentProperties,
+                                 com.warehouse.service.SiteSettingService settingService) {
         this.paymentConfigService = paymentConfigService;
         this.gatewayConfigRepo = gatewayConfigRepo;
         this.fallbackConfig = paymentProperties.getIyzico();
+        this.settingService = settingService;
+    }
+
+    /**
+     * 3DS uygulanacak mı? Tutar tabanlı rule engine:
+     * - {@code threeds_always = true} → her zaman 3DS (varsayılan, PCI-DSS uyumlu)
+     * - aksi halde tutar {@code threeds_min_amount} eşiğini aşıyorsa 3DS, altındaysa non-3DS.
+     *
+     * Türkiye'de BDDK düzenlemesi gereği genellikle tüm kart ödemelerinde 3DS
+     * önerilir; admin "always=false" yapsa bile düşük tutarlar için non-3DS
+     * sadece güvenli sayılan, küçük (örn. ₺50 altı) işlemler içindir.
+     */
+    private boolean requires3DS(java.math.BigDecimal amount) {
+        String alwaysSetting = settingService.getSetting("threeds_always");
+        boolean always = alwaysSetting == null || alwaysSetting.isBlank()
+                || "true".equalsIgnoreCase(alwaysSetting.trim());
+        if (always) return true;
+        if (amount == null) return true; // unknown → güvenli taraf
+        String minStr = settingService.getSetting("threeds_min_amount");
+        java.math.BigDecimal min = java.math.BigDecimal.valueOf(50);
+        if (minStr != null && !minStr.isBlank()) {
+            try { min = new java.math.BigDecimal(minStr.trim()); }
+            catch (NumberFormatException ignored) {}
+        }
+        return amount.compareTo(min) >= 0;
     }
 
     /**
@@ -126,7 +153,10 @@ public class IyzicoPaymentGateway implements PaymentGateway {
             iyzicoRequest.setPaymentGroup(PaymentGroup.PRODUCT.name());
             iyzicoRequest.setCallbackUrl(request.getCallbackUrl() != null ? request.getCallbackUrl() : getCallbackUrl());
             iyzicoRequest.setEnabledInstallments(Arrays.asList(1, 2, 3, 6, 9, 12));
-            iyzicoRequest.setForceThreeDS(1);
+            // 3DS rule engine: admin'den ayarlanabilir tutar bazlı politika
+            // (Türkiye BDDK regülasyonu için varsayılan: her zaman 3DS).
+            boolean require3ds = requires3DS(request.getPaidPrice());
+            iyzicoRequest.setForceThreeDS(require3ds ? 1 : 0);
 
             // Buyer
             Buyer buyer = new Buyer();

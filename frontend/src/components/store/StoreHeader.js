@@ -311,7 +311,7 @@ export default function StoreHeader({ cart, settings }) {
                               className="d-flex align-items-center gap-3 px-3 py-2 text-dark text-decoration-none store-search-item"
                               onClick={() => { setSearchFocused(false); setSearchTerm(''); setSearchResults([]); }}>
                               {r.image ? (
-                                <img src={r.image} alt="" style={{width:40,height:40,objectFit:'contain',borderRadius:8,background:'#f8f9fa',border:'1px solid #f1f5f9'}} />
+                                <img src={r.image} alt={r.name || 'Ürün görseli'} style={{width:40,height:40,objectFit:'contain',borderRadius:8,background:'#f8f9fa',border:'1px solid #f1f5f9'}} />
                               ) : (
                                 <div style={{width:40,height:40,borderRadius:8,background:'#f1f5f9',display:'flex',alignItems:'center',justifyContent:'center'}}><FiSearch size={14} className="text-muted" /></div>
                               )}

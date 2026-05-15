@@ -30,9 +30,11 @@ export default function ProductCard({ product, onAddToCart }) {
       <Link to={`/urun/${product.slug}`} className="text-decoration-none">
         <div className="card-img-wrapper">
           {product.primaryImageUrl ? (
-            <img src={product.primaryImageUrl} alt={product.name} loading="lazy" />
+            // width/height aspect ratio hint'i — CLS önler; gerçek render container CSS (1:1) ile sabitlenir
+            <img src={product.primaryImageUrl} alt={product.name} loading="lazy"
+                 width="400" height="400" decoding="async" />
           ) : (
-            <div className="card-img-placeholder"><FiShoppingCart size={32} /></div>
+            <div className="card-img-placeholder"><FiShoppingCart size={32} aria-hidden="true" /></div>
           )}
           <div className="card-badges">
             {product.featured && <span className="card-badge card-badge-featured"><FiStar size={10} className="me-1" />Öne Çıkan</span>}

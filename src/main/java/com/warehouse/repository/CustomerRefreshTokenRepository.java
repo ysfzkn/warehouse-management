@@ -14,4 +14,9 @@ public interface CustomerRefreshTokenRepository extends JpaRepository<CustomerRe
     @Modifying
     @Query("UPDATE CustomerRefreshToken t SET t.revokedAt = CURRENT_TIMESTAMP WHERE t.customer.id = :customerId AND t.revokedAt IS NULL")
     void revokeAllByCustomerId(Long customerId);
+
+    @org.springframework.transaction.annotation.Transactional
+    @Modifying
+    @Query("DELETE FROM CustomerRefreshToken t WHERE t.customer.id = :customerId")
+    void deleteByCustomerId(Long customerId);
 }

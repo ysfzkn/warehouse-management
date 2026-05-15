@@ -64,6 +64,11 @@ public class InvoiceServiceImpl implements InvoiceService {
     /**
      * Aktif (isEnabled()==true) olan ilk provider'ı döner.
      * Hiçbiri aktif değilse MOCK provider'ı fallback olarak kullanılır.
+     *
+     * <p><b>Production guard:</b> {@code invoice.mock-enabled=false} ise MOCK
+     * provider bean olarak yok; bu durumda fallback bulunmazsa null döner ve
+     * çağıran taraf "fatura sağlayıcı tanımlı değil" hatası fırlatır. Böylece
+     * prod'da yanlışlıkla sahte fatura kesmek imkansız.</p>
      */
     private InvoiceProvider getActiveProvider() {
         return providers.stream()
@@ -149,6 +154,82 @@ public class InvoiceServiceImpl implements InvoiceService {
     }
 
     @Override
+    @Transactional
+    public InvoiceDto createCreditNote(Long originalInvoiceId, java.math.BigDecimal refundAmount, String reason) {
+        Invoice original = invoiceRepository.findById(originalInvoiceId)
+                .orElseThrow(() -> new WarehouseManagementException(ErrorCode.INVOICE_NOT_FOUND,
+                        "ID: " + originalInvoiceId));
+
+        // Doğrulama: orijinal APPROVED olmalı; iade faturası iade faturası kesilemez
+        if (original.getStatus() != InvoiceStatus.APPROVED) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                    "Sadece APPROVED faturalar için iade faturası kesilebilir (mevcut: "
+                    + original.getStatus() + ").");
+        }
+        if (original.isCreditNote()) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                    "Bir credit note'a karşı yeni credit note kesilemez.");
+        }
+
+        // Aynı orijinal fatura için zaten bir credit note açıksa engelle (idempotency)
+        // (Repository'de bu sorgu yoksa basit findAll içinde filtre)
+        java.util.List<Invoice> existingCreditNotes = invoiceRepository
+                .findByCreditedInvoiceId(originalInvoiceId);
+        boolean hasActiveCreditNote = existingCreditNotes.stream()
+                .anyMatch(c -> c.getStatus() != InvoiceStatus.CANCELLED
+                            && c.getStatus() != InvoiceStatus.ERROR);
+        if (hasActiveCreditNote) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                    "Bu fatura için zaten aktif bir iade faturası mevcut.");
+        }
+
+        java.math.BigDecimal totalRefund = refundAmount != null
+                ? refundAmount
+                : original.getTotalAmount();
+        // Oranlı KDV: orijinal'de KDV/Toplam oranını koru
+        java.math.BigDecimal vatRatio = (original.getVatAmount() != null && original.getTotalAmount() != null
+                && original.getTotalAmount().compareTo(java.math.BigDecimal.ZERO) > 0)
+                ? original.getVatAmount().divide(original.getTotalAmount(), 4, java.math.RoundingMode.HALF_UP)
+                : java.math.BigDecimal.ZERO;
+        java.math.BigDecimal refundVat = totalRefund.multiply(vatRatio)
+                .setScale(2, java.math.RoundingMode.HALF_UP);
+        java.math.BigDecimal refundSubtotal = totalRefund.subtract(refundVat);
+
+        // Yeni Invoice satırı — orijinalin alıcı + satıcı snapshot'ını korur
+        Invoice creditNote = Invoice.builder()
+                .order(original.getOrder())
+                .invoiceType(original.getInvoiceType())
+                .status(InvoiceStatus.DRAFT)
+                .recipientName(original.getRecipientName())
+                .recipientTaxId(original.getRecipientTaxId())
+                .recipientTaxOffice(original.getRecipientTaxOffice())
+                .recipientAddress(original.getRecipientAddress())
+                .recipientEmail(original.getRecipientEmail())
+                .recipientPhone(original.getRecipientPhone())
+                .recipientCity(original.getRecipientCity())
+                .recipientDistrict(original.getRecipientDistrict())
+                .recipientPostalCode(original.getRecipientPostalCode())
+                .individual(original.isIndividual())
+                .subtotal(refundSubtotal)
+                .vatAmount(refundVat)
+                .totalAmount(totalRefund)
+                .providerName(original.getProviderName())
+                .note("İade Faturası — orijinal: " + original.getInvoiceNumber())
+                .creditNote(true)
+                .creditedInvoice(original)
+                .creditNoteReason(reason != null && !reason.isBlank() ? reason : "Cayma hakkı / iade")
+                .build();
+        creditNote = invoiceRepository.save(creditNote);
+
+        logger.info("[Invoice] Credit note draft oluşturuldu: id={}, orijinal={}, tutar={}",
+                creditNote.getId(), original.getInvoiceNumber(), totalRefund);
+
+        // Sağlayıcıya gönder (UBL-TR ProfileID=IADE + BillingReference içerir,
+        // UblTrInvoiceBuilder otomatik olarak credit note formatını seçer)
+        return sendToProvider(creditNote);
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public Optional<InvoiceDto> getInvoiceById(Long invoiceId) {
         return invoiceRepository.findById(invoiceId).map(this::toDto);
@@ -160,8 +241,21 @@ public class InvoiceServiceImpl implements InvoiceService {
         return invoiceRepository.findByOrderId(orderId).map(this::toDto);
     }
 
+    /**
+     * Fatura PDF'i — Caffeine cache ile sağlayıcıya tekrar tekrar gitmeyiz
+     * (PDF'ler immutable, 24h cache güvenli). Müşteri "Faturamı indir" butonuna
+     * 10 kez bassa bile Logo SOAP'a sadece 1 kez gidilir.
+     *
+     * <p>Cache anahtarı: invoiceId. APPROVED durumdaki faturalar cache'lenir
+     * (DRAFT/PENDING için cache yok — değişebilir).</p>
+     */
     @Override
     @Transactional(readOnly = true)
+    @org.springframework.cache.annotation.Cacheable(
+            value = "invoicePdf",
+            key = "#invoiceId",
+            condition = "#invoiceId != null",
+            unless = "#result == null || #result.length == 0")
     public byte[] downloadInvoicePdf(Long invoiceId) {
         Invoice invoice = invoiceRepository.findById(invoiceId)
                 .orElseThrow(() -> new WarehouseManagementException(ErrorCode.INVOICE_NOT_FOUND, "ID: " + invoiceId));
@@ -247,6 +341,22 @@ public class InvoiceServiceImpl implements InvoiceService {
         String companyName = extractBillingField(billing, "companyName", "");
         String tcKimlikNo = extractBillingField(billing, "tcKimlikNo", "");
         boolean individual = companyName.isBlank() && taxNumber.isBlank();
+
+        // ── VKN/TCKN algoritmik doğrulama ──
+        // Logo'ya yanlış kimlik gönderirsek GİB reject eder. Burada erken yakalanır.
+        // Bireysel ise TCKN opsiyonel (e-Arşiv'de zorunlu değil); ama girilmişse geçerli olmalı.
+        // Tüzel ise VKN zorunlu ve doğru olmalı.
+        if (individual && !tcKimlikNo.isBlank()
+                && !com.warehouse.util.TurkishTaxIdValidator.isValidTckn(tcKimlikNo)) {
+            throw new com.warehouse.exception.WarehouseManagementException(
+                    com.warehouse.exception.ErrorCode.VALIDATION_ERROR,
+                    "TCKN algoritmik olarak geçersiz: " + tcKimlikNo);
+        }
+        if (!individual && !com.warehouse.util.TurkishTaxIdValidator.isValidVkn(taxNumber)) {
+            throw new com.warehouse.exception.WarehouseManagementException(
+                    com.warehouse.exception.ErrorCode.VALIDATION_ERROR,
+                    "VKN algoritmik olarak geçersiz: " + taxNumber);
+        }
 
         InvoiceProvider activeProvider = getActiveProvider();
         String providerName = activeProvider != null ? activeProvider.getProviderName() : "NONE";

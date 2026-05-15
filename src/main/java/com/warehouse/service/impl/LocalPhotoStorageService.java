@@ -25,7 +25,16 @@ import java.time.LocalDate;
 import java.util.Iterator;
 import java.util.UUID;
 
+/**
+ * Local (filesystem) storage implementation. Varsayılan provider'dır.
+ *
+ * <p>{@code storage.provider=local} (varsayılan) iken aktif. S3/R2'ye geçiş için
+ * {@code storage.provider=s3} ayarlanır ve {@code S3PhotoStorageService}
+ * implementasyonu hazırlanır (şu an iskelet halinde, Faz 3 NICE-TO-HAVE).</p>
+ */
 @Service
+@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
+        name = "storage.provider", havingValue = "local", matchIfMissing = true)
 @RequiredArgsConstructor
 @Slf4j
 public class LocalPhotoStorageService implements PhotoStorageService {
@@ -337,6 +346,74 @@ public class LocalPhotoStorageService implements PhotoStorageService {
     @Override
     public InputStream openThumbnailStream(String thumbnailPath) {
         return openStream(thumbnailPath);
+    }
+
+    // ─── Generic document storage (PDF, XLSX, RAG docs) ───────────
+
+    @Override
+    public String storeDocument(String prefix, String originalFileName,
+                                 String contentType, java.io.InputStream inputStream) {
+        try {
+            String ext = "";
+            if (originalFileName != null) {
+                int dot = originalFileName.lastIndexOf('.');
+                if (dot > 0) ext = originalFileName.substring(dot);
+            }
+            String uuid = java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+            String relativeKey = prefix + "/" + uuid + ext;
+
+            // Local fs: baseDir altında prefix dizinini oluştur
+            Path target = resolveBaseDir().resolve(relativeKey).normalize();
+            // Path traversal koruması
+            if (!target.startsWith(resolveBaseDir().normalize())) {
+                throw new SecurityException("Invalid document path: " + relativeKey);
+            }
+            java.nio.file.Files.createDirectories(target.getParent());
+            try (java.io.OutputStream out = java.nio.file.Files.newOutputStream(target)) {
+                inputStream.transferTo(out);
+            }
+            log.debug("Local document stored: {}", target);
+            return relativeKey;
+        } catch (java.io.IOException e) {
+            throw new RuntimeException("Local document yazılamadı: " + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public java.io.InputStream openDocumentStream(String key) {
+        try {
+            if (key == null || key.isBlank()) {
+                throw new RuntimeException("Document key is null or empty");
+            }
+            if (key.contains("..") || key.contains("~")) {
+                throw new SecurityException("Invalid document key: " + key);
+            }
+            Path path = resolveBaseDir().resolve(key).normalize();
+            if (!path.startsWith(resolveBaseDir().normalize())) {
+                throw new SecurityException("Path traversal: " + key);
+            }
+            if (!java.nio.file.Files.exists(path)) {
+                throw new RuntimeException("Document not found: " + key);
+            }
+            return java.nio.file.Files.newInputStream(path);
+        } catch (java.io.IOException e) {
+            throw new RuntimeException("Document açılamadı: " + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public void deleteDocument(String key) {
+        if (key == null || key.isBlank()) return;
+        try {
+            Path path = resolveBaseDir().resolve(key).normalize();
+            if (!path.startsWith(resolveBaseDir().normalize())) {
+                log.warn("Skipping document delete (path traversal): {}", key);
+                return;
+            }
+            java.nio.file.Files.deleteIfExists(path);
+        } catch (Exception e) {
+            log.warn("Local document delete fail: {} → {}", key, e.getMessage());
+        }
     }
 
     private InputStream openStream(String relativePath) {

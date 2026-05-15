@@ -30,6 +30,7 @@ public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecific
     Page<Order> findAllWithCustomer(Pageable pageable);
 
     Page<Order> findByCustomerId(Long customerId, Pageable pageable);
+    List<Order> findByCustomerId(Long customerId);
     List<Order> findByStatusAndCreatedAtBefore(OrderStatus status, LocalDateTime threshold);
     Optional<Order> findByStockTransferId(Long stockTransferId);
     long countByStatus(OrderStatus status);

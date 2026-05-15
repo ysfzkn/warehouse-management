@@ -3,6 +3,7 @@ package com.warehouse.job;
 import com.warehouse.service.StockNotificationService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -27,6 +28,7 @@ public class StockNotificationJob {
      * Her 15 dakikada bir çalışır, uygulama başlangıcından 2 dakika sonra ilk çalışma.
      */
     @Scheduled(fixedRate = 15 * 60 * 1000, initialDelay = 2 * 60 * 1000)
+    @SchedulerLock(name = "stockNotification", lockAtMostFor = "PT10M", lockAtLeastFor = "PT2M")
     public void checkBackInStock() {
         try {
             int count = stockNotificationService.processPendingSubscriptions();

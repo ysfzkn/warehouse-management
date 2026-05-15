@@ -1,5 +1,9 @@
 /* ===== DESIGN TOKENS ===== */
-/* Central source of truth for all visual values */
+/* Central source of truth for all visual values.
+ * Bu dosya hem ADMIN/WMS hem STORE için kanonik token kaynağıdır.
+ * Eski "store.css" inline değerleri (--store-primary fallback'leri) artık burada
+ * tanımlı; renk tutarsızlığı önlenir.
+ */
 
 :root {
   /* ── Color Palette: Primary (Blue) ─────────────── */
@@ -13,6 +17,13 @@
   --color-primary-700: #1d4ed8;
   --color-primary-800: #1e40af;
   --color-primary-900: #1e3a8a;
+
+  /* ── Store-spesifik aliaslar ────────────────────── */
+  /* store.css içinde rastlanan eski isimler bunların üzerine inşa edildi.
+     Markaya özgü ayarlamalar admin paneli "primary_color" setting'i ile runtime'da override edilir. */
+  --store-primary:   var(--color-primary-600);   /* #2563eb */
+  --store-secondary: var(--color-primary-800);   /* #1e40af */
+  --store-accent:    var(--color-primary-100);
 
   /* ── Color Palette: Gray (Neutral) ─────────────── */
   --color-gray-50:  #f9fafb;
@@ -110,6 +121,85 @@
   /* ── Focus Ring ────────────────────────────────── */
   --focus-ring: 0 0 0 2px var(--color-primary-100), 0 0 0 4px var(--color-primary-500);
   --focus-ring-error: 0 0 0 2px var(--color-error-bg), 0 0 0 4px var(--color-error);
+
+  /* ── Surface (light theme) ─────────────────────── */
+  /* Layer'lar: alttan üste */
+  --surface-bg:        #f5f7fb;            /* sayfa background'u */
+  --surface-card:      #ffffff;            /* kart, modal, dropdown */
+  --surface-elevated:  #ffffff;            /* hover/active state */
+  --surface-overlay:   rgba(0, 0, 0, 0.55); /* modal overlay */
+
+  --text-primary:   #111827;
+  --text-secondary: #4b5563;
+  --text-muted:     #6b7280;
+  --text-inverse:   #ffffff;
+  --border-subtle:  rgba(17, 24, 39, 0.08);
+  --border-strong:  rgba(17, 24, 39, 0.16);
+}
+
+/* ============================================================
+ * DARK MODE (Faz 3 NICE-TO-HAVE)
+ *
+ * İki şekilde tetiklenir:
+ *   1. `data-theme="dark"` attribute (manuel toggle) — admin tercihi öncelikli
+ *   2. `@media (prefers-color-scheme: dark)` ve manuel tercih yoksa
+ *
+ * Sadece "surface" token'ları override edilir; brand renkleri (primary blue
+ * vb.) korunur — marka tutarlılığı.
+ * ============================================================ */
+:root[data-theme="dark"],
+:root[data-theme="auto"] {
+  /* will be overridden by media query below if auto */
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --surface-bg:        #0f172a;
+    --surface-card:      #1e293b;
+    --surface-elevated:  #334155;
+    --surface-overlay:   rgba(0, 0, 0, 0.7);
+
+    --text-primary:   #f1f5f9;
+    --text-secondary: #cbd5e1;
+    --text-muted:     #94a3b8;
+    --text-inverse:   #0f172a;
+    --border-subtle:  rgba(255, 255, 255, 0.08);
+    --border-strong:  rgba(255, 255, 255, 0.16);
+
+    /* Brand renklerini biraz parlat (koyu zeminde daha okunaklı) */
+    --store-primary:  var(--color-primary-400);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface-bg:        #0f172a;
+  --surface-card:      #1e293b;
+  --surface-elevated:  #334155;
+  --surface-overlay:   rgba(0, 0, 0, 0.7);
+
+  --text-primary:   #f1f5f9;
+  --text-secondary: #cbd5e1;
+  --text-muted:     #94a3b8;
+  --text-inverse:   #0f172a;
+  --border-subtle:  rgba(255, 255, 255, 0.08);
+  --border-strong:  rgba(255, 255, 255, 0.16);
+
+  --store-primary:  var(--color-primary-400);
+}
+
+/* ============================================================
+ * REDUCED MOTION (a11y)
+ * Kullanıcı işletim sistemi tercihine saygı: animasyonları sıfırla
+ * ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* ── Global Focus Visible ────────────────────────── */

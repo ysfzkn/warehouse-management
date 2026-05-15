@@ -10,6 +10,7 @@ import com.warehouse.service.EmailService;
 import com.warehouse.service.SiteSettingService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -55,6 +56,7 @@ public class AbandonedCartRecoveryJob {
      * Saatte bir çalışır (3600000ms). Uygulama başlangıcından 5 dk sonra ilk çalışma.
      */
     @Scheduled(fixedRate = 3_600_000, initialDelay = 300_000)
+    @SchedulerLock(name = "abandonedCartRecovery", lockAtMostFor = "PT10M", lockAtLeastFor = "PT5M")
     @Transactional
     public void processAbandonedCarts() {
         // Feature flag

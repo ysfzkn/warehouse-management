@@ -72,6 +72,8 @@ public class AdminOrderController {
     private final EmailService emailService;
     private final com.warehouse.service.notification.NotificationDispatchService notificationDispatchService;
     private final com.warehouse.service.cargo.CargoApiService cargoApiService;
+    private final org.springframework.context.ApplicationEventPublisher eventPublisher;
+    private final com.warehouse.service.PhotoStorageService photoStorageService;
 
     public AdminOrderController(OrderRepository orderRepository,
                                  OrderItemRepository orderItemRepository,
@@ -83,7 +85,9 @@ public class AdminOrderController {
                                  StockEventRepository stockEventRepository,
                                  EmailService emailService,
                                  com.warehouse.service.notification.NotificationDispatchService notificationDispatchService,
-                                 com.warehouse.service.cargo.CargoApiService cargoApiService) {
+                                 com.warehouse.service.cargo.CargoApiService cargoApiService,
+                                 org.springframework.context.ApplicationEventPublisher eventPublisher,
+                                 com.warehouse.service.PhotoStorageService photoStorageService) {
         this.orderRepository = orderRepository;
         this.orderItemRepository = orderItemRepository;
         this.statusHistoryRepository = statusHistoryRepository;
@@ -95,6 +99,8 @@ public class AdminOrderController {
         this.emailService = emailService;
         this.notificationDispatchService = notificationDispatchService;
         this.cargoApiService = cargoApiService;
+        this.eventPublisher = eventPublisher;
+        this.photoStorageService = photoStorageService;
     }
 
     @GetMapping
@@ -245,6 +251,14 @@ public class AdminOrderController {
         statusHistoryRepository.save(OrderStatusHistoryFactory.create(
             order, oldStatus, newStatus,
             CurrentUser.usernameOrSystem(), "ADMIN", body.getNote()));
+
+        // RETURNED/REFUNDED'a geçişte fatura iptal/credit note event'i fırlat
+        // (InvoiceCancellationListener AFTER_COMMIT + @Async olarak yakalar)
+        if (newStatus == OrderStatus.RETURNED || newStatus == OrderStatus.REFUNDED) {
+            eventPublisher.publishEvent(new com.warehouse.event.OrderReturnedEvent(
+                    this, order.getId(), order.getOrderNumber(),
+                    order.getGrandTotal(), body.getNote(), CurrentUser.usernameOrSystem()));
+        }
 
         // If SHIPPED and no tracking number yet → auto-create shipment via cargo API
         if (newStatus == OrderStatus.SHIPPED
@@ -557,8 +571,12 @@ public class AdminOrderController {
 
     // ==================== Invoice Upload ====================
 
-    private static final String INVOICE_UPLOAD_DIR = "uploads/invoices";
-
+    /**
+     * Manuel fatura PDF/resim yükleme. Storage abstraction üzerinden
+     * yazılır → dev'de local fs, prod'da Railway bucket / S3.
+     * DB'de {@code order.invoiceUrl} alanı artık <strong>storage key</strong>
+     * tutar (örn. {@code "invoices/123/abc.pdf"}), filesystem path değil.
+     */
     @PostMapping("/{id}/invoice")
     public ResponseEntity<Map<String, String>> uploadInvoice(
             @PathVariable Long id,
@@ -573,24 +591,18 @@ public class AdminOrderController {
         }
 
         try {
-            String originalFilename = file.getOriginalFilename();
-            String extension = "";
-            if (originalFilename != null && originalFilename.contains(".")) {
-                extension = originalFilename.substring(originalFilename.lastIndexOf('.'));
-            }
-            String storedFileName = UUID.randomUUID().toString() + extension;
-
-            Path uploadDir = Paths.get(INVOICE_UPLOAD_DIR);
-            Files.createDirectories(uploadDir);
-
-            Path targetPath = uploadDir.resolve(storedFileName);
-            Files.copy(file.getInputStream(), targetPath, StandardCopyOption.REPLACE_EXISTING);
+            String key = photoStorageService.storeDocument(
+                    "invoices/" + order.getId(),
+                    file.getOriginalFilename(),
+                    file.getContentType(),
+                    file.getInputStream()
+            );
 
             order.setInvoiceNumber(invoiceNumber);
-            order.setInvoiceUrl(targetPath.toString().replace("\\", "/"));
+            order.setInvoiceUrl(key);
             orderRepository.save(order);
 
-            return ResponseEntity.ok(Map.of("message", "Fatura yüklendi.", "invoiceUrl", order.getInvoiceUrl()));
+            return ResponseEntity.ok(Map.of("message", "Fatura yüklendi.", "invoiceUrl", key));
         } catch (IOException e) {
             throw new WarehouseManagementException(ErrorCode.INTERNAL_SERVER_ERROR,
                     "Fatura dosyası kaydedilirken hata oluştu.");
@@ -600,45 +612,66 @@ public class AdminOrderController {
     // ==================== Invoice Download ====================
 
     /**
-     * Fatura indirme/görüntüleme.
-     * ?inline=true → tarayıcıda görüntüle (PDF/resim)
-     * varsayılan → dosya olarak indir
+     * Fatura indirme/görüntüleme. Stream storage'tan çekilir, response'a
+     * yazılır. {@code ?inline=true} → tarayıcıda görüntüle.
      */
     @GetMapping("/{id}/invoice/download")
-    public ResponseEntity<Resource> downloadInvoice(@PathVariable Long id,
+    public ResponseEntity<org.springframework.core.io.Resource> downloadInvoice(@PathVariable Long id,
             @RequestParam(defaultValue = "false") boolean inline) {
         Order order = orderRepository.findById(id)
                 .orElseThrow(() -> new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Sipariş bulunamadı."));
 
-        if (order.getInvoiceUrl() == null || order.getInvoiceUrl().isBlank()) {
+        String key = order.getInvoiceUrl();
+        if (key == null || key.isBlank()) {
             throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Bu siparişe ait fatura bulunamadı.");
         }
 
         try {
-            Path filePath = Paths.get(order.getInvoiceUrl()).normalize();
-            if (!Files.exists(filePath)) {
+            // Legacy DB kayıtları için backward-compat:
+            // Eski path'ler "uploads/invoices/..." veya "C:/...uploads/invoices/..." formatında
+            // olabilir → key'e dönüştür (sadece dosya adını al, prefix'i invoices/{orderId} yap)
+            String storageKey = key;
+            if (key.contains("uploads/invoices/")) {
+                String fileName = key.substring(key.lastIndexOf('/') + 1);
+                storageKey = "invoices/" + order.getId() + "/" + fileName;
+            }
+
+            java.io.InputStream stream;
+            try {
+                stream = photoStorageService.openDocumentStream(storageKey);
+            } catch (Exception e) {
                 throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Fatura dosyası bulunamadı.");
             }
 
-            Resource resource = new UrlResource(filePath.toUri());
-            String contentType = Files.probeContentType(filePath);
-            if (contentType == null) contentType = "application/octet-stream";
+            byte[] bytes = stream.readAllBytes();
+            stream.close();
 
             String ext = "";
-            String fname = filePath.getFileName().toString();
-            if (fname.contains(".")) ext = fname.substring(fname.lastIndexOf('.'));
+            if (storageKey.contains(".")) ext = storageKey.substring(storageKey.lastIndexOf('.'));
             String filename = "fatura-" + order.getOrderNumber() + ext;
 
+            String contentType = guessContentType(ext);
             String disposition = inline ? "inline; filename=" + filename : "attachment; filename=" + filename;
 
             return ResponseEntity.ok()
                     .header(HttpHeaders.CONTENT_DISPOSITION, disposition)
                     .contentType(MediaType.parseMediaType(contentType))
-                    .body(resource);
+                    .body(new org.springframework.core.io.ByteArrayResource(bytes));
         } catch (IOException e) {
             throw new WarehouseManagementException(ErrorCode.INTERNAL_SERVER_ERROR,
                     "Fatura dosyası indirilirken hata oluştu.");
         }
+    }
+
+    private String guessContentType(String ext) {
+        return switch (ext.toLowerCase()) {
+            case ".pdf" -> "application/pdf";
+            case ".png" -> "image/png";
+            case ".jpg", ".jpeg" -> "image/jpeg";
+            case ".webp" -> "image/webp";
+            case ".xml" -> "application/xml";
+            default -> "application/octet-stream";
+        };
     }
 
     private String safeCustomerName(Order o) {

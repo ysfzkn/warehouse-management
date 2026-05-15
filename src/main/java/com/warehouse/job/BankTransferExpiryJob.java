@@ -9,6 +9,7 @@ import com.warehouse.util.OrderStatusHistoryFactory;
 import com.warehouse.repository.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,6 +41,7 @@ public class BankTransferExpiryJob {
     }
 
     @Scheduled(fixedRate = 300000) // Every 5 minutes
+    @SchedulerLock(name = "bankTransferExpiry", lockAtMostFor = "PT4M", lockAtLeastFor = "PT2M")
     @Transactional
     public void cleanupExpiredBankTransfers() {
         List<Order> expired = orderRepo.findExpiredBankTransferOrders(

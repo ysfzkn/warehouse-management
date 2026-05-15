@@ -21,6 +21,8 @@ public class RateLimitService {
         registerLimit("/api/store/auth/forgot-password", 3, Duration.ofHours(1));
         registerLimit("/api/store/auth/google", 10, Duration.ofMinutes(15));
         registerLimit("/api/store/contact-messages", 3, Duration.ofMinutes(1));
+        // Admin auth: brute-force korumasi — daha agresif limit
+        registerLimit("/api/admin/auth/login", 5, Duration.ofMinutes(15));
     }
 
     private void registerLimit(String path, int maxRequests, Duration window) {
