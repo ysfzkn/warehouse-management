@@ -80,16 +80,21 @@ public class ProductImageCrawlerService {
             "lg.com",               "lg.com.tr",
             "miele.com",            "miele.com.tr",
             "haier.com",            "haier.com.tr",
-            "fakir.com.tr",         "fakir.com",
-            "altus.com.tr",         "altus.com"
+            "fakir.com.tr",         "fakir.com"
+            // NOT: altus.com.tr Akamai Bot Manager ile TLS fingerprinting yapıyor;
+            // server-side HTTP client'larla (Jsoup/HttpURLConnection) bypass edilemez.
+            // Desteklemek için headless browser (Playwright) veya ScraperAPI gerekir.
     );
 
     private static final int MAX_IMAGES = 20;
     private static final long MAX_IMAGE_BYTES = 10L * 1024 * 1024;   // 10 MB
     private static final int FETCH_TIMEOUT_MS = 15_000;
     private static final int IMAGE_DOWNLOAD_TIMEOUT_MS = 10_000;
+    // Gerçekçi Chrome UA — "compatible; XxxBot" pattern'i Akamai/Cloudflare gibi
+    // bot manager'lar tarafından otomatik bloklanıyor (örn. Altus.com.tr).
     private static final String USER_AGENT =
-            "Mozilla/5.0 (compatible; WarehouseProductImporter/1.0; +https://example.com)";
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                    + "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
     private final ProductRepository productRepository;
     private final ProductImageRepository productImageRepository;
