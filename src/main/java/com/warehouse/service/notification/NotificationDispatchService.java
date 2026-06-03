@@ -11,13 +11,13 @@ import org.springframework.stereotype.Service;
 import java.util.Optional;
 
 /**
- * Bildirim dağıtım servisi.
- * Müşterinin tercihlerine göre hangi kanaldan (SMS/EMAIL) bildirim gönderileceğine karar verir.
+ * Notification dispatch service.
+ * Decides which channel (SMS/EMAIL) to send a notification through based on the customer's preferences.
  *
- * Tercih kuralları:
- * - Müşteri bir kanal için tercih belirtmişse, o kullanılır
- * - Aksi halde default: EMAIL = true, SMS = true (sipariş), SMS = false (marketing)
- * - Marketing için ayrıca kvkk marketingConsent kontrolü yapılır
+ * Preference rules:
+ * - If the customer has specified a preference for a channel, it is used
+ * - Otherwise the defaults are: EMAIL = true, SMS = true (orders), SMS = false (marketing)
+ * - For marketing, the KVKK marketingConsent is also checked
  */
 @Service
 public class NotificationDispatchService {
@@ -37,12 +37,12 @@ public class NotificationDispatchService {
     }
 
     /**
-     * Sipariş oluşturuldu bildirimi (SMS + e-posta, müşteri tercihlerine göre).
+     * Order created notification (SMS + email, based on customer preferences).
      */
     public void notifyOrderConfirmed(Customer customer, String orderNumber) {
         if (customer == null) return;
 
-        // E-posta
+        // Email
         if (shouldSendViaChannel(customer, NotificationChannelType.EMAIL, NotificationType.ORDER_CONFIRMED, true)) {
             try {
                 emailService.sendOrderConfirmation(customer.getEmail(), customer.getFirstName(), orderNumber);
@@ -64,7 +64,7 @@ public class NotificationDispatchService {
     }
 
     /**
-     * Sipariş durumu değişti bildirimi (kargoya verildi, teslim edildi vb.).
+     * Order status change notification (shipped, delivered, etc.).
      */
     public void notifyOrderStatusChange(Customer customer, String orderNumber,
                                          String newStatus, String cargoTrackingNo, String note) {
@@ -72,7 +72,7 @@ public class NotificationDispatchService {
 
         NotificationType type = resolveTypeForStatus(newStatus);
 
-        // E-posta
+        // Email
         if (shouldSendViaChannel(customer, NotificationChannelType.EMAIL, type, true)) {
             try {
                 emailService.sendOrderStatusUpdate(customer.getEmail(), customer.getFirstName(),
@@ -82,7 +82,7 @@ public class NotificationDispatchService {
             }
         }
 
-        // SMS (sadece önemli durum değişimlerinde)
+        // SMS (only for important status changes)
         if (type == NotificationType.CARGO_SHIPPED || type == NotificationType.ORDER_DELIVERED) {
             if (shouldSendViaChannel(customer, NotificationChannelType.SMS, type, true)
                     && customer.getPhone() != null && !customer.getPhone().isBlank()) {
@@ -93,7 +93,7 @@ public class NotificationDispatchService {
     }
 
     /**
-     * Ödeme alındı bildirimi.
+     * Payment received notification.
      */
     public void notifyPaymentReceived(Customer customer, String orderNumber) {
         if (customer == null) return;
@@ -110,12 +110,12 @@ public class NotificationDispatchService {
     // === Helpers ===
 
     /**
-     * Kullanıcının bir kanal+tip kombinasyonu için tercih ettiği ayarı döner.
-     * Kayıt yoksa default değeri kullanır.
+     * Returns the customer's preferred setting for a channel+type combination.
+     * Falls back to the default value if no record exists.
      */
     private boolean shouldSendViaChannel(Customer customer, NotificationChannelType channel,
                                           NotificationType type, boolean defaultEnabled) {
-        // Marketing için KVKK onayı ayrıca kontrol edilir
+        // For marketing, KVKK consent is checked separately
         if (type == NotificationType.MARKETING && !customer.isMarketingConsent()) {
             return false;
         }

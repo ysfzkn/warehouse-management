@@ -62,9 +62,9 @@ public class CargoProvider {
     private String trackingUrlTemplate;
 
     /**
-     * Kargonomi tarafındaki carrier slug'ı ("yurtici", "aras", "mng" vb).
-     * Müşteri bu provider'ı seçince Kargonomi API'ye bu slug ile "bu carrier ile gönder"
-     * talimatı verilir. Boşsa Kargonomi otomatik (en ucuz) carrier seçer.
+     * Carrier slug on the Kargonomi side ("yurtici", "aras", "mng", etc.).
+     * When the customer selects this provider, the Kargonomi API is instructed to
+     * "ship with this carrier" using this slug. If empty, Kargonomi auto-selects the cheapest carrier.
      */
     @Size(max = 40)
     @Column(name = "kargonomi_slug", length = 40)

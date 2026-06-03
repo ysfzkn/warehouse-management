@@ -188,7 +188,7 @@ export default function ProductDetailPage() {
                   // Auto-fill email from customer token if logged in
                   const token = localStorage.getItem('customer_token');
                   if (token) {
-                    // Token payload'dan email'i çıkartamayız güvenli şekilde, boş bırakıyoruz
+                    // We cannot safely extract the email from the token payload, so we leave it empty
                   }
                   setNotifyModalOpen(true);
                 }}
@@ -454,9 +454,9 @@ export default function ProductDetailPage() {
       )}
 
       {/*
-        Mobile sticky "Sepete Ekle" — yalnızca <768px ekrana sahip cihazlarda görünür.
-        PDP uzun olduğunda kullanıcı scroll edip butonu kaybetmesin diye altta sabit kalır.
-        Trust badge'lerden sonra geliyor; CSS @media ile mobile-only.
+        Mobile sticky "Add to Cart" — visible only on devices with screens <768px.
+        Stays pinned to the bottom so the user does not lose the button while scrolling a long PDP.
+        Comes after the trust badges; mobile-only via CSS @media.
       */}
       {product.stockStatus !== 'OUT_OF_STOCK' && (
         <div className="store-pdp-sticky-cta d-md-none" role="region" aria-label="Hızlı satın alma">

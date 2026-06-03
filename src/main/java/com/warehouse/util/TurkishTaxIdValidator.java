@@ -1,20 +1,20 @@
 package com.warehouse.util;
 
 /**
- * Türkiye Vergi Kimlik No (VKN) ve T.C. Kimlik No (TCKN) algoritmik doğrulayıcı.
+ * Algorithmic validator for the Turkish Tax ID (VKN) and Turkish National ID (TCKN).
  *
- * <p>E-fatura/e-arşiv kesilirken alıcıya yazılan kimlik numarası yanlışsa GİB
- * faturayı reject eder ve Logo'dan ERROR statüsünde geri döner. Bu durumda
- * müşteriye gönderilen "Faturanız Hazır" e-postası yanlış olur ve manuel
- * düzeltme gerekir. Bu validator ile başvuruyu Logo'ya göndermeden hemen
- * checkout aşamasında doğrularız.</p>
+ * <p>If the ID number written for the recipient is wrong when issuing an
+ * e-invoice/e-archive invoice, GİB rejects the invoice and Logo returns it in
+ * ERROR status. In that case the "Your invoice is ready" email sent to the
+ * customer is incorrect and a manual correction is required. With this validator
+ * we verify the input right at the checkout stage, before sending it to Logo.</p>
  *
- * <p>Resmi algoritmalar:
+ * <p>Official algorithms:
  * <ul>
- *   <li><b>TCKN (11 hane):</b> İlk 9 hanenin oddSum*7 - evenSum mod 10 = 10. hane;
- *       İlk 10 hanenin toplamı mod 10 = 11. hane. İlk hane sıfır olamaz.</li>
- *   <li><b>VKN (10 hane):</b> Soldan sağa pozisyon-bazlı (vXVii) algoritması;
- *       son hane checksum.</li>
+ *   <li><b>TCKN (11 digits):</b> (oddSum*7 - evenSum) mod 10 of the first 9 digits = 10th digit;
+ *       sum of the first 10 digits mod 10 = 11th digit. The first digit cannot be zero.</li>
+ *   <li><b>VKN (10 digits):</b> left-to-right position-based (vXVii) algorithm;
+ *       the last digit is the checksum.</li>
  * </ul>
  */
 public final class TurkishTaxIdValidator {
@@ -22,8 +22,8 @@ public final class TurkishTaxIdValidator {
     private TurkishTaxIdValidator() {}
 
     /**
-     * Verilen string'in TCKN (11 hane) veya VKN (10 hane) olarak geçerli olup
-     * olmadığını döner. Boş/null kabul edilmez.
+     * Returns whether the given string is valid as a TCKN (11 digits) or VKN
+     * (10 digits). Blank/null is not accepted.
      */
     public static boolean isValid(String id) {
         if (id == null) return false;
@@ -33,7 +33,7 @@ public final class TurkishTaxIdValidator {
         return false;
     }
 
-    /** Sadece TCKN doğrulaması. */
+    /** TCKN validation only. */
     public static boolean isValidTckn(String tckn) {
         if (tckn == null || tckn.length() != 11 || !tckn.chars().allMatch(Character::isDigit)) return false;
         if (tckn.charAt(0) == '0') return false;
@@ -51,7 +51,7 @@ public final class TurkishTaxIdValidator {
         return (total % 10) == d[10];
     }
 
-    /** Sadece VKN doğrulaması. */
+    /** VKN validation only. */
     public static boolean isValidVkn(String vkn) {
         if (vkn == null || vkn.length() != 10 || !vkn.chars().allMatch(Character::isDigit)) return false;
         int[] v = new int[10];
@@ -63,7 +63,7 @@ public final class TurkishTaxIdValidator {
             if (tmp == 0) {
                 sum += tmp;
             } else {
-                // pow(2, 9-i) mod 9; eğer sonuç 0 ise 9
+                // pow(2, 9-i) mod 9; if the result is 0, use 9
                 long p = (long) (tmp * Math.pow(2, 9 - i));
                 long mod = p % 9;
                 if (p != 0 && mod == 0) mod = 9;
@@ -74,7 +74,7 @@ public final class TurkishTaxIdValidator {
         return checksum == v[9];
     }
 
-    /** İkisinden hangisi olduğunu hızlıca belirler. */
+    /** Quickly determines which of the two it is. */
     public enum TaxIdKind { TCKN, VKN, INVALID }
 
     public static TaxIdKind classify(String id) {

@@ -98,7 +98,7 @@ export default function AssistantSettingsPage() {
       </p>
 
       <div className="row g-4">
-        {/* ── Chat Bağlantısı (Provider seçimli) ── */}
+        {/* ── Chat Connection (provider selectable) ── */}
         <div className="col-12">
           <div className="card border-0 shadow-sm border-start border-primary border-4">
             <div className="card-header bg-primary bg-opacity-10 d-flex justify-content-between align-items-center">
@@ -173,7 +173,7 @@ export default function AssistantSettingsPage() {
           </div>
         </div>
 
-        {/* ── Embedding Bağlantısı (Provider seçimli) ── */}
+        {/* ── Embedding Connection (provider selectable) ── */}
         <div className="col-12">
           <div className="card border-0 shadow-sm border-start border-success border-4">
             <div className="card-header bg-success bg-opacity-10 d-flex justify-content-between align-items-center">
@@ -244,7 +244,7 @@ export default function AssistantSettingsPage() {
           </div>
         </div>
 
-        {/* ── Güvenlik: Input ── */}
+        {/* ── Security: Input ── */}
         <div className="col-md-6">
           <div className="card border-0 shadow-sm">
             <div className="card-header bg-danger bg-opacity-10">
@@ -275,7 +275,7 @@ export default function AssistantSettingsPage() {
           </div>
         </div>
 
-        {/* ── Güvenlik: Output ── */}
+        {/* ── Security: Output ── */}
         <div className="col-md-6">
           <div className="card border-0 shadow-sm">
             <div className="card-header bg-warning bg-opacity-10">

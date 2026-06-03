@@ -10,20 +10,20 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import javax.sql.DataSource;
 
 /**
- * ShedLock — multi-instance scheduled job kilitlemesi.
+ * ShedLock — multi-instance scheduled job locking.
  *
- * <p>Railway scale-up edildiğinde aynı job birden fazla instance'ta paralel
- * çalışmamalı (çift e-posta gönderimi, çift fatura kesimi vb.). ShedLock,
- * shedlock tablosunda kayıt tutarak bir job'ın aynı anda tek instance'ta
- * çalışmasını garanti eder.</p>
+ * <p>When Railway is scaled up, the same job must not run in parallel on
+ * multiple instances (duplicate email sends, duplicate invoice issuance, etc.).
+ * By keeping a record in the shedlock table, ShedLock guarantees that a job runs
+ * on only one instance at a time.</p>
  *
- * <p>defaultLockAtMostFor = job'ın crash etmesi durumunda kilidin maksimum
- * tutulacağı süre. Tüm job'lar bu süreden önce bitmeli, aksi halde otomatik
- * unlock olur (orphan lock olmasın).</p>
+ * <p>defaultLockAtMostFor = the maximum time the lock is held if the job crashes.
+ * All jobs must finish before this duration; otherwise the lock is released
+ * automatically (to avoid orphan locks).</p>
  */
 @Configuration
 @EnableScheduling
-@EnableSchedulerLock(defaultLockAtMostFor = "PT10M") // 10dk default lock TTL
+@EnableSchedulerLock(defaultLockAtMostFor = "PT10M") // 10min default lock TTL
 public class SchedulerConfig {
 
     @Bean
@@ -31,7 +31,7 @@ public class SchedulerConfig {
         return new JdbcTemplateLockProvider(
                 JdbcTemplateLockProvider.Configuration.builder()
                         .withJdbcTemplate(new org.springframework.jdbc.core.JdbcTemplate(dataSource))
-                        .usingDbTime() // DB time'ı kullan (clock skew önler)
+                        .usingDbTime() // Use DB time (prevents clock skew)
                         .build()
         );
     }

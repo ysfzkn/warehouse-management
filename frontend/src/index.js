@@ -40,7 +40,7 @@ axios.interceptors.request.use((config) => {
 axios.interceptors.response.use(
   (response) => response,
   (error) => {
-    // --- Oturum süresi kontrolü ---
+    // --- Session expiry check ---
     if (error && error.response) {
       const status = error.response.status;
       const reqUrl = error?.config?.url ?? '';
@@ -49,8 +49,8 @@ axios.interceptors.response.use(
       const errCode = error?.response?.data?.code || error?.response?.data?.errorCode;
       const isAdminSecurityError = ['AUTH_002','AUTH_003','AUTH_004','AUTH_005','AUTH_006','AUTH_007'].includes(errCode);
 
-      // --- Oturum kontrolü: SADECE 401 (Unauthorized) + token mevcut = gerçek oturum süresi dolması ---
-      // 403 (Forbidden) = yetki yetersizliği, oturum aktif olabilir — modal GÖSTERME
+      // --- Session check: ONLY 401 (Unauthorized) + token present = a genuine session expiry ---
+      // 403 (Forbidden) = insufficient permissions, session may still be active — DO NOT show modal
       const hasAdminToken = !!localStorage.getItem('auth_token');
       const hasCustomerToken = !!localStorage.getItem('customer_token');
       const isStoreRequest = reqUrl.includes('/api/store/');
@@ -61,13 +61,13 @@ axios.interceptors.response.use(
         if (!window.__sessionExpiredHandling) {
           window.__sessionExpiredHandling = true;
 
-          // Doğru login sayfasını belirle: store isteği → store login, admin isteği → admin login
+          // Determine the correct login page: store request → store login, admin request → admin login
           const loginUrl = isStoreRequest ? '/giris' : '/login';
           const tokenKey = isStoreRequest ? 'customer_token' : 'auth_token';
 
           const modalId = 'session-expired-modal';
 
-          // Önce eski/orphan instance varsa temizle
+          // First clean up any old/orphan instance
           const existing = document.getElementById(modalId);
           if (existing) {
             try { existing.remove(); } catch {}
@@ -122,14 +122,14 @@ axios.interceptors.response.use(
             window.location.replace(loginUrl);
           };
 
-          // Event delegation: wrapper üzerinden click yakala (düğme koparılsa bile çalışır)
+          // Event delegation: capture click via the wrapper (works even if the button is detached)
           wrapper.addEventListener('click', (e) => {
             if (e.target.closest('#session-expired-ok')) {
               onOk();
             }
           });
 
-          // Escape tuşuyla da kapanabilsin (ve login'e git)
+          // Allow closing with the Escape key too (and go to login)
           const onKey = (e) => {
             if (e.key === 'Escape' || e.key === 'Enter') {
               document.removeEventListener('keydown', onKey);
@@ -138,7 +138,7 @@ axios.interceptors.response.use(
           };
           document.addEventListener('keydown', onKey);
 
-          // Failsafe: 60 saniye sonra hâlâ açıksa zorla login sayfasına git
+          // Failsafe: if still open after 60 seconds, force navigation to the login page
           setTimeout(() => {
             if (document.getElementById(modalId)) {
               console.warn('[session-expired] Modal 60 saniyedir açık, otomatik login\'e yönlendiriliyor');
@@ -149,12 +149,12 @@ axios.interceptors.response.use(
       }
     }
 
-    // --- Hata mesajı çeviri / normalize ---
+    // --- Error message translation / normalization ---
     if (error && error.response) {
       const res = error.response;
       const data = res.data;
 
-      // Orijinal backend mesajını çıkart
+      // Extract the original backend message
       let message = '';
       if (typeof data === 'string') {
         message = data;
@@ -197,23 +197,23 @@ axios.interceptors.response.use(
 
       const finalMessage = tr || message || 'Beklenmeyen bir hata oluştu';
 
-      // *** ÖNEMLİ KISIM: data'yı stringe çevirmiyoruz, objeyi koruyoruz ***
+      // *** IMPORTANT: we don't stringify data, we preserve the object ***
       if (data && typeof data === 'object') {
-        // errorCode, details vs. korunuyor
+        // errorCode, details, etc. are preserved
         res.data = {
           ...data,
           message: finalMessage
         };
       } else {
-        // Backend düz string yolladıysa en azından objeye sar
+        // If backend sent a plain string, at least wrap it in an object
         res.data = {
           message: finalMessage
         };
       }
     } else if (error && error.message === 'Network Error') {
-      // Network hataları için genel mesaj
+      // Generic message for network errors
       error.message = 'Ağ hatası: Sunucuya ulaşılamıyor';
-      // İstersen:
+      // If desired:
       // error.response = { data: { message: error.message } };
     }
 
@@ -234,9 +234,9 @@ root.render(
   </React.StrictMode>
 );
 
-// ── Service Worker (PWA) — sadece production, sadece store domain'i ──
-// REACT_APP_DISABLE_SW=true ile devre dışı bırakılabilir.
-// Admin/WMS hostlarında SW yüklenmez (gerçek zamanlı veri gerekli).
+// ── Service Worker (PWA) — production only, store domain only ──
+// Can be disabled with REACT_APP_DISABLE_SW=true.
+// SW is not loaded on admin/WMS hosts (real-time data required).
 if ('serviceWorker' in navigator
     && process.env.NODE_ENV === 'production'
     && process.env.REACT_APP_DISABLE_SW !== 'true') {

@@ -39,6 +39,11 @@ public class AdminOrderDetailDto {
     private List<StatusHistoryDto> statusHistory;
     private LocalDateTime createdAt;
 
+    // Critical admin info for bank transfer/EFT — used to reconcile against the bank statement
+    private String bankTransferReference;   // HVL... — search for this code in the bank statement
+    private LocalDateTime bankTransferDeadline;
+    private String bankTransferStatus;      // INITIATED / SUCCESS / FAILED / TIMEOUT
+
     @Data @Builder
     public static class OrderItemDto {
         private Long id;

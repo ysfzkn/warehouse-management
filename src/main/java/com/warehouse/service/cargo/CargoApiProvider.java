@@ -1,46 +1,46 @@
 package com.warehouse.service.cargo;
 
 /**
- * Kargo API sağlayıcı arayüzü.
+ * Cargo API provider interface.
  *
- * Türkiye'deki farklı kargo entegrasyonları bu arayüzü uygular:
+ * The various cargo integrations in Turkey implement this interface:
  * - Kargonomi (multi-carrier aggregator)
- * - Yurtiçi Kargo (doğrudan)
- * - Aras Kargo (doğrudan)
- * - MNG (doğrudan)
+ * - Yurtiçi Kargo (direct)
+ * - Aras Kargo (direct)
+ * - MNG (direct)
  *
- * Yapılandırma site_settings tablosundan okunur.
+ * Configuration is read from the site_settings table.
  */
 public interface CargoApiProvider {
 
     /**
-     * Sağlayıcı adı. Örn: "KARGONOMI", "YURTICI", "ARAS", "MOCK".
+     * Provider name. E.g. "KARGONOMI", "YURTICI", "ARAS", "MOCK".
      */
     String getProviderName();
 
     /**
-     * Bu sağlayıcı aktif ve credential'ları yapılandırılmış mı?
+     * Is this provider active and are its credentials configured?
      */
     boolean isEnabled();
 
     /**
-     * Kargo gönderimi oluşturur.
-     * Kargo firmasından takip numarası alır.
+     * Creates a cargo shipment.
+     * Obtains a tracking number from the carrier.
      */
     CargoShipmentResult createShipment(CargoShipmentRequest request);
 
     /**
-     * Takip numarasına göre kargo durumunu sorgular.
+     * Queries the cargo status by tracking number.
      */
     CargoTrackingStatus getTrackingStatus(String trackingNumber);
 
     /**
-     * Gönderimi iptal eder.
+     * Cancels the shipment.
      */
     CargoShipmentResult cancelShipment(String providerShipmentId);
 
     /**
-     * İade etiketi oluşturur (müşterinin ürünü iade etmesi için).
+     * Creates a return label (for the customer to return the product).
      */
     CargoShipmentResult createReturnShipment(CargoShipmentRequest request);
 }

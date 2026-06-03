@@ -7,6 +7,8 @@ import { useAdminToast } from '../components/AdminToast';
 // Setting groups organized into sections
 // ─────────────────────────────────────────────────────────────
 const SETTING_GROUPS = [
+  { id: 'storestatus', section: 'Mağaza',        title: 'Satış Durumu (Test Modu)', icon: 'fas fa-store-alt-slash',      keys: ['store_purchasing_enabled', 'store_test_mode_banner'],
+    tooltip: 'Mağazanın satışa açık olup olmadığını kontrol eder. Test/bakım aşamasında kapatın — site görünür kalır ama sipariş alınmaz.' },
   { id: 'brand',       section: 'Mağaza',        title: 'Marka & Görünüm',         icon: 'fas fa-palette',               keys: ['site_name', 'site_logo_url', 'site_favicon_url', 'primary_color', 'secondary_color'],
     tooltip: 'Mağaza header\'ı, tarayıcı sekmesi ve genel renk temasında kullanılır.' },
   { id: 'contact',     section: 'Mağaza',        title: 'İletişim Bilgileri',      icon: 'fas fa-phone',                 keys: ['contact_phone', 'contact_email', 'contact_address', 'contact_map_embed'],
@@ -52,6 +54,7 @@ const LABELS = {
   chamber_of_commerce: 'Ticaret/Sanayi Odası', etbis_qr_url: 'ETBİS QR Kod URL',
   warranty_notice_text: 'Garanti Uyarı Metni', bulky_shipping_notice_text: 'Hacimli Ürün Kargo Uyarısı',
   footer_text: 'Alt Bilgi Metni', currency_symbol: 'Para Birimi',
+  store_purchasing_enabled: 'Satışa Açık', store_test_mode_banner: 'Test Modu Banner Metni',
   free_shipping_threshold: 'Ücretsiz Kargo Limiti (TL)', default_shipping_cost: 'Varsayılan Kargo Ücreti (TL)',
   header_announcement: 'Üst Banner Duyuru Mesajı', contact_form_email: 'İletişim Formu Hedef E-posta',
   payment_method_credit_card_enabled: 'Kredi Kartı ile Ödeme', payment_method_bank_transfer_enabled: 'Havale / EFT ile Ödeme', payment_method_door_cash_enabled: 'Kapıda Ödeme',
@@ -105,6 +108,8 @@ const FIELD_TOOLTIPS = {
   warranty_notice_text: 'Beyaz eşya ürünlerinde garanti koşulları uyarısı (ürün detay sayfasında gösterilir)',
   bulky_shipping_notice_text: 'Hacimli ürünlerin kargo/teslimat süresi uyarısı (checkout\'ta gösterilir)',
   currency_symbol: 'Mağazada ve faturalarda kullanılacak para birimi',
+  store_purchasing_enabled: 'AÇIK = müşteriler sipariş verebilir (canlı satış). KAPALI = test/bakım modu: site açık kalır, ürünler görünür ama "Sepete Ekle/Sipariş" engellenir ve üstte test banner gösterilir. Yeni sürüm testinde veya bakımda kapatın.',
+  store_test_mode_banner: 'Test modunda (satış kapalıyken) sitenin üstünde gösterilecek uyarı metni. Boş bırakılırsa varsayılan metin kullanılır.',
   payment_method_credit_card_enabled: 'Kapatırsanız kredi kartı seçeneği müşterilere gösterilmez',
   payment_method_bank_transfer_enabled: 'Kapatırsanız havale/EFT seçeneği gösterilmez. IBAN yapılandırılmamışsa otomatik gizlenir.',
   payment_method_door_cash_enabled: 'Kapatırsanız kapıda ödeme seçeneği gösterilmez',
@@ -263,7 +268,7 @@ export default function AdminSiteSettings() {
         || e.response?.data?.error
         || (typeof e.response?.data === 'string' ? e.response.data : null);
 
-      // 403: güvenlik kodu, 400: validation, 401: oturum, 500: server, no response: network
+      // 403: security code, 400: validation, 401: session, 500: server, no response: network
       if (status === 403) {
         toast.error('Güvenlik şifresi hatalı.');
       } else if (status === 401) {
@@ -273,12 +278,12 @@ export default function AdminSiteSettings() {
       } else if (status >= 500) {
         toast.error(backendMsg || `Sunucu hatası (${status}). Loglara bakın.`);
       } else if (!e.response) {
-        // Network hatası — sunucu yanıt vermedi
+        // Network error — server did not respond
         toast.error('Sunucuya ulaşılamadı. Bağlantınızı kontrol edin.');
       } else {
         toast.error(backendMsg || `Hata (${status || 'unknown'})`);
       }
-      // Geliştirici için console'a tam hatayı yaz
+      // Log the full error to the console for developers
       // eslint-disable-next-line no-console
       console.error('[AdminSiteSettings] Save failed:', { status, message: backendMsg, error: e });
     }
@@ -489,7 +494,7 @@ export default function AdminSiteSettings() {
     }
 
     // Toggles
-    if ((key.startsWith('payment_method_') && key.endsWith('_enabled')) || ['abandoned_cart_enabled','sms_enabled','cargo_api_enabled','cargo_api_auto_create','invoice_auto_generate','logo_efatura_test_mode'].includes(key)) {
+    if ((key.startsWith('payment_method_') && key.endsWith('_enabled')) || ['store_purchasing_enabled','abandoned_cart_enabled','sms_enabled','cargo_api_enabled','cargo_api_auto_create','invoice_auto_generate','logo_efatura_test_mode'].includes(key)) {
       const defaultFalse = ['sms_enabled','cargo_api_enabled','cargo_api_auto_create','invoice_auto_generate'].includes(key);
       const isOn = defaultFalse ? settings[key] === 'true' : settings[key] !== 'false';
       const colSize = key.startsWith('payment_method_') ? 'col-md-4' : 'col-md-12';
@@ -665,9 +670,9 @@ export default function AdminSiteSettings() {
         </div>
       </div>
 
-      {/* ── Yasal Uyumluluk Uyarısı (Faz 0 BLOCKER) ──
-          ETBİS QR, KEP, MERSİS, vergi no vb. kritik alanlar boşsa kırmızı banner.
-          Lansman öncesi mutlaka doldurulmalı. */}
+      {/* ── Legal Compliance Warning (Phase 0 BLOCKER) ──
+          Red banner when critical fields like ETBİS QR, KEP, MERSİS, tax number, etc. are empty.
+          Must be filled before launch. */}
       {(() => {
         const CRITICAL_LEGAL_KEYS = [
           'company_legal_name', 'mersis_number', 'kep_address',

@@ -191,9 +191,9 @@ public class CartServiceImpl implements CartService {
             }
         }
 
-        // Kargo ücreti: admin panelden ayarlanabilen site setting'lerden okunur
-        // (provider seçimi olmadan; checkout aşamasında provider seçildiğinde
-        // CheckoutServiceImpl tarafından ayrıca hesaplanır).
+        // Shipping cost: read from site settings configurable in the admin panel
+        // (without provider selection; recalculated separately by CheckoutServiceImpl
+        // once a provider is chosen during checkout).
         BigDecimal shippingCost = shippingCostService.calculate(subtotal, null);
         if (shippingCost == null) shippingCost = BigDecimal.ZERO;
         if (coupon != null && coupon.getDiscountType() == com.warehouse.enums.DiscountType.FREE_SHIPPING) {
@@ -203,8 +203,8 @@ public class CartServiceImpl implements CartService {
         BigDecimal total = subtotal.subtract(discountAmount).add(shippingCost);
         if (total.compareTo(BigDecimal.ZERO) < 0) total = BigDecimal.ZERO;
 
-        // KDV oranı bazlı kırılım (Türkiye'de fiyatlar KDV dahil olduğundan
-        // gross fiyattan ayrıştırma: vatAmount = gross * (rate / (100 + rate)))
+        // VAT-rate-based breakdown (since prices in Turkey are VAT-inclusive,
+        // extract it from the gross price: vatAmount = gross * (rate / (100 + rate)))
         java.util.Map<String, BigDecimal> vatBreakdown = new java.util.LinkedHashMap<>();
         for (CartItemDto it : itemDtos) {
             if (it.getVatRate() == null || it.getVatRate().compareTo(BigDecimal.ZERO) <= 0) continue;

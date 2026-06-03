@@ -23,9 +23,9 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
 /**
- * Logo eLogo e-Fatura / e-Arşiv SOAP API entegrasyonu.
+ * Logo eLogo e-Invoice / e-Archive SOAP API integration.
  *
- * eLogo Postbox Service kullanarak UBL-TR formatında fatura gönderir.
+ * Sends invoices in UBL-TR format using the eLogo Postbox Service.
  *
  * API Endpoints:
  * - Test: https://pb-demo.elogo.com.tr/PostboxService.svc
@@ -34,27 +34,27 @@ import java.util.zip.ZipOutputStream;
  * SOAP Operations (WCF tempuri.org namespace):
  * - Login(login: {username, password}) → sessionID
  * - Logout(sessionID)
- * - SendDocument(sessionID, paramList, document) → e-Fatura/e-Arşiv gönderir
- * - getInvoiceStatus(sessionID, uuid) → fatura durumu
- * - GetDocumentData(sessionID, uuid, docType, dataType) → PDF/XML indir
- * - CheckGibUser(sessionID, vknTcknList) → GIB müşteri kontrolü
+ * - SendDocument(sessionID, paramList, document) → sends e-Invoice/e-Archive
+ * - getInvoiceStatus(sessionID, uuid) → invoice status
+ * - GetDocumentData(sessionID, uuid, docType, dataType) → download PDF/XML
+ * - CheckGibUser(sessionID, vknTcknList) → GIB customer check
  *
- * Fatura gönderim akışı:
- * 1. UBL-TR XML → ZIP içinde paketlenir (xml dosyası)
+ * Invoice submission flow:
+ * 1. UBL-TR XML → packaged inside a ZIP (xml file)
  * 2. ZIP → Base64
  * 3. SendDocument(paramList=[SIGNED=0, DOCUMENTTYPE=EINVOICE/EARCHIVE, ALIAS=...])
- * 4. Response: resultCode=1 başarılı, resultMsg hata
+ * 4. Response: resultCode=1 success, resultMsg error
  *
- * İptal: SendDocument + paramList=[DOCUMENTTYPE=CANCELEARCHIVEINVOICE, UUID=ettn]
+ * Cancellation: SendDocument + paramList=[DOCUMENTTYPE=CANCELEARCHIVEINVOICE, UUID=ettn]
  *
- * Referans: https://github.com/Hasokeyk/elogo-php/blob/main/src/Elogo/Elogo.php
+ * Reference: https://github.com/Hasokeyk/elogo-php/blob/main/src/Elogo/Elogo.php
  */
 @Component
 public class LogoInvoiceProvider implements InvoiceProvider {
 
     private static final Logger logger = LoggerFactory.getLogger(LogoInvoiceProvider.class);
 
-    // eLogo Postbox Service (WCF) gerçek endpoint'leri
+    // eLogo Postbox Service (WCF) actual endpoints
     private static final String TEST_ENDPOINT = "https://pb-demo.elogo.com.tr/PostboxService.svc";
     private static final String PROD_ENDPOINT = "https://pb.elogo.com.tr/PostboxService.svc";
 
@@ -64,8 +64,8 @@ public class LogoInvoiceProvider implements InvoiceProvider {
     private static final String ARRAYS_NS = "http://schemas.microsoft.com/2003/10/Serialization/Arrays";
 
     // Document types
-    private static final String DOC_TYPE_EINVOICE = "EINVOICE";       // e-Fatura (tüzel)
-    private static final String DOC_TYPE_EARCHIVE = "EARCHIVE";       // e-Arşiv (bireysel)
+    private static final String DOC_TYPE_EINVOICE = "EINVOICE";       // e-Invoice (corporate)
+    private static final String DOC_TYPE_EARCHIVE = "EARCHIVE";       // e-Archive (individual)
     private static final String DOC_TYPE_CANCEL_EARCHIVE = "CANCELEARCHIVEINVOICE";
 
     private final SiteSettingService settingService;
@@ -113,17 +113,17 @@ public class LogoInvoiceProvider implements InvoiceProvider {
                         .build();
             }
 
-            // 1. UBL-TR XML üret
+            // 1. Generate UBL-TR XML
             Map<String, String> companyInfo = getCompanyInfo();
             String ublXml = UblTrInvoiceBuilder.build(invoice, order,
                     items != null ? items : List.of(), companyInfo);
 
-            // 2. XML'i ZIP içinde paketle, Base64 encode et
+            // 2. Package the XML inside a ZIP and Base64-encode it
             String ettn = invoice.getEttn();
             byte[] zipBytes = buildZipWithXml(ublXml, ettn + ".xml");
             String base64Zip = Base64.getEncoder().encodeToString(zipBytes);
 
-            // 3. SendDocument SOAP çağrısı
+            // 3. SendDocument SOAP call
             String docType = invoice.isIndividual() ? DOC_TYPE_EARCHIVE : DOC_TYPE_EINVOICE;
             String alias = companyInfo.getOrDefault("logo_customer_alias", "");
 
@@ -131,7 +131,7 @@ public class LogoInvoiceProvider implements InvoiceProvider {
                     ettn + ".zip", docType, alias);
             String response = callSoap(soapRequest, "SendDocument");
 
-            // 4. Response parse
+            // 4. Parse response
             return parseSendDocumentResponse(response, invoice, ettn);
         } catch (LogoAuthException e) {
             logger.warn("Logo session expired, retrying: {}", e.getMessage());
@@ -182,7 +182,7 @@ public class LogoInvoiceProvider implements InvoiceProvider {
         }
         try {
             String sessionId = getOrRefreshSession();
-            // İptal: SendDocument + paramList içinde DOCUMENTTYPE=CANCELEARCHIVEINVOICE + UUID=ettn
+            // Cancellation: SendDocument + paramList with DOCUMENTTYPE=CANCELEARCHIVEINVOICE + UUID=ettn
             String soap = buildCancelSoap(sessionId, ettn);
             String response = callSoap(soap, "SendDocument");
 
@@ -207,9 +207,10 @@ public class LogoInvoiceProvider implements InvoiceProvider {
     }
 
     /**
-     * Logo CheckGibUser → GİB'de e-Fatura kayıtlı mı sorgular. Tüzel müşterilere
-     * E_FATURA yerine yanlışlıkla E_ARSIV kesmemek (ve tersi) için kullanılır.
-     * Geçersiz credential / session problem'i olursa güvenli tarafta {@code false} döner.
+     * Logo CheckGibUser → queries whether the party is registered for e-Invoice at GIB.
+     * Used to avoid mistakenly issuing E_ARSIV instead of E_FATURA to corporate
+     * customers (and vice versa). On invalid credentials / session problems it returns
+     * {@code false} to stay on the safe side.
      */
     @Override
     public boolean isGibRegistered(String taxId) {
@@ -222,7 +223,7 @@ public class LogoInvoiceProvider implements InvoiceProvider {
             String response = callSoap(soap, "CheckGibUser");
 
             // Response format: <item><vknTckn>...</vknTckn><isGibUser>true/false</isGibUser>...
-            // Ya da tek item → extractXmlValue bize ilk değeri döner.
+            // Or a single item → extractXmlValue returns the first value.
             String flag = extractXmlValue(response, "isGibUser");
             if (flag == null) flag = extractXmlValue(response, "gibUser");
             if (flag == null) flag = extractXmlValue(response, "isRegistered");
@@ -239,7 +240,7 @@ public class LogoInvoiceProvider implements InvoiceProvider {
     }
 
     /**
-     * CheckGibUser SOAP request — vknTcknList listesinde gönderilir.
+     * CheckGibUser SOAP request — sent in the vknTcknList list.
      */
     private String buildCheckGibUserSoap(String sessionId, String taxId) {
         return """
@@ -264,7 +265,7 @@ public class LogoInvoiceProvider implements InvoiceProvider {
         if (!isEnabled() || ettn == null) return new byte[0];
         try {
             String sessionId = getOrRefreshSession();
-            // Fatura tipini bilmediğimiz için önce EINVOICE dene, başarısızsa EARCHIVE
+            // Since we don't know the invoice type, try EINVOICE first, then EARCHIVE on failure
             byte[] pdf = downloadPdfWithDocType(sessionId, ettn, DOC_TYPE_EINVOICE);
             if (pdf.length == 0) {
                 pdf = downloadPdfWithDocType(sessionId, ettn, DOC_TYPE_EARCHIVE);
@@ -284,8 +285,8 @@ public class LogoInvoiceProvider implements InvoiceProvider {
             String soap = buildGetDocumentDataSoap(sessionId, ettn, docType, "PDF");
             String response = callSoap(soap, "GetDocumentData");
 
-            // Response içinde base64 PDF data var
-            // <binaryData><value>base64...</value></binaryData> veya <GetDocumentDataResult>
+            // The response contains base64 PDF data
+            // <binaryData><value>base64...</value></binaryData> or <GetDocumentDataResult>
             String base64 = extractXmlValue(response, "value");
             if (base64 == null) base64 = extractXmlValue(response, "binaryData");
             if (base64 == null) base64 = extractXmlValue(response, "GetDocumentDataResult");
@@ -299,7 +300,7 @@ public class LogoInvoiceProvider implements InvoiceProvider {
         } catch (LogoAuthException e) {
             throw e;
         } catch (Exception e) {
-            logger.debug("PDF download denemesi başarısız (docType={}): {}", docType, e.getMessage());
+            logger.debug("PDF download attempt failed (docType={}): {}", docType, e.getMessage());
             return new byte[0];
         }
     }
@@ -326,7 +327,7 @@ public class LogoInvoiceProvider implements InvoiceProvider {
             String soap = buildLoginSoap(username, password);
             String response = callSoap(soap, "Login");
 
-            // LoginResult: boolean (true=başarılı), sessionID: string
+            // LoginResult: boolean (true=success), sessionID: string
             String loginResult = extractXmlValue(response, "LoginResult");
             String sessionId = extractXmlValue(response, "sessionID");
 
@@ -336,7 +337,7 @@ public class LogoInvoiceProvider implements InvoiceProvider {
                 return null;
             }
 
-            // Session cache — 25dk güvenli aralık (Logo default 30dk)
+            // Session cache — 25 min safety margin (Logo default 30 min)
             sessionCache.set(new SessionCache(sessionId, System.currentTimeMillis() + 25 * 60 * 1000));
             logger.info("Logo eLogo login başarılı (session 25dk cache'lendi)");
             return sessionId;
@@ -363,14 +364,14 @@ public class LogoInvoiceProvider implements InvoiceProvider {
         String endpoint = resolveEndpoint();
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.valueOf("text/xml; charset=utf-8"));
-        // WCF standart SOAPAction formatı: "http://tempuri.org/IPostboxService/<MethodName>"
+        // WCF standard SOAPAction format: "http://tempuri.org/IPostboxService/<MethodName>"
         headers.set("SOAPAction", "\"" + SERVICE_NS + "IPostboxService/" + soapAction + "\"");
 
         HttpEntity<String> entity = new HttpEntity<>(soapRequest, headers);
         ResponseEntity<String> response = restTemplate.postForEntity(endpoint, entity, String.class);
         String body = response.getBody() != null ? response.getBody() : "";
 
-        // Session expired / invalid session kontrolü
+        // Session expired / invalid session check
         String lower = body.toLowerCase();
         if (lower.contains("sessionexception")
                 || lower.contains("invalid session")
@@ -432,7 +433,7 @@ public class LogoInvoiceProvider implements InvoiceProvider {
     }
 
     /**
-     * SendDocument SOAP request — fatura gönderim için ana method.
+     * SendDocument SOAP request — the main method for invoice submission.
      *
      * PHP:
      *   $data = [
@@ -457,7 +458,7 @@ public class LogoInvoiceProvider implements InvoiceProvider {
             paramListXml.append("            <arr:string>ALIAS=").append(xmlEscape(alias)).append("</arr:string>\n");
         }
 
-        // Logo hash beklentisi: ZIP dosyasının MD5 hex'i (base64 öncesinde)
+        // Logo hash expectation: MD5 hex of the ZIP file (before base64)
         String md5Hash = md5Hex(Base64.getDecoder().decode(base64Zip));
         String currentDate = java.time.OffsetDateTime.now()
                 .format(java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME);
@@ -494,8 +495,8 @@ public class LogoInvoiceProvider implements InvoiceProvider {
     }
 
     /**
-     * İptal: SendDocument + paramList=[DOCUMENTTYPE=CANCELEARCHIVEINVOICE, UUID=ettn]
-     * (e-Arşiv faturaları iptal edilebilir; e-Fatura ticari ret süreci ile iade edilir.)
+     * Cancellation: SendDocument + paramList=[DOCUMENTTYPE=CANCELEARCHIVEINVOICE, UUID=ettn]
+     * (e-Archive invoices can be cancelled; e-Invoices are returned via the commercial rejection process.)
      */
     private String buildCancelSoap(String sessionId, String ettn) {
         return """
@@ -532,7 +533,7 @@ public class LogoInvoiceProvider implements InvoiceProvider {
     }
 
     /**
-     * GetDocumentData — PDF/XML indirmek için.
+     * GetDocumentData — for downloading PDF/XML.
      *
      * PHP: $this->client->GetDocumentData(['sessionID', 'uuid', 'docType', 'dataType' => 'PDF'])
      */
@@ -557,7 +558,7 @@ public class LogoInvoiceProvider implements InvoiceProvider {
     // ===== Response Parsing =====
 
     /**
-     * SendDocumentResult.resultCode == 1 ise başarı, resultMsg hata detayı.
+     * SendDocumentResult.resultCode == 1 means success; resultMsg holds the error detail.
      */
     private InvoiceResult parseSendDocumentResponse(String response, Invoice invoice, String ettn) {
         String resultCode = extractXmlValue(response, "resultCode");
@@ -576,7 +577,7 @@ public class LogoInvoiceProvider implements InvoiceProvider {
                     .build();
         }
 
-        // Başarılı: Logo fatura numarasını da döner, ama ETTN ana referanstır
+        // Success: Logo also returns the invoice number, but ETTN is the primary reference
         return InvoiceResult.builder()
                 .success(true)
                 .invoiceNumber(invoice.getInvoiceNumber())
@@ -642,7 +643,7 @@ public class LogoInvoiceProvider implements InvoiceProvider {
     }
 
     /**
-     * UBL XML'i ZIP dosyası içinde paketler (Logo eLogo'nun zorunlu formatı).
+     * Packages the UBL XML inside a ZIP file (the format required by Logo eLogo).
      */
     private byte[] buildZipWithXml(String xml, String xmlFileName) throws Exception {
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream();

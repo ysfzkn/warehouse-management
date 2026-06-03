@@ -30,32 +30,32 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Üçüncü-taraf ürün sayfasından (örn. Profilo) ürün fotoğraflarını otomatik
- * çeker, yerel sisteme yükler.
+ * Automatically fetches product photos from a third-party product page
+ * (e.g. Profilo) and uploads them to the local system.
  *
- * <h3>Akış</h3>
+ * <h3>Flow</h3>
  * <ol>
- *   <li>{@link #preview(String)} — URL doğrulanır, HTML çekilir, görsel adayları
- *       (og:image, JSON-LD, &lt;img&gt; gallery, srcset) çıkarılır. UI'a önizleme
- *       listesi döner.</li>
- *   <li>{@link #importImages} — admin onayladığı URL'leri tek tek indirir,
- *       boyut/MIME doğrular, {@link PhotoStorageService} ile diske yazar,
- *       {@code product_images} tablosuna kayıt ekler.</li>
+ *   <li>{@link #preview(String)} — validates the URL, fetches the HTML, and
+ *       extracts candidate images (og:image, JSON-LD, &lt;img&gt; gallery, srcset).
+ *       Returns a preview list to the UI.</li>
+ *   <li>{@link #importImages} — downloads the URLs approved by the admin one by
+ *       one, validates size/MIME, writes them to disk via {@link PhotoStorageService},
+ *       and inserts rows into the {@code product_images} table.</li>
  * </ol>
  *
- * <h3>Edge case'ler</h3>
+ * <h3>Edge cases</h3>
  * <ul>
- *   <li><b>SSRF koruması</b> — sadece HTTPS, allowlist host, private/loopback IP reddi</li>
- *   <li><b>Rate-limit</b> — 5 saniyelik soğuma (kullanıcı arka arkaya çağrı atamaz)</li>
+ *   <li><b>SSRF protection</b> — HTTPS only, host allowlist, private/loopback IP rejection</li>
+ *   <li><b>Rate limit</b> — 5-second cooldown (user cannot fire calls back to back)</li>
  *   <li><b>Timeout</b> — fetch 15s, image download 10s</li>
- *   <li><b>Dosya boyutu</b> — max 10 MB / image, max 20 image / sayfa</li>
- *   <li><b>Format</b> — yalnızca JPG/PNG/WebP/AVIF; magic byte doğrulaması</li>
- *   <li><b>Duplicate</b> — aynı URL çoklu girişi tek sefer; LinkedHashSet ile sıra korunur</li>
- *   <li><b>Lazy-load</b> — data-src, data-original, srcset hepsi denenir</li>
- *   <li><b>Thumbnail filtresi</b> — "thumb"/"icon"/"logo"/"sprite" path desenleri elenir</li>
- *   <li><b>HTML değişikliği</b> — multi-strategy: og:image → JSON-LD → DOM. Profilo özel
- *       selector'lar başta, kaybolursa generic fallback devreye girer.</li>
- *   <li><b>İmza tekrarı</b> — admin "Mevcut görselleri sil" tikleyebilir; default ek modunda</li>
+ *   <li><b>File size</b> — max 10 MB per image, max 20 images per page</li>
+ *   <li><b>Format</b> — JPG/PNG/WebP/AVIF only; magic-byte validation</li>
+ *   <li><b>Duplicates</b> — the same URL appears only once; order preserved via LinkedHashSet</li>
+ *   <li><b>Lazy-load</b> — data-src, data-original, and srcset are all tried</li>
+ *   <li><b>Thumbnail filter</b> — "thumb"/"icon"/"logo"/"sprite" path patterns are dropped</li>
+ *   <li><b>HTML changes</b> — multi-strategy: og:image → JSON-LD → DOM. Profilo-specific
+ *       selectors come first; if they disappear, a generic fallback kicks in.</li>
+ *   <li><b>Duplicate signature</b> — the admin may tick "Delete existing images"; defaults to append mode</li>
  * </ul>
  */
 @Service
@@ -64,10 +64,10 @@ public class ProductImageCrawlerService {
     private static final Logger log = LoggerFactory.getLogger(ProductImageCrawlerService.class);
 
     /**
-     * İzinli host'lar — SSRF / abuse koruması. Yeni satıcı eklendiğinde buraya yazılır.
-     * Hem ".com" hem ".com.tr" varyasyonları (Türkiye ve global versiyonlar farklı olabilir).
-     * Subdomain'ler (m.profilo.com, www.profilo.com vb.) {@link #validateUrl} içindeki
-     * {@code endsWith("." + host)} kontrolüyle otomatik kabul edilir.
+     * Allowed hosts — SSRF / abuse protection. Add new vendors here.
+     * Both ".com" and ".com.tr" variants (the Turkish and global versions may differ).
+     * Subdomains (m.profilo.com, www.profilo.com, etc.) are accepted automatically via
+     * the {@code endsWith("." + host)} check in {@link #validateUrl}.
      */
     private static final List<String> ALLOWED_HOSTS = List.of(
             "profilo.com",          "profilo.com.tr",
@@ -81,17 +81,17 @@ public class ProductImageCrawlerService {
             "miele.com",            "miele.com.tr",
             "haier.com",            "haier.com.tr",
             "fakir.com.tr",         "fakir.com"
-            // NOT: altus.com.tr Akamai Bot Manager ile TLS fingerprinting yapıyor;
-            // server-side HTTP client'larla (Jsoup/HttpURLConnection) bypass edilemez.
-            // Desteklemek için headless browser (Playwright) veya ScraperAPI gerekir.
+            // NOTE: altus.com.tr does TLS fingerprinting with Akamai Bot Manager;
+            // it cannot be bypassed with server-side HTTP clients (Jsoup/HttpURLConnection).
+            // Supporting it would require a headless browser (Playwright) or ScraperAPI.
     );
 
     private static final int MAX_IMAGES = 20;
     private static final long MAX_IMAGE_BYTES = 10L * 1024 * 1024;   // 10 MB
     private static final int FETCH_TIMEOUT_MS = 15_000;
     private static final int IMAGE_DOWNLOAD_TIMEOUT_MS = 10_000;
-    // Gerçekçi Chrome UA — "compatible; XxxBot" pattern'i Akamai/Cloudflare gibi
-    // bot manager'lar tarafından otomatik bloklanıyor (örn. Altus.com.tr).
+    // Realistic Chrome UA — the "compatible; XxxBot" pattern is automatically
+    // blocked by bot managers such as Akamai/Cloudflare (e.g. Altus.com.tr).
     private static final String USER_AGENT =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
                     + "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
@@ -115,7 +115,7 @@ public class ProductImageCrawlerService {
     //  Preview
     // ─────────────────────────────────────────────────────────────
 
-    /** URL'i doğrula, HTML'i çek, aday görsel URL'lerini döndür (admin önizler). */
+    /** Validate the URL, fetch the HTML, and return candidate image URLs (for the admin to preview). */
     public CrawlPreview preview(String pageUrl) {
         validateUrl(pageUrl);
         long t0 = System.currentTimeMillis();
@@ -162,12 +162,12 @@ public class ProductImageCrawlerService {
     // ─────────────────────────────────────────────────────────────
 
     /**
-     * Seçilen URL'leri indirir, ürün için kaydeder.
+     * Downloads the selected URLs and saves them for the product.
      *
-     * @param productId hedef ürün
-     * @param imageUrls indirilecek görsel URL'leri (preview'da bulunanlardan seçilen)
-     * @param replaceExisting true ise ürünün mevcut görselleri silinir
-     * @param markFirstAsPrimary true ise ilk başarıyla yüklenen görsel "primary" yapılır
+     * @param productId target product
+     * @param imageUrls image URLs to download (selected from those found in the preview)
+     * @param replaceExisting if true, the product's existing images are deleted
+     * @param markFirstAsPrimary if true, the first successfully uploaded image is marked "primary"
      */
     public ImportResult importImages(Long productId,
                                       List<String> imageUrls,
@@ -176,7 +176,7 @@ public class ProductImageCrawlerService {
         return importImages(productId, imageUrls, replaceExisting, markFirstAsPrimary, null);
     }
 
-    /** Referer'lı varyant — hotlink koruması olan CDN'ler (WitCDN/Fakir vb.) için sayfa URL'i geçirilir. */
+    /** Referer-aware variant — the page URL is passed for CDNs with hotlink protection (WitCDN/Fakir, etc.). */
     public ImportResult importImages(Long productId,
                                       List<String> imageUrls,
                                       boolean replaceExisting,
@@ -192,7 +192,7 @@ public class ProductImageCrawlerService {
             imageUrls = imageUrls.subList(0, MAX_IMAGES);
         }
 
-        // Mevcut görselleri sil (istenirse)
+        // Delete existing images (if requested)
         if (replaceExisting) {
             List<ProductImage> existing = productImageRepository.findByProductOrderBySortOrderAscIdAsc(product);
             for (ProductImage img : existing) {
@@ -256,15 +256,15 @@ public class ProductImageCrawlerService {
     // ─────────────────────────────────────────────────────────────
 
     /**
-     * Uzun açıklamayı 5 farklı stratejiyle çıkarır (öncelik sırasıyla):
+     * Extracts the long description using 5 different strategies (in priority order):
      * <ol>
      *   <li>schema.org JSON-LD Product.description</li>
      *   <li>meta[itemprop=description]</li>
      *   <li>section.product-description / div.tab-pane (Bosch/Siemens/Beko pattern)</li>
      *   <li>article > div.description / .product-details</li>
-     *   <li>og:description (genelde kısa olur ama fallback)</li>
+     *   <li>og:description (usually short, but a fallback)</li>
      * </ol>
-     * Maksimum 5000 karakter; HTML tag'leri korunur ama temizlenir (script/style yok).
+     * Maximum 5000 characters; HTML tags are preserved but sanitized (no script/style).
      */
     String extractDescription(Document doc) {
         // 1) JSON-LD
@@ -272,7 +272,7 @@ public class ProductImageCrawlerService {
             for (var el : doc.select("script[type=application/ld+json]")) {
                 String json = el.data();
                 if (json == null || json.isBlank()) continue;
-                // Basit regex — tam JSON parse riski (\n vb.) yerine description "..." ara
+                // Simple regex — instead of risky full JSON parsing (\n etc.), search for description "..."
                 java.util.regex.Matcher m = java.util.regex.Pattern.compile(
                         "\"description\"\\s*:\\s*\"((?:\\\\\"|[^\"])*)\"")
                         .matcher(json);
@@ -307,13 +307,13 @@ public class ProductImageCrawlerService {
                 String html = el.html();
                 String txt = el.text();
                 if (txt != null && txt.length() > 80) {
-                    // HTML preserve et — bu admin'e zengin metin gösterir
+                    // Preserve HTML — this shows rich text to the admin
                     return truncateSmart(cleanHtml(html), 5000);
                 }
             }
         }
 
-        // 4) Tüm <p> taglerinin birleşimi (ana içerik area)
+        // 4) Concatenation of all <p> tags (main content area)
         try {
             var paragraphs = doc.select("main p, article p, .product p");
             if (paragraphs.isEmpty()) paragraphs = doc.select("p");
@@ -321,7 +321,7 @@ public class ProductImageCrawlerService {
             for (var p : paragraphs) {
                 String t = p.text();
                 if (t == null || t.length() < 40) continue;
-                // Navigation/footer text'i atla
+                // Skip navigation/footer text
                 String clsParent = p.parent() != null ? String.valueOf(p.parent().className()) : "";
                 if (clsParent.toLowerCase().matches(".*(menu|nav|footer|header|breadcrumb).*")) continue;
                 sb.append(t).append("\n\n");
@@ -330,14 +330,14 @@ public class ProductImageCrawlerService {
             if (sb.length() > 100) return truncateSmart(sb.toString().trim(), 5000);
         } catch (Exception ignored) {}
 
-        // 5) og:description fallback (genelde kısa)
+        // 5) og:description fallback (usually short)
         String og = doc.select("meta[property=og:description]").attr("content");
         if (og != null && og.length() > 30) return truncateSmart(og, 5000);
 
         return null;
     }
 
-    /** Kısa açıklama — meta description veya description'ın ilk cümlesi. */
+    /** Short description — the meta description or the first sentence of the description. */
     String extractShortDescription(Document doc, String longDescription) {
         // 1) meta name="description"
         String meta = doc.select("meta[name=description]").attr("content");
@@ -349,7 +349,7 @@ public class ProductImageCrawlerService {
         if (og != null && og.length() > 30 && og.length() < 300) {
             return og.trim();
         }
-        // 3) long description'ın ilk 200 karakteri
+        // 3) the first 200 characters of the long description
         if (longDescription != null && longDescription.length() > 50) {
             String plain = longDescription.replaceAll("<[^>]+>", " ").replaceAll("\\s+", " ").trim();
             if (plain.length() > 200) return plain.substring(0, 197) + "...";
@@ -359,8 +359,8 @@ public class ProductImageCrawlerService {
     }
 
     /**
-     * Teknik özellikleri tablo/dl/ul yapılarından çıkarır.
-     * Örn. "Kapasite: 9 kg", "Enerji Sınıfı: A++", "Renk: Beyaz" gibi.
+     * Extracts technical specifications from table/dl/ul structures.
+     * E.g. "Capacity: 9 kg", "Energy Class: A++", "Color: White".
      */
     java.util.Map<String, String> extractSpecs(Document doc) {
         java.util.Map<String, String> specs = new java.util.LinkedHashMap<>();
@@ -382,7 +382,7 @@ public class ProductImageCrawlerService {
             }
         } catch (Exception ignored) {}
 
-        // 2) <table> içindeki "spec table" (key-value pattern)
+        // 2) "spec table" inside a <table> (key-value pattern)
         if (specs.size() < 5) {
             for (var table : doc.select("table.product-specs, table.specs, table.specifications, .specs-table, table[class*=spec]")) {
                 for (var row : table.select("tr")) {
@@ -413,7 +413,7 @@ public class ProductImageCrawlerService {
             }
         }
 
-        // 4) "Key: Value" pattern li
+        // 4) "Key: Value" pattern in list items
         if (specs.size() < 3) {
             for (var li : doc.select("ul.features li, ul.specs li, .product-features li")) {
                 String txt = li.text().trim();
@@ -434,7 +434,7 @@ public class ProductImageCrawlerService {
         return specs;
     }
 
-    /** Marka adı extraction (schema.org brand veya meta). */
+    /** Brand name extraction (schema.org brand or meta). */
     String extractBrand(Document doc) {
         // 1) JSON-LD brand.name
         try {
@@ -462,21 +462,21 @@ public class ProductImageCrawlerService {
         return null;
     }
 
-    /** HTML temizleme — script/style kaldır, fazla whitespace sadeleştir. */
+    /** HTML cleanup — remove script/style, collapse excess whitespace. */
     private String cleanHtml(String html) {
         if (html == null) return null;
-        // Tehlikeli tag'leri kaldır (script, style, on* handlers)
+        // Remove dangerous tags (script, style, on* handlers)
         String cleaned = html
                 .replaceAll("(?is)<script[^>]*>.*?</script>", "")
                 .replaceAll("(?is)<style[^>]*>.*?</style>", "")
                 .replaceAll("(?i)\\son[a-z]+\\s*=\\s*\"[^\"]*\"", "")
                 .replaceAll("(?i)\\son[a-z]+\\s*=\\s*'[^']*'", "");
-        // İzin verilen tag'ler: p, br, strong, b, em, i, ul, ol, li, h2-h6, span, div
-        // Diğer tag'leri text olarak bırak (Jsoup safelist daha güçlü ama bu basit)
+        // Allowed tags: p, br, strong, b, em, i, ul, ol, li, h2-h6, span, div
+        // Leave other tags as text (Jsoup safelist is stronger, but this is simpler)
         return cleaned.trim();
     }
 
-    /** Description için sentence-aware truncate (max içinde son cümle sonunda kes). */
+    /** Sentence-aware truncation for the description (cut at the last sentence end within max). */
     private String truncateSmart(String s, int max) {
         if (s == null) return null;
         if (s.length() <= max) return s;
@@ -488,7 +488,7 @@ public class ProductImageCrawlerService {
     private List<String> extractImageUrls(Document doc, String baseUrl) {
         Set<String> urls = new LinkedHashSet<>();
 
-        // 1) og:image — genelde ana ürün görseli, en güvenilir
+        // 1) og:image — usually the main product image, most reliable
         for (Element e : doc.select("meta[property=og:image], meta[property=og:image:secure_url], meta[name=og:image]")) {
             addAbsolute(urls, e.attr("content"), baseUrl);
         }
@@ -502,12 +502,12 @@ public class ProductImageCrawlerService {
             extractFromJsonLd(script.data(), urls, baseUrl);
         }
 
-        // 3) DOM <img> tag'ları (lazy-load + srcset destekli)
+        // 3) DOM <img> tags (lazy-load + srcset supported)
         for (Element img : doc.select("img")) {
             if (isLikelyJunk(img)) continue;
-            // Önce yüksek çözünürlüklü kaynakları dene
+            // Try high-resolution sources first
             String src = firstNonBlank(
-                    img.attr("data-zoom-image"),       // büyütülmüş varyant
+                    img.attr("data-zoom-image"),       // zoomed variant
                     img.attr("data-large-src"),
                     img.attr("data-original"),
                     img.attr("data-src"),
@@ -524,7 +524,7 @@ public class ProductImageCrawlerService {
             addAbsolute(urls, link.attr("href"), baseUrl);
         }
 
-        // Filtreler
+        // Filters
         return urls.stream()
                 .filter(this::isImageUrl)
                 .filter(u -> !isProbablyJunkUrl(u))
@@ -533,10 +533,10 @@ public class ProductImageCrawlerService {
                 .toList();
     }
 
-    /** JSON-LD içindeki Product.image alanını çıkarır (basit pattern; LD-JSON tam parse'a alternatif). */
+    /** Extracts the Product.image field from JSON-LD (simple pattern; an alternative to full LD-JSON parsing). */
     private void extractFromJsonLd(String json, Set<String> urls, String baseUrl) {
         if (json == null || json.isBlank()) return;
-        // "image": "https://..."  veya  "image": ["https://...", ...]
+        // "image": "https://..."  or  "image": ["https://...", ...]
         Pattern singleStr = Pattern.compile("\"image\"\\s*:\\s*\"([^\"]+)\"", Pattern.CASE_INSENSITIVE);
         Matcher m1 = singleStr.matcher(json);
         while (m1.find()) addAbsolute(urls, m1.group(1), baseUrl);
@@ -550,7 +550,7 @@ public class ProductImageCrawlerService {
         }
     }
 
-    /** srcset="url1 1x, url2 2x" ya da "url1 320w, url2 640w" → en yüksek descriptor olanı dön. */
+    /** srcset="url1 1x, url2 2x" or "url1 320w, url2 640w" → return the one with the highest descriptor. */
     static String pickLargestFromSrcset(String srcset) {
         if (srcset == null || srcset.isBlank()) return null;
         String[] parts = srcset.split(",");
@@ -577,7 +577,7 @@ public class ProductImageCrawlerService {
         return bestUrl;
     }
 
-    /** "Logo", "icon", "sprite", reklam görseli gibi açık-belirtili junk'ları ele. */
+    /** Filters out clearly identifiable junk such as "logo", "icon", "sprite", and ad images. */
     private boolean isLikelyJunk(Element img) {
         String alt = img.attr("alt").toLowerCase();
         String cls = img.attr("class").toLowerCase();
@@ -588,7 +588,7 @@ public class ProductImageCrawlerService {
         for (String j : junk) {
             if (alt.contains(j) || cls.contains(j) || src.contains(j)) return true;
         }
-        // 1x1 piksel tracking?
+        // 1x1 pixel tracking?
         try {
             String w = img.attr("width"), h = img.attr("height");
             if (!w.isBlank() && Integer.parseInt(w) <= 30) return true;
@@ -617,7 +617,7 @@ public class ProductImageCrawlerService {
         return path.endsWith(".jpg") || path.endsWith(".jpeg")
                 || path.endsWith(".png") || path.endsWith(".webp")
                 || path.endsWith(".avif") || path.endsWith(".gif")
-                // Bazı CDN'lerde uzantı olmaz, content-type'tan kontrol edilir
+                // Some CDNs have no extension; checked via content-type
                 || lower.contains("/image/") || lower.contains("/images/")
                 || lower.contains("/media/") || lower.contains("/cdn-cgi/image/");
     }
@@ -630,7 +630,7 @@ public class ProductImageCrawlerService {
             URI uri = URI.create(src);
             URI absolute = uri.isAbsolute() ? uri : URI.create(baseUrl).resolve(uri);
             String s = absolute.toString();
-            // En azından imaj uzantısı veya path'inde 'image' geçenleri kabul et
+            // Accept at least URLs with an image extension or 'image' in the path
             urls.add(s);
         } catch (Exception ignored) {}
     }
@@ -644,9 +644,9 @@ public class ProductImageCrawlerService {
     }
 
     /**
-     * Public proxy: hotlink korumalı CDN'lerin görsellerini admin UI thumbnail'larında
-     * göstermek için backend üzerinden Referer'lı şekilde çek.
-     * SSRF guards aynen uygulanır (private IP yok, allowlist gerekli değil çünkü görseller CDN'de olabilir).
+     * Public proxy: fetches images from hotlink-protected CDNs through the backend
+     * with a Referer header, so they can be shown in admin UI thumbnails.
+     * SSRF guards still apply (no private IPs; an allowlist isn't required because the images may live on a CDN).
      */
     public ImageDownload proxyImage(String url, String referer) {
         if (url == null || url.isBlank()) return null;
@@ -654,13 +654,13 @@ public class ProductImageCrawlerService {
     }
 
     /**
-     * Referer'lı varyant — bazı CDN'ler (WitCDN/Fakir vb.) hotlink korumalı:
-     * Referer header'ı olmadan veya yanlış origin'den gelen istekleri
-     * placeholder ile cevaplar. Sayfa URL'ini Referer olarak göndermek bunu çözer.
+     * Referer-aware variant — some CDNs (WitCDN/Fakir, etc.) are hotlink-protected:
+     * they respond with a placeholder to requests that lack a Referer header or
+     * come from the wrong origin. Sending the page URL as the Referer fixes this.
      */
     private ImageDownload downloadImage(String url, String referer) {
-        // Resmin host'u de allowlist'te olabilir veya CDN olabilir — esnek.
-        // Yine de SSRF için scheme + IP kontrolü.
+        // The image host may or may not be in the allowlist, or it may be a CDN — be flexible.
+        // Still do a scheme + IP check for SSRF.
         try {
             URI uri = URI.create(url);
             if (!"https".equalsIgnoreCase(uri.getScheme()) && !"http".equalsIgnoreCase(uri.getScheme())) return null;
@@ -701,7 +701,7 @@ public class ProductImageCrawlerService {
         }
     }
 
-    /** Magic bytes ile gerçekten görsel mi kontrolü (uzantı yalan söyleyebilir). */
+    /** Checks via magic bytes whether it is actually an image (the extension may lie). */
     private boolean isValidImageMagic(byte[] b) {
         if (b == null || b.length < 8) return false;
         // JPEG: FF D8 FF
@@ -725,7 +725,7 @@ public class ProductImageCrawlerService {
             String name = slash >= 0 ? path.substring(slash + 1) : path;
             if (name.contains("?")) name = name.substring(0, name.indexOf('?'));
             if (name.isBlank()) name = "image";
-            // Uzantı yoksa content-type'a göre ekle
+            // If there is no extension, add one based on content-type
             if (!name.contains(".")) {
                 String ext = ".jpg";
                 if (contentType != null) {
@@ -783,7 +783,7 @@ public class ProductImageCrawlerService {
                     || addr.isMulticastAddress()) {
                 throw new CrawlException("Yerel/özel IP'ler engelli (SSRF koruması)");
             }
-            // 169.254/16, 100.64/10 (CGNAT) gibi extra koruma
+            // Extra protection for ranges like 169.254/16, 100.64/10 (CGNAT)
             String ip = addr.getHostAddress();
             if (ip.startsWith("169.254.") || ip.startsWith("100.64.")) {
                 throw new CrawlException("Bu IP aralığı engelli");
@@ -818,16 +818,16 @@ public class ProductImageCrawlerService {
     // ─────────────────────────────────────────────────────────────
 
     /**
-     * Crawler önizleme sonucu — admin'e gösterilecek bilgiler.
+     * Crawler preview result — information to display to the admin.
      *
-     * @param url           kaynak URL
-     * @param title         sayfa başlığı (og:title veya &lt;title&gt;)
-     * @param images        adayı görsel URL'leri
-     * @param description   uzun açıklama (HTML olabilir; düz metin tercih)
-     * @param shortDescription kısa açıklama (1-2 cümle, meta description'dan)
-     * @param specs         teknik özellikler (anahtar→değer çiftleri)
-     * @param brand         marka adı (schema.org/brand'den)
-     * @param error         hata mesajı (varsa)
+     * @param url           source URL
+     * @param title         page title (og:title or &lt;title&gt;)
+     * @param images        candidate image URLs
+     * @param description   long description (may be HTML; plain text preferred)
+     * @param shortDescription short description (1-2 sentences, from the meta description)
+     * @param specs         technical specifications (key→value pairs)
+     * @param brand         brand name (from schema.org/brand)
+     * @param error         error message (if any)
      */
     public record CrawlPreview(
             String url,
@@ -839,7 +839,7 @@ public class ProductImageCrawlerService {
             String brand,
             String error) {
 
-        /** Legacy 4-arg constructor — geriye uyumluluk için. */
+        /** Legacy 4-arg constructor — for backward compatibility. */
         public CrawlPreview(String url, String title, List<String> images, String error) {
             this(url, title, images, null, null, java.util.Map.of(), null, error);
         }

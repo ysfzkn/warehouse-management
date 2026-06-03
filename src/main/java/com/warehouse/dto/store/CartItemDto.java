@@ -15,7 +15,7 @@ public class CartItemDto {
     private BigDecimal unitPrice;
     private BigDecimal salePrice;
     private BigDecimal lineTotal;
-    /** KDV oranı (Türkiye'de fiyatlar KDV dahildir; bu oran fatura ve özet breakdown için). */
+    /** VAT rate (in Turkey prices are VAT-inclusive; this rate is for the invoice and the summary breakdown). */
     private BigDecimal vatRate;
     private int quantity;
     private int availableStock;

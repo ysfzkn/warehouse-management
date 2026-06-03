@@ -2,24 +2,24 @@ import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 
 /**
- * Checkout sırasında yasal sözleşmeleri (Mesafeli Satış, Ön Bilgilendirme, KVKK)
- * inline modal içinde gösterir. Türkiye e-ticaret mevzuatı (6502 sayılı Tüketicinin
- * Korunması Kanunu + Mesafeli Sözleşmeler Yönetmeliği) gereği müşterinin sözleşmeyi
- * **görmeden** onay vermesi yasal değildir. Bu modal:
+ * Displays legal contracts (Distance Sales, Preliminary Information, KVKK) in an
+ * inline modal during checkout. Under Turkish e-commerce law (Law 6502 on the
+ * Protection of Consumers + Distance Contracts Regulation), it is not legal for
+ * the customer to give consent **without seeing** the contract. This modal:
  *
- * 1. /api/store/pages/{slug} üzerinden CMS içeriğini çeker.
- * 2. Sözleşmeyi scroll'lu kutu içinde gösterir.
- * 3. Kullanıcı en alta scroll edene kadar "Kabul Et" butonu disabled kalır
- *    (mevzuata uygun "okuma kanıtı").
- * 4. Kabul edildiğinde onConfirm callback'i çağırır — parent checkbox'ı işaretler
- *    ve timestamp kaydeder.
+ * 1. Fetches the CMS content via /api/store/pages/{slug}.
+ * 2. Shows the contract inside a scrollable box.
+ * 3. Keeps the "Accept" button disabled until the user scrolls to the bottom
+ *    (legally compliant "proof of reading").
+ * 4. On acceptance, calls the onConfirm callback — the parent checks the checkbox
+ *    and records a timestamp.
  *
  * Props:
- *   slug      — CMS sayfa slug'ı (örn. "mesafeli-satis-sozlesmesi")
- *   title     — Modal başlığı
- *   open      — modal açık/kapalı
- *   onClose   — kapatma callback'i (kabul etmeden)
- *   onConfirm — kabul callback'i (timestamp ile birlikte)
+ *   slug      — CMS page slug (e.g. "mesafeli-satis-sozlesmesi")
+ *   title     — Modal title
+ *   open      — whether the modal is open/closed
+ *   onClose   — close callback (without accepting)
+ *   onConfirm — acceptance callback (with timestamp)
  */
 export default function LegalContractModal({ slug, title, open, onClose, onConfirm }) {
   const [content, setContent] = useState('');
@@ -48,23 +48,23 @@ export default function LegalContractModal({ slug, title, open, onClose, onConfi
     return () => { cancelled = true; };
   }, [open, slug]);
 
-  // Scroll-to-end detection: kullanıcı sözleşmeyi bitirdi mi?
+  // Scroll-to-end detection: has the user finished the contract?
   useEffect(() => {
     if (!open) return;
     const el = contentRef.current;
     if (!el) return;
     const handler = () => {
-      // 8px tolerans — sub-pixel scroll'lara karşı
+      // 8px tolerance — guards against sub-pixel scrolling
       const atEnd = el.scrollTop + el.clientHeight >= el.scrollHeight - 8;
       if (atEnd) setScrolledToEnd(true);
     };
     el.addEventListener('scroll', handler);
-    // İçerik kısa ise modal açılır açılmaz zaten okunmuş sayılır
+    // If the content is short, it counts as read as soon as the modal opens
     if (el.scrollHeight <= el.clientHeight + 8) setScrolledToEnd(true);
     return () => el.removeEventListener('scroll', handler);
   }, [open, content]);
 
-  // ESC ile kapatma + body scroll lock
+  // Close on ESC + body scroll lock
   useEffect(() => {
     if (!open) return;
     const onKey = (e) => { if (e.key === 'Escape') onClose && onClose(); };

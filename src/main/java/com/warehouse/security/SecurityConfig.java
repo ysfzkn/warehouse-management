@@ -50,15 +50,15 @@ public class SecurityConfig {
     }
 
     /**
-     * Üretim güvenlik header'larını her filter chain'e tek noktadan uygular.
+     * Applies production security headers to every filter chain from a single place.
      *
      * <ul>
-     *   <li><b>HSTS</b> — HTTPS zorunluluğu (1 yıl, subdomain dahil, preload)</li>
-     *   <li><b>X-Content-Type-Options: nosniff</b> — MIME-sniff saldırılarına karşı</li>
-     *   <li><b>X-Frame-Options: DENY</b> — Clickjacking koruması (CSP frame-ancestors backup)</li>
-     *   <li><b>Referrer-Policy</b> — strict-origin-when-cross-origin (default leak'i azaltır)</li>
-     *   <li><b>Permissions-Policy</b> — kamera/mikrofon/coğrafi konum vb. APIs varsayılan kapalı</li>
-     *   <li><b>CSP</b> — XSS savunması; React ihtiyaçları için 'unsafe-inline' style allow, script-src self + analytics + iyzico/PayTR; ileride nonce'lu hale getirilebilir.</li>
+     *   <li><b>HSTS</b> — enforces HTTPS (1 year, includes subdomains, preload)</li>
+     *   <li><b>X-Content-Type-Options: nosniff</b> — protects against MIME-sniffing attacks</li>
+     *   <li><b>X-Frame-Options: DENY</b> — clickjacking protection (backup for CSP frame-ancestors)</li>
+     *   <li><b>Referrer-Policy</b> — strict-origin-when-cross-origin (reduces default leakage)</li>
+     *   <li><b>Permissions-Policy</b> — camera/microphone/geolocation and similar APIs disabled by default</li>
+     *   <li><b>CSP</b> — XSS defense; allows 'unsafe-inline' style for React needs, script-src self + analytics + iyzico/PayTR; can be migrated to nonce-based later.</li>
      * </ul>
      */
     private void applySecurityHeaders(HttpSecurity http) throws Exception {
@@ -66,18 +66,18 @@ public class SecurityConfig {
                 .httpStrictTransportSecurity(hsts -> hsts
                         .includeSubDomains(true)
                         .preload(true)
-                        .maxAgeInSeconds(31536000) // 1 yıl
+                        .maxAgeInSeconds(31536000) // 1 year
                 )
                 .contentTypeOptions(opts -> {})
                 .frameOptions(frame -> frame.deny())
                 .referrerPolicy(rp -> rp.policy(ReferrerPolicyHeaderWriter.ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN))
                 .xssProtection(xss -> xss.headerValue(XXssProtectionHeaderWriter.HeaderValue.ENABLED_MODE_BLOCK))
                 .addHeaderWriter((req, resp) -> {
-                    // Permissions-Policy: agresif default-deny (e-ticaret site'i bu API'lere ihtiyaç duymaz)
+                    // Permissions-Policy: aggressive default-deny (the e-commerce site does not need these APIs)
                     resp.setHeader("Permissions-Policy",
                             "geolocation=(), camera=(), microphone=(), payment=(self), usb=(), fullscreen=(self)");
-                    // Content-Security-Policy: e-ticaret + admin uyumu için pratik bir başlangıç.
-                    // Inline style React tarafında zorunlu (CSS-in-JS, Helmet); script-src 'self' + analytics + payment gateways.
+                    // Content-Security-Policy: a practical starting point compatible with both e-commerce and admin.
+                    // Inline style is required on the React side (CSS-in-JS, Helmet); script-src 'self' + analytics + payment gateways.
                     if (!resp.containsHeader("Content-Security-Policy")) {
                         resp.setHeader("Content-Security-Policy",
                                 "default-src 'self'; " +
@@ -155,8 +155,8 @@ public class SecurityConfig {
                 .exceptionHandling(exceptions -> exceptions
                         .accessDeniedHandler(new SilentAccessDeniedHandler())
                 )
-                // Admin auth login için brute-force koruması (RateLimitService'te
-                // /api/admin/auth/login için 15dk içinde 5 deneme limiti tanımlı).
+                // Brute-force protection for admin auth login (RateLimitService
+                // defines a limit of 5 attempts within 15 minutes for /api/admin/auth/login).
                 .addFilterBefore(hostValidationFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(rateLimitFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
@@ -190,13 +190,13 @@ public class SecurityConfig {
                         .requestMatchers(org.springframework.http.HttpMethod.GET, ApiPaths.STORE_PAYMENT_METHODS).permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, ApiPaths.STORE_PAYMENT_STATUS_TOKEN).permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, ApiPaths.STORE_CARGO_PROVIDERS).permitAll()
-                        // Guest checkout: public (misafir kullanıcılar üye olmadan sipariş verebilir)
+                        // Guest checkout: public (guest users can place an order without signing up)
                         .requestMatchers(org.springframework.http.HttpMethod.POST, ApiPaths.STORE_GUEST_CHECKOUT).permitAll()
-                        // Misafir sipariş odeme baslatma: public (orderId + idempotencyKey ile korunur)
+                        // Guest order payment initialization: public (protected by orderId + idempotencyKey)
                         .requestMatchers(org.springframework.http.HttpMethod.POST, ApiPaths.STORE_PAYMENT_INITIALIZE).permitAll()
-                        // Halka acik siparis takip: orderNumber + email kombinasyonu ile korunur
+                        // Public order tracking: protected by orderNumber + email combination
                         .requestMatchers(org.springframework.http.HttpMethod.POST, ApiPaths.STORE_PUBLIC_ORDER_TRACK).permitAll()
-                        // Stokta yoksa bildir: misafirler de abone olabilsin
+                        // Notify when out of stock: guests can subscribe too
                         .requestMatchers(org.springframework.http.HttpMethod.POST, ApiPaths.STORE_PRODUCT_NOTIFY_ME).permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.POST, ApiPaths.STORE_NEWSLETTER).permitAll()
                         // Public settings and banners
@@ -233,12 +233,12 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        // /actuator/health, /actuator/info, /info, /error → herkese açık
+                        // /actuator/health, /actuator/info, /info, /error → public
                         .requestMatchers(ApiPaths.ACTUATOR, ApiPaths.INFO, ApiPaths.ERROR).permitAll()
-                        // Diğer tüm actuator endpoint'leri (env, configprops, loggers, beans, metrics, prometheus)
-                        // sadece ADMIN — secrets ve internal state sızdırmasın.
+                        // All other actuator endpoints (env, configprops, loggers, beans, metrics, prometheus)
+                        // are ADMIN only — to avoid leaking secrets and internal state.
                         .requestMatchers("/actuator/**").hasRole("ADMIN")
-                        // Swagger UI + OpenAPI docs — sadece ADMIN
+                        // Swagger UI + OpenAPI docs — ADMIN only
                         .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").hasRole("ADMIN")
                         .anyRequest().permitAll()
                 )
@@ -248,10 +248,10 @@ public class SecurityConfig {
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
-        // Payment / webhook callback endpoints: kısıtlı whitelist.
-        // Iyzico, PayTR, Logo eLogo, Kargonomi sunucu→sunucu POST yaparken
-        // genelde Origin header'ı GÖNDERMEZ (CORS preflight gerekmez), bu CORS
-        // ayarı sadece tarayıcıdan açılan iframe / redirect dönüşleri için.
+        // Payment / webhook callback endpoints: restricted whitelist.
+        // When Iyzico, PayTR, Logo eLogo, and Kargonomi make server-to-server POSTs
+        // they usually do NOT send an Origin header (no CORS preflight needed); this CORS
+        // config is only for iframe / redirect returns opened from the browser.
         CorsConfiguration callbackConfig = new CorsConfiguration();
         callbackConfig.setAllowedOriginPatterns(List.of(
                 "https://*.iyzipay.com",
@@ -278,7 +278,7 @@ public class SecurityConfig {
         // Register callback paths FIRST (more specific paths take precedence)
         source.registerCorsConfiguration("/api/store/payment/callback", callbackConfig);
         source.registerCorsConfiguration("/api/store/payment/callback/**", callbackConfig);
-        // Webhook'lar (Kargonomi, Logo): callback gibi davranır
+        // Webhooks (Kargonomi, Logo): behave like callbacks
         source.registerCorsConfiguration("/api/admin/cargo/webhook/**", callbackConfig);
         source.registerCorsConfiguration("/api/admin/invoice/webhook/**", callbackConfig);
         // Then general API paths

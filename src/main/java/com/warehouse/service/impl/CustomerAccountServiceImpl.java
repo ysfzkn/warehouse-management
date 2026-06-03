@@ -16,21 +16,22 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * KVKK Madde 11 (e) + GDPR Article 17/20 servisi.
- * Veri ihracı + hesap anonimleştirme mantığı burada.
+ * KVKK Article 11 (e) + GDPR Article 17/20 service.
+ * Holds the data export + account anonymization logic.
  *
- * <p><b>Anonimleştirme prensibi:</b> Müşterinin kişisel verileri (ad, soyad,
- * e-posta, telefon vb.) "anonim" formatına dönüştürülür, sipariş/fatura kayıtları
- * Türkiye'deki yasal saklama yükümlülüğü (10 yıl) gereği korunur. customer.email
- * "anon-{hash}@deleted.local" formatına alınır, böylece UNIQUE constraint kırılmaz
- * ve aynı email ile sonradan yeni hesap açılabilir.</p>
+ * <p><b>Anonymization principle:</b> The customer's personal data (first name,
+ * last name, email, phone, etc.) is converted to an "anonymous" format, while
+ * order/invoice records are retained as required by Turkey's legal retention
+ * obligation (10 years). customer.email is changed to the
+ * "anon-{hash}@deleted.local" format so the UNIQUE constraint is not violated
+ * and a new account can later be opened with the same email.</p>
  */
 @Service
 public class CustomerAccountServiceImpl implements CustomerAccountService {
 
     private static final Logger log = LoggerFactory.getLogger(CustomerAccountServiceImpl.class);
 
-    // Anonim sipariş kayıtlarında müşteri ad/soyad yerine kullanılacak placeholder
+    // Placeholder used instead of the customer first/last name in anonymized order records
     private static final String ANON_PREFIX = "[Anonim Müşteri]";
 
     private final CustomerRepository customerRepo;
@@ -70,7 +71,7 @@ public class CustomerAccountServiceImpl implements CustomerAccountService {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    //  Veri İhracı (GDPR Article 20: data portability)
+    //  Data Export (GDPR Article 20: data portability)
     // ─────────────────────────────────────────────────────────────────────────
     @Override
     @Transactional
@@ -85,7 +86,7 @@ public class CustomerAccountServiceImpl implements CustomerAccountService {
         export.put("exportedAt", LocalDateTime.now().toString());
         export.put("kvkkNote", "Bu dosya KVKK Madde 11 (e) ve GDPR Article 20 kapsamında kişisel verilerinizin ihracıdır.");
 
-        // ── Profil ──
+        // ── Profile ──
         Map<String, Object> profile = new LinkedHashMap<>();
         profile.put("id", c.getId());
         profile.put("email", c.getEmail());
@@ -103,7 +104,7 @@ public class CustomerAccountServiceImpl implements CustomerAccountService {
         profile.put("lastLoginAt", asString(c.getLastLoginAt()));
         export.put("profile", profile);
 
-        // ── Adresler ──
+        // ── Addresses ──
         List<CustomerAddress> addresses = addressRepo.findByCustomerId(customerId);
         export.put("addresses", addresses.stream().map(a -> {
             Map<String, Object> m = new LinkedHashMap<>();
@@ -119,7 +120,7 @@ public class CustomerAccountServiceImpl implements CustomerAccountService {
             return m;
         }).collect(Collectors.toList()));
 
-        // ── Siparişler ──
+        // ── Orders ──
         List<Order> orders = orderRepo.findByCustomerId(customerId);
         export.put("orders", orders.stream().map(o -> {
             Map<String, Object> m = new LinkedHashMap<>();
@@ -132,13 +133,13 @@ public class CustomerAccountServiceImpl implements CustomerAccountService {
             m.put("paymentMethod", o.getPaymentMethod());
             m.put("createdAt", asString(o.getCreatedAt()));
             m.put("invoiceNumber", o.getInvoiceNumber());
-            // Sipariş kalemleri
+            // Order items
             List<OrderItem> items = orderItemRepo.findByOrderId(o.getId());
             m.put("items", items.stream().map(it -> {
                 Map<String, Object> itm = new LinkedHashMap<>();
                 String name = "";
                 try {
-                    // Önce snapshot, sonra ilişkili ürün
+                    // Prefer the snapshot, then the associated product
                     if (it.getProductSnapshot() != null && it.getProductSnapshot().get("name") != null) {
                         name = String.valueOf(it.getProductSnapshot().get("name"));
                     } else if (it.getProduct() != null) {
@@ -154,7 +155,7 @@ public class CustomerAccountServiceImpl implements CustomerAccountService {
             return m;
         }).collect(Collectors.toList()));
 
-        // ── Yorumlar ──
+        // ── Reviews ──
         List<Review> reviews = reviewRepo.findAllByCustomerId(customerId);
         export.put("reviews", reviews.stream().map(r -> {
             Map<String, Object> m = new LinkedHashMap<>();
@@ -166,14 +167,14 @@ public class CustomerAccountServiceImpl implements CustomerAccountService {
             return m;
         }).collect(Collectors.toList()));
 
-        // ── Bildirim tercihleri ──
+        // ── Notification preferences ──
         export.put("notificationPreferences", notifPrefRepo.findByCustomerId(customerId));
 
         return export;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    //  Hesap Anonimleştirme (GDPR Article 17: right to erasure)
+    //  Account Anonymization (GDPR Article 17: right to erasure)
     // ─────────────────────────────────────────────────────────────────────────
     @Override
     @Transactional
@@ -185,7 +186,7 @@ public class CustomerAccountServiceImpl implements CustomerAccountService {
             throw new AccountDeletionBlockedException("Hesap zaten anonimleştirilmiş.");
         }
 
-        // ── 1) Aktif sipariş kontrolü ──
+        // ── 1) Active order check ──
         List<Order> orders = orderRepo.findByCustomerId(customerId);
         EnumSet<OrderStatus> activeStatuses = EnumSet.of(
                 OrderStatus.PENDING_PAYMENT, OrderStatus.PAID, OrderStatus.PREPARING, OrderStatus.SHIPPED
@@ -196,10 +197,10 @@ public class CustomerAccountServiceImpl implements CustomerAccountService {
                     "Aktif siparişiniz var. Sipariş tamamlanana veya iptal edilene kadar hesap silinemez.");
         }
 
-        // ── 2) Refresh token'ları iptal et (oturumları sonlandır) ──
+        // ── 2) Revoke refresh tokens (terminate sessions) ──
         try { refreshTokenRepo.deleteByCustomerId(customerId); } catch (Exception ignored) {}
 
-        // ── 3) Sepet temizle ──
+        // ── 3) Clear cart ──
         try {
             cartRepo.findByCustomerId(customerId).ifPresent(cart -> {
                 cartItemRepo.deleteByCartId(cart.getId());
@@ -207,30 +208,30 @@ public class CustomerAccountServiceImpl implements CustomerAccountService {
             });
         } catch (Exception e) { log.warn("Sepet silme hatası: {}", e.getMessage()); }
 
-        // ── 4) Wishlist sil ──
+        // ── 4) Delete wishlist ──
         try { wishlistRepo.deleteByCustomerId(customerId); } catch (Exception e) { log.warn("Wishlist silme hatası: {}", e.getMessage()); }
 
-        // ── 5) Adresleri sil (sipariş kalemleri içindeki snapshot adresleri korunuyor) ──
+        // ── 5) Delete addresses (snapshot addresses inside order items are retained) ──
         try {
             List<CustomerAddress> addresses = addressRepo.findByCustomerId(customerId);
             addressRepo.deleteAll(addresses);
         } catch (Exception e) { log.warn("Adres silme hatası: {}", e.getMessage()); }
 
-        // ── 6) Yorumları anonimleştir (silme değil, çünkü ürün rating'i korunmalı) ──
+        // ── 6) Anonymize reviews (not delete, since the product rating must be preserved) ──
         try {
             List<Review> reviews = reviewRepo.findAllByCustomerId(customerId);
             for (Review r : reviews) {
-                // customer ilişkisi kalsın ama display name değişsin; yoruma müşteri adı koymuyoruz
-                r.setApproved(r.isApproved()); // no-op, sadece dirty flag için
+                // Keep the customer relation but change the display name; we do not put the customer name on the review
+                r.setApproved(r.isApproved()); // no-op, only to set the dirty flag
             }
             reviewRepo.saveAll(reviews);
         } catch (Exception e) { log.warn("Yorum anonimleştirme hatası: {}", e.getMessage()); }
 
-        // ── 7) Bildirim tercihleri ve stok bildirimi abonelikleri sil ──
+        // ── 7) Delete notification preferences and stock notification subscriptions ──
         try { notifPrefRepo.deleteByCustomerId(customerId); } catch (Exception ignored) {}
         try { stockNotifRepo.deleteByCustomerId(customerId); } catch (Exception ignored) {}
 
-        // ── 8) Customer PII'sini anonimleştir ──
+        // ── 8) Anonymize the customer's PII ──
         String anonHash = sha256(c.getEmail() + ":" + System.currentTimeMillis()).substring(0, 12);
         String anonEmail = "anon-" + anonHash + "@deleted.local";
         c.setEmail(anonEmail);
@@ -245,7 +246,7 @@ public class CustomerAccountServiceImpl implements CustomerAccountService {
         c.setActive(false);
         c.setEmailVerified(false);
         c.setMarketingConsent(false);
-        // KVKK consent kanıtı korunur (verinin işlendiği dönemin kanıtı)
+        // KVKK consent proof is retained (evidence for the period the data was processed)
         LocalDateTime now = LocalDateTime.now();
         c.setAnonymizedAt(now);
         c.setDataDeletionRequestedAt(now);

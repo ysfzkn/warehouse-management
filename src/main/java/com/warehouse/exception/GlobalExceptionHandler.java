@@ -38,7 +38,7 @@ public class GlobalExceptionHandler {
                 ? ex.getMessage()
                 : errorCode.getMessage();
         List<String> details = null;
-        // Özel bazı doğrulama kodları için alan adı ekleyerek Türkçe mesaj üret
+        // For certain custom validation codes, build a message that includes the field name
         if (errorCode == ErrorCode.REQUIRED_FIELD_MISSING && ex.getMessage() != null) {
             message = ex.getMessage() + " alanı zorunludur";
         } else if (errorCode == ErrorCode.VALUE_MUST_BE_POSITIVE && ex.getMessage() != null) {
@@ -100,7 +100,7 @@ public class GlobalExceptionHandler {
                 .map(ConstraintViolation::getMessage)
                 .collect(Collectors.joining(", "));
         
-        // Türkçe mesajları daha anlaşılır hale getir
+        // Make the messages more understandable
         if (errorMessage.contains("Reserved quantity cannot be negative")) {
             errorMessage = "Rezerve miktarı negatif olamaz. Transfer iptal edilirken rezerve miktarı yetersiz olduğu için bu hata oluştu.";
         } else if (errorMessage.contains("cannot be negative")) {
@@ -182,7 +182,7 @@ public class GlobalExceptionHandler {
     /**
      * Handles timeout events for async/SSE requests.
      * For the SSE stream (/api/stream), this is considered a normal situation
-     * (client closed tab, network idle vs.), bu yüzden stack trace loglamıyoruz.
+     * (client closed tab, network idle, etc.), so we do not log the stack trace.
      */
     @ExceptionHandler(AsyncRequestTimeoutException.class)
     public ResponseEntity<Void> handleAsyncTimeout(
@@ -190,13 +190,13 @@ public class GlobalExceptionHandler {
 
         String uri = request.getRequestURI();
         if (uri != null && uri.startsWith("/api/admin/stream")) {
-            // Tek satırlık, düşük seviye log – hata gibi görünmesin
+            // Single-line, low-level log – should not look like an error
             logger.debug("SSE connection timeout/closed at path={}", uri);
-            // SSE connection zaten kapanmış olacağı için body dönmeye gerek yok
+            // No need to return a body since the SSE connection is already closed
             return ResponseEntity.noContent().build();
         }
 
-        // Diğer async istekler için uyarı seviyesinde kısa log
+        // Short warning-level log for other async requests
         logger.warn("Async request timed out at path={}", uri);
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).build();
     }

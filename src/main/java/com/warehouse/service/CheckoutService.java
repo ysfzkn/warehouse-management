@@ -10,9 +10,9 @@ public interface CheckoutService {
     PlaceOrderResponse placeOrder(Long customerId, PlaceOrderRequest request, String ipAddress, String userAgent);
 
     /**
-     * Misafir (üye olmayan) müşteri için sipariş oluşturur.
-     * Otomatik olarak bir müşteri kaydı oluşturur (emailVerified=false) ve
-     * müşteriye "hesabını tamamla" e-postası gönderir.
+     * Creates an order for a guest (non-member) customer.
+     * Automatically creates a customer record (emailVerified=false) and
+     * sends the customer a "complete your account" email.
      */
     PlaceOrderResponse placeGuestOrder(GuestPlaceOrderRequest request, String ipAddress, String userAgent);
 }

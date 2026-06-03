@@ -17,8 +17,8 @@ import java.util.List;
 
 /**
  * Customer-authenticated order lookup. Reads the customer id from the
- * request-scoped {@link AssistantContext} — guests calling this tool see an
- * "önce giriş yapmalısınız" response (enforced at the tool level so the
+ * request-scoped {@link AssistantContext} — guests calling this tool see a
+ * "you must log in first" response (enforced at the tool level so the
  * prompt can't bypass it).
  */
 @Component

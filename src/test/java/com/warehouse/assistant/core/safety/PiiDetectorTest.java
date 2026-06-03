@@ -19,7 +19,7 @@ class PiiDetectorTest {
     @Test void tcKimlikRedacted() { assertEquals("Numaram [TC_KIMLIK]", detector.redact("Numaram 12345678901")); }
     @Test void tcKimlikIgnoresLeadingZero() { assertFalse(detector.hasPii("Kod: 01234567890")); }
 
-    // ── Telefon ──
+    // ── Phone ──
     @Test void detectsTrPhone() { assertTrue(detector.hasPii("+90 532 123 45 67")); }
     @Test void detectsTrPhoneZeroPrefix() { assertTrue(detector.hasPii("0532 123 45 67")); }
     @Test void phoneRedacted() { assertEquals("Ara: [TELEFON]", detector.redact("Ara: 0532 123 45 67")); }
@@ -31,7 +31,7 @@ class PiiDetectorTest {
         assertTrue(r.contains("[IBAN]"), "Expected IBAN redacted, got: " + r);
     }
 
-    // ── Kredi Kartı ──
+    // ── Credit Card ──
     @Test void detectsCreditCard() { assertTrue(detector.hasPii("4111 1111 1111 1111")); }
     @Test void detectsCreditCardNoDash() { assertTrue(detector.hasPii("4111111111111111")); }
     @Test void cardRedacted() { assertEquals("Kart: [KART]", detector.redact("Kart: 4111 1111 1111 1111")); }

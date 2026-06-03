@@ -25,8 +25,8 @@ public class JwtService {
 
     private static final Logger log = LoggerFactory.getLogger(JwtService.class);
 
-    // Lansman öncesi taranan zayıf/default secret blacklist'i — prod'da bunlardan
-    // birinin kullanılması fatal hata olur (fail-fast at startup).
+    // Blacklist of weak/default secrets scanned before launch — using any of
+    // these in prod is a fatal error (fail-fast at startup).
     private static final java.util.Set<String> WEAK_SECRETS = java.util.Set.of(
             "change-this-secret",
             "dev-secret",
@@ -44,7 +44,7 @@ public class JwtService {
         byte[] keyBytes;
         String secret = Objects.toString(securityProperties.getJwtSecret(), "change-this-secret");
 
-        // ── Production fail-fast: zayıf/default secret prod'da kabul edilmez ──
+        // ── Production fail-fast: weak/default secrets are not accepted in prod ──
         boolean isProd = false;
         for (String profile : environment.getActiveProfiles()) {
             if ("prod".equalsIgnoreCase(profile) || "production".equalsIgnoreCase(profile)) {

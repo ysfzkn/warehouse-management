@@ -14,4 +14,9 @@ public class PaymentInitResult {
     private String errorMessage;
     private String errorCode;
     private Map<String, Object> rawResponse;
+    /** Active gateway provider: "IYZICO", "PAYTR", "NESTPAY", etc.
+     *  The frontend renders the brand name/logo based on this value. */
+    private String providerName;
+    /** Display name of the gateway: "iyzico", "PayTR", "İş Bankası NestPay", etc. */
+    private String providerDisplayName;
 }

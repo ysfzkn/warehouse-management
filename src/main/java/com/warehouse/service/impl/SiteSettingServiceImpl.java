@@ -43,12 +43,23 @@ public class SiteSettingServiceImpl implements SiteSettingService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public boolean getBoolSetting(String key, boolean defaultValue) {
+        String v = repository.findBySettingKey(key).map(SiteSetting::getSettingValue).orElse(null);
+        if (v == null || v.isBlank()) return defaultValue;
+        String lv = v.trim().toLowerCase();
+        if ("true".equals(lv) || "1".equals(lv) || "on".equals(lv) || "yes".equals(lv)) return true;
+        if ("false".equals(lv) || "0".equals(lv) || "off".equals(lv) || "no".equals(lv)) return false;
+        return defaultValue;
+    }
+
+    @Override
     public void updateSettings(Map<String, String> settings, String updatedBy) {
         if (settings == null || settings.isEmpty()) {
             log.warn("updateSettings called with empty/null map — ignoring");
             return;
         }
-        // updated_by alanını DB limitine kırp (CurrentUser.usernameOrSystem() çok uzunsa hata vermez)
+        // Truncate the updated_by field to the DB limit (so a too-long CurrentUser.usernameOrSystem() does not error)
         final String safeUpdatedBy = updatedBy == null ? "system"
                 : (updatedBy.length() > MAX_UPDATED_BY_LENGTH
                     ? updatedBy.substring(0, MAX_UPDATED_BY_LENGTH) : updatedBy);
@@ -56,7 +67,7 @@ public class SiteSettingServiceImpl implements SiteSettingService {
         int updated = 0, skipped = 0;
         for (var entry : settings.entrySet()) {
             String key = entry.getKey();
-            // Skip invalid keys: null, blank, çok uzun
+            // Skip invalid keys: null, blank, too long
             if (key == null || key.isBlank()) {
                 log.warn("Skipping setting with null/blank key");
                 skipped++;
@@ -80,7 +91,7 @@ public class SiteSettingServiceImpl implements SiteSettingService {
                 repository.save(setting);
                 updated++;
             } catch (Exception ex) {
-                // Tek setting hata atarsa diğerlerini de kaybetmeyelim — bu key'i atla
+                // If a single setting throws, do not lose the others — skip this key
                 log.error("Failed to save setting key='{}': {}", key, ex.getMessage(), ex);
                 throw new IllegalStateException(
                         "Ayar kaydedilemedi (key=" + key + "): " + ex.getMessage(), ex);

@@ -69,7 +69,7 @@ export function useCart() {
     }
   }, []);
 
-  /** Sepeti tamamen boşalt (tüm ürünleri kaldır) */
+  /** Empty the cart completely (remove all items) */
   const clearCart = useCallback(async () => {
     try {
       setLoading(true);

@@ -1,28 +1,28 @@
 package com.warehouse.service.notification;
 
 /**
- * SMS sağlayıcı arayüzü.
- * Farklı Türk SMS sağlayıcıları (Netgsm, İleti Merkezi, Vatansms vb.) bu arayüzü uygular.
+ * SMS provider interface.
+ * Different Turkish SMS providers (Netgsm, İleti Merkezi, Vatansms, etc.) implement this interface.
  */
 public interface SmsProvider {
 
     /**
-     * Sağlayıcı adını döner (örn: "NETGSM", "ILETIMERKEZI", "MOCK").
+     * Returns the provider name (e.g. "NETGSM", "ILETIMERKEZI", "MOCK").
      */
     String getProviderName();
 
     /**
-     * SMS gönderir.
+     * Sends an SMS.
      *
-     * @param phoneNumber alıcı telefon numarası (E.164 formatı: +905551234567 veya 05551234567)
-     * @param message     mesaj içeriği (Türkçe karakter destekli)
-     * @return gönderim sonucu
+     * @param phoneNumber recipient phone number (E.164 format: +905551234567 or 05551234567)
+     * @param message     message content (supports Turkish characters)
+     * @return send result
      */
     SmsSendResult send(String phoneNumber, String message);
 
     /**
-     * Sağlayıcının aktif olup olmadığını döner.
-     * Credential yapılandırması eksikse false.
+     * Returns whether the provider is enabled.
+     * False if the credential configuration is missing.
      */
     boolean isEnabled();
 }

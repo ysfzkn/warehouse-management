@@ -54,7 +54,7 @@ export default function MySupportPage() {
             const isOpen = selected === t.id;
             return (
               <div key={t.id} className="card border-0 shadow-sm" style={{ borderRadius: 14, overflow: 'hidden' }}>
-                {/* Header — tıklanabilir */}
+                {/* Header — clickable */}
                 <div className="card-body py-3" style={{ cursor: 'pointer', borderLeft: `4px solid ${s.color}` }}
                   onClick={() => setSelected(isOpen ? null : t.id)}>
                   <div className="d-flex justify-content-between align-items-start">
@@ -77,10 +77,10 @@ export default function MySupportPage() {
                   </div>
                 </div>
 
-                {/* Detail — açılır */}
+                {/* Detail — expandable */}
                 {isOpen && (
                   <div style={{ borderTop: '1px solid #f1f5f9' }}>
-                    {/* Müşteri mesajı */}
+                    {/* Customer message */}
                     <div className="px-4 pt-3">
                       <div className="d-flex gap-2 mb-1">
                         <span className="small fw-semibold text-primary">Siz</span>
@@ -94,7 +94,7 @@ export default function MySupportPage() {
                       </div>
                     </div>
 
-                    {/* Admin yanıtı */}
+                    {/* Admin reply */}
                     {t.adminReply ? (
                       <div className="px-4 pb-3">
                         <div className="d-flex gap-2 mb-1">

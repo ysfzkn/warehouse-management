@@ -40,7 +40,7 @@ export default function CartPage() {
             return (
             <div key={item.id} className="card border-0 shadow-sm mb-3" style={{borderRadius:14}}>
               <div className="card-body d-flex gap-3 align-items-center p-3">
-                {/* Görsel */}
+                {/* Image */}
                 <Link to={`/urun/${item.productSlug}`} className="flex-shrink-0 position-relative">
                   <div style={{width:80,height:80,borderRadius:12,background:'#f8fafc',border:'1px solid #f1f5f9',overflow:'hidden',display:'flex',alignItems:'center',justifyContent:'center'}}>
                     {item.imageUrl ? <img src={item.imageUrl} alt={item.productName || 'Ürün görseli'} style={{width:'100%',height:'100%',objectFit:'contain'}} /> : <FiShoppingCart size={24} className="text-muted" />}
@@ -48,7 +48,7 @@ export default function CartPage() {
                   {hasDiscount && <span className="badge bg-danger position-absolute" style={{top:-4,left:-4,fontSize:9}}>%{discountPct}</span>}
                 </Link>
 
-                {/* Ürün bilgisi */}
+                {/* Product info */}
                 <div className="flex-grow-1 min-w-0">
                   <Link to={`/urun/${item.productSlug}`} className="text-decoration-none">
                     <div className="fw-semibold text-truncate mb-1">{item.productName}</div>
@@ -68,7 +68,7 @@ export default function CartPage() {
                   )}
                 </div>
 
-                {/* Miktar kontrol — ortalanmış */}
+                {/* Quantity control — centered */}
                 <div className="d-flex flex-column align-items-center flex-shrink-0" style={{minWidth:100}}>
                   <div className="d-flex align-items-center" style={{border:'1.5px solid #e2e8f0',borderRadius:10,overflow:'hidden'}}>
                     <button className="btn btn-sm d-flex align-items-center justify-content-center" style={{width:32,height:32,border:'none',background:'#f8fafc'}}
@@ -85,13 +85,13 @@ export default function CartPage() {
                   </div>
                 </div>
 
-                {/* Toplam fiyat — sağa hizalı */}
+                {/* Total price — right-aligned */}
                 <div className="text-end flex-shrink-0" style={{minWidth:90}}>
                   <div className="fw-bold">{formatPrice(effectivePrice * item.quantity)}</div>
                   {item.quantity > 1 && <small className="text-muted">{item.quantity} × {formatPrice(effectivePrice)}</small>}
                 </div>
 
-                {/* Sil */}
+                {/* Remove */}
                 <button className="btn btn-sm text-danger flex-shrink-0" style={{width:32,height:32,padding:0}}
                   onClick={async () => { try { await cart.removeItem(item.id); toast.info('Ürün sepetten çıkarıldı'); } catch { toast.error('Ürün çıkarılamadı'); }}}
                   aria-label="Kaldır">
@@ -108,7 +108,7 @@ export default function CartPage() {
             <div className="store-cart-summary-row"><span>Ara Toplam</span><span>{formatPrice(cart.cart.subtotal)}</span></div>
             <div className="store-cart-summary-row"><span>Kargo</span><span className={cart.cart.shippingCost > 0 ? '' : 'text-success fw-medium'}>{cart.cart.shippingCost > 0 ? formatPrice(cart.cart.shippingCost) : 'Ücretsiz'}</span></div>
             {cart.cart.discountAmount > 0 && <div className="store-cart-summary-row text-success"><span><i className="fas fa-tag me-1" />İndirim</span><span>-{formatPrice(cart.cart.discountAmount)}</span></div>}
-            {/* Toplam indirim tasarrufu hesapla */}
+            {/* Compute total discount savings */}
             {(() => {
               const totalSaved = (cart.cart?.items || []).reduce((sum, i) => {
                 if (i.salePrice && i.salePrice > 0 && i.salePrice < i.unitPrice) return sum + (i.unitPrice - i.salePrice) * i.quantity;

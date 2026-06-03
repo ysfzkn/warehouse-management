@@ -23,18 +23,18 @@ import java.util.Locale;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Mock e-fatura sağlayıcısı.
- * Gerçek bir sağlayıcı entegre edilene kadar geliştirme/test amaçlı kullanılır.
- * Fatura numarası üretir ve APPROVED durumu döner.
+ * Mock e-invoice provider.
+ * Used for development/testing until a real provider is integrated.
+ * Generates an invoice number and returns the APPROVED status.
  *
- * <p><b>Production Guard:</b> {@code invoice.mock-enabled=false} prop'u ile bean
- * tamamen oluşturulmaz (Spring context'inde yer almaz). Varsayılan {@code true}
- * — dev/test ortamlarında otomatik aktif. application-prod.properties'te
- * {@code invoice.mock-enabled=false} ayarlanır. Bu sayede prod'da yanlışlıkla
- * MOCK fatura kesmek imkansız hale gelir.</p>
+ * <p><b>Production Guard:</b> with the {@code invoice.mock-enabled=false} property the bean
+ * is not created at all (it is absent from the Spring context). The default is {@code true}
+ * — automatically active in dev/test environments. In application-prod.properties
+ * {@code invoice.mock-enabled=false} is set. This makes it impossible to accidentally
+ * issue a MOCK invoice in prod.</p>
  *
- * <p>Ek olarak {@link PostConstruct} ile prod profile'inde aktif olursa loud
- * warning emit edilir (gözden kaçmasın diye).</p>
+ * <p>Additionally, via {@link PostConstruct}, a loud warning is emitted if it becomes
+ * active under the prod profile (so it is not overlooked).</p>
  */
 @Component
 @ConditionalOnProperty(name = "invoice.mock-enabled", havingValue = "true", matchIfMissing = true)
@@ -57,10 +57,10 @@ public class MockInvoiceProvider implements InvoiceProvider {
     }
 
     /**
-     * Production profile'inde MockInvoiceProvider yanlışlıkla aktif olursa
-     * loud warning at startup — operatör hemen fark etsin.
-     * @ConditionalOnProperty zaten beans'i prevent etmeli ama defense-in-depth
-     * için ek uyarı.
+     * If MockInvoiceProvider becomes accidentally active under the production profile,
+     * emit a loud warning at startup — so the operator notices immediately.
+     * @ConditionalOnProperty should already prevent the bean, but this is an
+     * extra warning for defense-in-depth.
      */
     @PostConstruct
     void warnIfProd() {
@@ -135,7 +135,7 @@ public class MockInvoiceProvider implements InvoiceProvider {
     public byte[] downloadPdf(String providerInvoiceId) {
         logger.info("Mock fatura PDF indiriliyor: {}", providerInvoiceId);
 
-        // providerInvoiceId → fatura detaylarını çek ve gerçek bir PDF üret
+        // providerInvoiceId → fetch the invoice details and generate a real PDF
         Invoice invoice = invoiceRepository.findAll().stream()
                 .filter(i -> providerInvoiceId.equals(i.getProviderInvoiceId()))
                 .findFirst()
@@ -144,7 +144,7 @@ public class MockInvoiceProvider implements InvoiceProvider {
         return renderMockPdf(invoice, providerInvoiceId);
     }
 
-    /** Basit ama geçerli bir PDF üret — müşteri açabilir, invoice bilgilerini görür. */
+    /** Generate a simple but valid PDF — the customer can open it and see the invoice details. */
     private byte[] renderMockPdf(Invoice invoice, String providerInvoiceId) {
         SimplePdfBuilder pdf = new SimplePdfBuilder();
         int y = 800;

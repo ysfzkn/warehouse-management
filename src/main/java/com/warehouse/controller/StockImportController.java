@@ -161,8 +161,8 @@ public class StockImportController {
             return ResponseEntity.notFound().build();
         }
 
-        // Yeni format: "imports/{warehouseId}/uuid.xlsx" — storage abstraction
-        // Eski format: timestamp_filename (local fs) — backward compat fallback
+        // New format: "imports/{warehouseId}/uuid.xlsx" — storage abstraction
+        // Old format: timestamp_filename (local fs) — backward compat fallback
         try (InputStream in = photoStorageService.openDocumentStream(storageKey)) {
             byte[] bytes = in.readAllBytes();
             return ResponseEntity.ok()
@@ -171,7 +171,7 @@ public class StockImportController {
                     .contentLength(bytes.length)
                     .body(new org.springframework.core.io.ByteArrayResource(bytes));
         } catch (Exception e) {
-            // Legacy fallback: eski kayıtlar local fs'te olabilir
+            // Legacy fallback: old records may live on the local fs
             Path storageDir = Path.of(importProperties.getStorageDir());
             Path path = storageDir.resolve(storageKey);
             if (!Files.exists(path)) {

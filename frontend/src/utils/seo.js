@@ -1,15 +1,15 @@
 /**
- * SEO Utility Modülü
+ * SEO Utility Module
  *
- * Schema.org JSON-LD üreticileri ve SEO yardımcı fonksiyonları.
- * Sayfa bileşenleri bu fonksiyonları kullanarak tutarlı yapılandırılmış veri üretir.
+ * Schema.org JSON-LD generators and SEO helper functions.
+ * Page components use these functions to produce consistent structured data.
  *
- * Kullanım örneği:
+ * Usage example:
  *   import { buildProductSchema, buildBreadcrumbSchema } from '../utils/seo';
  *   const productLd = buildProductSchema(product, siteSettings);
  */
 
-/** Canonical URL oluşturur. Site ayarındaki canonical domain varsa onu kullanır, yoksa window.location.origin. */
+/** Builds the canonical URL. Uses the canonical domain from site settings if present, otherwise window.location.origin. */
 export function getCanonicalUrl(path = '', siteSettings) {
   const canonicalDomain = siteSettings?.seo_canonical_domain?.trim();
   const origin = canonicalDomain || (typeof window !== 'undefined' ? window.location.origin : '');
@@ -18,7 +18,7 @@ export function getCanonicalUrl(path = '', siteSettings) {
   return cleanOrigin + cleanPath;
 }
 
-/** Site genelinde kullanılan site adı */
+/** Site name used across the whole site */
 export function getSiteName(siteSettings) {
   return siteSettings?.site_name || siteSettings?.seo_organization_name || 'Mağaza';
 }
@@ -28,13 +28,13 @@ export function getDefaultOgImage(siteSettings) {
   return siteSettings?.seo_default_og_image || siteSettings?.site_logo_url || '';
 }
 
-/** Description fallback zinciri */
+/** Description fallback chain */
 export function resolveDescription(customDescription, siteSettings) {
   if (customDescription && customDescription.trim()) return customDescription.trim();
   return siteSettings?.seo_default_meta_description || '';
 }
 
-/** URL'den tam hale getir: relative path'i absolute'a çevir */
+/** Make a full URL: convert a relative path to an absolute one */
 export function toAbsoluteUrl(url, siteSettings) {
   if (!url) return '';
   if (url.startsWith('http://') || url.startsWith('https://')) return url;
@@ -45,11 +45,11 @@ export function toAbsoluteUrl(url, siteSettings) {
   return cleanOrigin + cleanPath;
 }
 
-// ============ SCHEMA.ORG JSON-LD ÜRETİCİLERİ ============
+// ============ SCHEMA.ORG JSON-LD GENERATORS ============
 
 /**
- * Product Schema.org JSON-LD üretir.
- * Google rich snippet için: fiyat, stok, değerlendirme yıldızları.
+ * Generates the Product Schema.org JSON-LD.
+ * For Google rich snippets: price, stock, rating stars.
  */
 export function buildProductSchema(product, siteSettings) {
   if (!product) return null;
@@ -116,7 +116,7 @@ export function buildProductSchema(product, siteSettings) {
 
 /**
  * BreadcrumbList schema.
- * items: [{ name: 'Ana Sayfa', url: '/' }, { name: 'Elektronik', url: '/kategori/elektronik' }, ...]
+ * items: [{ name: 'Home', url: '/' }, { name: 'Electronics', url: '/kategori/elektronik' }, ...]
  */
 export function buildBreadcrumbSchema(items, siteSettings) {
   if (!items || items.length === 0) return null;
@@ -133,7 +133,7 @@ export function buildBreadcrumbSchema(items, siteSettings) {
 }
 
 /**
- * Organization schema - homepage'de kullanılır.
+ * Organization schema - used on the homepage.
  */
 export function buildOrganizationSchema(siteSettings) {
   if (!siteSettings) return null;
@@ -155,7 +155,7 @@ export function buildOrganizationSchema(siteSettings) {
 
   if (sameAs.length > 0) schema.sameAs = sameAs;
 
-  // İletişim bilgileri
+  // Contact information
   if (siteSettings.contact_phone || siteSettings.contact_email) {
     schema.contactPoint = {
       '@type': 'ContactPoint',
@@ -167,7 +167,7 @@ export function buildOrganizationSchema(siteSettings) {
     };
   }
 
-  // Adres
+  // Address
   if (siteSettings.contact_address) {
     schema.address = {
       '@type': 'PostalAddress',
@@ -180,7 +180,7 @@ export function buildOrganizationSchema(siteSettings) {
 }
 
 /**
- * WebSite schema with search action - Google sitelinks search box için.
+ * WebSite schema with search action - for the Google sitelinks search box.
  */
 export function buildWebSiteSchema(siteSettings) {
   const origin = getCanonicalUrl('/', siteSettings);
@@ -201,7 +201,7 @@ export function buildWebSiteSchema(siteSettings) {
 }
 
 /**
- * CollectionPage schema - kategori sayfaları için.
+ * CollectionPage schema - for category pages.
  */
 export function buildCollectionPageSchema(category, siteSettings) {
   if (!category) return null;
@@ -215,7 +215,7 @@ export function buildCollectionPageSchema(category, siteSettings) {
 }
 
 /**
- * Article schema - CMS sayfaları (blog, sss vb.) için.
+ * Article schema - for CMS pages (blog, FAQ, etc.).
  */
 export function buildArticleSchema(cmsPage, siteSettings) {
   if (!cmsPage) return null;
@@ -237,8 +237,8 @@ export function buildArticleSchema(cmsPage, siteSettings) {
 }
 
 /**
- * Meta tag kombinasyonu üretir: title, description, OG, Twitter Card.
- * Page component'larında <Helmet> içine map edilecek obje döner.
+ * Generates a meta tag combination: title, description, OG, Twitter Card.
+ * Returns an object to be mapped into <Helmet> in page components.
  *
  * @returns { title, description, canonicalUrl, ogImage, ogType, twitterCard }
  */

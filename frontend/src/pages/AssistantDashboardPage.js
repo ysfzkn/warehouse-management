@@ -4,7 +4,7 @@ import useSecurityCodePrompt from '../components/useSecurityCodePrompt';
 
 /**
  * Admin dashboard for the Cezeri assistant platform. Shows per-profile
- * conversation counts, aggregate cost, and a "Ürünleri yeniden indeksle"
+ * conversation counts, aggregate cost, and a "Reindex products"
  * action for the product embedding backfill.
  */
 export default function AssistantDashboardPage() {

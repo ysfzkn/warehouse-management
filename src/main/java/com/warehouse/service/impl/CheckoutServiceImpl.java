@@ -11,6 +11,7 @@ import com.warehouse.repository.*;
 import com.warehouse.service.CartService;
 import com.warehouse.service.CheckoutService;
 import com.warehouse.service.EmailService;
+import com.warehouse.service.SiteSettingService;
 import com.warehouse.entity.Stock;
 import com.warehouse.entity.StockEvent;
 import com.warehouse.enums.StockEventType;
@@ -47,6 +48,7 @@ public class CheckoutServiceImpl implements CheckoutService {
     private final StockEventRepository stockEventRepository;
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
+    private final SiteSettingService siteSettingService;
 
     public CheckoutServiceImpl(CartRepository cartRepository, CartItemRepository cartItemRepository,
                                 CustomerRepository customerRepository, CustomerAddressRepository addressRepository,
@@ -55,7 +57,8 @@ public class CheckoutServiceImpl implements CheckoutService {
                                 CargoProviderRepository cargoProviderRepository,
                                 StockEventRepository stockEventRepository,
                                 PasswordEncoder passwordEncoder,
-                                EmailService emailService) {
+                                EmailService emailService,
+                                SiteSettingService siteSettingService) {
         this.cartRepository = cartRepository;
         this.cartItemRepository = cartItemRepository;
         this.customerRepository = customerRepository;
@@ -68,6 +71,19 @@ public class CheckoutServiceImpl implements CheckoutService {
         this.cartService = cartService;
         this.passwordEncoder = passwordEncoder;
         this.emailService = emailService;
+        this.siteSettingService = siteSettingService;
+    }
+
+    /**
+     * Test mode / maintenance gate. Blocks order intake while
+     * store_purchasing_enabled=false. Shared check for both authenticated and guest checkout.
+     */
+    private void assertPurchasingEnabled() {
+        if (!siteSettingService.getBoolSetting("store_purchasing_enabled", true)) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                "Mağaza şu anda test modundadır. Sipariş alımı geçici olarak kapalıdır. "
+                + "Anlayışınız için teşekkür ederiz.");
+        }
     }
 
     @Override
@@ -113,6 +129,7 @@ public class CheckoutServiceImpl implements CheckoutService {
 
     @Override
     public PlaceOrderResponse placeOrder(Long customerId, PlaceOrderRequest request, String ipAddress, String userAgent) {
+        assertPurchasingEnabled();
         if (!request.isDistanceSalesContractAccepted()) {
             throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Mesafeli satış sözleşmesini onaylamanız gerekiyor.");
         }
@@ -151,7 +168,8 @@ public class CheckoutServiceImpl implements CheckoutService {
 
     @Override
     public PlaceOrderResponse placeGuestOrder(GuestPlaceOrderRequest request, String ipAddress, String userAgent) {
-        // --- Doğrulama (6502 sayılı Tüketicinin Korunması + KVKK 6698) ---
+        assertPurchasingEnabled();
+        // --- Validation (Law No. 6502 on Consumer Protection + KVKK 6698) ---
         if (!request.isDistanceSalesContractAccepted()) {
             throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Mesafeli satış sözleşmesini onaylamanız gerekiyor.");
         }
@@ -162,14 +180,14 @@ public class CheckoutServiceImpl implements CheckoutService {
             throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "KVKK aydınlatma metnini onaylamanız gerekiyor.");
         }
 
-        // E-posta zaten kayıtlı mı?
+        // Is the email already registered?
         Optional<Customer> existing = customerRepository.findByEmail(request.getEmail().toLowerCase().trim());
         if (existing.isPresent()) {
             throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
                 "Bu e-posta ile daha önce kayıt olunmuş. Lütfen giriş yapın ya da farklı bir e-posta kullanın.");
         }
 
-        // Misafir sepeti bul
+        // Find the guest cart
         if (request.getSessionId() == null || request.getSessionId().isBlank()) {
             throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Sepet bulunamadı. Lütfen sayfayı yenileyin.");
         }
@@ -181,10 +199,10 @@ public class CheckoutServiceImpl implements CheckoutService {
             throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Sepetiniz boş. Lütfen ürün ekleyerek devam edin.");
         }
 
-        // --- Yeni müşteri kaydı oluştur (misafir) ---
+        // --- Create a new customer record (guest) ---
         Customer customer = new Customer();
         customer.setEmail(request.getEmail().toLowerCase().trim());
-        // Geçici rastgele şifre; müşteri "hesabımı tamamla" akışında gerçek şifresini belirleyecek
+        // Temporary random password; the customer will set their real password in the "complete my account" flow
         String tempPassword = UUID.randomUUID().toString();
         customer.setPasswordHash(passwordEncoder.encode(tempPassword));
         customer.setFirstName(request.getFirstName().trim());
@@ -193,7 +211,7 @@ public class CheckoutServiceImpl implements CheckoutService {
         customer.setEmailVerified(false);
         customer.setActive(true);
 
-        // "Hesabı tamamla" için password reset token mekanizmasını kullan (7 gün geçerli)
+        // Use the password reset token mechanism for "complete account" (valid for 7 days)
         String setupToken = UUID.randomUUID().toString();
         customer.setPasswordResetToken(setupToken);
         customer.setPasswordResetSentAt(LocalDateTime.now());
@@ -206,7 +224,7 @@ public class CheckoutServiceImpl implements CheckoutService {
         customer = customerRepository.save(customer);
         logger.info("Misafir müşteri oluşturuldu: id={}, email={}", customer.getId(), customer.getEmail());
 
-        // --- Teslimat ve fatura adreslerini oluştur ---
+        // --- Create shipping and billing addresses ---
         CustomerAddress shippingAddr = buildGuestAddress(customer, request, true);
         shippingAddr = addressRepository.save(shippingAddr);
 
@@ -219,12 +237,12 @@ public class CheckoutServiceImpl implements CheckoutService {
             billingAddr = addressRepository.save(billingAddr);
         }
 
-        // --- Misafir sepetini yeni müşteriye bağla ---
+        // --- Attach the guest cart to the new customer ---
         cart.setCustomer(customer);
         cart.setSessionId(null);
         cartRepository.save(cart);
 
-        // --- Siparişi oluştur (yasal sözleşme zaman damgaları snapshot olarak Order'a iliştirilir) ---
+        // --- Create the order (legal contract timestamps are attached to the Order as a snapshot) ---
         ConsentSnapshot consents = new ConsentSnapshot(
                 request.getDistanceSalesContractAcceptedAt(),
                 request.getPreliminaryInfoAcceptedAt(),
@@ -235,7 +253,7 @@ public class CheckoutServiceImpl implements CheckoutService {
                 request.getPaymentMethod(), request.getCustomerNote(),
                 ipAddress, userAgent, true, consents);
 
-        // --- "Hesabını tamamla" e-postası gönder ---
+        // --- Send the "complete your account" email ---
         try {
             emailService.sendCompleteAccountSetup(
                 customer.getEmail(),
@@ -252,12 +270,12 @@ public class CheckoutServiceImpl implements CheckoutService {
     }
 
     /**
-     * Üye ve misafir siparişlerinin ortak sipariş oluşturma mantığı.
+     * Shared order-creation logic for member and guest orders.
      */
     /**
-     * Yasal sözleşme kabul zaman damgalarını taşıyan immutable snapshot.
-     * Client tarafında yakalanan timestamp'ler (sözleşmeyi okuduğu an) bu kayda
-     * dahil edilir; null ise server-now() fallback'i kullanılır.
+     * Immutable snapshot carrying the legal contract acceptance timestamps.
+     * Timestamps captured on the client side (the moment the contract was read) are
+     * included in this record; if null, the server-now() fallback is used.
      */
     private record ConsentSnapshot(
             LocalDateTime distanceSalesAcceptedAt,
@@ -271,9 +289,15 @@ public class CheckoutServiceImpl implements CheckoutService {
                                                     String paymentMethod, String customerNote,
                                                     String ipAddress, String userAgent, boolean isGuest,
                                                     ConsentSnapshot consents) {
-        // Generate order number up-front so stock events created during reservation
-        // can reference the order that caused them.
-        String orderNumber = "ORD-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd")) + "-" + java.util.UUID.randomUUID().toString().substring(0, 6).toUpperCase();
+        // Order number — alphanumeric, NO dashes. Format: ORDYYYYMMDDXXXXXX
+        // Dashes would violate PayTR's merchant_oid format rules (only A-Z, 0-9
+        // accepted); also, some bank POS systems like NestPay/GVP restrict special
+        // characters. A single representation looks identical across the payment
+        // provider, the DB, support, and the customer email.
+        String orderNumber = "ORD"
+                + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"))
+                + java.util.UUID.randomUUID().toString().replace("-", "")
+                        .substring(0, 6).toUpperCase();
 
         // Calculate totals
         BigDecimal subtotal = BigDecimal.ZERO;
@@ -392,7 +416,7 @@ public class CheckoutServiceImpl implements CheckoutService {
         order.setCustomerNote(customerNote);
         order.setIpAddress(ipAddress);
         order.setUserAgent(userAgent);
-        // Yasal sözleşme kanıtları (client-side capture, yoksa server-now fallback)
+        // Legal contract evidence (client-side capture, server-now fallback otherwise)
         LocalDateTime now = LocalDateTime.now();
         order.setDistanceSalesContractAccepted(true);
         order.setDistanceSalesContractAcceptedAt(
@@ -405,7 +429,7 @@ public class CheckoutServiceImpl implements CheckoutService {
         if (consents != null && consents.kvkkConsentAt() != null) {
             order.setKvkkConsentAt(consents.kvkkConsentAt());
         } else if (customer.getKvkkConsentAt() != null) {
-            // Authenticated kullanıcı için customer'dan snapshot
+            // Snapshot from the customer for an authenticated user
             order.setKvkkConsentAt(customer.getKvkkConsentAt());
         }
 
@@ -440,7 +464,7 @@ public class CheckoutServiceImpl implements CheckoutService {
     }
 
     /**
-     * Misafir checkout request'inden CustomerAddress nesnesi oluşturur.
+     * Builds a CustomerAddress object from the guest checkout request.
      */
     private CustomerAddress buildGuestAddress(Customer customer, GuestPlaceOrderRequest request, boolean shipping) {
         CustomerAddress addr = new CustomerAddress();

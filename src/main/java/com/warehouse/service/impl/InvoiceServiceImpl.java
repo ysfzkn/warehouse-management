@@ -62,13 +62,13 @@ public class InvoiceServiceImpl implements InvoiceService {
     }
 
     /**
-     * Aktif (isEnabled()==true) olan ilk provider'ı döner.
-     * Hiçbiri aktif değilse MOCK provider'ı fallback olarak kullanılır.
+     * Returns the first enabled provider (isEnabled()==true).
+     * If none are enabled, the MOCK provider is used as a fallback.
      *
-     * <p><b>Production guard:</b> {@code invoice.mock-enabled=false} ise MOCK
-     * provider bean olarak yok; bu durumda fallback bulunmazsa null döner ve
-     * çağıran taraf "fatura sağlayıcı tanımlı değil" hatası fırlatır. Böylece
-     * prod'da yanlışlıkla sahte fatura kesmek imkansız.</p>
+     * <p><b>Production guard:</b> when {@code invoice.mock-enabled=false} the MOCK
+     * provider bean does not exist; in that case, if no fallback is found, null is
+     * returned and the caller throws an "invoice provider not defined" error. This
+     * makes it impossible to accidentally issue a fake invoice in production.</p>
      */
     private InvoiceProvider getActiveProvider() {
         return providers.stream()
@@ -83,7 +83,7 @@ public class InvoiceServiceImpl implements InvoiceService {
     @Override
     @Transactional
     public InvoiceDto createInvoiceForOrder(Long orderId) {
-        // Mevcut fatura var mı kontrol et
+        // Check whether an invoice already exists
         Optional<Invoice> existing = invoiceRepository.findByOrderId(orderId);
         if (existing.isPresent() && existing.get().getStatus() != InvoiceStatus.ERROR
                 && existing.get().getStatus() != InvoiceStatus.CANCELLED) {
@@ -160,7 +160,7 @@ public class InvoiceServiceImpl implements InvoiceService {
                 .orElseThrow(() -> new WarehouseManagementException(ErrorCode.INVOICE_NOT_FOUND,
                         "ID: " + originalInvoiceId));
 
-        // Doğrulama: orijinal APPROVED olmalı; iade faturası iade faturası kesilemez
+        // Validation: original must be APPROVED; a credit note cannot be issued against a credit note
         if (original.getStatus() != InvoiceStatus.APPROVED) {
             throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
                     "Sadece APPROVED faturalar için iade faturası kesilebilir (mevcut: "
@@ -171,8 +171,8 @@ public class InvoiceServiceImpl implements InvoiceService {
                     "Bir credit note'a karşı yeni credit note kesilemez.");
         }
 
-        // Aynı orijinal fatura için zaten bir credit note açıksa engelle (idempotency)
-        // (Repository'de bu sorgu yoksa basit findAll içinde filtre)
+        // Block if an active credit note already exists for the same original invoice (idempotency)
+        // (If the repository lacks this query, filter within a simple findAll)
         java.util.List<Invoice> existingCreditNotes = invoiceRepository
                 .findByCreditedInvoiceId(originalInvoiceId);
         boolean hasActiveCreditNote = existingCreditNotes.stream()
@@ -186,7 +186,7 @@ public class InvoiceServiceImpl implements InvoiceService {
         java.math.BigDecimal totalRefund = refundAmount != null
                 ? refundAmount
                 : original.getTotalAmount();
-        // Oranlı KDV: orijinal'de KDV/Toplam oranını koru
+        // Proportional VAT: preserve the original VAT/Total ratio
         java.math.BigDecimal vatRatio = (original.getVatAmount() != null && original.getTotalAmount() != null
                 && original.getTotalAmount().compareTo(java.math.BigDecimal.ZERO) > 0)
                 ? original.getVatAmount().divide(original.getTotalAmount(), 4, java.math.RoundingMode.HALF_UP)
@@ -195,7 +195,7 @@ public class InvoiceServiceImpl implements InvoiceService {
                 .setScale(2, java.math.RoundingMode.HALF_UP);
         java.math.BigDecimal refundSubtotal = totalRefund.subtract(refundVat);
 
-        // Yeni Invoice satırı — orijinalin alıcı + satıcı snapshot'ını korur
+        // New Invoice row — preserves the original's recipient + seller snapshot
         Invoice creditNote = Invoice.builder()
                 .order(original.getOrder())
                 .invoiceType(original.getInvoiceType())
@@ -224,8 +224,8 @@ public class InvoiceServiceImpl implements InvoiceService {
         logger.info("[Invoice] Credit note draft oluşturuldu: id={}, orijinal={}, tutar={}",
                 creditNote.getId(), original.getInvoiceNumber(), totalRefund);
 
-        // Sağlayıcıya gönder (UBL-TR ProfileID=IADE + BillingReference içerir,
-        // UblTrInvoiceBuilder otomatik olarak credit note formatını seçer)
+        // Send to the provider (UBL-TR contains ProfileID=IADE + BillingReference;
+        // UblTrInvoiceBuilder automatically selects the credit note format)
         return sendToProvider(creditNote);
     }
 
@@ -242,12 +242,12 @@ public class InvoiceServiceImpl implements InvoiceService {
     }
 
     /**
-     * Fatura PDF'i — Caffeine cache ile sağlayıcıya tekrar tekrar gitmeyiz
-     * (PDF'ler immutable, 24h cache güvenli). Müşteri "Faturamı indir" butonuna
-     * 10 kez bassa bile Logo SOAP'a sadece 1 kez gidilir.
+     * Invoice PDF — with a Caffeine cache we avoid hitting the provider repeatedly
+     * (PDFs are immutable, so a 24h cache is safe). Even if the customer clicks the
+     * "Download my invoice" button 10 times, Logo SOAP is called only once.
      *
-     * <p>Cache anahtarı: invoiceId. APPROVED durumdaki faturalar cache'lenir
-     * (DRAFT/PENDING için cache yok — değişebilir).</p>
+     * <p>Cache key: invoiceId. APPROVED invoices are cached
+     * (no caching for DRAFT/PENDING — they may change).</p>
      */
     @Override
     @Transactional(readOnly = true)
@@ -315,7 +315,7 @@ public class InvoiceServiceImpl implements InvoiceService {
                 logger.info("Fatura statüsü güncellendi: {} → {} (invoiceId={})",
                         oldStatus, result.getStatus(), inv.getId());
 
-                // PENDING → APPROVED geçişinde müşteriye mail
+                // On PENDING → APPROVED transition, email the customer
                 if (oldStatus == InvoiceStatus.PENDING && result.getStatus() == InvoiceStatus.APPROVED) {
                     notifyCustomerInvoiceReady(inv);
                 }
@@ -329,23 +329,23 @@ public class InvoiceServiceImpl implements InvoiceService {
     // === Private helpers ===
 
     private InvoiceDto createAndSendInvoice(Order order, InvoiceType type, String note) {
-        // Alıcı bilgilerini sipariş billing address snapshot'ından al
+        // Take recipient details from the order's billing address snapshot
         Map<String, Object> billing = order.getBillingAddressSnapshot();
         String recipientName = extractBillingField(billing, "firstName", "") + " " +
                 extractBillingField(billing, "lastName", "");
         String recipientAddress = buildRecipientAddress(billing);
 
-        // Kurumsal/bireysel tespiti: taxNumber veya companyName varsa kurumsal
+        // Corporate/individual detection: corporate if taxNumber or companyName is present
         String taxNumber = extractBillingField(billing, "taxNumber", "");
         String taxOffice = extractBillingField(billing, "taxOffice", "");
         String companyName = extractBillingField(billing, "companyName", "");
         String tcKimlikNo = extractBillingField(billing, "tcKimlikNo", "");
         boolean individual = companyName.isBlank() && taxNumber.isBlank();
 
-        // ── VKN/TCKN algoritmik doğrulama ──
-        // Logo'ya yanlış kimlik gönderirsek GİB reject eder. Burada erken yakalanır.
-        // Bireysel ise TCKN opsiyonel (e-Arşiv'de zorunlu değil); ama girilmişse geçerli olmalı.
-        // Tüzel ise VKN zorunlu ve doğru olmalı.
+        // ── Algorithmic VKN/TCKN validation ──
+        // If we send an invalid ID to Logo, GİB rejects it. Caught early here.
+        // For individuals, TCKN is optional (not mandatory for e-Arşiv); but if provided, it must be valid.
+        // For corporate entities, VKN is mandatory and must be valid.
         if (individual && !tcKimlikNo.isBlank()
                 && !com.warehouse.util.TurkishTaxIdValidator.isValidTckn(tcKimlikNo)) {
             throw new com.warehouse.exception.WarehouseManagementException(
@@ -361,11 +361,11 @@ public class InvoiceServiceImpl implements InvoiceService {
         InvoiceProvider activeProvider = getActiveProvider();
         String providerName = activeProvider != null ? activeProvider.getProviderName() : "NONE";
 
-        // E-Fatura vs E-Arşiv seçimi:
-        //   - Caller explicit bir tip verdiyse ona saygı göster
-        //   - Bireysel müşteri → E_ARSIV
-        //   - Tüzel müşteri: GİB'de e-Fatura mükellefi kayıtlıysa → E_FATURA,
-        //     değilse zorunlu E_ARSIV (yanlışsa Logo reddeder)
+        // E-Fatura vs E-Arşiv selection:
+        //   - If the caller passed an explicit type, honor it
+        //   - Individual customer → E_ARSIV
+        //   - Corporate customer: if registered as an e-Fatura taxpayer in GİB → E_FATURA,
+        //     otherwise E_ARSIV is required (Logo rejects it if wrong)
         InvoiceType resolvedType;
         if (type != null) {
             resolvedType = type;
@@ -406,7 +406,7 @@ public class InvoiceServiceImpl implements InvoiceService {
         logger.info("Fatura taslağı oluşturuldu: sipariş={}, tip={}, bireysel={}, provider={}",
                 order.getOrderNumber(), resolvedType, individual, providerName);
 
-        // Otomatik oluşturma aktif ise sağlayıcıya gönder
+        // If auto-generation is enabled, send to the provider
         boolean autoGenerate = "true".equalsIgnoreCase(settingService.getSetting("invoice_auto_generate"));
         if (autoGenerate) {
             return sendToProvider(invoice);
@@ -437,7 +437,7 @@ public class InvoiceServiceImpl implements InvoiceService {
                 return toDto(invoice);
             }
 
-            // Sipariş kalemleri (UBL-TR XML için)
+            // Order items (for the UBL-TR XML)
             Order order = invoice.getOrder();
             List<OrderItem> items = orderItemRepository.findByOrderId(order.getId());
 
@@ -453,8 +453,8 @@ public class InvoiceServiceImpl implements InvoiceService {
                 logger.warn("UBL XML üretilip kaydedilemedi (yine de provider'a iletilecek): {}", xmlEx.getMessage());
             }
 
-            // Order tablosundaki fatura numarasını önceden set et — böylece provider
-            // başarısız olsa bile müşteri "fatura hazırlanıyor" gösterimine sahip olabilir.
+            // Set the invoice number on the Order up front — so that even if the
+            // provider fails, the customer can still see an "invoice being prepared" state.
             order.setInvoiceNumber(invoice.getInvoiceNumber());
             orderRepository.save(order);
 
@@ -476,7 +476,7 @@ public class InvoiceServiceImpl implements InvoiceService {
                 logger.info("Fatura başarıyla oluşturuldu: {} (sipariş: {})",
                         invoice.getInvoiceNumber(), order.getOrderNumber());
 
-                // Müşteriye "Faturanız Hazır" bildirimi — sadece APPROVED olanlarda
+                // "Your Invoice Is Ready" notification to the customer — only for APPROVED ones
                 if (result.getStatus() == InvoiceStatus.APPROVED) {
                     notifyCustomerInvoiceReady(invoice);
                 }
@@ -498,7 +498,7 @@ public class InvoiceServiceImpl implements InvoiceService {
         return toDto(invoice);
     }
 
-    /** Fatura APPROVED olunca müşteriye "Faturanız Hazır" mail'i — hata mail akışını bloklamaz. */
+    /** When the invoice becomes APPROVED, send a "Your Invoice Is Ready" email to the customer — errors do not block the flow. */
     private void notifyCustomerInvoiceReady(Invoice invoice) {
         try {
             Order order = invoice.getOrder();
@@ -524,7 +524,7 @@ public class InvoiceServiceImpl implements InvoiceService {
         }
     }
 
-    /** Satıcı firma bilgileri — UBL-TR XML içi için site_settings'ten toplanır. */
+    /** Seller company info — collected from site_settings for use inside the UBL-TR XML. */
     private Map<String, String> getCompanyInfoMap() {
         String[] keys = {
                 "logo_company_vkn", "logo_company_title", "logo_company_tax_office",

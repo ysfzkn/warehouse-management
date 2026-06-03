@@ -18,19 +18,19 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Admin: üçüncü-taraf ürün sayfasından (örn. Profilo, Siemens) ürün fotoğraflarını
- * otomatik çekme/yükleme.
+ * Admin: automatically fetch/upload product photos from a third-party product page
+ * (e.g. Profilo, Siemens).
  *
- * <p>İki adımlı UX (admin onayı şart):
+ * <p>Two-step UX (admin approval required):
  * <ol>
- *   <li>{@code POST /api/admin/products/{id}/crawl-images/preview} — URL'den aday
- *       görselleri listeler (henüz yüklemez)</li>
- *   <li>{@code POST /api/admin/products/{id}/crawl-images/import} — admin'in seçtiği
- *       URL'leri indirir, ürünü güncelleyip ProductImage kayıtlarını oluşturur</li>
+ *   <li>{@code POST /api/admin/products/{id}/crawl-images/preview} — lists candidate
+ *       images from the URL (does not upload yet)</li>
+ *   <li>{@code POST /api/admin/products/{id}/crawl-images/import} — downloads the URLs
+ *       selected by the admin, updates the product, and creates ProductImage records</li>
  * </ol>
  *
- * <p>Çağrı başına basit rate-limit: aynı admin saniyede 1'den fazla preview/import
- * yapamaz (DoS / 3rd-party rate-limit'ten korur).
+ * <p>Simple per-call rate limit: the same admin cannot run more than 1 preview/import
+ * per second (protects against DoS / third-party rate limits).
  */
 @RestController
 @RequestMapping("/api/admin/products")
@@ -106,9 +106,9 @@ public class AdminProductCrawlerController {
     }
 
     /**
-     * Hotlink korumalı CDN görselleri için proxy: admin UI thumbnail'larında
-     * "HOTLINK IMAGE NOT FOUND" placeholder'ı yerine gerçek görseli göstermek için kullanılır.
-     * Backend Referer header'ını ekler, browser yapamadığı için.
+     * Proxy for hotlink-protected CDN images: used to display the real image instead of
+     * the "HOTLINK IMAGE NOT FOUND" placeholder in admin UI thumbnails.
+     * The backend adds the Referer header, since the browser cannot.
      */
     @GetMapping("/crawl-images/proxy")
     public ResponseEntity<byte[]> proxyImage(@RequestParam("url") String url,
@@ -129,14 +129,14 @@ public class AdminProductCrawlerController {
         }
     }
 
-    /** Saniyede 1 istek sınırı (basit, in-memory). */
+    /** 1-request-per-second limit (simple, in-memory). */
     private boolean rateLimited(String key) {
         long now = System.currentTimeMillis();
         Long last = rateLimitWindow.put(key, now);
         return last != null && (now - last) < RATE_LIMIT_WINDOW_MS;
     }
 
-    // ── DTO'lar ──
+    // ── DTOs ──
     public static class PreviewRequest {
         public String url;
     }
@@ -144,7 +144,7 @@ public class AdminProductCrawlerController {
         public List<String> imageUrls;
         public Boolean replaceExisting;
         public Boolean markFirstAsPrimary;
-        /** Hotlink korumalı CDN'ler (WitCDN/Fakir vb.) için Referer olarak kullanılacak orijinal sayfa URL'i. */
+        /** Original page URL to use as the Referer for hotlink-protected CDNs (WitCDN/Fakir etc.). */
         public String pageUrl;
     }
 }

@@ -18,10 +18,10 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Admin Kargonomi entegrasyon yardımcı endpoint'leri:
- *   - GET  /api/admin/cargo/balance            → hesap bakiyesi
- *   - GET  /api/admin/cargo/orders/{id}/label  → kargo etiketi PDF
- *   - POST /api/admin/cargo/webhook/register   → Kargonomi'ye webhook kaydet
+ * Admin Kargonomi integration helper endpoints:
+ *   - GET  /api/admin/cargo/balance            → account balance
+ *   - GET  /api/admin/cargo/orders/{id}/label  → shipment label PDF
+ *   - POST /api/admin/cargo/webhook/register   → register a webhook with Kargonomi
  */
 @RestController
 @RequestMapping("/api/admin/cargo")
@@ -42,7 +42,7 @@ public class AdminCargoApiController {
         this.adminSecurityService = adminSecurityService;
     }
 
-    /** Aktif sağlayıcının hesap bakiyesi (Kargonomi: {@code GET /user/credit}). */
+    /** Active provider's account balance (Kargonomi: {@code GET /user/credit}). */
     @GetMapping("/balance")
     public ResponseEntity<Map<String, Object>> getBalance() {
         Map<String, Object> out = new LinkedHashMap<>();
@@ -62,7 +62,7 @@ public class AdminCargoApiController {
         return ResponseEntity.ok(out);
     }
 
-    /** Sipariş için kargo etiketini PDF olarak indirir. */
+    /** Downloads the shipment label for an order as a PDF. */
     @GetMapping("/orders/{orderId}/label")
     public ResponseEntity<?> downloadLabel(@PathVariable Long orderId) {
         Order order = orderRepository.findById(orderId).orElse(null);
@@ -85,8 +85,8 @@ public class AdminCargoApiController {
     }
 
     /**
-     * Kargonomi'ye webhook kaydı — {@code shipment.updated} event'leri için.
-     * Security code zorunlu (credential değişikliği sayılır).
+     * Register a webhook with Kargonomi — for {@code shipment.updated} events.
+     * Security code required (counts as a credential change).
      */
     @PostMapping("/webhook/register")
     public ResponseEntity<Map<String, Object>> registerWebhook(
@@ -111,7 +111,7 @@ public class AdminCargoApiController {
         return ResponseEntity.ok(Map.of("success", ok, "callbackUrl", callbackUrl));
     }
 
-    /** Kayıtlı tüm webhook'ları listele. */
+    /** List all registered webhooks. */
     @GetMapping("/webhooks")
     public ResponseEntity<?> listWebhooks() {
         CargoApiProvider provider = cargoApiService.getActiveProvider();
@@ -121,7 +121,7 @@ public class AdminCargoApiController {
         return ResponseEntity.ok(Map.of("items", k.listWebhooks()));
     }
 
-    /** Webhook detayı (id ile). */
+    /** Webhook details (by id). */
     @GetMapping("/webhooks/{id}")
     public ResponseEntity<?> getWebhook(@PathVariable long id) {
         CargoApiProvider provider = cargoApiService.getActiveProvider();
@@ -132,7 +132,7 @@ public class AdminCargoApiController {
         return data != null ? ResponseEntity.ok(data) : ResponseEntity.notFound().build();
     }
 
-    /** Webhook güncelleme (url veya is_active). */
+    /** Update a webhook (url or is_active). */
     @org.springframework.web.bind.annotation.PutMapping("/webhooks/{id}")
     public ResponseEntity<?> updateWebhook(@PathVariable long id, @RequestBody Map<String, Object> body,
                                             @RequestHeader(value = "X-ADMIN-SECURITY-CODE", required = false) String securityCode) {
@@ -147,7 +147,7 @@ public class AdminCargoApiController {
         return ResponseEntity.ok(Map.of("success", ok));
     }
 
-    /** Webhook silme. */
+    /** Delete a webhook. */
     @org.springframework.web.bind.annotation.DeleteMapping("/webhooks/{id}")
     public ResponseEntity<?> deleteWebhook(@PathVariable long id,
                                             @RequestHeader(value = "X-ADMIN-SECURITY-CODE", required = false) String securityCode) {
@@ -161,8 +161,8 @@ public class AdminCargoApiController {
     }
 
     /**
-     * Reconciliation: Kargonomi tarafındaki son shipment'ları listele.
-     * Bizim DB'mizdeki ile karşılaştırmak için useful.
+     * Reconciliation: list the most recent shipments on the Kargonomi side.
+     * Useful for comparing against the ones in our DB.
      */
     @GetMapping("/shipments")
     public ResponseEntity<?> listShipments(@RequestParam(defaultValue = "1") int page) {
@@ -174,9 +174,9 @@ public class AdminCargoApiController {
     }
 
     /**
-     * İlk kurulumda Kargonomi'ye depo (gönderici adresi) kaydı yapar.
-     * Dönen warehouse_id site_settings'e {@code kargonomi_warehouse_id} olarak
-     * yazılır (admin manuel olarak da girebilir).
+     * Registers a warehouse (sender address) with Kargonomi during initial setup.
+     * The returned warehouse_id is written to site_settings as
+     * {@code kargonomi_warehouse_id} (the admin can also enter it manually).
      */
     @PostMapping("/warehouses")
     public ResponseEntity<?> registerWarehouse(

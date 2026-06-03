@@ -30,7 +30,7 @@ import java.util.regex.Pattern;
  * </ol>
  *
  * The structural path dramatically improves retrieval for Turkish KVKK /
- * policy / yönetmelik documents because each chunk is a single topic rather
+ * policy / regulation documents because each chunk is a single topic rather
  * than a multi-topic average.
  */
 @Component

@@ -15,16 +15,17 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Map;
 
 /**
- * KVKK Madde 11 (e) & GDPR Article 17 (right to erasure) + Article 20
- * (right to data portability) uyumu için müşteri hesap yönetimi endpoint'leri.
+ * Customer account management endpoints for compliance with KVKK Article 11 (e)
+ * & GDPR Article 17 (right to erasure) + Article 20 (right to data portability).
  *
- * Endpoint'ler:
+ * Endpoints:
  * <ul>
- *   <li>{@code GET  /api/store/account/data-export} — Müşterinin tüm PII'sini ve
- *       sipariş geçmişini JSON olarak indirir.</li>
- *   <li>{@code DELETE /api/store/account} — Hesabı anonimleştirir. Sipariş ve
- *       fatura geçmişi yasal saklama süresi gereği korunur, fakat tüm PII
- *       (ad, e-posta, telefon, adres) silinir. İşlem geri alınamaz.</li>
+ *   <li>{@code GET  /api/store/account/data-export} — Downloads all of the
+ *       customer's PII and order history as JSON.</li>
+ *   <li>{@code DELETE /api/store/account} — Anonymizes the account. Order and
+ *       invoice history is retained as required by the legal retention period,
+ *       but all PII (name, email, phone, address) is deleted. This operation
+ *       cannot be undone.</li>
  * </ul>
  */
 @RestController
@@ -46,9 +47,10 @@ public class StoreCustomerAccountController {
     }
 
     /**
-     * KVKK Madde 11 (e) — kişisel verilerin yurt içinde veya yurt dışında üçüncü
-     * kişilere aktarılıp aktarılmadığını bilme + verilerin işlenmesinin nedenleri
-     * hakkında bilgi alma hakkının teknik karşılığı.
+     * KVKK Article 11 (e) — the technical counterpart of the right to know
+     * whether personal data has been transferred to third parties domestically
+     * or abroad, plus the right to obtain information about the reasons for which
+     * the data is processed.
      */
     @GetMapping("/data-export")
     public ResponseEntity<?> exportData(HttpServletRequest request) {
@@ -70,9 +72,9 @@ public class StoreCustomerAccountController {
     }
 
     /**
-     * KVKK Madde 11 (e) — kişisel verilerin silinmesini isteme hakkı.
-     * Tipik yapı: aktif siparişi (PENDING/PAID/SHIPPING) olan hesaplar silinmez,
-     * önce siparişin tamamlanması veya iptal edilmesi gerekir.
+     * KVKK Article 11 (e) — the right to request deletion of personal data.
+     * Typical structure: accounts with active orders (PENDING/PAID/SHIPPING) are
+     * not deleted; the order must first be completed or cancelled.
      */
     @DeleteMapping
     public ResponseEntity<?> deleteAccount(HttpServletRequest request, @RequestBody(required = false) DeleteAccountRequest body) {
@@ -80,7 +82,7 @@ public class StoreCustomerAccountController {
         if (customerId == null) {
             return ResponseEntity.status(401).body(Map.of("message", "Giriş yapın"));
         }
-        // Çift onay için: client "DELETE_MY_DATA" sabitini gönderir
+        // For double confirmation: the client sends the constant "DELETE_MY_DATA"
         if (body == null || !"DELETE_MY_DATA".equals(body.confirmation)) {
             return ResponseEntity.badRequest().body(Map.of(
                     "message", "Hesap silme onayı eksik (confirmation alanı 'DELETE_MY_DATA' olmalı)."));
@@ -105,9 +107,9 @@ public class StoreCustomerAccountController {
 
     // ── DTO ──
     public static class DeleteAccountRequest {
-        /** Çift onay için sabit: "DELETE_MY_DATA". */
+        /** Constant for double confirmation: "DELETE_MY_DATA". */
         public String confirmation;
-        /** Opsiyonel açıklama. */
+        /** Optional description. */
         public String reason;
     }
 

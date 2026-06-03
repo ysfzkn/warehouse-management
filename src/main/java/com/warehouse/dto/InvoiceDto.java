@@ -23,30 +23,30 @@ public class InvoiceDto {
     private InvoiceType invoiceType;
     private InvoiceStatus status;
 
-    // Alıcı bilgileri
+    // Recipient information
     private String recipientName;
     private String recipientTaxId;
     private String recipientTaxOffice;
     private String recipientAddress;
 
-    // Tutar bilgileri
+    // Amount information
     private BigDecimal subtotal;
     private BigDecimal vatAmount;
     private BigDecimal totalAmount;
 
-    // Sağlayıcı bilgileri
+    // Provider information
     private String providerName;
     private String providerInvoiceId;
     private String errorMessage;
 
-    // Dosya
+    // File
     private String pdfUrl;
     private boolean hasPdf;
 
-    // Notlar
+    // Notes
     private String note;
 
-    // Tarihler
+    // Dates
     private LocalDateTime issuedAt;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

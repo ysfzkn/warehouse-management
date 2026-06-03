@@ -6,17 +6,17 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Dependency-free minimal PDF 1.4 üretici.
+ * Dependency-free minimal PDF 1.4 generator.
  *
- * <p>İtext / PDFBox eklemek istemediğimiz durumlarda (MOCK provider, basit
- * tahsilat makbuzu vs.) işe yarar — ASCII olarak yazılan, xref tablosu
- * doğru hesaplanmış, herhangi bir PDF reader'ın açabileceği geçerli bir PDF.
+ * <p>Useful when we do not want to add iText / PDFBox (MOCK provider, a simple
+ * payment receipt, etc.) — a valid PDF written as ASCII, with a correctly
+ * computed xref table, that any PDF reader can open.
  *
- * <p>Sadece tek sayfa + tek font (Helvetica) destekler. Her satır için
- * konum + metin al. Türkçe karakter desteği için WinAnsiEncoding (ISO 8859-1
- * eşdeğeri) kullanılır; tüm karakterler temel Latin-1 kümesine eşlenir.
+ * <p>Supports only a single page + a single font (Helvetica). Takes a position
+ * + text for each line. For Turkish character support, WinAnsiEncoding (the
+ * ISO 8859-1 equivalent) is used; all characters are mapped to the basic Latin-1 set.
  *
- * <p>Kullanım:
+ * <p>Usage:
  * <pre>
  * byte[] pdf = new SimplePdfBuilder()
  *     .line(50, 800, "MOCK E-FATURA", 18)
@@ -28,7 +28,7 @@ public class SimplePdfBuilder {
 
     private final List<String> contentOps = new ArrayList<>();
 
-    /** Varsayılan 12pt satır ekle. */
+    /** Add a line with the default 12pt size. */
     public SimplePdfBuilder line(int x, int y, String text) {
         return line(x, y, text, 12);
     }
@@ -40,7 +40,7 @@ public class SimplePdfBuilder {
     }
 
     public byte[] build() {
-        // ── Object'leri hazırla ──
+        // ── Prepare the objects ──
         // Obj 1: Catalog   → Pages 2
         // Obj 2: Pages     → Kids [3], Count 1
         // Obj 3: Page      → Parent 2, MediaBox, Contents 4, Resources Font F1=5
@@ -104,8 +104,8 @@ public class SimplePdfBuilder {
     }
 
     /**
-     * Türkçe karakter map'leme (WinAnsi/cp1252).
-     * Ayrıca parens ve backslash'ı kaçış karakteriyle değiştirir.
+     * Turkish character mapping (WinAnsi/cp1252).
+     * Also escapes parentheses and backslashes.
      */
     private String toWinAnsi(String s) {
         if (s == null) return "";
@@ -115,16 +115,16 @@ public class SimplePdfBuilder {
                 case '(' -> sb.append("\\(");
                 case ')' -> sb.append("\\)");
                 case '\\' -> sb.append("\\\\");
-                // Türkçe karakter yaklaşımı — WinAnsiEncoding'de olanlar kalır
+                // Turkish character approximation — those present in WinAnsiEncoding are kept
                 case 'ı' -> sb.append('i');
                 case 'İ' -> sb.append('I');
                 case 'ş' -> sb.append('s');
                 case 'Ş' -> sb.append('S');
                 case 'ğ' -> sb.append('g');
                 case 'Ğ' -> sb.append('G');
-                case 'ü' -> sb.append('ü');   // WinAnsi'de 0xFC
+                case 'ü' -> sb.append('ü');   // 0xFC in WinAnsi
                 case 'Ü' -> sb.append('Ü');
-                case 'ö' -> sb.append('ö');   // WinAnsi'de 0xF6
+                case 'ö' -> sb.append('ö');   // 0xF6 in WinAnsi
                 case 'Ö' -> sb.append('Ö');
                 case 'ç' -> sb.append('ç');
                 case 'Ç' -> sb.append('Ç');

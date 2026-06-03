@@ -693,12 +693,12 @@ public class StockServiceImpl implements StockService {
                 successCount++;
                 logger.debug("Stock deleted successfully with id: {}", id);
             } catch (WarehouseManagementException e) {
-                // Domain exception'ları yakala
+                // Catch domain exceptions
                 Stock stock = null;
                 try {
                     stock = getStockByIdOrThrow(id);
                 } catch (Exception ex) {
-                    // Stok bulunamadı
+                    // Stock not found
                 }
                 String stockInfo = stock != null
                         ? String.format("%s / %s (SKU: %s)",
@@ -715,12 +715,12 @@ public class StockServiceImpl implements StockService {
                         e.getMessage()));
                 logger.warn("Cannot delete stock with id {}: {}", id, e.getMessage());
             } catch (Exception e) {
-                // Diğer hatalar
+                // Other errors
                 Stock stock = null;
                 try {
                     stock = getStockByIdOrThrow(id);
                 } catch (Exception ex) {
-                    // Stok bulunamadı
+                    // Stock not found
                 }
                 String stockInfo = stock != null
                         ? String.format("%s / %s (SKU: %s)",

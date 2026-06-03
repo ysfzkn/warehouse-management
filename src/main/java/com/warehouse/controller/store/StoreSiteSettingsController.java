@@ -35,6 +35,20 @@ public class StoreSiteSettingsController {
         return serveSiteAsset("site_favicon");
     }
 
+    /**
+     * Bank transfer/EFT FAST QR image — for the customer on the checkout page.
+     * Fetches from the site_settings.bank_transfer_qr_image storage key.
+     */
+    @GetMapping("/bank-transfer-qr")
+    public ResponseEntity<byte[]> viewBankTransferQr() {
+        // QR enabled check — don't serve if the admin turned it off
+        String enabled = siteSettingService.getSetting("bank_transfer_qr_enabled");
+        if (!"true".equalsIgnoreCase(enabled)) {
+            return ResponseEntity.notFound().build();
+        }
+        return serveSiteAsset("bank_transfer_qr_image");
+    }
+
     private ResponseEntity<byte[]> serveSiteAsset(String settingKey) {
         String path = siteSettingService.getSetting(settingKey);
         if (path == null || path.isEmpty() || path.contains("..") || path.contains("~")) {

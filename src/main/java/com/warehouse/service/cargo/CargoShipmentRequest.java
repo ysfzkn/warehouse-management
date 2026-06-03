@@ -9,7 +9,7 @@ import java.math.BigDecimal;
 import java.util.List;
 
 /**
- * Kargo gönderimi oluşturma isteği. Provider-agnostik format.
+ * Cargo shipment creation request. Provider-agnostic format.
  */
 @Data
 @Builder
@@ -17,18 +17,18 @@ import java.util.List;
 @AllArgsConstructor
 public class CargoShipmentRequest {
 
-    /** Sipariş numarası - referans için (bizim sistemde) */
+    /** Order number - for reference (in our system) */
     private String orderNumber;
 
-    /** İç sipariş ID */
+    /** Internal order ID */
     private Long orderId;
 
-    // --- Alıcı bilgileri ---
+    // --- Recipient information ---
     private String recipientName;
     private String recipientPhone;
     private String recipientEmail;
 
-    // --- Teslimat adresi ---
+    // --- Delivery address ---
     private String recipientAddress;
     private String recipientCity;
     private String recipientDistrict;
@@ -36,7 +36,7 @@ public class CargoShipmentRequest {
     /** "TR" */
     private String recipientCountryCode;
 
-    // --- Gönderici (mağaza) bilgileri ---
+    // --- Sender (store) information ---
     private String senderName;
     private String senderPhone;
     private String senderAddress;
@@ -44,33 +44,33 @@ public class CargoShipmentRequest {
     private String senderDistrict;
     private String senderPostalCode;
 
-    // --- Paket bilgileri ---
-    /** Paket sayısı (birden fazla koli olabilir) */
+    // --- Package information ---
+    /** Package count (there may be more than one parcel) */
     private Integer packageCount;
-    /** Toplam ağırlık (kg) */
+    /** Total weight (kg) */
     private BigDecimal totalWeightKg;
-    /** Toplam desi (hacim ağırlığı) */
+    /** Total desi (volumetric weight) */
     private BigDecimal totalDesi;
-    /** Paket içeriği açıklaması */
+    /** Package content description */
     private String contentDescription;
 
-    /** Sipariş tutarı (kapıda ödeme için önemli) */
+    /** Order amount (important for cash on delivery) */
     private BigDecimal orderAmount;
 
-    /** Kapıda ödeme? */
+    /** Cash on delivery? */
     private boolean cashOnDelivery;
     private BigDecimal cashOnDeliveryAmount;
 
-    // --- Kargo tercih ---
-    /** Kargonomi için: belirli bir taşıyıcı tercihi ("yurtici", "aras" vb.) */
+    // --- Cargo preference ---
+    /** For Kargonomi: a specific carrier preference ("yurtici", "aras", etc.) */
     private String preferredCarrier;
-    /** Servis tipi: STANDARD, EXPRESS, NEXT_DAY vb. */
+    /** Service type: STANDARD, EXPRESS, NEXT_DAY, etc. */
     private String serviceType;
 
-    /** Ek notlar (teslimatçıya) */
+    /** Additional notes (to the courier) */
     private String deliveryNote;
 
-    /** Sipariş kalemleri (opsiyonel - bazı API'ler detay ister) */
+    /** Order items (optional - some APIs require details) */
     private List<ShipmentItem> items;
 
     @Data

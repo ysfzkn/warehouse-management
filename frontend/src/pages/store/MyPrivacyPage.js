@@ -4,11 +4,11 @@ import axios from 'axios';
 import { useToast } from '../../components/store/Toast';
 
 /**
- * KVKK Madde 11 (e) — kişisel verilerin korunması haklarınız:
- *   • Verilerinizi indirme (data portability / GDPR Article 20)
- *   • Hesabınızı silme talebi (right to erasure / GDPR Article 17)
+ * KVKK Article 11(e) — your personal data protection rights:
+ *   • Download your data (data portability / GDPR Article 20)
+ *   • Request account deletion (right to erasure / GDPR Article 17)
  *
- * Authenticated customer'lar `/hesabim/gizlilik` üzerinden bu sayfaya erişir.
+ * Authenticated customers reach this page via `/hesabim/gizlilik`.
  */
 export default function MyPrivacyPage() {
   const navigate = useNavigate();
@@ -83,7 +83,7 @@ export default function MyPrivacyPage() {
         KVKK Madde 11 ve GDPR kapsamında kişisel verileriniz üzerindeki haklarınızı buradan kullanabilirsiniz.
       </p>
 
-      {/* ── Veri İhracı ── */}
+      {/* ── Data Export ── */}
       <div className="card mb-3">
         <div className="card-body">
           <h2 className="h6 fw-semibold mb-2">
@@ -100,7 +100,7 @@ export default function MyPrivacyPage() {
         </div>
       </div>
 
-      {/* ── Hesap Silme ── */}
+      {/* ── Account Deletion ── */}
       <div className="card border-danger">
         <div className="card-body">
           <h2 className="h6 fw-semibold mb-2 text-danger">

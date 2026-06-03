@@ -66,7 +66,7 @@ public class StockImportHistory {
     private String errorMessage;
 
     @Column(name = "failed_rows", columnDefinition = "TEXT")
-    private String failedRows; // JSON formatında başarısız satır bilgileri
+    private String failedRows; // failed row details in JSON format
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;

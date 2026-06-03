@@ -18,10 +18,10 @@ public class CartDto {
     private String couponDescription;
 
     /**
-     * KDV oranı bazlı kırılım (Türkiye e-ticaret standardı).
-     * Fiyatlar KDV dahildir; bu breakdown sepet özetinde "KDV (%18): X TL"
-     * şeklinde göstermek ve fatura sırasında ayrıştırmak için kullanılır.
-     * Anahtar: oran (örn. "20.00"), değer: o oran üzerinden hesaplanan KDV tutarı.
+     * VAT-rate-based breakdown (Turkish e-commerce standard).
+     * Prices are VAT-inclusive; this breakdown is used to display lines such as
+     * "VAT (18%): X TL" in the cart summary and to itemize them on the invoice.
+     * Key: rate (e.g. "20.00"), value: the VAT amount computed at that rate.
      */
     @Builder.Default
     private java.util.Map<String, BigDecimal> vatBreakdown = java.util.Collections.emptyMap();

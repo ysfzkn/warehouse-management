@@ -5,15 +5,15 @@ import org.springframework.context.ApplicationEvent;
 import java.math.BigDecimal;
 
 /**
- * Sipariş iadesi tamamlandı event'i.
+ * Event signaling that an order return has been completed.
  *
- * <p>Tipik tetikleyici: admin RETURN_REQUESTED → RETURNED ya da REFUNDED'a geçirir.
- * Abonesi: {@code InvoiceCancellationListener} → e-Arşiv için doğrudan iptal,
- * e-Fatura için credit note (iade faturası) kesimi.</p>
+ * <p>Typical trigger: an admin moves RETURN_REQUESTED → RETURNED or REFUNDED.
+ * Subscriber: {@code InvoiceCancellationListener} → direct cancellation for e-Arşiv,
+ * credit note (return invoice) issuance for E-Fatura.</p>
  *
- * <p>Türkiye mevzuatı: e-Arşiv 8 gün içinde iptal edilebilir; daha sonra
- * "iade faturası" (credit note) kesilmelidir. e-Fatura kesilmiş bir belgenin
- * iadesi her zaman credit note ile yapılır — orijinal fatura silinmez.</p>
+ * <p>Turkey regulations: an e-Arşiv invoice can be cancelled within 8 days; afterwards
+ * a "return invoice" (credit note) must be issued. The return of an issued E-Fatura
+ * document is always handled via a credit note — the original invoice is not deleted.</p>
  */
 public class OrderReturnedEvent extends ApplicationEvent {
 

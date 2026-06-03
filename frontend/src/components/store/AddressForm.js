@@ -16,9 +16,24 @@ function validateTcKimlik(tc) {
   return total % 10 === d[10];
 }
 
-// Phone format: 05XX XXX XX XX
+// Phone format: 05XX XXX XX XX (canonical) or +90 5XX XXX XX XX (international)
+// Both forms are accepted; normalized to 05XXXXXXXXX for storage.
+
+/** "+905312345678", "905312345678", "5312345678" → "05312345678" */
+function normalizePhoneDigits(val) {
+  let digits = (val || '').replace(/\D/g, '');
+  // Strip the +90 / 90 prefix if present and prepend 0
+  if (digits.startsWith('90') && digits.length >= 12) {
+    digits = '0' + digits.slice(2);
+  } else if (digits.length === 10 && digits.startsWith('5')) {
+    // Only operator + number entered (5XX...) — prepend 0
+    digits = '0' + digits;
+  }
+  return digits.slice(0, 11);
+}
+
 function formatPhone(val) {
-  const digits = val.replace(/\D/g, '').slice(0, 11);
+  const digits = normalizePhoneDigits(val);
   if (digits.length <= 4) return digits;
   if (digits.length <= 7) return digits.slice(0, 4) + ' ' + digits.slice(4);
   if (digits.length <= 9) return digits.slice(0, 4) + ' ' + digits.slice(4, 7) + ' ' + digits.slice(7);
@@ -26,11 +41,11 @@ function formatPhone(val) {
 }
 
 function validatePhone(phone) {
-  const digits = phone.replace(/\D/g, '');
-  return /^(05)\d{9}$/.test(digits);
+  const digits = normalizePhoneDigits(phone);
+  return /^05\d{9}$/.test(digits);
 }
 
-// İller artık `data/tr-locations.js`'ten geliyor (cascading select için ilçe veri seti).
+// Provinces now come from `data/tr-locations.js` (district dataset for the cascading select).
 const CITIES = TR_PROVINCES;
 
 export default function AddressForm({ onSubmit, initialData, submitLabel, onCancel }) {
@@ -58,7 +73,7 @@ export default function AddressForm({ onSubmit, initialData, submitLabel, onCanc
     if (touched.lastName && !form.lastName.trim()) e.lastName = 'Soyad zorunludur';
     if (touched.phone) {
       if (!form.phone.trim()) e.phone = 'Telefon zorunludur';
-      else if (!validatePhone(form.phone)) e.phone = 'Geçerli bir telefon girin (05XX XXX XX XX)';
+      else if (!validatePhone(form.phone)) e.phone = 'Geçerli bir telefon girin (0532 XXX XX XX veya +90 532 XXX XX XX)';
     }
     if (touched.city && !form.city) e.city = 'İl seçiniz';
     if (touched.district && !form.district.trim()) e.district = 'İlçe zorunludur';
@@ -108,7 +123,7 @@ export default function AddressForm({ onSubmit, initialData, submitLabel, onCanc
     <form onSubmit={handleSubmit} noValidate>
       <div className="row g-3">
 
-        {/* ── Adres Başlığı ── */}
+        {/* ── Address Title ── */}
         <div className="col-12">
           <label className="form-label small fw-semibold"><FiHome size={14} className="me-1 text-primary" />Adres Başlığı</label>
           <div className="d-flex gap-2 flex-wrap">
@@ -130,7 +145,7 @@ export default function AddressForm({ onSubmit, initialData, submitLabel, onCanc
           </div>
         </div>
 
-        {/* ── Kişisel Bilgiler ── */}
+        {/* ── Personal Information ── */}
         <div className="col-12"><hr className="my-1" /><div className="small fw-semibold text-muted"><FiUser size={13} className="me-1" />Kişisel Bilgiler</div></div>
 
         <div className="col-md-6">
@@ -202,7 +217,7 @@ export default function AddressForm({ onSubmit, initialData, submitLabel, onCanc
           <div className="text-muted" style={{ fontSize: '0.7rem', marginTop: 2 }}>Fatura ve kargo işlemleri için kullanılır</div>
         </div>
 
-        {/* ── Adres Bilgileri ── */}
+        {/* ── Address Information ── */}
         <div className="col-12"><hr className="my-1" /><div className="small fw-semibold text-muted"><FiMapPin size={13} className="me-1" />Adres Bilgileri</div></div>
 
         <div className="col-md-4">
@@ -210,7 +225,7 @@ export default function AddressForm({ onSubmit, initialData, submitLabel, onCanc
           <select className={`form-select ${touched.city ? (errors.city ? 'is-invalid' : form.city ? 'is-valid' : '') : ''}`}
             value={form.city}
             onChange={e => {
-              // İl değişince ilçe seçimi geçersiz olur — temizle
+              // Changing the province invalidates the district selection — clear it
               if (e.target.value !== form.city) {
                 setForm(prev => ({ ...prev, city: e.target.value, district: '' }));
                 setErrors(prev => ({ ...prev, city: '', district: '' }));
@@ -228,7 +243,7 @@ export default function AddressForm({ onSubmit, initialData, submitLabel, onCanc
           {(() => {
             const districts = getDistrictsForProvince(form.city);
             if (districts.length > 0) {
-              // İl seçildi ve elimizde ilçe listesi var — cascading select
+              // Province selected and we have a district list — cascading select
               return (
                 <select className={`form-select ${touched.district ? (errors.district ? 'is-invalid' : form.district ? 'is-valid' : '') : ''}`}
                   value={form.district}
@@ -239,7 +254,7 @@ export default function AddressForm({ onSubmit, initialData, submitLabel, onCanc
                 </select>
               );
             }
-            // İl seçilmedi veya küçük il (veri yok) — free text fallback
+            // No province selected or a small province (no data) — free text fallback
             return (
               <input className={inputClass('district')} value={form.district}
                 onChange={e => f('district', e.target.value)} onBlur={() => touch('district')}
@@ -274,7 +289,7 @@ export default function AddressForm({ onSubmit, initialData, submitLabel, onCanc
             placeholder="34000" inputMode="numeric" maxLength={5} />
         </div>
 
-        {/* ── Kurumsal Fatura ── */}
+        {/* ── Corporate Invoice ── */}
         <div className="col-12">
           <div className="d-flex align-items-center gap-2 p-2 rounded" style={{ background: showBilling ? '#eff6ff' : '#f8fafc', border: `1px solid ${showBilling ? '#bfdbfe' : '#e2e8f0'}`, cursor: 'pointer', transition: 'all 0.2s' }}
             onClick={() => setShowBilling(!showBilling)}>

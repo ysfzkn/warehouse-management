@@ -10,16 +10,16 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 
 /**
- * Netgsm SMS sağlayıcısı.
+ * Netgsm SMS provider.
  * https://www.netgsm.com.tr/dokuman/
  *
- * Yapılandırma (site_settings tablosundan):
+ * Configuration (from the site_settings table):
  * - sms_provider = "NETGSM"
- * - netgsm_username (kullanıcı kodu)
+ * - netgsm_username (user code)
  * - netgsm_password
- * - netgsm_sender (onaylı header, örn "MAGAZAM")
+ * - netgsm_sender (approved header, e.g. "MAGAZAM")
  *
- * Not: Netgsm gönderimleri için onaylı header gerekir.
+ * Note: Netgsm deliveries require an approved header.
  */
 @Component
 public class NetgsmSmsProvider implements SmsProvider {
@@ -53,7 +53,7 @@ public class NetgsmSmsProvider implements SmsProvider {
         String sender = settingService.getSetting("netgsm_sender");
         if (sender == null || sender.isBlank()) sender = DEFAULT_SENDER;
 
-        // Telefon numarasını normalize et (+90 / 0 prefix kaldır)
+        // Normalize the phone number (strip +90 / 0 prefix)
         String normalizedPhone = normalizePhone(phoneNumber);
         if (normalizedPhone == null) {
             return SmsSendResult.failure(getProviderName(), "INVALID_PHONE",
@@ -75,7 +75,7 @@ public class NetgsmSmsProvider implements SmsProvider {
             ResponseEntity<String> response = restTemplate.exchange(API_URL, HttpMethod.POST, entity, String.class);
             String body = response.getBody();
 
-            // Netgsm API yanıtı: "00 BULKID" = başarı, "20", "30", "40" vb. = hata
+            // Netgsm API response: "00 BULKID" = success, "20", "30", "40" etc. = error
             if (body != null && body.startsWith("00")) {
                 String bulkId = body.length() > 3 ? body.substring(3).trim() : "";
                 logger.info("Netgsm SMS gönderildi: phone={}, bulkId={}", normalizedPhone, bulkId);
@@ -104,14 +104,14 @@ public class NetgsmSmsProvider implements SmsProvider {
             && password != null && !password.isBlank();
     }
 
-    /** "+905551234567" veya "05551234567" -> "5551234567" (10 haneli) */
+    /** "+905551234567" or "05551234567" -> "5551234567" (10 digits) */
     private String normalizePhone(String phone) {
         if (phone == null) return null;
         String digits = phone.replaceAll("\\D", "");
         if (digits.startsWith("90")) digits = digits.substring(2);
         if (digits.startsWith("0")) digits = digits.substring(1);
         if (digits.length() != 10) return null;
-        if (!digits.startsWith("5")) return null; // GSM numarası 5 ile başlamalı
+        if (!digits.startsWith("5")) return null; // a GSM number must start with 5
         return digits;
     }
 

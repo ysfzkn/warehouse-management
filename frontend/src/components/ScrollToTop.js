@@ -2,36 +2,36 @@ import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 
 /**
- * Sayfa rotası değiştiğinde otomatik olarak en üste scroll eder.
+ * Automatically scrolls to the top when the page route changes.
  *
- * React Router default davranışı: route değişiminde scroll position korunur.
- * Bu, modal açma/kapama gibi durumlar için doğru, ama tam sayfa geçişlerinde
- * (ürün listesinden detaya, kategoriden ürüne vb.) kötü UX yaratır — kullanıcı
- * önceki sayfanın aşağısında kalır ve yeni sayfanın başlığını görmek için
- * elle yukarı kaydırmak zorunda kalır.
+ * Default React Router behavior: scroll position is preserved on route change.
+ * That is correct for cases like opening/closing a modal, but for full page
+ * transitions (product list to detail, category to product, etc.) it creates
+ * poor UX — the user stays at the bottom of the previous page and has to
+ * manually scroll up to see the new page's heading.
  *
- * Davranış:
- *   - pathname değiştiğinde scroll Y → 0
- *   - search/hash değişiminde scroll ETKİLENMEZ (filtre değiştirme, anchor link)
- *   - state.preserveScroll === true ise scroll korunur (back button, modal close)
- *   - Reduced motion tercihi varsa instant; yoksa smooth scroll
+ * Behavior:
+ *   - On pathname change, scroll Y → 0
+ *   - Scroll is NOT affected by search/hash changes (filter change, anchor link)
+ *   - Scroll is preserved when state.preserveScroll === true (back button, modal close)
+ *   - Instant if reduced-motion is preferred; otherwise smooth scroll
  *
- * Uygulama: <BrowserRouter> içinde, <Routes>'tan önce sadece bir tane.
+ * Usage: a single instance inside <BrowserRouter>, before <Routes>.
  */
 export default function ScrollToTop() {
   const { pathname, state } = useLocation();
 
   useEffect(() => {
-    // Modal kapatma, geri tuşu vb. durumlarda scroll korunsun
+    // Preserve scroll for cases like closing a modal, back button, etc.
     if (state && state.preserveScroll) return;
 
-    // Reduced motion tercihine saygı
+    // Respect the reduced-motion preference
     const reducedMotion =
       typeof window !== 'undefined' &&
       window.matchMedia &&
       window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-    // İçeriğin DOM'a girmesi için 1 frame bekle — Layout shift'i önler
+    // Wait 1 frame for the content to enter the DOM — prevents layout shift
     requestAnimationFrame(() => {
       try {
         window.scrollTo({
@@ -40,7 +40,7 @@ export default function ScrollToTop() {
           behavior: reducedMotion ? 'auto' : 'smooth',
         });
       } catch {
-        // Eski tarayıcı fallback
+        // Fallback for older browsers
         window.scrollTo(0, 0);
       }
     });

@@ -18,18 +18,18 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Her gün sabah 08:00'da admin'e e-fatura durum özeti gönderir.
+ * Sends a daily e-Fatura status digest to the admin every morning at 08:00.
  *
- * <p>Özet içeriği:
+ * <p>Digest contents:
  * <ul>
- *   <li>Son 24 saat içinde ERROR / REJECTED olan faturalar</li>
- *   <li>24 saatten uzun süredir PENDING'de kalmış faturalar</li>
+ *   <li>Invoices that became ERROR / REJECTED within the last 24 hours</li>
+ *   <li>Invoices stuck in PENDING for more than 24 hours</li>
  * </ul>
  *
- * <p>Hiç sorun yoksa mail gönderilmez (zero-noise digest).
+ * <p>If there are no issues, no mail is sent (zero-noise digest).
  *
- * <p>Alıcı: {@code invoice_admin_digest_email} site_setting'i; boşsa
- * {@code contact_form_email} kullanılır.
+ * <p>Recipient: the {@code invoice_admin_digest_email} site_setting; if blank,
+ * {@code contact_form_email} is used.
  */
 @Component
 @Profile("!test")
@@ -50,8 +50,8 @@ public class InvoiceAdminDigestJob {
     }
 
     /**
-     * Her gün 08:00'da Türkiye saati (Europe/Istanbul).
-     * Cron: saniye dakika saat gün ay haftagünü
+     * Every day at 08:00 Turkey time (Europe/Istanbul).
+     * Cron: second minute hour day month day-of-week
      */
     @Scheduled(cron = "0 0 8 * * *", zone = "Europe/Istanbul")
     @SchedulerLock(name = "invoiceAdminDigest", lockAtMostFor = "PT5M", lockAtLeastFor = "PT1M")

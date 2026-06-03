@@ -1,36 +1,36 @@
 package com.warehouse.service;
 
 /**
- * Stokta yoksa bildir servisi.
+ * Back-in-stock notification service.
  *
- * Kullanım:
- * 1. Müşteri stoku biten ürün için `subscribe()` çağırır
- * 2. Stok güncellendiğinde `checkAndNotifyProduct()` çağrılır (scheduled job veya hook)
- * 3. Ürün tekrar stoktaysa tüm abonelere e-posta gönderilir ve notified=true yapılır
+ * Usage:
+ * 1. Customer calls `subscribe()` for an out-of-stock product
+ * 2. When stock is updated, `checkAndNotifyProduct()` is called (scheduled job or hook)
+ * 3. If the product is back in stock, all subscribers are emailed and marked notified=true
  */
 public interface StockNotificationService {
 
     /**
-     * Bir ürün için stok bildirimine abone olur.
-     * Aynı e-posta + ürün için zaten aktif abonelik varsa idempotent (hata fırlatmaz).
+     * Subscribes to a stock notification for a product.
+     * Idempotent if an active subscription already exists for the same email + product (does not throw).
      *
-     * @return true: yeni abonelik oluşturuldu; false: zaten vardı
+     * @return true: a new subscription was created; false: it already existed
      */
     boolean subscribe(Long productId, String email, Long customerId);
 
     /**
-     * Belirli bir ürünün stok durumunu kontrol eder;
-     * stoktaysa bekleyen tüm aboneliklere bildirim gönderir ve notified=true işaretler.
+     * Checks the stock status of a specific product;
+     * if in stock, notifies all pending subscriptions and marks them notified=true.
      *
-     * @return bildirim gönderilen abonelik sayısı
+     * @return the number of subscriptions notified
      */
     int checkAndNotifyProduct(Long productId);
 
     /**
-     * Bekleyen abonelikleri olan tüm ürünleri kontrol eder.
-     * Scheduled job tarafından çağrılır.
+     * Checks all products that have pending subscriptions.
+     * Called by a scheduled job.
      *
-     * @return toplam gönderilen bildirim sayısı
+     * @return the total number of notifications sent
      */
     int processPendingSubscriptions();
 }

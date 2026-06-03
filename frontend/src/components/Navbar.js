@@ -836,7 +836,7 @@ const Navbar = () => {
                 </Link>
               </li>
               
-              {/* ── E-TİCARET DROPDOWN ── */}
+              {/* ── E-COMMERCE DROPDOWN ── */}
               {role === 'ADMIN' && (
               <li className="nav-item dropdown">
                 <button className="nav-link nav-link-custom dropdown-toggle text-white border-0 bg-transparent w-100 text-start" type="button" data-bs-toggle="dropdown"
@@ -862,7 +862,7 @@ const Navbar = () => {
               </li>
               )}
 
-              {/* ── AYARLAR DROPDOWN ── */}
+              {/* ── SETTINGS DROPDOWN ── */}
               {role === 'ADMIN' && (
               <li className="nav-item dropdown">
                 <button className="nav-link nav-link-custom dropdown-toggle text-white border-0 bg-transparent w-100 text-start" type="button" data-bs-toggle="dropdown"

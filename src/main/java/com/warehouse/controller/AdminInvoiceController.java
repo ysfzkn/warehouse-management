@@ -30,7 +30,7 @@ public class AdminInvoiceController {
     private final InvoiceService invoiceService;
 
     /**
-     * Fatura listesi (filtrelenebilir, sayfalanabilir).
+     * Invoice list (filterable, paginated).
      */
     @GetMapping
     @Transactional(readOnly = true)
@@ -62,7 +62,7 @@ public class AdminInvoiceController {
     }
 
     /**
-     * Tek fatura detayı.
+     * Single invoice detail.
      */
     @GetMapping("/{id}")
     @Transactional(readOnly = true)
@@ -73,7 +73,7 @@ public class AdminInvoiceController {
     }
 
     /**
-     * Sipariş ID ile fatura detayı.
+     * Invoice detail by order ID.
      */
     @GetMapping("/by-order/{orderId}")
     @Transactional(readOnly = true)
@@ -84,7 +84,7 @@ public class AdminInvoiceController {
     }
 
     /**
-     * Sipariş için fatura oluştur (otomatik veya manuel).
+     * Create an invoice for an order (automatic or manual).
      */
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
@@ -95,7 +95,7 @@ public class AdminInvoiceController {
     }
 
     /**
-     * Sipariş ID ile otomatik fatura oluştur.
+     * Create an invoice automatically by order ID.
      */
     @PostMapping("/auto/{orderId}")
     @PreAuthorize("hasRole('ADMIN')")
@@ -106,7 +106,7 @@ public class AdminInvoiceController {
     }
 
     /**
-     * Faturayı yeniden oluştur (hata durumunda).
+     * Regenerate the invoice (in case of an error).
      */
     @PostMapping("/{id}/regenerate")
     @PreAuthorize("hasRole('ADMIN')")
@@ -117,7 +117,7 @@ public class AdminInvoiceController {
     }
 
     /**
-     * Faturayı iptal et.
+     * Cancel the invoice.
      */
     @PostMapping("/{id}/cancel")
     @PreAuthorize("hasRole('ADMIN')")
@@ -128,15 +128,15 @@ public class AdminInvoiceController {
     }
 
     /**
-     * İade faturası (Credit Note) oluştur.
+     * Create a return invoice (Credit Note).
      *
-     * <p>Türkiye e-fatura iade kuralları:
+     * <p>Turkey e-invoice return rules:
      * <ul>
-     *   <li>e-Arşiv 8 gün içinde → {@code /cancel} endpoint'i kullanın (CANCELEARCHIVEINVOICE)</li>
-     *   <li>e-Fatura veya 8 gün geçmiş e-Arşiv → bu endpoint (yeni IADE faturası kesilir)</li>
+     *   <li>e-Arşiv within 8 days → use the {@code /cancel} endpoint (CANCELEARCHIVEINVOICE)</li>
+     *   <li>E-Fatura or e-Arşiv past 8 days → this endpoint (a new IADE invoice is issued)</li>
      * </ul>
-     * Otomatik olarak da RETURNED/REFUNDED order status değişimi sonrası
-     * {@code InvoiceCancellationListener} tetiklenir; bu endpoint manuel/retry için.</p>
+     * It is also triggered automatically via {@code InvoiceCancellationListener} after a
+     * RETURNED/REFUNDED order status change; this endpoint is for manual/retry use.</p>
      */
     @PostMapping("/{id}/credit-note")
     @PreAuthorize("hasRole('ADMIN')")
@@ -150,16 +150,16 @@ public class AdminInvoiceController {
         return ResponseEntity.ok(creditNote);
     }
 
-    /** Manuel credit note için request body. */
+    /** Request body for a manual credit note. */
     public static class CreditNoteRequest {
-        /** Null ise orijinal faturanın tamamı iade edilir. */
+        /** If null, the full original invoice amount is refunded. */
         public java.math.BigDecimal refundAmount;
-        /** UBL Note alanına yazılacak iade nedeni. */
+        /** Return reason to be written to the UBL Note field. */
         public String reason;
     }
 
     /**
-     * Fatura PDF indir.
+     * Download the invoice PDF.
      */
     @GetMapping("/{id}/pdf")
     @Transactional(readOnly = true)

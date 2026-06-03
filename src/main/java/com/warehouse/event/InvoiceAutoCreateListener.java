@@ -10,19 +10,19 @@ import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 /**
- * Sipariş ödenince fatura otomatik kesimi.
+ * Automatic invoice issuance when an order is paid.
  *
- * <p><b>Mimari kararlar:</b>
+ * <p><b>Architectural decisions:</b>
  * <ul>
- *   <li>{@code @TransactionalEventListener(phase = AFTER_COMMIT)} — Sipariş DB'ye
- *       yazılmadan fatura kesilmez (race condition koruması).</li>
- *   <li>{@code @Async} — Logo SOAP çağrısı 2-10 saniye sürebilir; sipariş onay
- *       endpoint'i bu süreyi beklemesin. Hata olursa fatura DRAFT/ERROR
- *       statüsünde kalır, admin digest ile bildirilir.</li>
- *   <li>Feature flag: {@code invoice_auto_generate} site setting'i kapalıysa
- *       sessizce return (kullanıcı admin panelden manuel kesebilir).</li>
- *   <li>Idempotency: {@link InvoiceService#createInvoiceForOrder} mevcut faturayı
- *       kontrol ediyor (ERROR/CANCELLED dışındaysa tekrar oluşturmaz).</li>
+ *   <li>{@code @TransactionalEventListener(phase = AFTER_COMMIT)} — The invoice is
+ *       not issued before the order is persisted to the DB (race condition guard).</li>
+ *   <li>{@code @Async} — The Logo SOAP call can take 2-10 seconds; the order
+ *       confirmation endpoint should not wait for it. On failure the invoice stays
+ *       in DRAFT/ERROR status and is reported via the admin digest.</li>
+ *   <li>Feature flag: if the {@code invoice_auto_generate} site setting is disabled,
+ *       return silently (the user can issue it manually from the admin panel).</li>
+ *   <li>Idempotency: {@link InvoiceService#createInvoiceForOrder} checks for an
+ *       existing invoice (it will not recreate one unless it is ERROR/CANCELLED).</li>
  * </ul>
  */
 @Component
@@ -51,8 +51,8 @@ public class InvoiceAutoCreateListener {
                     event.getOrderNumber(), event.getTriggeredBy());
             invoiceService.createInvoiceForOrder(event.getOrderId());
         } catch (Exception e) {
-            // Logo'dan gelen hataları yakalayıp event'in dağılmasını engelle —
-            // fatura ERROR statüsünde kayda alındı; admin digest ile bildirilecek.
+            // Catch errors coming from Logo to prevent the event from propagating —
+            // the invoice was recorded in ERROR status; it will be reported via the admin digest.
             log.error("[Invoice] Otomatik fatura kesimi başarısız: order={}, hata={}",
                     event.getOrderNumber(), e.getMessage());
         }

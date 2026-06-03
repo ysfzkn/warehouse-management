@@ -324,7 +324,7 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
             .orElseThrow(() -> new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
                 "Geçersiz veya süresi dolmuş hesap tamamlama bağlantısı."));
 
-        // Misafir hesabı tamamlama token'ı 7 gün geçerli
+        // Guest account completion token is valid for 7 days
         if (customer.getPasswordResetSentAt() == null
             || customer.getPasswordResetSentAt().plusDays(7).isBefore(LocalDateTime.now())) {
             customer.setPasswordResetToken(null);
@@ -336,7 +336,7 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
 
         PasswordPolicyValidator.validate(newPassword);
 
-        // Şifre belirle ve e-postayı doğrulanmış olarak işaretle (müşteri token sahibi, e-postaya erişebiliyor)
+        // Set the password and mark the email as verified (the customer owns the token, so has access to the email)
         customer.setPasswordHash(passwordEncoder.encode(newPassword));
         customer.setPasswordResetToken(null);
         customer.setPasswordResetSentAt(null);
@@ -348,7 +348,7 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
 
         logger.info("Guest account completed and verified: {}", customer.getEmail());
 
-        // JWT + refresh token üret (kullanıcıyı doğrudan login yap)
+        // Generate JWT + refresh token (log the user in directly)
         String jwtToken = jwtService.generateCustomerToken(customer.getId(), customer.getEmail());
         String refreshToken = createRefreshToken(customer);
 

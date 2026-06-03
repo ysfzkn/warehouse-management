@@ -3,23 +3,23 @@ import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 
 /**
- * Medium-benzeri WYSIWYG editör. İçerik HTML olarak dönüp
- * backend'te `page.content` alanına yazılır; store tarafında
- * `dangerouslySetInnerHTML` ile render edilir (mevcut akış korunur).
+ * Medium-like WYSIWYG editor. Content is returned as HTML and
+ * written to the `page.content` field on the backend; on the store
+ * side it is rendered via `dangerouslySetInnerHTML` (the existing flow is preserved).
  *
- * Özellikler:
- *   - Başlık (H2, H3), kalın/italik/altı-çizili, liste, alıntı
- *   - Link, resim (URL ile), hizalama, tablo
- *   - İçerik yapıştırırken stil temizleme (clean paste) — Word / Google Docs
- *     yapıştırılsa bile stil kirliliği olmaz.
+ * Features:
+ *   - Headings (H2, H3), bold/italic/underline, lists, blockquote
+ *   - Link, image (by URL), alignment, table
+ *   - Style stripping on paste (clean paste) — pasting from Word / Google Docs
+ *     does not introduce style pollution.
  *
- * Kullanım:
+ * Usage:
  *   <RichTextEditor value={content} onChange={setContent} />
  */
 export default function RichTextEditor({ value, onChange, placeholder, minHeight = 320 }) {
   const quillRef = useRef(null);
 
-  // Paste'de stilleri temizle — Word/Docs'tan gelen kirli HTML'i engeller
+  // Strip styles on paste — prevents dirty HTML coming from Word/Docs
   useEffect(() => {
     const editor = quillRef.current?.getEditor?.();
     if (!editor) return;

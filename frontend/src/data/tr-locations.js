@@ -1,17 +1,17 @@
 /**
- * Türkiye il + ilçe statik veri kümesi.
+ * Static dataset of Turkish provinces + districts.
  *
- * Bu data Türkiye e-ticaret mevzuatı (6563 sayılı kanun) gereği standartlaştırılmış
- * adres veri girişi sağlamak için kullanılır. PTT API entegrasyonu maliyetli ve
- * hız riski getirir; statik veri çoğu durum için yeterli, MVP yaklaşımıdır.
+ * This data is used to provide standardized address entry as required by Turkish
+ * e-commerce legislation (Law No. 6563). PTT API integration is costly and adds a
+ * performance risk; static data is sufficient for most cases — an MVP approach.
  *
- * Kapsam:
- *   - 81 il listesi (TR_PROVINCES) — şehir dropdown
- *   - En kalabalık ~20 ilin tüm ilçeleri (TR_DISTRICTS) — yaklaşık nüfusun %75'ini kapsar
- *   - Diğer iller için ilçe free-text kalır (autocomplete devre dışı)
+ * Scope:
+ *   - List of 81 provinces (TR_PROVINCES) — city dropdown
+ *   - All districts of the ~20 most populous provinces (TR_DISTRICTS) — covers roughly 75% of the population
+ *   - For other provinces, the district remains free-text (autocomplete disabled)
  *
- * İlçe verisi tam değildir — kapsam ihtiyaca göre genişletilebilir. Doğru kaynak:
- * https://github.com/anil-aslandag/tr-il-ilce-mahalle veya benzeri açık veri.
+ * The district data is not complete — coverage can be expanded as needed. A good source:
+ * https://github.com/anil-aslandag/tr-il-ilce-mahalle or similar open data.
  */
 
 export const TR_PROVINCES = [
@@ -25,7 +25,7 @@ export const TR_PROVINCES = [
   'Şırnak','Sivas','Tekirdağ','Tokat','Trabzon','Tunceli','Uşak','Van','Yalova','Yozgat','Zonguldak',
 ];
 
-// İlçeler — en kalabalık iller için (population %75 kapsar)
+// Districts — for the most populous provinces (covers ~75% of the population)
 export const TR_DISTRICTS = {
   'İstanbul': [
     'Adalar','Arnavutköy','Ataşehir','Avcılar','Bağcılar','Bahçelievler','Bakırköy','Başakşehir',
@@ -69,13 +69,13 @@ export const TR_DISTRICTS = {
   'Aydın': ['Bozdoğan','Buharkent','Çine','Didim','Efeler','Germencik','İncirliova','Karacasu','Karpuzlu','Koçarlı','Köşk','Kuşadası','Kuyucak','Nazilli','Söke','Sultanhisar','Yenipazar'],
 };
 
-/** Verilen şehir için ilçe listesi (yoksa boş array; UI free-text gösterir). */
+/** District list for the given city (empty array if none; UI shows free-text). */
 export function getDistrictsForProvince(province) {
   if (!province) return [];
   return TR_DISTRICTS[province] || [];
 }
 
-/** Şehir adının resmi şehir listesinde olup olmadığını doğrular. */
+/** Validates whether the city name is in the official city list. */
 export function isValidProvince(province) {
   return TR_PROVINCES.includes(province);
 }

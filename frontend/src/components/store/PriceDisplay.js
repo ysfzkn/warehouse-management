@@ -1,22 +1,23 @@
 import React from 'react';
 
 /**
- * Ürün fiyatını gösterir. price hem indirimsiz hem indirimli (üstü çizili) görünür.
+ * Displays a product price. The price is shown both at full and discounted
+ * (struck-through) rates.
  *
- * Edge case'ler:
- *   - price null/undefined/0: "Fiyat için iletişime geçin" mesajı (büyük tire yerine açıklayıcı)
- *   - salePrice >= price: indirim göstermez
+ * Edge cases:
+ *   - price null/undefined/0: "Contact us for the price" message (explanatory instead of a long dash)
+ *   - salePrice >= price: no discount shown
  *
  * Props:
- *   price        — normal fiyat (number)
- *   salePrice    — indirim fiyatı (number, opsiyonel)
+ *   price        — regular price (number)
+ *   salePrice    — discount price (number, optional)
  *   size         — 'normal' | 'large'
- *   showVat      — "KDV Dahil" notu göster
+ *   showVat      — show the "VAT Included" note
  */
 export default function PriceDisplay({ price, salePrice, size = 'normal', showVat = false }) {
   const isLarge = size === 'large';
 
-  // Price yoksa açıklayıcı mesaj göster — büyük tire kullanıcı için anlamsız.
+  // Show an explanatory message when there is no price — a long dash is meaningless to the user.
   if (price == null || price <= 0) {
     return (
       <div className="store-price-display">

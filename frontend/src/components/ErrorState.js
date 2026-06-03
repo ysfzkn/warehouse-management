@@ -1,9 +1,9 @@
 import React from 'react';
 
 /**
- * Hata durumu (error state) — API hatası, network down, load failure vb.
+ * Error state — API error, network down, load failure, etc.
  *
- * EmptyState'ten farkı: "tekrar dene" CTA varsayılan, retry callback alır.
+ * Difference from EmptyState: the "try again" CTA is the default and it takes a retry callback.
  */
 export default function ErrorState({
   title = 'Bir sorun oluştu',
@@ -11,7 +11,7 @@ export default function ErrorState({
   onRetry,
   retryLabel = 'Tekrar Dene',
   compact = false,
-  error, // dev mode için detay
+  error, // detail for dev mode
 }) {
   const showDetails = process.env.NODE_ENV !== 'production' && error;
   return (

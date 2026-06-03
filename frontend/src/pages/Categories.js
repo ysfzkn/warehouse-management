@@ -186,7 +186,7 @@ const Categories = () => {
                 fetchCategories();
                 break;
               }
-              // güvenlik hatası: toast göster, modal açık kalsın ve retry
+              // security error: show toast, keep modal open and retry
               const toast = document.createElement('div');
               toast.className = 'toast align-items-center text-bg-danger border-0 position-fixed top-0 end-0 m-3 show fs-6';
               toast.style.minWidth = '360px';
@@ -195,7 +195,7 @@ const Categories = () => {
               toast.innerHTML = `<div class="d-flex"><div class="toast-body fw-semibold">${msg || 'Güvenlik şifresi hatalı'}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
               document.body.appendChild(toast);
               setTimeout(() => { try { document.body.removeChild(toast); } catch { } }, 7000);
-              // güvenlik hatası ise modal açık kalsın, döngü devam etsin
+              // on a security error keep the modal open and continue the loop
             }
           }
         } else {
@@ -706,7 +706,7 @@ const Categories = () => {
                           </div>
                         </td>
                       </tr>
-                      {/* Alt Kategoriler - Expand edildiğinde göster */}
+                      {/* Subcategories - shown when expanded */}
                       {expandedCategories.includes(Number(category.id)) && category.subcategories && category.subcategories.length > 0 && (
                         <tr className="table-light">
                           <td colSpan="7" className="p-0">

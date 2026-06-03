@@ -15,21 +15,21 @@ import java.io.IOException;
 import java.util.UUID;
 
 /**
- * Her HTTP isteğine benzersiz bir <strong>requestId</strong> atar ve SLF4J MDC'ye
- * koyar. Logback JSON encoder'ı bu değeri otomatik olarak her log satırına dahil
- * eder — böylece Grafana Loki'de bir isteğin tüm logları
- * <code>{requestId="abc123"}</code> ile filtrelenebilir.
+ * Assigns a unique <strong>requestId</strong> to every HTTP request and places it
+ * in the SLF4J MDC. The Logback JSON encoder automatically includes this value in
+ * every log line — so in Grafana Loki all logs for a request can be filtered with
+ * <code>{requestId="abc123"}</code>.
  *
- * <p>Akış:
+ * <p>Flow:
  * <ol>
- *   <li>Client {@code X-Request-Id} header'ı gönderebilir (örn. nginx upstream'den)</li>
- *   <li>Yoksa UUID kısaltılmış (8 char) otomatik üretilir</li>
- *   <li>Response header'ında da geri yansıtılır (debug için)</li>
- *   <li>Filter sonunda MDC.clear() ile thread-local temizlenir (thread pool leak önlenir)</li>
+ *   <li>The client may send an {@code X-Request-Id} header (e.g. from an nginx upstream)</li>
+ *   <li>If absent, a shortened (8-char) UUID is generated automatically</li>
+ *   <li>It is also reflected back in the response header (for debugging)</li>
+ *   <li>At the end of the filter, the thread-local is cleared via MDC.clear() (prevents thread-pool leaks)</li>
  * </ol></p>
  *
- * <p>Ek olarak {@code userId} MDC field'ı login sonrası
- * JwtAuthenticationFilter tarafından doldurulabilir.</p>
+ * <p>Additionally, the {@code userId} MDC field may be populated after login by
+ * JwtAuthenticationFilter.</p>
  */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)
@@ -45,7 +45,7 @@ public class RequestIdFilter extends OncePerRequestFilter {
                                      @NonNull FilterChain filterChain) throws ServletException, IOException {
         String requestId = request.getHeader(HEADER_NAME);
         if (requestId == null || requestId.isBlank() || requestId.length() > 64) {
-            // Upstream ID yoksa veya geçersizse kendi ID'mizi üret
+            // If there is no upstream ID, or it is invalid, generate our own
             requestId = "req-" + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
         }
         try {
@@ -54,16 +54,16 @@ public class RequestIdFilter extends OncePerRequestFilter {
             response.setHeader(HEADER_NAME, requestId);
             filterChain.doFilter(request, response);
         } finally {
-            // KRİTİK: thread pool'da next request bizim MDC'mizi devralmasın
+            // CRITICAL: don't let the next request in the thread pool inherit our MDC
             MDC.remove(MDC_REQUEST_ID);
             MDC.remove(MDC_REMOTE_IP);
-            // userId / traceId varsa onlar da temizlenmeli (başka filter set'lediyse)
+            // userId / traceId should also be cleared if present (if another filter set them)
             MDC.remove("userId");
         }
     }
 
     private String resolveClientIp(HttpServletRequest request) {
-        // Reverse proxy arkasındaysak X-Forwarded-For; değilse remoteAddr
+        // If behind a reverse proxy, use X-Forwarded-For; otherwise remoteAddr
         String xff = request.getHeader("X-Forwarded-For");
         if (xff != null && !xff.isBlank()) {
             return xff.split(",")[0].trim();

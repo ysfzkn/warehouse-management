@@ -53,7 +53,7 @@ public class VirtualPosGateway implements PaymentGateway {
                 : request.getCallbackUrl();
         if (callbackUrl == null) callbackUrl = "";
 
-        // Customer ad-soyad birleştir — PayTR user_name tek alan
+        // Concatenate customer first and last name — PayTR user_name is a single field
         String fullName = ((request.getBuyerName() != null ? request.getBuyerName() : "")
                 + (request.getBuyerSurname() != null ? " " + request.getBuyerSurname() : "")).trim();
 

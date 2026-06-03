@@ -127,22 +127,22 @@ export default function StoreHeader({ cart, settings }) {
   const isLoggedIn = !!customerToken && !!customerName;
 
   // Smart header scroll behavior.
-  // Jitter fix stratejisi:
-  //   • rAF (requestAnimationFrame) ile throttle — scroll event başına state set değil,
-  //     frame başına bir kere.
-  //   • Hysteresis — açma/kapama eşikleri FARKLI, bu sayede eşik civarında salınım yapan
-  //     scroll'lar rapid toggle tetiklemez (scrolled: aç≥100, kapat<40; hidden: gizle≥240, göster≤delta-up).
-  //   • Minimum scroll delta — 5px altındaki oynamaları yok say (trackpad kinetic residue).
+  // Jitter fix strategy:
+  //   • Throttle with rAF (requestAnimationFrame) — set state once per frame,
+  //     not per scroll event.
+  //   • Hysteresis — the show/hide thresholds are DIFFERENT, so scrolls that
+  //     oscillate near the threshold don't trigger rapid toggling (scrolled: show≥100, hide<40; hidden: hide≥240, show≤delta-up).
+  //   • Minimum scroll delta — ignore movements under 5px (trackpad kinetic residue).
   const [scrolled, setScrolled] = useState(false);
   const [hidden, setHidden] = useState(false);
   const lastScrollY = useRef(0);
   const ticking = useRef(false);
 
   useEffect(() => {
-    const SHOW_SCROLLED_AT = 100;   // >= bu değerde "scrolled" true
-    const CLEAR_SCROLLED_AT = 40;   // <= bu değerde false'a döner — 60px deadband
-    const HIDE_AT = 240;            // bu değerin altında header gizlenmez
-    const MIN_DELTA = 5;            // 5px altı oynamaları yok say
+    const SHOW_SCROLLED_AT = 100;   // "scrolled" becomes true at >= this value
+    const CLEAR_SCROLLED_AT = 40;   // reverts to false at <= this value — 60px deadband
+    const HIDE_AT = 240;            // header is not hidden below this value
+    const MIN_DELTA = 5;            // ignore movements under 5px
 
     const apply = () => {
       const y = window.scrollY;
@@ -157,9 +157,9 @@ export default function StoreHeader({ cart, settings }) {
 
       if (Math.abs(delta) >= MIN_DELTA) {
         setHidden(prev => {
-          if (y < HIDE_AT) return false;             // üstte her zaman görünür
-          if (delta > 0) return true;                 // aşağı kaydır → gizle
-          if (delta < 0) return false;                // yukarı kaydır → göster
+          if (y < HIDE_AT) return false;             // always visible at the top
+          if (delta > 0) return true;                 // scroll down → hide
+          if (delta < 0) return false;                // scroll up → show
           return prev;
         });
         lastScrollY.current = y;
@@ -263,7 +263,7 @@ export default function StoreHeader({ cart, settings }) {
                     </div>
                   ) : (
                     <>
-                      {/* Kategoriler */}
+                      {/* Categories */}
                       {searchResults.filter(r => r.type === 'category').length > 0 && (
                         <>
                           <div className="px-3 pt-2 pb-1"><small className="text-muted fw-semibold text-uppercase" style={{fontSize:10,letterSpacing:'0.05em'}}>Kategoriler</small></div>
@@ -284,7 +284,7 @@ export default function StoreHeader({ cart, settings }) {
                         </>
                       )}
 
-                      {/* Markalar */}
+                      {/* Brands */}
                       {searchResults.filter(r => r.type === 'brand').length > 0 && (
                         <>
                           <div className="px-3 pt-2 pb-1 border-top"><small className="text-muted fw-semibold text-uppercase" style={{fontSize:10,letterSpacing:'0.05em'}}>Markalar</small></div>
@@ -302,7 +302,7 @@ export default function StoreHeader({ cart, settings }) {
                         </>
                       )}
 
-                      {/* Ürünler */}
+                      {/* Products */}
                       {searchResults.filter(r => r.type === 'product').length > 0 && (
                         <>
                           <div className="px-3 pt-2 pb-1 border-top"><small className="text-muted fw-semibold text-uppercase" style={{fontSize:10,letterSpacing:'0.05em'}}>Ürünler</small></div>
@@ -338,7 +338,7 @@ export default function StoreHeader({ cart, settings }) {
                         </>
                       )}
 
-                      {/* Tüm sonuçlar */}
+                      {/* All results */}
                       <Link to={`/kategori/arama?q=${encodeURIComponent(searchTerm)}`}
                         className="d-flex align-items-center justify-content-center gap-2 py-3 border-top text-primary small fw-semibold text-decoration-none store-search-item"
                         onClick={() => { setSearchFocused(false); setSearchTerm(''); setSearchResults([]); }}>

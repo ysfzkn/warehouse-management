@@ -63,7 +63,7 @@ export default function StoreRegisterPage() {
     window.location.href = url;
   };
 
-  // Başarılı kayıt — aktivasyon ekranı
+  // Successful registration — activation screen
   if (success) {
     return (
       <div className="container py-5" style={{ maxWidth: 520 }}>
@@ -96,7 +96,7 @@ export default function StoreRegisterPage() {
   return (
     <div className="container py-5" style={{ maxWidth: 520 }}>
       <div className="card border-0 shadow-lg overflow-hidden">
-        {/* Başlık */}
+        {/* Header */}
         <div className="text-center text-white py-4" style={{ background: 'linear-gradient(135deg, #2563eb, #1e40af)' }}>
           <i className="fas fa-user-plus fa-2x mb-2" />
           <h4 className="fw-bold mb-1">Üye Ol</h4>
@@ -104,7 +104,7 @@ export default function StoreRegisterPage() {
         </div>
 
         <div className="card-body p-4">
-          {/* Google ile Kayıt */}
+          {/* Register with Google */}
           <button type="button" className="btn btn-outline-dark w-100 py-2 mb-3 d-flex align-items-center justify-content-center gap-2" onClick={handleGoogleRegister}>
             <svg width="18" height="18" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
             Google ile Kayıt Ol
@@ -115,7 +115,7 @@ export default function StoreRegisterPage() {
           </div>
 
           <form onSubmit={handleSubmit}>
-            {/* Ad Soyad */}
+            {/* First and Last Name */}
             <div className="row g-3 mb-3">
               <div className="col-6">
                 <label className="form-label small fw-semibold">Adınız <span className="text-danger">*</span></label>
@@ -127,7 +127,7 @@ export default function StoreRegisterPage() {
               </div>
             </div>
 
-            {/* E-posta */}
+            {/* Email */}
             <div className="mb-3">
               <label className="form-label small fw-semibold">E-posta Adresi <span className="text-danger">*</span></label>
               <div className="input-group">
@@ -136,7 +136,7 @@ export default function StoreRegisterPage() {
               </div>
             </div>
 
-            {/* Telefon */}
+            {/* Phone */}
             <div className="mb-3">
               <label className="form-label small fw-semibold">Telefon Numarası</label>
               <div className="input-group">
@@ -145,7 +145,7 @@ export default function StoreRegisterPage() {
               </div>
             </div>
 
-            {/* Şifre */}
+            {/* Password */}
             <div className="mb-3">
               <label className="form-label small fw-semibold">Şifre <span className="text-danger">*</span></label>
               <div className="input-group">
@@ -155,7 +155,7 @@ export default function StoreRegisterPage() {
                   <i className={`fas fa-eye${showPwd ? '-slash' : ''}`} />
                 </button>
               </div>
-              {/* Şifre gücü göstergesi */}
+              {/* Password strength indicator */}
               {form.password.length > 0 && (
                 <div className="mt-2 p-2 bg-light rounded">
                   {PWD_RULES.map(rule => (
@@ -179,7 +179,7 @@ export default function StoreRegisterPage() {
               )}
             </div>
 
-            {/* Onaylar */}
+            {/* Consents */}
             <div className="mb-3 p-3 bg-light rounded">
               <div className="form-check mb-2">
                 <input className="form-check-input" type="checkbox" name="termsConsent" checked={form.termsConsent} onChange={handleChange} id="terms" />
@@ -201,7 +201,7 @@ export default function StoreRegisterPage() {
               </div>
             </div>
 
-            {/* Kayıt Butonu */}
+            {/* Register Button */}
             <button type="submit" className="btn btn-primary w-100 py-2 fw-semibold" disabled={loading || !allPwdValid || !form.kvkkConsent || !form.termsConsent}>
               {loading ? <><span className="spinner-border spinner-border-sm me-2" />Hesap oluşturuluyor...</> : <><i className="fas fa-user-plus me-2" />Üye Ol</>}
             </button>

@@ -1,7 +1,7 @@
 package com.warehouse.service.notification;
 
 /**
- * Bildirim kanalı tipleri.
+ * Notification channel types.
  */
 public enum NotificationChannelType {
     EMAIL,

@@ -93,6 +93,18 @@ export default function StoreLayout() {
         <a href="#main-content" className="skip-to-content">
           Ana içeriğe atla
         </a>
+        {/* Test mode banner — shown when store_purchasing_enabled=false */}
+        {siteSettings.get('store_purchasing_enabled', 'true') !== 'true' && (
+          <div style={{
+            background: 'linear-gradient(90deg, #f59e0b, #d97706)',
+            color: '#fff', textAlign: 'center', padding: '8px 16px',
+            fontSize: 13, fontWeight: 600, letterSpacing: 0.2,
+            position: 'sticky', top: 0, zIndex: 1050,
+          }}>
+            {siteSettings.get('store_test_mode_banner',
+              '🧪 Bu site şu anda test aşamasındadır. Gerçek satış yapılmamaktadır.')}
+          </div>
+        )}
         <StoreHeader cart={cart} settings={siteSettings} />
         <main id="main-content" className="store-main">
           <Outlet context={{ cart, siteSettings }} />

@@ -6,7 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * Kargo gönderimi oluşturma sonucu.
+ * Result of creating a cargo shipment.
  */
 @Data
 @Builder
@@ -16,25 +16,25 @@ public class CargoShipmentResult {
 
     private boolean success;
 
-    /** Kargo firması takip numarası (müşteriye gösterilecek) */
+    /** Cargo company tracking number (to be shown to the customer) */
     private String trackingNumber;
 
-    /** Kargo firmasının web sitesindeki takip URL'i */
+    /** Tracking URL on the cargo company's website */
     private String trackingUrl;
 
-    /** Kargo firmasının adı (Yurtiçi, Aras, MNG vb.) */
+    /** Cargo company name (Yurtiçi, Aras, MNG, etc.) */
     private String carrierName;
 
-    /** Kargo firmasının kodu (yurtici, aras, mng vb.) */
+    /** Cargo company code (yurtici, aras, mng, etc.) */
     private String carrierCode;
 
-    /** Etiket PDF URL'i (yazdırmak için) */
+    /** Label PDF URL (for printing) */
     private String labelUrl;
 
-    /** Sağlayıcının sistem ID'si (iptal / sorgulama için) */
+    /** Provider's system ID (for cancellation / lookup) */
     private String providerShipmentId;
 
-    /** Hata durumunda */
+    /** On error */
     private String errorCode;
     private String errorMessage;
 

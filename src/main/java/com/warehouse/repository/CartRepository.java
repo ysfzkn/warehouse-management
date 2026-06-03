@@ -16,12 +16,12 @@ public interface CartRepository extends JpaRepository<Cart, Long> {
     Optional<Cart> findBySessionId(String sessionId);
 
     /**
-     * Terk edilmiş sepet kurtarma için hedef sepetleri bulur:
-     * - Hesap sahibi (customer != null) olmalı (e-posta göndermek için)
-     * - En az bir ürünü olmalı
-     * - Son güncellenmeden :cutoffTime geçmiş olmalı (yeterince beklendi)
-     * - Son güncelleme :minRecentTime'den yeni olmalı (çok eski sepetleri spamleme)
-     * - Daha önce hatırlatma gönderilmemiş olmalı
+     * Finds target carts for abandoned-cart recovery:
+     * - Must belong to an account holder (customer != null) so we can send an email
+     * - Must contain at least one item
+     * - At least :cutoffTime must have elapsed since the last update (waited long enough)
+     * - The last update must be newer than :minRecentTime (don't spam very old carts)
+     * - A reminder must not have been sent already
      */
     @Query("""
         SELECT c FROM Cart c

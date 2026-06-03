@@ -547,7 +547,7 @@ public class StockTransferServiceImpl implements StockTransferService {
 
         adminSecurityService.requireSecurityCodeForAdmin(adminSecurityCode);
 
-        // Tüm transfer durumlarının (yolda, tamamlanan, beklemede) silinmesine izin veriyoruz
+        // We allow deleting transfers in any status (in transit, completed, pending)
         AuditMetadata metadata = buildTransferMetadata(transfer);
         stockTransferRepository.delete(transfer);
         String username = CurrentUser.usernameOrSystem();
@@ -589,7 +589,7 @@ public class StockTransferServiceImpl implements StockTransferService {
             try {
                 StockTransfer transfer = getTransferByIdOrThrow(transferId);
                 
-                // Tüm transfer durumlarının (yolda, tamamlanan, beklemede) silinmesine izin veriyoruz
+                // We allow deleting transfers in any status (in transit, completed, pending)
                 AuditMetadata metadata = buildTransferMetadata(transfer);
                 stockTransferRepository.delete(transfer);
                 auditService.log(AuditAction.TRANSFER_DELETE, DomainEntityType.StockTransfer.name(), transferId, username,
@@ -597,12 +597,12 @@ public class StockTransferServiceImpl implements StockTransferService {
                 successCount++;
                 logger.debug("Transfer deleted successfully with id: {}", transferId);
             } catch (WarehouseManagementException e) {
-                // Domain exception'ları yakala
+                // Catch domain exceptions
                 StockTransfer transfer = null;
                 try {
                     transfer = getTransferByIdOrThrow(transferId);
                 } catch (Exception ex) {
-                    // Transfer bulunamadı
+                    // Transfer not found
                 }
                 String transferInfo = transfer != null 
                     ? String.format("Transfer #%d (%s → %s)", transferId,
@@ -610,22 +610,22 @@ public class StockTransferServiceImpl implements StockTransferService {
                         transfer.getDestinationWarehouse() != null ? transfer.getDestinationWarehouse().getName() 
                             : (transfer.getCustomerFullName() != null ? transfer.getCustomerFullName() : "Bilinmeyen"))
                     : String.format("Transfer #%d", transferId);
-                
+
                 errors.add(new BulkDeleteResponse.DeleteError(
                     transferId,
                     transferInfo,
-                    null, // Transfer için SKU yok
+                    null, // No SKU for a transfer
                     e.getErrorCode().getCode(),
                     e.getMessage()
                 ));
                 logger.warn("Cannot delete transfer with id {}: {}", transferId, e.getMessage());
             } catch (Exception e) {
-                // Diğer hatalar
+                // Other errors
                 StockTransfer transfer = null;
                 try {
                     transfer = getTransferByIdOrThrow(transferId);
                 } catch (Exception ex) {
-                    // Transfer bulunamadı
+                    // Transfer not found
                 }
                 String transferInfo = transfer != null 
                     ? String.format("Transfer #%d (%s → %s)", transferId,
@@ -706,7 +706,7 @@ public class StockTransferServiceImpl implements StockTransferService {
             return stockTransferRepository.findByIdWithRelations(saved.getId()).orElse(saved);
         }
 
-        // Normal onaylarda güvenlik şifresi isteme
+        // Don't require a security code for normal approvals
         transfer.setApprovalStatus(TransferApprovalStatus.APPROVED);
         transfer.setApprovalDecisionBy(username);
         transfer.setApprovalDecisionAt(LocalDateTime.now());

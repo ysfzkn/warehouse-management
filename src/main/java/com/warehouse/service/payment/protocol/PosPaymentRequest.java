@@ -17,10 +17,10 @@ public class PosPaymentRequest {
     private String okUrl;    // Success callback URL
     private String failUrl;  // Failure callback URL
 
-    // ── PayTR + diğer POS protocol'lerinin "user info" zorunlulukları için ──
-    // PayTR prod ortamında user_name/user_address/user_phone boş gönderilirse
-    // bazı bankalar reddediyor (fraud algılaması). Bu alanlar VirtualPosGateway
-    // tarafından PaymentInitRequest'ten doldurulur.
+    // ── For the "user info" requirements of PayTR + other POS protocols ──
+    // In the PayTR production environment, if user_name/user_address/user_phone are sent
+    // empty, some banks reject the request (fraud detection). These fields are populated
+    // by VirtualPosGateway from the PaymentInitRequest.
     private String customerName;
     private String customerPhone;
     private String customerAddress;

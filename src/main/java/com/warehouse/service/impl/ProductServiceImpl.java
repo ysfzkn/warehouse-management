@@ -204,12 +204,12 @@ public class ProductServiceImpl implements ProductService {
     public void deleteProduct(Long id) {
         logger.info("Deleting product with id: {}", id);
         Product product = getProductByIdOrThrow(id);
-        // Önce stok ilişkilerini kontrol et
+        // First check stock relations
         EntityValidator.validateEntityHasNoRelations(
             !product.getStocks().isEmpty(), EntityNames.PRODUCT, EntityNames.RELATION_STOCKS
         );
 
-        // Ardından transfer ilişkilerini kontrol et (hem aktif hem geçmiş)
+        // Then check transfer relations (both active and historical)
         var transfersUsingProduct = stockTransferRepository.findByProduct(product);
         if (transfersUsingProduct != null && !transfersUsingProduct.isEmpty()) {
             logger.warn("Cannot delete product with id {} because it is used in {} stock transfers",
@@ -240,7 +240,7 @@ public class ProductServiceImpl implements ProductService {
             try {
                 Product product = getProductByIdOrThrow(id);
                 
-                // Önce stok ilişkilerini kontrol et
+                // First check stock relations
                 if (!product.getStocks().isEmpty()) {
                     errors.add(new BulkDeleteResponse.DeleteError(
                         id,
@@ -252,7 +252,7 @@ public class ProductServiceImpl implements ProductService {
                     continue;
                 }
                 
-                // Ardından transfer ilişkilerini kontrol et
+                // Then check transfer relations
                 var transfersUsingProduct = stockTransferRepository.findByProduct(product);
                 if (transfersUsingProduct != null && !transfersUsingProduct.isEmpty()) {
                     errors.add(new BulkDeleteResponse.DeleteError(
@@ -270,12 +270,12 @@ public class ProductServiceImpl implements ProductService {
                 eventPublisher.publishEvent(ProductIndexEvent.delete(id));
                 logger.debug("Product deleted successfully with id: {}", id);
             } catch (WarehouseManagementException e) {
-                // Domain exception'ları yakala
+                // Catch domain exceptions
                 Product product = null;
                 try {
                     product = getProductByIdOrThrow(id);
                 } catch (Exception ex) {
-                    // Ürün bulunamadı
+                    // Product not found
                 }
                 errors.add(new BulkDeleteResponse.DeleteError(
                     id,
@@ -286,12 +286,12 @@ public class ProductServiceImpl implements ProductService {
                 ));
                 logger.warn("Cannot delete product with id {}: {}", id, e.getMessage());
             } catch (Exception e) {
-                // Diğer hatalar
+                // Other errors
                 Product product = null;
                 try {
                     product = getProductByIdOrThrow(id);
                 } catch (Exception ex) {
-                    // Ürün bulunamadı
+                    // Product not found
                 }
                 errors.add(new BulkDeleteResponse.DeleteError(
                     id,

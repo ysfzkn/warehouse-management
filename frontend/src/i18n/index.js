@@ -1,14 +1,14 @@
 /**
- * i18n iskeleti (Faz 3 NICE-TO-HAVE).
+ * i18n skeleton (Phase 3 NICE-TO-HAVE).
  *
- * Default dil: TR. EN şu an stub — uluslararası satış başlayınca translation
- * key'ler doldurulur. Mevcut sayfaların hepsi hardcoded TR string'lerle yazılı;
- * tedrici migration:
- *   1. Yeni komponentler `useTranslation()` hook'unu kullansın
- *   2. Tekrar eden eski string'ler bir batch'te t('key') ile değiştirilsin
- *   3. tr.json + en.json'a aynı key eklensin
+ * Default language: TR. EN is currently a stub — translation keys will be filled in
+ * once international sales begin. All existing pages are written with hardcoded TR strings;
+ * gradual migration:
+ *   1. New components should use the `useTranslation()` hook
+ *   2. Repeated legacy strings should be replaced with t('key') in a batch
+ *   3. Add the same key to both tr.json and en.json
  *
- * Aktif etmek için `index.js`'te `import './i18n'` ekleyin.
+ * To enable, add `import './i18n'` in `index.js`.
  */
 
 import i18n from 'i18next';
@@ -28,10 +28,10 @@ i18n
     fallbackLng: 'tr',
     supportedLngs: ['tr', 'en'],
     interpolation: {
-      escapeValue: false, // React zaten escape ediyor
+      escapeValue: false, // React already escapes
     },
     detection: {
-      // Sıralama: localStorage > navigator (browser) > htmlTag > fallback
+      // Order: localStorage > navigator (browser) > htmlTag > fallback
       order: ['localStorage', 'navigator', 'htmlTag'],
       caches: ['localStorage'],
       lookupLocalStorage: 'i18nextLng',

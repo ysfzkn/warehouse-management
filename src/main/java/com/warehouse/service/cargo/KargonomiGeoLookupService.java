@@ -19,18 +19,18 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Kargonomi, şehir ve ilçe adlarını {@code integer id} ile ister — bizim sistemimiz
- * ise text (örn. "İstanbul", "Kadıköy") tutar. Bu servis iki yönlü:
+ * Kargonomi expects city and district names as an {@code integer id} — whereas our
+ * system stores them as text (e.g. "İstanbul", "Kadıköy"). This service is bidirectional:
  *
  * <ol>
- *   <li>{@code GET /states/1} (Türkiye) → 81 ili çeker, cache'ler</li>
- *   <li>{@code GET /cities/{stateId}} → o şehrin ilçelerini çeker, cache'ler</li>
+ *   <li>{@code GET /states/1} (Turkey) → fetches the 81 provinces and caches them</li>
+ *   <li>{@code GET /cities/{stateId}} → fetches that province's districts and caches them</li>
  *   <li>{@link #lookupStateId(String)} / {@link #lookupCityId(int, String)} — text → id</li>
  * </ol>
  *
- * <p>Cache 24 saat geçerli; ilk aramada API çağırır, sonraki aramalarda memory'den
- * döner. "İstanbul", "istanbul", "İSTANBUL", "Istanbul" gibi varyantlar normalize
- * edilip aynı anahtara düşer (Türkçe karakter folding dahil).
+ * <p>The cache is valid for 24 hours; the first lookup calls the API, subsequent lookups
+ * return from memory. Variants such as "İstanbul", "istanbul", "İSTANBUL", "Istanbul" are
+ * normalized down to the same key (including Turkish character folding).
  */
 @Service
 public class KargonomiGeoLookupService {
@@ -55,21 +55,21 @@ public class KargonomiGeoLookupService {
         this.restTemplate = new RestTemplate();
     }
 
-    /** Text şehir adından Kargonomi state_id'ye çevir. Bulunamazsa {@code null}. */
+    /** Converts a text province name to a Kargonomi state_id. {@code null} if not found. */
     public Integer lookupStateId(String stateName) {
         if (stateName == null || stateName.isBlank()) return null;
         Map<String, Integer> cache = ensureStateCache();
         return cache.get(normalize(stateName));
     }
 
-    /** Belirli şehirdeki ilçe adından city_id. Bulunamazsa {@code null}. */
+    /** city_id from a district name within a given province. {@code null} if not found. */
     public Integer lookupCityId(int stateId, String cityName) {
         if (cityName == null || cityName.isBlank()) return null;
         Map<String, Integer> cache = ensureCityCache(stateId);
         return cache.get(normalize(cityName));
     }
 
-    /** Şehir adı + ilçe adı → (stateId, cityId) çifti. Herhangi biri yoksa null döner. */
+    /** Province name + district name → (stateId, cityId) pair. Returns null if either is missing. */
     public int[] lookupStateAndCity(String stateName, String cityName) {
         Integer stateId = lookupStateId(stateName);
         if (stateId == null) return null;
@@ -156,7 +156,7 @@ public class KargonomiGeoLookupService {
 
     /**
      * "İstanbul" / "istanbul" / "Istanbul" / "  İSTANBUL " → "istanbul"
-     * Türkçe karakter folding + whitespace trim.
+     * Turkish character folding + whitespace trim.
      */
     static String normalize(String s) {
         if (s == null) return "";
@@ -168,7 +168,7 @@ public class KargonomiGeoLookupService {
         return t;
     }
 
-    /** Dev/test helper — cache'leri temizler. */
+    /** Dev/test helper — clears the caches. */
     public void clearCache() {
         stateCache = null;
         stateCacheExpireAt = 0;

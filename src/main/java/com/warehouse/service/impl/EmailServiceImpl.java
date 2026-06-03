@@ -331,8 +331,8 @@ public class EmailServiceImpl implements EmailService {
             log.info("Email disabled — order status update for {}: {} → {}", toEmail, orderNumber, newStatus);
             return;
         }
-        // İngilizce enum name'i Türkçe etikete çevir — müşteri "SHIPPED" yerine
-        // "Kargoya Verildi" görmeli.
+        // Convert the English enum name to a Turkish label — the customer should see
+        // "Kargoya Verildi" instead of "SHIPPED".
         String statusLabel = localizeOrderStatus(newStatus);
         String subject = "Sipariş Durumu Güncellendi — " + orderNumber;
         String noteHtml = (note != null && !note.isBlank())
@@ -358,7 +358,7 @@ public class EmailServiceImpl implements EmailService {
     }
 
     // ─────────────────────────────────────────────────────────────
-    //  E-Fatura bildirimleri
+    //  E-Invoice notifications
     // ─────────────────────────────────────────────────────────────
 
     @Override
@@ -494,7 +494,7 @@ public class EmailServiceImpl implements EmailService {
     }
 
     // ─────────────────────────────────────────────────────────────
-    //  Status → Türkçe etiket (enum name'ler mail'de görünmesin)
+    //  Status → Turkish label (so enum names do not appear in the email)
     // ─────────────────────────────────────────────────────────────
 
     private static final java.util.Map<String, String> ORDER_STATUS_TR = java.util.Map.ofEntries(
@@ -516,7 +516,7 @@ public class EmailServiceImpl implements EmailService {
     static String localizeOrderStatus(String status) {
         if (status == null || status.isBlank()) return "-";
         String up = status.trim().toUpperCase().replace('-', '_').replace(' ', '_');
-        return ORDER_STATUS_TR.getOrDefault(up, status); // bilinmeyenleri olduğu gibi bırak
+        return ORDER_STATUS_TR.getOrDefault(up, status); // leave unknown values as-is
     }
 
     private void sendHtml(String to, String subject, String html) {

@@ -41,8 +41,8 @@ export function SkeletonProductGrid({ count = 8 }) {
 }
 
 /**
- * Tablo iskeleti (admin / liste sayfaları için).
- * Spinner yerine bunu kullanmak perceived performance artırır.
+ * Table skeleton (for admin / list pages).
+ * Using this instead of a spinner improves perceived performance.
  */
 export function SkeletonTable({ rows = 5, columns = 4 }) {
   return (
@@ -70,7 +70,7 @@ export function SkeletonTable({ rows = 5, columns = 4 }) {
   );
 }
 
-/** Checkout aşamasında step yüklenirken iskelet (adres listesi, kargo seçenekleri vb.) */
+/** Skeleton shown while a checkout step loads (address list, shipping options, etc.) */
 export function SkeletonCheckoutStep() {
   return (
     <div aria-busy="true" aria-label="Yükleniyor" className="w-100">

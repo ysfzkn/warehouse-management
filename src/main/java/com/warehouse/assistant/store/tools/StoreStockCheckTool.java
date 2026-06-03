@@ -11,8 +11,8 @@ import java.util.Optional;
 
 /**
  * Stock availability lookup for a specific product. Returns a lightweight
- * summary the LLM can turn into Turkish prose ("Evet, stokta 12 adet var" /
- * "Şu an stokta bulunmuyor").
+ * summary the LLM can turn into Turkish prose ("Yes, 12 in stock" /
+ * "Currently out of stock").
  */
 @Component
 public class StoreStockCheckTool {

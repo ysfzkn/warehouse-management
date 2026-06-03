@@ -7,71 +7,71 @@ import com.warehouse.entity.OrderItem;
 import java.util.List;
 
 /**
- * E-Fatura / E-Arşiv sağlayıcı arayüzü.
- * Her e-fatura sağlayıcısı (Paraşüt, Foriba, Logo vb.) bu arayüzü uygular.
+ * E-Fatura / e-Arşiv provider interface.
+ * Every e-invoice provider (Paraşüt, Foriba, Logo, etc.) implements this interface.
  */
 public interface InvoiceProvider {
 
     /**
-     * Sağlayıcı adını döner (örn: "PARASUT", "FORIBA", "LOGO", "MOCK").
+     * Returns the provider name (e.g. "PARASUT", "FORIBA", "LOGO", "MOCK").
      */
     String getProviderName();
 
     /**
-     * Bu sağlayıcı aktif ve yapılandırılmış mı?
+     * Is this provider enabled and configured?
      */
     default boolean isEnabled() { return true; }
 
     /**
-     * Faturayı sağlayıcı üzerinden oluşturur ve GİB'e gönderir.
+     * Creates the invoice through the provider and submits it to GİB.
      *
-     * @param invoice oluşturulacak fatura (DRAFT durumunda)
-     * @param order   kaynak sipariş (satır detayları için)
-     * @param items   sipariş kalemleri
-     * @return güncellenen fatura (invoiceNumber, providerInvoiceId, status dolu)
+     * @param invoice the invoice to create (in DRAFT state)
+     * @param order   the source order (for line item details)
+     * @param items   the order items
+     * @return the updated invoice (invoiceNumber, providerInvoiceId, status populated)
      */
     InvoiceResult createInvoice(Invoice invoice, Order order, List<OrderItem> items);
 
     /**
-     * Geriye uyumluluk için (eski implementasyonlar için): sadece invoice ile çağrı.
-     * Yeni provider'lar createInvoice(invoice, order, items) tercih etmeli.
+     * For backward compatibility (for older implementations): call with the invoice only.
+     * New providers should prefer createInvoice(invoice, order, items).
      */
     default InvoiceResult createInvoice(Invoice invoice) {
         return createInvoice(invoice, null, List.of());
     }
 
     /**
-     * Fatura durumunu sağlayıcıdan sorgular.
+     * Queries the invoice status from the provider.
      *
-     * @param providerInvoiceId sağlayıcı tarafındaki fatura ID'si
-     * @return güncel durum
+     * @param providerInvoiceId the invoice ID on the provider side
+     * @return the current status
      */
     InvoiceResult queryStatus(String providerInvoiceId);
 
     /**
-     * Faturayı iptal eder.
+     * Cancels the invoice.
      *
-     * @param providerInvoiceId sağlayıcı tarafındaki fatura ID'si
-     * @return iptal sonucu
+     * @param providerInvoiceId the invoice ID on the provider side
+     * @return the cancellation result
      */
     InvoiceResult cancelInvoice(String providerInvoiceId);
 
     /**
-     * Faturanın PDF'ini indirir.
+     * Downloads the invoice PDF.
      *
-     * @param providerInvoiceId sağlayıcı tarafındaki fatura ID'si
-     * @return PDF byte dizisi
+     * @param providerInvoiceId the invoice ID on the provider side
+     * @return the PDF byte array
      */
     byte[] downloadPdf(String providerInvoiceId);
 
     /**
-     * GİB'de bu VKN/TCKN için kayıtlı e-Fatura mükellefi var mı kontrol eder.
-     * Tüzel müşteriler için E_FATURA ya da E_ARSIV seçimi bu sonuca göre yapılır.
+     * Checks whether a registered e-Fatura taxpayer exists in GİB for this VKN/TCKN.
+     * For corporate customers, the E_FATURA vs E_ARSIV choice is made based on this result.
      *
-     * @param taxId 10 haneli VKN ya da 11 haneli TCKN
-     * @return {@code true} = GİB kayıtlı e-Fatura mükellefi → E_FATURA kesilebilir
-     *         {@code false} = kayıtlı değil → E_ARSIV kesilmelidir
-     *         Provider desteklemiyorsa varsayılan {@code false} döner (güvenli taraf).
+     * @param taxId a 10-digit VKN or 11-digit TCKN
+     * @return {@code true} = registered e-Fatura taxpayer in GİB → E_FATURA can be issued
+     *         {@code false} = not registered → E_ARSIV must be issued.
+     *         If the provider does not support this, the default {@code false} is returned (safe side).
      */
     default boolean isGibRegistered(String taxId) {
         return false;

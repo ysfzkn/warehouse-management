@@ -9,17 +9,17 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
 /**
- * Sitemap ping job (Faz 3 NICE-TO-HAVE).
+ * Sitemap ping job (Phase 3 NICE-TO-HAVE).
  *
- * <p>Haftada bir Google Search Console + Bing IndexNow + Yandex ping endpoint'lerine
- * sitemap URL'imizi pingler. Bu sayede arama motorları yeni ürün/kategori
- * değişikliklerini daha hızlı keşfeder.</p>
+ * <p>Once a week, pings our sitemap URL to the Google Search Console + Bing IndexNow +
+ * Yandex ping endpoints. This lets search engines discover new product/category
+ * changes more quickly.</p>
  *
  * <p>Google: https://www.google.com/ping?sitemap=https://siteniz.com/sitemap.xml
- * Bing IndexNow: https://www.bing.com/IndexNow?... (modern alternatif)
+ * Bing IndexNow: https://www.bing.com/IndexNow?... (modern alternative)
  * Yandex: https://webmaster.yandex.com/ping?sitemap=...</p>
  *
- * <p>{@code seo_canonical_domain} setting boşsa job hiçbir şey yapmaz.</p>
+ * <p>If the {@code seo_canonical_domain} setting is empty, the job does nothing.</p>
  */
 @Component
 public class SitemapPingJob {
@@ -33,7 +33,7 @@ public class SitemapPingJob {
         this.settingService = settingService;
     }
 
-    /** Pazartesi sabah 04:00'te (Türkiye) — düşük trafik saati. */
+    /** Monday morning at 04:00 (Turkey) — low-traffic hour. */
     @Scheduled(cron = "0 0 4 * * MON", zone = "Europe/Istanbul")
     @SchedulerLock(name = "sitemapPing", lockAtMostFor = "PT5M", lockAtLeastFor = "PT1M")
     public void pingSearchEngines() {

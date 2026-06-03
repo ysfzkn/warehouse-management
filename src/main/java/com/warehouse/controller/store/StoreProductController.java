@@ -16,6 +16,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @RestController
@@ -25,24 +26,27 @@ public class StoreProductController {
     private final ProductService productService;
     private final StockService stockService;
     private final ReviewRepository reviewRepository;
+    private final com.warehouse.repository.StockRepository stockRepository;
     private final com.warehouse.service.StockNotificationService stockNotificationService;
     private final com.warehouse.security.JwtService jwtService;
 
     public StoreProductController(ProductService productService,
                                    StockService stockService,
                                    ReviewRepository reviewRepository,
+                                   com.warehouse.repository.StockRepository stockRepository,
                                    com.warehouse.service.StockNotificationService stockNotificationService,
                                    com.warehouse.security.JwtService jwtService) {
         this.productService = productService;
         this.stockService = stockService;
         this.reviewRepository = reviewRepository;
+        this.stockRepository = stockRepository;
         this.stockNotificationService = stockNotificationService;
         this.jwtService = jwtService;
     }
 
     /**
-     * Stokta yoksa bildir: müşteri ürün tekrar stoğa girdiğinde haber almak için abone olur.
-     * Giriş yapmış müşteri için token'dan email alınır, misafirler body'de email gönderir.
+     * Notify when back in stock: the customer subscribes to be notified when the product is restocked.
+     * For a logged-in customer the email is taken from the token; guests send the email in the body.
      */
     @PostMapping("/{id}/notify-me")
     public ResponseEntity<java.util.Map<String, Object>> notifyMe(
@@ -54,7 +58,7 @@ public class StoreProductController {
         String email = body != null ? body.getOrDefault("email", "") : "";
         email = email != null ? email.trim() : "";
 
-        // Giriş yapmış kullanıcıda token'dan email'i alabiliriz (opsiyonel — frontend zaten gönderir)
+        // For a logged-in user we can get the email from the token (optional — the frontend already sends it)
         if (email.isBlank()) {
             return ResponseEntity.badRequest().body(java.util.Map.of("error", "E-posta adresi zorunludur."));
         }
@@ -118,8 +122,14 @@ public class StoreProductController {
             productPage = new org.springframework.data.domain.PageImpl<>(filtered, pageable, filtered.size());
         }
 
+        // ── N+1 prevention: stock + reviews for ALL products on the page in a single query ──
+        List<Long> productIds = productPage.getContent().stream()
+                .map(Product::getId).collect(Collectors.toList());
+        Map<Long, Integer> stockMap = batchStockAvailability(productIds);
+        Map<Long, double[]> reviewMap = batchReviewStats(productIds); // [avgRating, count]
+
         List<StoreProductDto> dtos = productPage.getContent().stream()
-            .map(this::toStoreDto)
+            .map(p -> toStoreDto(p, stockMap, reviewMap))
             .collect(Collectors.toList());
 
         PagedResponse<StoreProductDto> response = new PagedResponse<>(
@@ -142,16 +152,70 @@ public class StoreProductController {
         return ResponseEntity.ok(toStoreDto(product));
     }
 
+    /**
+     * Single product (slug detail) — runs its own queries.
+     * For lists, use the batch version {@link #toStoreDto(Product, Map, Map)}.
+     */
     private StoreProductDto toStoreDto(Product product) {
-        // Calculate stock availability
         int totalAvailable = 0;
         try {
             List<Stock> stocks = stockService.getStocksByProduct(product.getId());
-            totalAvailable = stocks.stream()
-                .mapToInt(Stock::getAvailableQuantity)
-                .sum();
+            totalAvailable = stocks.stream().mapToInt(Stock::getAvailableQuantity).sum();
         } catch (Exception ignored) {}
+        Double avgRating = null;
+        long reviewCount = 0;
+        try {
+            avgRating = reviewRepository.getAverageRatingByProductId(product.getId());
+            reviewCount = reviewRepository.countApprovedByProductId(product.getId());
+        } catch (Exception ignored) {}
+        return buildDto(product, totalAvailable, avgRating, reviewCount);
+    }
 
+    /**
+     * Batch version — stock and review info is read from maps that were
+     * pre-fetched in bulk. No N+1. The list endpoint uses this.
+     */
+    private StoreProductDto toStoreDto(Product product,
+                                        Map<Long, Integer> stockMap,
+                                        Map<Long, double[]> reviewMap) {
+        int totalAvailable = stockMap.getOrDefault(product.getId(), 0);
+        double[] rv = reviewMap.get(product.getId());
+        Double avgRating = (rv != null && rv[1] > 0) ? rv[0] : null;
+        long reviewCount = (rv != null) ? (long) rv[1] : 0;
+        return buildDto(product, totalAvailable, avgRating, reviewCount);
+    }
+
+    /** Page-based total available stock for all products (single query). */
+    private Map<Long, Integer> batchStockAvailability(List<Long> productIds) {
+        Map<Long, Integer> map = new java.util.HashMap<>();
+        if (productIds == null || productIds.isEmpty()) return map;
+        try {
+            for (Object[] row : stockRepository.sumAvailableByProductIds(productIds)) {
+                Long pid = ((Number) row[0]).longValue();
+                int avail = row[1] != null ? ((Number) row[1]).intValue() : 0;
+                map.put(pid, avail);
+            }
+        } catch (Exception ignored) {}
+        return map;
+    }
+
+    /** Review statistics for all products (single query). Value: [avgRating, count]. */
+    private Map<Long, double[]> batchReviewStats(List<Long> productIds) {
+        Map<Long, double[]> map = new java.util.HashMap<>();
+        if (productIds == null || productIds.isEmpty()) return map;
+        try {
+            for (Object[] row : reviewRepository.getRatingStatsForProducts(productIds)) {
+                Long pid = ((Number) row[0]).longValue();
+                double avg = row[1] != null ? ((Number) row[1]).doubleValue() : 0;
+                double cnt = row[2] != null ? ((Number) row[2]).doubleValue() : 0;
+                map.put(pid, new double[]{ avg, cnt });
+            }
+        } catch (Exception ignored) {}
+        return map;
+    }
+
+    /** Shared DTO builder — stock and review values are passed as parameters. */
+    private StoreProductDto buildDto(Product product, int totalAvailable, Double avgRating, long reviewCount) {
         String stockStatus = totalAvailable > 0 ? "IN_STOCK" : "OUT_OF_STOCK";
         if (totalAvailable > 0 && totalAvailable <= 5) {
             stockStatus = "LOW_STOCK";
@@ -183,14 +247,7 @@ public class StoreProductController {
             } catch (Exception ignored) {}
         }
 
-        // Reviews
-        Double avgRating = null;
-        long reviewCount = 0;
-        try {
-            avgRating = reviewRepository.getAverageRatingByProductId(product.getId());
-            reviewCount = reviewRepository.countApprovedByProductId(product.getId());
-        } catch (Exception ignored) {}
-
+        // Reviews — avgRating + reviewCount came in as parameters (batch or single)
         return StoreProductDto.builder()
             .id(product.getId())
             .slug(product.getSlug())

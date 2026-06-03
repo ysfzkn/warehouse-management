@@ -160,6 +160,24 @@ public class AdminOrderController {
         List<OrderItem> items = orderItemRepository.findByOrderId(id);
         List<OrderStatusHistory> history = statusHistoryRepository.findByOrderIdOrderByCreatedAtDesc(id);
 
+        // If bank transfer — pull the reference + status from the latest transaction (for admin approval)
+        String bankRef = null;
+        java.time.LocalDateTime bankDeadline = null;
+        String bankTxStatus = null;
+        if ("BANK_TRANSFER".equalsIgnoreCase(order.getPaymentMethod())) {
+            // Ordering: the latest tx (if re-initialized, picks the last INITIATED one)
+            var txs = paymentRepo.findByOrderId(id);
+            // Latest tx — select by id descending (stable for equal createdAt values)
+            var latestTx = txs.stream()
+                    .max(java.util.Comparator.comparing(com.warehouse.entity.PaymentTransaction::getId))
+                    .orElse(null);
+            if (latestTx != null) {
+                bankRef = latestTx.getBankTransferRef();
+                bankDeadline = latestTx.getExpiresAt();
+                bankTxStatus = latestTx.getStatus() != null ? latestTx.getStatus().name() : null;
+            }
+        }
+
         return ResponseEntity.ok(AdminOrderDetailDto.builder()
             .id(order.getId())
             .orderNumber(order.getOrderNumber())
@@ -226,6 +244,9 @@ public class AdminOrderController {
                 .createdAt(h.getCreatedAt())
                 .build()).collect(Collectors.toList()))
             .createdAt(order.getCreatedAt())
+            .bankTransferReference(bankRef)
+            .bankTransferDeadline(bankDeadline)
+            .bankTransferStatus(bankTxStatus)
             .build());
     }
 
@@ -252,8 +273,8 @@ public class AdminOrderController {
             order, oldStatus, newStatus,
             CurrentUser.usernameOrSystem(), "ADMIN", body.getNote()));
 
-        // RETURNED/REFUNDED'a geçişte fatura iptal/credit note event'i fırlat
-        // (InvoiceCancellationListener AFTER_COMMIT + @Async olarak yakalar)
+        // On transition to RETURNED/REFUNDED, publish the invoice cancellation/credit note event
+        // (InvoiceCancellationListener catches it AFTER_COMMIT + @Async)
         if (newStatus == OrderStatus.RETURNED || newStatus == OrderStatus.REFUNDED) {
             eventPublisher.publishEvent(new com.warehouse.event.OrderReturnedEvent(
                     this, order.getId(), order.getOrderNumber(),
@@ -306,7 +327,7 @@ public class AdminOrderController {
                             stockEventRepository.save(event);
                         });
                     } else {
-                        // StockId null ama yine de event logla (izlenebilirlik)
+                        // StockId is null but still log the event (traceability)
                         StockEvent event = new StockEvent();
                         event.setProductId(productId);
                         event.setEventType(StockEventType.QUANTITY_CHANGED);
@@ -433,14 +454,69 @@ public class AdminOrderController {
         return ResponseEntity.ok(Map.of("message", "Not eklendi."));
     }
 
+    /**
+     * Bank transfer confirmation — the admin enters the actual deposit details, the system validates them.
+     * Body: { paidAmount: BigDecimal, paidAt: ISO datetime, receiptNote: String? }
+     */
     @PutMapping("/{id}/confirm-payment")
     public ResponseEntity<Map<String, String>> confirmPayment(
             @PathVariable Long id,
+            @RequestBody Map<String, Object> body,
             @RequestHeader(value = "X-ADMIN-SECURITY-CODE", required = false) String securityCode) {
         adminSecurityService.requireSecurityCodeForAdmin(securityCode);
+
+        if (body == null) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                    "Body zorunlu: { paidAmount, paidAt, receiptNote? }");
+        }
+        Object paidAmountRaw = body.get("paidAmount");
+        Object paidAtRaw = body.get("paidAt");
+        if (paidAmountRaw == null) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                    "paidAmount (yatırılan tutar) zorunlu.");
+        }
+        if (paidAtRaw == null) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                    "paidAt (banka ekstresindeki gerçek ödeme tarihi) zorunlu.");
+        }
+        java.math.BigDecimal paidAmount;
+        java.time.LocalDateTime paidAt;
+        try {
+            paidAmount = new java.math.BigDecimal(paidAmountRaw.toString());
+        } catch (NumberFormatException e) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                    "paidAmount geçersiz: " + paidAmountRaw);
+        }
+        try {
+            paidAt = java.time.LocalDateTime.parse(paidAtRaw.toString());
+        } catch (Exception e) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                    "paidAt ISO datetime formatında olmalı (örn. 2026-05-18T14:30:00). Gelen: " + paidAtRaw);
+        }
+        String receiptNote = body.get("receiptNote") != null ? body.get("receiptNote").toString() : null;
         String admin = CurrentUser.usernameOrSystem();
-        paymentService.confirmBankTransfer(id, admin);
+        paymentService.confirmBankTransfer(id, paidAmount, paidAt, admin, receiptNote);
         return ResponseEntity.ok(Map.of("message", "Havale/EFT ödemesi onaylandı."));
+    }
+
+    /**
+     * Bank transfer rejection — wrong amount, wrong reference, customer cancelled, etc.
+     * Body: { reason: String }
+     */
+    @PutMapping("/{id}/reject-payment")
+    public ResponseEntity<Map<String, String>> rejectPayment(
+            @PathVariable Long id,
+            @RequestBody Map<String, Object> body,
+            @RequestHeader(value = "X-ADMIN-SECURITY-CODE", required = false) String securityCode) {
+        adminSecurityService.requireSecurityCodeForAdmin(securityCode);
+        String reason = body != null && body.get("reason") != null ? body.get("reason").toString() : "";
+        if (reason.isBlank()) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                    "Red sebebi zorunlu (audit + müşteri bildirimi için).");
+        }
+        String admin = CurrentUser.usernameOrSystem();
+        paymentService.rejectBankTransfer(id, reason, admin);
+        return ResponseEntity.ok(Map.of("message", "Havale reddedildi, sipariş iptal edildi."));
     }
 
     @PutMapping("/{id}/refund")
@@ -572,10 +648,10 @@ public class AdminOrderController {
     // ==================== Invoice Upload ====================
 
     /**
-     * Manuel fatura PDF/resim yükleme. Storage abstraction üzerinden
-     * yazılır → dev'de local fs, prod'da Railway bucket / S3.
-     * DB'de {@code order.invoiceUrl} alanı artık <strong>storage key</strong>
-     * tutar (örn. {@code "invoices/123/abc.pdf"}), filesystem path değil.
+     * Manual invoice PDF/image upload. Written through the storage abstraction
+     * → local fs in dev, Railway bucket / S3 in prod.
+     * The {@code order.invoiceUrl} field in the DB now holds a <strong>storage key</strong>
+     * (e.g. {@code "invoices/123/abc.pdf"}), not a filesystem path.
      */
     @PostMapping("/{id}/invoice")
     public ResponseEntity<Map<String, String>> uploadInvoice(
@@ -612,8 +688,8 @@ public class AdminOrderController {
     // ==================== Invoice Download ====================
 
     /**
-     * Fatura indirme/görüntüleme. Stream storage'tan çekilir, response'a
-     * yazılır. {@code ?inline=true} → tarayıcıda görüntüle.
+     * Invoice download/view. The stream is pulled from storage and written to the
+     * response. {@code ?inline=true} → display in the browser.
      */
     @GetMapping("/{id}/invoice/download")
     public ResponseEntity<org.springframework.core.io.Resource> downloadInvoice(@PathVariable Long id,
@@ -627,9 +703,9 @@ public class AdminOrderController {
         }
 
         try {
-            // Legacy DB kayıtları için backward-compat:
-            // Eski path'ler "uploads/invoices/..." veya "C:/...uploads/invoices/..." formatında
-            // olabilir → key'e dönüştür (sadece dosya adını al, prefix'i invoices/{orderId} yap)
+            // Backward-compat for legacy DB records:
+            // Old paths may be in the form "uploads/invoices/..." or "C:/...uploads/invoices/..."
+            // → convert to a key (take just the file name, use the prefix invoices/{orderId})
             String storageKey = key;
             if (key.contains("uploads/invoices/")) {
                 String fileName = key.substring(key.lastIndexOf('/') + 1);

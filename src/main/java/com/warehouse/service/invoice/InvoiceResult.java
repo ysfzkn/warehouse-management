@@ -7,7 +7,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * E-Fatura sağlayıcısından dönen sonuç.
+ * Result returned by an E-Fatura provider.
  */
 @Data
 @Builder

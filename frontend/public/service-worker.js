@@ -1,14 +1,14 @@
 /* eslint-disable */
 /**
- * Mağaza Service Worker — minimum PWA + offline shell.
+ * Store Service Worker — minimal PWA + offline shell.
  *
- * Stratejiler:
+ * Strategies:
  *   - Static assets (.js, .css, font, image): cache-first
- *   - API çağrıları (/api/): network-first, cache fallback yok (taze veri kritik)
- *   - HTML navigations: network-first, offline'da app-shell fallback
+ *   - API calls (/api/): network-first, no cache fallback (fresh data is critical)
+ *   - HTML navigations: network-first, app-shell fallback when offline
  *
- * Aktif etmek için index.js'te navigator.serviceWorker.register('/service-worker.js')
- * çağrısı yapılmalı (registerSW.js helper'ı ile sarılı).
+ * To enable, navigator.serviceWorker.register('/service-worker.js') must be called
+ * in index.js (wrapped by the registerSW.js helper).
  */
 
 const CACHE_VERSION = 'magaza-v1';
@@ -31,7 +31,7 @@ self.addEventListener('install', (event) => {
   self.skipWaiting();
 });
 
-// ── Activate: eski cache temizliği ──
+// ── Activate: clean up old caches ──
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then(keys => Promise.all(
@@ -44,12 +44,12 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const req = event.request;
 
-  // Yalnız GET'leri cache'le; POST/PUT/DELETE asla cache'lenmez
+  // Cache GET requests only; POST/PUT/DELETE are never cached
   if (req.method !== 'GET') return;
 
   const url = new URL(req.url);
 
-  // API: network-first, cache yok (KVKK + güncel veri için)
+  // API: network-first, no cache (for KVKK compliance + up-to-date data)
   if (url.pathname.startsWith('/api/')) {
     event.respondWith(
       fetch(req).catch(() => new Response(JSON.stringify({
@@ -75,7 +75,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // HTML navigations: network-first, offline'da index.html'e düş
+  // HTML navigations: network-first, fall back to index.html when offline
   if (req.mode === 'navigate' || (req.destination === 'document')) {
     event.respondWith(
       fetch(req).catch(() => caches.match('/index.html'))

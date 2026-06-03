@@ -14,7 +14,7 @@ const CategoryForm = ({ category, onSuccess, onCancel }) => {
   const [createdCategoryId, setCreatedCategoryId] = useState(null);
 
   useEffect(() => {
-    // Düzenleme modunda kategorileri çek
+    // Fetch categories in edit mode
     if (category && category.parentId) {
       fetchCategories();
     }
@@ -28,7 +28,7 @@ const CategoryForm = ({ category, onSuccess, onCancel }) => {
         parentId: category.parentId || ''
       });
     } else {
-      // Yeni kategori oluşturma modunda parentId'yi boş bırak
+      // Leave parentId empty when creating a new category
       setFormData(prev => ({ ...prev, parentId: '' }));
     }
   }, [category]);
@@ -87,17 +87,17 @@ const CategoryForm = ({ category, onSuccess, onCancel }) => {
       };
 
       if (category) {
-        // Düzenleme modu
+        // Edit mode
         await axios.put(`/api/categories/${category.id}`, dataToSend);
 
-        // Parent değişikliği (sadece alt kategoriler için)
+        // Parent change (only for subcategories)
         if (category.parentId && formData.parentId !== category.parentId) {
           await axios.put(`/api/categories/${category.id}/parent?parentId=${formData.parentId || ''}`);
         }
 
         onSuccess();
       } else {
-        // Yeni kategori oluşturma - sadece ana kategori
+        // Create a new category - top-level only
         const response = await axios.post('/api/categories', dataToSend);
         setCreatedCategoryId(response.data.id);
         setShowSubcategoryModal(true);
@@ -185,7 +185,7 @@ const CategoryForm = ({ category, onSuccess, onCancel }) => {
           >
             <option value="">Ana Kategori (Üst kategori yok)</option>
             {categories
-              .filter(cat => cat.id !== category.id) // Kendisini parent olarak seçemesin
+              .filter(cat => cat.id !== category.id) // Prevent selecting itself as parent
               .map((cat) => (
                 <option key={cat.id} value={cat.id}>
                   {cat.name}

@@ -13,15 +13,15 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * UBL-TR formatında e-Fatura XML üretici.
+ * e-Invoice XML generator in UBL-TR format.
  *
- * UBL-TR GİB (Gelir İdaresi Başkanlığı) tarafından belirlenen e-Fatura standart formatıdır.
- * Bu builder EARSIV (bireysel müşteri) ve EFATURA (tüzel müşteri) formatlarının
- * temel XML yapısını üretir.
+ * UBL-TR is the standard e-Invoice format defined by the Turkish Revenue Administration (GIB).
+ * This builder produces the basic XML structure for the EARSIV (individual customer)
+ * and EFATURA (corporate customer) formats.
  *
- * NOT: Gerçek üretim XML'i için Logo Connect / eLogo tasarım dosyası (design_file)
- * kullanılması gerekebilir. Logo SendInvoice metodu template alanını ister,
- * bu metotdan dönen XML template'e uygulanır.
+ * NOTE: A Logo Connect / eLogo design file (design_file) may be required for the
+ * actual production XML. The Logo SendInvoice method requires a template field,
+ * and the XML returned by this method is applied to that template.
  */
 public class UblTrInvoiceBuilder {
 
@@ -29,13 +29,13 @@ public class UblTrInvoiceBuilder {
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm:ss");
 
     /**
-     * Tam UBL-TR Invoice XML'i üretir.
+     * Produces the complete UBL-TR Invoice XML.
      *
-     * @param invoice   Bizim Invoice entity'miz
-     * @param order     Sipariş (line items için)
-     * @param items     Sipariş kalemleri
-     * @param companyInfo Satıcı firma bilgileri (site_settings'ten map olarak)
-     * @return UBL-TR formatında XML string
+     * @param invoice   Our Invoice entity
+     * @param order     Order (for line items)
+     * @param items     Order items
+     * @param companyInfo Seller company info (as a map from site_settings)
+     * @return XML string in UBL-TR format
      */
     public static String build(Invoice invoice, Order order, List<OrderItem> items, Map<String, String> companyInfo) {
         String ettn = invoice.getEttn() != null ? invoice.getEttn() : UUID.randomUUID().toString();
@@ -46,14 +46,14 @@ public class UblTrInvoiceBuilder {
                 ? invoice.getInvoiceNumber()
                 : "";
 
-        // Alıcı tipi: bireysel (TCKN 11 hane) mi kurumsal (VKN 10 hane) mi?
+        // Recipient type: individual (TCKN 11 digits) or corporate (VKN 10 digits)?
         boolean individual = invoice.isIndividual();
         boolean isCreditNote = invoice.isCreditNote();
 
-        // ProfileID seçimi:
-        //   - Credit note (iade faturası): "IADE"
-        //   - Bireysel normal fatura: "EARSIVFATURA"
-        //   - Tüzel normal fatura: "TICARIFATURA"
+        // ProfileID selection:
+        //   - Credit note (return invoice): "IADE"
+        //   - Individual normal invoice: "EARSIVFATURA"
+        //   - Corporate normal invoice: "TICARIFATURA"
         String profileId = isCreditNote ? "IADE" : (individual ? "EARSIVFATURA" : "TICARIFATURA");
 
         // InvoiceTypeCode:
@@ -85,14 +85,14 @@ public class UblTrInvoiceBuilder {
         xml.append("  <cbc:IssueDate>").append(issueDate.format(DATE_FORMAT)).append("</cbc:IssueDate>\n");
         xml.append("  <cbc:IssueTime>").append(java.time.LocalTime.now().format(TIME_FORMAT)).append("</cbc:IssueTime>\n");
         xml.append("  <cbc:InvoiceTypeCode>").append(invoiceTypeCode).append("</cbc:InvoiceTypeCode>\n");
-        // Credit note için sebep — Note alanına yazılır
+        // Reason for credit note — written to the Note field
         if (isCreditNote && invoice.getCreditNoteReason() != null && !invoice.getCreditNoteReason().isBlank()) {
             xml.append("  <cbc:Note>").append(escape(invoice.getCreditNoteReason())).append("</cbc:Note>\n");
         }
         xml.append("  <cbc:DocumentCurrencyCode>TRY</cbc:DocumentCurrencyCode>\n");
         xml.append("  <cbc:LineCountNumeric>").append(items.size()).append("</cbc:LineCountNumeric>\n");
 
-        // Order Reference (sipariş numarası)
+        // Order Reference (order number)
         if (order.getOrderNumber() != null) {
             xml.append("  <cac:OrderReference>\n");
             xml.append("    <cbc:ID>").append(escape(order.getOrderNumber())).append("</cbc:ID>\n");
@@ -100,7 +100,7 @@ public class UblTrInvoiceBuilder {
             xml.append("  </cac:OrderReference>\n");
         }
 
-        // Credit note için orijinal faturaya BillingReference (zorunlu)
+        // BillingReference to the original invoice for credit notes (mandatory)
         if (isCreditNote && invoice.getCreditedInvoice() != null) {
             Invoice original = invoice.getCreditedInvoice();
             xml.append("  <cac:BillingReference>\n");
@@ -117,7 +117,7 @@ public class UblTrInvoiceBuilder {
             xml.append("  </cac:BillingReference>\n");
         }
 
-        // Satıcı (Supplier)
+        // Seller (Supplier)
         xml.append("  <cac:AccountingSupplierParty>\n");
         xml.append("    <cac:Party>\n");
         xml.append("      <cbc:WebsiteURI>").append(escape(companyInfo.getOrDefault("logo_company_website", ""))).append("</cbc:WebsiteURI>\n");
@@ -154,7 +154,7 @@ public class UblTrInvoiceBuilder {
         xml.append("    </cac:Party>\n");
         xml.append("  </cac:AccountingSupplierParty>\n");
 
-        // Alıcı (Customer)
+        // Recipient (Customer)
         xml.append("  <cac:AccountingCustomerParty>\n");
         xml.append("    <cac:Party>\n");
         xml.append("      <cac:PartyIdentification>\n");
@@ -162,14 +162,14 @@ public class UblTrInvoiceBuilder {
         xml.append("      </cac:PartyIdentification>\n");
 
         if (individual) {
-            // Bireysel: PersonName (Ad + Soyad)
+            // Individual: PersonName (First name + Last name)
             String[] nameParts = splitName(invoice.getRecipientName());
             xml.append("      <cac:Person>\n");
             xml.append("        <cbc:FirstName>").append(escape(nameParts[0])).append("</cbc:FirstName>\n");
             xml.append("        <cbc:FamilyName>").append(escape(nameParts[1])).append("</cbc:FamilyName>\n");
             xml.append("      </cac:Person>\n");
         } else {
-            // Kurumsal: PartyName
+            // Corporate: PartyName
             xml.append("      <cac:PartyName>\n");
             xml.append("        <cbc:Name>").append(escape(invoice.getRecipientName())).append("</cbc:Name>\n");
             xml.append("      </cac:PartyName>\n");
@@ -212,9 +212,9 @@ public class UblTrInvoiceBuilder {
         xml.append("    </cac:Party>\n");
         xml.append("  </cac:AccountingCustomerParty>\n");
 
-        // Fatura satırları (InvoiceLine)
-        // Her satır: KDV + (varsa) ÖTV (SCT) bloklarını içerir.
-        // Beyaz eşya / elektronik için ÖTV kritik — UBL-TR 1.2'de TaxTypeCode=4080
+        // Invoice lines (InvoiceLine)
+        // Each line contains VAT + (if present) SCT blocks.
+        // SCT is critical for white goods / electronics — TaxTypeCode=4080 in UBL-TR 1.2
         BigDecimal totalSctAmount = BigDecimal.ZERO;
         int lineId = 1;
         for (OrderItem item : items) {
@@ -230,7 +230,7 @@ public class UblTrInvoiceBuilder {
                     : BigDecimal.ZERO;
             totalSctAmount = totalSctAmount.add(sctAmount);
 
-            // Satır toplam vergisi: KDV + ÖTV
+            // Line total tax: VAT + SCT
             BigDecimal lineTaxTotal = vatAmount.add(sctAmount);
 
             xml.append("  <cac:InvoiceLine>\n");
@@ -241,7 +241,7 @@ public class UblTrInvoiceBuilder {
             xml.append("    <cac:TaxTotal>\n");
             xml.append("      <cbc:TaxAmount currencyID=\"TRY\">").append(lineTaxTotal.toPlainString()).append("</cbc:TaxAmount>\n");
 
-            // KDV (TaxTypeCode 0015)
+            // VAT (TaxTypeCode 0015)
             xml.append("      <cac:TaxSubtotal>\n");
             xml.append("        <cbc:TaxableAmount currencyID=\"TRY\">").append(lineTotal.toPlainString()).append("</cbc:TaxableAmount>\n");
             xml.append("        <cbc:TaxAmount currencyID=\"TRY\">").append(vatAmount.toPlainString()).append("</cbc:TaxAmount>\n");
@@ -254,7 +254,7 @@ public class UblTrInvoiceBuilder {
             xml.append("        </cac:TaxCategory>\n");
             xml.append("      </cac:TaxSubtotal>\n");
 
-            // ÖTV (TaxTypeCode 4080) — varsa
+            // SCT (TaxTypeCode 4080) — if present
             if (sctRate.compareTo(BigDecimal.ZERO) > 0) {
                 xml.append("      <cac:TaxSubtotal>\n");
                 xml.append("        <cbc:TaxableAmount currencyID=\"TRY\">").append(lineTotal.toPlainString()).append("</cbc:TaxableAmount>\n");
@@ -288,11 +288,11 @@ public class UblTrInvoiceBuilder {
             xml.append("  </cac:InvoiceLine>\n");
         }
 
-        // Toplam vergiler (KDV + ÖTV)
+        // Total taxes (VAT + SCT)
         BigDecimal vatTotal = invoice.getVatAmount() != null ? invoice.getVatAmount() : BigDecimal.ZERO;
         BigDecimal subtotal = invoice.getSubtotal() != null ? invoice.getSubtotal() : BigDecimal.ZERO;
         BigDecimal grandTotal = invoice.getTotalAmount() != null ? invoice.getTotalAmount() : BigDecimal.ZERO;
-        // Sipariş tarafından sağlanan SCT toplam'ı varsa onu, yoksa satır toplamlarından alınanı kullan
+        // Use the SCT total provided by the order if present, otherwise the one derived from the line totals
         BigDecimal sctTotal = order.getSctTotal() != null
                 ? order.getSctTotal()
                 : totalSctAmount;
@@ -300,7 +300,7 @@ public class UblTrInvoiceBuilder {
 
         xml.append("  <cac:TaxTotal>\n");
         xml.append("    <cbc:TaxAmount currencyID=\"TRY\">").append(taxGrandTotal.toPlainString()).append("</cbc:TaxAmount>\n");
-        // Vergi türü kırılımı (KDV)
+        // Tax type breakdown (VAT)
         xml.append("    <cac:TaxSubtotal>\n");
         xml.append("      <cbc:TaxAmount currencyID=\"TRY\">").append(vatTotal.toPlainString()).append("</cbc:TaxAmount>\n");
         xml.append("      <cac:TaxCategory>\n");
@@ -310,7 +310,7 @@ public class UblTrInvoiceBuilder {
         xml.append("        </cac:TaxScheme>\n");
         xml.append("      </cac:TaxCategory>\n");
         xml.append("    </cac:TaxSubtotal>\n");
-        // Vergi türü kırılımı (ÖTV) — sadece varsa
+        // Tax type breakdown (SCT) — only if present
         if (sctTotal.compareTo(BigDecimal.ZERO) > 0) {
             xml.append("    <cac:TaxSubtotal>\n");
             xml.append("      <cbc:TaxAmount currencyID=\"TRY\">").append(sctTotal.toPlainString()).append("</cbc:TaxAmount>\n");
@@ -324,7 +324,7 @@ public class UblTrInvoiceBuilder {
         }
         xml.append("  </cac:TaxTotal>\n");
 
-        // Parasal Toplamlar
+        // Monetary Totals
         xml.append("  <cac:LegalMonetaryTotal>\n");
         xml.append("    <cbc:LineExtensionAmount currencyID=\"TRY\">").append(subtotal.toPlainString()).append("</cbc:LineExtensionAmount>\n");
         xml.append("    <cbc:TaxExclusiveAmount currencyID=\"TRY\">").append(subtotal.toPlainString()).append("</cbc:TaxExclusiveAmount>\n");

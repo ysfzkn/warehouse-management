@@ -15,7 +15,7 @@ import org.springframework.stereotype.Component;
  * <p>Logo eLogo returns PENDING immediately on SendDocument in many cases —
  * GİB processes it a few seconds to minutes later. Without this poller
  * the invoice row would stay PENDING forever unless an admin manually
- * clicked "Yeniden Oluştur".
+ * clicked "Regenerate".
  *
  * <p>Schedule: every 5 minutes, with a 2-minute initial delay so we don't
  * hammer the provider right after app boot.

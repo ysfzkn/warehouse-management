@@ -52,7 +52,7 @@ public class AdminSiteSettingsController {
         try {
             siteSettingService.updateSettings(settings, CurrentUser.usernameOrSystem());
         } catch (IllegalStateException ex) {
-            // Tek setting'in patlaması — açıklayıcı mesaj döndür
+            // A single setting failed — return an explanatory message
             return ResponseEntity.badRequest().body(Map.of("message", ex.getMessage()));
         }
         return ResponseEntity.ok(Map.of("message", "Ayarlar güncellendi."));
@@ -128,38 +128,57 @@ public class AdminSiteSettingsController {
     }
 
     /** Serve uploaded site assets (banners, etc.) by filename — PUBLIC access */
-    @GetMapping("/site/asset/view/{fileName:.+}")
+    /**
+     * Serves site assets.
+     * New format: storage key (e.g. "assets/bank-transfer-qr-abc.png")
+     * Old format: just fileName (for the legacy local fs)
+     * Both are supported — PhotoStorageService first, then local fallback.
+     */
+    @GetMapping("/site/asset/view/{*assetKey}")
     @PreAuthorize("permitAll()")
-    public ResponseEntity<byte[]> viewAsset(@PathVariable String fileName) {
+    public ResponseEntity<byte[]> viewAsset(@PathVariable String assetKey) {
         try {
-            if (fileName == null || fileName.isEmpty() || fileName.contains("..") || fileName.contains("/") || fileName.contains("\\")) {
+            // The Spring "/{*x}" pattern leaves a leading slash — strip it
+            if (assetKey != null && assetKey.startsWith("/")) assetKey = assetKey.substring(1);
+            if (assetKey == null || assetKey.isEmpty() || assetKey.contains("..") || assetKey.contains("\\")) {
                 return ResponseEntity.badRequest().build();
             }
-            // Try multiple locations to find the file
-            java.nio.file.Path filePath = null;
-            // 1. Via PhotoStorageService
-            try {
-                java.nio.file.Path siteDir = photoStorageService.getSiteAssetDir();
-                java.nio.file.Path candidate = siteDir.resolve(fileName);
-                if (java.nio.file.Files.exists(candidate)) filePath = candidate;
+
+            byte[] bytes = null;
+
+            // 1. Try via PhotoStorageService — for both S3/MinIO and local.
+            //    New uploads store the key in the "assets/xxx.png" format.
+            try (java.io.InputStream is = photoStorageService.openPhotoStream(
+                    assetKey.contains("/") ? assetKey : "assets/" + assetKey)) {
+                bytes = is.readAllBytes();
             } catch (Exception ignored) {}
-            // 2. Fallback: uploads/site relative to CWD
-            if (filePath == null) {
-                java.nio.file.Path candidate = java.nio.file.Paths.get(System.getProperty("user.dir", ".")).resolve("uploads").resolve("site").resolve(fileName);
-                if (java.nio.file.Files.exists(candidate)) filePath = candidate;
+
+            // 2. Legacy local filesystem fallback — for old records
+            if (bytes == null) {
+                String fileName = assetKey.contains("/")
+                        ? assetKey.substring(assetKey.lastIndexOf('/') + 1)
+                        : assetKey;
+                java.nio.file.Path[] candidates = {
+                        java.nio.file.Paths.get(System.getProperty("user.dir", ".")).resolve("uploads").resolve("site").resolve(fileName),
+                        java.nio.file.Paths.get(System.getProperty("user.dir", ".")).resolve("site").resolve(fileName)
+                };
+                for (java.nio.file.Path p : candidates) {
+                    if (java.nio.file.Files.exists(p)) {
+                        bytes = java.nio.file.Files.readAllBytes(p);
+                        break;
+                    }
+                }
             }
-            // 3. Fallback: site/ relative to CWD
-            if (filePath == null) {
-                java.nio.file.Path candidate = java.nio.file.Paths.get(System.getProperty("user.dir", ".")).resolve("site").resolve(fileName);
-                if (java.nio.file.Files.exists(candidate)) filePath = candidate;
-            }
-            if (filePath == null || !java.nio.file.Files.exists(filePath)) {
-                return ResponseEntity.notFound().build();
-            }
-            byte[] bytes = java.nio.file.Files.readAllBytes(filePath);
+
+            if (bytes == null) return ResponseEntity.notFound().build();
+
             HttpHeaders headers = new HttpHeaders();
-            String lp = fileName.toLowerCase();
-            String ct = lp.endsWith(".svg") ? "image/svg+xml" : lp.endsWith(".png") ? "image/png" : lp.endsWith(".webp") ? "image/webp" : lp.endsWith(".gif") ? "image/gif" : "image/jpeg";
+            String lp = assetKey.toLowerCase();
+            String ct = lp.endsWith(".svg") ? "image/svg+xml"
+                    : lp.endsWith(".png") ? "image/png"
+                    : lp.endsWith(".webp") ? "image/webp"
+                    : lp.endsWith(".gif") ? "image/gif"
+                    : "image/jpeg";
             headers.setContentType(MediaType.parseMediaType(ct));
             headers.setContentLength(bytes.length);
             headers.setCacheControl("public, max-age=86400");

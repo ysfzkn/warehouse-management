@@ -11,8 +11,8 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 
 /**
- * Müşterinin bir bildirim tipi için belirli bir kanalın aktif olup olmadığını saklar.
- * Kayıt yoksa default değer (genellikle enabled=true) kullanılır.
+ * Stores whether a specific channel is enabled for a given notification type for a customer.
+ * If no record exists, the default value (usually enabled=true) is used.
  */
 @Entity
 @Table(name = "notification_preferences", indexes = {

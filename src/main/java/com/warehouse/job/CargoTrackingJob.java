@@ -19,13 +19,13 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 /**
- * Kargo takip polling job'u.
+ * Cargo tracking polling job.
  *
- * Her 30 dakikada bir SHIPPED durumundaki siparişlerin kargo takip durumunu
- * sağlayıcıdan sorgular. Teslim edilmişse order'ı DELIVERED olarak günceller.
+ * Every 30 minutes, queries the provider for the cargo tracking status of orders
+ * in SHIPPED status. If delivered, updates the order to DELIVERED.
  *
- * Kargonomi / diğer sağlayıcıların webhook desteği yoksa bu polling gereklidir.
- * Webhook desteği varsa bu job devre dışı bırakılabilir.
+ * This polling is required when Kargonomi / other providers do not support
+ * webhooks. If webhook support is available, this job can be disabled.
  */
 @Component
 public class CargoTrackingJob {
@@ -49,7 +49,7 @@ public class CargoTrackingJob {
     }
 
     /**
-     * Her 30 dakikada bir çalışır. Uygulama başlangıcından 3 dakika sonra ilk çalışma.
+     * Runs every 30 minutes. First run is 3 minutes after application startup.
      */
     @Scheduled(fixedRate = 30 * 60 * 1000, initialDelay = 3 * 60 * 1000)
     @SchedulerLock(name = "cargoTracking", lockAtMostFor = "PT15M", lockAtLeastFor = "PT5M")
@@ -57,7 +57,7 @@ public class CargoTrackingJob {
     public void pollShippedOrders() {
         if (!cargoApiService.isEnabled()) return;
 
-        // SHIPPED durumundaki ve tracking numarası olan siparişleri al
+        // Fetch orders in SHIPPED status that have a tracking number
         List<Order> shippedOrders = orderRepository.findAll(PageRequest.of(0, BATCH_SIZE))
                 .stream()
                 .filter(o -> o.getStatus() == OrderStatus.SHIPPED)
@@ -74,7 +74,7 @@ public class CargoTrackingJob {
                 CargoTrackingStatus status = cargoApiService.trackOrder(order);
                 if (status == null) continue;
 
-                // Teslim edildi?
+                // Delivered?
                 if (status.getStatus() == CargoTrackingStatus.CargoStatus.DELIVERED) {
                     order.setStatus(OrderStatus.DELIVERED);
                     orderRepository.save(order);
@@ -84,7 +84,7 @@ public class CargoTrackingJob {
                         "system", "CARGO_TRACKING_JOB",
                         "Kargo API teslim bildirimi: " + (status.getStatusText() != null ? status.getStatusText() : "")));
 
-                    // Müşteriye bildirim
+                    // Notify the customer
                     try {
                         notificationDispatchService.notifyOrderStatusChange(
                                 order.getCustomer(), order.getOrderNumber(),

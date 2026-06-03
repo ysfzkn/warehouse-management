@@ -16,8 +16,8 @@ import java.util.Map;
 /**
  * Semantic fallback search via pgvector. Call this only after
  * {@link StoreProductSearchTool} returns an empty list — or when the user's
- * query is descriptive rather than attribute-based ("evimin eşyalarına uyan
- * bir şey", "düşük sesli", "aileme hediye").
+ * query is descriptive rather than attribute-based ("something that matches my
+ * home furnishings", "quiet", "a gift for my family").
  */
 @Component
 public class StoreVectorSearchTool {

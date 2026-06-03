@@ -1,17 +1,17 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 
 /**
- * Session guard — proaktif oturum yönetimi.
+ * Session guard — proactive session management.
  *
- * Üç ayrı mekanizma tek bir yerde:
- *   1. JWT expiry takibi — token'ın `exp` alanını okur, süresi dolmadan önce uyarı gösterir,
- *      süre biter bitmez cross-tab logout tetikler.
- *   2. Idle timeout — kullanıcı N dakika hiçbir aktivite göstermediyse zorla çıkış yapar
- *      (boşta bırakılmış sekmeler için güvenlik katmanı).
- *   3. Cross-tab senkronizasyon — bir sekmede çıkış yapınca diğer sekmeler de anında
- *      logout olur (storage event).
+ * Three separate mechanisms in one place:
+ *   1. JWT expiry tracking — reads the token's `exp` field, shows a warning before it expires,
+ *      and triggers cross-tab logout as soon as it does.
+ *   2. Idle timeout — forces logout if the user shows no activity for N minutes
+ *      (a security layer for tabs left idle).
+ *   3. Cross-tab synchronization — logging out in one tab instantly logs out the others
+ *      (storage event).
  *
- * Kullanım:
+ * Usage:
  *   const { warningOpen, secondsLeft, dismiss, logoutNow } = useSessionGuard({
  *     tokenKey: 'auth_token',
  *     loginPath: '/login',
@@ -19,7 +19,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
  *     warnBeforeSeconds: 120 // show modal 2 min before JWT expiry
  *   });
  *
- * Dönen değerlerle bir <SessionWarningModal /> render edilir.
+ * The returned values are used to render a <SessionWarningModal />.
  */
 
 function decodeJwtExp(token) {
@@ -52,16 +52,16 @@ export function useSessionGuard({
     if (loggedOutRef.current) return;
     loggedOutRef.current = true;
 
-    // Tek kaynak, çok sekme: localStorage'ı temizle → storage event diğer sekmeleri uyarır
+    // Single source, multi-tab: clear localStorage → storage event notifies other tabs
     try {
       localStorage.removeItem(tokenKey);
       localStorage.removeItem(`${tokenKey}_refresh_token`);
       extraKeysToClear.forEach(k => localStorage.removeItem(k));
-      // Logout signal — diğer sekmeler dinliyor
+      // Logout signal — other tabs are listening
       localStorage.setItem('__session_logout_signal', String(Date.now()));
     } catch { /* storage disabled */ }
 
-    // Eğer zaten login sayfasındaysa yönlendirme
+    // Redirect only if not already on the login page
     if (window.location.pathname !== loginPath) {
       const next = encodeURIComponent(window.location.pathname + window.location.search);
       window.location.href = `${loginPath}?reason=${reason}&next=${next}`;
@@ -69,12 +69,12 @@ export function useSessionGuard({
   }, [tokenKey, loginPath, extraKeysToClear]);
 
   const dismiss = useCallback(() => {
-    // Kullanıcı "Devam Et" dedi — aktiviteyi güncelle, modalı kapat
+    // User clicked "Continue" — update activity, close the modal
     lastActivityRef.current = Date.now();
     setWarningOpen(false);
   }, []);
 
-  // Activity tracker — sadece timer'ı sıfırlar, render tetiklemez
+  // Activity tracker — only resets the timer, does not trigger a render
   useEffect(() => {
     const onActivity = () => { lastActivityRef.current = Date.now(); };
     const opts = { passive: true, capture: true };
@@ -92,7 +92,7 @@ export function useSessionGuard({
           window.location.href = `${loginPath}?reason=cross-tab`;
         }
       }
-      // Token silindiyse (manuel, uzantı, vs) → logout
+      // If the token was removed (manual, extension, etc.) → logout
       if (ev.key === tokenKey && ev.newValue === null && ev.oldValue) {
         logoutNow('token-removed');
       }
@@ -101,7 +101,7 @@ export function useSessionGuard({
     return () => window.removeEventListener('storage', onStorage);
   }, [tokenKey, loginPath, logoutNow]);
 
-  // Ana döngü: her saniye expiry + idle kontrol
+  // Main loop: check expiry + idle every second
   useEffect(() => {
     const refreshExpiry = () => {
       const token = localStorage.getItem(tokenKey);
@@ -110,11 +110,11 @@ export function useSessionGuard({
     refreshExpiry();
 
     const tick = () => {
-      // Token yoksa (login sayfası) hiçbir şey yapma
+      // If there's no token (login page) do nothing
       const token = localStorage.getItem(tokenKey);
       if (!token) { setWarningOpen(false); return; }
 
-      // Exp değişti mi? (yeni login veya refresh)
+      // Did exp change? (new login or refresh)
       const currentExp = decodeJwtExp(token);
       if (currentExp && currentExp !== expiryMsRef.current) {
         expiryMsRef.current = currentExp;
@@ -132,7 +132,7 @@ export function useSessionGuard({
         return;
       }
 
-      // 2) JWT exp takibi
+      // 2) JWT exp tracking
       if (exp) {
         const msLeft = exp - now;
         if (msLeft <= 0) {
@@ -149,7 +149,7 @@ export function useSessionGuard({
     };
 
     tickRef.current = setInterval(tick, 1000);
-    tick(); // ilk run
+    tick(); // initial run
     return () => clearInterval(tickRef.current);
   }, [tokenKey, idleMinutes, warnBeforeSeconds, logoutNow, warningOpen]);
 

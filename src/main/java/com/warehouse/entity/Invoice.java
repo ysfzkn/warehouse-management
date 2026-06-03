@@ -45,7 +45,7 @@ public class Invoice {
     @Builder.Default
     private InvoiceStatus status = InvoiceStatus.DRAFT;
 
-    // --- Alıcı bilgileri (sipariş anından snapshot) ---
+    // --- Recipient details (snapshot taken at order time) ---
 
     @Column(name = "recipient_name", length = 255)
     private String recipientName;
@@ -74,19 +74,19 @@ public class Invoice {
     @Column(name = "recipient_postal_code", length = 10)
     private String recipientPostalCode;
 
-    /** ETTN: e-Fatura evrensel takip numarası (GUID) - Logo/GİB'de faturayı bulmak için */
+    /** ETTN: universal e-Invoice tracking number (GUID) - used to locate the invoice in Logo/GİB */
     @Column(name = "ettn", length = 50)
     private String ettn;
 
     /**
-     * Bireysel müşteri mi? true: TC kimlik no ile e-Arşiv, false: VKN ile e-Fatura
-     * Bu flag bu faturanın bireysel mi kurumsal mı olduğunu belirler.
+     * Is this an individual customer? true: e-Arşiv with national ID (TC), false: e-Invoice with tax number (VKN).
+     * This flag determines whether the invoice is individual or corporate.
      */
     @Column(name = "is_individual", nullable = false)
     @Builder.Default
     private boolean individual = true;
 
-    // --- Tutar bilgileri ---
+    // --- Amount details ---
 
     @Column(name = "subtotal", precision = 12, scale = 2, nullable = false)
     @Builder.Default
@@ -100,7 +100,7 @@ public class Invoice {
     @Builder.Default
     private BigDecimal totalAmount = BigDecimal.ZERO;
 
-    // --- Sağlayıcı bilgileri ---
+    // --- Provider details ---
 
     @Column(name = "provider_name", length = 50)
     private String providerName;
@@ -114,7 +114,7 @@ public class Invoice {
     @Column(name = "error_message", columnDefinition = "TEXT")
     private String errorMessage;
 
-    // --- Dosya bilgileri ---
+    // --- File details ---
 
     @Column(name = "pdf_url", length = 500)
     private String pdfUrl;
@@ -122,20 +122,20 @@ public class Invoice {
     @Column(name = "xml_content", columnDefinition = "TEXT")
     private String xmlContent;
 
-    // --- Notlar ---
+    // --- Notes ---
 
     @Column(name = "note", length = 500)
     private String note;
 
-    // --- İade faturası (Credit Note) alanları ---
+    // --- Return invoice (Credit Note) fields ---
     //
-    // Türkiye e-fatura iade akışı:
-    //   - e-Arşiv 8 gün içinde iptal edilebilir (CANCELLED status)
-    //   - e-Fatura iptal edilemez → credit note kesilir (yeni Invoice satırı)
+    // Turkish e-invoice return flow:
+    //   - e-Arşiv can be cancelled within 8 days (CANCELLED status)
+    //   - e-Invoice cannot be cancelled → a credit note is issued (a new Invoice row)
     //
-    // creditNote=true ise bu fatura kendisi bir iade faturasıdır;
-    // creditedInvoice referansı orijinal faturayı gösterir.
-    // Orijinal fatura UNCHANGED kalır — yasal kanıt korunur.
+    // If creditNote=true, this invoice is itself a return invoice;
+    // the creditedInvoice reference points to the original invoice.
+    // The original invoice remains UNCHANGED — the legal record is preserved.
 
     @Column(name = "is_credit_note", nullable = false)
     private boolean creditNote = false;
@@ -147,7 +147,7 @@ public class Invoice {
     @Column(name = "credit_note_reason", length = 500)
     private String creditNoteReason;
 
-    // --- Zaman damgaları ---
+    // --- Timestamps ---
 
     @Column(name = "issued_at")
     private LocalDateTime issuedAt;

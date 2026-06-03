@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Door payment (kapıda ödeme) — auto-completes immediately.
+ * Door payment (cash/card on delivery) — auto-completes immediately.
  * No external gateway call needed.
  */
 @Component

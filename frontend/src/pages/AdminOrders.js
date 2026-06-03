@@ -50,6 +50,7 @@ export default function AdminOrders() {
   const [newStatus, setNewStatus] = useState('');
   const [statusNote, setStatusNote] = useState('');
   const [showCargoModal, setShowCargoModal] = useState(false);
+  const [confirmModal, setConfirmModal] = useState(null); // { paidAmount, paidAt, receiptNote }
   const [cargoCompany, setCargoCompany] = useState('');
   const [cargoTrackingNo, setCargoTrackingNo] = useState('');
   const [allowedTransitions, setAllowedTransitions] = useState([]);
@@ -134,15 +135,62 @@ export default function AdminOrders() {
     catch (e) { toast.error(e.response?.data?.message || 'Hata oluştu'); }
   };
 
-  const confirmPayment = async () => {
+  const confirmPayment = () => {
+    // Open the modal — a nice form instead of a prompt
+    setConfirmModal({
+      paidAmount: orderDetail?.grandTotal?.toString() || '',
+      paidAt: new Date().toISOString().slice(0, 16),
+      receiptNote: ''
+    });
+  };
+
+  // Modal submit
+  const submitConfirmPayment = async () => {
+    if (!confirmModal) return;
+    const paidAmount = Number(String(confirmModal.paidAmount).replace(',', '.'));
+    if (!isFinite(paidAmount) || paidAmount <= 0) {
+      toast.error('Geçerli bir tutar girin.');
+      return;
+    }
+    if (!confirmModal.paidAt) {
+      toast.error('Ödeme tarihi zorunlu.');
+      return;
+    }
+    const paidAt = confirmModal.paidAt.length === 16 ? confirmModal.paidAt + ':00' : confirmModal.paidAt;
+    // Store the form data, close the modal, then open the security prompt
+    // (avoid two overlays stacking — the security prompt is at the same z-index)
+    const payload = { paidAmount, paidAt, receiptNote: confirmModal.receiptNote || null };
+    const orderId = selectedOrder;
+    setConfirmModal(null);
     const code = await askCode({ description: 'Havale/EFT ödemesini onaylamak için güvenlik şifresini girin.' });
     if (!code) return;
     try {
-      await axios.put(`/api/admin/orders/${selectedOrder}/confirm-payment`, {}, {
-        headers: { 'X-ADMIN-SECURITY-CODE': code }
-      });
-      openDetail(selectedOrder); fetchOrders();
+      await axios.put(`/api/admin/orders/${orderId}/confirm-payment`, payload,
+        { headers: { 'X-ADMIN-SECURITY-CODE': code } }
+      );
+      openDetail(orderId); fetchOrders();
       toast.success('Ödeme onaylandı.');
+    } catch (e) {
+      toast.error(e.response?.status === 403 ? 'Güvenlik şifresi hatalı.' : (e.response?.data?.message || 'Hata oluştu'));
+    }
+  };
+
+  const rejectPayment = async () => {
+    const reason = window.prompt(
+      'Havale reddi sebebi (zorunlu — müşteri emailinde görünecek):\n\n' +
+      'Örn: "Yatırılan tutar siparişle uyuşmuyor", "Müşteri vazgeçti", "Yanlış referans"'
+    );
+    if (!reason || !reason.trim()) return;
+    if (!window.confirm(`Sipariş İPTAL edilecek ve stok serbest bırakılacak.\n\nSebep: ${reason}\n\nDevam edilsin mi?`)) return;
+    const code = await askCode({ description: 'Havale reddetmek için güvenlik şifresini girin.' });
+    if (!code) return;
+    try {
+      await axios.put(`/api/admin/orders/${selectedOrder}/reject-payment`,
+        { reason: reason.trim() },
+        { headers: { 'X-ADMIN-SECURITY-CODE': code } }
+      );
+      openDetail(selectedOrder); fetchOrders();
+      toast.success('Havale reddedildi, sipariş iptal edildi.');
     } catch (e) {
       toast.error(e.response?.status === 403 ? 'Güvenlik şifresi hatalı.' : (e.response?.data?.message || 'Hata oluştu'));
     }
@@ -170,7 +218,7 @@ export default function AdminOrders() {
     <div>
       {SecurityCodePrompt}
 
-      {/* Fatura Yükleme Modal */}
+      {/* Invoice Upload Modal */}
       {showInvoiceModal && (
         <div className="modal d-block" style={{ background: 'rgba(0,0,0,0.5)', zIndex: 5000 }} onClick={() => setShowInvoiceModal(false)}>
           <div className="modal-dialog modal-dialog-centered" onClick={e => e.stopPropagation()}>
@@ -183,14 +231,14 @@ export default function AdminOrders() {
                 <button className="btn-close" onClick={() => setShowInvoiceModal(false)} />
               </div>
               <div className="modal-body">
-                {/* Fatura Numarası */}
+                {/* Invoice Number */}
                 <div className="mb-3">
                   <label className="form-label small fw-medium">Fatura Numarası <span className="text-muted fw-normal">(opsiyonel)</span></label>
                   <input className="form-control" value={invoiceNumber} onChange={e => setInvoiceNumber(e.target.value)}
                     placeholder="FTR-2026-001234" />
                 </div>
 
-                {/* Dosya Seçimi */}
+                {/* File Selection */}
                 <div className="mb-3">
                   <label className="form-label small fw-medium">Fatura Dosyası <span className="text-danger">*</span></label>
                   <div className={`border rounded-3 p-3 text-center ${invoiceFile ? 'border-success bg-success bg-opacity-10' : 'border-dashed'}`}
@@ -217,7 +265,7 @@ export default function AdminOrders() {
                   </div>
                 </div>
 
-                {/* Mevcut fatura varsa göster */}
+                {/* Show existing invoice if present */}
                 {orderDetail?.invoiceUrl && (
                   <div className="alert alert-light small py-2 mb-0">
                     <i className="fas fa-info-circle me-1 text-info" />
@@ -378,10 +426,95 @@ export default function AdminOrders() {
                           <button className="btn btn-sm btn-outline-primary" onClick={() => { fetchAllowedTransitions(orderDetail.id); setShowStatusModal(true); }}><i className="fas fa-edit me-1" />Durum Güncelle</button>
                           <button className="btn btn-sm btn-outline-secondary" onClick={() => { setCargoCompany(orderDetail.cargoCompany||''); setCargoTrackingNo(orderDetail.cargoTrackingNo||''); setShowCargoModal(true); }}><i className="fas fa-truck me-1" />Kargo</button>
                           {orderDetail.status === 'PENDING_PAYMENT' && orderDetail.paymentMethod === 'BANK_TRANSFER' && (
-                            <button className="btn btn-sm btn-success" onClick={confirmPayment}><i className="fas fa-check me-1" />Havale Onayla</button>
+                            <>
+                              <button className="btn btn-sm btn-success" onClick={confirmPayment}>
+                                <i className="fas fa-check me-1" />Havale Onayla
+                              </button>
+                              <button className="btn btn-sm btn-outline-danger" onClick={rejectPayment}>
+                                <i className="fas fa-times me-1" />Havale Reddet
+                              </button>
+                            </>
                           )}
                         </div>
                       </div></div>
+
+                      {/* ══ Bank Transfer Matching Info — admin searches for this code in the statement ══ */}
+                      {orderDetail.paymentMethod === 'BANK_TRANSFER' && orderDetail.bankTransferReference && (
+                        <div className="card mb-3 border-warning">
+                          <div className="card-header bg-warning bg-opacity-10 d-flex align-items-center gap-2">
+                            <i className="fas fa-search-dollar text-warning" />
+                            <h6 className="mb-0 fw-bold">Havale Eşleştirme</h6>
+                            {orderDetail.bankTransferStatus && (
+                              <span className={`badge ms-auto ${
+                                orderDetail.bankTransferStatus === 'INITIATED' ? 'bg-warning text-dark' :
+                                orderDetail.bankTransferStatus === 'SUCCESS' ? 'bg-success' :
+                                orderDetail.bankTransferStatus === 'TIMEOUT' ? 'bg-secondary' :
+                                'bg-danger'
+                              }`}>
+                                {orderDetail.bankTransferStatus === 'INITIATED' ? 'Ödeme Bekliyor' :
+                                 orderDetail.bankTransferStatus === 'SUCCESS' ? 'Onaylandı' :
+                                 orderDetail.bankTransferStatus === 'TIMEOUT' ? 'Süresi Doldu' :
+                                 'İptal/Hata'}
+                              </span>
+                            )}
+                          </div>
+                          <div className="card-body">
+                            <div className="row g-3">
+                              <div className="col-md-7">
+                                <label className="form-label small text-muted mb-1">Referans Kodu (banka açıklamasında bunu arayın)</label>
+                                <div className="d-flex align-items-center gap-2">
+                                  <code className="fs-5 fw-bold text-dark px-3 py-2 bg-light rounded font-monospace flex-grow-1">
+                                    {orderDetail.bankTransferReference}
+                                  </code>
+                                  <button
+                                    className="btn btn-outline-secondary"
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(orderDetail.bankTransferReference);
+                                      toast.success('Referans kopyalandı');
+                                    }}
+                                    title="Kopyala"
+                                  >
+                                    <i className="fas fa-copy" />
+                                  </button>
+                                </div>
+                              </div>
+                              <div className="col-md-5">
+                                <label className="form-label small text-muted mb-1">Beklenen Tutar</label>
+                                <div className="fs-5 fw-bold text-primary">
+                                  ₺{orderDetail.grandTotal?.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
+                                </div>
+                                <small className="text-muted">Müşteri Adı: <strong>{orderDetail.customerName}</strong></small>
+                              </div>
+                              {orderDetail.bankTransferDeadline && (
+                                <div className="col-12">
+                                  <div className="small text-muted">
+                                    <i className="fas fa-clock me-1" />
+                                    Son Ödeme:{' '}
+                                    <strong className={
+                                      new Date(orderDetail.bankTransferDeadline) < new Date() ? 'text-danger' : 'text-warning'
+                                    }>
+                                      {formatDate(orderDetail.bankTransferDeadline)}
+                                    </strong>
+                                    {new Date(orderDetail.bankTransferDeadline) < new Date() && (
+                                      <span className="badge bg-danger ms-2">Süre Doldu</span>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                            <hr className="my-3" />
+                            <div className="alert alert-info mb-0 small">
+                              <strong>📋 Onay Adımları:</strong>
+                              <ol className="mb-0 mt-1 ps-3">
+                                <li>Banka ekstrende <code>{orderDetail.bankTransferReference}</code> yazan kaydı bulun</li>
+                                <li>Yatırılan tutarın <strong>₺{orderDetail.grandTotal?.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</strong> ile eşleştiğini doğrulayın</li>
+                                <li>Gönderen kişi <strong>{orderDetail.customerName}</strong> mı? (farklıysa not düşün)</li>
+                                <li>"Havale Onayla" → ekstredeki tutar/tarih girilir, doğrulanır</li>
+                              </ol>
+                            </div>
+                          </div>
+                        </div>
+                      )}
 
                       {/* Items */}
                       <div className="card mb-3">
@@ -390,14 +523,14 @@ export default function AdminOrders() {
                           <div className="list-group list-group-flush">
                             {orderDetail.items?.map(item => (
                               <div key={item.id} className="list-group-item d-flex align-items-center gap-3 py-3">
-                                {/* Ürün görseli */}
+                                {/* Product image */}
                                 <div className="flex-shrink-0" style={{ width: 56, height: 56, borderRadius: 10, background: '#f8fafc', border: '1px solid #e2e8f0', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                   {item.imageUrl ? (
                                     <img src={item.imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }}
                                       onError={e => { e.target.style.display = 'none'; e.target.parentElement.innerHTML = '<i class="fas fa-box text-muted"></i>'; }} />
                                   ) : <i className="fas fa-box text-muted" />}
                                 </div>
-                                {/* Ürün bilgisi */}
+                                {/* Product info */}
                                 <div className="flex-grow-1 min-w-0">
                                   <div className="fw-semibold small">{item.productName}</div>
                                   <div className="d-flex gap-2 mt-1 flex-wrap align-items-center">
@@ -409,17 +542,17 @@ export default function AdminOrders() {
                                     {item.stockId && <button className="btn btn-link btn-sm p-0 text-info" style={{fontSize:10}} onClick={(e) => { e.stopPropagation(); window.open(`/stock?highlight=${item.stockId}`, '_self'); }}>Stok Yönetimi <i className="fas fa-external-link-alt ms-1" style={{fontSize:8}} /></button>}
                                   </div>
                                 </div>
-                                {/* Adet */}
+                                {/* Quantity */}
                                 <div className="text-center flex-shrink-0" style={{ minWidth: 50 }}>
                                   <div className="small text-muted">Adet</div>
                                   <div className="fw-bold">{item.quantity}</div>
                                 </div>
-                                {/* Birim fiyat */}
+                                {/* Unit price */}
                                 <div className="text-end flex-shrink-0" style={{ minWidth: 90 }}>
                                   <div className="small text-muted">Birim</div>
                                   <div className="small">{formatPrice(item.unitPrice)}</div>
                                 </div>
-                                {/* Toplam */}
+                                {/* Total */}
                                 <div className="text-end flex-shrink-0" style={{ minWidth: 90 }}>
                                   <div className="small text-muted">Toplam</div>
                                   <div className="fw-bold text-primary">{formatPrice(item.lineTotal)}</div>
@@ -517,7 +650,7 @@ export default function AdminOrders() {
                                 <i className="fas fa-external-link-alt me-2" />Kargo Takip Sayfasına Git
                               </button>
                             )}
-                            {/* Kargonomi etiket PDF indirme — cargoProviderShipmentId varsa */}
+                            {/* Kargonomi label PDF download — when cargoProviderShipmentId is present */}
                             <button className="btn btn-sm btn-outline-primary w-100" onClick={() => {
                               axios.get(`/api/admin/cargo/orders/${orderDetail.id}/label`, { responseType: 'blob' })
                                 .then(r => {
@@ -545,7 +678,7 @@ export default function AdminOrders() {
                         )}
                       </div></div>
 
-                      {/* Invoice / Fatura */}
+                      {/* Invoice */}
                       <div className="card"><div className="card-header bg-transparent"><h6 className="mb-0"><i className="fas fa-file-invoice me-2 text-info" />Fatura Bilgileri</h6></div><div className="card-body small">
                         {orderDetail.billingAddress ? (<>
                           <p className="mb-1 fw-medium">{orderDetail.billingAddress.firstName} {orderDetail.billingAddress.lastName}</p>
@@ -558,7 +691,7 @@ export default function AdminOrders() {
                           <p className="text-muted mb-0">Teslimat adresi ile aynı</p>
                         )}
                         <hr />
-                        {/* Fatura Yükleme / Görüntüleme */}
+                        {/* Invoice Upload / View */}
                         {orderDetail.invoiceUrl ? (() => {
                           const isPdf = orderDetail.invoiceUrl.toLowerCase().includes('.pdf');
                           const apiUrl = `/api/admin/orders/${orderDetail.id}/invoice/download`;
@@ -582,7 +715,7 @@ export default function AdminOrders() {
                               <span className="badge bg-success"><i className="fas fa-check me-1" />Fatura Yüklü</span>
                               {orderDetail.invoiceNumber && <span className="badge bg-light text-dark border">#{orderDetail.invoiceNumber}</span>}
                             </div>
-                            {/* Aksiyonlar */}
+                            {/* Actions */}
                             <div className="d-flex gap-2">
                               <button className="btn btn-sm btn-outline-primary flex-grow-1" onClick={handleView}>
                                 <i className="fas fa-eye me-1" />Görüntüle
@@ -651,6 +784,92 @@ export default function AdminOrders() {
             </div>
             <div className="modal-footer"><button className="btn btn-secondary" onClick={() => setShowStatusModal(false)}>İptal</button><button className="btn btn-primary" onClick={updateStatus} disabled={allowedTransitions.length === 0}>Güncelle</button></div>
           </div></div>
+        </div>
+      )}
+
+      {/* ══ Bank Transfer Confirmation Modal — reference + amount visible, verification flow ══ */}
+      {confirmModal && orderDetail && (
+        <div className="modal show d-block" style={{ background: 'rgba(0,0,0,0.5)', zIndex: 4500 }} onClick={() => setConfirmModal(null)}>
+          <div className="modal-dialog modal-dialog-centered" onClick={e => e.stopPropagation()}>
+            <div className="modal-content border-0 shadow-lg" style={{ borderRadius: 14 }}>
+              <div className="modal-header bg-success bg-opacity-10 border-0">
+                <h5 className="modal-title fw-bold text-success">
+                  <i className="fas fa-check-circle me-2" />Havale Onayı
+                </h5>
+                <button type="button" className="btn-close" onClick={() => setConfirmModal(null)} />
+              </div>
+              <div className="modal-body">
+                {/* Matching summary — what the admin should keep in view */}
+                <div className="card bg-light border-0 mb-3">
+                  <div className="card-body p-3">
+                    <div className="row g-2 small">
+                      <div className="col-12 d-flex align-items-center gap-2">
+                        <span className="text-muted">Referans:</span>
+                        <code className="fw-bold flex-grow-1">{orderDetail.bankTransferReference}</code>
+                        <button className="btn btn-sm btn-outline-secondary py-0 px-2"
+                                onClick={() => { navigator.clipboard.writeText(orderDetail.bankTransferReference); toast.success('Kopyalandı'); }}>
+                          <i className="fas fa-copy" />
+                        </button>
+                      </div>
+                      <div className="col-6">
+                        <span className="text-muted">Müşteri:</span> <strong>{orderDetail.customerName}</strong>
+                      </div>
+                      <div className="col-6 text-end">
+                        <span className="text-muted">Beklenen:</span>{' '}
+                        <strong className="text-primary">₺{orderDetail.grandTotal?.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</strong>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="alert alert-warning small mb-3">
+                  <i className="fas fa-exclamation-triangle me-1" />
+                  Lütfen banka ekstresine bakarak <strong>gerçek</strong> yatırılan tutarı ve tarihi girin.
+                  Sistemle ±1.00 TL'den fazla fark varsa onay reddedilir.
+                </div>
+
+                <div className="mb-3">
+                  <label className="form-label fw-medium">
+                    Yatırılan Tutar <span className="text-danger">*</span>
+                  </label>
+                  <div className="input-group">
+                    <span className="input-group-text">₺</span>
+                    <input type="number" step="0.01" className="form-control form-control-lg fw-bold"
+                           value={confirmModal.paidAmount}
+                           onChange={e => setConfirmModal({ ...confirmModal, paidAmount: e.target.value })}
+                           autoFocus />
+                  </div>
+                  <small className="text-muted">Ekstrede görünen kesin tutar (TL)</small>
+                </div>
+
+                <div className="mb-3">
+                  <label className="form-label fw-medium">
+                    Ödeme Tarihi <span className="text-danger">*</span>
+                  </label>
+                  <input type="datetime-local" className="form-control"
+                         value={confirmModal.paidAt}
+                         onChange={e => setConfirmModal({ ...confirmModal, paidAt: e.target.value })} />
+                  <small className="text-muted">Bankadaki gerçek işlem tarihi (ekstreden)</small>
+                </div>
+
+                <div className="mb-2">
+                  <label className="form-label fw-medium">
+                    Banka Referans / Not <span className="text-muted small">(opsiyonel)</span>
+                  </label>
+                  <input type="text" className="form-control"
+                         value={confirmModal.receiptNote}
+                         onChange={e => setConfirmModal({ ...confirmModal, receiptNote: e.target.value })}
+                         placeholder="Banka swift no, ekstre satır no vb." />
+                </div>
+              </div>
+              <div className="modal-footer border-0">
+                <button className="btn btn-outline-secondary" onClick={() => setConfirmModal(null)}>İptal</button>
+                <button className="btn btn-success" onClick={submitConfirmPayment}>
+                  <i className="fas fa-check me-1" />Onayla
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

@@ -175,10 +175,10 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     Optional<Product> findBySlug(String slug);
 
     /**
-     * Store search — ürün adı + SKU + kategori + marka + alt-marka + renk + kısa açıklama
-     * üzerinden arama yapar. Tsvector (V52 idx_products_search_tsv) hâlâ JPQL'den
-     * doğrudan kullanılamıyor; geniş LIKE pattern ürün kataloğunda 1000+ ürüne kadar
-     * yeterli performans verir. Daha büyük katalog için native query'e geçilir.
+     * Store search — searches across product name + SKU + category + brand + sub-brand
+     * + color + short description. The tsvector (V52 idx_products_search_tsv) still cannot
+     * be used directly from JPQL; a broad LIKE pattern gives adequate performance up to
+     * 1000+ products in the catalog. For a larger catalog, switch to a native query.
      */
     @Query("""
         SELECT p FROM Product p

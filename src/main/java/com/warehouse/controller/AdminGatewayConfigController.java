@@ -49,7 +49,7 @@ public class AdminGatewayConfigController {
             @RequestBody PaymentGatewayConfig config,
             @RequestHeader(value = "X-ADMIN-SECURITY-CODE", required = false) String securityCode) {
         adminSecurityService.requireSecurityCodeForAdmin(securityCode);
-        // Protokol-spesifik zorunlu alan + güvenlik validasyonu (URL HTTPS, vb.)
+        // Protocol-specific required-field + security validation (HTTPS URLs, etc.)
         try {
             validateConfig(config, false);
         } catch (IllegalArgumentException ex) {
@@ -119,10 +119,10 @@ public class AdminGatewayConfigController {
     }
 
     /**
-     * Varsayılan gateway atama — atomik (race condition önlenir).
-     * Önceki implementasyon iki ayrı save loop'u yapıyordu; iki admin aynı anda
-     * farklı gateway'leri default yaparsa iki kayıt birden is_default=true kalabilirdi.
-     * Şimdi tek transaction içinde bulk UPDATE yapıyoruz.
+     * Default gateway assignment — atomic (race condition is prevented).
+     * The previous implementation did two separate save loops; if two admins made
+     * different gateways the default at the same time, two records could remain
+     * is_default=true. Now we do a bulk UPDATE within a single transaction.
      */
     @PutMapping("/{id}/set-default")
     @org.springframework.transaction.annotation.Transactional
@@ -131,14 +131,14 @@ public class AdminGatewayConfigController {
             @RequestHeader(value = "X-ADMIN-SECURITY-CODE", required = false) String securityCode) {
         adminSecurityService.requireSecurityCodeForAdmin(securityCode);
         return configRepo.findById(id).map(c -> {
-            // 1) Hedef gateway aktif değilse veya credential eksikse default atanmamalı
+            // 1) If the target gateway is inactive or missing credentials, it must not be set as default
             if (!isReadyForDefault(c)) {
                 return ResponseEntity.badRequest().body(Map.of(
                         "message", "Gateway eksik yapılandırılmış (credential veya callback URL). Önce tamamlayın."));
             }
-            // 2) Tek SQL ile tüm default'ları kapat (atomik)
+            // 2) Clear all defaults with a single SQL (atomic)
             configRepo.clearAllDefaults();
-            // 3) Hedefi default + aktif yap
+            // 3) Make the target default + active
             c.setDefaultGateway(true);
             c.setActive(true);
             configRepo.save(c);
@@ -146,7 +146,7 @@ public class AdminGatewayConfigController {
         }).orElse(ResponseEntity.notFound().build());
     }
 
-    /** Default yapmadan önce minimum yapılandırma kontrolü. */
+    /** Minimum configuration check before setting as default. */
     private boolean isReadyForDefault(PaymentGatewayConfig c) {
         if (c.getGatewayProtocol() == null) return false;
         String p = c.getGatewayProtocol();
@@ -241,7 +241,7 @@ public class AdminGatewayConfigController {
         dto.put("bankCode", c.getBankCode());
         dto.put("merchantId", c.getMerchantId());
         dto.put("terminalId", c.getTerminalId());
-        // Secret'lar: hem mask (preview) hem `*HasValue` flag (UI'da "set" durumu)
+        // Secrets: both mask (preview) and `*HasValue` flag ("set" state in the UI)
         dto.put("storeKey", mask(c.getStoreKey()));
         dto.put("storeKeySet", hasValue(c.getStoreKey()));
         dto.put("provisionPassword", mask(c.getProvisionPassword()));
@@ -259,7 +259,7 @@ public class AdminGatewayConfigController {
         dto.put("priority", c.getPriority());
         dto.put("supportedCards", c.getSupportedCards());
         dto.put("maxInstallments", c.getMaxInstallments());
-        // PayTR için merchant_ok_url, merchant_fail_url, timeout_limit gibi alanlar burada
+        // Fields such as merchant_ok_url, merchant_fail_url, timeout_limit for PayTR live here
         dto.put("extraConfig", c.getExtraConfig());
         dto.put("createdAt", c.getCreatedAt());
         dto.put("updatedAt", c.getUpdatedAt());
@@ -275,14 +275,14 @@ public class AdminGatewayConfigController {
     }
 
     /**
-     * Protokol-spesifik validasyon + güvenlik kontrolleri.
+     * Protocol-specific validation + security checks.
      *
-     * Production'a gönderilen tüm URL'lerin HTTPS olması zorunlu (sandbox modunda
-     * localhost http://'a izin verilir). Eksik credential'lar protokol başına farklı.
+     * All URLs sent to production must be HTTPS (localhost http:// is allowed in
+     * sandbox mode). Required credentials differ per protocol.
      *
-     * @param config doğrulanacak gateway
-     * @param isUpdate true ise secret'lar boş gelebilir (mevcut korunur); false (create) ise
-     *                 zorunlu secret'lar dolu olmalı
+     * @param config the gateway to validate
+     * @param isUpdate if true, secrets may arrive empty (existing ones are preserved);
+     *                 if false (create), required secrets must be present
      */
     private void validateConfig(PaymentGatewayConfig config, boolean isUpdate) {
         if (config == null) throw new IllegalArgumentException("Gateway yapılandırması boş.");
@@ -293,12 +293,12 @@ public class AdminGatewayConfigController {
 
         boolean sandbox = config.isSandbox();
 
-        // URL kontrolü — production'da kesinlikle HTTPS; sandbox'ta http://localhost OK
+        // URL check — strictly HTTPS in production; http://localhost OK in sandbox
         validateUrl("Callback URL", config.getCallbackUrl(), sandbox, true);
         validateUrl("3D Secure URL", config.getThreeDUrl(), sandbox, false);
         validateUrl("Base URL", config.getBaseUrl(), sandbox, false);
 
-        // Protokol-spesifik zorunlu alanlar
+        // Protocol-specific required fields
         switch (protocol) {
             case "IYZICO" -> {
                 if (!isUpdate) {
@@ -321,7 +321,7 @@ public class AdminGatewayConfigController {
                 }
                 if (!hasValue(config.getCallbackUrl()))
                     throw new IllegalArgumentException("PayTR için Callback URL (notify_url) zorunludur.");
-                // PayTR'in extraConfig'inde merchant_ok_url / merchant_fail_url da olmalı
+                // PayTR's extraConfig must also contain merchant_ok_url / merchant_fail_url
                 Map<String, Object> extra = config.getExtraConfig();
                 if (extra != null) {
                     Object okUrl = extra.get("merchant_ok_url");
@@ -349,8 +349,9 @@ public class AdminGatewayConfigController {
     }
 
     /**
-     * URL doğrulama: sandbox değilse mutlaka https://; sandbox'ta http://localhost,
-     * http://127.0.0.1 veya http://*.local kabul edilir (geliştirme rahatlığı).
+     * URL validation: must be https:// unless in sandbox; in sandbox all
+     * localhost variations (admin.localhost, foo.localhost, etc.),
+     * 127.0.0.1, 0.0.0.0, *.local and private IP ranges are accepted.
      */
     private void validateUrl(String label, String url, boolean sandbox, boolean required) {
         if (!hasValue(url)) {
@@ -362,14 +363,23 @@ public class AdminGatewayConfigController {
         if (!sandbox) {
             throw new IllegalArgumentException(label + " production modunda HTTPS olmalıdır (örn. https://...).");
         }
-        // Sandbox: sadece localhost-benzeri HTTP'ye izin
-        boolean isLocal = lower.startsWith("http://localhost")
-                || lower.startsWith("http://127.0.0.1")
+        // Sandbox: allow local development hosts
+        boolean isLocal =
+                // Plain localhost and its subdomains: localhost, admin.localhost, foo.bar.localhost
+                lower.matches("^http://([a-z0-9-]+\\.)*localhost(:\\d+)?(/|$|\\?).*")
+                // Loopback IPs
+                || lower.matches("^http://127\\.\\d+\\.\\d+\\.\\d+(:\\d+)?(/|$|\\?).*")
                 || lower.startsWith("http://0.0.0.0")
-                || lower.matches("^http://[a-z0-9.-]+\\.local(:\\d+)?(/|$).*");
+                // .local (mDNS / Bonjour)
+                || lower.matches("^http://[a-z0-9.-]+\\.local(:\\d+)?(/|$|\\?).*")
+                // Private IPs (192.168.x.x, 10.x.x.x, 172.16-31.x.x) — for LAN testing
+                || lower.matches("^http://192\\.168\\.\\d+\\.\\d+(:\\d+)?(/|$|\\?).*")
+                || lower.matches("^http://10\\.\\d+\\.\\d+\\.\\d+(:\\d+)?(/|$|\\?).*")
+                || lower.matches("^http://172\\.(1[6-9]|2[0-9]|3[01])\\.\\d+\\.\\d+(:\\d+)?(/|$|\\?).*");
         if (!isLocal) {
             throw new IllegalArgumentException(label + " sandbox modunda bile HTTPS önerilir; "
-                    + "lokal test için http://localhost veya http://...local izinli.");
+                    + "lokal test için http://localhost, http://*.localhost, http://192.168.x.x, "
+                    + "http://10.x.x.x veya http://...local izinli.");
         }
     }
 }

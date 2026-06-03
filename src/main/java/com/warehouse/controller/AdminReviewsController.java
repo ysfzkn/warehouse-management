@@ -15,12 +15,12 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * Admin: ürün yorumlarını moderasyon endpoint'leri.
+ * Admin: product review moderation endpoints.
  *
  * <ul>
- *   <li>{@code GET /api/admin/reviews?approved=false} — onay bekleyen yorumlar</li>
- *   <li>{@code POST /api/admin/reviews/{id}/approve} — yorumu onayla</li>
- *   <li>{@code POST /api/admin/reviews/{id}/reject} — yorumu sil</li>
+ *   <li>{@code GET /api/admin/reviews?approved=false} — reviews awaiting approval</li>
+ *   <li>{@code POST /api/admin/reviews/{id}/approve} — approve a review</li>
+ *   <li>{@code POST /api/admin/reviews/{id}/reject} — delete a review</li>
  * </ul>
  */
 @RestController
@@ -69,10 +69,10 @@ public class AdminReviewsController {
     }
 
     /**
-     * Yorum reddi/silinmesi. İki yol da aynı handler'a:
-     *   - POST /{id}/reject?reason=...   (admin UI "Reddet" butonu için)
-     *   - DELETE /{id}                   (REST stili, opsiyonel)
-     * Spring tek annotation'a izin verdiği için @RequestMapping ile birleştirildi.
+     * Review rejection/deletion. Both routes map to the same handler:
+     *   - POST /{id}/reject?reason=...   (for the admin UI "Reject" button)
+     *   - DELETE /{id}                   (REST style, optional)
+     * Combined with @RequestMapping since Spring allows only a single annotation.
      */
     @org.springframework.web.bind.annotation.RequestMapping(
             value = { "/{id}/reject", "/{id}" },

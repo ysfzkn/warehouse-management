@@ -96,7 +96,7 @@ public class Customer {
     @Column(name = "locked_until")
     private LocalDateTime lockedUntil;
 
-    // KVKK Madde 11 (e) — veri ihracı ve silme hakları için zaman damgaları (V58)
+    // KVKK Article 11 (e) — timestamps for data export and deletion rights (V58)
     @Column(name = "data_export_requested_at")
     private LocalDateTime dataExportRequestedAt;
 
@@ -104,8 +104,8 @@ public class Customer {
     private LocalDateTime dataDeletionRequestedAt;
 
     /**
-     * Hesabın anonimleştirildiği tarih. Sipariş/fatura geçmişi yasal saklama
-     * gereği korunur ama PII (ad, e-posta, telefon, adres) silinir.
+     * Date the account was anonymized. Order/invoice history is preserved for
+     * legal retention, but PII (name, email, phone, address) is removed.
      */
     @Column(name = "anonymized_at")
     private LocalDateTime anonymizedAt;

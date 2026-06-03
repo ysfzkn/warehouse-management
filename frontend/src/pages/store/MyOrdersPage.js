@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useToast } from '../../components/store/Toast';
 import { FiPackage, FiChevronRight, FiTruck, FiFileText, FiMessageSquare, FiX, FiDownload } from 'react-icons/fi';
@@ -29,6 +29,7 @@ const getAuthHeaders = () => {
 };
 
 export default function MyOrdersPage() {
+  const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
@@ -131,6 +132,16 @@ export default function MyOrdersPage() {
                     <div className="small text-muted">{o.itemCount || 0} ürün · {pmLabel(o.paymentMethod)}</div>
                     <div className="fw-bold">{fmt(o.grandTotal)}</div>
                   </div>
+                  {/* Pending bank transfer → direct action */}
+                  {o.status === 'PENDING_PAYMENT' && o.paymentMethod === 'BANK_TRANSFER' && (
+                    <div className="mt-2" onClick={e => e.stopPropagation()}>
+                      <button
+                        className="btn btn-sm btn-warning w-100 fw-semibold"
+                        onClick={() => navigate(`/odeme/havale/${o.id}`)}>
+                        <i className="fas fa-money-check-alt me-1" />Ödemeye Devam Et
+                      </button>
+                    </div>
+                  )}
                   {o.cargoTrackingNo && (
                     <div className="small text-success mt-1 d-flex align-items-center gap-2" onClick={e => e.stopPropagation()}>
                       <FiTruck size={13} />
@@ -158,7 +169,7 @@ export default function MyOrdersPage() {
         </div>
       )}
 
-      {/* ══════ SİPARİŞ DETAY MODAL ══════ */}
+      {/* ══════ ORDER DETAIL MODAL ══════ */}
       {(detailOrder || detailLoading) && (
         <div className="modal d-block" style={{ background: 'rgba(0,0,0,0.5)', zIndex: 3000 }} onClick={() => setDetailOrder(null)}>
           <div className="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable" onClick={e => e.stopPropagation()}>
@@ -180,7 +191,7 @@ export default function MyOrdersPage() {
                       </div>
                     </div>
                     <div className="modal-body">
-                      {/* Ürünler */}
+                      {/* Products */}
                       <h6 className="fw-semibold mb-3"><FiPackage className="me-2 text-primary" />Sipariş Ürünleri</h6>
                       {detailOrder.items && detailOrder.items.length > 0 ? (
                         <div className="d-flex flex-column gap-2 mb-4">
@@ -212,7 +223,7 @@ export default function MyOrdersPage() {
                         <div className="text-muted small mb-4">Ürün detayı bulunamadı.</div>
                       )}
 
-                      {/* Fiyat Özeti */}
+                      {/* Price Summary */}
                       <div className="rounded-3 p-3 mb-4" style={{ background: '#f8fafc', border: '1px solid #e2e8f0' }}>
                         <div className="d-flex justify-content-between small mb-1"><span className="text-muted">Ara Toplam</span><span>{fmt(detailOrder.subtotal)}</span></div>
                         <div className="d-flex justify-content-between small mb-1"><span className="text-muted">Kargo</span><span>{detailOrder.shippingCost > 0 ? fmt(detailOrder.shippingCost) : 'Ücretsiz'}</span></div>
@@ -222,7 +233,7 @@ export default function MyOrdersPage() {
                       </div>
 
                       <div className="row g-3">
-                        {/* Kargo Bilgisi */}
+                        {/* Cargo Info */}
                         {(detailOrder.cargoCompany || detailOrder.cargoTrackingNo) && (
                           <div className="col-md-6">
                             <div className="rounded-3 p-3 h-100" style={{ background: '#f0fdf4', border: '1px solid #bbf7d0' }}>
@@ -255,7 +266,7 @@ export default function MyOrdersPage() {
                           </div>
                         )}
 
-                        {/* Teslimat Adresi */}
+                        {/* Delivery Address */}
                         {detailOrder.shippingAddress && (
                           <div className="col-md-6">
                             <div className="rounded-3 p-3 h-100" style={{ background: '#eff6ff', border: '1px solid #bfdbfe' }}>
@@ -270,7 +281,7 @@ export default function MyOrdersPage() {
                         )}
                       </div>
 
-                      {/* Ödeme */}
+                      {/* Payment */}
                       <div className="rounded-3 p-3 mt-3" style={{ background: '#faf5ff', border: '1px solid #ddd6fe' }}>
                         <div className="small"><strong>Ödeme:</strong> {pmLabel(detailOrder.paymentMethod)}</div>
                       </div>
@@ -278,9 +289,9 @@ export default function MyOrdersPage() {
 
                     {/* Footer Actions */}
                     <div className="modal-footer border-0 pt-0 flex-wrap gap-2">
-                      {/* Fatura indirme — önce e-Fatura sistemini, yoksa manuel yüklenmiş
-                          dosyayı dener. Backend'ten gelen hata mesajı olduğu gibi gösterilir
-                          (yanıltıcı "doküman yüklenmedi" fallback yok). */}
+                      {/* Invoice download — tries the e-Invoice system first, then the
+                          manually uploaded file. The error message from the backend is shown
+                          as-is (no misleading "document not uploaded" fallback). */}
                       {(detailOrder.invoiceUrl || detailOrder.invoiceNumber) && (
                         <button className="btn btn-sm btn-outline-info" onClick={async () => {
                           const tryDownload = async (url, errPrefix) => {
@@ -294,7 +305,7 @@ export default function MyOrdersPage() {
                               window.URL.revokeObjectURL(blobUrl);
                               return { ok: true };
                             } catch (e) {
-                              // Blob error → response body'deki JSON mesajı oku
+                              // Blob error → read the JSON message from the response body
                               let msg = errPrefix;
                               if (e?.response?.data) {
                                 try {
@@ -307,14 +318,14 @@ export default function MyOrdersPage() {
                             }
                           };
 
-                          // 1) e-Fatura sistemi (öncelik)
+                          // 1) e-Invoice system (priority)
                           if (detailOrder.invoiceNumber) {
                             const r = await tryDownload(
                               `/api/store/orders/${detailOrder.orderNumber}/invoice/pdf`,
                               'Fatura indirilemedi.'
                             );
                             if (r.ok) return;
-                            // e-fatura hazır değilse ve manuel yüklü dosya da yoksa:
+                            // if the e-invoice is not ready and there is no manually uploaded file either:
                             if (!detailOrder.invoiceUrl) {
                               if (r.status === 404) toast.info(r.msg || 'Fatura henüz hazırlanıyor — birkaç dakika sonra tekrar deneyin.');
                               else toast.error(r.msg || 'Fatura indirilemedi.');
@@ -322,7 +333,7 @@ export default function MyOrdersPage() {
                             }
                           }
 
-                          // 2) Manuel yüklenmiş fatura (legacy)
+                          // 2) Manually uploaded invoice (legacy)
                           if (detailOrder.invoiceUrl) {
                             const r = await tryDownload(
                               `/api/store/orders/${detailOrder.orderNumber}/invoice`,
@@ -334,13 +345,25 @@ export default function MyOrdersPage() {
                           <FiDownload size={14} className="me-1" />Fatura İndir
                         </button>
                       )}
-                      {/* İade */}
+                      {/* Continue Bank Transfer Payment — for pending bank transfer orders */}
+                      {detailOrder.status === 'PENDING_PAYMENT'
+                        && detailOrder.paymentMethod === 'BANK_TRANSFER' && (
+                        <button
+                          className="btn btn-sm btn-warning fw-semibold"
+                          onClick={() => {
+                            setDetailOrder(null);
+                            navigate(`/odeme/havale/${detailOrder.id}`);
+                          }}>
+                          <i className="fas fa-money-check-alt me-1" />Ödemeye Devam Et
+                        </button>
+                      )}
+                      {/* Return */}
                       {(detailOrder.status === 'SHIPPED' || detailOrder.status === 'DELIVERED') && (
                         <button className="btn btn-sm btn-outline-warning" onClick={() => { setReturnModal(detailOrder.orderNumber); setDetailOrder(null); }}>
                           <i className="fas fa-undo me-1" />İade Talebi
                         </button>
                       )}
-                      {/* Destek */}
+                      {/* Support */}
                       <button className="btn btn-sm btn-outline-secondary" onClick={() => { setSupportModal(detailOrder.orderNumber); setSupportTopic(''); setSupportMessage(''); setDetailOrder(null); }}>
                         <FiMessageSquare size={14} className="me-1" />Destek Talebi
                       </button>
@@ -354,7 +377,7 @@ export default function MyOrdersPage() {
         </div>
       )}
 
-      {/* ══════ İADE TALEBİ MODAL ══════ */}
+      {/* ══════ RETURN REQUEST MODAL ══════ */}
       {returnModal && (
         <div className="modal d-block" style={{ background: 'rgba(0,0,0,0.5)', zIndex: 3000 }} onClick={() => setReturnModal(null)}>
           <div className="modal-dialog modal-dialog-centered" onClick={e => e.stopPropagation()}>
@@ -388,7 +411,7 @@ export default function MyOrdersPage() {
         </div>
       )}
 
-      {/* ══════ DESTEK TALEBİ MODAL ══════ */}
+      {/* ══════ SUPPORT REQUEST MODAL ══════ */}
       {supportModal && (
         <div className="modal d-block" style={{ background: 'rgba(0,0,0,0.5)', zIndex: 3000 }} onClick={() => setSupportModal(null)}>
           <div className="modal-dialog modal-dialog-centered" onClick={e => e.stopPropagation()}>

@@ -1,19 +1,19 @@
 package com.warehouse.enums;
 
 /**
- * Fatura yaşam döngüsü durumları.
+ * Invoice lifecycle statuses.
  */
 public enum InvoiceStatus {
-    /** Fatura oluşturuldu, henüz sağlayıcıya gönderilmedi */
+    /** Invoice created, not yet sent to the provider */
     DRAFT,
-    /** Sağlayıcıya gönderildi, GİB onayı bekleniyor */
+    /** Sent to the provider, awaiting GİB approval */
     PENDING,
-    /** GİB tarafından onaylandı */
+    /** Approved by GİB */
     APPROVED,
-    /** GİB tarafından reddedildi */
+    /** Rejected by GİB */
     REJECTED,
-    /** İptal edildi */
+    /** Cancelled */
     CANCELLED,
-    /** Oluşturma sırasında hata oluştu */
+    /** An error occurred during creation */
     ERROR
 }

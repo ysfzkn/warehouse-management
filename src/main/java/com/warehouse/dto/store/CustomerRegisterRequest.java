@@ -9,9 +9,10 @@ public class CustomerRegisterRequest {
     private String email;
 
     /**
-     * Parola politikası: en az 8 karakter, en az 1 büyük harf, 1 küçük harf, 1 rakam.
-     * Pattern karmaşıklığı OWASP rehberine uygun "minimum yeterli" seviyede tutuldu;
-     * sözlük saldırılarına karşı asıl koruma BCrypt strength 12 + login throttling.
+     * Password policy: at least 8 characters, at least 1 uppercase letter, 1 lowercase
+     * letter, 1 digit. Pattern complexity is kept at a "minimum sufficient" level per the
+     * OWASP guidelines; the main protection against dictionary attacks is BCrypt strength
+     * 12 + login throttling.
      */
     @NotBlank
     @Size(min = 8, max = 100, message = "Parola en az 8 karakter olmalıdır")

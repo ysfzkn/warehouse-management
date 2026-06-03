@@ -3,17 +3,17 @@ import axios from 'axios';
 import { FiX, FiSearch } from 'react-icons/fi';
 
 /**
- * Store ürün filtre paneli (Faz 2 UX iyileştirmesi).
+ * Storefront product filter panel (Phase 2 UX improvement).
  *
- * Özellikler:
- *  - Marka/Renk listeleri uzun olduğunda inline arama input'u
- *  - "Daha fazla göster" toggle ile uzun listeleri kısalt
- *  - Aktif filtre rozeti başlıkta
- *  - "Filtreleri temizle" butonu
+ * Features:
+ *  - Inline search input when the brand/color lists are long
+ *  - "Show more" toggle to collapse long lists
+ *  - Active filter badge in the heading
+ *  - "Clear filters" button
  *  - Mobile responsive (drawer mode)
  *
- * Çoklu seçim (multi-brand) backend tarafı query genişlemesi gerektirdiğinden
- * şimdilik tek seçim kaldı; ileride brandIds=[...] desteklenerek genişletilir.
+ * Multi-brand selection requires expanding the backend query, so for now only
+ * single selection is supported; it can later be extended via brandIds=[...].
  */
 export default function ProductFilters({ filters, onFilterChange, isOpen, onClose }) {
   const [brands, setBrands] = useState([]);
@@ -37,7 +37,7 @@ export default function ProductFilters({ filters, onFilterChange, isOpen, onClos
     return n;
   }, [filters]);
 
-  // Marka filtresi: arama + collapse
+  // Brand filter: search + collapse
   const filteredBrands = useMemo(() => {
     const q = brandSearch.trim().toLowerCase();
     const list = q ? brands.filter(b => (b.name || '').toLowerCase().includes(q)) : brands;
@@ -62,7 +62,7 @@ export default function ProductFilters({ filters, onFilterChange, isOpen, onClos
         <button className="btn btn-sm d-md-none" onClick={onClose} aria-label="Filtreleri kapat"><FiX /></button>
       </div>
 
-      {/* ── Marka ── */}
+      {/* ── Brand ── */}
       <div className="store-filter-group">
         <h6 className="d-flex justify-content-between align-items-center">
           <span>Marka</span>
@@ -97,7 +97,7 @@ export default function ProductFilters({ filters, onFilterChange, isOpen, onClos
         )}
       </div>
 
-      {/* ── Renk ── */}
+      {/* ── Color ── */}
       <div className="store-filter-group">
         <h6 className="d-flex justify-content-between align-items-center">
           <span>Renk</span>
@@ -132,7 +132,7 @@ export default function ProductFilters({ filters, onFilterChange, isOpen, onClos
         )}
       </div>
 
-      {/* ── Fiyat ── */}
+      {/* ── Price ── */}
       <div className="store-filter-group">
         <h6 className="d-flex justify-content-between align-items-center">
           <span>Fiyat Aralığı</span>
@@ -152,7 +152,7 @@ export default function ProductFilters({ filters, onFilterChange, isOpen, onClos
             onChange={e => onFilterChange({ ...filters, maxPrice: e.target.value || null })}
             aria-label="Maksimum fiyat" />
         </div>
-        {/* Hızlı seçim chip'leri */}
+        {/* Quick-select chips */}
         <div className="d-flex gap-1 flex-wrap mt-2">
           {[
             { label: '0-500', min: 0, max: 500 },

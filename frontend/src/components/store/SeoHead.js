@@ -4,17 +4,17 @@ import { useSiteSettings } from '../../hooks/useSiteSettings';
 import { buildMetaTags } from '../../utils/seo';
 
 /**
- * SEO meta tag enjeksiyonu için ortak bileşen.
+ * Shared component for injecting SEO meta tags.
  *
  * Props:
- *   - title: sayfa başlığı (siteName otomatik eklenir)
- *   - description: sayfa açıklaması (yoksa site default'u kullanılır)
- *   - path: canonical için path (örn: "/urun/iphone-15")
- *   - image: OG image URL'i (yoksa default logo kullanılır)
+ *   - title: page title (siteName is appended automatically)
+ *   - description: page description (falls back to the site default if absent)
+ *   - path: path for the canonical URL (e.g. "/urun/iphone-15")
+ *   - image: OG image URL (falls back to the default logo if absent)
  *   - type: OG type (website | article | product)
- *   - jsonLd: Schema.org JSON-LD object veya array (opsiyonel)
- *   - noindex: true ise robots meta "noindex,nofollow"
- *   - children: ek meta tagleri için
+ *   - jsonLd: Schema.org JSON-LD object or array (optional)
+ *   - noindex: if true, sets robots meta to "noindex,nofollow"
+ *   - children: for additional meta tags
  */
 export default function SeoHead({
   title,
@@ -72,7 +72,7 @@ export default function SeoHead({
   );
 }
 
-/** useSiteSettings settings objesini olduğu gibi kullanır */
+/** Uses the useSiteSettings settings object as-is */
 function toSettingsMap(settings) {
   if (!settings || typeof settings !== 'object') return {};
   return settings;

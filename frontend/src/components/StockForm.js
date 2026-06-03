@@ -121,14 +121,14 @@ const StockForm = ({
   }, [products, productSearchTerm]);
 
   const productOptions = useMemo(() => filteredProducts.slice(0), [filteredProducts]);
-  // Arama yapıldığında tüm sonuçları göster, aksi halde pagination uygula
+  // Show all results when searching, otherwise apply pagination
   const limitedProductOptions = useMemo(
     () => {
       if (productSearchTerm.trim()) {
-        // Arama yapıldığında tüm sonuçları göster
+        // Show all results when searching
         return productOptions;
       }
-      // Arama yoksa pagination uygula
+      // Apply pagination when there is no search
       return productOptions.slice(0, visibleProductCount);
     },
     [productOptions, visibleProductCount, productSearchTerm]

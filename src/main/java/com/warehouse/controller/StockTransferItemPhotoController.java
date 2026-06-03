@@ -60,17 +60,17 @@ public class StockTransferItemPhotoController {
         StockTransferItem item = findItemOrThrow(itemId);
 
         try (InputStream is = file.getInputStream()) {
-            // Eğer daha önce fotoğraf varsa eski dosyaları sil ve kaydı güncelle
+            // If a photo already exists, delete the old files and update the record
             Optional<StockTransferItemPhoto> existingOpt = photoRepository.findByItem(item);
             StockTransferItemPhoto photo;
             
             if (existingOpt.isPresent()) {
-                // Mevcut kaydı güncelle
+                // Update the existing record
                 photo = existingOpt.get();
-                // Eski dosyaları sil
+                // Delete the old files
                 photoStorageService.deletePhotoFiles(photo.getRelativePath(), photo.getThumbnailPath());
             } else {
-                // Yeni kayıt oluştur
+                // Create a new record
                 photo = new StockTransferItemPhoto();
                 photo.setItem(item);
             }
@@ -83,7 +83,7 @@ public class StockTransferItemPhotoController {
                     is
             );
 
-            // Fotoğraf bilgilerini güncelle
+            // Update the photo info
             photo.setFileName(stored.fileName());
             photo.setRelativePath(stored.relativePath());
             photo.setThumbnailPath(stored.thumbnailPath());

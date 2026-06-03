@@ -68,8 +68,8 @@ public class StoreCheckoutController {
     }
 
     /**
-     * Authenticated checkout. Çift tıklamaya karşı Idempotency-Key header'ı
-     * destekler — aynı key 24 saat boyunca aynı sonucu döner.
+     * Authenticated checkout. Supports an Idempotency-Key header to guard against
+     * double-clicks — the same key returns the same result for 24 hours.
      */
     @PostMapping("/place-order")
     public ResponseEntity<?> placeOrder(@Valid @RequestBody PlaceOrderRequest body,
@@ -81,7 +81,7 @@ public class StoreCheckoutController {
     }
 
     /**
-     * Misafir (üye olmayan) müşteri için sipariş oluşturur. Idempotency-Key destekler.
+     * Creates an order for a guest (non-registered) customer. Supports Idempotency-Key.
      */
     @PostMapping("/guest-checkout")
     public ResponseEntity<?> guestCheckout(@Valid @RequestBody GuestPlaceOrderRequest body,
@@ -92,22 +92,22 @@ public class StoreCheckoutController {
     }
 
     /**
-     * Idempotency wrapper: aynı key ile gelen istekte önce cache'i kontrol eder,
-     * varsa onu döner; yoksa supplier'ı çalıştırıp sonucu cache'ler.
+     * Idempotency wrapper: for a request with the same key, first checks the cache and
+     * returns the cached result if present; otherwise runs the supplier and caches the result.
      */
     private ResponseEntity<?> processWithIdempotency(String namespace, String key,
                                                       java.util.function.Supplier<Map<String, Object>> action) {
-        // Key yoksa direkt çalıştır (geriye uyumluluk; idempotency opsiyonel)
+        // If there is no key, run directly (backward compatibility; idempotency is optional)
         if (key == null || key.isBlank()) {
             return ResponseEntity.ok(action.get());
         }
-        // Önce cache'te var mı?
+        // Is it already in the cache?
         Map<String, Object> cached = idempotencyStore.get(namespace, key);
         if (cached != null) {
             log.info("Idempotency hit: ns={}, key={}", namespace, key);
             return ResponseEntity.ok().header("Idempotency-Replay", "true").body(cached);
         }
-        // Concurrent duplicate'ları engelle
+        // Prevent concurrent duplicates
         if (!idempotencyStore.tryAcquire(namespace, key)) {
             return ResponseEntity.status(409).body(Map.of(
                     "message", "Bu işlem hâlâ devam ediyor. Lütfen birkaç saniye bekleyip tekrar deneyin.",
@@ -123,7 +123,7 @@ public class StoreCheckoutController {
         }
     }
 
-    /** PlaceOrderResponse → Map (idempotency cache JSON-uyumlu olmalı). */
+    /** PlaceOrderResponse → Map (the idempotency cache must be JSON-compatible). */
     private Map<String, Object> serializeOrder(PlaceOrderResponse r) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("orderId", r.getOrderId());

@@ -22,14 +22,14 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Terk edilmiş sepet kurtarma için saatlik scheduled job.
+ * Hourly scheduled job for abandoned cart recovery.
  *
- * Şu koşulları sağlayan sepetlere hatırlatma e-postası gönderir:
- * - Kayıtlı müşteri sepeti (misafir olmayan)
- * - En az bir ürün içeriyor
- * - Belirli süre (varsayılan: 2 saat) kullanıcı güncellememiş
- * - Çok eski değil (varsayılan: 72 saatten yeni)
- * - Daha önce hatırlatma gönderilmemiş
+ * Sends a reminder email to carts that meet the following conditions:
+ * - Belongs to a registered customer (not a guest)
+ * - Contains at least one product
+ * - Not updated by the user for a given period (default: 2 hours)
+ * - Not too old (default: newer than 72 hours)
+ * - No reminder has been sent before
  */
 @Component
 public class AbandonedCartRecoveryJob {
@@ -53,7 +53,7 @@ public class AbandonedCartRecoveryJob {
     }
 
     /**
-     * Saatte bir çalışır (3600000ms). Uygulama başlangıcından 5 dk sonra ilk çalışma.
+     * Runs once an hour (3600000ms). First run is 5 minutes after application startup.
      */
     @Scheduled(fixedRate = 3_600_000, initialDelay = 300_000)
     @SchedulerLock(name = "abandonedCartRecovery", lockAtMostFor = "PT10M", lockAtLeastFor = "PT5M")
@@ -102,11 +102,11 @@ public class AbandonedCartRecoveryJob {
     private boolean sendReminderForCart(Cart cart) {
         Customer customer = cart.getCustomer();
         if (customer == null || customer.getEmail() == null || customer.getEmail().isBlank()) {
-            markAsSent(cart); // Geçersiz - tekrar işleme alma
+            markAsSent(cart); // Invalid - do not process again
             return false;
         }
 
-        // Marketing consent kontrolü
+        // Marketing consent check
         if (!customer.isMarketingConsent()) {
             logger.debug("Müşteri marketing consent vermemiş, hatırlatma gönderilmiyor: {}", customer.getEmail());
             markAsSent(cart);
@@ -119,7 +119,7 @@ public class AbandonedCartRecoveryJob {
             return false;
         }
 
-        // Sepet toplamı ve item HTML
+        // Cart total and item HTML
         BigDecimal subtotal = BigDecimal.ZERO;
         StringBuilder itemsHtml = new StringBuilder();
         itemsHtml.append("<div style=\"border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;margin:16px 0;\">");
@@ -151,7 +151,7 @@ public class AbandonedCartRecoveryJob {
         }
         itemsHtml.append("</div>");
 
-        // E-posta gönder
+        // Send the email
         emailService.sendAbandonedCartReminder(
                 customer.getEmail(),
                 customer.getFirstName() != null ? customer.getFirstName() : "Müşterimiz",

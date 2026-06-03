@@ -22,8 +22,8 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * Halka açık sipariş takip endpoint'leri.
- * Müşteriler giriş yapmadan, sipariş numarası + e-posta ile siparişlerini sorgulayabilir.
+ * Public order tracking endpoints.
+ * Customers can query their orders by order number + email without logging in.
  */
 @RestController
 @RequestMapping("/api/store/public/orders")
@@ -38,8 +38,8 @@ public class StorePublicOrderController {
     private final CargoProviderRepository cargoProviderRepository;
 
     /**
-     * Sipariş takip: sipariş numarası + e-posta ile sorgular.
-     * Sadece halka açık takip verileri döner (hassas bilgi içermez).
+     * Order tracking: queries by order number + email.
+     * Returns only public tracking data (contains no sensitive information).
      */
     @PostMapping("/track")
     @Transactional(readOnly = true)
@@ -55,7 +55,7 @@ public class StorePublicOrderController {
                 orderNumber.trim(), email.trim().toLowerCase());
 
         if (orderOpt.isEmpty()) {
-            // Güvenlik: detay verme, enumeration saldırısını engelle
+            // Security: don't give details, prevent enumeration attacks
             logger.info("Sipariş takip başarısız: orderNumber={}, email={}", orderNumber, email);
             return ResponseEntity.status(404).body(Map.of(
                 "error", "Bu bilgilere ait sipariş bulunamadı. Sipariş numarası ve e-posta adresinizi kontrol edin."

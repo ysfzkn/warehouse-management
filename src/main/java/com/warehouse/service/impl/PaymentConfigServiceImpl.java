@@ -33,6 +33,16 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         config.put("accountHolder", getOrFallback("payment_bank_account_holder", paymentProperties.getBankTransfer().getAccountHolder()));
         config.put("deadlineHours", getOrFallback("payment_bank_deadline_hours", String.valueOf(paymentProperties.getBankTransfer().getDeadlineHours())));
         config.put("configured", (!config.get("iban").isEmpty()) ? "true" : "false");
+
+        // FAST QR (Bank transfer via QR code) — optional, an extra option the admin enables via a toggle
+        String qrEnabled = getOrFallback("bank_transfer_qr_enabled", "false");
+        String qrImage = getOrFallback("bank_transfer_qr_image", "");
+        // Show to the customer only if the toggle is on and an image has been uploaded
+        boolean qrActive = "true".equalsIgnoreCase(qrEnabled) && !qrImage.isEmpty();
+        config.put("qrEnabled", String.valueOf(qrActive));
+        config.put("qrImage", qrActive ? qrImage : "");
+        config.put("qrBankName", qrActive ? getOrFallback("bank_transfer_qr_bank_name", "") : "");
+        config.put("qrDescription", qrActive ? getOrFallback("bank_transfer_qr_description", "") : "");
         return config;
     }
 
@@ -66,6 +76,11 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         if (config.containsKey("iban")) toSave.put("payment_bank_iban", config.get("iban"));
         if (config.containsKey("accountHolder")) toSave.put("payment_bank_account_holder", config.get("accountHolder"));
         if (config.containsKey("deadlineHours")) toSave.put("payment_bank_deadline_hours", config.get("deadlineHours"));
+        // QR settings
+        if (config.containsKey("qrEnabled")) toSave.put("bank_transfer_qr_enabled", config.get("qrEnabled"));
+        if (config.containsKey("qrImage")) toSave.put("bank_transfer_qr_image", config.get("qrImage"));
+        if (config.containsKey("qrBankName")) toSave.put("bank_transfer_qr_bank_name", config.get("qrBankName"));
+        if (config.containsKey("qrDescription")) toSave.put("bank_transfer_qr_description", config.get("qrDescription"));
         settingService.updateSettings(toSave, updatedBy);
     }
 

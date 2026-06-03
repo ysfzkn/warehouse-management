@@ -5,9 +5,9 @@ import ConfirmModal from './ConfirmModal';
 import './ProductForm.css';
 
 /**
- * Crawler önizleme thumbnail'ı: backend proxy üzerinden Referer'lı
- * indirme (hotlink korumalı CDN'ler için) + axios ile JWT Bearer ekleme.
- * <img src=...> direkt çalışmıyor çünkü browser Authorization header eklemiyor.
+ * Crawler preview thumbnail: downloads via the backend proxy with a Referer
+ * (for hotlink-protected CDNs) + attaches the JWT Bearer through axios.
+ * <img src=...> does not work directly because the browser does not add an Authorization header.
  */
 function CrawlThumbnail({ url, referer }) {
   const [blobUrl, setBlobUrl] = useState(null);
@@ -96,14 +96,14 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
     let basePrice, sctAmount, priceWithSct, vatAmount, totalPrice;
     
     if (priceIncludesVat && enteredPrice > 0) {
-      // Girilen fiyat KDV dahil ise, geriye doğru hesaplama yap
+      // If the entered price is VAT-inclusive, calculate backwards
       // totalPrice = priceWithSct * (1 + vatRate / 100)
       // priceWithSct = totalPrice / (1 + vatRate / 100)
       totalPrice = enteredPrice;
       priceWithSct = totalPrice / (1 + vatRate / 100);
       vatAmount = totalPrice - priceWithSct;
-      
-      // ÖTV varsa, basePrice'ı hesapla
+
+      // If there is SCT, calculate basePrice
       if (sctRate > 0) {
         // priceWithSct = basePrice * (1 + sctRate / 100)
         basePrice = priceWithSct / (1 + sctRate / 100);
@@ -113,7 +113,7 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
         sctAmount = 0;
       }
     } else {
-      // Girilen fiyat KDV hariç ise, ileriye doğru hesaplama yap
+      // If the entered price is VAT-exclusive, calculate forwards
       basePrice = enteredPrice;
       sctAmount = basePrice * (sctRate / 100);
       priceWithSct = basePrice + sctAmount;
@@ -476,11 +476,11 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
     const { name, value, type, checked } = e.target;
 
     if (name === 'categoryId') {
-      // Ana kategori değiştiğinde alt kategoriyi sıfırla
+      // Reset the subcategory when the main category changes
       setFormData(prev => ({
         ...prev,
         [name]: value,
-        subcategoryId: '' // Alt kategoriyi sıfırla
+        subcategoryId: '' // Reset the subcategory
       }));
     } else {
       setFormData(prev => ({
@@ -509,7 +509,7 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
       newErrors.sku = 'Stok kodu gereklidir';
     }
 
-    // Price: parseFloat NaN check + pozitif olmalı (e-ticarette 0 fiyat kullanılamaz)
+    // Price: parseFloat NaN check + must be positive (a price of 0 cannot be used in e-commerce)
     const priceNum = parseFloat(formData.price);
     if (!formData.price || isNaN(priceNum) || priceNum <= 0) {
       newErrors.price = 'Geçerli bir fiyat giriniz (sıfırdan büyük olmalı)';
@@ -519,7 +519,7 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
       newErrors.categoryId = 'Kategori seçiniz';
     }
 
-    // Backend constraint'leri ile uyumlu uzunluk kontrolü
+    // Length validation aligned with backend constraints
     if (formData.description && formData.description.length > 5000) {
       newErrors.description = `Açıklama 5000 karakteri aşamaz (şu an ${formData.description.length}).`;
     }
@@ -549,8 +549,8 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
   };
 
   // ─── Profilo / 3rd-party URL crawler ──────────────────────────────
-  // Backend allowlist'iyle senkron tutulan client-side check (UX için).
-  // Yanlış URL girildiğinde anında uyarı gösterir, gereksiz API çağrısını engeller.
+  // Client-side check kept in sync with the backend allowlist (for UX).
+  // Shows an instant warning when a wrong URL is entered, preventing an unnecessary API call.
   const SUPPORTED_DOMAINS = [
     'profilo.com','profilo.com.tr','siemens.com.tr','siemens-home.com.tr','siemens-home.bsh-group.com',
     'bosch-home.com','bosch-home.com.tr','arcelik.com','arcelik.com.tr','beko.com','beko.com.tr',
@@ -579,7 +579,7 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
   const [crawlReplace, setCrawlReplace] = useState(false);
   const [crawlImporting, setCrawlImporting] = useState(false);
   const [crawlResult, setCrawlResult] = useState(null); // { success, total, errors: [] }
-  // Description preview state — admin metni düzenleyebilir, sonra "Uygula" ile ProductForm'a aktarır
+  // Description preview state — the admin can edit the text, then transfer it to ProductForm via "Apply"
   const [crawlEditableDesc, setCrawlEditableDesc] = useState('');
   const [crawlEditableShortDesc, setCrawlEditableShortDesc] = useState('');
   const [crawlEditableSpecs, setCrawlEditableSpecs] = useState([]); // [{key, value}]
@@ -613,17 +613,17 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
       );
       const data = res.data || {};
       setCrawlPreview(data);
-      // Default: hepsini seç
+      // Default: select all
       setCrawlSelected(new Set(data.images || []));
-      // Description state'ini hydrate et (admin düzenleyebilir)
+      // Hydrate the description state (the admin can edit it)
       setCrawlEditableDesc(data.description || '');
       setCrawlEditableShortDesc(data.shortDescription || '');
-      // Specs Map → düzenlenebilir array
+      // Specs Map → editable array
       const specsObj = data.specs || {};
       setCrawlEditableSpecs(Object.entries(specsObj).map(([k, v]) => ({ key: k, value: v })));
-      // Eğer description çekilmediyse görsel tab'da kal; varsa description tab'ını da öner
+      // If no description was fetched, stay on the images tab; if present, also suggest the description tab
       if (data.description || data.shortDescription) {
-        setCrawlActiveTab('images'); // default başlangıç hala images
+        setCrawlActiveTab('images'); // default start is still images
       }
     } catch (e) {
       setCrawlError(e.response?.data?.message || 'Görseller çekilemedi');
@@ -648,25 +648,25 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
   const deselectAllCrawl = () => setCrawlSelected(new Set());
 
   /**
-   * Düzenlenmiş açıklama + specs'i ProductForm'un asıl alanlarına aktarır.
+   * Transfers the edited description + specs into ProductForm's actual fields.
    *
-   * Bug fix'ler:
-   *   - Backend description @Size(max=5000) — 4800 char'da kırp (HTML tag margin'i için)
-   *   - shortDescription @Column(length=1000) — 1000'de kırp
-   *   - setFormData callback formu ile asenkron güncelleme garantili
-   *   - Modal'ı otomatik kapatıp formdaki alanları flash ile vurgula (görsel feedback)
-   *   - Save tuşunu hatırlatan toast (kullanıcı "Aktarınca otomatik kaydedildi mi?" sanmasın)
+   * Bug fixes:
+   *   - Backend description @Size(max=5000) — truncate at 4800 chars (margin for HTML tags)
+   *   - shortDescription @Column(length=1000) — truncate at 1000
+   *   - asynchronous update guaranteed via the setFormData callback form
+   *   - automatically close the modal and flash-highlight the form fields (visual feedback)
+   *   - toast reminding to press Save (so the user does not think "was it auto-saved on transfer?")
    */
   const applyCrawlDescriptionToProduct = () => {
     const updates = {};
 
-    // Kısa açıklama (1000 char limit)
+    // Short description (1000 char limit)
     if (crawlEditableShortDesc && crawlEditableShortDesc.trim()) {
       const trimmed = crawlEditableShortDesc.trim();
       updates.shortDescription = trimmed.length > 1000 ? trimmed.substring(0, 997) + '...' : trimmed;
     }
 
-    // Uzun açıklama + specs (HTML tablo append). Toplam 5000 char limiti backend'de var.
+    // Long description + specs (HTML table append). The total 5000 char limit is on the backend.
     let fullDesc = (crawlEditableDesc || '').trim();
     if (crawlEditableSpecs.length > 0) {
       const validSpecs = crawlEditableSpecs.filter(s => s.key.trim() && s.value.trim());
@@ -679,7 +679,7 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
         fullDesc = fullDesc + table;
       }
     }
-    // Backend description @Size(max=5000) — 4800 char ile güvenli kalan; aşılırsa graceful kırp
+    // Backend description @Size(max=5000) — stay safe with 4800 chars; gracefully truncate if exceeded
     if (fullDesc.length > 4800) {
       fullDesc = fullDesc.substring(0, 4800) + '\n\n<p><em>... (açıklama 4800 karaktere kısaltıldı)</em></p>';
     }
@@ -692,7 +692,7 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
       return;
     }
 
-    // KRİTİK: prev callback formu ile state güncelle — race condition önlenir
+    // CRITICAL: update state via the prev callback form — prevents a race condition
     setFormData(prev => ({ ...prev, ...updates }));
     setCrawlDescAppliedToast(true);
 
@@ -705,10 +705,10 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
       'success'
     );
 
-    // Modal'ı otomatik kapat ve formdaki alanlara scroll + flash highlight
+    // Automatically close the modal and scroll to the form fields + flash highlight
     setTimeout(() => {
       setCrawlOpen(false);
-      // Form alanlarına scroll + 2 saniyelik flash highlight
+      // Scroll to the form fields + a 2-second flash highlight
       const descField = document.getElementById('description');
       const shortField = document.getElementById('shortDescription');
       const target = descField || shortField;
@@ -728,7 +728,7 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
     }, 400);
   };
 
-  // Simple HTML entity escape (XSS koruması)
+  // Simple HTML entity escape (XSS protection)
   const escapeHtmlEntity = (s) => String(s)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -766,7 +766,7 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
       // Reload product images
       const imgs = await axios.get(`/api/products/${product.id}/images`);
       setProductImages(imgs.data || []);
-      // Toast bildirimi
+      // Toast notification
       const { success = 0, total = 0, errors = [] } = res.data || {};
       if (success > 0 && errors.length === 0) {
         showToast(`${success}/${total} görsel başarıyla yüklendi`, 'success');
@@ -1458,7 +1458,7 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
         </div>
       )}
 
-      {/* ===== İndirim & Kampanya ===== */}
+      {/* ===== Discount & Campaign ===== */}
       <div className="row mb-3 mt-4">
         <div className="col-12">
           <h6 className="text-muted mb-3"><i className="fas fa-percentage me-2" />İndirim & Kampanya</h6>
@@ -1555,7 +1555,7 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
         </div>
       </div>
 
-      {/* ===== Ürün Görselleri (sadece düzenleme modunda) ===== */}
+      {/* ===== Product Images (edit mode only) ===== */}
       {product?.id && (
         <>
           <div className="row mb-3 mt-4">
@@ -1624,7 +1624,7 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
               )}
             </div>
 
-            {/* URL'den otomatik çek */}
+            {/* Auto-fetch from URL */}
             <div className="mt-3 d-flex justify-content-center">
               <button type="button" className="btn btn-sm btn-outline-info"
                 onClick={openCrawlModal} disabled={!product?.id}>
@@ -1778,7 +1778,7 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
                       </ul>
                     </div>
 
-                    {/* ── Tab: Görseller ── */}
+                    {/* ── Tab: Images ── */}
                     {crawlActiveTab === 'images' && crawlPreview.images && crawlPreview.images.length > 0 && (
                       <>
                         <div className="d-flex justify-content-between align-items-center mb-2">
@@ -1830,7 +1830,7 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
                       </>
                     )}
 
-                    {/* ── Tab: Açıklama & Özellikler ── */}
+                    {/* ── Tab: Description & Specs ── */}
                     {crawlActiveTab === 'description' && (
                       <div>
                         {!crawlPreview.description && !crawlPreview.shortDescription && crawlEditableSpecs.length === 0 ? (
@@ -1847,7 +1847,7 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
                           </div>
                         )}
 
-                        {/* Kısa açıklama */}
+                        {/* Short description */}
                         <div className="mb-3">
                           <label htmlFor="crawl-short-desc" className="form-label small fw-semibold d-flex justify-content-between">
                             <span>Kısa Açıklama</span>
@@ -1864,7 +1864,7 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
                             placeholder="Listeleme sayfalarında ürün adının altında görünür..." />
                         </div>
 
-                        {/* Uzun açıklama */}
+                        {/* Long description */}
                         <div className="mb-3">
                           <label htmlFor="crawl-long-desc" className="form-label small fw-semibold d-flex justify-content-between">
                             <span>Açıklama</span>
@@ -1988,7 +1988,7 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
         </div>
       )}
 
-      {/* ── SEO Ayarları ── */}
+      {/* ── SEO Settings ── */}
       <div className="card border-0 bg-light mt-3">
         <div className="card-header bg-transparent border-bottom-0 d-flex align-items-center gap-2 py-2 px-3" style={{cursor:'pointer'}}
           onClick={() => setFormData(prev => ({...prev, _seoOpen: !prev._seoOpen}))}>

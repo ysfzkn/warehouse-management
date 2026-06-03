@@ -166,7 +166,7 @@ export default function AdminSupportTickets() {
                 <button className="btn-close" onClick={() => setSelected(null)} />
               </div>
               <div className="card-body">
-                {/* Müşteri mesajı */}
+                {/* Customer message */}
                 <div className="d-flex gap-3 mb-3">
                   <div className="bg-primary bg-opacity-10 rounded-circle d-flex align-items-center justify-content-center flex-shrink-0" style={{ width: 36, height: 36 }}>
                     <i className="fas fa-user text-primary" style={{ fontSize: 14 }} />
@@ -179,7 +179,7 @@ export default function AdminSupportTickets() {
                   </div>
                 </div>
 
-                {/* Admin yanıtı (mevcut) */}
+                {/* Admin reply (existing) */}
                 {selected.adminReply && selected.status !== 'OPEN' && (
                   <div className="d-flex gap-3 mb-3">
                     <div className="bg-success bg-opacity-10 rounded-circle d-flex align-items-center justify-content-center flex-shrink-0" style={{ width: 36, height: 36 }}>
@@ -194,13 +194,13 @@ export default function AdminSupportTickets() {
                   </div>
                 )}
 
-                {/* Yanıt yazma */}
+                {/* Reply composer */}
                 <div className="border-top pt-3 mt-3">
                   <label className="form-label small fw-semibold"><i className="fas fa-reply me-1" />Yanıtınız</label>
                   <textarea className="form-control" rows={4} value={replyText} onChange={e => setReplyText(e.target.value)}
                     placeholder="Müşteriye yanıtınızı yazın..." />
                   <div className="d-flex justify-content-between align-items-center mt-3">
-                    {/* Durum değiştirme */}
+                    {/* Status change */}
                     <div className="d-flex gap-1">
                       {Object.entries(STATUS_MAP).map(([key, s]) => (
                         <button key={key}

@@ -11,6 +11,7 @@ import {
   buildPayloadForProtocol,
   validateForm,
   suggestCallbackUrl,
+  suggestRedirectUrl,
 } from './paymentGatewaySchema';
 
 const EMPTY_FORM = emptyFormForProtocol('IYZICO');
@@ -52,7 +53,7 @@ export default function AdminPaymentGateways() {
   };
 
   const handleSave = () => {
-    // Frontend validation — kullanıcı hata mesajını anında görür, backend round-trip gerekmez
+    // Frontend validation — the user sees the error message instantly, no backend round-trip needed
     const err = validateForm(form, form.gatewayProtocol, !!editing);
     if (err) {
       setFormError(err);
@@ -62,7 +63,7 @@ export default function AdminPaymentGateways() {
     setFormError(null);
     withCode('Gateway ayarlarını kaydetmek için güvenlik şifresini girin.', async (code) => {
       const headers = { 'X-ADMIN-SECURITY-CODE': code };
-      // Protokole özgü payload'u oluştur (gereksiz alanları kırp)
+      // Build the protocol-specific payload (trim unnecessary fields)
       const payload = buildPayloadForProtocol(form, form.gatewayProtocol);
       if (editing) {
         await axios.put(`/api/admin/payment-gateways/${editing}`, payload, { headers });
@@ -125,16 +126,16 @@ export default function AdminPaymentGateways() {
   }, []);
 
   /**
-   * Ödeme yöntemi toggle'ı (kredi kartı / havale / kapıda ödeme aç/kapat).
+   * Payment method toggle (enable/disable credit card / bank transfer / cash on delivery).
    *
-   * Backend admin endpoint'leri güvenlik şifresi (X-ADMIN-SECURITY-CODE) zorunlu kılar.
-   * Önceki sürümde header gönderilmiyordu → her toggle "400 Güvenlik şifresi zorunludur" alıyordu.
+   * The backend admin endpoints require a security code (X-ADMIN-SECURITY-CODE).
+   * In the previous version the header was not sent → every toggle got "400 Security code required".
    *
-   * Şimdi:
-   *   1. Toggle değişimi optimistic olarak UI'a yansıtılır
-   *   2. Şifre prompt'u açılır
-   *   3. Kullanıcı şifreyi girerse PUT atılır (success toast)
-   *   4. Kullanıcı iptal eder veya hata olursa UI önceki haline geri alınır
+   * Now:
+   *   1. The toggle change is reflected optimistically in the UI
+   *   2. The security code prompt opens
+   *   3. If the user enters the code, a PUT is sent (success toast)
+   *   4. If the user cancels or an error occurs, the UI is reverted to its previous state
    */
   const handleToggleChange = async (key, value) => {
     const previous = paymentToggles[key];
@@ -151,7 +152,7 @@ export default function AdminPaymentGateways() {
       description: `${action}: ${label.toLowerCase()} — onaylamak için güvenlik şifresini girin.`,
     });
     if (!code) {
-      // Kullanıcı iptal etti — UI revert
+      // User cancelled — revert UI
       setPaymentToggles(p => ({ ...p, [key]: previous }));
       return;
     }
@@ -160,7 +161,7 @@ export default function AdminPaymentGateways() {
           { headers: { 'X-ADMIN-SECURITY-CODE': code } });
       toast.success(`${label} ${value === 'true' ? 'aktif edildi' : 'devre dışı bırakıldı'}.`);
     } catch (e) {
-      // Hata → UI revert + açıklayıcı mesaj
+      // Error → revert UI + explanatory message
       setPaymentToggles(p => ({ ...p, [key]: previous }));
       const status = e.response?.status;
       const msg = e.response?.data?.message || e.response?.data?.error;
@@ -258,6 +259,117 @@ export default function AdminPaymentGateways() {
                   <span className="input-group-text small">saat</span>
                 </div>
               </div>
+              {/* ── FAST QR (Bank transfer via QR code) ── */}
+              <div className="col-12">
+                <hr className="my-3" />
+                <div className="d-flex align-items-center justify-content-between mb-2">
+                  <div>
+                    <h6 className="mb-1 fw-semibold">
+                      <i className="fas fa-qrcode text-primary me-2" />
+                      Karekod ile Havale (FAST QR)
+                    </h6>
+                    <small className="text-muted">
+                      Müşteri bankacılık uygulamasıyla QR'ı okutarak hızlı transfer yapar.
+                      Bankanızın panelinden FAST QR alıp resmi yükleyin.
+                    </small>
+                  </div>
+                  <div className="form-check form-switch">
+                    <input
+                      type="checkbox"
+                      role="switch"
+                      className="form-check-input"
+                      style={{ width: 48, height: 24 }}
+                      checked={bankConfig.qrEnabled === 'true' || bankConfig.qrEnabled === true}
+                      onChange={e => setBankConfig({ ...bankConfig, qrEnabled: e.target.checked ? 'true' : 'false' })}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="col-md-6">
+                <label className="form-label small fw-medium">QR Kod Resmi</label>
+                {bankConfig.qrImage && (
+                  <div className="mb-2">
+                    <img
+                      // bankConfig.qrImage = "assets/bank-transfer-qr-xxx.png"
+                      // The backend now accepts the full storage key (including slashes).
+                      src={`/api/admin/settings/site/asset/view/${bankConfig.qrImage}?t=${Date.now()}`}
+                      alt="QR Kod önizleme"
+                      style={{ maxWidth: 200, maxHeight: 200, border: '1px solid #dee2e6', borderRadius: 8, padding: 8, background: '#fff' }}
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                        const fb = e.currentTarget.nextSibling;
+                        if (fb) fb.style.display = 'block';
+                      }}
+                    />
+                    <div style={{ display: 'none' }} className="alert alert-warning small p-2 mt-1">
+                      Önizleme yüklenemedi (kaydet sonrası tarayıcı cache'i için sayfa yenileyin).
+                    </div>
+                    <div className="small text-muted font-monospace mt-1">{bankConfig.qrImage}</div>
+                  </div>
+                )}
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  className="form-control form-control-sm"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    if (file.size > 2 * 1024 * 1024) {
+                      toast.error('Maksimum 2 MB');
+                      return;
+                    }
+                    const code = await askCode({ description: 'QR yüklemek için güvenlik şifresi.' });
+                    if (!code) return;
+                    const fd = new FormData();
+                    fd.append('file', file);
+                    fd.append('name', 'bank-transfer-qr');
+                    try {
+                      // Correct endpoint: /site/upload (not asset). Goes to the bucket/MinIO.
+                      const r = await axios.post('/api/admin/settings/site/upload', fd, {
+                        headers: { 'X-ADMIN-SECURITY-CODE': code, 'Content-Type': 'multipart/form-data' }
+                      });
+                      // Backend response: { url, path, fileName }
+                      // path = storage key (e.g. "assets/bank-transfer-qr-abc.png")
+                      // we write this to site_settings.bank_transfer_qr_image
+                      const storageKey = r.data?.path;
+                      if (storageKey) {
+                        setBankConfig({ ...bankConfig, qrImage: storageKey });
+                        toast.success('QR kod yüklendi. "Kaydet"e basmayı unutmayın.');
+                      } else {
+                        toast.error('Yükleme yanıtı beklenmedik format: ' + JSON.stringify(r.data));
+                      }
+                    } catch (err) {
+                      toast.error('Yükleme hatası: ' + (err.response?.data?.message || err.message));
+                    }
+                  }}
+                />
+                <small className="text-muted">PNG/JPG/WebP, max 2 MB. Bankanızın panelinden indirin.</small>
+              </div>
+
+              <div className="col-md-6">
+                <label className="form-label small fw-medium">QR Bankası</label>
+                <input
+                  className="form-control"
+                  value={bankConfig.qrBankName || ''}
+                  onChange={e => setBankConfig({ ...bankConfig, qrBankName: e.target.value })}
+                  placeholder="Garanti BBVA / İş Bankası vb."
+                />
+                <small className="text-muted">QR'ın ait olduğu banka (IBAN ile aynı olmalı)</small>
+              </div>
+
+              <div className="col-12">
+                <label className="form-label small fw-medium">Açıklama Metni</label>
+                <textarea
+                  className="form-control"
+                  rows={2}
+                  value={bankConfig.qrDescription || ''}
+                  onChange={e => setBankConfig({ ...bankConfig, qrDescription: e.target.value })}
+                  placeholder={`örn: "Bankanızın mobil uygulamasında 'QR ile İşlem' menüsünden okutun..."`}
+                />
+                <small className="text-muted">Müşteriye checkout'ta QR yanında gösterilir</small>
+              </div>
+
               <div className="col-12">
                 <button className="btn btn-success px-4" onClick={handleSaveBankConfig} disabled={bankSaving}>
                   <i className={`fas ${bankSaving ? 'fa-spinner fa-spin' : 'fa-save'} me-2`} />{bankSaving ? 'Kaydediliyor...' : 'Havale Ayarlarını Kaydet'}
@@ -288,7 +400,7 @@ export default function AdminPaymentGateways() {
               <div className="card-body" style={{maxHeight: 'calc(100vh - 200px)', overflowY: 'auto'}}>
                 <div className="row g-3">
 
-                  {/* ── Protokol seçici (visual card picker) ── */}
+                  {/* ── Protocol picker (visual card picker) ── */}
                   <div className="col-12">
                     <label className="form-label small fw-semibold mb-2">Protokol Seçin <span className="text-danger" aria-hidden="true">*</span></label>
                     <div className="row g-2">
@@ -339,7 +451,7 @@ export default function AdminPaymentGateways() {
                     )}
                   </div>
 
-                  {/* ── Protokol help info ── */}
+                  {/* ── Protocol help info ── */}
                   {protocolConfig.helpText && (
                     <div className="col-12">
                       <div className={`alert alert-${protocolConfig.color === 'danger' ? 'warning' : protocolConfig.color || 'info'} small mb-0 py-2`}>
@@ -354,7 +466,7 @@ export default function AdminPaymentGateways() {
                     </div>
                   )}
 
-                  {/* ── Banka seçici (sadece NESTPAY/GVP) ── */}
+                  {/* ── Bank picker (NESTPAY/GVP only) ── */}
                   {protocolConfig.bankSelect && (
                     <div className="col-12">
                       <label className="form-label small fw-semibold">
@@ -371,7 +483,7 @@ export default function AdminPaymentGateways() {
                     </div>
                   )}
 
-                  {/* ── Temel bilgiler ── */}
+                  {/* ── Basic information ── */}
                   <div className="col-md-6">
                     <label className="form-label small fw-semibold">
                       Kod (benzersiz) <span className="text-danger" aria-hidden="true">*</span>
@@ -393,7 +505,7 @@ export default function AdminPaymentGateways() {
                     <small className="text-muted">Admin tablo görünümünde kullanılır.</small>
                   </div>
 
-                  {/* ── Protokol-spesifik alanlar (dinamik) ── */}
+                  {/* ── Protocol-specific fields (dynamic) ── */}
                   {Object.entries(protocolConfig.fields || {}).map(([fieldKey, def]) => (
                     <div key={fieldKey} className="col-12">
                       <GatewayFormField
@@ -403,17 +515,25 @@ export default function AdminPaymentGateways() {
                         editingExistingSecret={!!editing && def.type === 'password'
                           && form['_' + fieldKey + 'Set']}
                       />
-                      {/* Code → callback URL otomatik öneri */}
-                      {fieldKey === 'callbackUrl' && form.code && !form.callbackUrl && (
-                        <button type="button" className="btn btn-link btn-sm p-0 mt-1"
-                          onClick={() => setForm({...form, callbackUrl: suggestCallbackUrl(form.code, form.gatewayProtocol)})}>
-                          <i className="fas fa-magic me-1" />Otomatik öner
-                        </button>
-                      )}
+                      {/* Code → callback URL auto-suggestion */}
+                      {fieldKey === 'callbackUrl' && form.code && (() => {
+                        const suggested = suggestCallbackUrl(form.code, form.gatewayProtocol);
+                        return (
+                          <div className="d-flex align-items-center gap-2 mt-1">
+                            <button type="button" className="btn btn-link btn-sm p-0"
+                              onClick={() => setForm({...form, callbackUrl: suggested})}>
+                              <i className="fas fa-magic me-1" />Otomatik öner
+                            </button>
+                            <span className="text-muted small font-monospace" style={{fontSize: 11}}>
+                              → {suggested}
+                            </span>
+                          </div>
+                        );
+                      })()}
                     </div>
                   ))}
 
-                  {/* ── extraConfig alanları (PayTR için merchant_ok_url vb.) ── */}
+                  {/* ── extraConfig fields (e.g. merchant_ok_url for PayTR) ── */}
                   {protocolConfig.extraFields && Object.keys(protocolConfig.extraFields).length > 0 && (
                     <>
                       <div className="col-12 mt-3">
@@ -422,19 +542,37 @@ export default function AdminPaymentGateways() {
                           Yönlendirme & Ek Ayarlar
                         </h6>
                       </div>
-                      {Object.entries(protocolConfig.extraFields).map(([fieldKey, def]) => (
-                        <div key={fieldKey} className="col-12">
-                          <GatewayFormField
-                            def={def}
-                            value={form['extra_' + fieldKey]}
-                            onChange={(v) => setForm({...form, ['extra_' + fieldKey]: v})}
-                          />
-                        </div>
-                      ))}
+                      {Object.entries(protocolConfig.extraFields).map(([fieldKey, def]) => {
+                        // Auto-suggestion for success/fail URL fields
+                        const isOkUrl = fieldKey === 'merchant_ok_url' || fieldKey.includes('success');
+                        const isFailUrl = fieldKey === 'merchant_fail_url' || fieldKey.includes('fail');
+                        const canSuggest = isOkUrl || isFailUrl;
+                        const suggested = canSuggest ? suggestRedirectUrl(isOkUrl) : null;
+                        return (
+                          <div key={fieldKey} className="col-12">
+                            <GatewayFormField
+                              def={def}
+                              value={form['extra_' + fieldKey]}
+                              onChange={(v) => setForm({...form, ['extra_' + fieldKey]: v})}
+                            />
+                            {canSuggest && (
+                              <div className="d-flex align-items-center gap-2 mt-1">
+                                <button type="button" className="btn btn-link btn-sm p-0"
+                                  onClick={() => setForm({...form, ['extra_' + fieldKey]: suggested})}>
+                                  <i className="fas fa-magic me-1" />Otomatik öner
+                                </button>
+                                <span className="text-muted small font-monospace" style={{fontSize: 11}}>
+                                  → {suggested}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </>
                   )}
 
-                  {/* ── Ortam seçici (Sandbox / Production) ── */}
+                  {/* ── Environment picker (Sandbox / Production) ── */}
                   <div className="col-12 mt-3">
                     <hr className="my-2" />
                     <label className="form-label small fw-semibold">Ortam</label>
@@ -470,7 +608,7 @@ export default function AdminPaymentGateways() {
                     </div>
                   </div>
 
-                  {/* ── Davranış parametreleri ── */}
+                  {/* ── Behavior parameters ── */}
                   <div className="col-md-6">
                     <label className="form-label small fw-semibold">Öncelik</label>
                     <input type="number" className="form-control" value={form.priority}
@@ -514,7 +652,7 @@ export default function AdminPaymentGateways() {
                     </div>
                   </div>
 
-                  {/* Validation hatası göstergesi */}
+                  {/* Validation error indicator */}
                   {formError && (
                     <div className="col-12">
                       <div className="alert alert-danger small mb-0">
@@ -523,7 +661,7 @@ export default function AdminPaymentGateways() {
                     </div>
                   )}
 
-                  {/* Production uyarısı */}
+                  {/* Production warning */}
                   {!form.sandbox && (
                     <div className="col-12">
                       <div className="alert alert-danger small mb-0">
@@ -559,6 +697,19 @@ export default function AdminPaymentGateways() {
                   <button className="btn btn-sm btn-primary" onClick={startCreate}><i className="fas fa-plus me-1" />İlk Gateway'i Ekleyin</button>
                 </div>
               ) : (
+                <>
+                  {/* Warning banner when no gateway is marked as default.
+                      The backend falls back to the "first active" one if there's no default, but explicitly
+                      marking one provides both deterministic behavior and clear UX. */}
+                  {gateways.some(g => g.active) && !gateways.some(g => g.active && g.defaultGateway) && (
+                    <div className="alert alert-warning d-flex align-items-center gap-2 m-3 mb-0" role="alert">
+                      <i className="fas fa-exclamation-triangle" />
+                      <div className="flex-grow-1 small">
+                        <strong>Varsayılan ödeme sağlayıcı seçilmemiş.</strong> Sistem aktif olan ilk gateway'i kullanacak (öncelik sırasına göre).
+                        Hangi gateway'in kullanılacağından emin olmak için satırın ucundaki <i className="fas fa-star text-info mx-1" /> butonuyla bir <strong>Varsayılan</strong> belirleyin.
+                      </div>
+                    </div>
+                  )}
                 <table className="table table-hover align-middle mb-0">
                   <thead className="table-light">
                     <tr><th>Gateway</th><th>Protokol / Banka</th><th>Durum</th><th>Öncelik</th><th style={{width:180}}>İşlemler</th></tr>
@@ -601,6 +752,7 @@ export default function AdminPaymentGateways() {
                     ))}
                   </tbody>
                 </table>
+                </>
               )}
             </div>
           </div>

@@ -16,23 +16,23 @@ import java.time.LocalDateTime;
 import java.util.Optional;
 
 /**
- * Sipariş iade event'i için fatura iptal/credit note akışı.
+ * Invoice cancellation / credit note flow for the order return event.
  *
- * <p><b>Türkiye e-fatura iade kuralları:</b>
+ * <p><b>Turkey e-invoice return rules:</b>
  * <ul>
- *   <li><b>e-Arşiv (bireysel):</b> Kesildikten sonra <b>8 gün içinde</b> iptal
- *       edilebilir ({@code CANCELEARCHIVEINVOICE}). 8 gün sonrasında iptal değil,
- *       <b>iade faturası</b> kesmek gerekir.</li>
- *   <li><b>e-Fatura (tüzel):</b> Kesilmiş bir e-faturanın iptal edilmesi mümkün
- *       değildir. Mutlaka <b>credit note</b> (red/iade faturası) kesilmelidir.</li>
+ *   <li><b>e-Arşiv (individual):</b> Can be cancelled <b>within 8 days</b> of
+ *       being issued ({@code CANCELEARCHIVEINVOICE}). After 8 days it cannot be
+ *       cancelled; a <b>credit (return) invoice</b> must be issued instead.</li>
+ *   <li><b>e-Fatura (corporate):</b> An issued e-invoice cannot be cancelled.
+ *       A <b>credit note</b> (rejection/return invoice) must always be issued.</li>
  * </ul></p>
  *
- * <p><b>MVP davranışı:</b> Bu listener iptal eylemini admin'e bildirir ve
- * uygunsa otomatik iptal eder. Credit note akışı şu an "manuel onay gerekli"
- * mantığıyla ERROR statüsünde kayıt oluşturur (admin tamamlar). Tam credit
- * note kesimi UblTrInvoiceBuilder'da ProfileID="IADE" + creditedInvoiceID alanı
- * gerektirir ve Logo SendDocument farklı parametreler ister — gelecek
- * iterasyonda tam otomatize edilecek.</p>
+ * <p><b>MVP behavior:</b> This listener notifies the admin of the cancellation
+ * action and cancels automatically when eligible. The credit note flow currently
+ * creates a record in ERROR status with a "manual approval required" logic (the
+ * admin completes it). Full credit note issuance requires ProfileID="IADE" plus a
+ * creditedInvoiceID field in UblTrInvoiceBuilder, and Logo SendDocument expects
+ * different parameters — this will be fully automated in a future iteration.</p>
  */
 @Component
 public class InvoiceCancellationListener {
@@ -73,12 +73,12 @@ public class InvoiceCancellationListener {
                     && Duration.between(inv.getIssuedAt(), LocalDateTime.now()).toDays() < EARSIV_CANCEL_WINDOW_DAYS;
 
             if (eArsivWithinWindow) {
-                // e-Arşiv + 8 gün içinde → doğrudan iptal et (CANCELEARCHIVEINVOICE)
+                // e-Arşiv + within 8 days → cancel directly (CANCELEARCHIVEINVOICE)
                 log.info("[Invoice] e-Arşiv {} gün içinde — iptal ediliyor (order={})",
                         EARSIV_CANCEL_WINDOW_DAYS, event.getOrderNumber());
                 invoiceService.cancelInvoice(inv.getId());
             } else {
-                // e-Fatura veya 8 gün geçmiş e-Arşiv → credit note (iade faturası) kes
+                // e-Fatura or e-Arşiv past 8 days → issue a credit note (return invoice)
                 log.info("[Invoice] İade faturası kesiliyor (otomatik): invoiceId={}, type={}, order={}",
                         inv.getId(), inv.getInvoiceType(), event.getOrderNumber());
                 try {
@@ -89,8 +89,8 @@ public class InvoiceCancellationListener {
                     log.info("[Invoice] Credit note oluşturuldu: id={}, no={}, status={}",
                             creditNote.getId(), creditNote.getInvoiceNumber(), creditNote.getStatus());
                 } catch (Exception ce) {
-                    // Credit note kesimi başarısız → admin digest (ERROR statüsü) yakalar.
-                    // Manuel müdahale için admin /api/admin/invoices/{id}/credit-note kullanabilir.
+                    // Credit note issuance failed → the admin digest (ERROR status) catches it.
+                    // For manual intervention the admin can use /api/admin/invoices/{id}/credit-note.
                     log.error("[Invoice] Credit note kesimi başarısız: invoiceId={}, order={}, hata={}",
                             inv.getId(), event.getOrderNumber(), ce.getMessage());
                 }

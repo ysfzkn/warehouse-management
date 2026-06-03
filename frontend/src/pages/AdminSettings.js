@@ -437,7 +437,7 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
   };
 
 
-  // Hata mesajını backend'den detaylarıyla birlikte güvenli şekilde çıkarmak için helper
+  // Helper to safely extract the error message from the backend along with its details
   const buildErrorMessage = (rawError, fallbackMessage) => {
     console.log(rawError)
     if (!rawError) {
@@ -446,23 +446,23 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
 
     let apiError = rawError;
 
-    // Eğer string JSON geldiyse parse etmeye çalış
+    // If it came as a JSON string, try to parse it
     if (typeof apiError === 'string') {
       try {
         apiError = JSON.parse(apiError);
       } catch {
-        // Parselenemiyorsa direkt string olarak kullan
+        // If it can't be parsed, use it directly as a string
         return apiError || fallbackMessage;
       }
     }
 
-    // Buradan sonrası object varsayımı
+    // From here on we assume it's an object
     const backendMessage =
       apiError && typeof apiError.message === 'string'
         ? apiError.message.trim()
         : null;
 
-    // details hem array hem de string olabilsin
+    // details may be either an array or a string
     let details = [];
     if (Array.isArray(apiError?.details)) {
       details = apiError.details;
@@ -470,14 +470,14 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
       details = apiError.details.split('\n').map(d => d.trim()).filter(Boolean);
     }
 
-    // Temel mesaj
+    // Base message
     const base = backendMessage || fallbackMessage;
 
     if (!details.length) {
       return base;
     }
 
-    // Detayları HTML olarak listele
+    // List the details as HTML
     const listHtml = details
       .map(d => `• ${String(d).trim()}`)
       .join('<br/>');
@@ -520,7 +520,7 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
         tasks.push(
           axios.get('/api/brands')
             .then(res => setBrands(res.data || []))
-            .catch(() => { }) // önceki state'i koru
+            .catch(() => { }) // keep the previous state
         );
       }
       if (fetchColors) {
@@ -536,7 +536,7 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
             .then(res => {
               const incoming = Array.isArray(res.data) ? res.data : usersRef.current;
               console.log('[AdminSettings] users fetched', { next: incoming.length, prev: usersRef.current.length });
-              // Koruma: mevcut listedeki kişi sayısından beklenmedik düşüşte eski listeyi koru
+              // Guard: keep the old list on an unexpected drop from the current list's count
               if (incoming.length === 0 && usersRef.current.length > 0) {
                 console.warn('[AdminSettings] empty users response, keeping previous list');
                 setUsers(usersRef.current);
@@ -1127,7 +1127,7 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
               setSaving(true);
               setError('');
               if (editing.__create) {
-                // Eğer yeni kullanıcı ADMIN rolündeyse yönetici güvenlik şifresi iste
+                // If the new user has the ADMIN role, ask for the admin security code
                 let adminHeader = {};
                 if (form.role === 'ADMIN') {
                   let lastCode = '';
@@ -1160,7 +1160,7 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
                 showToast('Kullanıcı başarıyla oluşturuldu.', 'success');
               } else {
                 if (form.role && form.role !== editing.role) {
-                  // Rol değişikliği ADMIN ise güvenlik kodu iste
+                  // If the role change is to ADMIN, ask for the security code
                   let adminHeader = {};
                   if (form.role === 'ADMIN') {
                     let lastCode = '';

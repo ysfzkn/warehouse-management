@@ -8,8 +8,8 @@ import org.springframework.stereotype.Component;
 import java.util.UUID;
 
 /**
- * Mock SMS sağlayıcısı - geliştirme ve test için.
- * Gerçek SMS göndermez, log'a yazar.
+ * Mock SMS provider - for development and testing.
+ * Does not send real SMS; logs instead.
  */
 @Component
 public class MockSmsProvider implements SmsProvider {
@@ -37,7 +37,7 @@ public class MockSmsProvider implements SmsProvider {
 
     @Override
     public boolean isEnabled() {
-        // Mock provider sadece MOCK mode'da aktif
+        // Mock provider is only active in MOCK mode
         String provider = settingService.getSetting("sms_provider");
         return provider == null || provider.isBlank() || "MOCK".equalsIgnoreCase(provider);
     }

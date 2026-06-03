@@ -4,8 +4,8 @@ import axios from 'axios';
 import { FiLock, FiEye, FiEyeOff, FiCheckCircle, FiXCircle, FiArrowLeft, FiUserCheck } from 'react-icons/fi';
 
 /**
- * Misafir checkout sonrası müşterinin hesabını tamamlamak için kullandığı sayfa.
- * E-posta ile gönderilen bağlantıdaki token ile şifre belirler ve otomatik login olur.
+ * Page the customer uses to complete their account after guest checkout.
+ * Sets a password using the token from the emailed link and logs in automatically.
  */
 export default function CompleteAccountPage() {
   const [searchParams] = useSearchParams();
@@ -89,14 +89,14 @@ export default function CompleteAccountPage() {
     setLoading(true);
     try {
       const res = await axios.post('/api/store/auth/complete-account', { token, password });
-      // Otomatik login - token'ları sakla
+      // Automatic login - store the tokens
       if (res.data?.token) {
         localStorage.setItem('customer_token', res.data.token);
       }
       if (res.data?.refreshToken) {
         localStorage.setItem('customer_refresh_token', res.data.refreshToken);
       }
-      // auth-changed event'i tetikle
+      // Trigger the auth-changed event
       try { window.dispatchEvent(new Event('auth-changed')); } catch {}
       setSuccess(true);
     } catch (err) {

@@ -7,21 +7,21 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 
 /**
- * Kargo ücreti hesaplama servisi.
+ * Shipping cost calculation service.
  *
- * <p>Mevcut {@code ShippingConstants} hardcoded değerleri ile çalışıyordu; bu
- * servis SiteSetting'ten yapılandırılabilir değerleri okur ve seçili
- * {@link CargoProvider}'a göre fiyatı belirler.</p>
+ * <p>Previously it worked with the hardcoded {@code ShippingConstants} values; this
+ * service reads configurable values from SiteSetting and determines the price based on
+ * the selected {@link CargoProvider}.</p>
  *
- * <p>Hesaplama mantığı:
+ * <p>Calculation logic:
  * <ol>
- *   <li>Provider'ın {@code freeShippingThreshold} alanı varsa ve subtotal eşik üstündeyse → 0</li>
- *   <li>Yoksa global {@code free_shipping_threshold} site setting'i kontrol edilir</li>
- *   <li>Eşik aşılmadıysa: provider.baseCost > 0 ise o, değilse site setting {@code default_shipping_cost}</li>
- *   <li>Hiçbiri yoksa fallback: {@link ShippingConstants#DEFAULT_SHIPPING_COST}</li>
+ *   <li>If the provider has a {@code freeShippingThreshold} field and the subtotal is above the threshold → 0</li>
+ *   <li>Otherwise the global {@code free_shipping_threshold} site setting is checked</li>
+ *   <li>If the threshold is not exceeded: provider.baseCost if > 0, otherwise the site setting {@code default_shipping_cost}</li>
+ *   <li>If none apply, fallback: {@link ShippingConstants#DEFAULT_SHIPPING_COST}</li>
  * </ol>
- * Desi/ağırlık bazlı ek ücretlendirme (provider.costPerDesi) MVP'de uygulanmaz —
- * çoğu e-ticarette flat fee kullanılır, gelecek genişleme için açık bırakıldı.</p>
+ * Desi/weight-based surcharges (provider.costPerDesi) are not implemented in the MVP —
+ * most e-commerce uses a flat fee; left open for future expansion.</p>
  */
 @Service
 public class ShippingCostService {
@@ -33,10 +33,10 @@ public class ShippingCostService {
     }
 
     /**
-     * Subtotal + (opsiyonel) cargo provider için kargo ücretini hesaplar.
-     * @param subtotal sepet tutarı (KDV dahil)
-     * @param provider seçili kargo şirketi (null olabilir)
-     * @return BigDecimal — kargo bedeli (0 = ücretsiz)
+     * Calculates the shipping cost for a subtotal + (optional) cargo provider.
+     * @param subtotal cart amount (VAT included)
+     * @param provider the selected cargo company (may be null)
+     * @return BigDecimal — shipping cost (0 = free)
      */
     public BigDecimal calculate(BigDecimal subtotal, CargoProvider provider) {
         if (subtotal == null) subtotal = BigDecimal.ZERO;
@@ -49,7 +49,7 @@ public class ShippingCostService {
         return resolveBaseCost(provider);
     }
 
-    /** Eşik: provider'ın → site setting'in → null. */
+    /** Threshold: provider's → site setting's → null. */
     private BigDecimal resolveThreshold(CargoProvider provider) {
         if (provider != null && provider.getFreeShippingThreshold() != null
                 && provider.getFreeShippingThreshold().compareTo(BigDecimal.ZERO) > 0) {

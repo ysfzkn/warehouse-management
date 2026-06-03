@@ -30,7 +30,7 @@ export default function ProductCard({ product, onAddToCart }) {
       <Link to={`/urun/${product.slug}`} className="text-decoration-none">
         <div className="card-img-wrapper">
           {product.primaryImageUrl ? (
-            // width/height aspect ratio hint'i — CLS önler; gerçek render container CSS (1:1) ile sabitlenir
+            // width/height aspect-ratio hint — prevents CLS; actual render is fixed by container CSS (1:1)
             <img src={product.primaryImageUrl} alt={product.name} loading="lazy"
                  width="400" height="400" decoding="async" />
           ) : (

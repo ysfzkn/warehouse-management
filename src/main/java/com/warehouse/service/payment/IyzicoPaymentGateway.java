@@ -49,20 +49,20 @@ public class IyzicoPaymentGateway implements PaymentGateway {
     }
 
     /**
-     * 3DS uygulanacak mı? Tutar tabanlı rule engine:
-     * - {@code threeds_always = true} → her zaman 3DS (varsayılan, PCI-DSS uyumlu)
-     * - aksi halde tutar {@code threeds_min_amount} eşiğini aşıyorsa 3DS, altındaysa non-3DS.
+     * Should 3DS be applied? Amount-based rule engine:
+     * - {@code threeds_always = true} → always 3DS (default, PCI-DSS compliant)
+     * - otherwise 3DS if the amount exceeds the {@code threeds_min_amount} threshold, non-3DS below it.
      *
-     * Türkiye'de BDDK düzenlemesi gereği genellikle tüm kart ödemelerinde 3DS
-     * önerilir; admin "always=false" yapsa bile düşük tutarlar için non-3DS
-     * sadece güvenli sayılan, küçük (örn. ₺50 altı) işlemler içindir.
+     * In Turkey, BDDK regulations generally recommend 3DS for all card payments;
+     * even if the admin sets "always=false", non-3DS for low amounts is only for
+     * small transactions considered safe (e.g. under ₺50).
      */
     private boolean requires3DS(java.math.BigDecimal amount) {
         String alwaysSetting = settingService.getSetting("threeds_always");
         boolean always = alwaysSetting == null || alwaysSetting.isBlank()
                 || "true".equalsIgnoreCase(alwaysSetting.trim());
         if (always) return true;
-        if (amount == null) return true; // unknown → güvenli taraf
+        if (amount == null) return true; // unknown → err on the safe side
         String minStr = settingService.getSetting("threeds_min_amount");
         java.math.BigDecimal min = java.math.BigDecimal.valueOf(50);
         if (minStr != null && !minStr.isBlank()) {
@@ -74,8 +74,8 @@ public class IyzicoPaymentGateway implements PaymentGateway {
 
     /**
      * Build Options — priority:
-     * 1. payment_gateway_configs table (admin panel'den eklenen)
-     * 2. site_settings table (eski config)
+     * 1. payment_gateway_configs table (added from the admin panel)
+     * 2. site_settings table (legacy config)
      * 3. application.properties (fallback)
      */
     private Options buildOptions() {
@@ -153,8 +153,8 @@ public class IyzicoPaymentGateway implements PaymentGateway {
             iyzicoRequest.setPaymentGroup(PaymentGroup.PRODUCT.name());
             iyzicoRequest.setCallbackUrl(request.getCallbackUrl() != null ? request.getCallbackUrl() : getCallbackUrl());
             iyzicoRequest.setEnabledInstallments(Arrays.asList(1, 2, 3, 6, 9, 12));
-            // 3DS rule engine: admin'den ayarlanabilir tutar bazlı politika
-            // (Türkiye BDDK regülasyonu için varsayılan: her zaman 3DS).
+            // 3DS rule engine: admin-configurable amount-based policy
+            // (default for Turkish BDDK regulation: always 3DS).
             boolean require3ds = requires3DS(request.getPaidPrice());
             iyzicoRequest.setForceThreeDS(require3ds ? 1 : 0);
 

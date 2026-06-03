@@ -4,37 +4,37 @@ import java.time.LocalDateTime;
 import java.util.Map;
 
 /**
- * KVKK Madde 11 (e) / GDPR Article 17 & 20 uyumu — müşteri veri ihracı ve hesap
- * anonimleştirme servisi. Implementasyon: {@code CustomerAccountServiceImpl}.
+ * KVKK Article 11 (e) / GDPR Article 17 & 20 compliance — customer data export and
+ * account anonymization service. Implementation: {@code CustomerAccountServiceImpl}.
  */
 public interface CustomerAccountService {
 
     /**
-     * Müşterinin tüm PII'sini, sipariş geçmişini, adreslerini, yorumlarını,
-     * sepetini, abone olduğu bildirimleri JSON-uyumlu Map olarak döndürür.
-     * Müşteri bu JSON'u indirip arşivleyebilir (data portability).
+     * Returns all of the customer's PII, order history, addresses, reviews,
+     * cart, and notification subscriptions as a JSON-compatible Map.
+     * The customer can download and archive this JSON (data portability).
      */
     Map<String, Object> exportCustomerData(Long customerId);
 
     /**
-     * Müşteri hesabını anonimleştirir:
+     * Anonymizes the customer account:
      * <ul>
-     *   <li>PII alanları (ad, soyad, e-posta, telefon, TC, doğum tarihi) hash'lenir veya boşaltılır.</li>
-     *   <li>Adresleri silinir.</li>
-     *   <li>Sepeti boşaltılır.</li>
-     *   <li>Wishlist silinir.</li>
-     *   <li>Yorumları "Anonim Kullanıcı" olarak yeniden adlandırılır.</li>
-     *   <li>Sipariş ve fatura kayıtları **korunur** (Türkiye'de 10 yıl yasal saklama yükümlülüğü).</li>
-     *   <li>customer.anonymizedAt set edilir, customer.active=false.</li>
+     *   <li>PII fields (first name, last name, email, phone, TCKN, date of birth) are hashed or cleared.</li>
+     *   <li>Addresses are deleted.</li>
+     *   <li>The cart is emptied.</li>
+     *   <li>The wishlist is deleted.</li>
+     *   <li>Reviews are renamed to "Anonymous User".</li>
+     *   <li>Order and invoice records are **preserved** (10-year legal retention obligation in Turkey).</li>
+     *   <li>customer.anonymizedAt is set, customer.active=false.</li>
      * </ul>
      *
-     * @throws AccountDeletionBlockedException aktif sipariş varsa (PENDING/PAID/SHIPPING/PROCESSING)
+     * @throws AccountDeletionBlockedException if there is an active order (PENDING/PAID/SHIPPING/PROCESSING)
      */
     DeletionResult anonymizeAccount(Long customerId, String reason);
 
     record DeletionResult(LocalDateTime anonymizedAt, int preservedOrders) {}
 
-    /** Aktif siparişi olan hesap silinemez — önce sipariş tamamlanmalı/iptal edilmeli. */
+    /** An account with an active order cannot be deleted — the order must first be completed/cancelled. */
     class AccountDeletionBlockedException extends RuntimeException {
         public AccountDeletionBlockedException(String message) { super(message); }
     }

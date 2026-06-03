@@ -9,20 +9,20 @@ import java.time.Instant;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Admin login için username-bazlı brute-force koruması.
+ * Username-based brute-force protection for admin login.
  *
- * <p>RateLimitFilter IP başına global limit uyguluyor (tüm endpoint için);
- * bu tracker ayrıca kullanıcı adına özel sayar — saldırgan bot havuzundan
- * farklı IP'lerle aynı admin'i deniyorsa yine kilitlenir.</p>
+ * <p>RateLimitFilter applies a global per-IP limit (for all endpoints); this tracker
+ * additionally counts per username — so if an attacker tries the same admin from
+ * different IPs in a bot pool, it still gets locked.</p>
  *
- * <p>Sınırlar:
+ * <p>Limits:
  * <ul>
- *   <li>15 dakika içinde 5 başarısız deneme → 15 dakika kilit</li>
- *   <li>Başarılı login → sayaç sıfırlanır</li>
+ *   <li>5 failed attempts within 15 minutes → 15-minute lock</li>
+ *   <li>Successful login → counter is reset</li>
  * </ul></p>
  *
- * <p>In-memory (Caffeine); multi-instance scale'de her instance kendi sayar.
- * Tek-instance Railway için yeterli; ileride Redis'e taşınabilir.</p>
+ * <p>In-memory (Caffeine); at multi-instance scale each instance counts on its own.
+ * Sufficient for a single-instance Railway deployment; can be moved to Redis later.</p>
  */
 @Component
 public class AdminLoginAttemptTracker {
@@ -40,7 +40,7 @@ public class AdminLoginAttemptTracker {
             .maximumSize(10_000)
             .build();
 
-    /** Kilitliyse {@code lockedUntil} epoch ms döner, değilse 0. */
+    /** Returns the {@code lockedUntil} epoch ms if locked, otherwise 0. */
     public long lockedUntilMillis(String username) {
         if (username == null || username.isBlank()) return 0;
         Instant until = lockedUntil.getIfPresent(username.toLowerCase());
@@ -52,7 +52,7 @@ public class AdminLoginAttemptTracker {
         return until.toEpochMilli();
     }
 
-    /** Yanlış parola denemesini kaydet; eşik aşıldıysa kilitle. */
+    /** Records a wrong-password attempt; locks if the threshold is exceeded. */
     public void recordFailure(String username) {
         if (username == null || username.isBlank()) return;
         String k = username.toLowerCase();
@@ -63,7 +63,7 @@ public class AdminLoginAttemptTracker {
         }
     }
 
-    /** Başarılı login — sayaçları temizle. */
+    /** Successful login — clears the counters. */
     public void recordSuccess(String username) {
         if (username == null || username.isBlank()) return;
         attempts.invalidate(username.toLowerCase());

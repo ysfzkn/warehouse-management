@@ -1,17 +1,17 @@
 import React from 'react';
 
 /**
- * Boş durum (empty state) komponenti — tablo, liste, arama vb. veri yoksa gösterilir.
+ * Empty-state component — shown when a table, list, search, etc. has no data.
  *
- * Hem admin hem store tarafında kullanılabilir.
+ * Usable on both the admin and store sides.
  *
  * Props:
- *   - icon: React node (örn. <FiInbox size={48} />) veya FontAwesome class string
- *   - title: ana başlık (zorunlu)
- *   - description: kısa açıklama
- *   - actionLabel + onAction: opsiyonel CTA butonu
- *   - secondaryAction: opsiyonel ikinci buton ({ label, onClick })
- *   - compact: true → küçük variant (modal/dropdown içi)
+ *   - icon: React node (e.g. <FiInbox size={48} />) or a FontAwesome class string
+ *   - title: main heading (required)
+ *   - description: short explanation
+ *   - actionLabel + onAction: optional CTA button
+ *   - secondaryAction: optional second button ({ label, onClick })
+ *   - compact: true → small variant (inside a modal/dropdown)
  */
 export default function EmptyState({
   icon,

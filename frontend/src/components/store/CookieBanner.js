@@ -6,9 +6,9 @@ const STORAGE_KEY = 'cookie_consent';
 /**
  * KVKK & 6563 compliant cookie consent banner. Shows on first visit,
  * remembers preference in localStorage. Three categories:
- * - Zorunlu (always on, not toggleable)
- * - Analitik (opt-in)
- * - Pazarlama (opt-in)
+ * - Necessary (always on, not toggleable)
+ * - Analytics (opt-in)
+ * - Marketing (opt-in)
  */
 export default function CookieBanner() {
   const [visible, setVisible] = useState(false);
@@ -27,8 +27,8 @@ export default function CookieBanner() {
   const save = (consent) => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...consent, ts: Date.now() }));
-      // Aynı sekme içinde AnalyticsScripts vb. abonelerin haberdar olması için
-      // (storage event'i sadece DİĞER sekmelere yayılır).
+      // So subscribers like AnalyticsScripts in the same tab are notified
+      // (the storage event only propagates to OTHER tabs).
       window.dispatchEvent(new CustomEvent('cookie-consent-changed', { detail: consent }));
     } catch { /* ignore */ }
     setVisible(false);

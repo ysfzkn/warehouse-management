@@ -1,8 +1,8 @@
 package com.warehouse.config;
 
 /**
- * @deprecated {@link SchedulerConfig} bunu kapsadı (ShedLock + @EnableScheduling).
- * Bu class'a artık ihtiyaç yok; sınıf gövdesi kaldırıldı.
+ * @deprecated Superseded by {@link SchedulerConfig} (ShedLock + @EnableScheduling).
+ * This class is no longer needed; the class body has been removed.
  */
 @Deprecated
 public class SchedulingConfig {

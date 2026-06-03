@@ -60,7 +60,7 @@ export default function AdminInvoices() {
   const [copiedId, setCopiedId] = useState(null);
   const searchInputRef = useRef(null);
 
-  // Manuel "Sipariş için fatura oluştur" modalı state'leri
+  // Manual "Create invoice for order" modal state
   const [createOpen, setCreateOpen] = useState(false);
   const [createSearch, setCreateSearch] = useState('');
   const [createSearchResults, setCreateSearchResults] = useState([]);
@@ -222,9 +222,9 @@ export default function AdminInvoices() {
     }
   };
 
-  // ── Manuel "Sipariş için fatura oluştur" ──
+  // ── Manual "Create invoice for order" ──
 
-  // Debounce'lu order arama — order no veya müşteri adı
+  // Debounced order search — by order number or customer name
   useEffect(() => {
     if (!createOpen) return;
     const q = createSearch.trim();
@@ -258,7 +258,7 @@ export default function AdminInvoices() {
       const inv = res.data;
       showToast(`Fatura oluşturuldu: ${inv.invoiceNumber || '(numara atanıyor)'} — sipariş ${orderNumber}`);
       setCreateOpen(false);
-      fetchInvoices(0); // liste yenile
+      fetchInvoices(0); // refresh list
     } catch (e) {
       showToast(e?.response?.data?.message || 'Fatura oluşturulamadı.', 'danger');
     } finally {
@@ -907,7 +907,7 @@ export default function AdminInvoices() {
         </div>
       )}
 
-      {/* Sipariş için manuel fatura oluştur — modal */}
+      {/* Manual "Create invoice for order" — modal */}
       {createOpen && (
         <div
           className="modal show d-block"

@@ -57,6 +57,7 @@ import StoreCmsPage from './pages/store/StoreCmsPage';
 import StoreLoginPage from './pages/store/StoreLoginPage';
 import StoreRegisterPage from './pages/store/StoreRegisterPage';
 import PaymentResultPage from './pages/store/PaymentResultPage';
+import BankTransferResumePage from './pages/store/BankTransferResumePage';
 import GoogleAuthCallback from './pages/store/GoogleAuthCallback';
 import MyOrdersPage from './pages/store/MyOrdersPage';
 import MyAddressesPage from './pages/store/MyAddressesPage';
@@ -88,10 +89,10 @@ function App() {
     };
   }, []);
 
-  // Host-aware routing: admin.* veya wms.* subdomain → admin WMS, diğer her şey → storefront.
-  // siteniz.com + admin.siteniz.com (legacy) + wms.siteniz.com (yeni lansman) aynı frontend container'ı
-  // paylaşır; sadece bu host kontrolü hangi route ağacının çizileceğini belirler.
-  // REACT_APP_ADMIN_HOSTS env değişkeni ile özelleştirilebilir (örn. "admin,wms,panel").
+  // Host-aware routing: admin.* or wms.* subdomain → admin WMS, everything else → storefront.
+  // siteniz.com + admin.siteniz.com (legacy) + wms.siteniz.com (new launch) share the same frontend
+  // container; only this host check determines which route tree gets rendered.
+  // Customizable via the REACT_APP_ADMIN_HOSTS env variable (e.g. "admin,wms,panel").
   const ADMIN_HOST_PREFIXES = (process.env.REACT_APP_ADMIN_HOSTS || 'admin,wms')
       .split(',').map(s => s.trim()).filter(Boolean);
   const isAdminHost = typeof window !== 'undefined' && (() => {
@@ -101,7 +102,7 @@ function App() {
 
   return (
     <div className="App">
-      {/* Sayfa geçişlerinde otomatik yukarı kaydır — kullanıcı her zaman sayfanın başında başlar */}
+      {/* Auto-scroll to top on page transitions — user always starts at the top of the page */}
       <ScrollToTop />
       {isAdminHost ? (
         <AdminRoutes authed={authed} role={role} />
@@ -148,6 +149,8 @@ function StoreRoutes() {
         <Route path="sepet" element={<CartPage />} />
         <Route path="odeme" element={<CheckoutPage />} />
         <Route path="odeme/sonuc" element={<PaymentResultPage />} />
+        {/* Resume bank transfer payment — clicked from My Orders, IBAN/QR/reference shown again */}
+        <Route path="odeme/havale/:orderId" element={<BankTransferResumePage />} />
         <Route path="sayfa/:slug" element={<StoreCmsPage />} />
         <Route path="giris" element={<StoreLoginPage />} />
         <Route path="kayit" element={<StoreRegisterPage />} />

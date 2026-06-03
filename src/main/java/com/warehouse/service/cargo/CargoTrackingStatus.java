@@ -9,7 +9,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * Kargo takip durumu.
+ * Cargo tracking status.
  */
 @Data
 @Builder
@@ -17,25 +17,25 @@ import java.util.List;
 @AllArgsConstructor
 public class CargoTrackingStatus {
 
-    /** Takip numarası */
+    /** Tracking number */
     private String trackingNumber;
 
-    /** Güncel durum kodu */
+    /** Current status code */
     private CargoStatus status;
 
-    /** Ham durum metni (sağlayıcıdan geldiği gibi) */
+    /** Raw status text (as received from the provider) */
     private String statusText;
 
-    /** Teslimat tahmini tarihi */
+    /** Estimated delivery date */
     private LocalDateTime estimatedDelivery;
 
-    /** Gerçek teslimat tarihi (DELIVERED ise) */
+    /** Actual delivery date (if DELIVERED) */
     private LocalDateTime deliveredAt;
 
-    /** Teslim alan kişi (varsa) */
+    /** Person who received the delivery (if any) */
     private String deliveredTo;
 
-    /** Tarihsel olaylar */
+    /** Historical events */
     private List<TrackingEvent> events;
 
     @Data
@@ -50,25 +50,25 @@ public class CargoTrackingStatus {
     }
 
     public enum CargoStatus {
-        /** Gönderi oluşturuldu, henüz teslim alınmadı */
+        /** Shipment created, not yet picked up */
         CREATED,
-        /** Kargo firmasına teslim edildi */
+        /** Handed over to the cargo company */
         PICKED_UP,
-        /** Transit / yolda */
+        /** In transit / on the way */
         IN_TRANSIT,
-        /** Dağıtım şubesinde */
+        /** At the distribution branch */
         OUT_FOR_DELIVERY,
-        /** Teslim edildi */
+        /** Delivered */
         DELIVERED,
-        /** İade yolda */
+        /** Return in transit */
         RETURN_IN_TRANSIT,
-        /** İade tamamlandı */
+        /** Return completed */
         RETURNED,
-        /** İptal edildi */
+        /** Cancelled */
         CANCELLED,
-        /** Sorunlu (teslim edilemedi, yanlış adres vb.) */
+        /** Problematic (could not be delivered, wrong address, etc.) */
         FAILED,
-        /** Bilinmeyen / haritalanamayan durum */
+        /** Unknown / unmapped status */
         UNKNOWN
     }
 }

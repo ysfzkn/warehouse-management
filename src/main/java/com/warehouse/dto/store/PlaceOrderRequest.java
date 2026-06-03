@@ -15,7 +15,7 @@ public class PlaceOrderRequest {
     private String paymentMethod;
     private String customerNote;
 
-    // --- Yasal sözleşmeler (Türkiye 6502 sayılı kanun gereği) ---
+    // --- Legal contracts (required by Turkish Law No. 6502) ---
     private boolean distanceSalesContractAccepted;
     private LocalDateTime distanceSalesContractAcceptedAt;
     private boolean preliminaryInfoAccepted;

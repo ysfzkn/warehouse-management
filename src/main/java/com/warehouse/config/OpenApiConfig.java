@@ -11,16 +11,16 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * Springdoc OpenAPI yapılandırması.
+ * Springdoc OpenAPI configuration.
  *
- * <p>Swagger UI: {@code /swagger-ui.html} — admin-only erişim (SecurityConfig
- * tarafından korunmaz; ileride genel actuator gibi ADMIN role'ünün arkasına
- * alınabilir). API dokümantasyonu otomatik üretilir, ek annotation gerekmez
- * (controller method'larının @PostMapping, @RequestBody vb. annotations'ları
- * yeterli).</p>
+ * <p>Swagger UI: {@code /swagger-ui.html} — admin-only access (not protected by
+ * SecurityConfig; can later be placed behind the ADMIN role like the general
+ * actuator). API documentation is generated automatically, no extra annotations
+ * required (the controller methods' @PostMapping, @RequestBody, etc. annotations
+ * are sufficient).</p>
  *
- * <p>Production'da Swagger UI kapalı tutulabilir:
- * {@code springdoc.swagger-ui.enabled=false} — admin için güvenlik artar.</p>
+ * <p>Swagger UI can be disabled in production:
+ * {@code springdoc.swagger-ui.enabled=false} — improves security for admin.</p>
  */
 @Configuration
 public class OpenApiConfig {

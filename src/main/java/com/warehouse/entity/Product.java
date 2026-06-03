@@ -94,10 +94,10 @@ public class Product {
     private BigDecimal shippingRate; // per desi unit
 
     @Column(name = "vat_rate", precision = 5, scale = 2)
-    private BigDecimal vatRate; // KDV oranı (%)
+    private BigDecimal vatRate; // VAT rate (%)
 
     @Column(name = "sct_rate", precision = 5, scale = 2)
-    private BigDecimal sctRate; // ÖTV oranı (%)
+    private BigDecimal sctRate; // SCT (special consumption tax) rate (%)
 
     @Column(name = "slug", nullable = false, length = 200)
     private String slug;

@@ -21,9 +21,9 @@ public interface PaymentGatewayConfigRepository extends JpaRepository<PaymentGat
     List<PaymentGatewayConfig> findByGatewayProtocol(String gatewayProtocol);
 
     /**
-     * Atomik: tüm default flag'lerini kapatır. Set-default flow'da race condition
-     * (iki admin aynı anda iki farklı gateway'i default yaparsa multiple default
-     * kayıt kalması) önlenir.
+     * Atomic: clears all default flags. Prevents the race condition in the
+     * set-default flow (two admins making two different gateways default at the
+     * same time leaving multiple default records).
      */
     @org.springframework.data.jpa.repository.Modifying
     @org.springframework.transaction.annotation.Transactional

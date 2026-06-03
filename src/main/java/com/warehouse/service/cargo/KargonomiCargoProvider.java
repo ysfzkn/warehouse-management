@@ -23,22 +23,22 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Kargonomi Cargo API entegrasyonu (v1).
+ * Kargonomi Cargo API integration (v1).
  *
- * <p>Kargonomi; Yurtiçi, Aras, MNG, PTT, UPS, Sürat, Sendeo gibi taşıyıcıların
- * önünde bir aggregator servisidir. Tek API, fiyat karşılaştırma, barkod,
- * webhook destekli takip.
+ * <p>Kargonomi is an aggregator service in front of carriers such as Yurtiçi,
+ * Aras, MNG, PTT, UPS, Sürat, and Sendeo. A single API for price comparison,
+ * barcodes, and webhook-based tracking.
  *
  * <p><b>Auth</b>: {@code Authorization: Bearer <token>} + {@code X-App-Key: <appKey>}.
  *
- * <p><b>İki-aşamalı oluşturma akışı</b> (resmi spec):
+ * <p><b>Two-phase creation flow</b> (official spec):
  * <pre>
- *   1. POST /shipments                      → draft shipment id döner
- *   2. POST /confirm-shipping-price          → taşıyıcıyı seç ({@code -1} = otomatik en ucuz)
- *   3. (arka planda) Kargonomi webservice order yaratır → webhook ya da polling
+ *   1. POST /shipments                      → returns a draft shipment id
+ *   2. POST /confirm-shipping-price          → select the carrier ({@code -1} = automatic cheapest)
+ *   3. (in the background) Kargonomi creates a webservice order → webhook or polling
  * </pre>
  *
- * <p>Resmi dokümantasyon: https://www.kargonomi.com.tr/help/api-dokumantasyonu/kargonomi-api/
+ * <p>Official documentation: https://www.kargonomi.com.tr/help/api-dokumantasyonu/kargonomi-api/
  */
 @Component
 public class KargonomiCargoProvider implements CargoApiProvider {
@@ -46,7 +46,7 @@ public class KargonomiCargoProvider implements CargoApiProvider {
     private static final Logger logger = LoggerFactory.getLogger(KargonomiCargoProvider.class);
     private static final String DEFAULT_BASE_URL = "https://app.kargonomi.com.tr/api/v1";
 
-    // shipping_provider_id = -1  →  Kargonomi otomatik en ucuz seçer
+    // shipping_provider_id = -1  →  Kargonomi automatically picks the cheapest
     private static final int AUTO_CHEAPEST_PROVIDER_ID = -1;
 
     private final SiteSettingService settingService;
@@ -88,7 +88,7 @@ public class KargonomiCargoProvider implements CargoApiProvider {
         }
 
         try {
-            // ── Alıcı il/ilçe → Kargonomi id ──
+            // ── Recipient province/district → Kargonomi id ──
             int[] buyerGeo = geoLookup.lookupStateAndCity(
                     request.getRecipientCity(), request.getRecipientDistrict());
             if (buyerGeo == null) {
@@ -97,7 +97,7 @@ public class KargonomiCargoProvider implements CargoApiProvider {
                         + request.getRecipientCity() + " / " + request.getRecipientDistrict());
             }
 
-            // ── Phase 1: draft shipment yarat ──
+            // ── Phase 1: create draft shipment ──
             Map<String, Object> body = buildShipmentBody(request, buyerGeo[0], buyerGeo[1], false);
             String url = getBaseUrl() + "/shipments";
 
@@ -119,14 +119,14 @@ public class KargonomiCargoProvider implements CargoApiProvider {
                         "Kargonomi shipment id dönmedi — response: " + truncate(respBody.toString(), 300));
             }
 
-            // ── Phase 2: taşıyıcı seçimini onayla ──
-            // preferredCarrier varsa (ör. "yurtici") price-comparison'dan o carrier'ın
-            // provider_id'sini çözüp onunla onaylıyoruz. Yoksa -1 = Kargonomi otomatik en ucuz.
+            // ── Phase 2: confirm the carrier selection ──
+            // If a preferredCarrier exists (e.g. "yurtici"), we resolve that carrier's
+            // provider_id from the price comparison and confirm with it. Otherwise -1 = Kargonomi automatic cheapest.
             int preferredProviderId = resolvePreferredProviderId(shipmentId, request.getPreferredCarrier());
             CargoShipmentResult confirmResult = confirmShippingPrice(shipmentId, preferredProviderId);
             if (!confirmResult.isSuccess()) return confirmResult;
 
-            // ── Phase 3: final shipment'ı tekrar çek (tracking code + etiket URL için) ──
+            // ── Phase 3: fetch the final shipment again (for the tracking code + label URL) ──
             Map<String, Object> finalShipment = fetchShipment(shipmentId);
             return buildResultFromShipment(finalShipment, shipmentId);
         } catch (HttpClientErrorException e) {
@@ -166,10 +166,10 @@ public class KargonomiCargoProvider implements CargoApiProvider {
     }
 
     /**
-     * Slug (örn. "yurtici") → Kargonomi {@code shipping_provider_id}.
-     * <p>Draft shipment için {@code GET /shipment-price-comparison/{id}} çağrılır; dönen
-     * carrier listesinde slug eşleşmesi aranır. Bulunamazsa (örn. o carrier Kargonomi
-     * hesabında aktif değil) otomatik en ucuza {@code -1} düşülür.
+     * Slug (e.g. "yurtici") → Kargonomi {@code shipping_provider_id}.
+     * <p>{@code GET /shipment-price-comparison/{id}} is called for the draft shipment; a
+     * slug match is searched for in the returned carrier list. If not found (e.g. that
+     * carrier is not active in the Kargonomi account), it falls back to {@code -1} (automatic cheapest).
      */
     @SuppressWarnings("unchecked")
     private int resolvePreferredProviderId(String shipmentId, String preferredSlug) {
@@ -288,7 +288,7 @@ public class KargonomiCargoProvider implements CargoApiProvider {
             String shipmentId = strVal(shipment.get("id"));
             if (shipmentId == null) return CargoShipmentResult.failure("NO_ID", "İade shipment id dönmedi");
 
-            // Return shipment'ta da provider onayı gerekli
+            // A return shipment also requires provider confirmation
             confirmShippingPrice(shipmentId, AUTO_CHEAPEST_PROVIDER_ID);
             Map<String, Object> finalShipment = fetchShipment(shipmentId);
             return buildResultFromShipment(finalShipment, shipmentId);
@@ -303,7 +303,7 @@ public class KargonomiCargoProvider implements CargoApiProvider {
     // ─────────────────────────────────────────────────────────────
 
     /**
-     * Kargo etiketini PDF olarak indirir. Base64 olarak döndüğü için decode edilir.
+     * Downloads the cargo label as a PDF. It is returned as Base64, so it is decoded.
      * Query options:
      *   format=pdf (default)
      *   packageContentVisibility=true
@@ -321,7 +321,7 @@ public class KargonomiCargoProvider implements CargoApiProvider {
             Map<String, Object> body = response.getBody();
             if (body == null) return new byte[0];
 
-            // Response örn: {"data": "base64string..."} veya {"barcode": "base64..."}
+            // Response e.g.: {"data": "base64string..."} or {"barcode": "base64..."}
             Object data = body.getOrDefault("data", body.get("barcode"));
             if (data == null) data = body.get("pdf");
             if (data instanceof String s && !s.isBlank()) {
@@ -339,7 +339,7 @@ public class KargonomiCargoProvider implements CargoApiProvider {
     //  Balance
     // ─────────────────────────────────────────────────────────────
 
-    /** GET /user/credit — hesap bakiyesi (TL). Hata durumunda null döner. */
+    /** GET /user/credit — account balance (TRY). Returns null on error. */
     public BigDecimal getBalance() {
         if (!isEnabled()) return null;
         try {
@@ -365,7 +365,7 @@ public class KargonomiCargoProvider implements CargoApiProvider {
     //  Webhooks (registration)
     // ─────────────────────────────────────────────────────────────
 
-    /** Webhook kaydı. Kargonomi, {@code shipment.updated} event'lerinde callbackUrl'e POST yapar. */
+    /** Webhook registration. Kargonomi POSTs to callbackUrl on {@code shipment.updated} events. */
     public boolean registerWebhook(String callbackUrl, String secret) {
         if (!isEnabled() || callbackUrl == null || callbackUrl.isBlank()) return false;
         try {
@@ -388,7 +388,7 @@ public class KargonomiCargoProvider implements CargoApiProvider {
         }
     }
 
-    /** GET /webhooks — kayıtlı tüm webhook'ları listeler. */
+    /** GET /webhooks — lists all registered webhooks. */
     @SuppressWarnings("unchecked")
     public List<Map<String, Object>> listWebhooks() {
         if (!isEnabled()) return List.of();
@@ -407,7 +407,7 @@ public class KargonomiCargoProvider implements CargoApiProvider {
         }
     }
 
-    /** GET /webhooks/{id} — belirli bir webhook detayı. */
+    /** GET /webhooks/{id} — details of a specific webhook. */
     public Map<String, Object> getWebhook(long webhookId) {
         if (!isEnabled()) return null;
         try {
@@ -421,7 +421,7 @@ public class KargonomiCargoProvider implements CargoApiProvider {
         }
     }
 
-    /** PUT /webhooks/{id} — webhook güncelleme (URL veya is_active değişimi). */
+    /** PUT /webhooks/{id} — webhook update (URL or is_active change). */
     public boolean updateWebhook(long webhookId, String url, Boolean isActive) {
         if (!isEnabled()) return false;
         try {
@@ -440,7 +440,7 @@ public class KargonomiCargoProvider implements CargoApiProvider {
         }
     }
 
-    /** DELETE /webhooks/{id} — webhook silme. */
+    /** DELETE /webhooks/{id} — webhook deletion. */
     public boolean deleteWebhook(long webhookId) {
         if (!isEnabled()) return false;
         try {
@@ -460,8 +460,8 @@ public class KargonomiCargoProvider implements CargoApiProvider {
     // ─────────────────────────────────────────────────────────────
 
     /**
-     * GET /shipments — Kargonomi tarafındaki shipment listesi (sayfa başına 50).
-     * Admin reconciliation panelinde "bizim DB ile Kargonomi senkron mu?" check için.
+     * GET /shipments — the shipment list on the Kargonomi side (50 per page).
+     * Used in the admin reconciliation panel to check "is our DB in sync with Kargonomi?".
      */
     @SuppressWarnings("unchecked")
     public Map<String, Object> listShipments(int page) {
@@ -482,14 +482,14 @@ public class KargonomiCargoProvider implements CargoApiProvider {
     // ─────────────────────────────────────────────────────────────
 
     /**
-     * POST /warehouses — Kargonomi'ye yeni depo (gönderici adresi) kaydı.
-     * İlk kurulumda admin panelden bir kez çağrılır; dönen warehouse_id
-     * shipment yaratırken {@code shipment.warehouse_id} olarak kullanılır.
+     * POST /warehouses — registers a new warehouse (sender address) with Kargonomi.
+     * Called once from the admin panel during initial setup; the returned warehouse_id
+     * is used as {@code shipment.warehouse_id} when creating shipments.
      */
     public Long registerWarehouse(WarehouseRegistrationRequest req) {
         if (!isEnabled()) return null;
         try {
-            // Sender şehir/ilçe → Kargonomi state_id/city_id lookup
+            // Sender city/district → Kargonomi state_id/city_id lookup
             int[] geo = geoLookup.lookupStateAndCity(req.getCity(), req.getDistrict());
             if (geo == null) {
                 logger.warn("[Kargonomi] Warehouse register: il/ilçe bulunamadı ({}/{})", req.getCity(), req.getDistrict());
@@ -559,9 +559,9 @@ public class KargonomiCargoProvider implements CargoApiProvider {
     // ─────────────────────────────────────────────────────────────
 
     /**
-     * Kargonomi {@code POST /shipments} için request body.
+     * Request body for Kargonomi {@code POST /shipments}.
      *
-     * <p>Kargonomi gerçek spec (resmi doküman):
+     * <p>Kargonomi's actual spec (official doc):
      * <pre>
      * {
      *   "shipment": {
@@ -570,7 +570,7 @@ public class KargonomiCargoProvider implements CargoApiProvider {
      *     "buyer_email" (opt), "buyer_tax_number" (opt), "buyer_tax_place" (opt),
      *     "packages": [{ "desi", "content" (opt), "barcode" (opt) }]
      *   },
-     *   "warehouse_id": 42   (opt — sender bilgisi yerine)
+     *   "warehouse_id": 42   (opt — instead of sender information)
      * }
      * </pre>
      */
@@ -587,7 +587,7 @@ public class KargonomiCargoProvider implements CargoApiProvider {
             shipment.put("buyer_email", request.getRecipientEmail());
         }
 
-        // Packages array — her paket için desi zorunlu
+        // Packages array — desi is required for each package
         List<Map<String, Object>> packages = new ArrayList<>();
         int count = request.getPackageCount() != null ? request.getPackageCount() : 1;
         BigDecimal totalDesi = request.getTotalDesi() != null
@@ -601,7 +601,7 @@ public class KargonomiCargoProvider implements CargoApiProvider {
             if (request.getContentDescription() != null) {
                 pkg.put("content", truncate(request.getContentDescription(), 200));
             }
-            // barcode → sipariş no ile ilişkilendirme (Kargonomi içinde arama kolaylığı)
+            // barcode → association with the order number (for easy searching within Kargonomi)
             if (request.getOrderNumber() != null) {
                 pkg.put("barcode", count == 1
                         ? request.getOrderNumber()
@@ -614,13 +614,13 @@ public class KargonomiCargoProvider implements CargoApiProvider {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("shipment", shipment);
 
-        // Sender için warehouse_id kullanılabilir; yoksa sender inline bilgileri gönderilir.
+        // warehouse_id can be used for the sender; otherwise inline sender information is sent.
         String warehouseId = settingService.getSetting("kargonomi_warehouse_id");
         if (warehouseId != null && !warehouseId.isBlank()) {
             try { body.put("warehouse_id", Integer.parseInt(warehouseId.trim())); }
             catch (NumberFormatException ignored) {}
         } else {
-            // Sender inline (warehouse yoksa)
+            // Inline sender (when there is no warehouse)
             int[] senderGeo = geoLookup.lookupStateAndCity(
                     request.getSenderCity(), request.getSenderDistrict());
             if (senderGeo != null) {
@@ -662,7 +662,7 @@ public class KargonomiCargoProvider implements CargoApiProvider {
                 .build();
     }
 
-    /** Kargonomi shipment object → CargoTrackingStatus. Webhook controller'dan da çağrılır. */
+    /** Kargonomi shipment object → CargoTrackingStatus. Also called from the webhook controller. */
     @SuppressWarnings("unchecked")
     public CargoTrackingStatus parseTrackingResponse(Map<String, Object> shipment) {
         String trackingCode = strVal(shipment.get("shipping_webservice_tracking_code"));
@@ -730,7 +730,7 @@ public class KargonomiCargoProvider implements CargoApiProvider {
         String appKey = settingService.getSetting("kargonomi_app_key");
         HttpHeaders headers = new HttpHeaders();
         headers.setBearerAuth(token);
-        headers.set("X-App-Key", appKey);   // ← doğru header: X-App-Key
+        headers.set("X-App-Key", appKey);   // ← correct header: X-App-Key
         headers.setAccept(List.of(MediaType.APPLICATION_JSON));
         return headers;
     }
@@ -774,7 +774,7 @@ public class KargonomiCargoProvider implements CargoApiProvider {
 
     private static String normalizePhone(String phone) {
         if (phone == null) return null;
-        // Kargonomi 10 haneli (başında 0 olmadan) ister çoğu zaman
+        // Kargonomi usually expects 10 digits (without a leading 0)
         String digits = phone.replaceAll("\\D+", "");
         if (digits.startsWith("90") && digits.length() == 12) return digits.substring(2);
         if (digits.startsWith("0") && digits.length() == 11) return digits.substring(1);
@@ -794,10 +794,10 @@ public class KargonomiCargoProvider implements CargoApiProvider {
 
     // ─────────────────────────────────────────────────────────────
     //  Resilience4j fallback methods
-    //  (Tüm retry tükenince veya circuit breaker open iken çağrılır)
+    //  (Called when all retries are exhausted or the circuit breaker is open)
     // ─────────────────────────────────────────────────────────────
 
-    /** createShipment için fallback — kuyruğa alıp admin'i uyaran "PENDING_RETRY" sonucu döner. */
+    /** Fallback for createShipment — queues the request and returns a "PENDING_RETRY" result that alerts the admin. */
     @SuppressWarnings("unused")
     public CargoShipmentResult createShipmentFallback(CargoShipmentRequest request, Throwable t) {
         logger.error("[Kargonomi] createShipment retry/CB fallback: {}", t.getMessage());

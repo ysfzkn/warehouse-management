@@ -76,7 +76,7 @@ public class Stock {
 
     @Min(value = 0, message = "Consigned quantity cannot be negative")
     @Column(name = "consigned_quantity")
-    private Integer consignedQuantity = 0; // Emanet miktar
+    private Integer consignedQuantity = 0; // Consigned quantity
 
     @Size(max = 500, message = "Addition note cannot exceed 500 characters")
     @Column(name = "addition_note", length = 500)

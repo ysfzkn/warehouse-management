@@ -8,7 +8,7 @@ import React, { useState } from 'react';
  *   value: current value
  *   onChange: (newValue) => void
  *   editingExistingSecret: true if this is an edit and the secret was previously set
- *                          (we show a "(değiştirmek için yeni değer girin)" placeholder)
+ *                          (we show a "(enter a new value to change it)" placeholder)
  */
 export default function GatewayFormField({ def, value, onChange, editingExistingSecret }) {
   const [show, setShow] = useState(false);
@@ -16,7 +16,7 @@ export default function GatewayFormField({ def, value, onChange, editingExisting
   const inputType = isSecret ? (show ? 'text' : 'password')
                    : (def.type === 'number' ? 'number' : 'text');
 
-  // Edit modunda secret zaten varsa, placeholder'ı değiştir
+  // In edit mode, if the secret already exists, change the placeholder
   const placeholder = editingExistingSecret && isSecret
     ? '(önceki değer korunuyor — değiştirmek için yeni değer girin)'
     : def.placeholder || '';

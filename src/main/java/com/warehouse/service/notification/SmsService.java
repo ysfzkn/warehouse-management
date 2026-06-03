@@ -9,8 +9,8 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 
 /**
- * SMS gönderim için üst seviye servis.
- * Aktif SmsProvider'ı bulur ve mesajı gönderir.
+ * High-level service for sending SMS.
+ * Finds the active SmsProvider and sends the message.
  */
 @Service
 public class SmsService {
@@ -26,12 +26,12 @@ public class SmsService {
     }
 
     /**
-     * Aktif sağlayıcıyı kullanarak SMS gönderir.
-     * Birden fazla aktif sağlayıcı varsa, ilkini kullanır.
+     * Sends an SMS using the active provider.
+     * If there are multiple active providers, uses the first one.
      */
     @Async
     public void send(String phoneNumber, String message) {
-        // SMS genelinde aktif mi?
+        // Is SMS enabled globally?
         if (!isSmsEnabled()) {
             logger.debug("SMS devre dışı, mesaj gönderilmiyor: phone={}", phoneNumber);
             return;
@@ -64,7 +64,7 @@ public class SmsService {
     }
 
     /**
-     * Global SMS feature flag kontrolü.
+     * Checks the global SMS feature flag.
      */
     public boolean isSmsEnabled() {
         String enabled = settingService.getSetting("sms_enabled");

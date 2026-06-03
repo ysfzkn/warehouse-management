@@ -16,7 +16,9 @@ function generateIdempotencyKey() {
 }
 
 export default function CheckoutPage() {
-  const { cart } = useOutletContext();
+  const { cart, siteSettings } = useOutletContext();
+  // Test mode — order intake is disabled when store_purchasing_enabled=false
+  const purchasingEnabled = !siteSettings || siteSettings.get('store_purchasing_enabled', 'true') === 'true';
   const navigate = useNavigate();
   const toast = useToast();
   const [step, setStep] = useState('address');
@@ -27,12 +29,12 @@ export default function CheckoutPage() {
   const [contractAcceptedAt, setContractAcceptedAt] = useState(null);
   const [preliminaryInfoAccepted, setPreliminaryInfoAccepted] = useState(false);
   const [preliminaryInfoAcceptedAt, setPreliminaryInfoAcceptedAt] = useState(null);
-  // Yasal sözleşme modal'ları (Mesafeli Satış / Ön Bilgilendirme)
+  // Legal contract modals (Distance Sales / Preliminary Information)
   const [legalModal, setLegalModal] = useState(null); // { type: 'contract' | 'preInfo' }
   const [loading, setLoading] = useState(false);
   const [, setError] = useState(''); // kept for setError calls, display via toast
 
-  // --- Misafir (guest) checkout state ---
+  // --- Guest checkout state ---
   const [isGuest, setIsGuest] = useState(!localStorage.getItem('customer_token'));
   const [guestEmail, setGuestEmail] = useState('');
   const [guestKvkkConsent, setGuestKvkkConsent] = useState(false);
@@ -43,6 +45,9 @@ export default function CheckoutPage() {
   const [savedAddresses, setSavedAddresses] = useState([]);
   const [showNewAddress, setShowNewAddress] = useState(false);
   const [iyzicoHtml, setIyzicoHtml] = useState(null);
+  // Active gateway name — comes from the backend /api/store/payment/initialize response.
+  // Used in the "processed by X secure infrastructure" text and payment labels in the UI.
+  const [activeProviderName, setActiveProviderName] = useState('güvenli ödeme altyapısı');
   const [posHtml, setPosHtml] = useState(null);
   const [bankDetails, setBankDetails] = useState(null);
   const [cargoProviders, setCargoProviders] = useState([]);
@@ -138,10 +143,10 @@ export default function CheckoutPage() {
     try {
       let orderRes;
 
-      // Çift tıklamaya karşı idempotency-key — aynı checkout submit'i tek sipariş yaratır.
-      // Frontend baştan üretip aynı 24h boyunca cache'lenebilir; her render'da yeniden
-      // üretmemek için useState ile tutmak ideal — burada submit anında üretiyoruz çünkü
-      // submit'ten önce zaten button disabled.
+      // Idempotency-key against double-click — the same checkout submit creates a single order.
+      // The frontend could generate it upfront and cache it for 24h; holding it in useState to avoid
+      // regenerating on every render would be ideal — here we generate it at submit time because
+      // the button is already disabled before submit.
       const checkoutIdempotencyKey = generateIdempotencyKey();
       const checkoutHeaders = { 'Idempotency-Key': checkoutIdempotencyKey };
 
@@ -171,9 +176,12 @@ export default function CheckoutPage() {
         }, { headers: checkoutHeaders });
       } else {
         // Authenticated checkout
+        if (!address?.id) {
+          throw new Error('Teslimat adresi seçilmedi veya kaydedilemedi. Lütfen adres adımına dönüp tekrar deneyin.');
+        }
         orderRes = await axios.post('/api/store/checkout/place-order', {
-          shippingAddressId: address?.id || 1,
-          billingAddressId: address?.id || 1,
+          shippingAddressId: address.id,
+          billingAddressId: address.id,
           cargoCompany,
           cargoProviderId: selectedCargoProvider?.id || null,
           paymentMethod,
@@ -200,8 +208,12 @@ export default function CheckoutPage() {
       if (paymentMethod === 'CREDIT_CARD' || paymentMethod === 'VIRTUAL_POS') {
         if (result.success && result.htmlContent) {
           const html = result.htmlContent;
-          const isIyzico = html.includes('iyzico') || html.includes('iyziup');
-          const isPayTR = html.includes('paytr.com') || html.includes('paytriframe');
+          // The backend now returns providerName/providerDisplayName — this is authoritative.
+          // The HTML content check remains only as a backward-compat fallback.
+          if (result.providerDisplayName) setActiveProviderName(result.providerDisplayName);
+          const providerName = (result.providerName || '').toUpperCase();
+          const isIyzico = providerName === 'IYZICO' || html.includes('iyzico') || html.includes('iyziup');
+          const isPayTR = providerName === 'PAYTR' || html.includes('paytr.com') || html.includes('paytriframe');
           if (isIyzico) {
             setIyzicoHtml(html);
             setPaymentPhase('iyzico');
@@ -290,7 +302,9 @@ export default function CheckoutPage() {
             <i className="fas fa-lock" style={{ fontSize: 22, color: '#2563eb' }} />
           </div>
           <h2 className="h4 fw-bold mb-1">Güvenli Ödeme</h2>
-          <p className="text-muted small mb-0">Kart bilgileriniz iyzico güvenli altyapısında işlenir, sunucumuza ulaşmaz.</p>
+          <p className="text-muted small mb-0">
+            Kart bilgileriniz <strong>{activeProviderName}</strong> güvenli altyapısında işlenir, sunucumuza ulaşmaz.
+          </p>
         </div>
 
         {/* Trust badges */}
@@ -319,8 +333,13 @@ export default function CheckoutPage() {
     return (
       <div className="container my-4" style={{ maxWidth: 800 }}>
         <h1 className="h3 fw-bold mb-4">Kredi Kartı ile Ödeme</h1>
-        <div className="alert alert-info"><i className="fas fa-shield-alt me-2" /><strong>3D Secure:</strong> Kart bilgilerinizi banka sayfasında güvenle gireceksiniz. Bilgileriniz sunucumuza ulaşmaz.</div>
-        <div className="alert alert-warning small"><i className="fas fa-spinner fa-spin me-2" />Banka ödeme sayfasına yönlendiriliyorsunuz...</div>
+        <div className="alert alert-info">
+          <i className="fas fa-shield-alt me-2" />
+          <strong>3D Secure:</strong> Kart bilgilerinizi <strong>{activeProviderName}</strong> üzerinden bankanın güvenli sayfasında gireceksiniz. Bilgileriniz sunucumuza ulaşmaz.
+        </div>
+        <div className="alert alert-warning small">
+          <i className="fas fa-spinner fa-spin me-2" />Banka ödeme sayfasına yönlendiriliyorsunuz...
+        </div>
         <VirtualPosRedirect htmlContent={posHtml} />
       </div>
     );
@@ -330,7 +349,10 @@ export default function CheckoutPage() {
     return (
       <div className="container my-4" style={{ maxWidth: 800 }}>
         <h1 className="h3 fw-bold mb-4">Kredi Kartı ile Ödeme</h1>
-        <div className="alert alert-info"><i className="fas fa-shield-alt me-2" /><strong>Güvenli Ödeme:</strong> Kart bilgileriniz PayTR güvenli altyapısı üzerinden işlenir. Bilgileriniz sunucumuza ulaşmaz.</div>
+        <div className="alert alert-info">
+          <i className="fas fa-shield-alt me-2" />
+          <strong>Güvenli Ödeme:</strong> Kart bilgileriniz <strong>{activeProviderName}</strong> güvenli altyapısı üzerinden işlenir. Bilgileriniz sunucumuza ulaşmaz.
+        </div>
         <VirtualPosRedirect htmlContent={posHtml} />
       </div>
     );
@@ -440,7 +462,27 @@ export default function CheckoutPage() {
                   <i className="fas fa-arrow-left me-1" />Kayıtlı Adreslerime Dön
                 </button>
               )}
-              <AddressForm onSubmit={(data) => { setAddress(data); setShowNewAddress(false); next(); }} />
+              <AddressForm onSubmit={async (data) => {
+                try {
+                  if (isGuest) {
+                    // Guest checkout — the address is not saved to a separate table,
+                    // the form fields go directly into the place-guest-order payload.
+                    setAddress(data);
+                  } else {
+                    // Authenticated — save the address to the DB, get back the object with an id
+                    const res = await axios.post('/api/store/addresses', data, {
+                      headers: getAuthHeaders()
+                    });
+                    const saved = res.data;
+                    setSavedAddresses(prev => [...prev, saved]);
+                    setAddress(saved);
+                  }
+                  setShowNewAddress(false);
+                  next();
+                } catch (err) {
+                  alert('Adres kaydedilemedi: ' + (err.response?.data?.message || err.message));
+                }
+              }} />
             </div>
           )}
         </div>
@@ -537,7 +579,7 @@ export default function CheckoutPage() {
           <h5 className="mb-3">Sipariş Onay</h5>
           <div className="store-cart-summary mb-3">
             <div className="store-cart-summary-row"><span>Ürün Toplamı <small className="text-muted">(KDV dahil)</small></span><strong>{formatPrice(subtotal)}</strong></div>
-            {/* KDV breakdown — Türkiye e-fatura mevzuatı gereği KDV ayrıştırması */}
+            {/* VAT breakdown — VAT itemization required by Turkish e-invoice regulations */}
             {cart.cart?.vatBreakdown && Object.keys(cart.cart.vatBreakdown).length > 0 && (
               Object.entries(cart.cart.vatBreakdown).map(([rate, amount]) => (
                 <div key={rate} className="store-cart-summary-row text-muted small">
@@ -561,13 +603,13 @@ export default function CheckoutPage() {
             {cp?.estimatedDeliveryDays && <div className="store-cart-summary-row text-muted small"><span>Tahmini Teslimat</span><span>{cp.estimatedDeliveryDays} iş günü</span></div>}
             <div className="store-cart-summary-row text-muted small"><span>Ödeme Yöntemi</span><span>{getMethodLabel(paymentMethod)}</span></div>
           </div>
-          {/* Yasal Sözleşmeler — inline modal ile gösterim (6502 sayılı Tüketici Kanunu) */}
+          {/* Legal contracts — shown via inline modal (Consumer Protection Law no. 6502) */}
           <div className="form-check mb-2">
             <input className="form-check-input" type="checkbox" id="preliminaryInfo"
               checked={preliminaryInfoAccepted}
               onChange={e => {
                 if (e.target.checked) {
-                  // Onay kutusuna tıklandığında otomatik modal açılır (zorunlu okuma)
+                  // The modal opens automatically when the checkbox is clicked (mandatory reading)
                   setLegalModal({ type: 'preInfo' });
                 } else {
                   setPreliminaryInfoAccepted(false);
@@ -606,9 +648,16 @@ export default function CheckoutPage() {
               <i className="fas fa-exclamation-triangle me-2" />Devam etmek için her iki sözleşmeyi de onaylamanız gerekmektedir.
             </div>
           )}
+          {!purchasingEnabled && (
+            <div className="alert alert-warning small mb-2">
+              <i className="fas fa-flask me-1" />
+              Site test modunda — sipariş alımı geçici olarak kapalıdır.
+            </div>
+          )}
           <div className="d-flex gap-2">
             <button className="btn btn-outline-secondary" onClick={prev}>Geri</button>
-            <button className="btn btn-primary btn-lg flex-grow-1" onClick={handlePlaceOrder} disabled={loading || !contractAccepted || !preliminaryInfoAccepted}>
+            <button className="btn btn-primary btn-lg flex-grow-1" onClick={handlePlaceOrder}
+                    disabled={loading || !contractAccepted || !preliminaryInfoAccepted || !purchasingEnabled}>
               {loading ? <><span className="spinner-border spinner-border-sm me-2" />İşleniyor...</> : <><i className="fas fa-lock me-2" />Siparişi Onayla ve Öde</>}
             </button>
           </div>
@@ -616,7 +665,7 @@ export default function CheckoutPage() {
         );
       })()}
 
-      {/* Yasal sözleşme modal'ı (Mesafeli Satış / Ön Bilgilendirme) */}
+      {/* Legal contract modal (Distance Sales / Preliminary Information) */}
       <LegalContractModal
         open={!!legalModal}
         slug={legalModal?.type === 'contract' ? 'mesafeli-satis-sozlesmesi' : 'on-bilgilendirme-formu'}

@@ -5,10 +5,11 @@ const STORAGE_KEY = 'cookie_consent';
 const CONSENT_CHANGED_EVENT = 'cookie-consent-changed';
 
 /**
- * Cookie consent durumunu localStorage'dan reactive olarak okur.
- * CookieBanner consent kaydedince `window.dispatchEvent(new CustomEvent('cookie-consent-changed'))`
- * tetiklemeli ki bu hook güncel kalabilsin (aynı sekme içi değişim).
- * Farklı sekmedeki değişim için 'storage' event'i otomatik gelir.
+ * Reactively reads the cookie consent state from localStorage.
+ * When CookieBanner saves consent it must dispatch
+ * `window.dispatchEvent(new CustomEvent('cookie-consent-changed'))`
+ * so this hook stays up to date (same-tab change).
+ * For changes in a different tab, the 'storage' event fires automatically.
  */
 function useCookieConsent() {
   const [consent, setConsent] = useState(() => readConsent());
@@ -45,19 +46,19 @@ function readConsent() {
 /**
  * Google Analytics (GA4), Facebook Pixel, Hotjar ve Microsoft Clarity script enjeksiyonu.
  *
- * **KVKK & 6563 uyumu:** Script'ler **sadece** kullanıcı cookie banner üzerinden
- * ilgili kategoriye onay verdiyse yüklenir:
+ * **KVKK & Law 6563 compliance:** Scripts load **only** if the user has granted
+ * consent for the relevant category via the cookie banner:
  *   - GA4 → "analytics" consent
  *   - Hotjar / MS Clarity → "analytics" consent
  *   - Facebook Pixel → "marketing" consent
  *
- * Kullanıcı henüz banner ile etkileşmediyse (consent = null) hiçbir script yüklenmez.
+ * If the user has not yet interacted with the banner (consent = null), no script loads.
  *
  * Props:
  *   - googleAnalyticsId: "G-XXXXXXXX" format
  *   - facebookPixelId: numeric pixel ID
- *   - hotjarId: numeric Hotjar site ID (opsiyonel)
- *   - clarityId: Microsoft Clarity project ID (opsiyonel)
+ *   - hotjarId: numeric Hotjar site ID (optional)
+ *   - clarityId: Microsoft Clarity project ID (optional)
  */
 export default function AnalyticsScripts({ googleAnalyticsId, facebookPixelId, hotjarId, clarityId }) {
   const consent = useCookieConsent();
@@ -66,7 +67,7 @@ export default function AnalyticsScripts({ googleAnalyticsId, facebookPixelId, h
   const hjId = (hotjarId || '').trim();
   const clId = (clarityId || '').trim();
 
-  if (!consent) return null;            // kullanıcı henüz seçim yapmadı
+  if (!consent) return null;            // user has not made a choice yet
   if (!gaId && !fbId && !hjId && !clId) return null;
 
   const allowAnalytics = !!consent.analytics && (gaId || hjId || clId);
@@ -74,7 +75,7 @@ export default function AnalyticsScripts({ googleAnalyticsId, facebookPixelId, h
 
   if (!allowAnalytics && !allowMarketing) return null;
 
-  // GA4 script (gtag.js) — sadece analytics consent varsa
+  // GA4 script (gtag.js) — only when analytics consent is present
   const gaScript = allowAnalytics
     ? `
       window.dataLayer = window.dataLayer || [];
@@ -84,7 +85,7 @@ export default function AnalyticsScripts({ googleAnalyticsId, facebookPixelId, h
     `.trim()
     : null;
 
-  // Facebook Pixel script — sadece marketing consent varsa
+  // Facebook Pixel script — only when marketing consent is present
   const fbScript = allowMarketing
     ? `
       !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?

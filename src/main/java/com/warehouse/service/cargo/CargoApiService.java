@@ -19,14 +19,14 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Kargo API üst seviye servisi.
+ * High-level cargo API service.
  *
- * Aktif CargoApiProvider'ı bulur ve siparişlere dayalı olarak:
- * - Kargo gönderimi oluşturur (ship order)
- * - Takip durumunu sorgular
- * - Gönderimi iptal eder
+ * Finds the active CargoApiProvider and, based on orders:
+ * - Creates a cargo shipment (ship order)
+ * - Queries the tracking status
+ * - Cancels a shipment
  *
- * Site ayarından 'cargo_api_enabled' false ise hiçbir işlem yapmaz.
+ * Does nothing if the 'cargo_api_enabled' site setting is false.
  */
 @Service
 public class CargoApiService {
@@ -52,23 +52,23 @@ public class CargoApiService {
     }
 
     /**
-     * Kargo API entegrasyonu aktif mi?
+     * Is the cargo API integration enabled?
      */
     public boolean isEnabled() {
         return "true".equalsIgnoreCase(settingService.getSetting("cargo_api_enabled"));
     }
 
     /**
-     * Sipariş oluşturulduğunda otomatik olarak kargo gönderimi oluşturulsun mu?
+     * Should a cargo shipment be created automatically when an order is placed?
      */
     public boolean isAutoCreateEnabled() {
         return isEnabled() && "true".equalsIgnoreCase(settingService.getSetting("cargo_api_auto_create"));
     }
 
     /**
-     * Sipariş için kargo gönderimi oluşturur ve Order'a tracking bilgilerini kaydeder.
+     * Creates a cargo shipment for the order and saves the tracking info to the Order.
      *
-     * @return oluşturulan gönderim sonucu; API aktif değilse null
+     * @return the created shipment result; null if the API is not enabled
      */
     @Transactional
     public CargoShipmentResult createShipmentForOrder(Order order) {
@@ -92,9 +92,9 @@ public class CargoApiService {
                 order.setCargoProviderShipmentId(result.getProviderShipmentId());
                 order.setCargoLabelUrl(result.getLabelUrl());
 
-                // Önemli: order.cargoCompany (müşterinin checkout'ta seçtiği) DOKUNULMAZ.
-                // cargoProviderName sadece görsel — Kargonomi'nin döndürdüğü carrier adı
-                // (genelde müşteri seçimi ile aynı; farklıysa "auto-cheapest" seçilmiş demektir).
+                // Important: order.cargoCompany (chosen by the customer at checkout) is NOT touched.
+                // cargoProviderName is display-only — the carrier name returned by Kargonomi
+                // (usually the same as the customer's choice; if different, "auto-cheapest" was selected).
                 if (result.getCarrierName() != null) {
                     order.setCargoProviderName(result.getCarrierName());
                 }
@@ -115,8 +115,8 @@ public class CargoApiService {
     }
 
     /**
-     * Sipariş için kargo takip durumunu sorgular ve Order'ı günceller.
-     * Teslim edilmişse actualDeliveryDate set edilir.
+     * Queries the cargo tracking status for the order and updates the Order.
+     * Sets actualDeliveryDate if it has been delivered.
      */
     @Transactional
     public CargoTrackingStatus trackOrder(Order order) {
@@ -139,7 +139,7 @@ public class CargoApiService {
     }
 
     /**
-     * Kargo gönderimini iptal eder.
+     * Cancels the cargo shipment.
      */
     @Transactional
     public CargoShipmentResult cancelShipment(Order order) {
@@ -156,10 +156,10 @@ public class CargoApiService {
     }
 
     /**
-     * Order'ın kargo etiketini (PDF) indirir. Yalnızca Kargonomi gibi etiket indirmeyi
-     * destekleyen sağlayıcılar için çalışır.
+     * Downloads the order's cargo label (PDF). Works only for providers that
+     * support label download, such as Kargonomi.
      *
-     * @return PDF byte[], yoksa boş array
+     * @return PDF byte[], or an empty array if none
      */
     public byte[] downloadShipmentLabel(Order order) {
         if (!isEnabled() || order.getCargoProviderShipmentId() == null) return new byte[0];
@@ -173,7 +173,7 @@ public class CargoApiService {
         return new byte[0];
     }
 
-    /** Aktif sağlayıcının hesap bakiyesi. Destek yoksa {@code null}. */
+    /** The active provider's account balance. {@code null} if unsupported. */
     public BigDecimal getProviderBalance() {
         if (!isEnabled()) return null;
         CargoApiProvider provider = getActiveProvider();
@@ -184,8 +184,8 @@ public class CargoApiService {
     }
 
     /**
-     * Webhook ya da polling'den gelen tracking update'ini Order'a uygular.
-     * @return true ise Order güncellendi, false ise değişiklik yok
+     * Applies a tracking update from a webhook or polling to the Order.
+     * @return true if the Order was updated, false if there was no change
      */
     @Transactional
     public boolean applyTrackingUpdate(Order order, CargoTrackingStatus status) {
@@ -199,7 +199,7 @@ public class CargoApiService {
             order.setActualDeliveryDate(status.getDeliveredAt().toLocalDate());
             changed = true;
         }
-        // Tracking code ilk kez geldiyse kaydet
+        // Save the tracking code if it arrived for the first time
         if ((order.getCargoTrackingNo() == null || order.getCargoTrackingNo().isBlank())
                 && status.getTrackingNumber() != null) {
             order.setCargoTrackingNo(status.getTrackingNumber());
@@ -212,30 +212,30 @@ public class CargoApiService {
     // === Private helpers ===
 
     /**
-     * Müşterinin seçtiği {@code Order.cargoCompany} için Kargonomi slug'ını bulur.
+     * Finds the Kargonomi slug for the {@code Order.cargoCompany} chosen by the customer.
      * <ol>
      *   <li>cargo_providers.kargonomi_slug (explicit DB mapping) — ideal</li>
-     *   <li>Enum adının lowercase hali (YURTICI → "yurtici") — fallback</li>
-     *   <li>null → Kargonomi otomatik en ucuz seçer</li>
+     *   <li>The lowercase enum name (YURTICI → "yurtici") — fallback</li>
+     *   <li>null → Kargonomi automatically picks the cheapest</li>
      * </ol>
      */
     private String resolveKargonomiSlug(Order order) {
         if (order.getCargoCompany() == null) return null;
         String code = order.getCargoCompany().name();
 
-        // 1) cargo_providers'tan explicit slug
+        // 1) explicit slug from cargo_providers
         var provider = cargoProviderRepository.findByCode(code).orElse(null);
         if (provider != null && provider.getKargonomiSlug() != null
                 && !provider.getKargonomiSlug().isBlank()) {
             return provider.getKargonomiSlug().trim().toLowerCase();
         }
 
-        // 2) Fallback: enum adı lowercase
+        // 2) Fallback: lowercase enum name
         return code.toLowerCase();
     }
 
     /**
-     * Aktif (isEnabled()==true) sağlayıcıyı bulur.
+     * Finds the active (isEnabled()==true) provider.
      */
     public CargoApiProvider getActiveProvider() {
         return providers.stream()
@@ -245,12 +245,12 @@ public class CargoApiService {
     }
 
     /**
-     * Order'dan CargoShipmentRequest oluşturur.
+     * Builds a CargoShipmentRequest from the Order.
      */
     private CargoShipmentRequest buildShipmentRequest(Order order) {
         Map<String, Object> shippingAddr = order.getShippingAddressSnapshot();
 
-        // Gönderici bilgileri site_settings'tan
+        // Sender information from site_settings
         String senderName = settingService.getSetting("sender_name");
         String senderPhone = settingService.getSetting("sender_phone");
         String senderAddress = settingService.getSetting("sender_address");
@@ -262,7 +262,7 @@ public class CargoApiService {
             senderName = settingService.getSetting("site_name");
         }
 
-        // Sipariş kalemleri
+        // Order items
         List<OrderItem> orderItems = orderItemRepository.findByOrderId(order.getId());
         List<CargoShipmentRequest.ShipmentItem> items = orderItems.stream()
                 .map(oi -> {
@@ -276,11 +276,11 @@ public class CargoApiService {
                 })
                 .toList();
 
-        // Kapıda ödeme kontrolü
+        // Cash-on-delivery check
         boolean isCod = "DOOR_CASH".equals(order.getPaymentMethod()) || "DOOR_CARD".equals(order.getPaymentMethod());
         BigDecimal codAmount = isCod ? order.getGrandTotal() : null;
 
-        // Toplam ağırlık ve desi hesapla (ürün boyutlarından)
+        // Compute total weight and desi (from product dimensions)
         BigDecimal totalWeight = BigDecimal.ZERO;
         BigDecimal totalDesi = BigDecimal.ZERO;
         int totalPackages = 0;
@@ -301,10 +301,10 @@ public class CargoApiService {
             totalPackages += oi.getQuantity();
         }
 
-        // Kargonomi slug'ı — müşterinin checkout'ta seçtiği kargo firmasına karşılık gelen
-        // Kargonomi carrier slug'ı. cargo_providers.kargonomi_slug'tan çekilir (explicit mapping).
-        // Eşleşme yoksa enum adının lowercase hali fallback (örn. YURTICI → "yurtici"),
-        // hiçbiri yoksa null → Kargonomi otomatik (en ucuz) seçer.
+        // Kargonomi slug — the Kargonomi carrier slug corresponding to the cargo company
+        // the customer chose at checkout. Pulled from cargo_providers.kargonomi_slug (explicit mapping).
+        // If there is no match, fall back to the lowercase enum name (e.g. YURTICI → "yurtici"),
+        // and if none exists, null → Kargonomi automatically picks the cheapest.
         String carrierSlug = resolveKargonomiSlug(order);
 
         return CargoShipmentRequest.builder()

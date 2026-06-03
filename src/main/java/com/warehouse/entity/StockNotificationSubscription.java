@@ -9,9 +9,9 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 
 /**
- * Stokta yoksa bildir - müşteri aboneliği.
- * Müşteri stoku tükenmiş bir ürün için bildirim talep ettiğinde oluşturulur.
- * Ürün tekrar stoğa girdiğinde abonelere e-posta gönderilir ve notified=true olarak işaretlenir.
+ * Back-in-stock notification - customer subscription.
+ * Created when a customer requests a notification for an out-of-stock product.
+ * When the product is back in stock, subscribers are emailed and marked notified=true.
  */
 @Entity
 @Table(name = "stock_notification_subscriptions", indexes = {
@@ -32,7 +32,7 @@ public class StockNotificationSubscription {
     @JoinColumn(name = "product_id", nullable = false)
     private Product product;
 
-    /** Opsiyonel: misafir kullanıcılar için null olabilir */
+    /** Optional: may be null for guest users */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "customer_id")
     private Customer customer;

@@ -26,11 +26,11 @@ import java.util.Iterator;
 import java.util.UUID;
 
 /**
- * Local (filesystem) storage implementation. Varsayılan provider'dır.
+ * Local (filesystem) storage implementation. This is the default provider.
  *
- * <p>{@code storage.provider=local} (varsayılan) iken aktif. S3/R2'ye geçiş için
- * {@code storage.provider=s3} ayarlanır ve {@code S3PhotoStorageService}
- * implementasyonu hazırlanır (şu an iskelet halinde, Faz 3 NICE-TO-HAVE).</p>
+ * <p>Active when {@code storage.provider=local} (the default). To switch to S3/R2,
+ * set {@code storage.provider=s3} and provide the {@code S3PhotoStorageService}
+ * implementation (currently a skeleton, Phase 3 NICE-TO-HAVE).</p>
  */
 @Service
 @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
@@ -59,8 +59,8 @@ public class LocalPhotoStorageService implements PhotoStorageService {
         if (railwayVolumePath != null && !railwayVolumePath.trim().isEmpty()) {
             Path root = Paths.get(railwayVolumePath);
 
-            // Eğer properties'teki baseDir göreli bir yol ise (örn: "uploads/shipments"),
-            // sadece son segmenti (örn: "shipments") volume root'un altına ekleyelim.
+            // If the baseDir in properties is a relative path (e.g. "uploads/shipments"),
+            // append only its last segment (e.g. "shipments") under the volume root.
             if (baseDir != null && !baseDir.trim().isEmpty()) {
                 Path basePath = Paths.get(baseDir);
                 if (!basePath.isAbsolute() && basePath.getNameCount() > 0) {
@@ -82,7 +82,7 @@ public class LocalPhotoStorageService implements PhotoStorageService {
             return customPath.toAbsolutePath();
         }
 
-        // 3) properties içindeki baseDir
+        // 3) baseDir from properties
         Path basePath = Paths.get(baseDir);
 
         // If it's already absolute (like /tmp/warehouse-uploads/shipments), use it
@@ -362,9 +362,9 @@ public class LocalPhotoStorageService implements PhotoStorageService {
             String uuid = java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 16);
             String relativeKey = prefix + "/" + uuid + ext;
 
-            // Local fs: baseDir altında prefix dizinini oluştur
+            // Local fs: create the prefix directory under baseDir
             Path target = resolveBaseDir().resolve(relativeKey).normalize();
-            // Path traversal koruması
+            // Path traversal protection
             if (!target.startsWith(resolveBaseDir().normalize())) {
                 throw new SecurityException("Invalid document path: " + relativeKey);
             }

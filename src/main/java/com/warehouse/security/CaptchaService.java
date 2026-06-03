@@ -14,19 +14,19 @@ import org.springframework.web.client.RestTemplate;
 import java.util.Map;
 
 /**
- * hCaptcha / reCaptcha doğrulama servisi.
+ * hCaptcha / reCaptcha verification service.
  *
- * <p>Saldırgan bot trafiğine karşı register/forgot-password/contact gibi public
- * endpoint'lerde isteğe bağlı bir koruma katmanı. Site key & secret admin
- * panelinden (site_settings) veya env değişkenlerinden alınır. Boşsa servis
- * "always-pass" döner — yani CAPTCHA opsiyonel feature gate'tir.</p>
+ * <p>An optional protection layer on public endpoints such as
+ * register/forgot-password/contact against malicious bot traffic. The site key &amp;
+ * secret are taken from the admin panel (site_settings) or from env variables. If empty,
+ * the service returns "always-pass" — i.e. CAPTCHA is an optional feature gate.</p>
  *
- * <p>Front-end form'a hCaptcha widget'ı eklenir, kullanıcı doğrularken üretilen
- * token'ı isteğin {@code captchaToken} alanında gönderir. Controller burada
- * {@link #verify(String, String)} çağırır; false dönerse 400 ile reddeder.</p>
+ * <p>The hCaptcha widget is added to the front-end form; on verification, the user sends
+ * the generated token in the request's {@code captchaToken} field. The controller calls
+ * {@link #verify(String, String)} here; if it returns false, the request is rejected with 400.</p>
  *
- * <p>Provider seçimi: {@code captcha.provider} = "hcaptcha" (varsayılan)
- * veya "recaptcha"; secret env'den okunur.</p>
+ * <p>Provider selection: {@code captcha.provider} = "hcaptcha" (default)
+ * or "recaptcha"; the secret is read from env.</p>
  */
 @Service
 public class CaptchaService {
@@ -48,9 +48,9 @@ public class CaptchaService {
     private boolean enabled;
 
     /**
-     * Token'ı sağlayıcıya doğrulat. Service disabled veya secret boşsa true döner
-     * (gating yok). Network hatasında true döner — saldırı vektörü olmasın diye
-     * fail-open (alternatif fail-close üretim incident'larına yol açar).
+     * Verifies the token with the provider. Returns true if the service is disabled or the
+     * secret is empty (no gating). Returns true on a network error — fail-open so it does
+     * not become an attack vector (the alternative, fail-close, causes production incidents).
      */
     public boolean verify(String token, String clientIp) {
         if (!enabled || secret == null || secret.isBlank()) {

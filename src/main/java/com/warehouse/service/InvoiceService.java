@@ -11,76 +11,76 @@ import java.time.LocalDateTime;
 import java.util.Optional;
 
 /**
- * E-Fatura / E-Arşiv fatura yönetim servisi.
+ * E-Fatura / e-Arşiv invoice management service.
  */
 public interface InvoiceService {
 
     /**
-     * Sipariş için otomatik fatura oluşturur.
-     * Sipariş PAID durumuna geçtiğinde çağrılır.
+     * Creates an invoice automatically for an order.
+     * Called when the order transitions to PAID status.
      */
     InvoiceDto createInvoiceForOrder(Long orderId);
 
     /**
-     * Manuel fatura oluşturma (admin tarafından).
+     * Manual invoice creation (by an admin).
      */
     InvoiceDto createInvoice(InvoiceCreateRequest request);
 
     /**
-     * Faturayı yeniden oluşturur (hata durumunda).
+     * Regenerates the invoice (in case of an error).
      */
     InvoiceDto regenerateInvoice(Long invoiceId);
 
     /**
-     * Faturayı iptal eder.
+     * Cancels the invoice.
      */
     InvoiceDto cancelInvoice(Long invoiceId);
 
     /**
-     * İade faturası (Credit Note) oluşturur.
+     * Creates a return invoice (Credit Note).
      *
-     * <p>Türkiye e-fatura mevzuatı:
+     * <p>Turkey e-invoice regulations:
      * <ul>
-     *   <li>e-Arşiv 8 gün içinde iptal edilebilir → bu durumda credit note değil,
-     *       doğrudan {@link #cancelInvoice(Long)} kullanın.</li>
-     *   <li>8 gün sonrasındaki e-Arşiv veya herhangi bir zamandaki e-Fatura için
-     *       credit note kesilmelidir. Bu metot UBL-TR ProfileID="IADE" + orijinal
-     *       faturanın BillingReference'ını içeren yeni bir Invoice satırı yaratır.</li>
+     *   <li>An e-Arşiv invoice can be cancelled within 8 days → in that case use
+     *       {@link #cancelInvoice(Long)} directly instead of a credit note.</li>
+     *   <li>For an e-Arşiv invoice past 8 days, or an E-Fatura at any time, a credit
+     *       note must be issued. This method creates a new Invoice row with UBL-TR
+     *       ProfileID="IADE" + the original invoice's BillingReference.</li>
      * </ul></p>
      *
-     * @param originalInvoiceId iadeye konu orijinal fatura
-     * @param refundAmount     iade tutarı (null ise orijinalin tamamı)
-     * @param reason           İade nedeni (UBL Note alanına yazılır)
-     * @return yeni oluşturulan credit note Invoice DTO'su
+     * @param originalInvoiceId the original invoice subject to the return
+     * @param refundAmount     the refund amount (null means the full original amount)
+     * @param reason           the return reason (written to the UBL Note field)
+     * @return the newly created credit note Invoice DTO
      */
     InvoiceDto createCreditNote(Long originalInvoiceId, java.math.BigDecimal refundAmount, String reason);
 
     /**
-     * ID ile fatura getirir.
+     * Retrieves an invoice by ID.
      */
     Optional<InvoiceDto> getInvoiceById(Long invoiceId);
 
     /**
-     * Sipariş ID ile fatura getirir.
+     * Retrieves an invoice by order ID.
      */
     Optional<InvoiceDto> getInvoiceByOrderId(Long orderId);
 
     /**
-     * Fatura PDF'ini indirir.
+     * Downloads the invoice PDF.
      */
     byte[] downloadInvoicePdf(Long invoiceId);
 
     /**
-     * Filtrelenmiş fatura listesi.
+     * Filtered invoice list.
      */
     Page<InvoiceDto> getInvoices(InvoiceStatus status, InvoiceType invoiceType,
                                   String search, LocalDateTime from, LocalDateTime to,
                                   Pageable pageable);
 
     /**
-     * PENDING durumundaki faturaları Logo'dan sorgular ve güncel statülerini yazar.
-     * Scheduled job tarafından çağrılır.
-     * @return güncellenen fatura sayısı
+     * Queries PENDING invoices from Logo and writes their current statuses.
+     * Called by a scheduled job.
+     * @return the number of updated invoices
      */
     int refreshPendingStatuses();
 }

@@ -107,8 +107,8 @@ public class GvpProtocol implements BankPosProtocol {
             String hashInput = orderId + terminalId + response + mdStatus + storeKey;
             String calculatedHash = sha512Hex(hashInput);
 
-            // Timing-safe karşılaştırma. GVP hex çıktı verir; ikisini de aynı case'e
-            // çevirip MessageDigest.isEqual ile karşılaştır.
+            // Timing-safe comparison. GVP returns hex output; normalize both to the same
+            // case and compare with MessageDigest.isEqual.
             boolean valid = receivedHash != null && calculatedHash != null
                     && java.security.MessageDigest.isEqual(
                             calculatedHash.toLowerCase().getBytes(java.nio.charset.StandardCharsets.UTF_8),

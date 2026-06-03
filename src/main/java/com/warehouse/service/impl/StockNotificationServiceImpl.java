@@ -57,7 +57,7 @@ public class StockNotificationServiceImpl implements StockNotificationService {
         }
         String normalizedEmail = email.trim().toLowerCase();
 
-        // Idempotent: zaten bekleyen abonelik varsa tekrar ekleme
+        // Idempotent: if a pending subscription already exists, don't add another
         if (subscriptionRepository.existsByProductIdAndEmailAndNotifiedFalse(productId, normalizedEmail)) {
             logger.debug("Stok bildirimi zaten var: productId={}, email={}", productId, normalizedEmail);
             return false;
@@ -87,7 +87,7 @@ public class StockNotificationServiceImpl implements StockNotificationService {
         List<StockNotificationSubscription> pending = subscriptionRepository.findByProductIdAndNotifiedFalse(productId);
         if (pending.isEmpty()) return 0;
 
-        // Ürünün toplam satılabilir stoğunu hesapla
+        // Calculate the product's total sellable stock
         int available = totalAvailableQuantity(productId);
         if (available <= 0) return 0;
 
@@ -156,7 +156,7 @@ public class StockNotificationServiceImpl implements StockNotificationService {
     private String buildProductUrl(Product product) {
         String baseUrl = settingService.getSetting("seo_canonical_domain");
         if (baseUrl == null || baseUrl.isBlank()) {
-            // app.base-url fallback gerekirse ama SiteSetting'da yok; onun yerine frontend domain'i için en iyi fallback
+            // Use app.base-url as a fallback if needed, but it's not in SiteSetting; this is the best fallback for the frontend domain
             baseUrl = settingService.getSetting("app_base_url");
         }
         if (baseUrl == null || baseUrl.isBlank()) baseUrl = "";
@@ -172,7 +172,7 @@ public class StockNotificationServiceImpl implements StockNotificationService {
                         .findFirst()
                         .orElse(product.getImages().get(0));
                 if (primary != null) {
-                    // Görsel API URL'i
+                    // Image API URL
                     String baseUrl = settingService.getSetting("seo_canonical_domain");
                     String cleanBase = baseUrl != null ? baseUrl.replaceAll("/+$", "") : "";
                     return cleanBase + "/api/admin/products/images/" + primary.getId() + "/view";

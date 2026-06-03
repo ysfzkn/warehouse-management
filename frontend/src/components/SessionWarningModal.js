@@ -1,8 +1,8 @@
 import React from 'react';
 
 /**
- * Oturum süresi dolmadan ~2 dakika önce gösterilen uyarı diyaloğu.
- * Geri sayım + "Devam Et" / "Çıkış Yap" butonları.
+ * Warning dialog shown ~2 minutes before the session expires.
+ * Countdown + "Continue" / "Log Out" buttons.
  */
 export default function SessionWarningModal({ open, secondsLeft, onContinue, onLogout }) {
   if (!open) return null;
@@ -11,7 +11,7 @@ export default function SessionWarningModal({ open, secondsLeft, onContinue, onL
   const ss = secondsLeft % 60;
   const display = `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
 
-  // secondsLeft 30 altına düşünce kırmızı vurgu
+  // Red highlight when secondsLeft drops below 30
   const urgent = secondsLeft <= 30;
 
   return (

@@ -12,18 +12,18 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class InvoiceCreateRequest {
 
-    /** Sipariş ID */
+    /** Order ID */
     private Long orderId;
 
-    /** Fatura tipi (varsayılan: E_ARSIV) */
+    /** Invoice type (default: E_ARSIV) */
     private InvoiceType invoiceType;
 
-    /** Alıcı vergi numarası (tüzel kişiler için) */
+    /** Recipient tax number (for legal entities) */
     private String recipientTaxId;
 
-    /** Alıcı vergi dairesi (tüzel kişiler için) */
+    /** Recipient tax office (for legal entities) */
     private String recipientTaxOffice;
 
-    /** Not */
+    /** Note */
     private String note;
 }

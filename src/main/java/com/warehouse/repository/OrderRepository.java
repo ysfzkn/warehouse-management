@@ -17,10 +17,20 @@ import java.util.Optional;
 public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecificationExecutor<Order> {
     Optional<Order> findByOrderNumber(String orderNumber);
 
-    /** Kargo webhook ile gelen shipment id'si ile Order arama. */
+    /**
+     * Pessimistic write lock — SELECT ... FOR UPDATE.
+     * Prevents the double-confirm race during concurrent state transitions
+     * such as bank transfer confirmation / cancellation / expiry job.
+     * Must be used within a transaction scope.
+     */
+    @Query("SELECT o FROM Order o WHERE o.id = :id")
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    Optional<Order> findByIdForUpdate(@Param("id") Long id);
+
+    /** Looks up an Order by the shipment id received via the cargo webhook. */
     Optional<Order> findByCargoProviderShipmentId(String cargoProviderShipmentId);
 
-    /** Takip no ile Order arama — kargo firma-specific. */
+    /** Looks up an Order by tracking number — carrier-specific. */
     Optional<Order> findByCargoTrackingNo(String cargoTrackingNo);
 
     @Query("SELECT o FROM Order o LEFT JOIN FETCH o.customer WHERE o.id = :id")
@@ -42,8 +52,8 @@ public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecific
                                               @Param("deadline") java.time.LocalDateTime deadline);
 
     /**
-     * Halka açık sipariş takip: sipariş numarası + müşteri e-postası ile sorgular.
-     * E-posta, müşteri hesabına kayıtlı e-posta ile eşleşmelidir.
+     * Public order tracking: queries by order number + customer e-mail.
+     * The e-mail must match the one registered on the customer account.
      */
     @Query("SELECT o FROM Order o LEFT JOIN FETCH o.customer c WHERE o.orderNumber = :orderNumber AND LOWER(c.email) = LOWER(:email)")
     Optional<Order> findByOrderNumberAndCustomerEmail(@Param("orderNumber") String orderNumber,

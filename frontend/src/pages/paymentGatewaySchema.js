@@ -1,17 +1,17 @@
 /**
- * Ödeme Gateway Form Şeması
+ * Payment Gateway Form Schema
  *
- * Her protokol için hangi alanların gerekli/opsiyonel/n/a olduğunu tanımlar.
- * AdminPaymentGateways formu bu şemaya bakarak dinamik render eder; kullanıcı
- * sadece protokolüne ait alanları görür, gereksiz alanlar gizlenir.
+ * Defines which fields are required/optional/n-a for each protocol.
+ * The AdminPaymentGateways form renders dynamically based on this schema; the user
+ * sees only the fields relevant to their protocol, and unnecessary fields are hidden.
  *
- * Yapı:
+ * Structure:
  *   PROTOCOLS[code] = {
  *     label, icon, description, helpUrl,    // visual + help
- *     bankSelect: boolean,                  // banka seçimi gösterilsin mi
- *     banks: [...],                         // bankSelect=true ise opsiyonlar
+ *     bankSelect: boolean,                  // whether to show bank selection
+ *     banks: [...],                         // options when bankSelect=true
  *     fields: { fieldKey: { required, label, type, placeholder, help, ... } }
- *     extraFields: { ... }                  // extraConfig altında saklanan
+ *     extraFields: { ... }                  // stored under extraConfig
  *   }
  *
  * field type: 'text' | 'password' | 'url' | 'select' | 'number' | 'cards-multi'
@@ -24,8 +24,8 @@ export const BANK_LABELS = {
 };
 
 /**
- * Ortak field tanımları (her protokolde yer alan).
- * Bu objelerin spread'i ile her protokol kendi farklılaştırmasını yapar.
+ * Common field definitions (present in every protocol).
+ * Each protocol applies its own customization by spreading these objects.
  */
 const COMMON_FIELDS = {
   callbackUrl: {
@@ -116,14 +116,16 @@ export const PROTOCOLS = {
         type: 'url',
         required: true,
         placeholder: 'https://siteniz.com/odeme/sonuc?success=true',
-        help: 'Ödeme başarılı olunca müşterinin yönlendirileceği frontend URL.',
+        help: 'Ödeme başarılı olunca müşterinin yönlendirileceği store frontend URL\'i. ' +
+              '"Otomatik öner" ile mevcut ortama göre doldurabilirsiniz.',
       },
       merchant_fail_url: {
         label: 'Başarısız Ödeme URL',
         type: 'url',
         required: true,
         placeholder: 'https://siteniz.com/odeme/sonuc?success=false',
-        help: 'Ödeme başarısız olunca müşterinin yönlendirileceği frontend URL.',
+        help: 'Ödeme başarısız olunca müşterinin yönlendirileceği store frontend URL\'i. ' +
+              '"Otomatik öner" ile mevcut ortama göre doldurabilirsiniz.',
       },
       timeout_limit: {
         label: 'Zaman Aşımı (dk)',
@@ -233,8 +235,8 @@ export const PROTOCOLS = {
 };
 
 /**
- * Frontend'den backend'e gönderilecek payload'u oluştur.
- * Form state'inde sadece görünen alanları topla; gizli alanlar undefined.
+ * Build the payload to send from the frontend to the backend.
+ * Collect only the visible fields from the form state; hidden fields are undefined.
  */
 export function buildPayloadForProtocol(formState, protocolCode) {
   const protocol = PROTOCOLS[protocolCode];
@@ -249,11 +251,11 @@ export function buildPayloadForProtocol(formState, protocolCode) {
     supportedCards: formState.supportedCards || 'VISA,MASTERCARD,TROY',
     maxInstallments: formState.maxInstallments || 12,
   };
-  // Standart field'lar
+  // Standard fields
   Object.keys(protocol.fields).forEach(key => {
     if (formState[key] !== undefined) payload[key] = formState[key];
   });
-  // extraConfig field'ları
+  // extraConfig fields
   if (protocol.extraFields) {
     payload.extraConfig = {};
     Object.keys(protocol.extraFields).forEach(key => {
@@ -266,8 +268,8 @@ export function buildPayloadForProtocol(formState, protocolCode) {
 }
 
 /**
- * Form state'i mevcut gateway entity'sinden (edit modu) hydrate eder.
- * Secret'lar mask'li gelir, bu yüzden onları boş bırakırız (kullanıcı değiştirmek isterse yazsın).
+ * Hydrate the form state from an existing gateway entity (edit mode).
+ * Secrets come masked, so we leave them empty (the user types a new value if they want to change them).
  */
 export function hydrateFormFromGateway(gateway) {
   const f = {
@@ -277,7 +279,7 @@ export function hydrateFormFromGateway(gateway) {
     bankCode: gateway.bankCode || '',
     merchantId: gateway.merchantId || '',
     terminalId: gateway.terminalId || '',
-    storeKey: '', // Secret'lar boş — değiştirmek için yeni değer girilir
+    storeKey: '', // Secrets are empty — enter a new value to change them
     provisionPassword: '',
     apiKey: '',
     secretKey: '',
@@ -289,13 +291,13 @@ export function hydrateFormFromGateway(gateway) {
     supportedCards: gateway.supportedCards || 'VISA,MASTERCARD,TROY',
     maxInstallments: gateway.maxInstallments || 12,
   };
-  // extraConfig alanları
+  // extraConfig fields
   if (gateway.extraConfig && typeof gateway.extraConfig === 'object') {
     Object.entries(gateway.extraConfig).forEach(([k, v]) => {
       f['extra_' + k] = v != null ? String(v) : '';
     });
   }
-  // Edit modunda secret'ların DB'de set olup olmadığını bilmek için *Set flag'leri
+  // *Set flags to know whether secrets are set in the DB while in edit mode
   f._storeKeySet = !!gateway.storeKeySet;
   f._provisionPasswordSet = !!gateway.provisionPasswordSet;
   f._apiKeySet = !!gateway.apiKeySet;
@@ -303,7 +305,7 @@ export function hydrateFormFromGateway(gateway) {
   return f;
 }
 
-/** Boş form (yeni gateway oluştururken). */
+/** Empty form (when creating a new gateway). */
 export function emptyFormForProtocol(protocolCode = 'IYZICO') {
   return {
     code: '', displayName: '', gatewayProtocol: protocolCode, bankCode: '',
@@ -314,7 +316,7 @@ export function emptyFormForProtocol(protocolCode = 'IYZICO') {
 }
 
 /**
- * Frontend tarafı validation (UX) — backend de aynı kontrolü yapar (defense-in-depth).
+ * Frontend-side validation (UX) — the backend performs the same check (defense-in-depth).
  * @returns string error message or null if valid
  */
 export function validateForm(formState, protocolCode, isEdit) {
@@ -327,14 +329,14 @@ export function validateForm(formState, protocolCode, isEdit) {
 
   if (protocol.bankSelect && !formState.bankCode) return 'Banka seçimi zorunludur.';
 
-  // Her required field için boş kontrolü (edit modunda secret'lar opsiyonel — mevcut korunur)
+  // Empty check for each required field (in edit mode secrets are optional — the existing value is kept)
   for (const [key, def] of Object.entries(protocol.fields)) {
     if (!def.required) continue;
     const isSecret = def.type === 'password';
-    if (isEdit && isSecret) continue; // edit'te secret boş kalabilir
+    if (isEdit && isSecret) continue; // secrets may stay empty on edit
     const v = formState[key];
     if (!v || !String(v).trim()) return `${def.label} zorunludur.`;
-    // URL ek validation
+    // Additional URL validation
     if (def.type === 'url') {
       const lower = String(v).trim().toLowerCase();
       if (!lower.startsWith('http://') && !lower.startsWith('https://')) {
@@ -343,9 +345,23 @@ export function validateForm(formState, protocolCode, isEdit) {
       if (!formState.sandbox && !lower.startsWith('https://')) {
         return `${def.label}: Production modunda HTTPS zorunludur.`;
       }
+      // In sandbox, http://localhost*, 127.x, 10.x, 192.168.x, *.local are allowed
+      if (formState.sandbox && lower.startsWith('http://')) {
+        const isLocal =
+          /^http:\/\/([a-z0-9-]+\.)*localhost(:\d+)?(\/|$|\?)/.test(lower) ||
+          /^http:\/\/127\.\d+\.\d+\.\d+(:\d+)?(\/|$|\?)/.test(lower) ||
+          /^http:\/\/0\.0\.0\.0/.test(lower) ||
+          /^http:\/\/[a-z0-9.-]+\.local(:\d+)?(\/|$|\?)/.test(lower) ||
+          /^http:\/\/192\.168\.\d+\.\d+(:\d+)?(\/|$|\?)/.test(lower) ||
+          /^http:\/\/10\.\d+\.\d+\.\d+(:\d+)?(\/|$|\?)/.test(lower) ||
+          /^http:\/\/172\.(1[6-9]|2[0-9]|3[01])\.\d+\.\d+(:\d+)?(\/|$|\?)/.test(lower);
+        if (!isLocal) {
+          return `${def.label}: Sandbox'ta bile HTTPS önerilir. Lokal test için http://localhost veya *.local izinli.`;
+        }
+      }
     }
   }
-  // extraConfig field'ları
+  // extraConfig fields
   if (protocol.extraFields) {
     for (const [key, def] of Object.entries(protocol.extraFields)) {
       if (!def.required) continue;
@@ -365,11 +381,56 @@ export function validateForm(formState, protocolCode, isEdit) {
   return null;
 }
 
-/** Code → callback URL önerisi. */
+/**
+ * Detect the backend base URL. Even if the admin panel runs at
+ * `admin.localhost:3000`, the callback must reach the backend (port 8080) in dev.
+ * In prod, the backend is at `api.<domain>` or directly under the domain.
+ */
+function detectBackendBase() {
+  const { protocol, hostname, port } = window.location;
+  // Local dev: frontend 3000, backend 8080
+  if (hostname === 'localhost' || hostname.endsWith('.localhost') || hostname === '127.0.0.1') {
+    return `${protocol}//localhost:8080`;
+  }
+  // Prod: admin.yourdomain.com → api.yourdomain.com
+  // or yourdomain.com → api.yourdomain.com
+  const hostParts = hostname.split('.');
+  if (hostParts.length >= 2) {
+    // Strip the subdomain (admin., wms., www.) and prepend api.
+    const rootDomain = hostParts.length > 2 ? hostParts.slice(-2).join('.') : hostname;
+    return `${protocol}//api.${rootDomain}`;
+  }
+  return `${protocol}//${hostname}${port ? ':' + port : ''}`;
+}
+
+/**
+ * Detect the store frontend base URL. Customers should be redirected
+ * to the main store domain, not the admin panel.
+ */
+function detectStoreBase() {
+  const { protocol, hostname, port } = window.location;
+  // Local dev
+  if (hostname === 'localhost' || hostname.endsWith('.localhost') || hostname === '127.0.0.1') {
+    return `${protocol}//localhost:3000`;
+  }
+  // Prod: admin.yourdomain.com → yourdomain.com
+  const hostParts = hostname.split('.');
+  if (hostParts.length > 2 && ['admin', 'wms', 'panel'].includes(hostParts[0])) {
+    return `${protocol}//${hostParts.slice(1).join('.')}`;
+  }
+  return `${protocol}//${hostname}${port ? ':' + port : ''}`;
+}
+
+/** Code + protocol → callback URL suggestion (backend endpoint). */
 export function suggestCallbackUrl(code, protocolCode, host) {
-  const base = host || window.location.origin;
+  const base = host || detectBackendBase();
   if (protocolCode === 'PAYTR') {
     return `${base}/api/store/payment/callback/paytr/${code || 'CODE'}`;
   }
   return `${base}/api/store/payment/callback/pos/${code || 'CODE'}`;
+}
+
+/** Success/failure redirect URL suggestion (store frontend). */
+export function suggestRedirectUrl(success) {
+  return `${detectStoreBase()}/odeme/sonuc?success=${success ? 'true' : 'false'}`;
 }

@@ -20,22 +20,22 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * Kargonomi webhook receiver. Kargonomi shipment statüsü değiştiğinde
- * buraya POST gelir; HMAC-SHA256 imzası kontrol edilir, geçerliyse ilgili
- * Order güncellenir (polling job gereksiz olur).
+ * Kargonomi webhook receiver. When a Kargonomi shipment status changes,
+ * a POST arrives here; the HMAC-SHA256 signature is verified and, if valid,
+ * the corresponding Order is updated (eliminating the need for a polling job).
  *
- * <p>Kargonomi tarafında kayıt:
+ * <p>Registration on the Kargonomi side:
  * <pre>
  *   POST /webhooks
  *   { name, url: "https://sizinsite.com/api/public/cargo/kargonomi/webhook",
  *     event_type: "shipment.updated", is_active: true, secret: "..." }
  * </pre>
  *
- * <p>Retry politikası (Kargonomi): 60s, 120s, 300s, 600s, 1200s — 2xx dönene
- * kadar tekrar eder. 400/401/403/404/409/410/422 skip edilir.
+ * <p>Retry policy (Kargonomi): 60s, 120s, 300s, 600s, 1200s — retries until a
+ * 2xx is returned. 400/401/403/404/409/410/422 are skipped.
  *
- * <p>Idempotency: payload.meta.idempotency_key ile aynı olay birden fazla
- * işlenmez (simple in-memory short-window tracking; production için Redis/DB).
+ * <p>Idempotency: the same event is not processed more than once based on
+ * payload.meta.idempotency_key (simple in-memory short-window tracking; use Redis/DB in production).
  */
 @RestController
 @RequestMapping("/api/public/cargo/kargonomi")
@@ -48,7 +48,7 @@ public class KargonomiWebhookController {
     private final CargoApiService cargoApiService;
     private final SiteSettingService settingService;
 
-    // Short-term idempotency cache — son 1000 key
+    // Short-term idempotency cache — last 1000 keys
     private final java.util.concurrent.ConcurrentHashMap<String, Long> seenKeys
             = new java.util.concurrent.ConcurrentHashMap<>();
 
@@ -64,7 +64,7 @@ public class KargonomiWebhookController {
     public ResponseEntity<Map<String, Object>> receive(
             @RequestHeader(value = "X-Webhook-Signature", required = false) String signature,
             @RequestBody String rawBody) {
-        // 1) HMAC doğrulama
+        // 1) HMAC verification
         String secret = settingService.getSetting("kargonomi_webhook_secret");
         if (secret != null && !secret.isBlank()) {
             String expected = hmacSha256Hex(secret, rawBody);
@@ -76,7 +76,7 @@ public class KargonomiWebhookController {
             log.warn("[KargonomiWebhook] kargonomi_webhook_secret tanımsız — imza doğrulaması atlanıyor (GÜVENSİZ)");
         }
 
-        // 2) JSON parse
+        // 2) JSON parsing
         Map<String, Object> payload;
         try {
             payload = new com.fasterxml.jackson.databind.ObjectMapper()
@@ -86,7 +86,7 @@ public class KargonomiWebhookController {
             return ResponseEntity.badRequest().body(Map.of("error", "invalid json"));
         }
 
-        // 3) Idempotency kontrolü
+        // 3) Idempotency check
         @SuppressWarnings("unchecked")
         Map<String, Object> meta = (Map<String, Object>) payload.getOrDefault("meta", Map.of());
         String idemKey = String.valueOf(meta.getOrDefault("idempotency_key", ""));
@@ -96,19 +96,19 @@ public class KargonomiWebhookController {
         }
         cleanOldIdemKeys();
 
-        // 4) Shipment'ı çıkar
+        // 4) Extract the shipment
         @SuppressWarnings("unchecked")
         Map<String, Object> shipment = (Map<String, Object>) payload.get("shipment");
         if (shipment == null || shipment.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("error", "missing shipment"));
         }
 
-        // 5) Order'ı bul (providerShipmentId veya tracking_code ile)
+        // 5) Find the Order (by providerShipmentId or tracking_code)
         Order order = findOrder(shipment);
         if (order == null) {
             log.info("[KargonomiWebhook] shipment geldi ama eşleşen order yok: {}",
                     shipment.get("id"));
-            // 200 dönüyoruz; yoksa Kargonomi defalarca retry eder
+            // Return 200; otherwise Kargonomi will retry repeatedly
             return ResponseEntity.ok(Map.of("status", "order not found"));
         }
 
@@ -121,7 +121,7 @@ public class KargonomiWebhookController {
         return ResponseEntity.ok(Map.of("status", "ok", "orderNumber", order.getOrderNumber()));
     }
 
-    /** Webhook payload'dan Order'ı bul. Önce providerShipmentId, sonra tracking code. */
+    /** Find the Order from the webhook payload. First by providerShipmentId, then by tracking code. */
     private Order findOrder(Map<String, Object> shipment) {
         String shipmentId = String.valueOf(shipment.getOrDefault("id", ""));
         if (!shipmentId.isBlank()) {
@@ -137,7 +137,7 @@ public class KargonomiWebhookController {
         return null;
     }
 
-    /** Shipment map → CargoTrackingStatus. KargonomiCargoProvider'daki logic'i re-use et. */
+    /** Shipment map → CargoTrackingStatus. Re-uses the logic in KargonomiCargoProvider. */
     private CargoTrackingStatus parseWithProvider(Map<String, Object> shipment) {
         if (cargoApiService.getActiveProvider() instanceof KargonomiCargoProvider k) {
             return k.parseTrackingResponse(shipment);
@@ -174,7 +174,7 @@ public class KargonomiWebhookController {
 
     private void cleanOldIdemKeys() {
         if (seenKeys.size() < 1000) return;
-        long cutoff = System.currentTimeMillis() - 10 * 60 * 1000; // 10dk'dan eski
+        long cutoff = System.currentTimeMillis() - 10 * 60 * 1000; // older than 10 minutes
         seenKeys.entrySet().removeIf(e -> e.getValue() < cutoff);
     }
 }

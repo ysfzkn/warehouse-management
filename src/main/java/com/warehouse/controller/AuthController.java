@@ -34,7 +34,7 @@ public class AuthController {
         String username = body.getOrDefault("username", "").trim();
         String password = body.getOrDefault("password", "");
 
-        // ── Brute-force lockout: kullanıcı bazlı (IP-bazlı limit RateLimitFilter'da) ──
+        // ── Brute-force lockout: per-user (IP-based limit is in RateLimitFilter) ──
         long lockedUntil = loginTracker.lockedUntilMillis(username);
         if (lockedUntil > 0) {
             long retryAfter = Math.max(1, (lockedUntil - System.currentTimeMillis()) / 1000);

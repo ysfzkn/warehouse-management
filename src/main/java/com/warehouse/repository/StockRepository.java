@@ -36,6 +36,16 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
     @EntityGraph(value = Stock.GRAPH_WITH_PRODUCT_AND_WAREHOUSE, type = EntityGraph.EntityGraphType.LOAD)
     List<Stock> findByProduct(@Param("product") Product product);
 
+    /**
+     * Batch — total <strong>available</strong> quantity for multiple products in a single query.
+     * available = quantity - reserved - consigned (same as Stock.getAvailableQuantity()).
+     * Prevents N+1 (store product list). Returned Object[]: [productId, totalAvailable (Long)].
+     */
+    @Query("SELECT s.product.id, " +
+           "SUM(COALESCE(s.quantity,0) - COALESCE(s.reservedQuantity,0) - COALESCE(s.consignedQuantity,0)) " +
+           "FROM Stock s WHERE s.product.id IN :productIds GROUP BY s.product.id")
+    List<Object[]> sumAvailableByProductIds(@Param("productIds") List<Long> productIds);
+
     @Query("SELECT s FROM Stock s WHERE s.warehouse = :warehouse ORDER BY s.product.name")
     @EntityGraph(value = Stock.GRAPH_WITH_PRODUCT_AND_WAREHOUSE, type = EntityGraph.EntityGraphType.LOAD)
     List<Stock> findByWarehouse(@Param("warehouse") Warehouse warehouse);

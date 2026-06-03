@@ -1,11 +1,11 @@
 import React from 'react';
 
 /**
- * Top-level React error boundary. Runtime exception'larda beyaz ekran yerine
- * brand-tutarlı bir "bir hata oluştu" sayfası gösterir; ileride Sentry'ye
- * componentDidCatch içinden raporlayabiliriz.
+ * Top-level React error boundary. On runtime exceptions it shows a
+ * brand-consistent "something went wrong" page instead of a white screen;
+ * later we can report to Sentry from within componentDidCatch.
  *
- * Production'da error details kullanıcıya gösterilmez; sadece dev'de.
+ * In production the error details are not shown to the user; only in dev.
  */
 export default class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -21,7 +21,7 @@ export default class ErrorBoundary extends React.Component {
     // eslint-disable-next-line no-console
     console.error('[ErrorBoundary]', error, info);
     this.setState({ info });
-    // Sentry / GlitchTip entegrasyonu burada (Faz 1 batch 20):
+    // Sentry / GlitchTip integration goes here (Phase 1 batch 20):
     // if (window.Sentry) window.Sentry.captureException(error, { extra: info });
   }
 

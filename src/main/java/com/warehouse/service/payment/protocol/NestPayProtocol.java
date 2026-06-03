@@ -122,7 +122,7 @@ public class NestPayProtocol implements BankPosProtocol {
             hashBuilder.append(config.getStoreKey());
 
             String calculatedHash = generateHash(hashBuilder.toString());
-            // Timing-safe karşılaştırma (saldırgan hash byte'larını tek tek tahmin edemesin)
+            // Timing-safe comparison (so an attacker cannot guess the hash bytes one by one)
             boolean valid = receivedHash != null && calculatedHash != null
                     && java.security.MessageDigest.isEqual(
                             calculatedHash.getBytes(java.nio.charset.StandardCharsets.UTF_8),

@@ -17,9 +17,9 @@ import org.springframework.web.bind.annotation.*;
 import java.util.*;
 
 /**
- * Müşteri bildirim tercihleri endpoint'leri.
- * Müşteriler hangi kanal (SMS/EMAIL) için hangi bildirim tipini
- * (sipariş, kargo, pazarlama vb.) almak istediğini yönetir.
+ * Customer notification preference endpoints.
+ * Customers manage which notification type (order, cargo, marketing, etc.)
+ * they want to receive on which channel (SMS/EMAIL).
  */
 @RestController
 @RequestMapping("/api/store/account/notification-preferences")
@@ -31,8 +31,8 @@ public class StoreNotificationPreferenceController {
     private final JwtService jwtService;
 
     /**
-     * Müşterinin tüm bildirim tercihlerini döner.
-     * Her [kanal x tip] için mevcut değer veya default (true) döner.
+     * Returns all of the customer's notification preferences.
+     * For each [channel x type] returns the existing value or the default (true).
      */
     @GetMapping
     @Transactional(readOnly = true)
@@ -42,12 +42,12 @@ public class StoreNotificationPreferenceController {
 
         List<NotificationPreference> prefs = preferenceRepository.findByCustomerId(customerId);
 
-        // Kanal -> tip -> enabled mapping'i oluştur
+        // Build the channel -> type -> enabled mapping
         Map<String, Map<String, Boolean>> result = new LinkedHashMap<>();
         for (NotificationChannelType channel : NotificationChannelType.values()) {
             Map<String, Boolean> channelMap = new LinkedHashMap<>();
             for (NotificationType type : NotificationType.values()) {
-                // Default: marketing = false, diğerleri = true
+                // Default: marketing = false, others = true
                 boolean defaultValue = type != NotificationType.MARKETING;
                 Optional<NotificationPreference> pref = prefs.stream()
                         .filter(p -> p.getChannel() == channel && p.getType() == type)
@@ -61,7 +61,7 @@ public class StoreNotificationPreferenceController {
     }
 
     /**
-     * Tercihleri günceller. Body yapısı:
+     * Updates the preferences. Body structure:
      * {
      *   "EMAIL": { "ORDER_CONFIRMED": true, "MARKETING": false },
      *   "SMS": { "CARGO_SHIPPED": true }

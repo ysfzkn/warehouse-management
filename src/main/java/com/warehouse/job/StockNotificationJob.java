@@ -8,10 +8,10 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * Stokta yoksa bildir scheduled job'u.
+ * Back-in-stock notification scheduled job.
  *
- * Her 15 dakikada bir çalışır ve bekleyen abonelikleri kontrol eder.
- * Bir ürünün stoku artmışsa tüm bekleyen abonelere e-posta gönderir.
+ * Runs every 15 minutes and checks pending subscriptions.
+ * If a product's stock has increased, sends an email to all pending subscribers.
  */
 @Component
 public class StockNotificationJob {
@@ -25,7 +25,7 @@ public class StockNotificationJob {
     }
 
     /**
-     * Her 15 dakikada bir çalışır, uygulama başlangıcından 2 dakika sonra ilk çalışma.
+     * Runs every 15 minutes, with the first run 2 minutes after application startup.
      */
     @Scheduled(fixedRate = 15 * 60 * 1000, initialDelay = 2 * 60 * 1000)
     @SchedulerLock(name = "stockNotification", lockAtMostFor = "PT10M", lockAtLeastFor = "PT2M")

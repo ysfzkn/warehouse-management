@@ -10,55 +10,55 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Idempotency-Key store: aynı key ile gelen sipariş/ödeme isteklerinde
- * önceki sonucu döner, mutation'ı tekrarlamaz.
+ * Idempotency-Key store: for order/payment requests arriving with the same key,
+ * returns the previous result instead of repeating the mutation.
  *
- * <p>Tipik kullanım: müşteri "Siparişi Onayla" butonuna iki kez tıklarsa,
- * client tarafı aynı key'i gönderir, backend ikincisinde yeni order yaratmak
- * yerine ilk order'ın ID'sini döner.</p>
+ * <p>Typical use: if a customer clicks the "Confirm Order" button twice, the
+ * client sends the same key, and on the second request the backend returns the
+ * first order's ID instead of creating a new order.</p>
  *
- * <p>In-memory (Caffeine), 24h TTL. Multi-instance scale'de eski kayıt
- * Redis'e taşınabilir; tek-instance Railway için yeterli.</p>
+ * <p>In-memory (Caffeine), 24h TTL. At multi-instance scale the store can be
+ * moved to Redis; it is sufficient for single-instance Railway.</p>
  *
- * <p>Key format kontrolü: client'tan gelen Idempotency-Key UUID formatında
- * olmalı (sabit string'lerle her isteği aynı sayma riskini kaldırır).</p>
+ * <p>Key format check: the Idempotency-Key from the client must be in UUID format
+ * (removes the risk of treating every request as the same via fixed strings).</p>
  */
 @Component
 public class IdempotencyStore {
 
     private static final Duration TTL = Duration.ofHours(24);
 
-    /** namespace + key → response payload (Map JSON-uyumlu) */
+    /** namespace + key → response payload (JSON-compatible Map) */
     private final Cache<String, Map<String, Object>> cache = Caffeine.newBuilder()
             .expireAfterWrite(TTL)
             .maximumSize(100_000)
             .build();
 
-    /** In-flight key'leri tutar (aynı key'le concurrent isteklere collide-and-wait). */
+    /** Holds in-flight keys (collide-and-wait for concurrent requests with the same key). */
     private final ConcurrentHashMap<String, Object> inFlight = new ConcurrentHashMap<>();
 
     /**
-     * Kayıtlı sonucu döner; yoksa null.
-     * @param namespace "checkout" / "payment" gibi mantıksal bölme
+     * Returns the stored result; null if none.
+     * @param namespace logical partition such as "checkout" / "payment"
      */
     public Map<String, Object> get(String namespace, String key) {
         if (!isValidKey(key)) return null;
         return cache.getIfPresent(namespace + ":" + key);
     }
 
-    /** Sonucu kaydet (24 saat boyunca tekrar isteğinde aynı sonuç döner). */
+    /** Store the result (the same result is returned on a repeat request for 24 hours). */
     public void put(String namespace, String key, Map<String, Object> result) {
         if (!isValidKey(key) || result == null) return;
         cache.put(namespace + ":" + key, result);
     }
 
     /**
-     * In-flight reservation — concurrent duplicate'ları engeller.
+     * In-flight reservation — prevents concurrent duplicates.
      * Returns true if reservation acquired (caller should proceed),
      * false if another in-flight request holds it.
      */
     public boolean tryAcquire(String namespace, String key) {
-        if (!isValidKey(key)) return true; // key yoksa idempotency yok, geç
+        if (!isValidKey(key)) return true; // no key means no idempotency, proceed
         return inFlight.putIfAbsent(namespace + ":" + key, Boolean.TRUE) == null;
     }
 
@@ -67,15 +67,15 @@ public class IdempotencyStore {
         inFlight.remove(namespace + ":" + key);
     }
 
-    /** UUID v4 benzeri format zorunluluğu (saldırgan rastgele string ile collision yapamasın). */
+    /** Requires a UUID v4-like format (so an attacker cannot collide using a random string). */
     private boolean isValidKey(String key) {
         if (key == null || key.isBlank() || key.length() < 16 || key.length() > 128) return false;
-        // UUID veya en az 16 karakter rastgele alphanumeric/dash
+        // UUID or at least 16 random alphanumeric/dash characters
         try {
             UUID.fromString(key);
             return true;
         } catch (IllegalArgumentException e) {
-            // UUID değilse min length kontrolü yeterli
+            // If not a UUID, the min-length check is sufficient
             return key.matches("[A-Za-z0-9_\\-]{16,128}");
         }
     }

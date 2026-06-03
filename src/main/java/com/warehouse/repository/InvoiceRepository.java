@@ -24,10 +24,11 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
     Optional<Invoice> findByInvoiceNumber(String invoiceNumber);
 
     /**
-     * PostgreSQL + Hibernate 6 type-inference fix: bir sorgu parametresi {@code null}
-     * geldiğinde PG onun tipini {@code bytea} olarak çıkarır ve {@code lower(bytea)}
-     * fonksiyonu olmadığı için patlar. {@code CAST(:search AS string)} açık tip ipucu
-     * verir — aynı pattern {@code ProductRepository.findByFilters}'ta da kullanılıyor.
+     * PostgreSQL + Hibernate 6 type-inference fix: when a query parameter arrives
+     * as {@code null}, PG infers its type as {@code bytea} and blows up because
+     * there is no {@code lower(bytea)} function. {@code CAST(:search AS string)}
+     * gives an explicit type hint — the same pattern is used in
+     * {@code ProductRepository.findByFilters}.
      */
     @Query("""
         SELECT i FROM Invoice i
@@ -54,8 +55,8 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
     long countByStatus(InvoiceStatus status);
 
     /**
-     * PENDING durumundaki ve Logo'ya gönderilmiş (providerInvoiceId != null) faturaları
-     * döner. InvoiceStatusPollingJob tarafından kullanılır.
+     * Returns invoices that are PENDING and have been sent to Logo
+     * (providerInvoiceId != null). Used by InvoiceStatusPollingJob.
      */
     @Query("""
         SELECT i FROM Invoice i
@@ -65,7 +66,7 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
     """)
     List<Invoice> findByStatusWithProviderId(@Param("status") InvoiceStatus status, Pageable pageable);
 
-    /** Admin digest için: son 24 saat içinde oluşturulan ERROR veya REJECTED faturalar. */
+    /** For the admin digest: ERROR or REJECTED invoices created within the last 24 hours. */
     @Query("""
         SELECT i FROM Invoice i
          WHERE (i.status = com.warehouse.enums.InvoiceStatus.ERROR
@@ -75,7 +76,7 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
     """)
     List<Invoice> findRecentErrors(@Param("since") LocalDateTime since);
 
-    /** Admin digest için: 24 saatten uzun süredir PENDING kalan faturalar. */
+    /** For the admin digest: invoices stuck in PENDING for more than 24 hours. */
     @Query("""
         SELECT i FROM Invoice i
          WHERE i.status = com.warehouse.enums.InvoiceStatus.PENDING
@@ -87,7 +88,7 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
     @Query("SELECT COUNT(i) FROM Invoice i WHERE i.createdAt >= :from AND i.createdAt <= :to")
     long countByDateRange(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 
-    /** Bir orijinal faturanın tüm credit note'larını döner. */
+    /** Returns all credit notes of an original invoice. */
     @Query("SELECT i FROM Invoice i WHERE i.creditedInvoice.id = :originalId ORDER BY i.createdAt DESC")
     List<Invoice> findByCreditedInvoiceId(@Param("originalId") Long originalInvoiceId);
 }

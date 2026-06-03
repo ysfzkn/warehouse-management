@@ -14,12 +14,12 @@ public interface CustomerAuthService {
     void resetPassword(String token, String newPassword);
 
     /**
-     * Misafir checkout sonrası oluşturulan hesabı tamamlar:
-     * - Şifre oluşturur
-     * - E-postayı doğrulanmış olarak işaretler
-     * - Kullanıcıyı login yapar (JWT döner)
+     * Completes the account created after guest checkout:
+     * - Sets a password
+     * - Marks the email as verified
+     * - Logs the user in (returns a JWT)
      *
-     * Token 7 gün geçerlidir.
+     * The token is valid for 7 days.
      */
     CustomerLoginResponse completeGuestAccount(String token, String newPassword, String ipAddress);
 }

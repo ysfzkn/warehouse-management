@@ -52,14 +52,14 @@ public class StoreCartController {
     }
 
     /**
-     * Sepeti tamamen boşaltır (tüm ürünleri kaldırır).
+     * Empties the cart completely (removes all items).
      */
     @DeleteMapping
     public ResponseEntity<CartDto> clearCart(HttpServletRequest request) {
         Long customerId = CustomerTokenExtractor.extractCustomerId(request, jwtService);
         String sessionId = request.getHeader("X-Session-Id");
         cartService.clearCart(customerId, sessionId);
-        // Temizlendikten sonra güncel (boş) cart state'i döndür
+        // After clearing, return the current (empty) cart state
         return ResponseEntity.ok(cartService.getCart(customerId, sessionId));
     }
 

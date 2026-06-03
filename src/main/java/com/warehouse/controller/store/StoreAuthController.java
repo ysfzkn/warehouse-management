@@ -32,7 +32,7 @@ public class StoreAuthController {
     public ResponseEntity<?> register(@Valid @RequestBody CustomerRegisterRequest request,
                                        @RequestHeader(value = "X-Captcha-Token", required = false) String captchaToken,
                                        HttpServletRequest httpRequest) {
-        // CAPTCHA (env'den feature flag; default off)
+        // CAPTCHA (feature flag from env; default off)
         if (!captchaService.verify(captchaToken, httpRequest.getRemoteAddr())) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(Map.of("message", "CAPTCHA doğrulaması başarısız. Lütfen tekrar deneyin."));
@@ -85,8 +85,8 @@ public class StoreAuthController {
     }
 
     /**
-     * Misafir checkout sonrası oluşturulan hesabı tamamlar.
-     * Şifreyi belirler, e-postayı doğrular ve otomatik login yapar.
+     * Completes the account created after a guest checkout.
+     * Sets the password, verifies the email, and logs the user in automatically.
      */
     @PostMapping("/complete-account")
     public ResponseEntity<CustomerLoginResponse> completeAccount(@RequestBody Map<String, String> body,

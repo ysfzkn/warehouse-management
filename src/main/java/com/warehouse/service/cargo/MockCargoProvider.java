@@ -14,9 +14,9 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Mock kargo sağlayıcısı. Geliştirme ve test için.
- * Gerçek API çağrısı yapmaz, rastgele takip numarası üretir ve
- * etiket indirmek istenirse basit bir test PDF'i döner.
+ * Mock cargo provider. For development and testing.
+ * Makes no real API calls, generates a random tracking number, and
+ * returns a simple test PDF if a label download is requested.
  */
 @Component
 public class MockCargoProvider implements CargoApiProvider {
@@ -107,8 +107,8 @@ public class MockCargoProvider implements CargoApiProvider {
     }
 
     /**
-     * MOCK için geçerli bir test etiketi PDF'i üretir (gerçek kargo firması
-     * etiketi değil, sadece "akışın UI'da çalıştığını" doğrulamaya yarar).
+     * Produces a valid test label PDF for MOCK (not a real carrier label,
+     * only useful to verify "the flow works in the UI").
      */
     public byte[] downloadLabelPdf(String providerShipmentId) {
         logger.info("[MOCK CARGO] Etiket PDF isteği: {}", providerShipmentId);
@@ -165,7 +165,7 @@ public class MockCargoProvider implements CargoApiProvider {
                     .format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")));
         }
 
-        // Alt uyari
+        // Footer warning
         pdf.line(50, 40, "— MOCK KARGO — Gercek gonderi icin Kargonomi saglayicisina gecin —", 8);
 
         return pdf.build();

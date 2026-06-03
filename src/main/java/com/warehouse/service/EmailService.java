@@ -8,32 +8,32 @@ public interface EmailService {
     void sendPasswordResetConfirmation(String toEmail, String firstName);
 
     /**
-     * Misafir sipariş sonrası müşteriye "hesabını tamamla" e-postası gönderir.
-     * Müşteri linke tıklayarak şifresini oluşturabilir ve hesabını aktive edebilir.
+     * Sends a "complete your account" e-mail to the customer after a guest order.
+     * By clicking the link the customer can set a password and activate their account.
      */
     void sendCompleteAccountSetup(String toEmail, String firstName, String orderNumber, String setupToken);
 
     /**
-     * Stoğu biten bir ürün tekrar stoğa girdiğinde bildirim e-postası gönderir.
+     * Sends a notification e-mail when an out-of-stock product is back in stock.
      *
-     * @param toEmail       alıcı e-posta
-     * @param productName   ürün adı
-     * @param productUrl    ürün detay sayfasının tam URL'i
-     * @param productImage  ürün görsel URL'i (opsiyonel)
-     * @param price         fiyat (formatlanmış, örn: "1.299,00 ₺")
+     * @param toEmail       recipient e-mail
+     * @param productName   product name
+     * @param productUrl    full URL of the product detail page
+     * @param productImage  product image URL (optional)
+     * @param price         price (formatted, e.g. "1.299,00 ₺")
      */
     void sendBackInStockNotification(String toEmail, String productName, String productUrl,
                                       String productImage, String price);
 
     /**
-     * Terk edilmiş sepet hatırlatma e-postası gönderir.
-     * Sepetteki ürünleri ve doğrudan sepet linkini içerir.
+     * Sends an abandoned cart reminder e-mail.
+     * Includes the cart items and a direct cart link.
      *
-     * @param toEmail     alıcı e-posta
-     * @param firstName   müşteri adı
-     * @param itemCount   sepetteki ürün sayısı
-     * @param itemsHtml   sepet ürünlerinin HTML özeti (ad, görsel, fiyat)
-     * @param cartTotal   sepet toplam tutarı (formatlanmış string)
+     * @param toEmail     recipient e-mail
+     * @param firstName   customer name
+     * @param itemCount   number of items in the cart
+     * @param itemsHtml   HTML summary of the cart items (name, image, price)
+     * @param cartTotal   cart total amount (formatted string)
      */
     void sendAbandonedCartReminder(String toEmail, String firstName, int itemCount, String itemsHtml, String cartTotal);
 
@@ -52,15 +52,15 @@ public interface EmailService {
                                    String phone, String subject, String message);
 
     /**
-     * Sipariş için e-Fatura GİB tarafından onaylandığında müşteriye bildirim mail'i.
-     * İçerik: fatura numarası, tutar, sipariş numarası, "Hesabımdan İndir" CTA.
+     * Notification mail to the customer when the order's e-Fatura is approved by GİB.
+     * Contents: invoice number, amount, order number, "Download from My Account" CTA.
      */
     void sendInvoiceReady(String toEmail, String firstName, String orderNumber,
                           String invoiceNumber, String invoiceType, String totalFormatted);
 
     /**
-     * Admin'e günlük e-Fatura durum özeti: ERROR/REJECTED ve 24h+ PENDING faturalar.
-     * Hiç sorun yoksa gönderilmez (zero-noise digest).
+     * Daily e-Fatura status digest to the admin: ERROR/REJECTED and 24h+ PENDING invoices.
+     * Not sent if there are no issues (zero-noise digest).
      */
     void sendAdminInvoiceDigest(String toEmail, java.util.List<java.util.Map<String,Object>> errorRows,
                                 java.util.List<java.util.Map<String,Object>> stuckPendingRows);

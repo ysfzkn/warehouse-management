@@ -4,12 +4,12 @@ import { useAdminToast } from '../components/AdminToast';
 import ConfirmModal from '../components/ConfirmModal';
 
 /**
- * Admin: Ürün yorumları moderasyon paneli.
+ * Admin: product review moderation panel.
  *
- * - Onay bekleyen yorumlar varsayılan filtre
- * - Onayla / Sil aksiyonları
- * - Filtre: tüm / onaylı / bekleyen
- * - Sayfalama
+ * - Pending reviews are the default filter
+ * - Approve / Delete actions
+ * - Filter: all / approved / pending
+ * - Pagination
  */
 export default function AdminReviews() {
   const toast = useAdminToast();

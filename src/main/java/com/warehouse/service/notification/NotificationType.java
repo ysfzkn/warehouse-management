@@ -1,20 +1,20 @@
 package com.warehouse.service.notification;
 
 /**
- * Gönderilebilir bildirim tipleri.
- * Her tip için kullanıcı tercih (enabled/disabled) tutabilir.
+ * Notification types that can be sent.
+ * The user can keep a preference (enabled/disabled) for each type.
  */
 public enum NotificationType {
-    /** Sipariş oluşturuldu / onaylandı */
+    /** Order created / confirmed */
     ORDER_CONFIRMED,
-    /** Sipariş durumu değişti (hazırlanıyor, kargolandı, teslim edildi) */
+    /** Order status changed (preparing, shipped, delivered) */
     ORDER_STATUS_CHANGE,
-    /** Kargo tracking numarası eklendi */
+    /** Cargo tracking number added */
     CARGO_SHIPPED,
-    /** Teslim edildi */
+    /** Delivered */
     ORDER_DELIVERED,
-    /** Ödeme alındı */
+    /** Payment received */
     PAYMENT_RECEIVED,
-    /** Pazarlama / kampanya */
+    /** Marketing / campaign */
     MARKETING
 }

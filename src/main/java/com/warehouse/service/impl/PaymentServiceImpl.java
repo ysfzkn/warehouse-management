@@ -118,9 +118,19 @@ public class PaymentServiceImpl implements PaymentService {
         try {
             result = gateway.initializePayment(request);
         } catch (Exception e) {
+            // Gateway exception (network, NPE, etc.) → tx FAILED + order CANCELLED + stock release
             tx.setStatus(PaymentStatus.FAILED);
             tx.setErrorMessage(e.getMessage());
             paymentRepo.save(tx);
+            try { releaseOrderStock(order); }
+            catch (Exception se) { logger.warn("Stock release failed: {}", se.getMessage()); }
+            OrderStatus oldStatus = order.getStatus();
+            order.setStatus(OrderStatus.CANCELLED);
+            orderRepo.save(order);
+            logStatusChange(order, oldStatus != null ? oldStatus.name() : "PENDING_PAYMENT",
+                    OrderStatus.CANCELLED.name(), "system",
+                    "Ödeme gateway exception: " + e.getMessage());
+            logger.error("Payment gateway exception for orderId={}: {}", orderId, e.getMessage(), e);
             throw new WarehouseManagementException(ErrorCode.PAYMENT_INIT_FAILED, e.getMessage());
         }
 
@@ -135,11 +145,11 @@ public class PaymentServiceImpl implements PaymentService {
                 case PAYTR:
                 case NESTPAY:
                 case GVP:
-                    // Direct bank POS / PayTR iframe — kart girişi gateway tarafında,
-                    // server-to-server callback (notify_url) ile sonuç gelir.
-                    // PayTR retry: 1dk aralıklarla 24 saat boyunca "OK" alana kadar.
+                    // Direct bank POS / PayTR iframe — card entry happens on the gateway side,
+                    // the result arrives via a server-to-server callback (notify_url).
+                    // PayTR retry: every 1 minute for 24 hours until it receives "OK".
                     tx.setStatus(PaymentStatus.PROCESSING);
-                    // result.getToken() — VirtualPosGateway tarafından transactionId (=merchant_oid=orderNumber) olarak set edilir
+                    // result.getToken() — set by VirtualPosGateway as the transactionId (=merchant_oid=orderNumber)
                     tx.setToken(result.getToken());
                     tx.setExpiresAt(LocalDateTime.now().plusMinutes(30)); // PayTR iframe timeout default
                     break;
@@ -154,7 +164,7 @@ public class PaymentServiceImpl implements PaymentService {
                     catch (Exception e) { logger.warn("Cart clear failed: {}", e.getMessage()); }
                     break;
                 case DOOR_PAYMENT:
-                    // Kapıda ödeme: ödeme henüz alınmadı, sipariş hazırlanmaya başlar
+                    // Cash on delivery: payment not collected yet, the order starts being prepared
                     tx.setStatus(PaymentStatus.INITIATED);
                     order.setStatus(OrderStatus.PREPARING);
                     orderRepo.save(order);
@@ -168,9 +178,26 @@ public class PaymentServiceImpl implements PaymentService {
                     break;
             }
         } else {
+            // Gateway init fail (missing config, network error, card decline, etc.)
+            // → move the order to CANCELLED and release the stock reservation. Otherwise,
+            // when the user retries, an orphan order + stock lock is left behind.
             tx.setStatus(PaymentStatus.FAILED);
             tx.setErrorCode(result.getErrorCode());
             tx.setErrorMessage(result.getErrorMessage());
+
+            try {
+                releaseOrderStock(order);
+            } catch (Exception e) {
+                logger.warn("Stock release failed for order {} during init failure: {}", orderId, e.getMessage());
+            }
+            OrderStatus oldStatus = order.getStatus();
+            order.setStatus(OrderStatus.CANCELLED);
+            orderRepo.save(order);
+            logStatusChange(order, oldStatus != null ? oldStatus.name() : "PENDING_PAYMENT",
+                    OrderStatus.CANCELLED.name(), "system",
+                    "Ödeme başlatılamadı: " + (result.getErrorMessage() != null ? result.getErrorMessage() : "bilinmeyen hata"));
+            logger.warn("Payment init failed: orderId={}, txId={}, provider={}, error={}",
+                    orderId, tx.getId(), provider, result.getErrorMessage());
         }
 
         if (result.getRawResponse() != null) {
@@ -181,7 +208,22 @@ public class PaymentServiceImpl implements PaymentService {
         logger.info("Payment initialized: orderId={}, provider={}, status={}, txId={}",
             orderId, provider, tx.getStatus(), tx.getId());
 
+        // Add provider info so the frontend can render the UI per brand
+        result.setProviderName(provider.name());
+        result.setProviderDisplayName(providerDisplayName(provider));
         return result;
+    }
+
+    /** Provider enum → user-visible name. */
+    private String providerDisplayName(PaymentProvider provider) {
+        return switch (provider) {
+            case IYZICO -> "iyzico";
+            case PAYTR -> "PayTR";
+            case NESTPAY -> "NestPay";
+            case GVP -> "Garanti Sanal POS";
+            case BANK_TRANSFER -> "Havale / EFT";
+            case DOOR_PAYMENT -> "Kapıda Ödeme";
+        };
     }
 
     @Override
@@ -195,11 +237,11 @@ public class PaymentServiceImpl implements PaymentService {
         PaymentTransaction tx = paymentRepo.findByToken(token)
             .orElseThrow(() -> new WarehouseManagementException(ErrorCode.PAYMENT_NOT_FOUND, "Token: " + token));
 
-        // ── Idempotency koruması (PayTR her dakika retry yapar "OK" alana kadar) ──
-        // SUCCESS olmuş bir tx'e tekrar callback gelirse:
-        //   - PAID order tekrar PAID set'lenmesin (audit log şişer)
-        //   - OrderPaidEvent tekrar publish edilmesin (çift fatura/email/stok hareketi)
-        //   - Müşteriye tekrar onay maili gitmesin
+        // ── Idempotency protection (PayTR retries every minute until it receives "OK") ──
+        // If a callback arrives again for a tx that has already SUCCEEDED:
+        //   - A PAID order should not be set to PAID again (bloats the audit log)
+        //   - OrderPaidEvent should not be published again (duplicate invoice/email/stock movement)
+        //   - The customer should not receive another confirmation email
         if (tx.getStatus() == PaymentStatus.SUCCESS) {
             logger.info("Idempotent callback hit (already SUCCESS): txId={}, token={}", tx.getId(), token);
             return PaymentCallbackResult.builder()
@@ -228,7 +270,7 @@ public class PaymentServiceImpl implements PaymentService {
 
         Order order = tx.getOrder();
 
-        // Provider adı dinamik — log + event için (önceden hardcoded "iyzico" idi)
+        // Dynamic provider name — for logs + events (was previously hardcoded "iyzico")
         final String providerName = tx.getPaymentProvider() != null
                 ? tx.getPaymentProvider().name().toLowerCase()
                 : "unknown";
@@ -281,14 +323,14 @@ public class PaymentServiceImpl implements PaymentService {
             logger.info("Payment successful: txId={}, orderId={}, provider={}",
                     tx.getId(), order.getId(), providerName);
 
-            // OrderPaid event yayınla — fatura otomatik kesimi (async, AFTER_COMMIT)
-            // ve diğer abonelerin (notification, kargo vb.) tetiklenmesi için.
-            // Sync invoice çağrısı transaction'ı blokluyordu; event-driven mimari
-            // ile checkout response time'ı düşer + fail-soft davranır.
+            // Publish the OrderPaid event — for automatic invoice issuance (async, AFTER_COMMIT)
+            // and to trigger the other subscribers (notification, shipment, etc.).
+            // The synchronous invoice call was blocking the transaction; with an event-driven
+            // architecture, the checkout response time drops + behaves fail-soft.
             eventPublisher.publishEvent(new com.warehouse.event.OrderPaidEvent(
                     this, order.getId(), order.getOrderNumber(), providerName));
 
-            // Send order confirmation notification (email + SMS) — sync (kritik bildirim)
+            // Send order confirmation notification (email + SMS) — sync (critical notification)
             try {
                 notificationDispatchService.notifyOrderConfirmed(order.getCustomer(), order.getOrderNumber());
             } catch (Exception e) {
@@ -326,46 +368,143 @@ public class PaymentServiceImpl implements PaymentService {
         return result;
     }
 
-    @Override
-    public void confirmBankTransfer(Long orderId, String confirmedBy) {
-        Order order = orderRepo.findById(orderId)
-            .orElseThrow(() -> new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Sipariş bulunamadı."));
+    /** Allowed amount tolerance for bank transfer confirmation (to account for bank swift fee differences). */
+    private static final BigDecimal BANK_TRANSFER_AMOUNT_TOLERANCE = new BigDecimal("1.00");
 
-        if (order.getStatus() != OrderStatus.PENDING_PAYMENT || !PaymentProvider.BANK_TRANSFER.name().equals(order.getPaymentMethod())) {
+    @Override
+    @org.springframework.transaction.annotation.Transactional
+    public void confirmBankTransfer(Long orderId, BigDecimal paidAmount,
+                                     LocalDateTime paidAt, String confirmedBy,
+                                     String receiptNote) {
+        // Validations — null/sane checks
+        if (orderId == null) throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Sipariş ID boş.");
+        if (paidAmount == null || paidAmount.compareTo(BigDecimal.ZERO) <= 0) {
             throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
-                "Bu sipariş havale onayına uygun değil.");
+                    "Yatırılan tutar zorunlu ve > 0 olmalı.");
+        }
+        if (paidAt == null) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                    "Bankadaki gerçek ödeme tarihi (paidAt) zorunlu — ekstreden okuyun.");
+        }
+        if (paidAt.isAfter(LocalDateTime.now().plusMinutes(5))) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                    "Ödeme tarihi gelecekte olamaz.");
+        }
+        if (confirmedBy == null || confirmedBy.isBlank()) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Admin kullanıcı bilgisi eksik.");
+        }
+
+        // PESSIMISTIC LOCK — prevent a race with double-confirm and the expiry job
+        Order order = orderRepo.findByIdForUpdate(orderId)
+                .orElseThrow(() -> new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Sipariş bulunamadı."));
+
+        // Idempotency — if already PAID, silently skip (admin double-click)
+        if (order.getStatus() == OrderStatus.PAID) {
+            logger.info("Bank transfer confirm idempotent skip: orderId={} already PAID by previous request", orderId);
+            return;
+        }
+
+        if (order.getStatus() != OrderStatus.PENDING_PAYMENT
+                || !PaymentProvider.BANK_TRANSFER.name().equals(order.getPaymentMethod())) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                "Bu sipariş havale onayına uygun değil. Mevcut durum: " + order.getStatus());
         }
 
         PaymentTransaction tx = paymentRepo.findByOrderIdAndStatus(orderId, PaymentStatus.INITIATED)
-            .orElseThrow(() -> new WarehouseManagementException(ErrorCode.PAYMENT_NOT_FOUND));
+            .orElseThrow(() -> new WarehouseManagementException(ErrorCode.PAYMENT_NOT_FOUND,
+                    "Onaylanacak INITIATED durumda bir havale işlemi yok."));
 
-        // Check deadline — warn but allow admin to override
+        // AMOUNT VERIFICATION — block if the wrong amount was deposited
+        BigDecimal expected = order.getGrandTotal();
+        BigDecimal diff = paidAmount.subtract(expected).abs();
+        if (diff.compareTo(BANK_TRANSFER_AMOUNT_TOLERANCE) > 0) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, String.format(
+                    "Yatırılan tutar (%s TL) sipariş tutarıyla (%s TL) uyuşmuyor (fark: %s TL, tolerans: %s TL). " +
+                    "Tutar farklıysa: müşteriden eksik kısmı isteyin veya iade edip 'Havale Reddet' kullanın.",
+                    paidAmount, expected, diff, BANK_TRANSFER_AMOUNT_TOLERANCE));
+        }
+
+        // If the deadline is exceeded, warn but do not block — the admin is making a deliberate decision
         if (tx.getExpiresAt() != null && tx.getExpiresAt().isBefore(LocalDateTime.now())) {
-            logger.warn("Bank transfer confirmed AFTER deadline: orderId={}, deadline={}, by={}", orderId, tx.getExpiresAt(), confirmedBy);
+            logger.warn("Bank transfer confirmed AFTER deadline: orderId={}, deadline={}, paidAt={}, by={}",
+                    orderId, tx.getExpiresAt(), paidAt, confirmedBy);
         }
 
         tx.setStatus(PaymentStatus.SUCCESS);
-        tx.setPaidAt(LocalDateTime.now());
-        tx.setPaidAmount(order.getGrandTotal());
+        tx.setPaidAt(paidAt);         // Actual date from the bank (from the statement)
+        tx.setPaidAmount(paidAmount); // Actual amount from the bank
         paymentRepo.save(tx);
 
         order.setStatus(OrderStatus.PAID);
         orderRepo.save(order);
-        logStatusChange(order, OrderStatus.PENDING_PAYMENT.name(), OrderStatus.PAID.name(), confirmedBy, "Havale/EFT onayı");
 
-        logger.info("Bank transfer confirmed: orderId={}, by={}", orderId, confirmedBy);
+        String note = "Havale/EFT onayı — paidAmount=" + paidAmount + " TL, paidAt=" + paidAt
+                + (receiptNote != null && !receiptNote.isBlank() ? ", not: " + receiptNote : "");
+        logStatusChange(order, OrderStatus.PENDING_PAYMENT.name(), OrderStatus.PAID.name(), confirmedBy, note);
 
-        // OrderPaid event — fatura otomatik kesimi (async)
+        logger.info("Bank transfer confirmed: orderId={}, amount={}, by={}", orderId, paidAmount, confirmedBy);
+
+        // OrderPaid event — automatic invoice issuance (async)
         eventPublisher.publishEvent(new com.warehouse.event.OrderPaidEvent(
                 this, order.getId(), order.getOrderNumber(), "bank_transfer:" + confirmedBy));
 
-        // Send payment received + order confirmed notifications
         try {
             notificationDispatchService.notifyPaymentReceived(order.getCustomer(), order.getOrderNumber());
             notificationDispatchService.notifyOrderConfirmed(order.getCustomer(), order.getOrderNumber());
         } catch (Exception e) {
             logger.warn("Havale onay bildirimi gönderilemedi (sipariş {}): {}", order.getOrderNumber(), e.getMessage());
         }
+    }
+
+    @Override
+    @org.springframework.transaction.annotation.Transactional
+    public void rejectBankTransfer(Long orderId, String reason, String rejectedBy) {
+        if (orderId == null) throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Sipariş ID boş.");
+        if (reason == null || reason.isBlank()) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                    "Red sebebi zorunlu (audit ve müşteri bildirimi için).");
+        }
+        if (rejectedBy == null || rejectedBy.isBlank()) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Admin kullanıcı bilgisi eksik.");
+        }
+
+        Order order = orderRepo.findByIdForUpdate(orderId)
+                .orElseThrow(() -> new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Sipariş bulunamadı."));
+
+        if (order.getStatus() == OrderStatus.CANCELLED) {
+            logger.info("Bank transfer reject idempotent skip: orderId={} already CANCELLED", orderId);
+            return;
+        }
+        if (order.getStatus() != OrderStatus.PENDING_PAYMENT
+                || !PaymentProvider.BANK_TRANSFER.name().equals(order.getPaymentMethod())) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                    "Bu sipariş havale reddine uygun değil. Mevcut durum: " + order.getStatus());
+        }
+
+        // If there is an INITIATED tx, move it to FAILED
+        paymentRepo.findByOrderIdAndStatus(orderId, PaymentStatus.INITIATED).ifPresent(tx -> {
+            tx.setStatus(PaymentStatus.FAILED);
+            tx.setErrorMessage("Havale reddedildi: " + reason);
+            paymentRepo.save(tx);
+        });
+
+        // Release the stock reservation
+        try { releaseOrderStock(order); }
+        catch (Exception e) { logger.warn("Stock release failed: {}", e.getMessage()); }
+
+        OrderStatus oldStatus = order.getStatus();
+        order.setStatus(OrderStatus.CANCELLED);
+        orderRepo.save(order);
+        logStatusChange(order, oldStatus.name(), OrderStatus.CANCELLED.name(), rejectedBy,
+                "Havale reddi: " + reason);
+
+        logger.info("Bank transfer rejected: orderId={}, reason='{}', by={}", orderId, reason, rejectedBy);
+
+        // TODO: NotificationDispatchService.notifyOrderCancelled(...) should be added.
+        // For now the admin sends the cancellation email manually; the reason is stored
+        // in the order_status_history.note column in the DB and can be reported on.
+        logger.info("Customer email pending: order {} cancelled with reason '{}' — admin manual follow-up gerekirse",
+                order.getOrderNumber(), reason);
     }
 
     @Override
@@ -461,7 +600,18 @@ public class PaymentServiceImpl implements PaymentService {
         }
     }
 
+    /**
+     * Resolve the active card payment provider. Order:
+     *   1. The first active gateway with {@code defaultGateway=true}
+     *   2. If none is marked default, the first active gateway with the lowest priority
+     *   3. If there is no active gateway → fail-fast ("payment system not configured" to the user)
+     *
+     * The old behavior fell back to a hardcoded IYZICO — if the admin only enabled
+     * PayTR and forgot to mark it as default, Iyzico was called and an
+     * "Empty key" error was thrown.
+     */
     private PaymentProvider resolveDefaultCardProvider() {
+        // 1. First, the default-marked active gateway
         var defaultConfig = gatewayConfigRepo.findFirstByActiveTrueAndDefaultGatewayTrueOrderByPriorityAsc();
         if (defaultConfig.isPresent()) {
             try {
@@ -470,7 +620,22 @@ public class PaymentServiceImpl implements PaymentService {
                 logger.warn("Invalid gateway protocol in config: {}", defaultConfig.get().getGatewayProtocol());
             }
         }
-        return PaymentProvider.IYZICO; // Fallback
+        // 2. No default marked → first active gateway (priority asc)
+        var anyActive = gatewayConfigRepo.findByActiveTrueOrderByPriorityAsc();
+        if (!anyActive.isEmpty()) {
+            var gw = anyActive.get(0);
+            try {
+                logger.info("Hiçbir default gateway işaretlenmemiş; ilk active gateway kullanılıyor: code={}, protocol={}",
+                        gw.getCode(), gw.getGatewayProtocol());
+                return PaymentProvider.valueOf(gw.getGatewayProtocol());
+            } catch (IllegalArgumentException e) {
+                logger.warn("Invalid gateway protocol in config: {}", gw.getGatewayProtocol());
+            }
+        }
+        // 3. No active gateway at all → fail-fast
+        throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                "Aktif bir kart ödeme sistemi yapılandırılmamış. Lütfen admin panelinden "
+                        + "bir ödeme sağlayıcı (PayTR, Iyzico, NestPay vb.) aktive edin.");
     }
 
     private PaymentInitRequest buildInitRequest(Order order, int installmentCount, String ipAddress) {

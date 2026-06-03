@@ -5,13 +5,13 @@ import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
 /**
- * Misafir (üye olmayan) müşteriler için sipariş oluşturma isteği.
- * Adres bilgileri saved address ID yerine inline olarak gönderilir.
+ * Order creation request for guest (non-member) customers.
+ * Address details are sent inline instead of as a saved address ID.
  */
 @Data
 public class GuestPlaceOrderRequest {
 
-    // --- Misafir iletişim bilgileri ---
+    // --- Guest contact info ---
 
     @NotBlank(message = "E-posta zorunludur")
     @Email(message = "Geçerli bir e-posta adresi giriniz")
@@ -26,7 +26,7 @@ public class GuestPlaceOrderRequest {
     @NotBlank(message = "Telefon zorunludur")
     private String phone;
 
-    // --- Teslimat adresi (inline) ---
+    // --- Shipping address (inline) ---
 
     @NotBlank(message = "Teslimat adresi zorunludur")
     private String shippingAddressLine;
@@ -39,17 +39,17 @@ public class GuestPlaceOrderRequest {
 
     private String shippingPostalCode;
 
-    // --- Fatura adresi (opsiyonel; boşsa teslimat adresi kullanılır) ---
+    // --- Billing address (optional; if empty, the shipping address is used) ---
 
     private String billingAddressLine;
     private String billingCity;
     private String billingDistrict;
     private String billingPostalCode;
 
-    /** Fatura adresi teslimat adresiyle aynı mı? */
+    /** Is the billing address the same as the shipping address? */
     private boolean billingSameAsShipping = true;
 
-    // --- Kargo ve ödeme ---
+    // --- Shipment and payment ---
 
     private String cargoCompany;
     private Long cargoProviderId;
@@ -59,7 +59,7 @@ public class GuestPlaceOrderRequest {
 
     private String customerNote;
 
-    // --- Sözleşmeler (Türkiye 6502 sayılı kanun + KVKK 6698 gereği) ---
+    // --- Contracts (required by Turkish Law No. 6502 + KVKK 6698) ---
 
     private boolean distanceSalesContractAccepted;
     private java.time.LocalDateTime distanceSalesContractAcceptedAt;
@@ -68,6 +68,6 @@ public class GuestPlaceOrderRequest {
     private boolean kvkkConsent;
     private java.time.LocalDateTime kvkkConsentAt;
 
-    /** Misafir sepeti ile bağlantı için (localStorage'daki session ID) */
+    /** For linking to the guest cart (the session ID in localStorage) */
     private String sessionId;
 }

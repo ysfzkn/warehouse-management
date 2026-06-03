@@ -18,16 +18,16 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * Host header validation: production'da admin endpoint'lerinin sadece
- * yapılandırılmış admin subdomain'inden (wms.* / admin.*) çağrılmasını sağlar.
+ * Host header validation: in production, ensures admin endpoints are only
+ * called from the configured admin subdomain (wms.* / admin.*).
  *
- * <p>Saldırı senaryosu: saldırgan store domain'inin XSS açığını kullanıp
- * <code>fetch('/api/admin/users')</code> derse → bu filter Host header'ını
- * kontrol eder; store subdomain'inden gelen admin isteği 403 ile reddedilir.</p>
+ * <p>Attack scenario: if an attacker uses an XSS hole on the store domain and
+ * calls <code>fetch('/api/admin/users')</code> → this filter checks the Host
+ * header; an admin request coming from a store subdomain is rejected with 403.</p>
  *
- * <p>Yapılandırma {@code app.hosts.admin} ve {@code app.hosts.store} property'leri
- * ile veya {@code APP_HOSTS_ADMIN} env değişkeniyle. Dev profile'inde
- * (host'lar boşsa) tamamen pas geçer.</p>
+ * <p>Configured via the {@code app.hosts.admin} and {@code app.hosts.store}
+ * properties or the {@code APP_HOSTS_ADMIN} env variable. In the dev profile
+ * (when hosts are empty) it is bypassed entirely.</p>
  */
 @Component
 public class HostValidationFilter extends OncePerRequestFilter {
@@ -44,7 +44,7 @@ public class HostValidationFilter extends OncePerRequestFilter {
             Environment env) {
         this.allowedAdminHosts = parse(adminHostsCsv);
         this.allowedStoreHosts = parse(storeHostsCsv);
-        // Production'da hostlar tanımlıysa enable. Aksi halde no-op (dev/test rahat çalışır).
+        // Enable in production if hosts are defined. Otherwise no-op (dev/test runs freely).
         boolean isProd = Arrays.asList(env.getActiveProfiles()).contains("prod");
         this.enabled = isProd && !allowedAdminHosts.isEmpty();
         log.info("HostValidationFilter: enabled={}, adminHosts={}, storeHosts={}",
@@ -88,7 +88,7 @@ public class HostValidationFilter extends OncePerRequestFilter {
         return patterns.stream().anyMatch(p -> matchesPattern(lower, p));
     }
 
-    /** Wildcard "*.example.com" + exact match destekler. */
+    /** Supports wildcard "*.example.com" + exact match. */
     private boolean matchesPattern(String host, String pattern) {
         if (pattern.startsWith("*.")) {
             String suffix = pattern.substring(1); // ".example.com"

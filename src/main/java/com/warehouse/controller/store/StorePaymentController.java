@@ -31,6 +31,8 @@ public class StorePaymentController {
     private final BankPosProtocolFactory protocolFactory;
     private final com.warehouse.service.SiteSettingService siteSettingService;
     private final com.warehouse.service.PaymentConfigService paymentConfigService;
+    private final com.warehouse.repository.OrderRepository orderRepository;
+    private final com.warehouse.repository.PaymentTransactionRepository paymentRepository;
 
     @org.springframework.beans.factory.annotation.Value("${app.base-url:http://localhost:3000}")
     private String appBaseUrl;
@@ -39,18 +41,28 @@ public class StorePaymentController {
                                    PaymentGatewayConfigRepository gatewayConfigRepo,
                                    BankPosProtocolFactory protocolFactory,
                                    com.warehouse.service.SiteSettingService siteSettingService,
-                                   com.warehouse.service.PaymentConfigService paymentConfigService) {
+                                   com.warehouse.service.PaymentConfigService paymentConfigService,
+                                   com.warehouse.repository.OrderRepository orderRepository,
+                                   com.warehouse.repository.PaymentTransactionRepository paymentRepository) {
         this.paymentService = paymentService;
         this.jwtService = jwtService;
         this.gatewayConfigRepo = gatewayConfigRepo;
         this.protocolFactory = protocolFactory;
         this.siteSettingService = siteSettingService;
         this.paymentConfigService = paymentConfigService;
+        this.orderRepository = orderRepository;
+        this.paymentRepository = paymentRepository;
     }
 
     @PostMapping("/initialize")
     public ResponseEntity<?> initializePayment(@RequestBody Map<String, Object> body,
                                                                 HttpServletRequest request) {
+        // Test mode gate — defense-in-depth (checkout also has this check, but
+        // this is a second layer for direct payment init calls).
+        if (!siteSettingService.getBoolSetting("store_purchasing_enabled", true)) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                "Mağaza şu anda test modundadır. Ödeme alımı geçici olarak kapalıdır."));
+        }
         if (body.get("orderId") == null) {
             return ResponseEntity.badRequest().body(Map.of("message", "orderId zorunludur."));
         }
@@ -171,10 +183,10 @@ public class StorePaymentController {
         // Process the payment callback
         Map<String, String> enrichedParams = new HashMap<>(params);
         enrichedParams.put("_configCode", configCode);
-        // KRİTİK: PayTR callback'inde "token" parametresi YOK — sadece "merchant_oid".
-        // PaymentServiceImpl.handlePaymentCallback() tx'i token alanından bulur ve
-        // initializePayment sırasında tx.token = orderNumber (= merchant_oid) olarak set edilmişti.
-        // Burada manuel mapping ile boşluğu kapatıyoruz.
+        // CRITICAL: The PayTR callback has NO "token" parameter — only "merchant_oid".
+        // PaymentServiceImpl.handlePaymentCallback() finds the tx by the token field, and
+        // during initializePayment tx.token was set to orderNumber (= merchant_oid).
+        // Here we close the gap with a manual mapping.
         if (!enrichedParams.containsKey("token") && enrichedParams.containsKey("merchant_oid")) {
             enrichedParams.put("token", enrichedParams.get("merchant_oid"));
         }
@@ -182,13 +194,13 @@ public class StorePaymentController {
         try {
             paymentService.handlePaymentCallback(enrichedParams);
         } catch (Exception e) {
-            // ÖNEMLİ: Hata olsa bile PayTR'a "OK" dönerin; aksi halde dakikada 1 retry yapar.
-            // Hata loglanır + InvoiceAdminDigestJob benzeri mekanizma yakalar.
+            // IMPORTANT: Return "OK" to PayTR even on error; otherwise it retries once a minute.
+            // The error is logged and caught by a mechanism similar to InvoiceAdminDigestJob.
             log.error("PayTR callback processing error (merchant_oid={}): {}",
                     params.get("merchant_oid"), e.getMessage(), e);
         }
 
-        // PayTR requires plain text "OK" response — retry'ları durdurmak için
+        // PayTR requires plain text "OK" response — to stop the retries
         return ResponseEntity.ok("OK");
     }
 
@@ -279,6 +291,84 @@ public class StorePaymentController {
         } catch (Exception e) {
             return ResponseEntity.ok(Map.of("status", "ERROR", "errorMessage", e.getMessage()));
         }
+    }
+
+    /**
+     * Retrieves the payment details of a pending bank transfer order.
+     * If the customer leaves checkout and later clicks "My Orders → Continue
+     * to Payment", they see the IBAN + reference + amount + (if any) QR again.
+     *
+     * Checks:
+     *   - The order must belong to this customer (auth required)
+     *   - Status must be PENDING_PAYMENT (404 for PAID/CANCELLED)
+     *   - paymentMethod must be BANK_TRANSFER
+     *   - The tx must be in INITIATED status
+     */
+    @GetMapping("/bank-transfer-details/{orderId}")
+    public ResponseEntity<Map<String, Object>> getBankTransferDetails(
+            @PathVariable Long orderId,
+            jakarta.servlet.http.HttpServletRequest request) {
+
+        // Auth — customerId from the JWT
+        String authHeader = request.getHeader("Authorization");
+        Long customerId = null;
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            try {
+                customerId = jwtService.extractCustomerId(authHeader.substring(7));
+            } catch (Exception ignored) {}
+        }
+        if (customerId == null) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("message", "Giriş yapmanız gerekiyor."));
+        }
+
+        com.warehouse.entity.Order order = orderRepository.findById(orderId).orElse(null);
+        if (order == null || order.getCustomer() == null
+                || !customerId.equals(order.getCustomer().getId())) {
+            // Nonexistent order or one belonging to another customer — don't leak info, 404
+            return ResponseEntity.status(org.springframework.http.HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Sipariş bulunamadı."));
+        }
+
+        if (order.getStatus() != com.warehouse.enums.OrderStatus.PENDING_PAYMENT) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Bu sipariş artık ödeme bekleme durumunda değil.",
+                    "currentStatus", order.getStatus().name()));
+        }
+        if (!"BANK_TRANSFER".equalsIgnoreCase(order.getPaymentMethod())) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Bu sipariş havale ile ödenmiyor.",
+                    "paymentMethod", order.getPaymentMethod()));
+        }
+
+        // Find the INITIATED transaction — the reference is here
+        com.warehouse.entity.PaymentTransaction tx = paymentRepository
+                .findByOrderIdAndStatus(order.getId(), com.warehouse.enums.PaymentStatus.INITIATED)
+                .orElse(null);
+        if (tx == null) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Bekleyen havale işlemi bulunamadı."));
+        }
+
+        // Bank config (bank details + QR — admin can change it, get the latest version)
+        Map<String, String> cfg = paymentConfigService.getBankTransferConfig();
+
+        Map<String, Object> details = new LinkedHashMap<>();
+        details.put("bankName", cfg.getOrDefault("bankName", ""));
+        details.put("iban", cfg.getOrDefault("iban", ""));
+        details.put("accountHolder", cfg.getOrDefault("accountHolder", ""));
+        details.put("reference", tx.getBankTransferRef());
+        details.put("amount", order.getGrandTotal().toPlainString() + " TRY");
+        details.put("deadline", tx.getExpiresAt() != null ? tx.getExpiresAt().toString() : null);
+
+        // QR (if the admin enabled it)
+        if ("true".equalsIgnoreCase(cfg.getOrDefault("qrEnabled", "false"))) {
+            details.put("qrEnabled", "true");
+            details.put("qrImage", cfg.getOrDefault("qrImage", ""));
+            details.put("qrBankName", cfg.getOrDefault("qrBankName", ""));
+            details.put("qrDescription", cfg.getOrDefault("qrDescription", ""));
+        }
+        return ResponseEntity.ok(details);
     }
 
     /**

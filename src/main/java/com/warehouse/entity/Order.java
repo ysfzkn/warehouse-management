@@ -91,15 +91,15 @@ public class Order {
     @Column(name = "cargo_provider_name", length = 100)
     private String cargoProviderName;
 
-    /** Kargonomi / diğer API sağlayıcılarından dönen shipment ID (iptal/tracking için) */
+    /** Shipment ID returned by Kargonomi / other API providers (for cancellation/tracking) */
     @Column(name = "cargo_provider_shipment_id", length = 100)
     private String cargoProviderShipmentId;
 
-    /** Kargo etiket PDF URL'i (yazdırmak için) */
+    /** Shipping label PDF URL (for printing) */
     @Column(name = "cargo_label_url", length = 500)
     private String cargoLabelUrl;
 
-    /** Son kargo takip sorgulaması zamanı */
+    /** Timestamp of the last shipment tracking query */
     @Column(name = "cargo_last_tracked_at")
     private LocalDateTime cargoLastTrackedAt;
 
@@ -140,9 +140,9 @@ public class Order {
     private LocalDateTime preliminaryInfoAcceptedAt;
 
     /**
-     * Sipariş anında KVKK rızasının verildiği zaman damgası.
-     * Misafir checkout için kritik kanıt (authenticated kullanıcılarda Customer entity'sinde
-     * ayrıca kvkkConsentAt vardır; bu sütun sipariş anındaki snapshot).
+     * Timestamp when KVKK consent was given at order time.
+     * Critical evidence for guest checkout (for authenticated users the Customer entity
+     * also has kvkkConsentAt; this column is the snapshot taken at order time).
      */
     @Column(name = "kvkk_consent_at")
     private LocalDateTime kvkkConsentAt;

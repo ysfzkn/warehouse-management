@@ -129,7 +129,7 @@ export default function AdminCms() {
   const banners = pages.filter(p => p.pageType === 'BANNER');
   const contentPages = pages.filter(p => p.pageType !== 'BANNER');
 
-  // Checkout + footer'da linklenen zorunlu yasal sayfa slug'ları
+  // Slugs of required legal pages linked in checkout + footer
   const REQUIRED_LEGAL = [
     { slug: 'kvkk',                        title: 'KVKK Aydınlatma Metni',       reason: 'Checkout KVKK onay kutusu',        template: 'kvkk' },
     { slug: 'on-bilgilendirme-formu',      title: 'Ön Bilgilendirme Formu',      reason: 'Checkout ön bilgilendirme onayı', template: 'on-bilgilendirme' },
@@ -182,7 +182,7 @@ export default function AdminCms() {
         </div>
       </div>
 
-      {/* Zorunlu Yasal Sayfalar check-list */}
+      {/* Required Legal Pages check-list */}
       <div className={`card border-0 shadow-sm mb-4 ${missingLegal.length ? 'border-start border-warning border-4' : ''}`}>
         <div className={`card-header d-flex justify-content-between align-items-center ${missingLegal.length ? 'bg-warning bg-opacity-10' : 'bg-success bg-opacity-10'}`}>
           <div>

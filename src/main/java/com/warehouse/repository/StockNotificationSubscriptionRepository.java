@@ -16,8 +16,8 @@ public interface StockNotificationSubscriptionRepository extends JpaRepository<S
     List<StockNotificationSubscription> findByProductIdAndNotifiedFalse(Long productId);
 
     /**
-     * Henüz bildirilmemiş tüm abonelikleri ait olduğu ürünlerin ID'leri ile birlikte döner.
-     * Scheduled job bu listeyi alır, her ürünün güncel stoğunu kontrol eder.
+     * Returns the product IDs of all subscriptions that have not yet been notified.
+     * The scheduled job takes this list and checks each product's current stock.
      */
     @Query("SELECT DISTINCT s.product.id FROM StockNotificationSubscription s WHERE s.notified = false")
     List<Long> findProductIdsWithPendingSubscriptions();

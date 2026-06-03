@@ -24,8 +24,8 @@ public class Cart {
     private LocalDateTime expiresAt;
 
     /**
-     * Terk edilmiş sepet hatırlatma e-postasının gönderildiği zaman.
-     * null ise henüz gönderilmemiş demektir. Duplicate gönderimi engeller.
+     * Timestamp when the abandoned-cart reminder email was sent.
+     * If null, it has not been sent yet. Prevents duplicate sends.
      */
     @Column(name = "abandoned_cart_reminder_sent_at")
     private LocalDateTime abandonedCartReminderSentAt;

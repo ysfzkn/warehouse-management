@@ -1241,20 +1241,20 @@ const Stock = () => {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
 
-      // Fotoğraf güncellendikten sonra o item için metadata'yı tekrar fetch et
+      // After the photo is updated, re-fetch the metadata for that item
       try {
         const metaResp = await axios.get(`/api/stock-transfer-items/${item.id}/photo`);
         setTransferDetailPhotos(prev => ({
           ...prev,
           [item.id]: metaResp.data
         }));
-        // Cache-busting için timestamp ekle
+        // Add a timestamp for cache-busting
         setPhotoUpdateTimestamps(prev => ({
           ...prev,
           [item.id]: Date.now()
         }));
       } catch (metaError) {
-        // Metadata fetch başarısız olursa tüm transfer için yeniden yükle
+        // If the metadata fetch fails, reload the entire transfer
         await loadTransferDetailPhotos(transfer);
       }
 
@@ -1275,7 +1275,7 @@ const Stock = () => {
       const headers = isAdmin ? await requireAdminSecurityHeaders() : {};
       if (headers === null) return;
       await axios.delete(`/api/stock-transfer-items/${item.id}/photo`, { headers });
-      // Fotoğraf silindikten sonra state'ten kaldır
+      // Remove from state after the photo is deleted
       setTransferDetailPhotos(prev => {
         const updated = { ...prev };
         delete updated[item.id];
@@ -1722,7 +1722,7 @@ const Stock = () => {
     }, 4000);
   };
 
-  // Toast bildirimi fonksiyonu (hata, uyarı, başarı için)
+  // Toast notification function (for error, warning, success)
   const showToast = (message, type = 'success', duration) => {
     const displayDuration = typeof duration === 'number'
       ? duration
@@ -1787,7 +1787,7 @@ const Stock = () => {
     if (!isAdmin) return {};
     const code = await askSecurityCode();
     if (code === null) {
-      return null; // kullanıcı iptal etti, hata olarak gösterme
+      return null; // user cancelled, do not show as an error
     }
     return { 'X-ADMIN-SECURITY-CODE': code };
   };
@@ -1861,9 +1861,9 @@ const Stock = () => {
     setTimeout(removeToast, 20000);
   };
 
-  // Excel yükleme hatası için detaylı mesaj oluşturma fonksiyonu
+  // Function that builds a detailed message for an Excel upload error
   const getExcelUploadErrorMessage = (error) => {
-    // Network hatası (internet bağlantısı yok veya sunucuya ulaşılamıyor)
+    // Network error (no internet connection or the server is unreachable)
     if (!error.response) {
       if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
         return 'İstek zaman aşımına uğradı. Dosya çok büyük olabilir veya internet bağlantınız yavaş olabilir. Lütfen daha küçük bir dosya deneyin veya internet bağlantınızı kontrol edin.';
@@ -1878,7 +1878,7 @@ const Stock = () => {
     const data = error.response?.data;
     const errorMessage = typeof data === 'string' ? data : (data?.message || data?.error || '');
 
-    // HTTP durum kodlarına göre hata mesajları
+    // Error messages by HTTP status code
     switch (status) {
       case 400:
         if (errorMessage.includes('Warehouse not found') || errorMessage.includes('Depo bulunamadı')) {
@@ -1974,7 +1974,7 @@ const Stock = () => {
       icon: 'trash',
       onConfirm: async () => {
         setConfirmModal({ show: false });
-        // Admin değilse doğrudan sil
+        // If not admin, delete directly
         if (!isAdmin) {
           try {
             await axios.delete(`/api/stocks/${id}`);
@@ -2030,7 +2030,7 @@ const Stock = () => {
               await Promise.all([fetchAllData(), fetchStocks(stockPage)]);
               break;
             }
-            // Güvenlik hatası ise modal açık kalsın ve retry etsin
+            // If it's a security error, keep the modal open and retry
           }
         }
       }
@@ -2118,7 +2118,7 @@ const Stock = () => {
               await Promise.all([fetchAllData(), fetchStocks(stockPage)]);
               break;
             }
-            // güvenlik hatası ise döngü devam eder, modal açık kalır
+            // if it's a security error, the loop continues and the modal stays open
           }
         }
       }
@@ -2130,7 +2130,7 @@ const Stock = () => {
       return;
     }
 
-    // Statü bazlı daha güçlü uyarı metni
+    // Stronger, status-based warning text
     const transfersById = new Map(transfers.map(t => [t.id, t]));
     const hasSensitiveStatusInBatch = ids.some(id => {
       const t = transfersById.get(id);
@@ -2217,7 +2217,7 @@ const Stock = () => {
               break;
             }
             lastErrorMsg = msg || 'Güvenlik şifresi hatalı, tekrar deneyin.';
-            // güvenlik hatası; modal açık kalacak ve tekrar sorulacak
+            // security error; the modal will stay open and ask again
           }
         }
       }
@@ -2972,7 +2972,7 @@ const Stock = () => {
                       return;
                     }
                     
-                    // Dosya uzantısı kontrolü
+                    // File extension check
                     const fileName = excelFile.name.toLowerCase();
                     if (!fileName.endsWith('.xlsx') && !fileName.endsWith('.xls')) {
                       showToast('Sadece Excel dosyaları (.xlsx veya .xls) yüklenebilir. Lütfen doğru formatta bir dosya seçin.', 'error');
@@ -2980,7 +2980,7 @@ const Stock = () => {
                       return;
                     }
                     
-                    // Dosya boyutu kontrolü (50MB limit)
+                    // File size check (50MB limit)
                     const maxSize = 50 * 1024 * 1024; // 50MB
                     if (excelFile.size > maxSize) {
                       showToast('Dosya boyutu çok büyük. Maksimum dosya boyutu 50MB\'dır. Lütfen daha küçük bir dosya yükleyin veya dosyanızdaki satır sayısını azaltın.', 'error');
@@ -3000,7 +3000,7 @@ const Stock = () => {
                       showMissingFieldsToast(res.data.failedRows || res.data.failedRowsJson);
                     }
                     
-                    // Başarılı yükleme sonrası tüm verileri yenile
+                    // Refresh all data after a successful upload
                     if (res.data && (res.data.status === 'BAŞARILI' || res.data.status === 'SUCCESS' || res.data.status === 'KISMEN' || res.data.status === 'PARTIAL')) {
                       await Promise.all([fetchAllData(), fetchStocks(0)]);
                       if (res.data.status === 'BAŞARILI' || res.data.status === 'SUCCESS') {
@@ -3020,7 +3020,7 @@ const Stock = () => {
                     }
                     const errorMsg = typeof data === 'string' ? data : (data?.message || data?.error || errorMessage);
                     setExcelResult({ status: 'FAILED', errorMessage: errorMsg });
-                    // Toast bildirimi ile detaylı hata mesajı göster
+                    // Show a detailed error message via a toast notification
                     showToast(errorMessage, 'error');
                   } finally {
                     setExcelUploading(false);
@@ -3791,7 +3791,7 @@ const Stock = () => {
                                 const photoMeta = transferDetailPhotos[item.id];
                                 const hasPhoto = !!photoMeta && photoMeta.hasPhoto !== false;
                                 const baseThumbUrl = photoMeta?.thumbnailUrl || photoMeta?.viewUrl;
-                                // Cache-busting için timestamp ekle (sadece fotoğraf güncellendiğinde)
+                                // Add a timestamp for cache-busting (only when the photo is updated)
                                 const updateTimestamp = photoUpdateTimestamps[item.id];
                                 const thumbUrl = baseThumbUrl
                                   ? (updateTimestamp
@@ -4469,19 +4469,19 @@ const Stock = () => {
                   {/* Desktop Table View */}
                   <div className="breakpoint-1155-desktop table-responsive" style={{ overflowX: 'auto' }}>
                     <table className="table table-hover table-sm mb-0 align-middle transfer-table-compact">
-                      {/* Desktop için fixed layout - geniş ekranlarda */}
+                      {/* Fixed layout for desktop - on wide screens */}
                       <colgroup className="d-none d-xl-table-column-group">
                         {isAdmin && <col style={{ width: '40px' }} />}  {/* Checkbox */}
                         <col style={{ width: '60px' }} />      {/* No */}
-                        <col style={{ width: '110px' }} />     {/* Tarih */}
-                        <col style={{ width: '140px' }} />     {/* Ürün */}
-                        <col style={{ width: '140px' }} />     {/* Kaynak */}
-                        <col style={{ width: '140px' }} />     {/* Hedef */}
-                        <col style={{ width: '70px' }} />      {/* Miktar */}
-                        <col style={{ width: '110px' }} />     {/* Şoför */}
-                        <col style={{ width: '70px' }} />      {/* Plaka */}
-                        <col style={{ width: '90px' }} />      {/* Durum */}
-                        <col style={{ width: '140px' }} />     {/* İşlemler */}
+                        <col style={{ width: '110px' }} />     {/* Date */}
+                        <col style={{ width: '140px' }} />     {/* Product */}
+                        <col style={{ width: '140px' }} />     {/* Source */}
+                        <col style={{ width: '140px' }} />     {/* Destination */}
+                        <col style={{ width: '70px' }} />      {/* Quantity */}
+                        <col style={{ width: '110px' }} />     {/* Driver */}
+                        <col style={{ width: '70px' }} />      {/* Plate */}
+                        <col style={{ width: '90px' }} />      {/* Status */}
+                        <col style={{ width: '140px' }} />     {/* Actions */}
                       </colgroup>
                       <thead className="table-light sticky-top" style={{ position: 'sticky', top: 0, zIndex: 10 }}>
                         <tr>
@@ -4523,12 +4523,12 @@ const Stock = () => {
                             <i className="fas fa-boxes d-none d-sm-inline me-1"></i>
                             <div className="small">Adet</div>
                           </th>
-                          {/* Şoför kolonu - sadece geniş ekranlarda göster */}
+                          {/* Driver column - show only on wide screens */}
                           <th className="align-middle d-none d-xl-table-cell">
                             <i className="fas fa-user me-1"></i>
                             <div className="small">Şoför</div>
                           </th>
-                          {/* Plaka kolonu - sadece geniş ekranlarda göster */}
+                          {/* Plate column - show only on wide screens */}
                           <th className="text-center align-middle d-none d-xl-table-cell" style={{ width: '70px' }}>
                             <i className="fas fa-car me-1"></i>
                             <div className="small">Plaka</div>
@@ -4692,7 +4692,7 @@ const Stock = () => {
                               <td className="text-center align-middle">
                                 <span className="badge bg-primary rounded-pill">{totalQuantity}</span>
                               </td>
-                              {/* Şoför kolonu - tablet ve üstünde göster */}
+                              {/* Driver column - show on tablet and above */}
                               <td className="align-middle d-none d-md-table-cell">
                                 <div className="small overflow-hidden text-break" style={wrapTextStyle}>
                                   <div className="fw-bold text-break" style={wrapTextStyle} title={transfer.driverName}>{transfer.driverName}</div>
@@ -4702,7 +4702,7 @@ const Stock = () => {
                                   </div>
                                 </div>
                               </td>
-                              {/* Plaka kolonu - desktop'ta göster */}
+                              {/* Plate column - show on desktop */}
                               <td className="text-center align-middle d-none d-lg-table-cell">
                                 <span className="badge bg-secondary text-truncate d-block mx-auto" style={{ maxWidth: '100%' }} title={transfer.vehiclePlate}>
                                   {transfer.vehiclePlate}
@@ -4994,13 +4994,13 @@ const Stock = () => {
                                   <>
                                     <div className="transfer-mobile-card__header mb-2 d-flex justify-content-between align-items-center">
 
-                                      {/* Sol blok: Transfer + Route */}
+                                      {/* Left block: Transfer + Route */}
                                       <div className="d-flex flex-column">
                                         <div className="transfer-mobile-card__title">Transfer {transfer.id}</div>
                                         <div className="text-muted small mb-2 mt-2">{routeLabel}</div>
                                       </div>
 
-                                      {/* Sağ blok: Modern Checkbox */}
+                                      {/* Right block: Modern Checkbox */}
                                       {isAdmin && (
                                         <div className="custom-select-checkbox d-flex align-items-center">
                                           <input
@@ -5015,7 +5015,7 @@ const Stock = () => {
                                       )}
                                     </div>
 
-                                    {/* Tarih + Type + Status */}
+                                    {/* Date + Type + Status */}
                                     <div className="transfer-mobile-card__badges d-flex justify-content-between align-items-center gap-3 mb-3">
                                       <small className="text-muted flex-grow-1 d-flex align-items-center gap-2">
                                         <i className="fas fa-calendar"></i>

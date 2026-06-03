@@ -12,8 +12,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * Halka açık sipariş takip için sadeleştirilmiş sipariş bilgisi.
- * Hassas bilgiler (adres, fatura no, iletişim) içermez - sadece durum bilgileri döner.
+ * Simplified order info for public order tracking.
+ * Contains no sensitive data (address, invoice number, contact) — returns status info only.
  */
 @Data
 @Builder
@@ -26,26 +26,26 @@ public class PublicOrderTrackingDto {
     private String statusLabel;
     private LocalDateTime createdAt;
 
-    // Teslimat tahmini
+    // Delivery estimate
     private LocalDate estimatedDeliveryDate;
     private LocalDate actualDeliveryDate;
 
-    // Kargo bilgileri
+    // Shipment info
     private String cargoCompany;
     private String cargoProviderName;
     private String cargoTrackingNo;
     private String cargoTrackingUrl;
 
-    // Toplam tutar (müşterinin siparişini doğrulaması için)
+    // Grand total (for the customer to verify their order)
     private BigDecimal grandTotal;
 
-    // Ürün sayısı (özet)
+    // Item count (summary)
     private Integer itemCount;
 
-    // Maskelenmiş müşteri adı (örn: "Ahmet Y***")
+    // Masked customer name (e.g., "Ahmet Y***")
     private String maskedCustomerName;
 
-    // Durum geçmişi timeline'ı
+    // Status history timeline
     private List<StatusHistoryItem> statusHistory;
 
     @Data

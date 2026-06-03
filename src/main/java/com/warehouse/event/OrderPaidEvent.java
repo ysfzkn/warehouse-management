@@ -3,23 +3,23 @@ package com.warehouse.event;
 import org.springframework.context.ApplicationEvent;
 
 /**
- * Sipariş başarıyla ödendi event'i.
+ * Event fired when an order has been paid successfully.
  *
- * <p>Aboneler:
+ * <p>Subscribers:
  * <ul>
- *   <li>{@code InvoiceAutoCreateListener} — fatura otomatik kesimi (@Async)</li>
- *   <li>Gelecekte: kargo otomatik gönderi, müşteri SMS, marketplace stok sync vb.</li>
+ *   <li>{@code InvoiceAutoCreateListener} — automatic invoice issuance (@Async)</li>
+ *   <li>Future: automatic shipment dispatch, customer SMS, marketplace stock sync, etc.</li>
  * </ul>
  *
- * <p><b>Önemli:</b> {@code AFTER_COMMIT} phase'inde dinleyiciler tetiklenmeli
- * (sipariş gerçekten DB'ye yazıldıktan sonra). {@code @TransactionalEventListener}
- * kullanın.</p>
+ * <p><b>Important:</b> listeners must be triggered in the {@code AFTER_COMMIT} phase
+ * (after the order is actually written to the DB). Use
+ * {@code @TransactionalEventListener}.</p>
  */
 public class OrderPaidEvent extends ApplicationEvent {
 
     private final Long orderId;
     private final String orderNumber;
-    private final String triggeredBy; // "iyzico", "bank_transfer", "manual", vb.
+    private final String triggeredBy; // "iyzico", "bank_transfer", "manual", etc.
 
     public OrderPaidEvent(Object eventSource, Long orderId, String orderNumber, String triggeredBy) {
         super(eventSource);

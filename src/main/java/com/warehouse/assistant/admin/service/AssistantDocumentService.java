@@ -91,7 +91,7 @@ public class AssistantDocumentService {
             throw new IllegalArgumentException("Yüklenecek dosya boş olamaz.");
         }
         String fileName = file.getOriginalFilename() != null ? file.getOriginalFilename() : "document";
-        // Storage abstraction üzerinden kaydet → dev'de local fs, prod'da S3/MinIO.
+        // Save via the storage abstraction → local fs in dev, S3/MinIO in prod.
         String storageKey;
         try (InputStream in = file.getInputStream()) {
             storageKey = photoStorageService.storeDocument(
@@ -241,8 +241,8 @@ public class AssistantDocumentService {
     // Helpers
     // -------------------------------------------------------------------------
 
-    // persistToDisk / extractText artık kullanılmıyor — tüm I/O
-    // PhotoStorageService.storeDocument + openDocumentStream üzerinden.
+    // persistToDisk / extractText are no longer used — all I/O goes through
+    // PhotoStorageService.storeDocument + openDocumentStream.
 
     private String truncate(String s, int max) {
         if (s == null) return null;

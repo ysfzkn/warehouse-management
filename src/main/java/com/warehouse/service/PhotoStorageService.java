@@ -78,22 +78,22 @@ public interface PhotoStorageService {
 
     // ─────────────────────────────────────────────────────────────────────
     // Generic document storage (PDF invoices, XLSX imports, RAG documents)
-    // Photo path'lerinden farklı olarak resim optimizasyonu yapmaz; binary
-    // dosyayı olduğu gibi kaydeder. Tüm dosya yazımı bu interface üzerinden
-    // geçmeli — local dev'de filesystem, prod'da Railway/S3 bucket.
+    // Unlike the photo paths, it performs no image optimization; it stores the
+    // binary file as-is. All file writes must go through this interface —
+    // filesystem in local dev, Railway/S3 bucket in prod.
     // ─────────────────────────────────────────────────────────────────────
 
     /**
-     * Generic dosya kaydı. Resim olmayan ya da işlem gerektirmeyen
-     * dosyalar için (PDF, XLSX, TXT, DOCX vb.).
+     * Generic file storage. For non-image files or files that require no
+     * processing (PDF, XLSX, TXT, DOCX, etc.).
      *
-     * @param prefix             logical klasör prefix'i, örn. {@code "invoices/123"},
+     * @param prefix             logical folder prefix, e.g. {@code "invoices/123"},
      *                           {@code "imports/45"}, {@code "assistant-documents/9"}
-     * @param originalFileName   gerçek dosya adı (uzantı çıkarımı için)
+     * @param originalFileName   actual file name (used to derive the extension)
      * @param contentType        mime type
-     * @param inputStream        binary içerik
-     * @return depolanan key — DB'de bu string saklanacak; daha sonra
-     *         {@link #openDocumentStream(String)} ile geri açılır.
+     * @param inputStream        binary content
+     * @return the stored key — this string is persisted in the DB and can later
+     *         be reopened via {@link #openDocumentStream(String)}.
      */
     String storeDocument(String prefix,
                          String originalFileName,
@@ -101,13 +101,13 @@ public interface PhotoStorageService {
                          InputStream inputStream);
 
     /**
-     * Document key'den InputStream açar. Caller close etmekle yükümlü.
-     * Var olmayan key için {@link RuntimeException} fırlatır.
+     * Opens an InputStream from a document key. The caller is responsible for closing it.
+     * Throws {@link RuntimeException} for a non-existent key.
      */
     InputStream openDocumentStream(String key);
 
     /**
-     * Document'i siler. Var olmayan key sessizce yutulur (idempotent delete).
+     * Deletes the document. A non-existent key is silently ignored (idempotent delete).
      */
     void deleteDocument(String key);
 }

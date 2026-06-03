@@ -67,7 +67,7 @@ public class WmsAssistantChatService implements AssistantChatService {
 
         String lastUser = lastUserMessage(request != null ? request.messages : null);
 
-        // ── Katman 1: Input validation (PII redaction + jailbreak detect) ──
+        // ── Layer 1: Input validation (PII redaction + jailbreak detect) ──
         SafetyCheckResult inputCheck = safetyPipeline.validateInput(AssistantProfile.WMS, username, lastUser);
         if (inputCheck.isBlocked()) {
             WmsChatResponse resp = new WmsChatResponse();
@@ -119,7 +119,7 @@ public class WmsAssistantChatService implements AssistantChatService {
                     """;
         }
 
-        // ── Katman 3: Output validation (PII redaction defense-in-depth) ──
+        // ── Layer 3: Output validation (PII redaction defense-in-depth) ──
         assistantText = safetyPipeline.validateOutput(AssistantProfile.WMS, username, assistantText);
 
         WmsChatResponse resp = new WmsChatResponse();

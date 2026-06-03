@@ -88,7 +88,7 @@ const Products = () => {
     if (!isAdmin) return {};
     const code = await askSecurityCode();
     if (code === null) {
-      return null; // iptal durumunda hata gösterme
+      return null; // do not show an error when cancelled
     }
     return { 'X-ADMIN-SECURITY-CODE': code };
   };
@@ -204,7 +204,7 @@ const Products = () => {
   useEffect(() => {
     if (selectedCategory) {
       fetchSubcategories(selectedCategory);
-      setSelectedSubcategory(''); // Ana kategori değiştiğinde alt kategoriyi sıfırla
+      setSelectedSubcategory(''); // Reset the subcategory when the main category changes
     } else {
       setSubcategories([]);
       setSelectedSubcategory('');
@@ -349,7 +349,7 @@ const Products = () => {
       confirmText: 'Sil',
       onConfirm: async () => {
         setConfirmModal({ show: false, title: '', message: '', onConfirm: null });
-        // Admin için güvenlik kodu retry döngüsü
+        // Security code retry loop for admin
         if (isAdmin) {
           let lastCode = '';
           let lastErrorMsg = '';
@@ -388,7 +388,7 @@ const Products = () => {
 
               if (!isSecurity) {
                 closeSecurityPrompt();
-                // Eğer ürün transfer ile bağlıysa detaylı uyarı göster
+                // If the product is linked to a transfer, show a detailed warning
                 if (msg.includes('transfer') || errCode === 'RELATION_004') {
                   setErrorModal({
                     show: true,
@@ -410,7 +410,7 @@ const Products = () => {
                 fetchProducts(productPage, productPageSize);
                 break;
               }
-              // güvenlik hatası ise modal açık kalsın, uyarıyı göster ve yeniden sor
+              // if it's a security error, keep the modal open, show the warning, and ask again
               const toast = document.createElement('div');
               toast.className = 'toast align-items-center text-bg-danger border-0 position-fixed top-0 end-0 m-3 show fs-6';
               toast.style.minWidth = '360px';
@@ -419,11 +419,11 @@ const Products = () => {
               toast.innerHTML = `<div class="d-flex"><div class="toast-body fw-semibold">${msg || 'Güvenlik şifresi hatalı'}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
               document.body.appendChild(toast);
               setTimeout(() => { try { document.body.removeChild(toast); } catch {} }, 7000);
-              // güvenlik hatası ise modal açık kalsın, döngü devam etsin
+              // if it's a security error, keep the modal open and let the loop continue
             }
           }
         } else {
-          // Admin değilse doğrudan sil
+          // If not admin, delete directly
           try {
             await axios.delete(`/api/products/${id}`);
             const toast = document.createElement('div');
@@ -604,12 +604,12 @@ const Products = () => {
         setConfirmModal({ show: false, title: '', message: '', onConfirm: null });
         
         try {
-          // Backend'den toplu silme endpoint'ini kullan
+          // Use the backend bulk delete endpoint
           const headers = await requireAdminSecurityHeaders();
           const response = await axios.delete('/api/products/bulk', { data: ids, headers });
           const result = response.data;
-          
-          // Başarılı silinen ürünler için toast göster
+
+          // Show a toast for successfully deleted products
           if (result.successCount > 0) {
             const toast = document.createElement('div');
             toast.className = 'toast align-items-center text-bg-success border-0 position-fixed top-0 end-0 m-3 show fs-6';
@@ -621,7 +621,7 @@ const Products = () => {
             setTimeout(() => { try { document.body.removeChild(toast); } catch {} }, 7000);
           }
           
-          // Hata alan ürünler varsa detaylı hata listesi göster
+          // If there are products that errored, show a detailed error list
           if (result.errors && result.errors.length > 0) {
             const formattedErrors = result.errors.map(err => ({
               productName: err.name || 'Bilinmeyen Ürün',
@@ -637,20 +637,20 @@ const Products = () => {
             });
           }
           
-          // Seçili ürünleri temizle (sadece başarıyla silinenleri kaldır, hata alanları seçimde kalsın)
+          // Clear selected products (remove only the successfully deleted ones, keep the errored ones selected)
           const errorIds = new Set((result.errors || []).map(err => err.id));
           setSelectedProducts(prev => prev.filter(id => {
-            // Eğer bu ID silinmeye çalışılan ID'ler arasındaysa
+            // If this ID is among the IDs we tried to delete
             if (ids.includes(id)) {
-              // Hata alan ürünleri seçimde tut, başarıyla silinenleri kaldır
+              // Keep errored products selected, remove the successfully deleted ones
               return errorIds.has(id);
             }
-            // Diğer ürünleri olduğu gibi tut
+            // Keep other products as they are
             return true;
           }));
         } catch (error) {
           if (error?.message?.startsWith('ADMIN_SECURITY')) return;
-          // Backend hatası (örneğin network hatası)
+          // Backend error (e.g. network error)
           const errorData = error?.response?.data;
           const msg = errorData?.message || errorData?.error || error.message || 'Ürünler silinirken hata oluştu';
           setErrorModal({
@@ -659,7 +659,7 @@ const Products = () => {
             message: msg
           });
         } finally {
-          // Listeyi yenile
+          // Refresh the list
           fetchProducts(productPage, productPageSize);
         }
       }

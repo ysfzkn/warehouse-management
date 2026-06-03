@@ -1,6 +1,6 @@
 package com.warehouse.entity;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -36,22 +36,25 @@ public class PaymentGatewayConfig {
     @Column(name = "terminal_id", length = 200)
     private String terminalId;
 
-    // --- Secret credentials: @JsonIgnore ile JSON serialization'da hiç dışarı çıkmaz.
-    // --- Admin response DTO'su (AdminGatewayConfigController) bunları masked ("ABCD****WXYZ") gönderir.
-    // --- Servis bean'leri Lombok @Data getter'larını JVM içinde okur — koruma sadece HTTP boundary'sinde.
-    @JsonIgnore
+    // --- Secret credentials: with WRITE_ONLY they are only read from incoming JSON
+    // --- and never leak out in the response. (@JsonIgnore cannot be used because it
+    // --- also blocks deserialization — the field would stay null even if the user fills the form.)
+    // --- The admin response DTO (AdminGatewayConfigController) sends these as a masked
+    // --- ("ABCD****WXYZ") manual field.
+    // --- Service beans read Lombok @Data getters inside the JVM — the protection only applies at the HTTP boundary.
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     @Column(name = "store_key", columnDefinition = "TEXT")
     private String storeKey;
 
-    @JsonIgnore
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     @Column(name = "provision_password", columnDefinition = "TEXT")
     private String provisionPassword;
 
-    @JsonIgnore
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     @Column(name = "api_key", columnDefinition = "TEXT")
     private String apiKey;
 
-    @JsonIgnore
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     @Column(name = "secret_key", columnDefinition = "TEXT")
     private String secretKey;
 
