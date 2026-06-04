@@ -23,11 +23,19 @@ public class CacheConfig {
     @Bean
     public CacheManager cacheManager() {
         CaffeineCacheManager cacheManager = new CaffeineCacheManager(
+            // Existing WMS caches
             "dashboardStats",      // 5 minutes TTL
             "warehouseStats",      // 5 minutes TTL
             "lowStockItems",       // 3 minutes TTL
-            "outOfStockItems",    // 3 minutes TTL
-            "counts"              // lowStock, unread etc. (short TTL)
+            "outOfStockItems",     // 3 minutes TTL
+            "counts",              // lowStock, unread etc. (short TTL)
+            // E-commerce storefront caches
+            "storeCatalog",        // Product listing cache
+            "categoryTree",        // Category hierarchy cache
+            "productDetail",       // Single product detail cache
+            "stockAvailability",   // Stock availability (short TTL, evicted on stock events)
+            "sitemap",             // Dynamic sitemap.xml — 6h TTL (there is also a controller-level header)
+            "invoicePdf"           // E-invoice PDF — 24h cache to avoid repeatedly fetching from Logo
         );
         
         cacheManager.setCaffeine(Caffeine.newBuilder()

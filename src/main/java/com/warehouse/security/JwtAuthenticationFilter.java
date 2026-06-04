@@ -16,6 +16,7 @@ import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
+import jakarta.servlet.http.Cookie;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
@@ -35,16 +36,25 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         final String authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             token = authHeader.substring(7);
-        } else if (ApiPaths.STREAM.equals(request.getRequestURI())) {
+        } else if ("/api/admin/stream".equals(request.getRequestURI())) {
             // Allow token via query param for SSE since EventSource cannot set headers
             token = request.getParameter("token");
+        } else {
+            // Fallback: read from HttpOnly cookie (storefront)
+            token = extractTokenFromCookie(request);
         }
         if (token != null) {
             try {
                 Claims claims = jwtService.parseToken(token);
                 String username = claims.getSubject();
-                String role = String.valueOf(claims.get("role"));
-                List<GrantedAuthority> authorities = Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + role));
+                String userType = claims.get("userType", String.class);
+                List<GrantedAuthority> authorities;
+                if ("customer".equals(userType)) {
+                    authorities = Collections.singletonList(new SimpleGrantedAuthority("ROLE_CUSTOMER"));
+                } else {
+                    String role = String.valueOf(claims.get("role"));
+                    authorities = Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + role));
+                }
                 Authentication auth = new UsernamePasswordAuthenticationToken(username, null, authorities);
                 SecurityContextHolder.getContext().setAuthentication(auth);
             } catch (Exception e) {
@@ -52,6 +62,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             }
         }
         filterChain.doFilter(request, response);
+    }
+
+    private String extractTokenFromCookie(HttpServletRequest request) {
+        Cookie[] cookies = request.getCookies();
+        if (cookies != null) {
+            for (Cookie cookie : cookies) {
+                if ("access_token".equals(cookie.getName())) {
+                    return cookie.getValue();
+                }
+            }
+        }
+        return null;
     }
 }
 

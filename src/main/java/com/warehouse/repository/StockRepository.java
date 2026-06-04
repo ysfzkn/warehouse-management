@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import com.warehouse.enums.WarehouseType;
 
 import java.util.Collection;
 import java.util.List;
@@ -34,6 +35,16 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
     @Query("SELECT s FROM Stock s WHERE s.product = :product ORDER BY s.warehouse.name")
     @EntityGraph(value = Stock.GRAPH_WITH_PRODUCT_AND_WAREHOUSE, type = EntityGraph.EntityGraphType.LOAD)
     List<Stock> findByProduct(@Param("product") Product product);
+
+    /**
+     * Batch — total <strong>available</strong> quantity for multiple products in a single query.
+     * available = quantity - reserved - consigned (same as Stock.getAvailableQuantity()).
+     * Prevents N+1 (store product list). Returned Object[]: [productId, totalAvailable (Long)].
+     */
+    @Query("SELECT s.product.id, " +
+           "SUM(COALESCE(s.quantity,0) - COALESCE(s.reservedQuantity,0) - COALESCE(s.consignedQuantity,0)) " +
+           "FROM Stock s WHERE s.product.id IN :productIds GROUP BY s.product.id")
+    List<Object[]> sumAvailableByProductIds(@Param("productIds") List<Long> productIds);
 
     @Query("SELECT s FROM Stock s WHERE s.warehouse = :warehouse ORDER BY s.product.name")
     @EntityGraph(value = Stock.GRAPH_WITH_PRODUCT_AND_WAREHOUSE, type = EntityGraph.EntityGraphType.LOAD)
@@ -164,6 +175,138 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
                               @Param("status") String status,
                               @Param("lastUpdatedFrom") java.time.LocalDateTime lastUpdatedFrom,
                               @Param("lastUpdatedTo") java.time.LocalDateTime lastUpdatedTo);
+
+    @EntityGraph(value = Stock.GRAPH_WITH_PRODUCT_AND_WAREHOUSE, type = EntityGraph.EntityGraphType.LOAD)
+    @Query("""
+        SELECT s FROM Stock s
+        JOIN FETCH s.warehouse w
+        JOIN FETCH s.product p
+        WHERE (
+              w.warehouseType = :warehouseType
+              OR LOWER(w.name) LIKE '%emanet%'
+        )
+          AND (:warehouseId IS NULL OR w.id = :warehouseId)
+          AND (:searchEnabled = false OR (
+                TRIM(COALESCE(s.customerName, '')) LIKE :searchPatternRaw
+             OR LOWER(TRIM(COALESCE(s.customerName, ''))) LIKE :searchPatternLower
+             OR TRIM(COALESCE(s.customerPhone, '')) LIKE :searchPatternRaw
+             OR LOWER(TRIM(COALESCE(s.customerPhone, ''))) LIKE :searchPatternLower
+             OR (
+                  :digitsEnabled = true AND
+                  REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(s.customerPhone, ''), ' ', ''), '-', ''), '+', ''), '(', ''), ')', '') LIKE :digitsPattern
+             )
+          ))
+        ORDER BY s.lastUpdated DESC
+    """)
+    Page<Stock> findEmanetByCustomer(@Param("warehouseType") WarehouseType warehouseType,
+                                     @Param("warehouseId") Long warehouseId,
+                                     @Param("searchEnabled") boolean searchEnabled,
+                                     @Param("searchPatternRaw") String searchPatternRaw,
+                                     @Param("searchPatternLower") String searchPatternLower,
+                                     @Param("digitsEnabled") boolean digitsEnabled,
+                                     @Param("digitsPattern") String digitsPattern,
+                                     Pageable pageable);
+
+    @Query("""
+        SELECT DISTINCT
+          TRIM(COALESCE(s.customerName, '')) AS customerName,
+          TRIM(COALESCE(s.customerPhone, '')) AS customerPhone
+        FROM Stock s
+        JOIN s.warehouse w
+        WHERE (
+              w.warehouseType = :warehouseType
+              OR LOWER(w.name) LIKE '%emanet%'
+        )
+          AND (:warehouseId IS NULL OR w.id = :warehouseId)
+          AND (COALESCE(s.customerName, '') <> '' OR COALESCE(s.customerPhone, '') <> '')
+          AND (:searchEnabled = false OR (
+                TRIM(COALESCE(s.customerName, '')) LIKE :searchPatternRaw
+             OR LOWER(TRIM(COALESCE(s.customerName, ''))) LIKE :searchPatternLower
+             OR TRIM(COALESCE(s.customerPhone, '')) LIKE :searchPatternRaw
+             OR LOWER(TRIM(COALESCE(s.customerPhone, ''))) LIKE :searchPatternLower
+             OR (
+                  :digitsEnabled = true AND
+                  REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(s.customerPhone, ''), ' ', ''), '-', ''), '+', ''), '(', ''), ')', '') LIKE :digitsPattern
+             )
+          ))
+        ORDER BY
+          TRIM(COALESCE(s.customerName, '')) ASC,
+          TRIM(COALESCE(s.customerPhone, '')) ASC
+    """)
+    List<EmanetCustomerCandidate> findEmanetCustomerCandidates(@Param("warehouseType") WarehouseType warehouseType,
+                                                               @Param("warehouseId") Long warehouseId,
+                                                               @Param("searchEnabled") boolean searchEnabled,
+                                                               @Param("searchPatternRaw") String searchPatternRaw,
+                                                               @Param("searchPatternLower") String searchPatternLower,
+                                                               @Param("digitsEnabled") boolean digitsEnabled,
+                                                               @Param("digitsPattern") String digitsPattern,
+                                                               Pageable pageable);
+
+    interface EmanetCustomerCandidate {
+        String getCustomerName();
+        String getCustomerPhone();
+    }
+
+    @Query("""
+        SELECT COALESCE(SUM(s.quantity), 0) FROM Stock s
+        JOIN s.warehouse w
+        WHERE (
+              w.warehouseType = :warehouseType
+              OR LOWER(w.name) LIKE '%emanet%'
+        )
+          AND (:warehouseId IS NULL OR w.id = :warehouseId)
+          AND (:searchEnabled = false OR (
+                TRIM(COALESCE(s.customerName, '')) LIKE :searchPatternRaw
+             OR LOWER(TRIM(COALESCE(s.customerName, ''))) LIKE :searchPatternLower
+             OR TRIM(COALESCE(s.customerPhone, '')) LIKE :searchPatternRaw
+             OR LOWER(TRIM(COALESCE(s.customerPhone, ''))) LIKE :searchPatternLower
+             OR (
+                  :digitsEnabled = true AND
+                  REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(s.customerPhone, ''), ' ', ''), '-', ''), '+', ''), '(', ''), ')', '') LIKE :digitsPattern
+             )
+          ))
+    """)
+    Long sumEmanetDepotQuantity(@Param("warehouseType") WarehouseType warehouseType,
+                               @Param("warehouseId") Long warehouseId,
+                               @Param("searchEnabled") boolean searchEnabled,
+                               @Param("searchPatternRaw") String searchPatternRaw,
+                               @Param("searchPatternLower") String searchPatternLower,
+                               @Param("digitsEnabled") boolean digitsEnabled,
+                               @Param("digitsPattern") String digitsPattern);
+
+    @Query("""
+        SELECT COALESCE(SUM(s.quantity), 0) FROM Stock s
+        JOIN s.warehouse w
+        JOIN s.product p
+        WHERE p.id = :productId
+          AND (
+              w.warehouseType = :warehouseType
+              OR LOWER(w.name) LIKE '%emanet%'
+          )
+          AND (:warehouseId IS NULL OR w.id = :warehouseId)
+    """)
+    Long sumEmanetDepotQuantityByProduct(@Param("warehouseType") WarehouseType warehouseType,
+                                         @Param("warehouseId") Long warehouseId,
+                                         @Param("productId") Long productId);
+
+    @Query("""
+        SELECT COALESCE(SUM(
+          COALESCE(s.quantity, 0)
+          - COALESCE(s.reservedQuantity, 0)
+          - COALESCE(s.consignedQuantity, 0)
+        ), 0) FROM Stock s
+        JOIN s.warehouse w
+        JOIN s.product p
+        WHERE p.id = :productId
+          AND (
+              w.warehouseType = :warehouseType
+              OR LOWER(w.name) LIKE '%emanet%'
+          )
+          AND (:warehouseId IS NULL OR w.id = :warehouseId)
+    """)
+    Long sumEmanetDepotAvailableByProduct(@Param("warehouseType") WarehouseType warehouseType,
+                                          @Param("warehouseId") Long warehouseId,
+                                          @Param("productId") Long productId);
 
     @Query("""
         SELECT s FROM Stock s
@@ -403,4 +546,17 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
             @Param("colorId") Long colorId,
             @Param("warehouseIds") java.util.List<Long> warehouseIds,
             @Param("hasWarehouseFilter") Boolean hasWarehouseFilter);
+
+    // ============================================================================
+    // Checkout: Pessimistic locking for stock reservation
+    // ============================================================================
+
+    @Query(value = "SELECT * FROM stocks WHERE product_id = :productId " +
+        "AND (quantity - COALESCE(reserved_quantity, 0) - COALESCE(consigned_quantity, 0)) > 0 " +
+        "ORDER BY (quantity - COALESCE(reserved_quantity, 0) - COALESCE(consigned_quantity, 0)) DESC " +
+        "FOR UPDATE", nativeQuery = true)
+    List<Stock> findAvailableByProductForUpdate(@Param("productId") Long productId);
+
+    @Query(value = "SELECT * FROM stocks WHERE id = :stockId FOR UPDATE", nativeQuery = true)
+    Optional<Stock> findByIdForUpdate(@Param("stockId") Long stockId);
 }

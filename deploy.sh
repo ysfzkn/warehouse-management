@@ -82,7 +82,7 @@ echo "📦 Building optimized Maven project..."
 mvn clean package -DskipTests -Dmaven.test.skip=true -Dmaven.javadoc.skip=true
 
 echo "🐳 Building optimized Docker images..."
-echo "   - Multi-stage build with OpenJDK 17 JRE Alpine"
+echo "   - Multi-stage build with Eclipse Temurin 21 JRE Alpine"
 echo "   - Optimized for production deployment"
 echo "   - Minimal base image for smaller size"
 

@@ -1,14 +1,62 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import SearchableSelect from './SearchableSelect';
+import ConfirmModal from './ConfirmModal';
 import './ProductForm.css';
+
+/**
+ * Crawler preview thumbnail: downloads via the backend proxy with a Referer
+ * (for hotlink-protected CDNs) + attaches the JWT Bearer through axios.
+ * <img src=...> does not work directly because the browser does not add an Authorization header.
+ */
+function CrawlThumbnail({ url, referer }) {
+  const [blobUrl, setBlobUrl] = useState(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    let createdBlobUrl = null;
+    setBlobUrl(null); setFailed(false);
+    (async () => {
+      try {
+        const res = await axios.get(`/api/admin/products/crawl-images/proxy`, {
+          params: { url, referer },
+          responseType: 'blob',
+        });
+        if (cancelled) return;
+        createdBlobUrl = URL.createObjectURL(res.data);
+        setBlobUrl(createdBlobUrl);
+      } catch {
+        if (!cancelled) setFailed(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (createdBlobUrl) URL.revokeObjectURL(createdBlobUrl);
+    };
+  }, [url, referer]);
+  if (failed) return null;
+  if (!blobUrl) {
+    return (
+      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af', fontSize: '0.75rem' }}>
+        Yükleniyor…
+      </div>
+    );
+  }
+  return <img src={blobUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />;
+}
 
 const ProductForm = ({ product, onSuccess, onCancel }) => {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
+    shortDescription: '',
     sku: '',
     price: '',
+    salePrice: '',
+    saleStart: '',
+    saleEnd: '',
+    isFeatured: false,
+    isNew: false,
     weight: '',
     dimensions: '',
     lengthCm: '',
@@ -21,6 +69,10 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
     subcategoryId: '',
     isActive: true
   });
+  const [productImages, setProductImages] = useState([]);
+  const [imageUploading, setImageUploading] = useState(false);
+  const [deleteImageId, setDeleteImageId] = useState(null);
+  const imageInputRef = React.useRef(null);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
   const [mainCategories, setMainCategories] = useState([]);
@@ -44,14 +96,14 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
     let basePrice, sctAmount, priceWithSct, vatAmount, totalPrice;
     
     if (priceIncludesVat && enteredPrice > 0) {
-      // Girilen fiyat KDV dahil ise, geriye doğru hesaplama yap
+      // If the entered price is VAT-inclusive, calculate backwards
       // totalPrice = priceWithSct * (1 + vatRate / 100)
       // priceWithSct = totalPrice / (1 + vatRate / 100)
       totalPrice = enteredPrice;
       priceWithSct = totalPrice / (1 + vatRate / 100);
       vatAmount = totalPrice - priceWithSct;
-      
-      // ÖTV varsa, basePrice'ı hesapla
+
+      // If there is SCT, calculate basePrice
       if (sctRate > 0) {
         // priceWithSct = basePrice * (1 + sctRate / 100)
         basePrice = priceWithSct / (1 + sctRate / 100);
@@ -61,7 +113,7 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
         sctAmount = 0;
       }
     } else {
-      // Girilen fiyat KDV hariç ise, ileriye doğru hesaplama yap
+      // If the entered price is VAT-exclusive, calculate forwards
       basePrice = enteredPrice;
       sctAmount = basePrice * (sctRate / 100);
       priceWithSct = basePrice + sctAmount;
@@ -80,6 +132,7 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
 
   useEffect(() => {
     fetchMainCategories();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -88,6 +141,7 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
     } else {
       setSubcategories([]);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData.categoryId]);
 
   useEffect(() => {
@@ -120,8 +174,21 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
       sctRate: product.sctRate || '',
       categoryId: mainCategoryIdNumeric != null ? String(mainCategoryIdNumeric) : '',
       subcategoryId: subcategoryIdNumeric != null ? String(subcategoryIdNumeric) : '',
-      isActive: product.isActive !== false
+      isActive: product.isActive !== false,
+      shortDescription: product.shortDescription || '',
+      salePrice: product.salePrice || '',
+      saleStart: product.saleStart ? product.saleStart.substring(0, 16) : '',
+      saleEnd: product.saleEnd ? product.saleEnd.substring(0, 16) : '',
+      isFeatured: !!product.featured || !!product.isFeatured,
+      isNew: !!product.isNew,
+      slug: product.slug || '',
+      metaTitle: product.metaTitle || '',
+      metaDescription: product.metaDescription || '',
     }));
+    // Load product images
+    if (product.id) {
+      axios.get(`/api/products/${product.id}/images`).then(r => setProductImages(r.data || [])).catch(() => {});
+    }
     const resolvedBrandId = product.brand?.id
       ?? (product.brandId != null ? Number(product.brandId) : null);
     const resolvedColorId = product.color?.id
@@ -140,6 +207,7 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
     } else {
       setSubcategories([]);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product]);
 
   const normalizeSubcategories = (subs = [], parentMeta = {}) => {
@@ -408,11 +476,11 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
     const { name, value, type, checked } = e.target;
 
     if (name === 'categoryId') {
-      // Ana kategori değiştiğinde alt kategoriyi sıfırla
+      // Reset the subcategory when the main category changes
       setFormData(prev => ({
         ...prev,
         [name]: value,
-        subcategoryId: '' // Alt kategoriyi sıfırla
+        subcategoryId: '' // Reset the subcategory
       }));
     } else {
       setFormData(prev => ({
@@ -441,16 +509,279 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
       newErrors.sku = 'Stok kodu gereklidir';
     }
 
-    if (!formData.price || parseFloat(formData.price) < 0) {
-      newErrors.price = 'Geçerli bir fiyat giriniz';
+    // Price: parseFloat NaN check + must be positive (a price of 0 cannot be used in e-commerce)
+    const priceNum = parseFloat(formData.price);
+    if (!formData.price || isNaN(priceNum) || priceNum <= 0) {
+      newErrors.price = 'Geçerli bir fiyat giriniz (sıfırdan büyük olmalı)';
     }
 
     if (!formData.categoryId) {
       newErrors.categoryId = 'Kategori seçiniz';
     }
 
+    // Length validation aligned with backend constraints
+    if (formData.description && formData.description.length > 5000) {
+      newErrors.description = `Açıklama 5000 karakteri aşamaz (şu an ${formData.description.length}).`;
+    }
+    if (formData.shortDescription && formData.shortDescription.length > 1000) {
+      newErrors.shortDescription = `Kısa açıklama 1000 karakteri aşamaz (şu an ${formData.shortDescription.length}).`;
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
+  };
+
+  const uploadImage = async (file) => {
+    if (!product?.id || !file) return;
+    setImageUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('primary', productImages.length === 0 ? 'true' : 'false');
+      await axios.post(`/api/products/${product.id}/images`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      const res = await axios.get(`/api/products/${product.id}/images`);
+      setProductImages(res.data || []);
+    } catch (e) {
+      setErrors({ general: e.response?.data?.message || 'Görsel yüklenemedi' });
+    } finally { setImageUploading(false); }
+  };
+
+  // ─── Profilo / 3rd-party URL crawler ──────────────────────────────
+  // Client-side check kept in sync with the backend allowlist (for UX).
+  // Shows an instant warning when a wrong URL is entered, preventing an unnecessary API call.
+  const SUPPORTED_DOMAINS = [
+    'profilo.com','profilo.com.tr','siemens.com.tr','siemens-home.com.tr','siemens-home.bsh-group.com',
+    'bosch-home.com','bosch-home.com.tr','arcelik.com','arcelik.com.tr','beko.com','beko.com.tr',
+    'vestel.com','vestel.com.tr','samsung.com','samsung.com.tr','lg.com','lg.com.tr',
+    'miele.com','miele.com.tr','haier.com','haier.com.tr',
+    'fakir.com.tr','fakir.com','altus.com.tr','altus.com',
+  ];
+  const isLikelySupportedUrl = (url) => {
+    if (!url || typeof url !== 'string') return false;
+    try {
+      const u = new URL(url.trim());
+      if (!/^https?:$/.test(u.protocol)) return false;
+      const host = u.hostname.toLowerCase();
+      return SUPPORTED_DOMAINS.some(d => host === d || host.endsWith('.' + d));
+    } catch {
+      return false;
+    }
+  };
+
+  const [crawlOpen, setCrawlOpen] = useState(false);
+  const [crawlUrl, setCrawlUrl] = useState('');
+  const [crawlLoading, setCrawlLoading] = useState(false);
+  const [crawlError, setCrawlError] = useState('');
+  const [crawlPreview, setCrawlPreview] = useState(null); // { url, title, images, description, shortDescription, specs, brand }
+  const [crawlSelected, setCrawlSelected] = useState(new Set());
+  const [crawlReplace, setCrawlReplace] = useState(false);
+  const [crawlImporting, setCrawlImporting] = useState(false);
+  const [crawlResult, setCrawlResult] = useState(null); // { success, total, errors: [] }
+  // Description preview state — the admin can edit the text, then transfer it to ProductForm via "Apply"
+  const [crawlEditableDesc, setCrawlEditableDesc] = useState('');
+  const [crawlEditableShortDesc, setCrawlEditableShortDesc] = useState('');
+  const [crawlEditableSpecs, setCrawlEditableSpecs] = useState([]); // [{key, value}]
+  const [crawlActiveTab, setCrawlActiveTab] = useState('images'); // 'images' | 'description'
+  const [crawlDescAppliedToast, setCrawlDescAppliedToast] = useState(false);
+
+  const openCrawlModal = () => {
+    setCrawlOpen(true);
+    setCrawlUrl('');
+    setCrawlError('');
+    setCrawlPreview(null);
+    setCrawlSelected(new Set());
+    setCrawlReplace(false);
+    setCrawlResult(null);
+  };
+
+  const fetchCrawlPreview = async () => {
+    if (!product?.id) {
+      setCrawlError('Önce ürünü kaydetmeniz gerekiyor.');
+      return;
+    }
+    if (!crawlUrl.trim()) return;
+    setCrawlLoading(true);
+    setCrawlError('');
+    setCrawlPreview(null);
+    setCrawlResult(null);
+    try {
+      const res = await axios.post(
+        `/api/admin/products/${product.id}/crawl-images/preview`,
+        { url: crawlUrl.trim() }
+      );
+      const data = res.data || {};
+      setCrawlPreview(data);
+      // Default: select all
+      setCrawlSelected(new Set(data.images || []));
+      // Hydrate the description state (the admin can edit it)
+      setCrawlEditableDesc(data.description || '');
+      setCrawlEditableShortDesc(data.shortDescription || '');
+      // Specs Map → editable array
+      const specsObj = data.specs || {};
+      setCrawlEditableSpecs(Object.entries(specsObj).map(([k, v]) => ({ key: k, value: v })));
+      // If no description was fetched, stay on the images tab; if present, also suggest the description tab
+      if (data.description || data.shortDescription) {
+        setCrawlActiveTab('images'); // default start is still images
+      }
+    } catch (e) {
+      setCrawlError(e.response?.data?.message || 'Görseller çekilemedi');
+    } finally {
+      setCrawlLoading(false);
+    }
+  };
+
+  const toggleCrawlSelection = (url) => {
+    setCrawlSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(url)) next.delete(url); else next.add(url);
+      return next;
+    });
+  };
+
+  const selectAllCrawl = () => {
+    if (!crawlPreview) return;
+    setCrawlSelected(new Set(crawlPreview.images || []));
+  };
+
+  const deselectAllCrawl = () => setCrawlSelected(new Set());
+
+  /**
+   * Transfers the edited description + specs into ProductForm's actual fields.
+   *
+   * Bug fixes:
+   *   - Backend description @Size(max=5000) — truncate at 4800 chars (margin for HTML tags)
+   *   - shortDescription @Column(length=1000) — truncate at 1000
+   *   - asynchronous update guaranteed via the setFormData callback form
+   *   - automatically close the modal and flash-highlight the form fields (visual feedback)
+   *   - toast reminding to press Save (so the user does not think "was it auto-saved on transfer?")
+   */
+  const applyCrawlDescriptionToProduct = () => {
+    const updates = {};
+
+    // Short description (1000 char limit)
+    if (crawlEditableShortDesc && crawlEditableShortDesc.trim()) {
+      const trimmed = crawlEditableShortDesc.trim();
+      updates.shortDescription = trimmed.length > 1000 ? trimmed.substring(0, 997) + '...' : trimmed;
+    }
+
+    // Long description + specs (HTML table append). The total 5000 char limit is on the backend.
+    let fullDesc = (crawlEditableDesc || '').trim();
+    if (crawlEditableSpecs.length > 0) {
+      const validSpecs = crawlEditableSpecs.filter(s => s.key.trim() && s.value.trim());
+      if (validSpecs.length > 0) {
+        const table = '\n\n<h3>Teknik Özellikler</h3>\n<table class="product-specs-table">\n'
+          + validSpecs.map(s =>
+              `  <tr><td><strong>${escapeHtmlEntity(s.key)}</strong></td>`
+              + `<td>${escapeHtmlEntity(s.value)}</td></tr>`).join('\n')
+          + '\n</table>';
+        fullDesc = fullDesc + table;
+      }
+    }
+    // Backend description @Size(max=5000) — stay safe with 4800 chars; gracefully truncate if exceeded
+    if (fullDesc.length > 4800) {
+      fullDesc = fullDesc.substring(0, 4800) + '\n\n<p><em>... (açıklama 4800 karaktere kısaltıldı)</em></p>';
+    }
+    if (fullDesc) {
+      updates.description = fullDesc;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      showToast('Aktarılacak açıklama veya özellik yok', 'warning');
+      return;
+    }
+
+    // CRITICAL: update state via the prev callback form — prevents a race condition
+    setFormData(prev => ({ ...prev, ...updates }));
+    setCrawlDescAppliedToast(true);
+
+    const fieldList = [];
+    if (updates.shortDescription) fieldList.push('Kısa Açıklama');
+    if (updates.description) fieldList.push('Açıklama');
+
+    showToast(
+      `✓ ${fieldList.join(' + ')} forma aktarıldı. KAYDET'e basmayı unutmayın!`,
+      'success'
+    );
+
+    // Automatically close the modal and scroll to the form fields + flash highlight
+    setTimeout(() => {
+      setCrawlOpen(false);
+      // Scroll to the form fields + a 2-second flash highlight
+      const descField = document.getElementById('description');
+      const shortField = document.getElementById('shortDescription');
+      const target = descField || shortField;
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        [descField, shortField].filter(Boolean).forEach(el => {
+          el.style.transition = 'box-shadow 0.3s ease, background-color 0.3s ease';
+          el.style.boxShadow = '0 0 0 3px rgba(34, 197, 94, 0.4)';
+          el.style.backgroundColor = '#dcfce7';
+          setTimeout(() => {
+            el.style.boxShadow = '';
+            el.style.backgroundColor = '';
+          }, 2500);
+        });
+      }
+      setCrawlDescAppliedToast(false);
+    }, 400);
+  };
+
+  // Simple HTML entity escape (XSS protection)
+  const escapeHtmlEntity = (s) => String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+  const updateCrawlSpec = (index, field, value) => {
+    setCrawlEditableSpecs(prev => prev.map((s, i) => i === index ? { ...s, [field]: value } : s));
+  };
+
+  const removeCrawlSpec = (index) => {
+    setCrawlEditableSpecs(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const addCrawlSpec = () => {
+    setCrawlEditableSpecs(prev => [...prev, { key: '', value: '' }]);
+  };
+
+  const importCrawled = async () => {
+    if (!product?.id || crawlSelected.size === 0) return;
+    setCrawlImporting(true);
+    setCrawlError('');
+    try {
+      const res = await axios.post(
+        `/api/admin/products/${product.id}/crawl-images/import`,
+        {
+          imageUrls: Array.from(crawlSelected),
+          replaceExisting: crawlReplace,
+          markFirstAsPrimary: productImages.length === 0 || crawlReplace,
+          pageUrl: crawlUrl.trim(),
+        }
+      );
+      setCrawlResult(res.data);
+      // Reload product images
+      const imgs = await axios.get(`/api/products/${product.id}/images`);
+      setProductImages(imgs.data || []);
+      // Toast notification
+      const { success = 0, total = 0, errors = [] } = res.data || {};
+      if (success > 0 && errors.length === 0) {
+        showToast(`${success}/${total} görsel başarıyla yüklendi`, 'success');
+      } else if (success > 0 && errors.length > 0) {
+        showToast(`${success}/${total} yüklendi — ${errors.length} hata`, 'warning');
+      } else {
+        showToast(`Hiçbir görsel yüklenemedi (${errors.length} hata)`, 'error');
+      }
+    } catch (e) {
+      const msg = e.response?.data?.message || 'İçe aktarma başarısız';
+      setCrawlError(msg);
+      showToast(msg, 'error');
+    } finally {
+      setCrawlImporting(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -471,8 +802,14 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
       const dataToSend = {
         name: formData.name,
         description: formData.description,
+        shortDescription: formData.shortDescription || null,
         sku: formData.sku,
         price: parseFloat(formData.price),
+        salePrice: formData.salePrice ? parseFloat(formData.salePrice) : null,
+        saleStart: formData.saleStart ? formData.saleStart + ':00' : null,
+        saleEnd: formData.saleEnd ? formData.saleEnd + ':00' : null,
+        featured: formData.isFeatured,
+        isNew: formData.isNew,
         weight: formData.weight ? parseFloat(formData.weight) : null,
         dimensions: formData.dimensions,
         lengthCm: formData.lengthCm ? parseFloat(formData.lengthCm) : null,
@@ -484,7 +821,10 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
         category: { id: parseInt(formData.subcategoryId || formData.categoryId) },
         brand: brandId ? { id: brandId } : null,
         color: colorId ? { id: colorId } : null,
-        isActive: formData.isActive
+        isActive: formData.isActive,
+        slug: formData.slug || null,
+        metaTitle: formData.metaTitle || null,
+        metaDescription: formData.metaDescription || null,
       };
 
       let savedProductId = product?.id;
@@ -503,15 +843,24 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
     } catch (error) {
       console.error('Error saving product:', error);
       const errorData = error?.response?.data;
-      const friendlyMessage = errorData?.message
-        || errorData?.error
-        || (typeof errorData === 'string' ? errorData : null)
-        || 'Ürün kaydedilirken beklenmeyen bir hata oluştu. Lütfen tekrar deneyin.';
-      setErrors({ general: friendlyMessage });
-      if (onSuccess) {
-        // Bildirim için hata da iletilsin
-        onSuccess({ error: true, message: friendlyMessage });
+      // Build friendly message from validation details or general message
+      let friendlyMessage = '';
+      if (errorData?.details && typeof errorData.details === 'object') {
+        friendlyMessage = Object.values(errorData.details).join(', ');
+      } else {
+        friendlyMessage = errorData?.message || errorData?.error || (typeof errorData === 'string' ? errorData : null)
+          || 'Ürün kaydedilirken beklenmeyen bir hata oluştu.';
       }
+      setErrors({ general: friendlyMessage });
+      // Show error toast
+      const t = document.createElement('div');
+      t.className = 'toast align-items-center text-bg-danger border-0 position-fixed top-0 end-0 m-3 show';
+      t.style.cssText = 'min-width:340px;z-index:9999;animation:fadeInDown 0.3s ease';
+      t.setAttribute('role', 'alert');
+      t.innerHTML = `<div class="d-flex align-items-center px-3 py-2"><i class="fas fa-exclamation-circle me-2"></i><div class="toast-body fw-medium">${friendlyMessage}</div><button type="button" class="btn-close btn-close-white ms-auto" onclick="this.parentElement.parentElement.remove()"></button></div>`;
+      document.body.appendChild(t);
+      setTimeout(() => { try { document.body.removeChild(t); } catch {} }, 5000);
+      // Do NOT call onSuccess on error — keep form open
     } finally {
       setLoading(false);
     }
@@ -567,18 +916,33 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
       </div>
 
       <div className="mb-3">
-        <label htmlFor="description" className="form-label">
-          Açıklama
+        <label htmlFor="description" className="form-label d-flex justify-content-between">
+          <span>Açıklama</span>
+          <span className={`small ${(formData.description || '').length > 5000 ? 'text-danger fw-semibold' : 'text-muted'}`}>
+            {(formData.description || '').length} / 5000
+          </span>
         </label>
-        <textarea
-          className="form-control"
-          id="description"
-          name="description"
-          rows="3"
-          value={formData.description}
+        <textarea className={`form-control ${errors.description ? 'is-invalid' : ''}`}
+          id="description" name="description" rows="5"
+          value={formData.description || ''}
           onChange={handleChange}
-          placeholder="Ürün açıklaması..."
-        />
+          placeholder="Detaylı ürün açıklaması..." />
+        {errors.description && <div className="invalid-feedback">{errors.description}</div>}
+      </div>
+      <div className="mb-3">
+        <label htmlFor="shortDescription" className="form-label d-flex justify-content-between">
+          <span>Kısa Açıklama <small className="text-muted">(mağazada listede görünür)</small></span>
+          <span className={`small ${(formData.shortDescription || '').length > 1000 ? 'text-danger fw-semibold' : 'text-muted'}`}>
+            {(formData.shortDescription || '').length} / 1000
+          </span>
+        </label>
+        <textarea className={`form-control ${errors.shortDescription ? 'is-invalid' : ''}`}
+          id="shortDescription" name="shortDescription" rows="2"
+          value={formData.shortDescription || ''}
+          onChange={handleChange}
+          placeholder="Mağazada ürün kartında görünecek kısa açıklama..."
+          maxLength={1000} />
+        {errors.shortDescription && <div className="invalid-feedback">{errors.shortDescription}</div>}
       </div>
 
       {/* Price and Tax Section */}
@@ -1094,7 +1458,582 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
         </div>
       )}
 
-      <div className="d-flex justify-content-end gap-2">
+      {/* ===== Discount & Campaign ===== */}
+      <div className="row mb-3 mt-4">
+        <div className="col-12">
+          <h6 className="text-muted mb-3"><i className="fas fa-percentage me-2" />İndirim & Kampanya</h6>
+        </div>
+      </div>
+      <div className="row">
+        <div className="col-md-6">
+          <div className="mb-3">
+            <label className="form-label fw-medium">İndirim Uygula</label>
+            {(() => {
+              const origPrice = parseFloat(formData.price) || 0;
+              const salePrice = parseFloat(formData.salePrice) || 0;
+              const hasDiscount = salePrice > 0 && origPrice > 0 && salePrice < origPrice;
+              const discountPercent = hasDiscount ? ((1 - salePrice / origPrice) * 100) : 0;
+
+              const handleSalePriceChange = (e) => {
+                setFormData(f => ({ ...f, salePrice: e.target.value }));
+              };
+
+              const handlePercentChange = (e) => {
+                const pct = parseFloat(e.target.value) || 0;
+                if (origPrice > 0 && pct > 0 && pct < 100) {
+                  const calc = (origPrice * (1 - pct / 100)).toFixed(2);
+                  setFormData(f => ({ ...f, salePrice: calc }));
+                } else if (pct === 0 || e.target.value === '') {
+                  setFormData(f => ({ ...f, salePrice: '' }));
+                }
+              };
+
+              return (
+                <div className="border rounded p-3 bg-light">
+                  <div className="row g-2 align-items-end">
+                    <div className="col-6">
+                      <label className="form-label small text-muted mb-1">Satış Fiyatı (₺)</label>
+                      <input type="number" step="0.01" min="0" className="form-control"
+                        value={formData.salePrice} onChange={handleSalePriceChange}
+                        placeholder={origPrice > 0 ? `Mevcut: ${origPrice}₺` : 'Fiyat girin'} />
+                    </div>
+                    <div className="col-6">
+                      <label className="form-label small text-muted mb-1">veya İndirim (%)</label>
+                      <div className="input-group">
+                        <span className="input-group-text">%</span>
+                        <input type="number" step="1" min="0" max="99" className="form-control"
+                          value={hasDiscount ? discountPercent.toFixed(0) : ''}
+                          onChange={handlePercentChange}
+                          placeholder="0" />
+                      </div>
+                    </div>
+                  </div>
+                  {hasDiscount && (
+                    <div className="mt-2 d-flex align-items-center gap-2">
+                      <span className="badge bg-danger">%{discountPercent.toFixed(0)} indirim</span>
+                      <small className="text-muted"><del>{origPrice.toFixed(2)}₺</del> → <strong className="text-success">{salePrice.toFixed(2)}₺</strong></small>
+                    </div>
+                  )}
+                  {formData.salePrice && origPrice > 0 && salePrice >= origPrice && (
+                    <small className="text-danger mt-1 d-block"><i className="fas fa-exclamation-triangle me-1" />Satış fiyatı orijinal fiyattan düşük olmalıdır.</small>
+                  )}
+                  <small className="text-muted d-block mt-2">Satış fiyatı girildiğinde mağazada indirimli olarak gösterilir. Boş bırakırsanız indirim uygulanmaz.</small>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+        <div className="col-md-3">
+          <div className="mb-3">
+            <label className="form-label fw-medium">İndirim Başlangıcı</label>
+            <input type="datetime-local" className="form-control" name="saleStart"
+              value={formData.saleStart} onChange={handleChange} />
+          </div>
+        </div>
+        <div className="col-md-3">
+          <div className="mb-3">
+            <label className="form-label fw-medium">İndirim Bitişi</label>
+            <input type="datetime-local" className="form-control" name="saleEnd"
+              value={formData.saleEnd} onChange={handleChange} />
+          </div>
+        </div>
+      </div>
+      <div className="row mb-3">
+        <div className="col-md-6">
+          <div className="form-check form-switch">
+            <input className="form-check-input" type="checkbox" id="isFeatured" checked={formData.isFeatured}
+              onChange={e => setFormData(f => ({...f, isFeatured: e.target.checked}))} />
+            <label className="form-check-label" htmlFor="isFeatured"><i className="fas fa-star text-warning me-1" />Öne Çıkan Ürün</label>
+          </div>
+        </div>
+        <div className="col-md-6">
+          <div className="form-check form-switch">
+            <input className="form-check-input" type="checkbox" id="isNew" checked={formData.isNew}
+              onChange={e => setFormData(f => ({...f, isNew: e.target.checked}))} />
+            <label className="form-check-label" htmlFor="isNew"><i className="fas fa-sparkles text-info me-1" />Yeni Ürün Etiketi</label>
+          </div>
+        </div>
+      </div>
+
+      {/* ===== Product Images (edit mode only) ===== */}
+      {product?.id && (
+        <>
+          <div className="row mb-3 mt-4">
+            <div className="col-12">
+              <h6 className="text-muted mb-3"><i className="fas fa-images me-2" />Ürün Görselleri</h6>
+            </div>
+          </div>
+          <div className="mb-3">
+            {/* Image Grid */}
+            {productImages.length > 0 && (
+              <div className="row g-2 mb-3">
+                {productImages.sort((a,b) => a.sortOrder - b.sortOrder).map(img => (
+                  <div key={img.id} className="col-6 col-md-3">
+                    <div className={`border rounded overflow-hidden position-relative ${img.primary ? 'border-primary border-2' : ''}`}>
+                      <img src={`/api/admin/products/images/${img.id}/view?thumbnail=true`}
+                        alt="" style={{width:'100%', height:140, objectFit:'contain', background:'#f8f9fa'}}
+                        onError={e => { e.target.style.display='none'; }} />
+                      <div className="position-absolute top-0 end-0 p-1 d-flex gap-1">
+                        {!img.primary && (
+                          <button className="btn btn-sm btn-warning" title="Birincil yap"
+                            style={{width:24,height:24,padding:0,fontSize:10}}
+                            onClick={() => {
+                              axios.put(`/api/products/images/${img.id}/set-primary`).then(() => {
+                                axios.get(`/api/products/${product.id}/images`).then(r => setProductImages(r.data || []));
+                              }).catch(() => {});
+                            }}>
+                            <i className="fas fa-star" />
+                          </button>
+                        )}
+                        <button className="btn btn-sm btn-danger" title="Sil"
+                          style={{width:24,height:24,padding:0,fontSize:10}}
+                          onClick={() => setDeleteImageId(img.id)}>
+                          <i className="fas fa-times" />
+                        </button>
+                      </div>
+                      {img.primary && (
+                        <div className="position-absolute bottom-0 start-0 w-100 text-center" style={{background:'rgba(37,99,235,0.8)', padding:'2px 0'}}>
+                          <small className="text-white" style={{fontSize:10}}>Ana Görsel</small>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {/* Upload Zone */}
+            <div className="border-2 border-dashed rounded text-center"
+              style={{cursor:'pointer', padding:'24px 16px'}}
+              onClick={() => imageInputRef.current?.click()}
+              onDragOver={e => e.preventDefault()}
+              onDrop={e => {
+                e.preventDefault();
+                const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+                files.forEach(f => uploadImage(f));
+              }}>
+              <input type="file" ref={imageInputRef} className="d-none" accept="image/*" multiple
+                onChange={e => { Array.from(e.target.files).forEach(f => uploadImage(f)); e.target.value=''; }} />
+              {imageUploading ? (
+                <div className="py-2"><span className="spinner-border spinner-border-sm text-primary me-2" />Yükleniyor...</div>
+              ) : (
+                <div>
+                  <div className="mb-2"><i className="fas fa-cloud-upload-alt text-muted" style={{fontSize:28}} /></div>
+                  <div className="small text-muted">Görselleri sürükleyin veya <span className="text-primary fw-medium">dosya seçin</span></div>
+                  <div className="text-muted mt-1" style={{fontSize:11}}>PNG, JPG, WebP — Birden fazla seçebilirsiniz</div>
+                </div>
+              )}
+            </div>
+
+            {/* Auto-fetch from URL */}
+            <div className="mt-3 d-flex justify-content-center">
+              <button type="button" className="btn btn-sm btn-outline-info"
+                onClick={openCrawlModal} disabled={!product?.id}>
+                <i className="fas fa-globe me-2" />Üretici Sayfasından Görsel Çek (Profilo, Siemens, Bosch...)
+              </button>
+            </div>
+            {!product?.id && (
+              <div className="text-center small text-muted mt-1">
+                URL'den çekmek için önce ürünü kaydedin
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* ─── Crawl modal ─── */}
+      {crawlOpen && (
+        <div className="modal show d-block" tabIndex="-1"
+          style={{ background: 'rgba(0,0,0,0.5)' }}
+          onClick={() => !crawlLoading && !crawlImporting && setCrawlOpen(false)}>
+          <div className="modal-dialog modal-lg modal-dialog-scrollable" onClick={e => e.stopPropagation()}>
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">
+                  <i className="fas fa-globe text-info me-2" />
+                  Üretici Sayfasından Görsel İndir
+                </h5>
+                <button type="button" className="btn-close"
+                  onClick={() => setCrawlOpen(false)}
+                  disabled={crawlLoading || crawlImporting}></button>
+              </div>
+              <div className="modal-body">
+                <div className="alert alert-info py-2 mb-3">
+                  <div className="small mb-2">
+                    <i className="fas fa-info-circle me-1" />
+                    Ürün detay sayfasının URL'ini yapıştırın → görseller otomatik bulunup gösterilecek.
+                  </div>
+                  <div className="d-flex flex-wrap gap-1">
+                    <small className="text-muted me-1" style={{lineHeight: '24px'}}>Desteklenen:</small>
+                    {['profilo.com','siemens.com.tr','bosch-home.com.tr','arcelik.com.tr','beko.com.tr',
+                      'vestel.com.tr','samsung.com','lg.com','miele.com','haier.com',
+                      'fakir.com.tr','altus.com.tr'].map(d => (
+                      <span key={d} className="badge bg-white text-dark border" style={{fontWeight: 400}}>
+                        {d}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="mb-3">
+                  <div className="input-group input-group-sm">
+                    <span className="input-group-text"><i className="fas fa-link" /></span>
+                    <input type="url"
+                      className={`form-control ${crawlUrl && !isLikelySupportedUrl(crawlUrl) ? 'is-invalid' : ''}`}
+                      placeholder="https://www.profilo.com/tr/tr/product/..."
+                      value={crawlUrl}
+                      onChange={e => setCrawlUrl(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); fetchCrawlPreview(); } }}
+                      disabled={crawlLoading || crawlImporting}
+                      autoFocus />
+                    <button className="btn btn-primary" onClick={fetchCrawlPreview}
+                      disabled={crawlLoading || crawlImporting || !crawlUrl.trim()}>
+                      {crawlLoading ? (
+                        <><span className="spinner-border spinner-border-sm me-1" />Çekiliyor</>
+                      ) : <><i className="fas fa-search me-1" />Görselleri Bul</>}
+                    </button>
+                  </div>
+                  {crawlUrl && !isLikelySupportedUrl(crawlUrl) && (
+                    <small className="text-danger d-block mt-1">
+                      <i className="fas fa-exclamation-circle me-1" />
+                      Bu domain desteklenmiyor görünüyor. Yukarıdaki listeden bir site kullanın.
+                    </small>
+                  )}
+                  {crawlUrl && isLikelySupportedUrl(crawlUrl) && (
+                    <small className="text-success d-block mt-1">
+                      <i className="fas fa-check-circle me-1" />
+                      Geçerli — "Görselleri Bul"a tıklayın.
+                    </small>
+                  )}
+                </div>
+
+                {crawlError && (
+                  <div className="alert alert-danger d-flex align-items-start gap-2 mb-3">
+                    <i className="fas fa-exclamation-triangle mt-1" style={{fontSize: 18}} />
+                    <div className="flex-grow-1">
+                      <strong className="d-block mb-1">URL kabul edilmedi</strong>
+                      <div className="small">{crawlError}</div>
+                      {crawlError.includes('Desteklenen') && (
+                        <div className="mt-2 small">
+                          <strong>İpucu:</strong> Yapıştırdığınız URL'in başlangıcı doğru mu?
+                          Profilo için: <code className="bg-white px-1 rounded">https://www.profilo.com/...</code>
+                        </div>
+                      )}
+                    </div>
+                    <button type="button" className="btn-close btn-close-sm"
+                      onClick={() => setCrawlError('')}></button>
+                  </div>
+                )}
+
+                {crawlResult && (
+                  <div className={`alert ${crawlResult.success > 0 ? 'alert-success' : 'alert-warning'} py-2 small mb-3`}>
+                    <i className="fas fa-check-circle me-1" />
+                    <strong>{crawlResult.success}/{crawlResult.total}</strong> görsel başarıyla yüklendi.
+                    {crawlResult.errors?.length > 0 && (
+                      <ul className="mb-0 mt-2" style={{fontSize: 11}}>
+                        {crawlResult.errors.slice(0, 5).map((e, i) => <li key={i}>{e}</li>)}
+                        {crawlResult.errors.length > 5 && <li>...ve {crawlResult.errors.length - 5} daha</li>}
+                      </ul>
+                    )}
+                  </div>
+                )}
+
+                {crawlPreview && (
+                  <>
+                    {/* ── Preview header: title + brand + tab navigation ── */}
+                    <div className="border-bottom pb-2 mb-3">
+                      {crawlPreview.title && (
+                        <div className="small text-muted text-truncate mb-2" style={{maxWidth: '100%'}}>
+                          <i className="fas fa-tag me-1" />{crawlPreview.title}
+                          {crawlPreview.brand && (
+                            <span className="badge bg-info bg-opacity-10 text-info ms-2">
+                              <i className="fas fa-trademark me-1" />{crawlPreview.brand}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      {/* Tab nav */}
+                      <ul className="nav nav-tabs nav-tabs-sm mb-0" style={{borderBottom: 'none'}}>
+                        <li className="nav-item">
+                          <button type="button"
+                            className={`nav-link ${crawlActiveTab === 'images' ? 'active' : ''}`}
+                            onClick={() => setCrawlActiveTab('images')}>
+                            <i className="fas fa-images me-1" />Görseller
+                            {crawlPreview.images?.length > 0 && (
+                              <span className="badge bg-primary ms-2">{crawlPreview.images.length}</span>
+                            )}
+                          </button>
+                        </li>
+                        <li className="nav-item">
+                          <button type="button"
+                            className={`nav-link ${crawlActiveTab === 'description' ? 'active' : ''}`}
+                            onClick={() => setCrawlActiveTab('description')}>
+                            <i className="fas fa-align-left me-1" />Açıklama & Özellikler
+                            {(crawlPreview.description || crawlEditableSpecs.length > 0) && (
+                              <span className="badge bg-success ms-2">
+                                <i className="fas fa-check" style={{fontSize: 9}} />
+                              </span>
+                            )}
+                          </button>
+                        </li>
+                      </ul>
+                    </div>
+
+                    {/* ── Tab: Images ── */}
+                    {crawlActiveTab === 'images' && crawlPreview.images && crawlPreview.images.length > 0 && (
+                      <>
+                        <div className="d-flex justify-content-between align-items-center mb-2">
+                          <div>
+                            <strong className="me-2">{crawlPreview.images.length} görsel bulundu</strong>
+                            <span className="text-muted small">— {crawlSelected.size} seçili</span>
+                          </div>
+                          <div className="btn-group btn-group-sm">
+                            <button type="button" className="btn btn-outline-secondary" onClick={selectAllCrawl}>Tümünü Seç</button>
+                            <button type="button" className="btn btn-outline-secondary" onClick={deselectAllCrawl}>Temizle</button>
+                          </div>
+                        </div>
+
+                        <div className="row g-2 mb-3" style={{ maxHeight: 400, overflowY: 'auto' }}>
+                          {crawlPreview.images.map((u, idx) => {
+                            const selected = crawlSelected.has(u);
+                            return (
+                              <div key={u} className="col-4 col-md-3">
+                                <div
+                                  className={`border rounded position-relative overflow-hidden ${selected ? 'border-primary border-2' : ''}`}
+                                  style={{ cursor: 'pointer', aspectRatio: '1/1', background: '#f8f9fa' }}
+                                  onClick={() => toggleCrawlSelection(u)}
+                                  title={u}
+                                >
+                                  <CrawlThumbnail url={u} referer={crawlUrl.trim()} />
+                                  <div className="position-absolute top-0 start-0 m-1">
+                                    <span className="badge bg-dark bg-opacity-75 small">#{idx + 1}</span>
+                                  </div>
+                                  {selected && (
+                                    <div className="position-absolute top-0 end-0 m-1">
+                                      <span className="badge bg-primary"><i className="fas fa-check" /></span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        <div className="form-check mb-2">
+                          <input className="form-check-input" type="checkbox" id="crawlReplaceCheck"
+                            checked={crawlReplace}
+                            onChange={e => setCrawlReplace(e.target.checked)} />
+                          <label className="form-check-label small" htmlFor="crawlReplaceCheck">
+                            <strong>Mevcut ürün görsellerini sil</strong>
+                            <span className="text-muted ms-1">(işaretlenmezse yenileri ek olarak yüklenir)</span>
+                          </label>
+                        </div>
+                      </>
+                    )}
+
+                    {/* ── Tab: Description & Specs ── */}
+                    {crawlActiveTab === 'description' && (
+                      <div>
+                        {!crawlPreview.description && !crawlPreview.shortDescription && crawlEditableSpecs.length === 0 ? (
+                          <div className="alert alert-warning small mb-3">
+                            <i className="fas fa-exclamation-triangle me-1" />
+                            Bu sayfadan açıklama veya teknik özellik çıkarılamadı.
+                            Manuel olarak ekleyebilir veya ürün formuna kendiniz yazabilirsiniz.
+                          </div>
+                        ) : (
+                          <div className="alert alert-info small mb-3 py-2">
+                            <i className="fas fa-magic me-1" />
+                            <strong>Açıklama bulundu!</strong> Aşağıda düzenleyip "Ürün Formuna Aktar" diyerek
+                            doğrudan formdaki "Açıklama" ve "Kısa Açıklama" alanlarına yazdırabilirsiniz.
+                          </div>
+                        )}
+
+                        {/* Short description */}
+                        <div className="mb-3">
+                          <label htmlFor="crawl-short-desc" className="form-label small fw-semibold d-flex justify-content-between">
+                            <span>Kısa Açıklama</span>
+                            <span className="text-muted" style={{fontSize: 11}}>
+                              {crawlEditableShortDesc.length} / 300
+                            </span>
+                          </label>
+                          <textarea id="crawl-short-desc"
+                            className="form-control form-control-sm"
+                            rows={2}
+                            maxLength={300}
+                            value={crawlEditableShortDesc}
+                            onChange={e => setCrawlEditableShortDesc(e.target.value)}
+                            placeholder="Listeleme sayfalarında ürün adının altında görünür..." />
+                        </div>
+
+                        {/* Long description */}
+                        <div className="mb-3">
+                          <label htmlFor="crawl-long-desc" className="form-label small fw-semibold d-flex justify-content-between">
+                            <span>Açıklama</span>
+                            <span className="text-muted" style={{fontSize: 11}}>
+                              {crawlEditableDesc.length} karakter
+                            </span>
+                          </label>
+                          <textarea id="crawl-long-desc"
+                            className="form-control"
+                            rows={6}
+                            value={crawlEditableDesc}
+                            onChange={e => setCrawlEditableDesc(e.target.value)}
+                            placeholder="Ürün detay sayfasında gösterilecek tam açıklama (HTML/Markdown desteklenir)..." />
+                          <small className="text-muted">
+                            HTML etiketleri korunur. "Ürün Formuna Aktar"a basınca formdaki zengin metin editörüne yapıştırılır.
+                          </small>
+                        </div>
+
+                        {/* Specs editor */}
+                        <div className="mb-3">
+                          <div className="d-flex justify-content-between align-items-center mb-2">
+                            <label className="form-label small fw-semibold mb-0">
+                              Teknik Özellikler ({crawlEditableSpecs.length})
+                            </label>
+                            <button type="button" className="btn btn-sm btn-outline-primary" onClick={addCrawlSpec}>
+                              <i className="fas fa-plus me-1" />Yeni Özellik
+                            </button>
+                          </div>
+                          {crawlEditableSpecs.length === 0 ? (
+                            <div className="text-muted small text-center py-3 border rounded bg-light">
+                              Özellik çıkarılamadı. "Yeni Özellik" butonu ile elle ekleyebilirsiniz.
+                            </div>
+                          ) : (
+                            <div style={{maxHeight: 280, overflowY: 'auto'}}>
+                              {crawlEditableSpecs.map((spec, idx) => (
+                                <div key={idx} className="d-flex gap-2 mb-2">
+                                  <input type="text" className="form-control form-control-sm"
+                                    placeholder="Özellik adı (örn. Kapasite)"
+                                    value={spec.key}
+                                    onChange={e => updateCrawlSpec(idx, 'key', e.target.value)}
+                                    style={{flexBasis: '40%'}} />
+                                  <input type="text" className="form-control form-control-sm"
+                                    placeholder="Değer (örn. 9 kg)"
+                                    value={spec.value}
+                                    onChange={e => updateCrawlSpec(idx, 'value', e.target.value)}
+                                    style={{flexBasis: '55%'}} />
+                                  <button type="button" className="btn btn-sm btn-outline-danger"
+                                    onClick={() => removeCrawlSpec(idx)}
+                                    title="Sil">
+                                    <i className="fas fa-trash" />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          <small className="text-muted">
+                            Aktarınca açıklamanın altına "Teknik Özellikler" tablosu olarak eklenir.
+                          </small>
+                        </div>
+
+                        {/* Apply button */}
+                        <div className="d-flex gap-2 align-items-center">
+                          <button type="button" className="btn btn-success"
+                            onClick={applyCrawlDescriptionToProduct}
+                            disabled={!crawlEditableDesc && !crawlEditableShortDesc && crawlEditableSpecs.length === 0}>
+                            <i className="fas fa-arrow-right me-1" />
+                            Ürün Formuna Aktar
+                          </button>
+                          {crawlDescAppliedToast && (
+                            <span className="badge bg-success">
+                              <i className="fas fa-check me-1" />Aktarıldı
+                            </span>
+                          )}
+                          <small className="text-muted ms-auto">
+                            <i className="fas fa-info-circle me-1" />
+                            Formdaki mevcut değerler üzerine yazılır
+                          </small>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {crawlPreview && crawlActiveTab === 'images' && (!crawlPreview.images || crawlPreview.images.length === 0) && (
+                  <div className="alert alert-warning py-2 small mb-0">
+                    Bu sayfada otomatik bulunabilen görsel yok. "Açıklama & Özellikler" sekmesini deneyebilir veya elle ekleyebilirsiniz.
+                  </div>
+                )}
+              </div>
+              <div className="modal-footer">
+                {crawlResult && crawlResult.success > 0 ? (
+                  <>
+                    <button type="button" className="btn btn-outline-secondary" onClick={() => setCrawlOpen(false)}>
+                      <i className="fas fa-images me-1" />Daha Fazla Görsel Ekle
+                    </button>
+                    <button type="button" className="btn btn-success" onClick={() => {
+                      setCrawlOpen(false);
+                      if (onSuccess) onSuccess({ id: product?.id });
+                    }}>
+                      <i className="fas fa-arrow-right me-1" />Ürün Detayına Dön
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button type="button" className="btn btn-secondary" onClick={() => setCrawlOpen(false)}
+                      disabled={crawlLoading || crawlImporting}>Kapat</button>
+                    <button type="button" className="btn btn-primary"
+                      disabled={!crawlPreview || crawlSelected.size === 0 || crawlImporting || crawlLoading}
+                      onClick={importCrawled}>
+                      {crawlImporting ? (
+                        <><span className="spinner-border spinner-border-sm me-1" />Yükleniyor...</>
+                      ) : (
+                        <><i className="fas fa-download me-1" />{crawlSelected.size} Görseli İndir</>
+                      )}
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── SEO Settings ── */}
+      <div className="card border-0 bg-light mt-3">
+        <div className="card-header bg-transparent border-bottom-0 d-flex align-items-center gap-2 py-2 px-3" style={{cursor:'pointer'}}
+          onClick={() => setFormData(prev => ({...prev, _seoOpen: !prev._seoOpen}))}>
+          <i className="fas fa-search text-success" />
+          <span className="small fw-semibold">SEO Ayarları</span>
+          <i className={`fas fa-chevron-${formData._seoOpen ? 'up' : 'down'} ms-auto text-muted`} style={{fontSize:11}} />
+        </div>
+        {formData._seoOpen && (
+          <div className="card-body pt-0 px-3 pb-3">
+            <div className="row g-2">
+              <div className="col-12">
+                <label className="form-label small fw-medium mb-1">Slug (URL)</label>
+                <div className="input-group input-group-sm">
+                  <span className="input-group-text text-muted" style={{fontSize:11}}>/store/urun/</span>
+                  <input className="form-control font-monospace" value={formData.slug || ''} onChange={e => setFormData(prev => ({...prev, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g,'')}))} placeholder="urun-adi-slug" />
+                  <button type="button" className="btn btn-outline-secondary" title="Ürün adından otomatik oluştur" onClick={() => {
+                    const s = (formData.name || '').toLowerCase().replace(/ş/g,'s').replace(/ç/g,'c').replace(/ğ/g,'g').replace(/ü/g,'u').replace(/ö/g,'o').replace(/ı/g,'i').replace(/İ/g,'i').replace(/[^a-z0-9\s-]/g,'').replace(/\s+/g,'-').replace(/-+/g,'-').replace(/^-|-$/g,'');
+                    setFormData(prev => ({...prev, slug: s}));
+                  }}><i className="fas fa-magic" /></button>
+                </div>
+              </div>
+              <div className="col-12">
+                <label className="form-label small fw-medium mb-1">Meta Başlık <span className="text-muted fw-normal">({(formData.metaTitle||'').length}/200)</span></label>
+                <input className="form-control form-control-sm" value={formData.metaTitle || ''} onChange={e => setFormData(prev => ({...prev, metaTitle: e.target.value}))} maxLength={200} placeholder="Arama sonuçlarında görünecek başlık" />
+              </div>
+              <div className="col-12">
+                <label className="form-label small fw-medium mb-1">Meta Açıklama <span className="text-muted fw-normal">({(formData.metaDescription||'').length}/500)</span></label>
+                <textarea className="form-control form-control-sm" rows={2} value={formData.metaDescription || ''} onChange={e => setFormData(prev => ({...prev, metaDescription: e.target.value}))} maxLength={500} placeholder="Arama sonuçlarında görünecek açıklama" />
+              </div>
+              {formData.metaTitle && (
+                <div className="col-12">
+                  <div className="border rounded p-2" style={{fontSize:12,background:'#fff'}}>
+                    <div className="text-primary" style={{fontSize:14}}>{formData.metaTitle || formData.name}</div>
+                    <div className="text-success" style={{fontSize:11}}>siteniz.com/store/urun/{formData.slug || '...'}</div>
+                    <div className="text-muted">{(formData.metaDescription || formData.shortDescription || '').substring(0, 160)}</div>
+                  </div>
+                  <small className="text-muted">Google arama sonucu önizlemesi</small>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="d-flex justify-content-end gap-2 mt-3">
         <button
           type="button"
           className="btn btn-secondary"
@@ -1124,6 +2063,23 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
       </div>
 
       {/* Create Modal */}
+      <ConfirmModal
+        show={!!deleteImageId}
+        title="Gorseli Sil"
+        message="Bu gorseli silmek istediginize emin misiniz? Bu islem geri alinamaz."
+        icon="trash"
+        confirmText="Sil"
+        confirmVariant="danger"
+        onConfirm={() => {
+          const imgId = deleteImageId;
+          setDeleteImageId(null);
+          axios.delete(`/api/products/images/${imgId}`).then(() => {
+            setProductImages(prev => prev.filter(i => i.id !== imgId));
+          }).catch(() => {});
+        }}
+        onCancel={() => setDeleteImageId(null)}
+      />
+
       {showCreateModal && (
         <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} tabIndex="-1">
           <div className="modal-dialog modal-dialog-centered">

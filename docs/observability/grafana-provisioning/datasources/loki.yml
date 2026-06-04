@@ -1,0 +1,19 @@
+apiVersion: 1
+
+# Grafana ilk açılışta Loki datasource'unu otomatik tanımlar — manuel kurulum gerekmez.
+datasources:
+  - name: Loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    isDefault: true
+    editable: false
+    jsonData:
+      timeout: 60
+      maxLines: 5000
+      # Derived fields: log mesajındaki traceId/requestId'lere otomatik link
+      derivedFields:
+        - datasourceUid: loki
+          matcherRegex: '"traceId":"([^"]+)"'
+          name: TraceID
+          url: '/explore?orgId=1&left={"datasource":"loki","queries":[{"refId":"A","expr":"{traceId=\"$${__value.raw}\"}"}]}'

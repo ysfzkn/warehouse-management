@@ -5,8 +5,8 @@ package com.warehouse.enums;
  */
 public enum RoleName {
     ADMIN,
-    STOCK_IN,    // Sadece stok ekleyebilir
-    STOCK_OUT;   // Sadece stok çıkarabilir
+    STOCK_IN,    // Can only add stock
+    STOCK_OUT;   // Can only remove stock
 
     public String asAuthority() {
         return "ROLE_" + name();

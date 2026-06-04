@@ -23,13 +23,14 @@ import com.warehouse.dto.BulkDeleteResponse;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/stock-imports")
+@RequestMapping("/api/admin/stock-imports")
 @RequiredArgsConstructor
 @Slf4j
 public class StockImportController {
@@ -38,6 +39,7 @@ public class StockImportController {
     private final StockImportHistoryRepository historyRepository;
     private final ImportProperties importProperties;
     private final AdminSecurityService adminSecurityService;
+    private final com.warehouse.service.PhotoStorageService photoStorageService;
 
     @GetMapping("/template")
     public ResponseEntity<Resource> downloadTemplate() throws IOException {
@@ -153,42 +155,35 @@ public class StockImportController {
     public ResponseEntity<Resource> downloadFile(@PathVariable Long id) throws IOException {
         StockImportHistory history = historyRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Record not found: " + id));
-        Path storageDir = Path.of(importProperties.getStorageDir());
-        Path path = storageDir.resolve(history.getStoredFilename());
-        if (!Files.exists(path)) {
-            // Fallback: try to find by original filename suffix (for older inconsistent records)
-            String sanitizedOriginal = history.getOriginalFilename() != null
-                    ? history.getOriginalFilename().replaceAll("[^a-zA-Z0-9._-]", "_")
-                    : null;
-            if (sanitizedOriginal != null && Files.isDirectory(storageDir)) {
-                try (var stream = Files.list(storageDir)) {
-                    var match = stream
-                            .filter(Files::isRegularFile)
-                            .filter(p -> p.getFileName().toString().endsWith(sanitizedOriginal))
-                            .sorted((p1, p2) -> {
-                                try {
-                                    return Files.getLastModifiedTime(p2).compareTo(Files.getLastModifiedTime(p1));
-                                } catch (IOException e) {
-                                    return 0;
-                                }
-                            })
-                            .findFirst();
-                    if (match.isPresent()) {
-                        path = match.get();
-                    } else {
-                        return ResponseEntity.notFound().build();
-                    }
-                }
-            } else {
+
+        String storageKey = history.getStoredFilename();
+        if (storageKey == null || storageKey.isBlank()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        // New format: "imports/{warehouseId}/uuid.xlsx" — storage abstraction
+        // Old format: timestamp_filename (local fs) — backward compat fallback
+        try (InputStream in = photoStorageService.openDocumentStream(storageKey)) {
+            byte[] bytes = in.readAllBytes();
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + history.getOriginalFilename())
+                    .contentType(MediaType.parseMediaType(history.getContentType()))
+                    .contentLength(bytes.length)
+                    .body(new org.springframework.core.io.ByteArrayResource(bytes));
+        } catch (Exception e) {
+            // Legacy fallback: old records may live on the local fs
+            Path storageDir = Path.of(importProperties.getStorageDir());
+            Path path = storageDir.resolve(storageKey);
+            if (!Files.exists(path)) {
                 return ResponseEntity.notFound().build();
             }
+            InputStreamResource resource = new InputStreamResource(Files.newInputStream(path));
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + history.getOriginalFilename())
+                    .contentType(MediaType.parseMediaType(history.getContentType()))
+                    .contentLength(Files.size(path))
+                    .body(resource);
         }
-        InputStreamResource resource = new InputStreamResource(Files.newInputStream(path));
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + history.getOriginalFilename())
-                .contentType(MediaType.parseMediaType(history.getContentType()))
-                .contentLength(Files.size(path))
-                .body(resource);
     }
 
     private StockImportHistoryDto toDto(StockImportHistory h) {

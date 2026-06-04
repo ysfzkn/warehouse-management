@@ -6,6 +6,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import org.hibernate.LazyInitializationException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -37,7 +38,7 @@ public class GlobalExceptionHandler {
                 ? ex.getMessage()
                 : errorCode.getMessage();
         List<String> details = null;
-        // Özel bazı doğrulama kodları için alan adı ekleyerek Türkçe mesaj üret
+        // For certain custom validation codes, build a message that includes the field name
         if (errorCode == ErrorCode.REQUIRED_FIELD_MISSING && ex.getMessage() != null) {
             message = ex.getMessage() + " alanı zorunludur";
         } else if (errorCode == ErrorCode.VALUE_MUST_BE_POSITIVE && ex.getMessage() != null) {
@@ -99,7 +100,7 @@ public class GlobalExceptionHandler {
                 .map(ConstraintViolation::getMessage)
                 .collect(Collectors.joining(", "));
         
-        // Türkçe mesajları daha anlaşılır hale getir
+        // Make the messages more understandable
         if (errorMessage.contains("Reserved quantity cannot be negative")) {
             errorMessage = "Rezerve miktarı negatif olamaz. Transfer iptal edilirken rezerve miktarı yetersiz olduğu için bu hata oluştu.";
         } else if (errorMessage.contains("cannot be negative")) {
@@ -146,6 +147,21 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
     }
 
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<ErrorResponse> handleOptimisticLockException(
+            ObjectOptimisticLockingFailureException ex, HttpServletRequest request) {
+
+        ErrorResponse errorResponse = new ErrorResponse(
+                "CONCURRENT_MODIFICATION",
+                HttpStatus.CONFLICT.value(),
+                HttpStatus.CONFLICT.name(),
+                "Bu kayit baska bir islem tarafindan guncellendi. Lutfen sayfayi yenileyip tekrar deneyin.",
+                request.getRequestURI()
+        );
+        logger.warn("Optimistic lock conflict at path={} entity={}", request.getRequestURI(), ex.getPersistentClassName());
+        return new ResponseEntity<>(errorResponse, HttpStatus.CONFLICT);
+    }
+
     @ExceptionHandler(LazyInitializationException.class)
     public ResponseEntity<ErrorResponse> handleLazyInitializationException(
             LazyInitializationException ex, HttpServletRequest request) {
@@ -166,21 +182,21 @@ public class GlobalExceptionHandler {
     /**
      * Handles timeout events for async/SSE requests.
      * For the SSE stream (/api/stream), this is considered a normal situation
-     * (client closed tab, network idle vs.), bu yüzden stack trace loglamıyoruz.
+     * (client closed tab, network idle, etc.), so we do not log the stack trace.
      */
     @ExceptionHandler(AsyncRequestTimeoutException.class)
     public ResponseEntity<Void> handleAsyncTimeout(
             AsyncRequestTimeoutException ex, HttpServletRequest request) {
 
         String uri = request.getRequestURI();
-        if (uri != null && uri.startsWith("/api/stream")) {
-            // Tek satırlık, düşük seviye log – hata gibi görünmesin
+        if (uri != null && uri.startsWith("/api/admin/stream")) {
+            // Single-line, low-level log – should not look like an error
             logger.debug("SSE connection timeout/closed at path={}", uri);
-            // SSE connection zaten kapanmış olacağı için body dönmeye gerek yok
+            // No need to return a body since the SSE connection is already closed
             return ResponseEntity.noContent().build();
         }
 
-        // Diğer async istekler için uyarı seviyesinde kısa log
+        // Short warning-level log for other async requests
         logger.warn("Async request timed out at path={}", uri);
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).build();
     }
@@ -190,7 +206,7 @@ public class GlobalExceptionHandler {
             Exception ex, HttpServletRequest request) {
         // Avoid writing JSON on SSE endpoint which uses text/event-stream
         String uri = request.getRequestURI();
-        if (uri != null && uri.startsWith("/api/stream")) {
+        if (uri != null && uri.startsWith("/api/admin/stream")) {
             logger.error("Unhandled exception on SSE stream at path={} : {}", uri, ex.getMessage(), ex);
             return new ResponseEntity<>(null, HttpStatus.INTERNAL_SERVER_ERROR);
         }

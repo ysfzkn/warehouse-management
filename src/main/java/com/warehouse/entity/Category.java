@@ -42,6 +42,24 @@ public class Category {
     @Column(name = "is_active", nullable = false)
     private boolean isActive = true;
 
+    @Column(name = "slug", nullable = false, length = 100)
+    private String slug;
+
+    @Column(name = "image_url", length = 500)
+    private String imageUrl;
+
+    @Column(name = "sort_order", nullable = false)
+    private Integer sortOrder = 0;
+
+    @Column(name = "show_in_menu", nullable = false)
+    private boolean showInMenu = true;
+
+    @Column(name = "meta_title", length = 200)
+    private String metaTitle;
+
+    @Column(name = "meta_description", length = 500)
+    private String metaDescription;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "parent_id")
     @JsonIgnoreProperties({"children", "products", "hibernateLazyInitializer", "handler"})

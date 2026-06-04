@@ -11,8 +11,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/colors")
-@CrossOrigin(origins = "*")
+@RequestMapping("/api/admin/colors")
 public class ColorController {
 
     private final ColorService colorService;

@@ -1,0 +1,5 @@
+#!/usr/bin/env sh
+# Pre-commit: ESLint + Prettier (lint-staged) yalnız staged dosyalarda çalışır.
+# Hata varsa commit reddedilir.
+cd frontend 2>/dev/null || true
+npx lint-staged

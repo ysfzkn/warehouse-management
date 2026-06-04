@@ -76,7 +76,7 @@ public class Stock {
 
     @Min(value = 0, message = "Consigned quantity cannot be negative")
     @Column(name = "consigned_quantity")
-    private Integer consignedQuantity = 0; // Emanet miktar
+    private Integer consignedQuantity = 0; // Consigned quantity
 
     @Size(max = 500, message = "Addition note cannot exceed 500 characters")
     @Column(name = "addition_note", length = 500)
@@ -89,6 +89,10 @@ public class Stock {
     @Size(max = 20, message = "Customer phone cannot exceed 20 characters")
     @Column(name = "customer_phone", length = 20)
     private String customerPhone; // For EMANET_DEPO warehouses
+
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version = 0L;
 
     @Column(name = "last_updated", nullable = false)
     private LocalDateTime lastUpdated;

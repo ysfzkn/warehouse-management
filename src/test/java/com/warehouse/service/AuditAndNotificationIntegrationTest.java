@@ -49,23 +49,25 @@ class AuditAndNotificationIntegrationTest {
 
         category = new Category();
         category.setName("Integration Category");
+        category.setSlug("integration-category");
         category = categoryRepository.save(category);
 
         product = new Product();
         product.setName("Test Product");
         product.setSku("INT-TEST-001");
+        product.setSlug("int-test-001");
         product.setCategory(category);
-        productRepository.save(product);
+        product = productRepository.save(product);
 
         wh1 = new Warehouse();
         wh1.setName("WH-1");
         wh1.setLocation("Istanbul");
-        warehouseRepository.save(wh1);
+        wh1 = warehouseRepository.save(wh1);
 
         wh2 = new Warehouse();
         wh2.setName("WH-2");
         wh2.setLocation("Ankara");
-        warehouseRepository.save(wh2);
+        wh2 = warehouseRepository.save(wh2);
     }
 
     @AfterEach

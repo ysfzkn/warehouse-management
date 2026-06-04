@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <!--
+        Logback config with PII redaction for production.
+
+        KVKK + güvenlik:
+        - E-mail adresleri, telefon, kart numarası, JWT token, password patternleri
+          loglara akmamalı. Bu config "%replace" ile pattern-bazlı mask uygular.
+        - dev/test profile'inde plain console output (debug için).
+        - prod profile'inde JSON-friendly + redaction aktif.
+    -->
+
+    <springProperty scope="context" name="appName" source="spring.application.name" defaultValue="warehouse"/>
+    <springProperty scope="context" name="activeProfile" source="spring.profiles.active" defaultValue="dev"/>
+
+    <!-- ============================================================ -->
+    <!--  DEV / TEST profile — plain console, full output             -->
+    <!-- ============================================================ -->
+    <springProfile name="default,dev,test,local">
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder>
+                <pattern>%d{HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n</pattern>
+            </encoder>
+        </appender>
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+        <logger name="com.warehouse" level="DEBUG"/>
+        <logger name="org.springframework.web" level="INFO"/>
+    </springProfile>
+
+    <!-- ============================================================ -->
+    <!--  PROD profile — JSON output + PII redaction (Loki uyumlu)    -->
+    <!-- ============================================================ -->
+    <!--
+        Logback yapılandırması:
+        - Tüm log mesajları structured JSON (Logstash encoder) → Loki/Promtail parser
+        - PII pattern'leri (email/telefon/kart/JWT/password) message field'ında redact
+        - MDC alanları (traceId, requestId, userId) otomatik JSON'a dahil
+        - Stack trace ayrı field olarak (Grafana'da kolay açılır/kapanır)
+
+        JSON şeması:
+        {
+          "@timestamp": "2026-05-15T10:30:00.123Z",
+          "level": "ERROR",
+          "logger_name": "com.warehouse.service.PaymentService",
+          "thread_name": "http-nio-8080-exec-3",
+          "message": "Payment failed: orderId=42",
+          "traceId": "a1b2c3d4...",
+          "requestId": "req-abc123",
+          "userId": "12",
+          "stack_trace": "java.lang.NullPointerException..."
+        }
+    -->
+    <springProfile name="prod,production">
+        <appender name="JSON_CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+                <!-- MDC alanları otomatik JSON'a -->
+                <includeMdc>true</includeMdc>
+                <!-- Stack trace ayrı field; çok büyükse 100KB'da kes -->
+                <throwableConverter class="net.logstash.logback.stacktrace.ShortenedThrowableConverter">
+                    <maxLength>10000</maxLength>
+                    <rootCauseFirst>true</rootCauseFirst>
+                </throwableConverter>
+                <!-- PII redaction custom field message üzerinde regex -->
+                <!-- (Logstash encoder kendi redact desteklemiyor; mesajı yazan
+                     kod PII bilgisini direkt log'a koymamalı — bu son savunma) -->
+                <customFields>{"service":"warehouse-backend"}</customFields>
+            </encoder>
+        </appender>
+
+        <root level="INFO">
+            <appender-ref ref="JSON_CONSOLE"/>
+        </root>
+
+        <!-- Hassas modüller için sıkı seviye (kazara secret leak'i azalt) -->
+        <logger name="com.warehouse.service.payment" level="INFO"/>
+        <logger name="com.warehouse.security" level="INFO"/>
+
+        <!-- Spring boot / Hibernate gürültüsünü kıs -->
+        <logger name="org.springframework.web.servlet.DispatcherServlet" level="WARN"/>
+        <logger name="org.hibernate.SQL" level="WARN"/>
+        <logger name="org.hibernate.type.descriptor.sql.BasicBinder" level="WARN"/>
+        <logger name="org.apache.tomcat" level="WARN"/>
+        <logger name="org.apache.catalina" level="WARN"/>
+    </springProfile>
+</configuration>

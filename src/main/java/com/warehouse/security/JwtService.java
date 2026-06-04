@@ -7,6 +7,9 @@ import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.io.DecodingException;
 import io.jsonwebtoken.security.Keys;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 
 import java.security.Key;
@@ -20,13 +23,44 @@ import java.util.Map;
 @Service
 public class JwtService {
 
+    private static final Logger log = LoggerFactory.getLogger(JwtService.class);
+
+    // Blacklist of weak/default secrets scanned before launch — using any of
+    // these in prod is a fatal error (fail-fast at startup).
+    private static final java.util.Set<String> WEAK_SECRETS = java.util.Set.of(
+            "change-this-secret",
+            "dev-secret",
+            "dev-secret-change-in-production-min-32-chars!!",
+            "secret",
+            "your-secret-key",
+            "your-256-bit-secret"
+    );
+
     private final SecurityProperties securityProperties;
     private final Key signingKey;
 
-    public JwtService(SecurityProperties securityProperties) {
+    public JwtService(SecurityProperties securityProperties, Environment environment) {
         this.securityProperties = securityProperties;
         byte[] keyBytes;
         String secret = Objects.toString(securityProperties.getJwtSecret(), "change-this-secret");
+
+        // ── Production fail-fast: weak/default secrets are not accepted in prod ──
+        boolean isProd = false;
+        for (String profile : environment.getActiveProfiles()) {
+            if ("prod".equalsIgnoreCase(profile) || "production".equalsIgnoreCase(profile)) {
+                isProd = true; break;
+            }
+        }
+        if (isProd) {
+            String trimmed = secret == null ? "" : secret.trim();
+            if (trimmed.isBlank() || WEAK_SECRETS.contains(trimmed) || trimmed.length() < 32) {
+                String msg = "FATAL: Production'da JWT_SECRET zayıf/eksik. " +
+                             "En az 32 karakterli, default olmayan bir secret env değişkeni olarak verilmelidir. " +
+                             "Önerilen: openssl rand -base64 48";
+                log.error(msg);
+                throw new IllegalStateException(msg);
+            }
+        }
         // Accept raw text or base64 secret
         try {
             keyBytes = Decoders.BASE64.decode(secret);
@@ -62,6 +96,35 @@ public class JwtService {
                 .setExpiration(Date.from(exp.toInstant()))
                 .signWith(signingKey, SignatureAlgorithm.HS256)
                 .compact();
+    }
+
+    /**
+     * Generate a JWT for B2C customer authentication.
+     * Includes userType=customer claim for filter chain routing.
+     */
+    public String generateCustomerToken(Long customerId, String email) {
+        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime exp = now.plusDays(securityProperties.getCustomerTokenExpirationDays());
+        return Jwts.builder()
+                .setSubject(email)
+                .addClaims(Map.of(
+                    "customerId", customerId,
+                    "userType", "customer"
+                ))
+                .setIssuedAt(Date.from(now.toInstant()))
+                .setExpiration(Date.from(exp.toInstant()))
+                .signWith(signingKey, SignatureAlgorithm.HS256)
+                .compact();
+    }
+
+    public Long extractCustomerId(String token) {
+        try {
+            Claims claims = parseToken(token);
+            Object cid = claims.get("customerId");
+            if (cid instanceof Number) return ((Number) cid).longValue();
+            if (cid instanceof String) return Long.parseLong((String) cid);
+            return null;
+        } catch (Exception e) { return null; }
     }
 
     public Claims parseToken(String token) {

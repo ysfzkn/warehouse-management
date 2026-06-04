@@ -17,8 +17,10 @@ import com.warehouse.service.ProductService;
 import com.warehouse.util.EntityValidator;
 import com.warehouse.constants.BusinessMessages;
 import com.warehouse.constants.EntityNames;
+import com.warehouse.assistant.core.rag.ProductIndexEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -43,17 +45,20 @@ public class ProductServiceImpl implements ProductService {
     private final BrandRepository brandRepository;
     private final ColorRepository colorRepository;
     private final StockTransferRepository stockTransferRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     public ProductServiceImpl(ProductRepository productRepository,
                              CategoryRepository categoryRepository,
                              BrandRepository brandRepository,
                              ColorRepository colorRepository,
-                             StockTransferRepository stockTransferRepository) {
+                             StockTransferRepository stockTransferRepository,
+                             ApplicationEventPublisher eventPublisher) {
         this.productRepository = productRepository;
         this.categoryRepository = categoryRepository;
         this.brandRepository = brandRepository;
         this.colorRepository = colorRepository;
         this.stockTransferRepository = stockTransferRepository;
+        this.eventPublisher = eventPublisher;
     }
 
     @Override
@@ -167,9 +172,14 @@ public class ProductServiceImpl implements ProductService {
         product.setCategory(category);
         setBrandIfPresent(product);
         setColorIfPresent(product);
+        if (product.getSlug() == null || product.getSlug().isBlank()) {
+            product.setSlug(product.getSku().toLowerCase()
+                .replace(" ", "-").replaceAll("[^a-z0-9\\-]", ""));
+        }
 
         Product saved = productRepository.save(product);
         logger.info("Product created successfully with id: {}", saved.getId());
+        eventPublisher.publishEvent(ProductIndexEvent.upsert(saved.getId()));
         return productRepository.findByIdWithRelations(saved.getId()).orElse(saved);
     }
 
@@ -186,6 +196,7 @@ public class ProductServiceImpl implements ProductService {
 
         Product saved = productRepository.save(product);
         logger.info("Product updated successfully with id: {}", saved.getId());
+        eventPublisher.publishEvent(ProductIndexEvent.upsert(saved.getId()));
         return productRepository.findByIdWithRelations(saved.getId()).orElse(saved);
     }
 
@@ -193,12 +204,12 @@ public class ProductServiceImpl implements ProductService {
     public void deleteProduct(Long id) {
         logger.info("Deleting product with id: {}", id);
         Product product = getProductByIdOrThrow(id);
-        // Önce stok ilişkilerini kontrol et
+        // First check stock relations
         EntityValidator.validateEntityHasNoRelations(
             !product.getStocks().isEmpty(), EntityNames.PRODUCT, EntityNames.RELATION_STOCKS
         );
 
-        // Ardından transfer ilişkilerini kontrol et (hem aktif hem geçmiş)
+        // Then check transfer relations (both active and historical)
         var transfersUsingProduct = stockTransferRepository.findByProduct(product);
         if (transfersUsingProduct != null && !transfersUsingProduct.isEmpty()) {
             logger.warn("Cannot delete product with id {} because it is used in {} stock transfers",
@@ -211,6 +222,7 @@ public class ProductServiceImpl implements ProductService {
 
         productRepository.delete(product);
         logger.info("Product deleted successfully with id: {}", id);
+        eventPublisher.publishEvent(ProductIndexEvent.delete(id));
     }
 
     @Override
@@ -228,7 +240,7 @@ public class ProductServiceImpl implements ProductService {
             try {
                 Product product = getProductByIdOrThrow(id);
                 
-                // Önce stok ilişkilerini kontrol et
+                // First check stock relations
                 if (!product.getStocks().isEmpty()) {
                     errors.add(new BulkDeleteResponse.DeleteError(
                         id,
@@ -240,7 +252,7 @@ public class ProductServiceImpl implements ProductService {
                     continue;
                 }
                 
-                // Ardından transfer ilişkilerini kontrol et
+                // Then check transfer relations
                 var transfersUsingProduct = stockTransferRepository.findByProduct(product);
                 if (transfersUsingProduct != null && !transfersUsingProduct.isEmpty()) {
                     errors.add(new BulkDeleteResponse.DeleteError(
@@ -255,14 +267,15 @@ public class ProductServiceImpl implements ProductService {
                 
                 productRepository.delete(product);
                 successCount++;
+                eventPublisher.publishEvent(ProductIndexEvent.delete(id));
                 logger.debug("Product deleted successfully with id: {}", id);
             } catch (WarehouseManagementException e) {
-                // Domain exception'ları yakala
+                // Catch domain exceptions
                 Product product = null;
                 try {
                     product = getProductByIdOrThrow(id);
                 } catch (Exception ex) {
-                    // Ürün bulunamadı
+                    // Product not found
                 }
                 errors.add(new BulkDeleteResponse.DeleteError(
                     id,
@@ -273,12 +286,12 @@ public class ProductServiceImpl implements ProductService {
                 ));
                 logger.warn("Cannot delete product with id {}: {}", id, e.getMessage());
             } catch (Exception e) {
-                // Diğer hatalar
+                // Other errors
                 Product product = null;
                 try {
                     product = getProductByIdOrThrow(id);
                 } catch (Exception ex) {
-                    // Ürün bulunamadı
+                    // Product not found
                 }
                 errors.add(new BulkDeleteResponse.DeleteError(
                     id,
@@ -430,6 +443,25 @@ public class ProductServiceImpl implements ProductService {
         return totalUpdated;
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Product getProductBySlug(String slug) {
+        return productRepository.findBySlug(slug)
+            .orElseThrow(() -> new WarehouseManagementException(ErrorCode.PRODUCT_NOT_FOUND, "Slug: " + slug));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<Product> getAllActiveProducts(Pageable pageable, String search, Long categoryId, Long brandId, Long colorId) {
+        return productRepository.findActiveByFilters(search, categoryId, brandId, colorId, pageable);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<Product> getAllActiveProductsMultiFilter(Pageable pageable, String search, Long categoryId, java.util.List<Long> brandIds, java.util.List<Long> colorIds) {
+        return productRepository.findActiveByMultiFilters(search, categoryId, brandIds, colorIds, pageable);
+    }
+
     private void validateSkuUniqueness(String sku) {
         if (productRepository.existsBySku(sku)) {
             logger.warn("SKU already exists: {}", sku);
@@ -517,8 +549,14 @@ public class ProductServiceImpl implements ProductService {
     private void updateProductFields(Product product, Product productDetails) {
         product.setName(productDetails.getName());
         product.setDescription(productDetails.getDescription());
+        product.setShortDescription(productDetails.getShortDescription());
         product.setSku(productDetails.getSku());
         product.setPrice(productDetails.getPrice());
+        product.setSalePrice(productDetails.getSalePrice());
+        product.setSaleStart(productDetails.getSaleStart());
+        product.setSaleEnd(productDetails.getSaleEnd());
+        product.setFeatured(productDetails.isFeatured());
+        product.setNew(productDetails.isNew());
         product.setWeight(productDetails.getWeight());
         product.setDimensions(productDetails.getDimensions());
         product.setLengthCm(productDetails.getLengthCm());
@@ -528,6 +566,9 @@ public class ProductServiceImpl implements ProductService {
         product.setVatRate(productDetails.getVatRate());
         product.setSctRate(productDetails.getSctRate());
         product.setActive(productDetails.isActive());
+        if (productDetails.getSlug() != null) product.setSlug(productDetails.getSlug());
+        if (productDetails.getMetaTitle() != null) product.setMetaTitle(productDetails.getMetaTitle());
+        if (productDetails.getMetaDescription() != null) product.setMetaDescription(productDetails.getMetaDescription());
     }
 
     private void updateProductStatus(Long id, boolean isActive) {

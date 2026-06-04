@@ -1,10 +1,11 @@
 <div align="center">
 
-# 🎨 Warehouse Management - Frontend
+# 🎨 Warehouse & E-Commerce Platform — Frontend
 
-**Modern, responsive React application for warehouse management**
+**React SPA powering both the admin warehouse panel and the customer-facing e-commerce storefront**
 
 [![React](https://img.shields.io/badge/React-18.2.0-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://reactjs.org/)
+[![React Router](https://img.shields.io/badge/React%20Router-6.11-CA4245?style=for-the-badge&logo=reactrouter&logoColor=white)](https://reactrouter.com/)
 [![Bootstrap](https://img.shields.io/badge/Bootstrap-5.2.3-7952B3?style=for-the-badge&logo=bootstrap&logoColor=white)](https://getbootstrap.com/)
 [![Chart.js](https://img.shields.io/badge/Chart.js-4.3.0-FF6384?style=for-the-badge&logo=chart.js&logoColor=white)](https://www.chartjs.org/)
 
@@ -12,39 +13,65 @@
 
 ---
 
-## 📱 Features
+## 🎯 Overview
 
-- ✨ **Modern UI** - Clean, intuitive interface built with Bootstrap 5
-- 📊 **Real-time Dashboard** - Live statistics and interactive charts
-- 📱 **Fully Responsive** - Optimized for mobile, tablet, and desktop
-- 🎯 **Component-Based** - Reusable React components
-- ⚡ **Fast Performance** - Optimized rendering and lazy loading
-- 🔄 **Live Updates** - Real-time data synchronization
-- 🎨 **Professional Design** - Modern UX with attention to detail
+This single React app serves **two distinct experiences** sharing the same codebase:
+
+- 🛠️ **Admin Panel** — Warehouse, stock, product, order, customer, payment, CMS and support management
+- 🛍️ **Customer Storefront** — Public catalog, cart, checkout, wishlist, account & order tracking
+
+It talks to the Spring Boot backend (Java 21 / Spring Boot 3.3.5) via REST + JWT.
+
+---
+
+## ✨ Features
+
+### 🛠️ Admin Panel
+- 📊 **Sales & Stock Dashboard** — Live KPIs, low-stock alerts, interactive charts
+- 📦 **Catalog Management** — Products, categories, brands, colors with SKU tracking
+- 🏭 **Multi-Warehouse Inventory** — Stock CRUD, transfers, adjustments, reservations
+- 🛒 **Order & Cargo Management** — Order list, status updates, cargo tracking
+- 👤 **Customer Management** — Customer list, status control, address management
+- 💳 **Payment Configuration** — Gateway selection (iyzico / PayTR / NestPay / Bank Transfer / Door)
+- 🎟️ **Coupons & Discounts** — Validity windows, usage tracking
+- 📝 **CMS & Banners** — Homepage banners, About / Terms / Privacy pages
+- 🆘 **Support Tickets** — Customer support inbox
+- 🔒 **Audit Logs** — Security & action history
+
+### 🛍️ Customer Storefront
+- 🏠 **Hero Banners & CMS Pages** — Editable from admin
+- 🔎 **Product Browsing** — Category, brand, color, price filters
+- 🖼️ **Product Gallery & Specs** — Multi-image gallery with stock badges
+- 🛒 **Persistent Cart** — Add/remove, quantity updates, real-time totals
+- ❤️ **Wishlist** — Favorites with persistent state
+- 💳 **Multi-Step Checkout** — Address → Shipping → Payment
+- 💰 **Multi-Gateway Payments** — iyzico Checkout Form, PayTR, Bank Transfer, Cash on Delivery
+- 📦 **Order Tracking** — Order history with status timeline
+- 👤 **Customer Auth** — Email/password + Google OAuth, address book
+
+### 💎 Technical
+- ✅ **Fully Responsive** — Mobile, tablet, desktop optimized
+- ✅ **SEO-ready** — `react-helmet-async` for meta tags & Open Graph
+- ✅ **Code Splitting** — Lazy-loaded routes
+- ✅ **Reusable Components** — Skeletons, toasts, modals, breadcrumbs
+- ✅ **Context API** — Wishlist & cart state
 
 ---
 
 ## 🚀 Quick Start
 
 ### Prerequisites
-
-- Node.js 18+ 
-- npm or yarn
+- **Node.js 18+**
+- **npm** (or yarn)
+- Backend running on `http://localhost:8080` (see [main README](../README.md))
 
 ### Installation
 
 ```bash
-# Install dependencies
 npm install
-
-# Start development server
-npm start
-
-# Build for production
-npm run build
+npm start              # dev server → http://localhost:3000
+npm run build          # production build
 ```
-
-Application opens at **http://localhost:3000**
 
 ---
 
@@ -52,13 +79,15 @@ Application opens at **http://localhost:3000**
 
 | Technology | Version | Purpose |
 |------------|---------|---------|
-| **React** | 18.2.0 | UI Framework |
+| **React** | 18.2.0 | UI framework |
 | **React Router** | 6.11.0 | Client-side routing |
-| **Bootstrap** | 5.2.3 | CSS Framework |
-| **React Bootstrap** | 2.7.4 | Bootstrap Components |
-| **Axios** | 1.4.0 | HTTP Client |
-| **Chart.js** | 4.3.0 | Data Visualization |
-| **React Icons** | 4.10.1 | Icon Library |
+| **Bootstrap** | 5.2.3 | CSS framework |
+| **React Bootstrap** | 2.7.4 | Bootstrap components |
+| **Axios** | 1.4.0 | HTTP client |
+| **Chart.js** + `react-chartjs-2` | 4.3.0 / 5.2.0 | Dashboard analytics |
+| **React Icons** | 4.10.1 | Icon library |
+| **React Helmet Async** | 3.0.0 | SEO meta management |
+| **TypeScript** | 4.9.5 | (dev tooling) |
 
 ---
 
@@ -67,195 +96,110 @@ Application opens at **http://localhost:3000**
 ```
 frontend/
 ├── public/
-│   ├── index.html              # HTML template
-│   └── company-logo.png       # App logo
+│   ├── index.html
+│   └── company-logo.png
 │
 ├── src/
-│   ├── components/             # Reusable components
-│   │   ├── Navbar.js           # Navigation bar
-│   │   ├── ProductForm.js      # Product create/edit form
-│   │   ├── StockForm.js        # Stock management form
-│   │   ├── WarehouseForm.js    # Warehouse form
-│   │   ├── CategoryForm.js     # Category form
-│   │   ├── StockModal.js       # Stock details modal
-│   │   ├── StockAdjustmentModal.js  # Stock adjustment
-│   │   ├── StockTransferModal.js    # Transfer between warehouses
-│   │   ├── ConfirmModal.js     # Confirmation dialogs
-│   │   ├── NotesModal.js       # Notes display
-│   │   ├── FilterChips.js      # Active filter chips
-│   │   └── SearchableSelect.js # Searchable dropdown
+│   ├── components/
+│   │   ├── store/                  # 🛍️ Storefront UI
+│   │   │   ├── StoreHeader.js
+│   │   │   ├── StoreFooter.js
+│   │   │   ├── MobileNav.js
+│   │   │   ├── HeroBanner.js
+│   │   │   ├── ProductCard.js
+│   │   │   ├── ProductGrid.js
+│   │   │   ├── ProductFilters.js
+│   │   │   ├── ProductGallery.js
+│   │   │   ├── ProductSpecs.js
+│   │   │   ├── PriceDisplay.js
+│   │   │   ├── StockBadge.js
+│   │   │   ├── CartSidebar.js
+│   │   │   ├── CheckoutStepper.js
+│   │   │   ├── AddressForm.js
+│   │   │   ├── IyzicoCheckoutForm.js
+│   │   │   ├── BankTransferInfo.js
+│   │   │   ├── WishlistContext.js
+│   │   │   ├── Breadcrumb.js
+│   │   │   ├── Skeleton.js
+│   │   │   └── Toast.js
+│   │   │
+│   │   └── (admin)                 # 🛠️ Admin panel UI
+│   │       ├── Navbar.js
+│   │       ├── ProductForm.js
+│   │       ├── StockForm.js
+│   │       ├── WarehouseForm.js
+│   │       ├── CategoryForm.js
+│   │       ├── StockModal.js
+│   │       ├── StockAdjustmentModal.js
+│   │       ├── StockTransferModal.js
+│   │       ├── ConfirmModal.js
+│   │       ├── NotesModal.js
+│   │       ├── FilterChips.js
+│   │       └── SearchableSelect.js
 │   │
-│   ├── pages/                  # Page components
-│   │   ├── Login.js            # Login page
-│   │   ├── Dashboard.js        # Main dashboard
-│   │   ├── Products.js         # Product management
-│   │   ├── Stock.js            # Stock management
-│   │   ├── Warehouses.js       # Warehouse management
-│   │   ├── Categories.js       # Category management
-│   │   ├── AdminSettings.js    # Admin settings
-│   │   └── DesiCalculator.js   # Desi calculator tool
+│   ├── pages/
+│   │   ├── store/                  # Storefront pages (catalog, cart, checkout, account…)
+│   │   ├── admin/                  # Admin pages (orders, customers, payments, CMS…)
+│   │   ├── Login.js                # Admin login
+│   │   ├── Dashboard.js            # Admin dashboard
+│   │   ├── Products.js
+│   │   ├── Stock.js
+│   │   ├── Warehouses.js
+│   │   ├── Categories.js
+│   │   ├── AdminSettings.js
+│   │   └── DesiCalculator.js
 │   │
-│   ├── App.js                  # Main app component
-│   ├── config.js               # API configuration
-│   ├── App.css                 # Global styles
-│   └── index.js                # React entry point
+│   ├── App.js
+│   ├── config.js                   # API base URL
+│   ├── App.css
+│   └── index.js
 │
-├── package.json                # Dependencies
-├── Dockerfile                  # Docker config
-└── nginx.conf                  # Nginx proxy
+├── package.json
+├── Dockerfile                      # Multi-stage Nginx build
+└── nginx.conf
 ```
-
----
-
-## 🎨 Key Components
-
-### Dashboard
-- Overview statistics (products, categories, warehouses, stock)
-- Low stock alerts
-- Interactive charts (Pie, Bar)
-- Quick action buttons
-
-### Product Management
-- Product listing with search
-- Create/Edit/Delete products
-- Category, brand, and color filtering
-- SKU management
-- Product activation/deactivation
-
-### Stock Management
-- Real-time stock levels
-- Multi-warehouse inventory
-- Stock adjustments (add/remove)
-- Stock transfers between warehouses
-- Reserved and consigned quantities
-- Low stock alerts
-
-### Warehouse Management
-- Warehouse CRUD operations
-- Capacity tracking
-- Stock overview per warehouse
-- Warehouse activation/deactivation
-
-### Transfer System
-- Transfer creation between warehouses
-- Transfer status tracking (Pending → In Transit → Completed)
-- Driver and vehicle information
-- Transfer cancellation
-- Transfer history
 
 ---
 
 ## ⚙️ Configuration
 
-### API Configuration
+### API Base URL
 
-Edit `src/config.js`:
+`src/config.js`:
 
 ```javascript
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8080';
-
 export const API_URL = `${API_BASE_URL}/api`;
 ```
 
 ### Environment Variables
 
-Create `.env` file:
+Create `.env`:
 
 ```env
 REACT_APP_API_URL=http://localhost:8080
 ```
 
-### Proxy Setup
+### Dev Proxy
 
-In `package.json`:
+`package.json`:
 
 ```json
-{
-  "proxy": "http://localhost:8080"
-}
+{ "proxy": "http://localhost:8080" }
 ```
 
 ---
 
 ## 📱 Responsive Design
 
-### Breakpoints
+| Breakpoint | Width |
+|---|---|
+| Mobile | < 576px |
+| Tablet | 576 – 768px |
+| Desktop | 768 – 992px |
+| Large Desktop | > 992px |
 
-- **Mobile**: < 576px
-- **Tablet**: 576px - 768px  
-- **Desktop**: 768px - 992px
-- **Large Desktop**: > 992px
-
-### Mobile Features
-
-- Touch-optimized buttons
-- Collapsible navigation
-- Responsive tables with horizontal scroll
-- Optimized modals for small screens
-- Mobile-first forms
-
----
-
-## 🎯 Component Examples
-
-### Using Forms
-
-```jsx
-import ProductForm from './components/ProductForm';
-
-function ProductsPage() {
-  const handleSuccess = () => {
-    fetchProducts(); // Refresh list
-  };
-
-  return (
-    <ProductForm
-      product={editingProduct}
-      categories={categories}
-      brands={brands}
-      colors={colors}
-      onSuccess={handleSuccess}
-      onCancel={() => setShowForm(false)}
-    />
-  );
-}
-```
-
-### API Calls
-
-```jsx
-import axios from 'axios';
-import { API_URL } from './config';
-
-const fetchProducts = async () => {
-  try {
-    const response = await axios.get(`${API_URL}/products`, {
-      headers: {
-        'Authorization': `Basic ${btoa('admin:admin')}`
-      }
-    });
-    setProducts(response.data);
-  } catch (error) {
-    console.error('Error:', error);
-  }
-};
-```
-
-### Charts
-
-```jsx
-import { Pie, Bar } from 'react-chartjs-2';
-
-const chartData = {
-  labels: ['In Stock', 'Low Stock', 'Out of Stock'],
-  datasets: [{
-    data: [120, 30, 5],
-    backgroundColor: ['#28a745', '#ffc107', '#dc3545']
-  }]
-};
-
-<Pie data={chartData} options={chartOptions} />
-```
+Mobile features: touch-optimized buttons, collapsible nav (`MobileNav`), responsive tables, mobile-first checkout & forms.
 
 ---
 
@@ -264,25 +208,17 @@ const chartData = {
 ### Available Scripts
 
 ```bash
-# Start dev server (http://localhost:3000)
-npm start
-
-# Run tests
-npm test
-
-# Build for production
-npm run build
-
-# Eject config (not recommended)
-npm run eject
+npm start         # dev server (http://localhost:3000)
+npm test          # tests (React Testing Library + Jest)
+npm run build     # production build → build/
+npm run eject     # ⚠️ not recommended
 ```
 
-### Development Tips
-
-- Hot reload is enabled by default
-- Use React DevTools extension for debugging
-- Check Network tab for API call issues
-- Use `console.log()` for quick debugging
+### Tips
+- Hot reload enabled by default
+- Use React DevTools for component inspection
+- Network tab → debug API calls
+- Backend must be running on `:8080` (see main README)
 
 ---
 
@@ -294,109 +230,68 @@ npm run eject
 npm run build
 ```
 
-Creates optimized build in `build/` folder:
-- Minified JavaScript
-- Optimized CSS
-- Compressed assets
-- Service worker for caching
+Outputs minified JS, optimized CSS, compressed assets to `build/`.
 
-### Docker Deployment
+### Docker
 
 ```bash
-# Build image
 docker build -t warehouse-frontend .
-
-# Run container
 docker run -p 80:80 warehouse-frontend
 ```
 
+The bundled `Dockerfile` does a multi-stage build (Node 18 → Nginx Alpine) and the included `nginx.conf` proxies `/api/**` to the backend.
+
 ### Static Hosting
 
-Deploy `build/` folder to:
-- Netlify
-- Vercel
-- AWS S3 + CloudFront
-- GitHub Pages
-- Any static hosting
-
----
-
-## 🎨 Styling
-
-### Bootstrap Classes
-
-```jsx
-<div className="container">
-  <div className="row">
-    <div className="col-md-6 col-lg-4">
-      <div className="card shadow-sm">
-        {/* Content */}
-      </div>
-    </div>
-  </div>
-</div>
-```
-
-### Custom Styles
-
-Global styles in `App.css` and `index.css`
+The `build/` folder can be deployed to Netlify, Vercel, AWS S3 + CloudFront, GitHub Pages, or any static host. Remember to set `REACT_APP_API_URL` at build time.
 
 ---
 
 ## 🧪 Testing
 
 ```bash
-# Run tests
-npm test
-
-# Run tests with coverage
-npm test -- --coverage
-
-# Run tests in watch mode
-npm test -- --watch
+npm test                  # interactive watch
+npm test -- --coverage    # with coverage
+npm test -- --watchAll=false  # CI mode
 ```
+
+Stack: `@testing-library/react`, `@testing-library/jest-dom`, `@testing-library/user-event`.
 
 ---
 
 ## 🔍 Troubleshooting
 
-### Common Issues
-
-**Port already in use:**
+**Port already in use**
 ```bash
-# Kill process on port 3000
 npx kill-port 3000
-# Or change port
+# or
 PORT=3001 npm start
 ```
 
-**Build errors:**
+**Build errors**
 ```bash
-# Clean install
 rm -rf node_modules package-lock.json
 npm install
 ```
 
-**API connection errors:**
-- Ensure backend is running on port 8080
-- Check CORS settings
-- Verify Authorization header
-- Check browser console for errors
+**API connection errors**
+- Backend running on `:8080`?
+- CORS allowed origins includes `http://localhost:3000`?
+- For admin endpoints: JWT token in `Authorization: Bearer <token>` header
+- Check browser console & Network tab
 
-**Slow performance:**
+**Slow performance**
 - Clear browser cache
-- Check for console errors
-- Optimize images
-- Use React.memo for expensive components
+- `React.memo` for heavy components
+- Optimize images (use the storefront's `<ProductGallery>` patterns)
 
 ---
 
 ## 🤝 Contributing
 
-1. Create feature branch
-2. Make changes
-3. Test thoroughly
-4. Submit pull request
+1. Create a feature branch
+2. Make changes (run `npm test` & `npm run build`)
+3. Submit a pull request
 
 See [CONTRIBUTING.md](../CONTRIBUTING.md) for detailed guidelines.
 
@@ -404,15 +299,16 @@ See [CONTRIBUTING.md](../CONTRIBUTING.md) for detailed guidelines.
 
 ## 📄 License
 
-MIT License - see [LICENSE](../LICENSE) file for details.
+MIT License — see [LICENSE](../LICENSE) for details.
 
 ---
 
 ## 🆘 Support
 
-- **Main Docs**: [../README.md](../README.md)
-- **API Docs**: [../API_README.md](../API_README.md)
-- **Quick Start**: [../QUICK_START.md](../QUICK_START.md)
+- 📖 **Main Docs:** [../README.md](../README.md)
+- 🚀 **Quick Start:** [../QUICK_START.md](../QUICK_START.md)
+- 💳 **Payment Integration:** [../docs/PAYMENT_INTEGRATION_GUIDE.md](../docs/PAYMENT_INTEGRATION_GUIDE.md)
+- 🐛 **Issues:** [GitHub Issues](https://github.com/yourusername/warehouse-management/issues)
 
 ---
 
@@ -422,6 +318,6 @@ MIT License - see [LICENSE](../LICENSE) file for details.
 
 Built with ❤️ using React
 
-[⬆ Back to Top](#-warehouse-management---frontend)
+[⬆ Back to Top](#-warehouse--e-commerce-platform--frontend)
 
 </div>

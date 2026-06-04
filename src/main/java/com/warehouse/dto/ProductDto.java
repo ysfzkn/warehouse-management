@@ -1,5 +1,6 @@
 package com.warehouse.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
@@ -29,6 +30,16 @@ public class ProductDto {
     public BigDecimal shippingRate;
     public BigDecimal vatRate;
     public BigDecimal sctRate;
+    public String shortDescription;
+    public BigDecimal salePrice;
+    public LocalDateTime saleStart;
+    public LocalDateTime saleEnd;
+    public boolean featured;
+    @JsonProperty("isNew")
+    public boolean isNew;
+    public String slug;
+    public String metaTitle;
+    public String metaDescription;
     public LocalDateTime createdAt;
     public LocalDateTime updatedAt;
     public Long totalQuantity;

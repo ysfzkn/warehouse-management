@@ -94,6 +94,18 @@ public class ProductImageServiceImpl implements ProductImageService {
     }
 
     @Override
+    public void setPrimaryImage(Long imageId) {
+        ProductImage image = imageRepository.findById(imageId)
+                .orElseThrow(() -> new WarehouseManagementException(ErrorCode.PRODUCT_NOT_FOUND));
+        // Get all images for the same product and update primary flags
+        List<ProductImage> allImages = imageRepository.findByProductOrderBySortOrderAscIdAsc(image.getProduct());
+        for (ProductImage img : allImages) {
+            img.setPrimary(img.getId().equals(imageId));
+        }
+        imageRepository.saveAll(allImages);
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public ProductImage getImageOrThrow(Long imageId) {
         return imageRepository.findById(imageId)

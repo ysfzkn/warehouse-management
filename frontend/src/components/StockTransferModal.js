@@ -16,7 +16,7 @@ const StockTransferModal = ({ stock, onSuccess, onClose, lockToCustomerDelivery 
   const initialTransferType = lockToCustomerDelivery ? 'CUSTOMER_DELIVERY' : 'WAREHOUSE';
   const role = (typeof window !== 'undefined' && localStorage.getItem('auth_role')) || 'ADMIN';
   const isAdmin = role === 'ADMIN';
-  const { askCode: askSecurityCode, SecurityCodePrompt } = useSecurityCodePrompt();
+  const { askCode: askSecurityCode } = useSecurityCodePrompt();
   
   // Get current date/time in Turkey timezone (GMT+3)
   const getTurkeyDateTime = () => {
@@ -507,7 +507,7 @@ useEffect(() => {
       return;
     }
 
-    // Eğer henüz transfer oluşmadıysa veya fotoğraf pending durumdaysa sadece local state temizle
+    // If the transfer is not created yet or the photo is still pending, just clear local state
     if (!photoInfo.itemId || photoInfo.pending) {
       setItemPhotos(prev => {
         const copy = { ...prev };
@@ -559,7 +559,7 @@ useEffect(() => {
         mimeType: file.type && file.type.startsWith('image/') ? file.type : 'image/jpeg'
       });
 
-      // Eğer transfer henüz oluşturulmadıysa, dosyayı geçici olarak sakla
+      // If the transfer is not created yet, store the file temporarily
       const localUrl = URL.createObjectURL(optimizedFile);
 
       if (!createdTransferId) {
@@ -586,7 +586,7 @@ useEffect(() => {
         return;
       }
 
-      // Transfer oluşturulmuşsa doğrudan upload et
+      // If the transfer has been created, upload directly
       const transferResp = await axios.get(`/api/stock-transfers/${createdTransferId}`);
       const transfer = transferResp.data;
       const item = (transfer.items || []).find(i => String(i.stockId) === key);
@@ -822,7 +822,7 @@ useEffect(() => {
       setSubmitSuccess({ isApprovalRequest, id: newTransferId });
       setCurrentStep(4); // Move to success step
 
-      // Eğer bekleyen fotoğraflar varsa, transfer oluşturulduktan sonra bunları yükle
+      // If there are pending photos, upload them after the transfer is created
       if (Object.keys(pendingItemPhotos).length > 0) {
         try {
           const transferResp = await axios.get(`/api/stock-transfers/${newTransferId}`);
@@ -865,11 +865,11 @@ useEffect(() => {
             }
           }
 
-          // Bekleyenleri temizle ve meta veriyi yükle
+          // Clear the pending photos and load the metadata
           setPendingItemPhotos({});
           await loadItemPhotoMeta(newTransferId);
 
-          // Hata varsa kullanıcıya bilgilendir
+          // Inform the user if there were errors
           if (photoUploadErrors.length > 0) {
             const errorCount = photoUploadErrors.length;
             const totalPhotos = Object.keys(pendingItemPhotos).length;
@@ -904,7 +904,7 @@ useEffect(() => {
           );
         }
       } else {
-        // Yine de meta veriyi yükleyelim (ileride eklenmiş fotoğraflar için)
+        // Load the metadata anyway (for photos added later)
         await loadItemPhotoMeta(newTransferId);
       }
 

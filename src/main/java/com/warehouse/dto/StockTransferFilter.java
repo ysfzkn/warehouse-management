@@ -14,6 +14,10 @@ public class StockTransferFilter {
     private String sku;
     private String driverName;
     private String notes;
+    private LocalDateTime startDate;
+    private LocalDateTime endDate;
+    /** Applies mostly to CUSTOMER_DELIVERY transfers (customerFullName / customerPhone) */
+    private String customerQuery;
     private LocalDateTime transferDateFrom;
     private LocalDateTime transferDateTo;
     private LocalDateTime createdAtFrom;
@@ -83,6 +87,30 @@ public class StockTransferFilter {
         this.notes = notes;
     }
 
+    public LocalDateTime getStartDate() {
+        return startDate;
+    }
+
+    public void setStartDate(LocalDateTime startDate) {
+        this.startDate = startDate;
+    }
+
+    public LocalDateTime getEndDate() {
+        return endDate;
+    }
+
+    public void setEndDate(LocalDateTime endDate) {
+        this.endDate = endDate;
+    }
+
+    public String getCustomerQuery() {
+        return customerQuery;
+    }
+
+    public void setCustomerQuery(String customerQuery) {
+        this.customerQuery = customerQuery;
+    }
+
     public LocalDateTime getTransferDateFrom() {
         return transferDateFrom;
     }
@@ -115,4 +143,3 @@ public class StockTransferFilter {
         this.createdAtTo = createdAtTo;
     }
 }
-

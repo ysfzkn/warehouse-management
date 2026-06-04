@@ -1,13 +1,20 @@
 version: '3.8'
 
 services:
-  # PostgreSQL Database
+  # PostgreSQL Database (with pgvector for Cezeri v2 RAG features)
+  #
+  # NOTE: we pin to pg15 to match any existing postgres_data volume created
+  # by the old postgres:15-alpine image. If you start from a clean volume
+  # you can bump to pg17 safely. Downgrading to vanilla postgres is also
+  # fine — the V42 migration detects pgvector availability at runtime and
+  # simply skips the vector-dependent tables; all other assistant features
+  # keep working and RAG is just disabled.
   db:
-    image: postgres:15-alpine
+    image: pgvector/pgvector:pg15
     environment:
       POSTGRES_DB: warehouse_db
       POSTGRES_USER: warehouse_user
-      POSTGRES_PASSWORD: warehouse_pass
+      POSTGRES_PASSWORD: secret123
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
@@ -20,57 +27,164 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+#
+#  # Backend Service
+#  backend:
+#    build:
+#      context: .
+#      dockerfile: Dockerfile
+#    ports:
+#      - "8080:8080"
+#    environment:
+#      - SPRING_PROFILES_ACTIVE=docker
+#      # PostgreSQL Database Configuration (Environment variables)
+#      - DATABASE_URL=jdbc:postgresql://db:5432/warehouse_db
+#      - SPRING_DATASOURCE_USERNAME=warehouse_user
+#      - SPRING_DATASOURCE_PASSWORD=secret123
+#      - SPRING_JPA_DATABASE_PLATFORM=org.hibernate.dialect.PostgreSQLDialect
+#      - SPRING_JPA_HIBERNATE_DDL_AUTO=validate
+#      - SPRING_FLYWAY_ENABLED=true
+#      - SPRING_FLYWAY_BASELINE_ON_MIGRATE=false
+#      - CORS_ALLOWED_ORIGINS=http://localhost,http://localhost:*,https://localhost:*
+#    depends_on:
+#      db:
+#        condition: service_healthy
+#    networks:
+#      - warehouse-network
+#    restart: unless-stopped
+#
+#  # Frontend Service
+#  frontend:
+#    build:
+#      context: ./frontend
+#      dockerfile: Dockerfile
+#    ports:
+#      - "80:80"
+#    depends_on:
+#      - backend
+#    networks:
+#      - warehouse-network
+#    restart: unless-stopped
+#
+#  # pgAdmin - PostgreSQL Management Tool
+#  pgadmin:
+#    image: dpage/pgadmin4:latest
+#    environment:
+#      PGADMIN_DEFAULT_EMAIL: ozkan.development@gmail.com
+#      PGADMIN_DEFAULT_PASSWORD: admin123
+#      PGADMIN_CONFIG_SERVER_MODE: 'False'
+#    volumes:
+#      - pgadmin_data:/var/lib/pgadmin
+#    ports:
+#      - "5050:80"
+#    depends_on:
+#      - db
+#    networks:
+#      - warehouse-network
+#    restart: unless-stopped
 
-  # Backend Service
-  backend:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    ports:
-      - "8080:8080"
+  # ============================================================
+  # MinIO — self-hosted S3-compatible object storage
+  # ============================================================
+  # Why MinIO in dev:
+  #   - 100% S3 API compatible → aynı kod prod'da AWS S3 / Cloudflare R2 /
+  #     Backblaze B2 / DigitalOcean Spaces ile çalışır
+  #   - Local'de ücretsiz, console UI on http://localhost:9001
+  #
+  # Initial setup:
+  #   1. docker compose up -d minio minio-init
+  #   2. Console: http://localhost:9001 (minioadmin / minioadmin)
+  #   3. Bucket "warehouse-uploads" minio-init ile otomatik oluşturulur
+  #   4. application-dev.properties: STORAGE_PROVIDER=s3
+  #
+  # Production: Cloudflare R2 önerilir (en ucuz, zero egress fee).
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
     environment:
-      - SPRING_PROFILES_ACTIVE=docker
-      # PostgreSQL Database Configuration (Environment variables)
-      - DATABASE_URL=jdbc:postgresql://db:5432/warehouse_db
-      - SPRING_DATASOURCE_USERNAME=warehouse_user
-      - SPRING_DATASOURCE_PASSWORD=warehouse_pass
-      - SPRING_JPA_DATABASE_PLATFORM=org.hibernate.dialect.PostgreSQLDialect
-      - SPRING_JPA_HIBERNATE_DDL_AUTO=validate
-      - SPRING_FLYWAY_ENABLED=true
-      - SPRING_FLYWAY_BASELINE_ON_MIGRATE=false
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    volumes:
+      - minio_data:/data
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # Web console
+    networks:
+      - warehouse-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Bucket auto-create + assets/ public-read policy (logos, banners için)
+  minio-init:
+    image: minio/mc:latest
     depends_on:
-      db:
+      minio:
         condition: service_healthy
     networks:
       - warehouse-network
-    restart: unless-stopped
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 ${MINIO_ROOT_USER:-minioadmin} ${MINIO_ROOT_PASSWORD:-minioadmin};
+      mc mb --ignore-existing local/warehouse-uploads;
+      mc anonymous set download local/warehouse-uploads/assets;
+      echo 'MinIO ready: bucket=warehouse-uploads, console=http://localhost:9001';
+      exit 0;
+      "
 
-  # Frontend Service
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
+  # ============================================================
+  # Log aggregation — Grafana Loki + Promtail + Grafana
+  # ============================================================
+  # Ücretsiz, self-hosted, düşük kaynak (Loki idle <100 MB RAM).
+  # Spring Boot JSON logs → Promtail tails Docker logs → Loki indexer
+  # → Grafana LogQL query.
+  #
+  #   - Grafana: http://localhost:3001 (admin / admin)
+  #   - Loki API: http://localhost:3100
+  #
+  # Quick start:
+  #   docker compose up -d loki promtail grafana
+  #   Backend loglarını Grafana'da Explore → Loki → {service="warehouse-backend"}
+  loki:
+    image: grafana/loki:2.9.10
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - loki_data:/loki
     ports:
-      - "80:80"
-    depends_on:
-      - backend
+      - "3100:3100"
     networks:
       - warehouse-network
     restart: unless-stopped
 
-  # pgAdmin - PostgreSQL Management Tool
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    environment:
-      PGADMIN_DEFAULT_EMAIL: ozkan.development@gmail.com
-      PGADMIN_DEFAULT_PASSWORD: admin123
-      PGADMIN_CONFIG_SERVER_MODE: 'False'
+  promtail:
+    image: grafana/promtail:2.9.10
     volumes:
-      - pgadmin_data:/var/lib/pgadmin
-    ports:
-      - "5050:80"
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./docs/observability/promtail-config.yml:/etc/promtail/config.yml:ro
+    command: -config.file=/etc/promtail/config.yml
     depends_on:
-      - db
+      - loki
+    networks:
+      - warehouse-network
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.2.2
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./docs/observability/grafana-provisioning:/etc/grafana/provisioning:ro
+    ports:
+      - "3001:3000"
+    depends_on:
+      - loki
     networks:
       - warehouse-network
     restart: unless-stopped
@@ -96,3 +210,6 @@ networks:
 volumes:
   postgres_data:
   pgadmin_data:
+  minio_data:
+  loki_data:
+  grafana_data:

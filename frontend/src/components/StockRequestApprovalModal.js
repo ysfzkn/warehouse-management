@@ -107,12 +107,14 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
 
   useEffect(() => {
     fetchTransferApprovals();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     setTransferApprovals(
       allTransferApprovals.filter(approval => matchesFilter(approval.approvalStatus, transferFilter))
     );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [transferFilter, allTransferApprovals]);
 
   const fetchStockRequests = async () => {

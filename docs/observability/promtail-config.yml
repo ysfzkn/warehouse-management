@@ -1,0 +1,54 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+# Docker container loglarını otomatik keşfet
+# Container label'ı com.docker.compose.service = service adı
+scrape_configs:
+  - job_name: docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+        filters:
+          - name: label
+            values: ["com.docker.compose.project"]
+    relabel_configs:
+      - source_labels: ['__meta_docker_container_name']
+        regex: '/(.*)'
+        target_label: 'container'
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_service']
+        target_label: 'service'
+      - source_labels: ['__meta_docker_container_log_stream']
+        target_label: 'stream'
+
+    # Spring Boot JSON loglarını parse et
+    pipeline_stages:
+      # 1) JSON log satırı mı? (prod profile'da logback JSON output verir)
+      - json:
+          expressions:
+            timestamp: '"@timestamp"'
+            level: level
+            logger: logger_name
+            thread: thread_name
+            message: message
+            traceId: traceId
+            requestId: requestId
+            userId: userId
+            stack_trace: stack_trace
+      # 2) Level'i Loki label olarak ekle (LogQL'de level="ERROR" gibi filtre için)
+      - labels:
+          level:
+          logger:
+      # 3) Timestamp'i log satırından al (Docker container timestamp'ini override)
+      - timestamp:
+          source: timestamp
+          format: RFC3339Nano
+          fallback_formats:
+            - "2006-01-02 15:04:05.000"
+            - RFC3339

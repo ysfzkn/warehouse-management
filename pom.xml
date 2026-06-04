@@ -6,7 +6,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.1.5</version>
+        <version>3.3.5</version>
         <relativePath/>
     </parent>
 
@@ -17,13 +17,27 @@
     <description>Warehouse Management System for White Goods Company</description>
 
     <properties>
-        <java.version>17</java.version>
-        <maven.compiler.source>17</maven.compiler.source>
-        <maven.compiler.target>17</maven.compiler.target>
+        <java.version>21</java.version>
+        <maven.compiler.source>21</maven.compiler.source>
+        <maven.compiler.target>21</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <flyway.version>9.22.3</flyway.version>
+        <flyway.version>10.20.1</flyway.version>
         <flyway.locations>filesystem:src/main/resources/db/migration</flyway.locations>
+        <!-- Spring AI -->
+        <spring-ai.version>1.0.0</spring-ai.version>
     </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework.ai</groupId>
+                <artifactId>spring-ai-bom</artifactId>
+                <version>${spring-ai.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <dependencies>
         <!-- Spring Boot Starters -->
@@ -73,6 +87,12 @@
         <dependency>
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-core</artifactId>
+            <version>${flyway.version}</version>
+        </dependency>
+        <!-- Flyway 10+ requires the database-specific module on the classpath -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
             <version>${flyway.version}</version>
         </dependency>
 
@@ -144,6 +164,108 @@
             <groupId>org.apache.poi</groupId>
             <artifactId>poi-ooxml</artifactId>
             <version>5.2.5</version>
+        </dependency>
+        <!-- iyzico Payment Gateway SDK -->
+        <dependency>
+            <groupId>com.iyzipay</groupId>
+            <artifactId>iyzipay-java</artifactId>
+            <version>2.0.134</version>
+        </dependency>
+
+        <!-- Email -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
+
+        <!-- Spring AI 1.0.0 GA (Azure OpenAI) -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-model-azure-openai</artifactId>
+        </dependency>
+
+        <!-- Spring AI: vanilla OpenAI model classes (no auto-config; used dynamically) -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-openai</artifactId>
+        </dependency>
+
+        <!-- Spring AI: Tika document reader (FAQ/document ingestion pipeline) -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-tika-document-reader</artifactId>
+        </dependency>
+
+        <!-- Rate limiting (assistant: guest/customer/WMS scopes) -->
+        <dependency>
+            <groupId>com.bucket4j</groupId>
+            <artifactId>bucket4j_jdk17-core</artifactId>
+            <version>8.14.0</version>
+        </dependency>
+
+        <!-- AOP (used for @Tool call logging across the assistant tool set) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-aop</artifactId>
+        </dependency>
+
+        <!-- Jsoup — HTML parsing for product image crawling (Profilo, etc.) -->
+        <dependency>
+            <groupId>org.jsoup</groupId>
+            <artifactId>jsoup</artifactId>
+            <version>1.18.1</version>
+        </dependency>
+
+        <!-- Thymeleaf — HTML email templates (Faz 1 HIGH).
+             EmailServiceImpl mevcut string-builder mantığıyla çalışmaya devam ediyor,
+             ileride templates/email/*.html dosyaları üzerinden Thymeleaf render'a geçişle
+             tekrar kullanılabilir hale getirilecek. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-thymeleaf</artifactId>
+        </dependency>
+
+        <!-- ShedLock — multi-instance scheduled job locking (Faz 1 HIGH) -->
+        <dependency>
+            <groupId>net.javacrumbs.shedlock</groupId>
+            <artifactId>shedlock-spring</artifactId>
+            <version>5.16.0</version>
+        </dependency>
+        <dependency>
+            <groupId>net.javacrumbs.shedlock</groupId>
+            <artifactId>shedlock-provider-jdbc-template</artifactId>
+            <version>5.16.0</version>
+        </dependency>
+
+        <!-- Resilience4j — retry/circuit breaker for Iyzico/Logo/Kargonomi -->
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-spring-boot3</artifactId>
+            <version>2.2.0</version>
+        </dependency>
+
+        <!-- AWS SDK v2 S3 — MinIO (dev) + AWS S3 / Cloudflare R2 / Backblaze B2 (prod)
+             ile %100 uyumlu storage client. STORAGE_PROVIDER=s3 olduğunda devreye girer. -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+            <version>2.28.16</version>
+        </dependency>
+
+        <!-- Logback JSON encoder — structured logging Loki/Grafana için.
+             logback-spring.xml prod profile'inde JSON output kullanır. -->
+        <dependency>
+            <groupId>net.logstash.logback</groupId>
+            <artifactId>logstash-logback-encoder</artifactId>
+            <version>8.0</version>
+        </dependency>
+
+        <!-- Springdoc OpenAPI — admin API documentation (Faz 3 NICE-TO-HAVE).
+             /swagger-ui.html ve /v3/api-docs admin-only erişilebilir. -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <version>2.6.0</version>
         </dependency>
     </dependencies>
 

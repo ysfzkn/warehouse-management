@@ -69,6 +69,7 @@ const AdminNotifications = () => {
 
   useEffect(() => {
     fetchNotifications();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, size, filters]);
 
   const totalPages = useMemo(() => {

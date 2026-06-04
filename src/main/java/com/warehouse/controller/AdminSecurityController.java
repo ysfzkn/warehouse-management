@@ -10,7 +10,6 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/admin/security-code")
-@CrossOrigin(origins = "*")
 public class AdminSecurityController {
 
     private final AdminSecurityService adminSecurityService;

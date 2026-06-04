@@ -66,6 +66,7 @@ const StockImportHistory = () => {
 
   useEffect(() => {
     fetchData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const badgeClass = (status) => {
@@ -153,7 +154,7 @@ const StockImportHistory = () => {
           const result = response.data;
           
           if (result.errorCount > 0) {
-            // Kısmi başarı durumu
+            // Partial success case
             const errorMessages = result.errors?.map(err => 
               err.errorMessage || `Kayıt #${err.id}: ${err.errorCode || 'Bilinmeyen hata'}`
             ).join(', ') || '';
@@ -170,7 +171,7 @@ const StockImportHistory = () => {
               );
             }
           } else {
-            // Tam başarı
+            // Full success
             showToast(
               `${result.successCount} aktarım geçmişi kaydı başarıyla silindi.`,
               'success'

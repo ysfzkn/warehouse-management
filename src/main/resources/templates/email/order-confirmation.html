@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="tr">
+<body>
+<div th:fragment="content">
+    <h2 style="margin:0 0 16px 0;font-size:18px;color:#111827;">Siparişiniz alındı 🎉</h2>
+    <p>Merhaba <strong th:text="${customerName}">Ahmet</strong>,</p>
+    <p>
+        <strong th:text="${orderNumber}">SIP-2026-001</strong> numaralı siparişiniz başarıyla oluşturuldu.
+        Siparişiniz hazırlandığında size yine e-posta ile bilgi vereceğiz.
+    </p>
+
+    <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:24px 0;border:1px solid #e5e7eb;border-radius:6px;overflow:hidden;">
+        <tr style="background:#f9fafb;">
+            <th align="left" style="padding:10px 14px;font-size:12px;color:#6b7280;font-weight:600;">Ürün</th>
+            <th align="right" style="padding:10px 14px;font-size:12px;color:#6b7280;font-weight:600;">Adet</th>
+            <th align="right" style="padding:10px 14px;font-size:12px;color:#6b7280;font-weight:600;">Tutar</th>
+        </tr>
+        <tr th:each="item : ${items}" style="border-top:1px solid #e5e7eb;">
+            <td style="padding:12px 14px;" th:text="${item.name}">Ürün adı</td>
+            <td style="padding:12px 14px;text-align:right;" th:text="${item.quantity}">1</td>
+            <td style="padding:12px 14px;text-align:right;" th:text="${item.totalFormatted}">₺0,00</td>
+        </tr>
+    </table>
+
+    <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:16px 0;">
+        <tr><td align="right" style="padding:4px 0;color:#6b7280;font-size:13px;">Ara Toplam:</td><td align="right" style="padding:4px 0 4px 16px;" th:text="${subtotalFormatted}">₺0,00</td></tr>
+        <tr><td align="right" style="padding:4px 0;color:#6b7280;font-size:13px;">Kargo:</td><td align="right" style="padding:4px 0 4px 16px;" th:text="${shippingFormatted}">₺0,00</td></tr>
+        <tr style="font-size:16px;font-weight:700;color:#111827;border-top:2px solid #111827;">
+            <td align="right" style="padding:8px 0;">Genel Toplam:</td><td align="right" style="padding:8px 0 8px 16px;" th:text="${totalFormatted}">₺0,00</td>
+        </tr>
+    </table>
+
+    <p style="margin-top:24px;">
+        <a th:href="${orderUrl}" style="display:inline-block;background:#2563eb;color:white;padding:12px 24px;text-decoration:none;border-radius:6px;font-weight:500;">
+            Siparişi Görüntüle
+        </a>
+    </p>
+</div>
+</body>
+</html>

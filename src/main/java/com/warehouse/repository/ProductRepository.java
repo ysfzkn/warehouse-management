@@ -153,7 +153,12 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
         LEFT JOIN c.parent cp
         LEFT JOIN p.brand b
         LEFT JOIN p.color col
-        WHERE (:search IS NULL OR LOWER(p.name) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')) OR LOWER(p.sku) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')))
+        WHERE (:search IS NULL
+               OR LOWER(p.name)  LIKE LOWER(CONCAT('%', CAST(:search AS string), '%'))
+               OR LOWER(p.sku)   LIKE LOWER(CONCAT('%', CAST(:search AS string), '%'))
+               OR LOWER(c.name)  LIKE LOWER(CONCAT('%', CAST(:search AS string), '%'))
+               OR LOWER(cp.name) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%'))
+               OR LOWER(b.name)  LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')))
           AND (:categoryId IS NULL OR c.id = :categoryId OR cp.id = :categoryId)
           AND (:brandId IS NULL OR b.id = :brandId)
           AND (:colorId IS NULL OR col.id = :colorId)
@@ -164,4 +169,59 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
                                 @Param("brandId") Long brandId,
                                 @Param("colorId") Long colorId,
                                 Pageable pageable);
+
+    // E-commerce storefront queries
+    @EntityGraph(value = Product.GRAPH_WITH_RELATIONS, type = EntityGraph.EntityGraphType.LOAD)
+    Optional<Product> findBySlug(String slug);
+
+    /**
+     * Store search — searches across product name + SKU + category + brand + sub-brand
+     * + color + short description. The tsvector (V52 idx_products_search_tsv) still cannot
+     * be used directly from JPQL; a broad LIKE pattern gives adequate performance up to
+     * 1000+ products in the catalog. For a larger catalog, switch to a native query.
+     */
+    @Query("""
+        SELECT p FROM Product p
+        LEFT JOIN p.category c
+        LEFT JOIN c.parent cp
+        LEFT JOIN p.brand b
+        LEFT JOIN p.color col
+        WHERE p.isActive = true
+          AND (:search IS NULL
+               OR LOWER(p.name)             LIKE LOWER(CONCAT('%', CAST(:search AS string), '%'))
+               OR LOWER(p.sku)              LIKE LOWER(CONCAT('%', CAST(:search AS string), '%'))
+               OR LOWER(p.shortDescription) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%'))
+               OR LOWER(c.name)             LIKE LOWER(CONCAT('%', CAST(:search AS string), '%'))
+               OR LOWER(cp.name)            LIKE LOWER(CONCAT('%', CAST(:search AS string), '%'))
+               OR LOWER(b.name)             LIKE LOWER(CONCAT('%', CAST(:search AS string), '%'))
+               OR LOWER(col.name)           LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')))
+          AND (:categoryId IS NULL OR c.id = :categoryId OR cp.id = :categoryId)
+          AND (:brandId IS NULL OR b.id = :brandId)
+          AND (:colorId IS NULL OR col.id = :colorId)
+    """)
+    @EntityGraph(value = Product.GRAPH_WITH_RELATIONS, type = EntityGraph.EntityGraphType.LOAD)
+    Page<Product> findActiveByFilters(@Param("search") String search,
+                                      @Param("categoryId") Long categoryId,
+                                      @Param("brandId") Long brandId,
+                                      @Param("colorId") Long colorId,
+                                      Pageable pageable);
+
+    @Query("""
+        SELECT p FROM Product p
+        LEFT JOIN p.category c
+        LEFT JOIN c.parent cp
+        LEFT JOIN p.brand b
+        LEFT JOIN p.color col
+        WHERE p.isActive = true
+          AND (:search IS NULL OR LOWER(p.name) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')) OR LOWER(p.sku) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')))
+          AND (:categoryId IS NULL OR c.id = :categoryId OR cp.id = :categoryId)
+          AND (:brandIds IS NULL OR b.id IN :brandIds)
+          AND (:colorIds IS NULL OR col.id IN :colorIds)
+    """)
+    @EntityGraph(value = Product.GRAPH_WITH_RELATIONS, type = EntityGraph.EntityGraphType.LOAD)
+    Page<Product> findActiveByMultiFilters(@Param("search") String search,
+                                           @Param("categoryId") Long categoryId,
+                                           @Param("brandIds") java.util.List<Long> brandIds,
+                                           @Param("colorIds") java.util.List<Long> colorIds,
+                                           Pageable pageable);
 }

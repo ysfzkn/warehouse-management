@@ -110,6 +110,8 @@ public class StockTransferServiceImpl implements StockTransferService {
                 params.transferType,
                 params.sourceWarehouseId,
                 params.destinationWarehouseId,
+                params.startDate,
+                params.endDate,
                 params.driverNameProvided,
                 params.driverPattern,
                 params.productNameProvided,
@@ -118,6 +120,9 @@ public class StockTransferServiceImpl implements StockTransferService {
                 params.skuPattern,
                 params.notesProvided,
                 params.notesPattern,
+                params.customerProvided,
+                params.customerNamePattern,
+                params.customerPhonePattern,
                 transferDateFrom,
                 transferDateTo,
                 createdAtFrom,
@@ -190,6 +195,8 @@ public class StockTransferServiceImpl implements StockTransferService {
                 params.transferType,
                 params.sourceWarehouseId,
                 params.destinationWarehouseId,
+                params.startDate,
+                params.endDate,
                 params.driverNameProvided,
                 params.driverPattern,
                 params.productNameProvided,
@@ -198,6 +205,9 @@ public class StockTransferServiceImpl implements StockTransferService {
                 params.skuPattern,
                 params.notesProvided,
                 params.notesPattern,
+                params.customerProvided,
+                params.customerNamePattern,
+                params.customerPhonePattern,
                 transferDateFrom,
                 transferDateTo,
                 createdAtFrom,
@@ -217,12 +227,17 @@ public class StockTransferServiceImpl implements StockTransferService {
                         params.transferType,
                         params.sourceWarehouseId,
                         params.destinationWarehouseId,
+                        params.startDate,
+                        params.endDate,
                         params.driverNameProvided,
                         params.driverPattern,
                         params.productNameProvided,
                         params.productNamePattern,
                         params.skuProvided,
-                        params.skuPattern)
+                        params.skuPattern,
+                        params.customerProvided,
+                        params.customerNamePattern,
+                        params.customerPhonePattern)
                 .stream()
                 .collect(Collectors.toMap(
                         sc -> sc.getStatus().name(),
@@ -234,12 +249,17 @@ public class StockTransferServiceImpl implements StockTransferService {
                         params.transferType,
                         params.sourceWarehouseId,
                         params.destinationWarehouseId,
+                        params.startDate,
+                        params.endDate,
                         params.driverNameProvided,
                         params.driverPattern,
                         params.productNameProvided,
                         params.productNamePattern,
                         params.skuProvided,
-                        params.skuPattern)
+                        params.skuPattern,
+                        params.customerProvided,
+                        params.customerNamePattern,
+                        params.customerPhonePattern)
                 .stream()
                 .collect(Collectors.toMap(
                         tc -> tc.getTransferType() != null ? tc.getTransferType().name() : TransferType.WAREHOUSE.name(),
@@ -527,7 +547,7 @@ public class StockTransferServiceImpl implements StockTransferService {
 
         adminSecurityService.requireSecurityCodeForAdmin(adminSecurityCode);
 
-        // Tüm transfer durumlarının (yolda, tamamlanan, beklemede) silinmesine izin veriyoruz
+        // We allow deleting transfers in any status (in transit, completed, pending)
         AuditMetadata metadata = buildTransferMetadata(transfer);
         stockTransferRepository.delete(transfer);
         String username = CurrentUser.usernameOrSystem();
@@ -569,7 +589,7 @@ public class StockTransferServiceImpl implements StockTransferService {
             try {
                 StockTransfer transfer = getTransferByIdOrThrow(transferId);
                 
-                // Tüm transfer durumlarının (yolda, tamamlanan, beklemede) silinmesine izin veriyoruz
+                // We allow deleting transfers in any status (in transit, completed, pending)
                 AuditMetadata metadata = buildTransferMetadata(transfer);
                 stockTransferRepository.delete(transfer);
                 auditService.log(AuditAction.TRANSFER_DELETE, DomainEntityType.StockTransfer.name(), transferId, username,
@@ -577,12 +597,12 @@ public class StockTransferServiceImpl implements StockTransferService {
                 successCount++;
                 logger.debug("Transfer deleted successfully with id: {}", transferId);
             } catch (WarehouseManagementException e) {
-                // Domain exception'ları yakala
+                // Catch domain exceptions
                 StockTransfer transfer = null;
                 try {
                     transfer = getTransferByIdOrThrow(transferId);
                 } catch (Exception ex) {
-                    // Transfer bulunamadı
+                    // Transfer not found
                 }
                 String transferInfo = transfer != null 
                     ? String.format("Transfer #%d (%s → %s)", transferId,
@@ -590,22 +610,22 @@ public class StockTransferServiceImpl implements StockTransferService {
                         transfer.getDestinationWarehouse() != null ? transfer.getDestinationWarehouse().getName() 
                             : (transfer.getCustomerFullName() != null ? transfer.getCustomerFullName() : "Bilinmeyen"))
                     : String.format("Transfer #%d", transferId);
-                
+
                 errors.add(new BulkDeleteResponse.DeleteError(
                     transferId,
                     transferInfo,
-                    null, // Transfer için SKU yok
+                    null, // No SKU for a transfer
                     e.getErrorCode().getCode(),
                     e.getMessage()
                 ));
                 logger.warn("Cannot delete transfer with id {}: {}", transferId, e.getMessage());
             } catch (Exception e) {
-                // Diğer hatalar
+                // Other errors
                 StockTransfer transfer = null;
                 try {
                     transfer = getTransferByIdOrThrow(transferId);
                 } catch (Exception ex) {
-                    // Transfer bulunamadı
+                    // Transfer not found
                 }
                 String transferInfo = transfer != null 
                     ? String.format("Transfer #%d (%s → %s)", transferId,
@@ -686,7 +706,7 @@ public class StockTransferServiceImpl implements StockTransferService {
             return stockTransferRepository.findByIdWithRelations(saved.getId()).orElse(saved);
         }
 
-        // Normal onaylarda güvenlik şifresi isteme
+        // Don't require a security code for normal approvals
         transfer.setApprovalStatus(TransferApprovalStatus.APPROVED);
         transfer.setApprovalDecisionBy(username);
         transfer.setApprovalDecisionAt(LocalDateTime.now());
@@ -1213,8 +1233,31 @@ public class StockTransferServiceImpl implements StockTransferService {
         if (value == null) {
             return null;
         }
-        String trimmed = value.trim();
-        return trimmed.isEmpty() ? null : trimmed;
+        String t = value.trim();
+        if (t.isEmpty()) return null;
+
+        // Strip surrounding quotes (including smart quotes) that the chat/tool layer might include.
+        t = stripWrappingQuotes(t);
+
+        // Collapse whitespace (e.g., double spaces) to make matching more robust.
+        t = t.replaceAll("\\s+", " ").trim();
+        return t.isEmpty() ? null : t;
+    }
+
+    private static String stripWrappingQuotes(String s) {
+        if (s == null) return null;
+        String out = s;
+        while (out.length() >= 2 && isQuote(out.charAt(0)) && isQuote(out.charAt(out.length() - 1))) {
+            out = out.substring(1, out.length() - 1).trim();
+        }
+        return out;
+    }
+
+    private static boolean isQuote(char c) {
+        return c == '"' || c == '\''
+                || c == '“' || c == '”'
+                || c == '‘' || c == '’'
+                || c == '`';
     }
 
     private AuditMetadata buildTransferMetadata(StockTransfer transfer) {
@@ -1283,14 +1326,19 @@ public class StockTransferServiceImpl implements StockTransferService {
         private final TransferType transferType;
         private final Long sourceWarehouseId;
         private final Long destinationWarehouseId;
+        private final LocalDateTime startDate;
+        private final LocalDateTime endDate;
         private final boolean productNameProvided;
         private final boolean skuProvided;
         private final boolean driverNameProvided;
         private final boolean notesProvided;
+        private final boolean customerProvided;
         private final String productNamePattern;
         private final String skuPattern;
         private final String driverPattern;
         private final String notesPattern;
+        private final String customerNamePattern;
+        private final String customerPhonePattern;
 
         private TransferFilterParams(StockTransferFilter filter) {
             if (filter == null) {
@@ -1298,36 +1346,55 @@ public class StockTransferServiceImpl implements StockTransferService {
                 this.transferType = null;
                 this.sourceWarehouseId = null;
                 this.destinationWarehouseId = null;
+                this.startDate = null;
+                this.endDate = null;
                 this.productNameProvided = false;
                 this.skuProvided = false;
                 this.driverNameProvided = false;
                 this.notesProvided = false;
+                this.customerProvided = false;
                 this.productNamePattern = "%";
                 this.skuPattern = "%";
                 this.driverPattern = "%";
                 this.notesPattern = "%";
+                this.customerNamePattern = "%";
+                this.customerPhonePattern = "%";
             } else {
                 this.status = filter.getStatus();
                 this.transferType = filter.getTransferType();
-                this.sourceWarehouseId = filter.getSourceWarehouseId();
-                this.destinationWarehouseId = filter.getDestinationWarehouseId();
+                // Treat 0 / negative IDs as "no filter" to avoid accidental empty results from tool-calls.
+                this.sourceWarehouseId = normalizeId(filter.getSourceWarehouseId());
+                this.destinationWarehouseId = normalizeId(filter.getDestinationWarehouseId());
+                this.startDate = filter.getStartDate();
+                this.endDate = filter.getEndDate();
                 String productName = normalize(filter.getProductName());
                 String sku = normalize(filter.getSku());
                 String driverName = normalize(filter.getDriverName());
                 String notes = normalize(filter.getNotes());
+                String customerQuery = normalize(filter.getCustomerQuery());
                 this.productNameProvided = productName != null;
                 this.skuProvided = sku != null;
                 this.driverNameProvided = driverName != null;
                 this.notesProvided = notes != null;
+                this.customerProvided = customerQuery != null;
                 this.productNamePattern = productNameProvided ? likePattern(productName) : "%";
                 this.skuPattern = skuProvided ? likePattern(sku) : "%";
                 this.driverPattern = driverNameProvided ? likePattern(driverName) : "%";
                 this.notesPattern = notesProvided ? likePattern(notes) : "%";
+                String digits = customerQuery != null ? customerQuery.replaceAll("\\D", "") : null;
+                boolean digitsProvided = digits != null && !digits.isBlank();
+                this.customerNamePattern = customerProvided ? likePattern(customerQuery) : "%";
+                this.customerPhonePattern = digitsProvided ? ("%" + digits + "%") : (customerProvided ? likePattern(customerQuery) : "%");
             }
         }
 
         private static TransferFilterParams from(StockTransferFilter filter) {
             return new TransferFilterParams(filter);
+        }
+
+        private static Long normalizeId(Long id) {
+            if (id == null) return null;
+            return id > 0 ? id : null;
         }
 
         private static String likePattern(String value) {

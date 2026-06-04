@@ -56,6 +56,7 @@ public class StockImportServiceImpl implements StockImportService {
     private final AuditService auditService;
     private final NotificationService notificationService;
     private final ImportProperties importProperties;
+    private final com.warehouse.service.PhotoStorageService photoStorageService;
 
     public StockImportServiceImpl(ProductRepository productRepository,
                                   CategoryRepository categoryRepository,
@@ -65,7 +66,8 @@ public class StockImportServiceImpl implements StockImportService {
                                   StockImportHistoryRepository historyRepository,
                                   AuditService auditService,
                                   NotificationService notificationService,
-                                  ImportProperties importProperties) {
+                                  ImportProperties importProperties,
+                                  com.warehouse.service.PhotoStorageService photoStorageService) {
         this.productRepository = productRepository;
         this.categoryRepository = categoryRepository;
         this.brandRepository = brandRepository;
@@ -75,6 +77,7 @@ public class StockImportServiceImpl implements StockImportService {
         this.auditService = auditService;
         this.notificationService = notificationService;
         this.importProperties = importProperties;
+        this.photoStorageService = photoStorageService;
     }
 
     @Override
@@ -120,12 +123,23 @@ public class StockImportServiceImpl implements StockImportService {
                     return new IllegalArgumentException("Warehouse not found: " + warehouseId);
                 });
 
-        String storedFilename = System.currentTimeMillis() + "_" + sanitizeFilename(file.getOriginalFilename());
-        Path targetFile = storeFile(file, storedFilename);
-        com.warehouse.entity.StockImportHistory history = createImportHistory(file, warehouse, storedFilename);
+        // Back up the original file to storage (S3/MinIO) for audit/redownload.
+        // The storage key is persisted as history.storedFilename.
+        String storageKey;
+        byte[] fileBytes = file.getBytes();
+        try (InputStream uploadStream = new java.io.ByteArrayInputStream(fileBytes)) {
+            storageKey = photoStorageService.storeDocument(
+                    "imports/" + warehouseId,
+                    file.getOriginalFilename(),
+                    file.getContentType(),
+                    uploadStream
+            );
+        }
+        com.warehouse.entity.StockImportHistory history = createImportHistory(file, warehouse, storageKey);
 
         try {
-            ImportResult result = processExcelFile(targetFile, warehouse);
+            // Process the Excel file in-memory (from the uploaded bytes) — no disk path needed.
+            ImportResult result = processExcelBytes(fileBytes, warehouse);
             updateHistoryWithResult(history, result);
             logger.info("Stock import completed. Status: {}, Processed: {}/{}, Failed: {}", 
                     history.getStatus(), result.getProcessedRows(), result.getTotalRows(), result.getFailedRows().size());
@@ -155,6 +169,13 @@ public class StockImportServiceImpl implements StockImportService {
         return headerStyle;
     }
 
+    /**
+     * @deprecated {@link com.warehouse.service.PhotoStorageService#storeDocument}
+     * is now used instead. This method is kept as a local-only fallback (not to be
+     * deleted, so it doesn't break old tests), but is never called in the
+     * production code path.
+     */
+    @Deprecated
     private Path storeFile(MultipartFile file, String storedFilename) throws IOException {
         Path dir = resolveImportDir();
         Files.createDirectories(dir);
@@ -209,12 +230,20 @@ public class StockImportServiceImpl implements StockImportService {
         return historyRepository.save(history);
     }
 
-    private ImportResult processExcelFile(Path filePath, Warehouse warehouse) throws IOException {
+    /**
+     * Reads the Excel file from an in-memory byte array. No disk I/O → ideal for S3/MinIO.
+     */
+    private ImportResult processExcelBytes(byte[] bytes, Warehouse warehouse) throws IOException {
+        try (InputStream is = new java.io.ByteArrayInputStream(bytes)) {
+            return processExcelStream(is, warehouse);
+        }
+    }
+
+    private ImportResult processExcelStream(InputStream is, Warehouse warehouse) throws IOException {
         ImportResult result = new ImportResult();
         ObjectMapper objectMapper = new ObjectMapper();
 
-        try (InputStream is = Files.newInputStream(filePath);
-             XSSFWorkbook workbook = new XSSFWorkbook(is)) {
+        try (XSSFWorkbook workbook = new XSSFWorkbook(is)) {
 
             Sheet sheet = workbook.getSheetAt(0);
             logger.debug("Processing Excel file with {} rows", sheet.getLastRowNum());
@@ -260,15 +289,15 @@ public class StockImportServiceImpl implements StockImportService {
     private RowData extractRowData(Row row, int rowNumber) {
         return new RowData(
             rowNumber,
-            getStringValue(row, 0),  // Ürün Adı
-            getStringValue(row, 1),  // Stok Kodu
-            getStringValue(row, 2),  // Kategori Adı
-            getStringValue(row, 4),  // Marka (opsiyonel)
-            getStringValue(row, 3),  // Miktar
-            getStringValue(row, 5),  // Emanet
-            getStringValue(row, 6),  // Fiyat
-            getStringValue(row, 7),  // Minimum Stok
-            getStringValue(row, 8)   // Rezerve
+            getStringValue(row, 0),  // Product name
+            getStringValue(row, 1),  // SKU
+            getStringValue(row, 2),  // Category name
+            getStringValue(row, 4),  // Brand (optional)
+            getStringValue(row, 3),  // Quantity
+            getStringValue(row, 5),  // Consigned
+            getStringValue(row, 6),  // Price
+            getStringValue(row, 7),  // Minimum stock
+            getStringValue(row, 8)   // Reserved
         );
     }
 
@@ -348,6 +377,8 @@ public class StockImportServiceImpl implements StockImportService {
                 .orElseGet(() -> {
                     Category category = new Category();
                     category.setName(categoryName.trim());
+                    category.setSlug(categoryName.trim().toLowerCase()
+                        .replace(" ", "-").replaceAll("[^a-z0-9\\-]", "") + "-" + System.currentTimeMillis() % 10000);
                     category.setActive(true);
                     Category saved = categoryRepository.save(category);
                     result.incrementCreatedCategories();
@@ -361,6 +392,8 @@ public class StockImportServiceImpl implements StockImportService {
                 .orElseGet(() -> {
                     Brand brand = new Brand();
                     brand.setName(brandName.trim());
+                    brand.setSlug(brandName.trim().toLowerCase()
+                        .replace(" ", "-").replaceAll("[^a-z0-9\\-]", "") + "-" + System.currentTimeMillis() % 10000);
                     brand.setActive(true);
                     Brand saved = brandRepository.save(brand);
                     result.incrementCreatedBrands();
@@ -375,7 +408,7 @@ public class StockImportServiceImpl implements StockImportService {
         
         if (existingProduct.isPresent()) {
             Product product = existingProduct.get();
-            // Eğer marka belirtilmişse ve ürünün markası yoksa veya farklıysa, markayı güncelle
+            // If a brand is specified and the product has no brand or a different one, update the brand
             if (brand != null && (product.getBrand() == null || !product.getBrand().getId().equals(brand.getId()))) {
                 product.setBrand(brand);
                 product.setUpdatedAt(LocalDateTime.now());
@@ -388,6 +421,8 @@ public class StockImportServiceImpl implements StockImportService {
         Product product = new Product();
         product.setName(rowData.getName().trim());
         product.setSku(skuTrimmed);
+        product.setSlug(skuTrimmed.toLowerCase()
+            .replace(" ", "-").replaceAll("[^a-z0-9\\-]", ""));
         product.setPrice(price);
         product.setCategory(category);
         product.setBrand(brand);
@@ -418,7 +453,7 @@ public class StockImportServiceImpl implements StockImportService {
             int delta = quantity - oldQty;
             if (delta > 0) {
                 String username = getCurrentUsername();
-                // Audit: stok artırma
+                // Audit: stock increase
                 auditService.log(
                         AuditAction.STOCK_ADD,
                         DomainEntityType.Stock.name(),
@@ -449,7 +484,7 @@ public class StockImportServiceImpl implements StockImportService {
             result.incrementCreatedStocks();
 
             String username = getCurrentUsername();
-            // Audit: stok oluşturma
+            // Audit: stock creation
             auditService.log(
                     AuditAction.STOCK_CREATE,
                     DomainEntityType.Stock.name(),

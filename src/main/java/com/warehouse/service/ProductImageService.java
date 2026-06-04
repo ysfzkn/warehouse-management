@@ -17,6 +17,8 @@ public interface ProductImageService {
 
     void deleteImage(Long imageId);
 
+    void setPrimaryImage(Long imageId);
+
     ProductImage getImageOrThrow(Long imageId);
 }
 

@@ -49,7 +49,7 @@ export const formatPhoneInputValue = (digits) => formatGroups(digits);
 
 export const PHONE_PLACEHOLDER = '555 123 45 67';
 
-export default {
+const phoneUtils = {
   PHONE_PREFIX,
   extractPhoneDigits,
   isPhoneComplete,
@@ -58,4 +58,5 @@ export default {
   formatPhoneInputValue,
   PHONE_PLACEHOLDER
 };
+export default phoneUtils;
 

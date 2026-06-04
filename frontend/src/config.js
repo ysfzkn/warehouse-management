@@ -1,6 +1,6 @@
 /**
  * Application Configuration
- * Bu dosyadaki değişiklikler otomatik olarak hot reload ile güncellenir
+ * Changes in this file are automatically applied via hot reload
  */
 
 const config = {
@@ -17,7 +17,7 @@ const config = {
     environment: process.env.NODE_ENV || 'development',
   },
 
-  // Feature Flags (bu değerleri değiştirdiğinizde hot reload çalışır!)
+  // Feature Flags (changing these values triggers hot reload!)
   features: {
     enableDebugMode: true,
     enableAutoSave: true,

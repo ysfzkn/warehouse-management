@@ -1,0 +1,60 @@
+{
+  "common": {
+    "loading": "Loading...",
+    "error": "An error occurred",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "back": "Back",
+    "next": "Next",
+    "close": "Close",
+    "search": "Search",
+    "yes": "Yes",
+    "no": "No",
+    "tryAgain": "Try Again"
+  },
+  "nav": {
+    "home": "Home",
+    "products": "Products",
+    "cart": "Cart",
+    "favorites": "Favorites",
+    "myAccount": "My Account",
+    "orders": "My Orders",
+    "login": "Sign In",
+    "register": "Sign Up",
+    "logout": "Sign Out",
+    "contact": "Contact"
+  },
+  "checkout": {
+    "title": "Order Confirmation",
+    "shippingAddress": "Shipping Address",
+    "billingAddress": "Billing Address",
+    "paymentMethod": "Payment Method",
+    "orderSummary": "Order Summary",
+    "subtotal": "Subtotal",
+    "shipping": "Shipping",
+    "vat": "VAT",
+    "discount": "Discount",
+    "total": "Total",
+    "placeOrder": "Confirm and Pay",
+    "contractAccept": "I have read and accept",
+    "guestCheckout": "Continue as Guest"
+  },
+  "product": {
+    "addToCart": "Add to Cart",
+    "outOfStock": "Out of Stock",
+    "inStock": "In Stock",
+    "lowStock": "Low Stock",
+    "freeShipping": "Free Shipping",
+    "reviews": "Reviews",
+    "description": "Description",
+    "specs": "Specifications"
+  },
+  "kvkk": {
+    "title": "Privacy & Data",
+    "downloadData": "Download My Data",
+    "deleteAccount": "Delete My Account",
+    "confirmDelete": "DELETE MY ACCOUNT"
+  }
+}

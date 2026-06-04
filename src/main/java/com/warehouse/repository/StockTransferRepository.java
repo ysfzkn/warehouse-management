@@ -151,6 +151,8 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, Lo
           AND (:transferType IS NULL OR st.transferType = :transferType)
           AND (:sourceWarehouseId IS NULL OR st.sourceWarehouse.id = :sourceWarehouseId)
           AND (:destinationWarehouseId IS NULL OR st.destinationWarehouse.id = :destinationWarehouseId)
+          AND (st.transferDate >= COALESCE(:startDate, st.transferDate))
+          AND (st.transferDate <= COALESCE(:endDate, st.transferDate))
           AND (:driverProvided = false OR LOWER(st.driverName) LIKE :driverPattern)
           AND (
                 :productNameProvided = false
@@ -174,6 +176,26 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, Lo
                 :notesProvided = false
                 OR LOWER(COALESCE(st.notes, '')) LIKE :notesPattern
           )
+          AND (
+                :customerProvided = false
+                OR LOWER(COALESCE(st.customerFullName, '')) LIKE :customerNamePattern
+                OR LOWER(COALESCE(st.customerPhone, '')) LIKE :customerPhonePattern
+                OR LOWER(COALESCE(st.driverName, '')) LIKE :customerNamePattern
+                OR LOWER(COALESCE(st.createdBy, '')) LIKE :customerNamePattern
+                OR EXISTS (
+                    SELECT 1 FROM StockTransferItem itemCustomer
+                    WHERE itemCustomer.transfer = st
+                      AND itemCustomer.stockId IS NOT NULL
+                      AND EXISTS (
+                          SELECT 1 FROM Stock s
+                          WHERE s.id = itemCustomer.stockId
+                            AND (
+                                LOWER(COALESCE(s.customerName, '')) LIKE :customerNamePattern
+                                OR LOWER(COALESCE(s.customerPhone, '')) LIKE :customerPhonePattern
+                            )
+                      )
+                )
+          )
           AND st.transferDate >= :transferDateFrom
           AND st.transferDate <= :transferDateTo
           AND st.createdAt >= :createdAtFrom
@@ -185,6 +207,8 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, Lo
                                       @Param("transferType") TransferType transferType,
                                       @Param("sourceWarehouseId") Long sourceWarehouseId,
                                       @Param("destinationWarehouseId") Long destinationWarehouseId,
+                                      @Param("startDate") LocalDateTime startDate,
+                                      @Param("endDate") LocalDateTime endDate,
                                       @Param("driverProvided") boolean driverProvided,
                                       @Param("driverPattern") String driverPattern,
                                       @Param("productNameProvided") boolean productNameProvided,
@@ -193,6 +217,9 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, Lo
                                       @Param("skuPattern") String skuPattern,
                                       @Param("notesProvided") boolean notesProvided,
                                       @Param("notesPattern") String notesPattern,
+                                      @Param("customerProvided") boolean customerProvided,
+                                      @Param("customerNamePattern") String customerNamePattern,
+                                      @Param("customerPhonePattern") String customerPhonePattern,
                                       @Param("transferDateFrom") java.time.LocalDateTime transferDateFrom,
                                       @Param("transferDateTo") java.time.LocalDateTime transferDateTo,
                                       @Param("createdAtFrom") java.time.LocalDateTime createdAtFrom,
@@ -207,6 +234,8 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, Lo
           AND (:transferType IS NULL OR st.transferType = :transferType)
           AND (:sourceWarehouseId IS NULL OR st.sourceWarehouse.id = :sourceWarehouseId)
           AND (:destinationWarehouseId IS NULL OR st.destinationWarehouse.id = :destinationWarehouseId)
+          AND (st.transferDate >= COALESCE(:startDate, st.transferDate))
+          AND (st.transferDate <= COALESCE(:endDate, st.transferDate))
           AND (:driverProvided = false OR LOWER(st.driverName) LIKE :driverPattern)
           AND (
                 :productNameProvided = false
@@ -224,6 +253,26 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, Lo
                     SELECT 1 FROM StockTransferItem itemSku
                     WHERE itemSku.transfer = st
                       AND LOWER(COALESCE(itemSku.product.sku, '')) LIKE :skuPattern
+                )
+          )
+          AND (
+                :customerProvided = false
+                OR LOWER(COALESCE(st.customerFullName, '')) LIKE :customerNamePattern
+                OR LOWER(COALESCE(st.customerPhone, '')) LIKE :customerPhonePattern
+                OR LOWER(COALESCE(st.driverName, '')) LIKE :customerNamePattern
+                OR LOWER(COALESCE(st.createdBy, '')) LIKE :customerNamePattern
+                OR EXISTS (
+                    SELECT 1 FROM StockTransferItem itemCustomer
+                    WHERE itemCustomer.transfer = st
+                      AND itemCustomer.stockId IS NOT NULL
+                      AND EXISTS (
+                          SELECT 1 FROM Stock s
+                          WHERE s.id = itemCustomer.stockId
+                            AND (
+                                LOWER(COALESCE(s.customerName, '')) LIKE :customerNamePattern
+                                OR LOWER(COALESCE(s.customerPhone, '')) LIKE :customerPhonePattern
+                            )
+                      )
                 )
           )
         GROUP BY st.status
@@ -233,12 +282,17 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, Lo
                                                             @Param("transferType") TransferType transferType,
                                                             @Param("sourceWarehouseId") Long sourceWarehouseId,
                                                             @Param("destinationWarehouseId") Long destinationWarehouseId,
+                                                            @Param("startDate") LocalDateTime startDate,
+                                                            @Param("endDate") LocalDateTime endDate,
                                                             @Param("driverProvided") boolean driverProvided,
                                                             @Param("driverPattern") String driverPattern,
                                                             @Param("productNameProvided") boolean productNameProvided,
                                                             @Param("productNamePattern") String productNamePattern,
                                                             @Param("skuProvided") boolean skuProvided,
-                                                            @Param("skuPattern") String skuPattern);
+                                                            @Param("skuPattern") String skuPattern,
+                                                            @Param("customerProvided") boolean customerProvided,
+                                                            @Param("customerNamePattern") String customerNamePattern,
+                                                            @Param("customerPhonePattern") String customerPhonePattern);
 
     @Query("""
         SELECT st.transferType AS transferType, COUNT(DISTINCT st.id) AS count FROM StockTransfer st
@@ -248,6 +302,8 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, Lo
           AND (:transferType IS NULL OR st.transferType = :transferType)
           AND (:sourceWarehouseId IS NULL OR st.sourceWarehouse.id = :sourceWarehouseId)
           AND (:destinationWarehouseId IS NULL OR st.destinationWarehouse.id = :destinationWarehouseId)
+          AND (st.transferDate >= COALESCE(:startDate, st.transferDate))
+          AND (st.transferDate <= COALESCE(:endDate, st.transferDate))
           AND (:driverProvided = false OR LOWER(st.driverName) LIKE :driverPattern)
           AND (
                 :productNameProvided = false
@@ -267,6 +323,26 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, Lo
                       AND LOWER(COALESCE(itemSku.product.sku, '')) LIKE :skuPattern
                 )
           )
+          AND (
+                :customerProvided = false
+                OR LOWER(COALESCE(st.customerFullName, '')) LIKE :customerNamePattern
+                OR LOWER(COALESCE(st.customerPhone, '')) LIKE :customerPhonePattern
+                OR LOWER(COALESCE(st.driverName, '')) LIKE :customerNamePattern
+                OR LOWER(COALESCE(st.createdBy, '')) LIKE :customerNamePattern
+                OR EXISTS (
+                    SELECT 1 FROM StockTransferItem itemCustomer
+                    WHERE itemCustomer.transfer = st
+                      AND itemCustomer.stockId IS NOT NULL
+                      AND EXISTS (
+                          SELECT 1 FROM Stock s
+                          WHERE s.id = itemCustomer.stockId
+                            AND (
+                                LOWER(COALESCE(s.customerName, '')) LIKE :customerNamePattern
+                                OR LOWER(COALESCE(s.customerPhone, '')) LIKE :customerPhonePattern
+                            )
+                      )
+                )
+          )
         GROUP BY st.transferType
     """)
     List<TransferTypeCountProjection> countByFiltersGroupedTransferType(@Param("createdBy") String createdBy,
@@ -274,12 +350,17 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, Lo
                                                                         @Param("transferType") TransferType transferType,
                                                                         @Param("sourceWarehouseId") Long sourceWarehouseId,
                                                                         @Param("destinationWarehouseId") Long destinationWarehouseId,
+                                                                        @Param("startDate") LocalDateTime startDate,
+                                                                        @Param("endDate") LocalDateTime endDate,
                                                                         @Param("driverProvided") boolean driverProvided,
                                                                         @Param("driverPattern") String driverPattern,
                                                                         @Param("productNameProvided") boolean productNameProvided,
                                                                         @Param("productNamePattern") String productNamePattern,
                                                                         @Param("skuProvided") boolean skuProvided,
-                                                                        @Param("skuPattern") String skuPattern);
+                                                                        @Param("skuPattern") String skuPattern,
+                                                                        @Param("customerProvided") boolean customerProvided,
+                                                                        @Param("customerNamePattern") String customerNamePattern,
+                                                                        @Param("customerPhonePattern") String customerPhonePattern);
 
     interface StatusCountProjection {
         TransferStatus getStatus();

@@ -2,12 +2,33 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App';
+import ErrorBoundary from './components/ErrorBoundary';
 import { BrowserRouter } from 'react-router-dom';
+import { HelmetProvider } from 'react-helmet-async';
 import axios from 'axios';
 
-// attach Bearer auth header from localStorage token
+// Rewrite legacy /api/* paths to /api/admin/* (matches nginx rewrite rule).
+// Excluded:
+//   /api/store/*        — storefront endpoints
+//   /api/info           — public public info
+//   /api/cezeri/*       — WMS assistant chat (physically at /api/cezeri on backend)
+//   /api/assistant/*    — public assistant endpoints (flags) consumed by BOTH
+//                          admin and store layouts — rewriting to /api/admin would
+//                          require admin auth and fail 403 in the store tab.
 axios.interceptors.request.use((config) => {
-  const token = localStorage.getItem('auth_token');
+  if (config.url && config.url.startsWith('/api/') &&
+      !config.url.startsWith('/api/admin/') &&
+      !config.url.startsWith('/api/store/') &&
+      !config.url.startsWith('/api/info') &&
+      !config.url.startsWith('/api/cezeri/') &&
+      !config.url.startsWith('/api/assistant/')) {
+    config.url = config.url.replace('/api/', '/api/admin/');
+  }
+  // attach Bearer auth header — admin or customer token based on request path
+  const isStoreApi = config.url && config.url.startsWith('/api/store/');
+  const token = isStoreApi
+    ? (localStorage.getItem('customer_token') || localStorage.getItem('auth_token'))
+    : (localStorage.getItem('auth_token') || localStorage.getItem('customer_token'));
   if (token) {
     config.headers = config.headers || {};
     config.headers['Authorization'] = `Bearer ${token}`;
@@ -19,78 +40,121 @@ axios.interceptors.request.use((config) => {
 axios.interceptors.response.use(
   (response) => response,
   (error) => {
-    // --- Oturum süresi kontrolü ---
+    // --- Session expiry check ---
     if (error && error.response) {
       const status = error.response.status;
       const reqUrl = error?.config?.url ?? '';
-      const isAuthEndpoint = reqUrl.includes('/auth/login');
+      const isAuthEndpoint = reqUrl.includes('/auth/');
       const isNotifications = reqUrl.includes('/api/notifications');
       const errCode = error?.response?.data?.code || error?.response?.data?.errorCode;
       const isAdminSecurityError = ['AUTH_002','AUTH_003','AUTH_004','AUTH_005','AUTH_006','AUTH_007'].includes(errCode);
 
-      // Session expired or unauthorized (skip admin security code errors)
-      if ((status === 401 || status === 403) && !isAuthEndpoint && !isNotifications && !isAdminSecurityError) {
+      // --- Session check: ONLY 401 (Unauthorized) + token present = a genuine session expiry ---
+      // 403 (Forbidden) = insufficient permissions, session may still be active — DO NOT show modal
+      const hasAdminToken = !!localStorage.getItem('auth_token');
+      const hasCustomerToken = !!localStorage.getItem('customer_token');
+      const isStoreRequest = reqUrl.includes('/api/store/');
+      const isRealSessionExpiry = status === 401 && (hasAdminToken || hasCustomerToken)
+          && !isAuthEndpoint && !isNotifications && !isAdminSecurityError;
+
+      if (isRealSessionExpiry) {
         if (!window.__sessionExpiredHandling) {
           window.__sessionExpiredHandling = true;
 
+          // Determine the correct login page: store request → store login, admin request → admin login
+          const loginUrl = isStoreRequest ? '/giris' : '/login';
+          const tokenKey = isStoreRequest ? 'customer_token' : 'auth_token';
+
           const modalId = 'session-expired-modal';
-          if (!document.getElementById(modalId)) {
-            const wrapper = document.createElement('div');
-            wrapper.id = modalId;
-            wrapper.innerHTML = `
-              <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5); z-index: 2000;">
-                <div class="modal-dialog modal-dialog-centered">
-                  <div class="modal-content shadow-lg border-0">
-                    <div class="modal-header border-0 pb-0">
-                      <div class="w-100 text-center pt-3">
-                        <div class="text-info mb-3">
-                          <i class="fas fa-info-circle fa-3x"></i>
-                        </div>
-                        <h5 class="modal-title fw-bold">Oturum Süresi Doldu</h5>
+
+          // First clean up any old/orphan instance
+          const existing = document.getElementById(modalId);
+          if (existing) {
+            try { existing.remove(); } catch {}
+          }
+
+          const wrapper = document.createElement('div');
+          wrapper.id = modalId;
+          wrapper.innerHTML = `
+            <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5); z-index: 2000;">
+              <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content shadow-lg border-0">
+                  <div class="modal-header border-0 pb-0">
+                    <div class="w-100 text-center pt-3">
+                      <div class="text-warning mb-3">
+                        <i class="fas fa-clock fa-3x"></i>
                       </div>
-                    </div>
-                    <div class="modal-body text-center px-4 py-3">
-                      <p class="text-muted mb-0">Güvenliğiniz için tekrar giriş yapmanız gerekiyor.</p>
-                    </div>
-                    <div class="modal-footer border-0 justify-content-center gap-2 pb-4">
-                      <button type="button" id="session-expired-ok" class="btn btn-primary px-4">
-                        <i class="fas fa-sign-in-alt me-2"></i>
-                        Giriş Ekranına Git
-                      </button>
+                      <h5 class="modal-title fw-bold">Oturum Süresi Doldu</h5>
                     </div>
                   </div>
+                  <div class="modal-body text-center px-4 py-3">
+                    <p class="text-muted mb-0">Güvenliğiniz için tekrar giriş yapmanız gerekiyor.</p>
+                  </div>
+                  <div class="modal-footer border-0 justify-content-center gap-2 pb-4">
+                    <button type="button" id="session-expired-ok" class="btn btn-primary px-4">
+                      <i class="fas fa-sign-in-alt me-2"></i>
+                      Giriş Ekranına Git
+                    </button>
+                  </div>
                 </div>
-              </div>`;
-            document.body.appendChild(wrapper);
+              </div>
+            </div>`;
+          document.body.appendChild(wrapper);
 
-            const cleanup = () => {
-              try { document.body.removeChild(wrapper); } catch {}
-              window.__sessionExpiredHandling = false;
-            };
+          const cleanup = () => {
+            try {
+              const el = document.getElementById(modalId);
+              if (el) el.remove();
+            } catch {}
+            window.__sessionExpiredHandling = false;
+          };
 
-            const onOk = () => {
-              try {
-                localStorage.removeItem('auth_token');
+          const onOk = () => {
+            try {
+              localStorage.removeItem(tokenKey);
+              if (!isStoreRequest) {
                 localStorage.removeItem('auth_user');
                 localStorage.removeItem('auth_role');
-                window.dispatchEvent(new Event('auth-changed'));
-              } catch {}
-              cleanup();
-              window.location.replace('/login');
-            };
+              }
+              window.dispatchEvent(new Event('auth-changed'));
+            } catch {}
+            cleanup();
+            window.location.replace(loginUrl);
+          };
 
-            document.getElementById('session-expired-ok')?.addEventListener('click', onOk);
-          }
+          // Event delegation: capture click via the wrapper (works even if the button is detached)
+          wrapper.addEventListener('click', (e) => {
+            if (e.target.closest('#session-expired-ok')) {
+              onOk();
+            }
+          });
+
+          // Allow closing with the Escape key too (and go to login)
+          const onKey = (e) => {
+            if (e.key === 'Escape' || e.key === 'Enter') {
+              document.removeEventListener('keydown', onKey);
+              onOk();
+            }
+          };
+          document.addEventListener('keydown', onKey);
+
+          // Failsafe: if still open after 60 seconds, force navigation to the login page
+          setTimeout(() => {
+            if (document.getElementById(modalId)) {
+              console.warn('[session-expired] Modal 60 saniyedir açık, otomatik login\'e yönlendiriliyor');
+              onOk();
+            }
+          }, 60000);
         }
       }
     }
 
-    // --- Hata mesajı çeviri / normalize ---
+    // --- Error message translation / normalization ---
     if (error && error.response) {
       const res = error.response;
       const data = res.data;
 
-      // Orijinal backend mesajını çıkart
+      // Extract the original backend message
       let message = '';
       if (typeof data === 'string') {
         message = data;
@@ -133,23 +197,23 @@ axios.interceptors.response.use(
 
       const finalMessage = tr || message || 'Beklenmeyen bir hata oluştu';
 
-      // *** ÖNEMLİ KISIM: data'yı stringe çevirmiyoruz, objeyi koruyoruz ***
+      // *** IMPORTANT: we don't stringify data, we preserve the object ***
       if (data && typeof data === 'object') {
-        // errorCode, details vs. korunuyor
+        // errorCode, details, etc. are preserved
         res.data = {
           ...data,
           message: finalMessage
         };
       } else {
-        // Backend düz string yolladıysa en azından objeye sar
+        // If backend sent a plain string, at least wrap it in an object
         res.data = {
           message: finalMessage
         };
       }
     } else if (error && error.message === 'Network Error') {
-      // Network hataları için genel mesaj
+      // Generic message for network errors
       error.message = 'Ağ hatası: Sunucuya ulaşılamıyor';
-      // İstersen:
+      // If desired:
       // error.response = { data: { message: error.message } };
     }
 
@@ -160,8 +224,31 @@ axios.interceptors.response.use(
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>
-    <BrowserRouter>
-      <App />
-    </BrowserRouter>
+    <ErrorBoundary>
+      <HelmetProvider>
+        <BrowserRouter>
+          <App />
+        </BrowserRouter>
+      </HelmetProvider>
+    </ErrorBoundary>
   </React.StrictMode>
 );
+
+// ── Service Worker (PWA) — production only, store domain only ──
+// Can be disabled with REACT_APP_DISABLE_SW=true.
+// SW is not loaded on admin/WMS hosts (real-time data required).
+if ('serviceWorker' in navigator
+    && process.env.NODE_ENV === 'production'
+    && process.env.REACT_APP_DISABLE_SW !== 'true') {
+  const host = window.location.hostname || '';
+  const adminPrefixes = (process.env.REACT_APP_ADMIN_HOSTS || 'admin,wms').split(',').map(s => s.trim());
+  const isAdmin = adminPrefixes.some(p => host.startsWith(p + '.'));
+  if (!isAdmin) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/service-worker.js').catch(err => {
+        // eslint-disable-next-line no-console
+        console.warn('Service worker registration failed:', err);
+      });
+    });
+  }
+}
