@@ -45,7 +45,8 @@ class BankTransferGatewayTest {
         PaymentInitResult result = gateway.initializePayment(request);
 
         assertThat(result.isSuccess()).isTrue();
-        assertThat(result.getBankTransferReference()).startsWith("HVL-ORD-TEST-001-");
+        // Referans kasıtlı tiresiz: "HVL" + orderNumber + 6 hane (bazı bankalar açıklamada tireyi siler)
+        assertThat(result.getBankTransferReference()).startsWith("HVLORD-TEST-001");
         assertThat(result.getBankDetails()).containsKey("iban");
         assertThat(result.getBankDetails().get("bankName")).isEqualTo("Test Bank");
     }
