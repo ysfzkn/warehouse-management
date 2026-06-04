@@ -86,6 +86,10 @@ dist/
 # Backup files
 *.backup
 *.bak
+# DB dumps (production data — NEVER commit). Migration files in db/migration/ are tracked separately.
+prod-backup.sql
+*-backup.sql
+*-dump.sql
 
 # Uploads (do not commit uploaded Excel files)
 uploads/
