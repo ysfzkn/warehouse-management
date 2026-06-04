@@ -69,6 +69,12 @@ class PaymentServiceImplTest {
 
         when(paymentRepo.findByIdempotencyKey(idempotencyKey)).thenReturn(Optional.empty());
         when(orderRepo.findById(order.getId())).thenReturn(Optional.of(order));
+        // Kart ödeme artık DB'den aktif gateway çözüyor (resolveDefaultCardProvider)
+        PaymentGatewayConfig cardCfg = new PaymentGatewayConfig();
+        cardCfg.setActive(true);
+        cardCfg.setGatewayProtocol("IYZICO");
+        when(gatewayConfigRepo.findFirstByActiveTrueAndDefaultGatewayTrueOrderByPriorityAsc())
+            .thenReturn(Optional.of(cardCfg));
         when(gatewayFactory.getGateway(PaymentProvider.IYZICO)).thenReturn(mockGateway);
         when(paymentRepo.save(any(PaymentTransaction.class))).thenAnswer(inv -> {
             PaymentTransaction tx = inv.getArgument(0);
@@ -240,12 +246,14 @@ class PaymentServiceImplTest {
         tx.setPaymentProvider(PaymentProvider.BANK_TRANSFER);
         tx.setStatus(PaymentStatus.INITIATED);
 
-        when(orderRepo.findById(order.getId())).thenReturn(Optional.of(order));
+        when(orderRepo.findByIdForUpdate(order.getId())).thenReturn(Optional.of(order));
         when(paymentRepo.findByOrderIdAndStatus(order.getId(), PaymentStatus.INITIATED)).thenReturn(Optional.of(tx));
         when(paymentRepo.save(any())).thenReturn(tx);
         when(orderRepo.save(any())).thenReturn(order);
 
-        paymentService.confirmBankTransfer(order.getId(), "admin");
+        // grandTotal=269.99 (TestDataFactory); paidAmount tolerans içinde eşleşmeli
+        paymentService.confirmBankTransfer(order.getId(), new BigDecimal("269.99"),
+                LocalDateTime.now(), "admin", "test onayı");
 
         verify(paymentRepo).save(argThat(t -> t.getStatus() == PaymentStatus.SUCCESS));
         verify(orderRepo).save(argThat(o -> o.getStatus() == OrderStatus.PAID));
@@ -257,9 +265,10 @@ class PaymentServiceImplTest {
         Order order = TestDataFactory.createOrder(customer);
         order.setPaymentMethod("CREDIT_CARD");
 
-        when(orderRepo.findById(order.getId())).thenReturn(Optional.of(order));
+        when(orderRepo.findByIdForUpdate(order.getId())).thenReturn(Optional.of(order));
 
-        assertThatThrownBy(() -> paymentService.confirmBankTransfer(order.getId(), "admin"))
+        assertThatThrownBy(() -> paymentService.confirmBankTransfer(
+                order.getId(), new BigDecimal("269.99"), LocalDateTime.now(), "admin", null))
             .isInstanceOf(WarehouseManagementException.class);
     }
 

@@ -46,6 +46,8 @@ class BankTransferExpiryJobTest {
 
         when(orderRepo.findExpiredBankTransferOrders(eq(OrderStatus.PENDING_PAYMENT), eq("BANK_TRANSFER"), any()))
             .thenReturn(List.of(order));
+        // Job her order'ı pessimistic lock ile yeniden çekiyor (findByIdForUpdate)
+        when(orderRepo.findByIdForUpdate(order.getId())).thenReturn(Optional.of(order));
         when(orderItemRepo.findByOrderId(order.getId())).thenReturn(List.of());
         when(paymentRepo.findByOrderIdAndStatus(order.getId(), PaymentStatus.INITIATED)).thenReturn(Optional.of(tx));
         when(orderRepo.save(any())).thenReturn(order);
