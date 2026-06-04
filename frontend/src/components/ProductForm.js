@@ -15,7 +15,8 @@ function CrawlThumbnail({ url, referer }) {
   useEffect(() => {
     let cancelled = false;
     let createdBlobUrl = null;
-    setBlobUrl(null); setFailed(false);
+    setBlobUrl(null);
+    setFailed(false);
     (async () => {
       try {
         const res = await axios.get(`/api/admin/products/crawl-images/proxy`, {
@@ -37,7 +38,17 @@ function CrawlThumbnail({ url, referer }) {
   if (failed) return null;
   if (!blobUrl) {
     return (
-      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af', fontSize: '0.75rem' }}>
+      <div
+        style={{
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: '#9ca3af',
+          fontSize: '0.75rem',
+        }}
+      >
         Yükleniyor…
       </div>
     );
@@ -67,11 +78,13 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
     sctRate: '',
     categoryId: '',
     subcategoryId: '',
-    isActive: true
+    isActive: true,
   });
   const [productImages, setProductImages] = useState([]);
   const [imageUploading, setImageUploading] = useState(false);
   const [deleteImageId, setDeleteImageId] = useState(null);
+  const [selectedImageIds, setSelectedImageIds] = useState(() => new Set());
+  const [bulkDeletingImages, setBulkDeletingImages] = useState(false);
   const imageInputRef = React.useRef(null);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
@@ -86,15 +99,15 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
   const [createModalDescription, setCreateModalDescription] = useState('');
   const [createModalLoading, setCreateModalLoading] = useState(false);
   const [priceIncludesVat, setPriceIncludesVat] = useState(false);
-  
+
   // Calculate total price with taxes
   const calculateTotalPrice = () => {
     const enteredPrice = parseFloat(formData.price) || 0;
     const sctRate = parseFloat(formData.sctRate) || 0;
     const vatRate = parseFloat(formData.vatRate) || 0;
-    
+
     let basePrice, sctAmount, priceWithSct, vatAmount, totalPrice;
-    
+
     if (priceIncludesVat && enteredPrice > 0) {
       // If the entered price is VAT-inclusive, calculate backwards
       // totalPrice = priceWithSct * (1 + vatRate / 100)
@@ -120,19 +133,19 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
       vatAmount = priceWithSct * (vatRate / 100);
       totalPrice = priceWithSct + vatAmount;
     }
-    
+
     return {
       basePrice,
       sctAmount,
       priceWithSct,
       vatAmount,
-      totalPrice
+      totalPrice,
     };
   };
 
   useEffect(() => {
     fetchMainCategories();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -141,7 +154,7 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
     } else {
       setSubcategories([]);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData.categoryId]);
 
   useEffect(() => {
@@ -149,16 +162,17 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
       return;
     }
 
-    const leafCategoryIdRaw = product.category?.id
-      ?? (product.categoryId != null ? Number(product.categoryId) : null);
-    const parentCategoryIdRaw = product.category?.parent?.id
-      ?? (product.categoryParentId != null ? Number(product.categoryParentId) : null);
+    const leafCategoryIdRaw =
+      product.category?.id ?? (product.categoryId != null ? Number(product.categoryId) : null);
+    const parentCategoryIdRaw =
+      product.category?.parent?.id ??
+      (product.categoryParentId != null ? Number(product.categoryParentId) : null);
 
     const hasParent = parentCategoryIdRaw != null;
     const mainCategoryIdNumeric = hasParent ? parentCategoryIdRaw : leafCategoryIdRaw;
     const subcategoryIdNumeric = hasParent ? leafCategoryIdRaw : null;
 
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
       name: product.name || '',
       description: product.description || '',
@@ -187,12 +201,13 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
     }));
     // Load product images
     if (product.id) {
-      axios.get(`/api/products/${product.id}/images`).then(r => setProductImages(r.data || [])).catch(() => {});
+      axios
+        .get(`/api/products/${product.id}/images`)
+        .then((r) => setProductImages(r.data || []))
+        .catch(() => {});
     }
-    const resolvedBrandId = product.brand?.id
-      ?? (product.brandId != null ? Number(product.brandId) : null);
-    const resolvedColorId = product.color?.id
-      ?? (product.colorId != null ? Number(product.colorId) : null);
+    const resolvedBrandId = product.brand?.id ?? (product.brandId != null ? Number(product.brandId) : null);
+    const resolvedColorId = product.color?.id ?? (product.colorId != null ? Number(product.colorId) : null);
 
     setBrandId(resolvedBrandId);
     setColorId(resolvedColorId);
@@ -200,22 +215,26 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
     if (mainCategoryIdNumeric != null) {
       (async () => {
         const subs = await fetchSubcategories(mainCategoryIdNumeric);
-        if (subcategoryIdNumeric != null && Array.isArray(subs) && subs.some(s => String(s.id) === String(subcategoryIdNumeric))) {
-          setFormData(prev => ({ ...prev, subcategoryId: String(subcategoryIdNumeric) }));
+        if (
+          subcategoryIdNumeric != null &&
+          Array.isArray(subs) &&
+          subs.some((s) => String(s.id) === String(subcategoryIdNumeric))
+        ) {
+          setFormData((prev) => ({ ...prev, subcategoryId: String(subcategoryIdNumeric) }));
         }
       })();
     } else {
       setSubcategories([]);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product]);
 
   const normalizeSubcategories = (subs = [], parentMeta = {}) => {
-    return subs.map(sub => ({
+    return subs.map((sub) => ({
       ...sub,
       parentId: sub.parentId ?? parentMeta.id ?? null,
       parentName: sub.parentName ?? parentMeta.name ?? null,
-      productCount: Number(sub.productCount ?? 0)
+      productCount: Number(sub.productCount ?? 0),
     }));
   };
 
@@ -228,10 +247,14 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
       const response = await axios.get('/api/categories/top-level');
       const data = response.data || {};
       // Handle paginated response
-      const categoriesList = Array.isArray(data.content) ? data.content : (Array.isArray(data) ? data : []);
-      const normalized = categoriesList.map(cat => {
+      const categoriesList = Array.isArray(data.content) ? data.content : Array.isArray(data) ? data : [];
+      const normalized = categoriesList.map((cat) => {
         const children = normalizeSubcategories(
-          Array.isArray(cat.children) ? cat.children : (Array.isArray(cat.subcategories) ? cat.subcategories : []),
+          Array.isArray(cat.children)
+            ? cat.children
+            : Array.isArray(cat.subcategories)
+              ? cat.subcategories
+              : [],
           { id: cat.id, name: cat.name }
         );
         return { ...cat, children: sortByName(children) };
@@ -246,7 +269,7 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
   const fetchSubcategories = async (parentId, { forceRefresh = false } = {}) => {
     try {
       const parentIdNum = Number(parentId);
-      const parent = mainCategories.find(cat => Number(cat.id) === parentIdNum);
+      const parent = mainCategories.find((cat) => Number(cat.id) === parentIdNum);
       if (!forceRefresh && parent && Array.isArray(parent.children) && parent.children.length > 0) {
         const sorted = sortByName(parent.children);
         setSubcategories(sorted);
@@ -254,11 +277,15 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
       }
       const response = await axios.get(`/api/categories/${parentId}/subcategories`);
       const data = response.data || {};
-      const subcategoriesList = Array.isArray(data.content) ? data.content : (Array.isArray(data) ? data : []);
-      const normalized = sortByName(normalizeSubcategories(subcategoriesList, { id: parentIdNum, name: parent?.name }));
+      const subcategoriesList = Array.isArray(data.content) ? data.content : Array.isArray(data) ? data : [];
+      const normalized = sortByName(
+        normalizeSubcategories(subcategoriesList, { id: parentIdNum, name: parent?.name })
+      );
       setSubcategories(normalized);
       if (parent) {
-        setMainCategories(prev => prev.map(cat => cat.id === parentIdNum ? { ...cat, children: normalized } : cat));
+        setMainCategories((prev) =>
+          prev.map((cat) => (cat.id === parentIdNum ? { ...cat, children: normalized } : cat))
+        );
       }
       return normalized;
     } catch (error) {
@@ -278,8 +305,14 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
 
   const showToast = (message, type = 'success') => {
     const toast = document.createElement('div');
-    const bgClass = type === 'success' ? 'text-bg-success' : type === 'warning' ? 'text-bg-warning' : 'text-bg-danger';
-    const icon = type === 'success' ? 'fa-check-circle' : type === 'warning' ? 'fa-exclamation-triangle' : 'fa-times-circle';
+    const bgClass =
+      type === 'success' ? 'text-bg-success' : type === 'warning' ? 'text-bg-warning' : 'text-bg-danger';
+    const icon =
+      type === 'success'
+        ? 'fa-check-circle'
+        : type === 'warning'
+          ? 'fa-exclamation-triangle'
+          : 'fa-times-circle';
     toast.className = `toast align-items-center ${bgClass} border-0 position-fixed top-0 end-0 m-3 show`;
     toast.setAttribute('role', 'alert');
     toast.style.zIndex = '9999';
@@ -293,14 +326,19 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
       </div>
     `;
     document.body.appendChild(toast);
-    setTimeout(() => {
-      try {
-        toast.classList.remove('show');
-        setTimeout(() => {
-          try { document.body.removeChild(toast); } catch {}
-        }, 300);
-      } catch {}
-    }, type === 'success' ? 3000 : 5000);
+    setTimeout(
+      () => {
+        try {
+          toast.classList.remove('show');
+          setTimeout(() => {
+            try {
+              document.body.removeChild(toast);
+            } catch {}
+          }, 300);
+        } catch {}
+      },
+      type === 'success' ? 3000 : 5000
+    );
   };
 
   const handleCreateSubmit = async () => {
@@ -313,12 +351,14 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
     try {
       let created;
       const trimmedName = createModalName.trim();
-      
+
       if (createModalType === 'brand') {
         // Check if brand already exists
         try {
           const searchResponse = await axios.get('/api/brands/search', { params: { name: trimmedName } });
-          const existing = searchResponse.data?.find(b => b.name.toLowerCase() === trimmedName.toLowerCase());
+          const existing = searchResponse.data?.find(
+            (b) => b.name.toLowerCase() === trimmedName.toLowerCase()
+          );
           if (existing) {
             setBrandId(existing.id);
             setShowCreateModal(false);
@@ -332,7 +372,7 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
         } catch (searchError) {
           // Continue with creation if search fails
         }
-        
+
         const response = await axios.post('/api/brands', { name: trimmedName });
         created = response.data;
         setBrandId(created.id);
@@ -341,7 +381,9 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
         // Check if color already exists
         try {
           const searchResponse = await axios.get('/api/colors/search', { params: { name: trimmedName } });
-          const existing = searchResponse.data?.find(c => c.name.toLowerCase() === trimmedName.toLowerCase());
+          const existing = searchResponse.data?.find(
+            (c) => c.name.toLowerCase() === trimmedName.toLowerCase()
+          );
           if (existing) {
             setColorId(existing.id);
             setShowCreateModal(false);
@@ -355,10 +397,10 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
         } catch (searchError) {
           // Continue with creation if search fails
         }
-        
-        const response = await axios.post('/api/colors', { 
+
+        const response = await axios.post('/api/colors', {
           name: trimmedName,
-          hexCode: createModalColorHex
+          hexCode: createModalColorHex,
         });
         created = response.data;
         setColorId(created.id);
@@ -366,9 +408,9 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
       } else if (createModalType === 'category') {
         // Check if category already exists
         try {
-          const existing = mainCategories.find(c => c.name.toLowerCase() === trimmedName.toLowerCase());
+          const existing = mainCategories.find((c) => c.name.toLowerCase() === trimmedName.toLowerCase());
           if (existing) {
-            setFormData(prev => ({ ...prev, categoryId: String(existing.id) }));
+            setFormData((prev) => ({ ...prev, categoryId: String(existing.id) }));
             setShowCreateModal(false);
             setCreateModalName('');
             setCreateModalColorHex('#000000');
@@ -380,14 +422,14 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
         } catch (searchError) {
           // Continue with creation if search fails
         }
-        
-        const response = await axios.post('/api/categories', { 
+
+        const response = await axios.post('/api/categories', {
           name: trimmedName,
-          description: createModalDescription.trim() || null
+          description: createModalDescription.trim() || null,
         });
         created = response.data;
         await fetchMainCategories();
-        setFormData(prev => ({ ...prev, categoryId: String(created.id) }));
+        setFormData((prev) => ({ ...prev, categoryId: String(created.id) }));
         showToast(`"${trimmedName}" kategorisi başarıyla oluşturuldu.`, 'success');
       } else if (createModalType === 'subcategory') {
         if (!formData.categoryId) {
@@ -395,12 +437,12 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
           setCreateModalLoading(false);
           return;
         }
-        
+
         // Check if subcategory already exists
         try {
-          const existing = subcategories.find(s => s.name.toLowerCase() === trimmedName.toLowerCase());
+          const existing = subcategories.find((s) => s.name.toLowerCase() === trimmedName.toLowerCase());
           if (existing) {
-            setFormData(prev => ({ ...prev, subcategoryId: String(existing.id) }));
+            setFormData((prev) => ({ ...prev, subcategoryId: String(existing.id) }));
             setShowCreateModal(false);
             setCreateModalName('');
             setCreateModalColorHex('#000000');
@@ -412,32 +454,35 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
         } catch (searchError) {
           // Continue with creation if search fails
         }
-        
-        const response = await axios.post('/api/categories/batch', 
+
+        const response = await axios.post(
+          '/api/categories/batch',
           [{ name: trimmedName, description: createModalDescription.trim() || null }],
           { params: { parentId: formData.categoryId } }
         );
         created = response.data[0];
         const updatedSubs = await fetchSubcategories(formData.categoryId, { forceRefresh: true });
-        const createdMatch = updatedSubs.find(sub => Number(sub.id) === Number(created?.id));
+        const createdMatch = updatedSubs.find((sub) => Number(sub.id) === Number(created?.id));
         const effectiveSub = createdMatch || {
           ...(created || {}),
           id: created?.id,
           name: created?.name ?? trimmedName,
           parentId: Number(formData.categoryId),
-          parentName: mainCategories.find(cat => cat.id?.toString() === formData.categoryId)?.name || null
+          parentName: mainCategories.find((cat) => cat.id?.toString() === formData.categoryId)?.name || null,
         };
         if (!createdMatch) {
-          setSubcategories(prev => sortByName([...(prev || []), effectiveSub]));
-          setMainCategories(prev => prev.map(cat => {
-            if (cat.id?.toString() === formData.categoryId) {
-              const updatedChildren = sortByName([...(cat.children || []), effectiveSub]);
-              return { ...cat, children: updatedChildren };
-            }
-            return cat;
-          }));
+          setSubcategories((prev) => sortByName([...(prev || []), effectiveSub]));
+          setMainCategories((prev) =>
+            prev.map((cat) => {
+              if (cat.id?.toString() === formData.categoryId) {
+                const updatedChildren = sortByName([...(cat.children || []), effectiveSub]);
+                return { ...cat, children: updatedChildren };
+              }
+              return cat;
+            })
+          );
         }
-        setFormData(prev => ({ ...prev, subcategoryId: String((effectiveSub?.id ?? created?.id) ?? '') }));
+        setFormData((prev) => ({ ...prev, subcategoryId: String(effectiveSub?.id ?? created?.id ?? '') }));
         showToast(`"${trimmedName}" alt kategorisi başarıyla oluşturuldu.`, 'success');
       }
       setShowCreateModal(false);
@@ -448,7 +493,7 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
       console.error('Error creating:', error);
       const errorResponse = error.response?.data;
       let errorMessage = 'Oluşturma sırasında hata oluştu';
-      
+
       if (errorResponse) {
         if (typeof errorResponse === 'string') {
           errorMessage = errorResponse;
@@ -458,13 +503,33 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
           errorMessage = errorResponse.error;
         }
       }
-      
+
       // Check for duplicate/conflict errors
-      if (error.response?.status === 409 || errorMessage.toLowerCase().includes('zaten') || errorMessage.toLowerCase().includes('mevcut') || errorMessage.toLowerCase().includes('duplicate') || errorMessage.toLowerCase().includes('exists')) {
-        const itemType = createModalType === 'brand' ? 'marka' : createModalType === 'color' ? 'renk' : createModalType === 'category' ? 'kategori' : 'alt kategori';
+      if (
+        error.response?.status === 409 ||
+        errorMessage.toLowerCase().includes('zaten') ||
+        errorMessage.toLowerCase().includes('mevcut') ||
+        errorMessage.toLowerCase().includes('duplicate') ||
+        errorMessage.toLowerCase().includes('exists')
+      ) {
+        const itemType =
+          createModalType === 'brand'
+            ? 'marka'
+            : createModalType === 'color'
+              ? 'renk'
+              : createModalType === 'category'
+                ? 'kategori'
+                : 'alt kategori';
         showToast(`"${createModalName.trim()}" ${itemType} zaten mevcut.`, 'warning');
       } else {
-        const itemType = createModalType === 'brand' ? 'Marka' : createModalType === 'color' ? 'Renk' : createModalType === 'category' ? 'Kategori' : 'Alt kategori';
+        const itemType =
+          createModalType === 'brand'
+            ? 'Marka'
+            : createModalType === 'color'
+              ? 'Renk'
+              : createModalType === 'category'
+                ? 'Kategori'
+                : 'Alt kategori';
         showToast(`${itemType} oluşturulurken hata: ${errorMessage}`, 'error');
       }
     } finally {
@@ -477,23 +542,23 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
 
     if (name === 'categoryId') {
       // Reset the subcategory when the main category changes
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
         [name]: value,
-        subcategoryId: '' // Reset the subcategory
+        subcategoryId: '', // Reset the subcategory
       }));
     } else {
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
-        [name]: type === 'checkbox' ? checked : value
+        [name]: type === 'checkbox' ? checked : value,
       }));
     }
 
     // Clear error when user starts typing
     if (errors[name]) {
-      setErrors(prev => ({
+      setErrors((prev) => ({
         ...prev,
-        [name]: ''
+        [name]: '',
       }));
     }
   };
@@ -539,24 +604,74 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
       fd.append('file', file);
       fd.append('primary', productImages.length === 0 ? 'true' : 'false');
       await axios.post(`/api/products/${product.id}/images`, fd, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
       const res = await axios.get(`/api/products/${product.id}/images`);
       setProductImages(res.data || []);
     } catch (e) {
       setErrors({ general: e.response?.data?.message || 'Görsel yüklenemedi' });
-    } finally { setImageUploading(false); }
+    } finally {
+      setImageUploading(false);
+    }
+  };
+
+  // ─── Bulk image selection / delete ───
+  const toggleImageSelect = (id) =>
+    setSelectedImageIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const toggleSelectAllImages = () =>
+    setSelectedImageIds((prev) =>
+      prev.size === productImages.length ? new Set() : new Set(productImages.map((i) => i.id))
+    );
+  const bulkDeleteImages = async () => {
+    if (selectedImageIds.size === 0) return;
+    if (!window.confirm(`${selectedImageIds.size} görsel kalıcı olarak silinecek. Emin misiniz?`)) return;
+    setBulkDeletingImages(true);
+    try {
+      const ids = Array.from(selectedImageIds);
+      await axios.delete('/api/products/images/bulk', { data: ids });
+      setProductImages((prev) => prev.filter((i) => !selectedImageIds.has(i.id)));
+      setSelectedImageIds(new Set());
+    } catch (e) {
+      setErrors({ general: e.response?.data?.message || 'Görseller silinemedi' });
+    } finally {
+      setBulkDeletingImages(false);
+    }
   };
 
   // ─── Profilo / 3rd-party URL crawler ──────────────────────────────
   // Client-side check kept in sync with the backend allowlist (for UX).
   // Shows an instant warning when a wrong URL is entered, preventing an unnecessary API call.
   const SUPPORTED_DOMAINS = [
-    'profilo.com','profilo.com.tr','siemens.com.tr','siemens-home.com.tr','siemens-home.bsh-group.com',
-    'bosch-home.com','bosch-home.com.tr','arcelik.com','arcelik.com.tr','beko.com','beko.com.tr',
-    'vestel.com','vestel.com.tr','samsung.com','samsung.com.tr','lg.com','lg.com.tr',
-    'miele.com','miele.com.tr','haier.com','haier.com.tr',
-    'fakir.com.tr','fakir.com','altus.com.tr','altus.com',
+    'profilo.com',
+    'profilo.com.tr',
+    'siemens.com.tr',
+    'siemens-home.com.tr',
+    'siemens-home.bsh-group.com',
+    'bosch-home.com',
+    'bosch-home.com.tr',
+    'arcelik.com',
+    'arcelik.com.tr',
+    'beko.com',
+    'beko.com.tr',
+    'vestel.com',
+    'vestel.com.tr',
+    'samsung.com',
+    'samsung.com.tr',
+    'lg.com',
+    'lg.com.tr',
+    'miele.com',
+    'miele.com.tr',
+    'haier.com',
+    'haier.com.tr',
+    'fakir.com.tr',
+    'fakir.com',
+    'altus.com.tr',
+    'altus.com',
   ];
   const isLikelySupportedUrl = (url) => {
     if (!url || typeof url !== 'string') return false;
@@ -564,7 +679,7 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
       const u = new URL(url.trim());
       if (!/^https?:$/.test(u.protocol)) return false;
       const host = u.hostname.toLowerCase();
-      return SUPPORTED_DOMAINS.some(d => host === d || host.endsWith('.' + d));
+      return SUPPORTED_DOMAINS.some((d) => host === d || host.endsWith('.' + d));
     } catch {
       return false;
     }
@@ -607,10 +722,9 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
     setCrawlPreview(null);
     setCrawlResult(null);
     try {
-      const res = await axios.post(
-        `/api/admin/products/${product.id}/crawl-images/preview`,
-        { url: crawlUrl.trim() }
-      );
+      const res = await axios.post(`/api/admin/products/${product.id}/crawl-images/preview`, {
+        url: crawlUrl.trim(),
+      });
       const data = res.data || {};
       setCrawlPreview(data);
       // Default: select all
@@ -633,9 +747,10 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
   };
 
   const toggleCrawlSelection = (url) => {
-    setCrawlSelected(prev => {
+    setCrawlSelected((prev) => {
       const next = new Set(prev);
-      if (next.has(url)) next.delete(url); else next.add(url);
+      if (next.has(url)) next.delete(url);
+      else next.add(url);
       return next;
     });
   };
@@ -669,13 +784,18 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
     // Long description + specs (HTML table append). The total 5000 char limit is on the backend.
     let fullDesc = (crawlEditableDesc || '').trim();
     if (crawlEditableSpecs.length > 0) {
-      const validSpecs = crawlEditableSpecs.filter(s => s.key.trim() && s.value.trim());
+      const validSpecs = crawlEditableSpecs.filter((s) => s.key.trim() && s.value.trim());
       if (validSpecs.length > 0) {
-        const table = '\n\n<h3>Teknik Özellikler</h3>\n<table class="product-specs-table">\n'
-          + validSpecs.map(s =>
-              `  <tr><td><strong>${escapeHtmlEntity(s.key)}</strong></td>`
-              + `<td>${escapeHtmlEntity(s.value)}</td></tr>`).join('\n')
-          + '\n</table>';
+        const table =
+          '\n\n<h3>Teknik Özellikler</h3>\n<table class="product-specs-table">\n' +
+          validSpecs
+            .map(
+              (s) =>
+                `  <tr><td><strong>${escapeHtmlEntity(s.key)}</strong></td>` +
+                `<td>${escapeHtmlEntity(s.value)}</td></tr>`
+            )
+            .join('\n') +
+          '\n</table>';
         fullDesc = fullDesc + table;
       }
     }
@@ -693,17 +813,14 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
     }
 
     // CRITICAL: update state via the prev callback form — prevents a race condition
-    setFormData(prev => ({ ...prev, ...updates }));
+    setFormData((prev) => ({ ...prev, ...updates }));
     setCrawlDescAppliedToast(true);
 
     const fieldList = [];
     if (updates.shortDescription) fieldList.push('Kısa Açıklama');
     if (updates.description) fieldList.push('Açıklama');
 
-    showToast(
-      `✓ ${fieldList.join(' + ')} forma aktarıldı. KAYDET'e basmayı unutmayın!`,
-      'success'
-    );
+    showToast(`✓ ${fieldList.join(' + ')} forma aktarıldı. KAYDET'e basmayı unutmayın!`, 'success');
 
     // Automatically close the modal and scroll to the form fields + flash highlight
     setTimeout(() => {
@@ -714,7 +831,7 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
       const target = descField || shortField;
       if (target) {
         target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        [descField, shortField].filter(Boolean).forEach(el => {
+        [descField, shortField].filter(Boolean).forEach((el) => {
           el.style.transition = 'box-shadow 0.3s ease, background-color 0.3s ease';
           el.style.boxShadow = '0 0 0 3px rgba(34, 197, 94, 0.4)';
           el.style.backgroundColor = '#dcfce7';
@@ -729,23 +846,24 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
   };
 
   // Simple HTML entity escape (XSS protection)
-  const escapeHtmlEntity = (s) => String(s)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+  const escapeHtmlEntity = (s) =>
+    String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
 
   const updateCrawlSpec = (index, field, value) => {
-    setCrawlEditableSpecs(prev => prev.map((s, i) => i === index ? { ...s, [field]: value } : s));
+    setCrawlEditableSpecs((prev) => prev.map((s, i) => (i === index ? { ...s, [field]: value } : s)));
   };
 
   const removeCrawlSpec = (index) => {
-    setCrawlEditableSpecs(prev => prev.filter((_, i) => i !== index));
+    setCrawlEditableSpecs((prev) => prev.filter((_, i) => i !== index));
   };
 
   const addCrawlSpec = () => {
-    setCrawlEditableSpecs(prev => [...prev, { key: '', value: '' }]);
+    setCrawlEditableSpecs((prev) => [...prev, { key: '', value: '' }]);
   };
 
   const importCrawled = async () => {
@@ -753,15 +871,12 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
     setCrawlImporting(true);
     setCrawlError('');
     try {
-      const res = await axios.post(
-        `/api/admin/products/${product.id}/crawl-images/import`,
-        {
-          imageUrls: Array.from(crawlSelected),
-          replaceExisting: crawlReplace,
-          markFirstAsPrimary: productImages.length === 0 || crawlReplace,
-          pageUrl: crawlUrl.trim(),
-        }
-      );
+      const res = await axios.post(`/api/admin/products/${product.id}/crawl-images/import`, {
+        imageUrls: Array.from(crawlSelected),
+        replaceExisting: crawlReplace,
+        markFirstAsPrimary: productImages.length === 0 || crawlReplace,
+        pageUrl: crawlUrl.trim(),
+      });
       setCrawlResult(res.data);
       // Reload product images
       const imgs = await axios.get(`/api/products/${product.id}/images`);
@@ -848,8 +963,11 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
       if (errorData?.details && typeof errorData.details === 'object') {
         friendlyMessage = Object.values(errorData.details).join(', ');
       } else {
-        friendlyMessage = errorData?.message || errorData?.error || (typeof errorData === 'string' ? errorData : null)
-          || 'Ürün kaydedilirken beklenmeyen bir hata oluştu.';
+        friendlyMessage =
+          errorData?.message ||
+          errorData?.error ||
+          (typeof errorData === 'string' ? errorData : null) ||
+          'Ürün kaydedilirken beklenmeyen bir hata oluştu.';
       }
       setErrors({ general: friendlyMessage });
       // Show error toast
@@ -859,7 +977,11 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
       t.setAttribute('role', 'alert');
       t.innerHTML = `<div class="d-flex align-items-center px-3 py-2"><i class="fas fa-exclamation-circle me-2"></i><div class="toast-body fw-medium">${friendlyMessage}</div><button type="button" class="btn-close btn-close-white ms-auto" onclick="this.parentElement.parentElement.remove()"></button></div>`;
       document.body.appendChild(t);
-      setTimeout(() => { try { document.body.removeChild(t); } catch {} }, 5000);
+      setTimeout(() => {
+        try {
+          document.body.removeChild(t);
+        } catch {}
+      }, 5000);
       // Do NOT call onSuccess on error — keep form open
     } finally {
       setLoading(false);
@@ -868,1329 +990,1808 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
 
   return (
     <div className="product-form-container">
-    <form onSubmit={(e) => e.preventDefault()}>
-      {errors.general && (
-        <div className="alert alert-danger" role="alert">
-          {errors.general}
-        </div>
-      )}
+      <form onSubmit={(e) => e.preventDefault()}>
+        {errors.general && (
+          <div className="alert alert-danger" role="alert">
+            {errors.general}
+          </div>
+        )}
 
-      <div className="row">
-        <div className="col-12 col-md-6">
-          <div className="mb-3">
-            <label htmlFor="name" className="form-label">
-              Ürün Adı <span className="text-danger">*</span>
-            </label>
-            <input
-              type="text"
-              className={`form-control ${errors.name ? 'is-invalid' : ''}`}
-              id="name"
-              name="name"
-              value={formData.name}
-              onChange={handleChange}
-              placeholder="Samsung Buzdolabı"
-              required
-            />
-            {errors.name && <div className="invalid-feedback">{errors.name}</div>}
+        <div className="row">
+          <div className="col-12 col-md-6">
+            <div className="mb-3">
+              <label htmlFor="name" className="form-label">
+                Ürün Adı <span className="text-danger">*</span>
+              </label>
+              <input
+                type="text"
+                className={`form-control ${errors.name ? 'is-invalid' : ''}`}
+                id="name"
+                name="name"
+                value={formData.name}
+                onChange={handleChange}
+                placeholder="Samsung Buzdolabı"
+                required
+              />
+              {errors.name && <div className="invalid-feedback">{errors.name}</div>}
+            </div>
+          </div>
+
+          <div className="col-12 col-md-6">
+            <div className="mb-3">
+              <label htmlFor="sku" className="form-label">
+                Stok Kodu <span className="text-danger">*</span>
+              </label>
+              <input
+                type="text"
+                className={`form-control ${errors.sku ? 'is-invalid' : ''}`}
+                id="sku"
+                name="sku"
+                value={formData.sku}
+                onChange={handleChange}
+                placeholder="BD-001"
+                required
+              />
+              {errors.sku && <div className="invalid-feedback">{errors.sku}</div>}
+            </div>
           </div>
         </div>
 
-        <div className="col-12 col-md-6">
-          <div className="mb-3">
-            <label htmlFor="sku" className="form-label">
-              Stok Kodu <span className="text-danger">*</span>
-            </label>
-            <input
-              type="text"
-              className={`form-control ${errors.sku ? 'is-invalid' : ''}`}
-              id="sku"
-              name="sku"
-              value={formData.sku}
-              onChange={handleChange}
-              placeholder="BD-001"
-              required
-            />
-            {errors.sku && <div className="invalid-feedback">{errors.sku}</div>}
+        <div className="mb-3">
+          <label htmlFor="description" className="form-label d-flex justify-content-between">
+            <span>Açıklama</span>
+            <span
+              className={`small ${(formData.description || '').length > 5000 ? 'text-danger fw-semibold' : 'text-muted'}`}
+            >
+              {(formData.description || '').length} / 5000
+            </span>
+          </label>
+          <textarea
+            className={`form-control ${errors.description ? 'is-invalid' : ''}`}
+            id="description"
+            name="description"
+            rows="5"
+            value={formData.description || ''}
+            onChange={handleChange}
+            placeholder="Detaylı ürün açıklaması..."
+          />
+          {errors.description && <div className="invalid-feedback">{errors.description}</div>}
+        </div>
+        <div className="mb-3">
+          <label htmlFor="shortDescription" className="form-label d-flex justify-content-between">
+            <span>
+              Kısa Açıklama <small className="text-muted">(mağazada listede görünür)</small>
+            </span>
+            <span
+              className={`small ${(formData.shortDescription || '').length > 1000 ? 'text-danger fw-semibold' : 'text-muted'}`}
+            >
+              {(formData.shortDescription || '').length} / 1000
+            </span>
+          </label>
+          <textarea
+            className={`form-control ${errors.shortDescription ? 'is-invalid' : ''}`}
+            id="shortDescription"
+            name="shortDescription"
+            rows="2"
+            value={formData.shortDescription || ''}
+            onChange={handleChange}
+            placeholder="Mağazada ürün kartında görünecek kısa açıklama..."
+            maxLength={1000}
+          />
+          {errors.shortDescription && <div className="invalid-feedback">{errors.shortDescription}</div>}
+        </div>
+
+        {/* Price and Tax Section */}
+        <div className="row mb-3">
+          <div className="col-12">
+            <h6 className="text-muted mb-3">
+              <i className="fas fa-money-bill-wave me-2"></i>
+              Fiyatlandırma ve Vergiler
+            </h6>
           </div>
         </div>
-      </div>
 
-      <div className="mb-3">
-        <label htmlFor="description" className="form-label d-flex justify-content-between">
-          <span>Açıklama</span>
-          <span className={`small ${(formData.description || '').length > 5000 ? 'text-danger fw-semibold' : 'text-muted'}`}>
-            {(formData.description || '').length} / 5000
-          </span>
-        </label>
-        <textarea className={`form-control ${errors.description ? 'is-invalid' : ''}`}
-          id="description" name="description" rows="5"
-          value={formData.description || ''}
-          onChange={handleChange}
-          placeholder="Detaylı ürün açıklaması..." />
-        {errors.description && <div className="invalid-feedback">{errors.description}</div>}
-      </div>
-      <div className="mb-3">
-        <label htmlFor="shortDescription" className="form-label d-flex justify-content-between">
-          <span>Kısa Açıklama <small className="text-muted">(mağazada listede görünür)</small></span>
-          <span className={`small ${(formData.shortDescription || '').length > 1000 ? 'text-danger fw-semibold' : 'text-muted'}`}>
-            {(formData.shortDescription || '').length} / 1000
-          </span>
-        </label>
-        <textarea className={`form-control ${errors.shortDescription ? 'is-invalid' : ''}`}
-          id="shortDescription" name="shortDescription" rows="2"
-          value={formData.shortDescription || ''}
-          onChange={handleChange}
-          placeholder="Mağazada ürün kartında görünecek kısa açıklama..."
-          maxLength={1000} />
-        {errors.shortDescription && <div className="invalid-feedback">{errors.shortDescription}</div>}
-      </div>
+        <div className="row">
+          <div className="col-12 col-md-6 col-lg-4">
+            <div className="mb-4">
+              <label htmlFor="price" className="form-label">
+                <i className="fas fa-tag me-1"></i>
+                Fiyat (₺) <span className="text-danger">*</span>
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                className={`form-control ${errors.price ? 'is-invalid' : ''}`}
+                id="price"
+                name="price"
+                value={formData.price}
+                onChange={handleChange}
+                placeholder="15000.00"
+                required
+              />
+              {errors.price && <div className="invalid-feedback">{errors.price}</div>}
+              <div className="mt-2">
+                <div className="form-check form-switch d-flex align-items-center">
+                  <input
+                    className="form-check-input"
+                    type="checkbox"
+                    id="priceIncludesVat"
+                    checked={priceIncludesVat}
+                    onChange={(e) => setPriceIncludesVat(e.target.checked)}
+                    style={{ width: '48px', height: '24px', cursor: 'pointer' }}
+                  />
+                  <label
+                    className="form-check-label ms-2"
+                    htmlFor="priceIncludesVat"
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <span className={priceIncludesVat ? 'text-primary fw-semibold' : 'text-muted'}>
+                      <i className={`fas ${priceIncludesVat ? 'fa-check-circle' : 'fa-circle'} me-1`}></i>
+                      KDV Dahil
+                    </span>
+                  </label>
+                </div>
+                {priceIncludesVat && formData.vatRate && (
+                  <small className="text-muted d-block mt-1 ms-5">
+                    <i className="fas fa-info-circle me-1"></i>
+                    Girilen fiyat %{formData.vatRate} KDV dahil olarak kabul edilecektir
+                  </small>
+                )}
+              </div>
+            </div>
+          </div>
 
-      {/* Price and Tax Section */}
-      <div className="row mb-3">
-        <div className="col-12">
-          <h6 className="text-muted mb-3">
-            <i className="fas fa-money-bill-wave me-2"></i>
-            Fiyatlandırma ve Vergiler
-          </h6>
-        </div>
-      </div>
-
-      <div className="row">
-        <div className="col-12 col-md-6 col-lg-4">
-          <div className="mb-4">
-            <label htmlFor="price" className="form-label">
-              <i className="fas fa-tag me-1"></i>
-              Fiyat (₺) <span className="text-danger">*</span>
-            </label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              className={`form-control ${errors.price ? 'is-invalid' : ''}`}
-              id="price"
-              name="price"
-              value={formData.price}
-              onChange={handleChange}
-              placeholder="15000.00"
-              required
-            />
-            {errors.price && <div className="invalid-feedback">{errors.price}</div>}
-            <div className="mt-2">
-              <div className="form-check form-switch d-flex align-items-center">
+          <div className="col-12 col-md-6 col-lg-4">
+            <div className="mb-4">
+              <label htmlFor="vatRate" className="form-label">
+                <i className="fas fa-percentage me-1"></i>KDV Oranı (%)
+                <span
+                  className="ms-1 text-primary"
+                  style={{ cursor: 'help' }}
+                  title="Katma Değer Vergisi oranı. Türkiye'de yaygın oranlar: %1, %10, %20"
+                >
+                  <i className="fas fa-info-circle"></i>
+                </span>
+              </label>
+              <div className="input-group">
                 <input
-                  className="form-check-input"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="100"
+                  className="form-control"
+                  id="vatRate"
+                  name="vatRate"
+                  value={formData.vatRate}
+                  onChange={handleChange}
+                  placeholder="20"
+                />
+                <span className="input-group-text">%</span>
+              </div>
+              <div className="d-flex gap-1 mt-2">
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-secondary"
+                  onClick={() => setFormData({ ...formData, vatRate: '1' })}
+                >
+                  %1
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-secondary"
+                  onClick={() => setFormData({ ...formData, vatRate: '10' })}
+                >
+                  %10
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-secondary"
+                  onClick={() => setFormData({ ...formData, vatRate: '20' })}
+                >
+                  %20
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-secondary"
+                  onClick={() => setFormData({ ...formData, vatRate: '0' })}
+                >
+                  Muaf
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="col-12 col-md-6 col-lg-4">
+            <div className="mb-4">
+              <label htmlFor="sctRate" className="form-label">
+                <i className="fas fa-percentage me-1"></i>ÖTV Oranı (%)
+                <span
+                  className="ms-1 text-primary"
+                  style={{ cursor: 'help' }}
+                  title="Özel Tüketim Vergisi. Alkol, tütün, akaryakıt, otomobil gibi ürünlerde uygulanır."
+                >
+                  <i className="fas fa-info-circle"></i>
+                </span>
+              </label>
+              <div className="input-group">
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="200"
+                  className="form-control"
+                  id="sctRate"
+                  name="sctRate"
+                  value={formData.sctRate}
+                  onChange={handleChange}
+                  placeholder="0"
+                />
+                <span className="input-group-text">%</span>
+              </div>
+              <div className="d-flex gap-1 mt-2">
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-secondary"
+                  onClick={() => setFormData({ ...formData, sctRate: '0' })}
+                >
+                  Yok
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-secondary"
+                  onClick={() => setFormData({ ...formData, sctRate: '10' })}
+                >
+                  %10
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-secondary"
+                  onClick={() => setFormData({ ...formData, sctRate: '50' })}
+                >
+                  %50
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Physical Properties Section */}
+        <div className="row mb-3">
+          <div className="col-12">
+            <h6 className="text-muted mb-3">
+              <i className="fas fa-cube me-2"></i>
+              Fiziksel Özellikler
+            </h6>
+          </div>
+        </div>
+
+        <div className="row">
+          <div className="col-12 col-md-6">
+            <div className="mb-3">
+              <label className="form-label">
+                <i className="fas fa-ruler-combined me-1"></i>
+                Boyutlar (cm)
+              </label>
+              <div className="input-group">
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  className="form-control"
+                  id="widthCm"
+                  name="widthCm"
+                  value={formData.widthCm}
+                  onChange={handleChange}
+                  placeholder="En"
+                />
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  className="form-control"
+                  id="lengthCm"
+                  name="lengthCm"
+                  value={formData.lengthCm}
+                  onChange={handleChange}
+                  placeholder="Boy"
+                />
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  className="form-control"
+                  id="heightCm"
+                  name="heightCm"
+                  value={formData.heightCm}
+                  onChange={handleChange}
+                  placeholder="Derinlik"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="col-md-6">
+            <div className="mb-3">
+              <label htmlFor="weight" className="form-label">
+                <i className="fas fa-weight-hanging me-1"></i>
+                Ağırlık (kg)
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                className="form-control"
+                id="weight"
+                name="weight"
+                value={formData.weight}
+                onChange={handleChange}
+                placeholder="50.5"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Category and Brand Section */}
+        <div className="row mb-3">
+          <div className="col-12">
+            <h6 className="text-muted mb-3">
+              <i className="fas fa-tags me-2"></i>
+              Kategori ve Özellikler
+            </h6>
+          </div>
+        </div>
+
+        <div className="row">
+          <div className="col-12 col-md-6 col-lg-4">
+            <div className="mb-3">
+              <label htmlFor="categoryId" className="form-label">
+                <i className="fas fa-folder me-1"></i>
+                Ana Kategori <span className="text-danger">*</span>
+              </label>
+              <div className="input-group">
+                <select
+                  className={`form-select ${errors.categoryId ? 'is-invalid' : ''}`}
+                  id="categoryId"
+                  name="categoryId"
+                  value={formData.categoryId}
+                  onChange={handleChange}
+                  required
+                >
+                  <option value="">Ana kategori seçin</option>
+                  {Array.isArray(mainCategories) &&
+                    mainCategories.map((category) => (
+                      <option key={category.id} value={String(category.id)}>
+                        {category.name}
+                      </option>
+                    ))}
+                </select>
+                <button
+                  type="button"
+                  className="btn btn-outline-primary"
+                  onClick={() => handleCreateNew('category')}
+                  title="Yeni kategori oluştur"
+                  style={{ minWidth: '45px' }}
+                >
+                  <i className="fas fa-plus"></i>
+                </button>
+              </div>
+              {errors.categoryId && <div className="invalid-feedback">{errors.categoryId}</div>}
+            </div>
+          </div>
+
+          <div className="col-12 col-md-6 col-lg-4">
+            <div className="mb-3">
+              <label htmlFor="subcategoryId" className="form-label">
+                <i className="fas fa-folder-open me-1"></i>
+                Alt Kategori (Opsiyonel)
+              </label>
+              <div className="input-group">
+                <select
+                  className="form-select"
+                  id="subcategoryId"
+                  name="subcategoryId"
+                  value={formData.subcategoryId}
+                  onChange={handleChange}
+                  disabled={!formData.categoryId}
+                >
+                  <option value="">Alt kategori seçin (opsiyonel)</option>
+                  {Array.isArray(subcategories) &&
+                    subcategories.map((subcategory) => (
+                      <option key={subcategory.id} value={String(subcategory.id)}>
+                        {subcategory.name}
+                      </option>
+                    ))}
+                </select>
+                <button
+                  type="button"
+                  className="btn btn-outline-primary"
+                  onClick={() => handleCreateNew('subcategory')}
+                  disabled={!formData.categoryId}
+                  title="Yeni alt kategori oluştur"
+                  style={{ minWidth: '45px' }}
+                >
+                  <i className="fas fa-plus"></i>
+                </button>
+              </div>
+              {!formData.categoryId && <small className="text-muted">Önce ana kategori seçin</small>}
+            </div>
+          </div>
+
+          <div className="col-12 col-md-6 col-lg-4">
+            <div className="mb-3">
+              <label className="form-label">
+                <i className="fas fa-copyright me-1"></i>
+                Marka
+              </label>
+              <div className="d-flex" style={{ gap: '0.5rem' }}>
+                <div style={{ flex: 1 }}>
+                  <SearchableSelect
+                    value={brandId}
+                    onChange={(id) => setBrandId(id)}
+                    searchEndpoint="/api/brands/search"
+                    placeholder="Marka ara..."
+                    wrapperClassName=""
+                  />
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-outline-primary d-flex align-items-center justify-content-center"
+                  onClick={() => handleCreateNew('brand')}
+                  title="Yeni marka oluştur"
+                  style={{
+                    minWidth: '42px',
+                    width: '42px',
+                    height: '38px',
+                    padding: '0',
+                    flexShrink: 0,
+                  }}
+                >
+                  <i className="fas fa-plus"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="col-12 col-md-6 col-lg-4">
+            <div className="mb-3">
+              <label className="form-label">
+                <i className="fas fa-palette me-1"></i>
+                Renk
+              </label>
+              <div className="d-flex" style={{ gap: '0.5rem' }}>
+                <div style={{ flex: 1 }}>
+                  <SearchableSelect
+                    value={colorId}
+                    onChange={(id) => setColorId(id)}
+                    searchEndpoint="/api/colors/search"
+                    placeholder="Renk ara..."
+                    renderOption={(opt) => (
+                      <span>
+                        <span
+                          className="me-2"
+                          style={{
+                            display: 'inline-block',
+                            width: 12,
+                            height: 12,
+                            backgroundColor: opt.hexCode || '#ccc',
+                            border: '1px solid #ccc',
+                          }}
+                        ></span>
+                        {opt.name}
+                      </span>
+                    )}
+                    wrapperClassName=""
+                  />
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-outline-primary d-flex align-items-center justify-content-center"
+                  onClick={() => handleCreateNew('color')}
+                  title="Yeni renk oluştur"
+                  style={{
+                    minWidth: '42px',
+                    width: '42px',
+                    height: '38px',
+                    padding: '0',
+                    flexShrink: 0,
+                  }}
+                >
+                  <i className="fas fa-plus"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Shipping and Status Section */}
+        <div className="row mt-4">
+          <div className="col-12">
+            <h6
+              className="text-muted mb-4"
+              style={{
+                marginTop: '0.5rem',
+                marginBottom: '1.5rem',
+                fontSize: '1rem',
+                fontWeight: '600',
+                paddingBottom: '0.75rem',
+                borderBottom: '1px solid #e9ecef',
+              }}
+            >
+              <i className="fas fa-shipping-fast me-2"></i>
+              Kargo ve Durum
+            </h6>
+          </div>
+        </div>
+
+        <div className="row">
+          <div className="col-md-6 col-12 mb-3 mb-md-0">
+            <div className="mb-3">
+              <label htmlFor="shippingRate" className="form-label">
+                <i className="fas fa-truck me-1"></i>
+                Kargo Ücreti (Desi Başına)
+              </label>
+              <div className="input-group">
+                <span className="input-group-text">₺</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  className="form-control"
+                  id="shippingRate"
+                  name="shippingRate"
+                  value={formData.shippingRate}
+                  onChange={handleChange}
+                  placeholder="12.50"
+                />
+                <span className="input-group-text">/desi</span>
+              </div>
+              <small className="text-muted">Desi başına kargo ücreti tutarı</small>
+            </div>
+          </div>
+
+          <div className="col-md-6 col-12">
+            <div className="mb-3">
+              <label className="form-label d-block">
+                <i className="fas fa-toggle-on me-1"></i>
+                Ürün Durumu
+              </label>
+              <div className="form-check form-switch mt-3">
+                <input
                   type="checkbox"
-                  id="priceIncludesVat"
-                  checked={priceIncludesVat}
-                  onChange={(e) => setPriceIncludesVat(e.target.checked)}
+                  className="form-check-input"
+                  id="isActive"
+                  name="isActive"
+                  checked={formData.isActive}
+                  onChange={handleChange}
                   style={{ width: '48px', height: '24px', cursor: 'pointer' }}
                 />
-                <label className="form-check-label ms-2" htmlFor="priceIncludesVat" style={{ cursor: 'pointer' }}>
-                  <span className={priceIncludesVat ? 'text-primary fw-semibold' : 'text-muted'}>
-                    <i className={`fas ${priceIncludesVat ? 'fa-check-circle' : 'fa-circle'} me-1`}></i>
-                    KDV Dahil
-                  </span>
+                <label className="form-check-label ms-2" htmlFor="isActive" style={{ cursor: 'pointer' }}>
+                  <strong className={formData.isActive ? 'text-success' : 'text-secondary'}>
+                    {formData.isActive ? 'Aktif' : 'Pasif'}
+                  </strong>
                 </label>
               </div>
-              {priceIncludesVat && formData.vatRate && (
-                <small className="text-muted d-block mt-1 ms-5">
+            </div>
+          </div>
+        </div>
+
+        {/* Live Price Calculation Preview */}
+        {formData.price && parseFloat(formData.price) > 0 && (
+          <div className="alert alert-info border-start border-primary border-4 mb-3">
+            <h6 className="alert-heading mb-2">
+              <i className="fas fa-calculator me-2"></i>
+              Fiyat Hesaplama Önizlemesi
+              {priceIncludesVat && (
+                <span className="badge bg-primary ms-2">
                   <i className="fas fa-info-circle me-1"></i>
-                  Girilen fiyat %{formData.vatRate} KDV dahil olarak kabul edilecektir
-                </small>
+                  KDV Dahil Fiyat
+                </span>
               )}
-            </div>
-          </div>
-        </div>
-
-        <div className="col-12 col-md-6 col-lg-4">
-          <div className="mb-4">
-            <label htmlFor="vatRate" className="form-label">
-              <i className="fas fa-percentage me-1"></i>KDV Oranı (%)
-              <span 
-                className="ms-1 text-primary" 
-                style={{ cursor: 'help' }}
-                title="Katma Değer Vergisi oranı. Türkiye'de yaygın oranlar: %1, %10, %20"
-              >
-                <i className="fas fa-info-circle"></i>
-              </span>
-            </label>
-            <div className="input-group">
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                max="100"
-                className="form-control"
-                id="vatRate"
-                name="vatRate"
-                value={formData.vatRate}
-                onChange={handleChange}
-                placeholder="20"
-              />
-              <span className="input-group-text">%</span>
-            </div>
-            <div className="d-flex gap-1 mt-2">
-              <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setFormData({...formData, vatRate: '1'})}>%1</button>
-              <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setFormData({...formData, vatRate: '10'})}>%10</button>
-              <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setFormData({...formData, vatRate: '20'})}>%20</button>
-              <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setFormData({...formData, vatRate: '0'})}>Muaf</button>
-            </div>
-          </div>
-        </div>
-
-        <div className="col-12 col-md-6 col-lg-4">
-          <div className="mb-4">
-            <label htmlFor="sctRate" className="form-label">
-              <i className="fas fa-percentage me-1"></i>ÖTV Oranı (%)
-              <span 
-                className="ms-1 text-primary" 
-                style={{ cursor: 'help' }}
-                title="Özel Tüketim Vergisi. Alkol, tütün, akaryakıt, otomobil gibi ürünlerde uygulanır."
-              >
-                <i className="fas fa-info-circle"></i>
-              </span>
-            </label>
-            <div className="input-group">
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                max="200"
-                className="form-control"
-                id="sctRate"
-                name="sctRate"
-                value={formData.sctRate}
-                onChange={handleChange}
-                placeholder="0"
-              />
-              <span className="input-group-text">%</span>
-            </div>
-            <div className="d-flex gap-1 mt-2">
-              <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setFormData({...formData, sctRate: '0'})}>Yok</button>
-              <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setFormData({...formData, sctRate: '10'})}>%10</button>
-              <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setFormData({...formData, sctRate: '50'})}>%50</button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Physical Properties Section */}
-      <div className="row mb-3">
-        <div className="col-12">
-          <h6 className="text-muted mb-3">
-            <i className="fas fa-cube me-2"></i>
-            Fiziksel Özellikler
-          </h6>
-        </div>
-      </div>
-
-      <div className="row">
-        <div className="col-12 col-md-6">
-          <div className="mb-3">
-            <label className="form-label">
-              <i className="fas fa-ruler-combined me-1"></i>
-              Boyutlar (cm)
-            </label>
-            <div className="input-group">
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                className="form-control"
-                id="widthCm"
-                name="widthCm"
-                value={formData.widthCm}
-                onChange={handleChange}
-                placeholder="En"
-              />
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                className="form-control"
-                id="lengthCm"
-                name="lengthCm"
-                value={formData.lengthCm}
-                onChange={handleChange}
-                placeholder="Boy"
-              />
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                className="form-control"
-                id="heightCm"
-                name="heightCm"
-                value={formData.heightCm}
-                onChange={handleChange}
-                placeholder="Derinlik"
-              />
-            </div>
-          </div>
-        </div>
-
-        <div className="col-md-6">
-          <div className="mb-3">
-            <label htmlFor="weight" className="form-label">
-              <i className="fas fa-weight-hanging me-1"></i>
-              Ağırlık (kg)
-            </label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              className="form-control"
-              id="weight"
-              name="weight"
-              value={formData.weight}
-              onChange={handleChange}
-              placeholder="50.5"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Category and Brand Section */}
-      <div className="row mb-3">
-        <div className="col-12">
-          <h6 className="text-muted mb-3">
-            <i className="fas fa-tags me-2"></i>
-            Kategori ve Özellikler
-          </h6>
-        </div>
-      </div>
-
-      <div className="row">
-        <div className="col-12 col-md-6 col-lg-4">
-          <div className="mb-3">
-            <label htmlFor="categoryId" className="form-label">
-              <i className="fas fa-folder me-1"></i>
-              Ana Kategori <span className="text-danger">*</span>
-            </label>
-            <div className="input-group">
-              <select
-                className={`form-select ${errors.categoryId ? 'is-invalid' : ''}`}
-                id="categoryId"
-                name="categoryId"
-                value={formData.categoryId}
-                onChange={handleChange}
-                required
-              >
-                <option value="">Ana kategori seçin</option>
-                {Array.isArray(mainCategories) && mainCategories.map((category) => (
-                  <option key={category.id} value={String(category.id)}>
-                    {category.name}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                className="btn btn-outline-primary"
-                onClick={() => handleCreateNew('category')}
-                title="Yeni kategori oluştur"
-                style={{ minWidth: '45px' }}
-              >
-                <i className="fas fa-plus"></i>
-              </button>
-            </div>
-            {errors.categoryId && <div className="invalid-feedback">{errors.categoryId}</div>}
-          </div>
-        </div>
-
-        <div className="col-12 col-md-6 col-lg-4">
-          <div className="mb-3">
-            <label htmlFor="subcategoryId" className="form-label">
-              <i className="fas fa-folder-open me-1"></i>
-              Alt Kategori (Opsiyonel)
-            </label>
-            <div className="input-group">
-              <select
-                className="form-select"
-                id="subcategoryId"
-                name="subcategoryId"
-                value={formData.subcategoryId}
-                onChange={handleChange}
-                disabled={!formData.categoryId}
-              >
-                <option value="">Alt kategori seçin (opsiyonel)</option>
-                {Array.isArray(subcategories) && subcategories.map((subcategory) => (
-                  <option key={subcategory.id} value={String(subcategory.id)}>
-                    {subcategory.name}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                className="btn btn-outline-primary"
-                onClick={() => handleCreateNew('subcategory')}
-                disabled={!formData.categoryId}
-                title="Yeni alt kategori oluştur"
-                style={{ minWidth: '45px' }}
-              >
-                <i className="fas fa-plus"></i>
-              </button>
-            </div>
-            {!formData.categoryId && (
-              <small className="text-muted">Önce ana kategori seçin</small>
-            )}
-          </div>
-        </div>
-        
-        <div className="col-12 col-md-6 col-lg-4">
-          <div className="mb-3">
-            <label className="form-label">
-              <i className="fas fa-copyright me-1"></i>
-              Marka
-            </label>
-            <div className="d-flex" style={{ gap: '0.5rem' }}>
-              <div style={{ flex: 1 }}>
-                <SearchableSelect
-                  value={brandId}
-                  onChange={(id) => setBrandId(id)}
-                  searchEndpoint="/api/brands/search"
-                  placeholder="Marka ara..."
-                  wrapperClassName=""
-                />
-              </div>
-              <button
-                type="button"
-                className="btn btn-outline-primary d-flex align-items-center justify-content-center"
-                onClick={() => handleCreateNew('brand')}
-                title="Yeni marka oluştur"
-                style={{ 
-                  minWidth: '42px', 
-                  width: '42px',
-                  height: '38px',
-                  padding: '0',
-                  flexShrink: 0
-                }}
-              >
-                <i className="fas fa-plus"></i>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="col-12 col-md-6 col-lg-4">
-          <div className="mb-3">
-            <label className="form-label">
-              <i className="fas fa-palette me-1"></i>
-              Renk
-            </label>
-            <div className="d-flex" style={{ gap: '0.5rem' }}>
-              <div style={{ flex: 1 }}>
-                <SearchableSelect
-                  value={colorId}
-                  onChange={(id) => setColorId(id)}
-                  searchEndpoint="/api/colors/search"
-                  placeholder="Renk ara..."
-                  renderOption={(opt) => (
+            </h6>
+            <div className="row g-2">
+              <div className="col-12 col-md-6">
+                {priceIncludesVat && (
+                  <div className="d-flex justify-content-between small mb-2 p-2 bg-light rounded">
+                    <span className="text-muted">Girilen Fiyat (KDV Dahil):</span>
+                    <strong className="text-primary">
+                      ₺{parseFloat(formData.price).toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
+                    </strong>
+                  </div>
+                )}
+                <div className="d-flex justify-content-between small">
+                  <span className="text-muted">Ana Fiyat:</span>
+                  <strong>
+                    ₺{calculateTotalPrice().basePrice.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
+                  </strong>
+                </div>
+                {calculateTotalPrice().sctAmount > 0 && (
+                  <>
+                    <div className="d-flex justify-content-between small text-success">
+                      <span>+ ÖTV (%{formData.sctRate}):</span>
+                      <span>
+                        ₺
+                        {calculateTotalPrice().sctAmount.toLocaleString('tr-TR', {
+                          minimumFractionDigits: 2,
+                        })}
+                      </span>
+                    </div>
+                    <div className="d-flex justify-content-between small">
+                      <span className="text-muted">ÖTV'li Fiyat:</span>
+                      <span>
+                        ₺
+                        {calculateTotalPrice().priceWithSct.toLocaleString('tr-TR', {
+                          minimumFractionDigits: 2,
+                        })}
+                      </span>
+                    </div>
+                  </>
+                )}
+                {calculateTotalPrice().vatAmount > 0 && (
+                  <div className="d-flex justify-content-between small text-success">
+                    <span>+ KDV (%{formData.vatRate}):</span>
                     <span>
-                      <span className="me-2" style={{ display: 'inline-block', width: 12, height: 12, backgroundColor: opt.hexCode || '#ccc', border: '1px solid #ccc' }}></span>
-                      {opt.name}
+                      ₺{calculateTotalPrice().vatAmount.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
                     </span>
-                  )}
-                  wrapperClassName=""
-                />
+                  </div>
+                )}
+                <hr className="my-1" />
+                <div className="d-flex justify-content-between">
+                  <strong className="text-dark">Toplam Fiyat:</strong>
+                  <strong className="text-success fs-5">
+                    ₺{calculateTotalPrice().totalPrice.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
+                  </strong>
+                </div>
               </div>
-              <button
-                type="button"
-                className="btn btn-outline-primary d-flex align-items-center justify-content-center"
-                onClick={() => handleCreateNew('color')}
-                title="Yeni renk oluştur"
-                style={{ 
-                  minWidth: '42px', 
-                  width: '42px',
-                  height: '38px',
-                  padding: '0',
-                  flexShrink: 0
-                }}
-              >
-                <i className="fas fa-plus"></i>
-              </button>
+              <div className="col-12 col-md-6">
+                <small className="text-muted d-block">
+                  <i className="fas fa-lightbulb me-1 text-warning"></i>
+                  <strong>Hesaplama Formülü:</strong>
+                </small>
+                {priceIncludesVat ? (
+                  <>
+                    <small className="text-muted d-block">
+                      1. <strong>Girilen Fiyat = KDV Dahil Fiyat</strong>
+                    </small>
+                    <small className="text-muted d-block">
+                      2. ÖTV'li Fiyat = KDV Dahil Fiyat ÷ (1 + KDV%)
+                    </small>
+                    {calculateTotalPrice().sctAmount > 0 && (
+                      <small className="text-muted d-block">3. Ana Fiyat = ÖTV'li Fiyat ÷ (1 + ÖTV%)</small>
+                    )}
+                    <small className="text-muted d-block">
+                      4. KDV Tutarı = KDV Dahil Fiyat - ÖTV'li Fiyat
+                    </small>
+                  </>
+                ) : (
+                  <>
+                    <small className="text-muted d-block">1. ÖTV Tutarı = Ana Fiyat × ÖTV%</small>
+                    <small className="text-muted d-block">2. ÖTV'li Fiyat = Ana Fiyat + ÖTV</small>
+                    <small className="text-muted d-block">3. KDV Tutarı = ÖTV'li Fiyat × KDV%</small>
+                    <small className="text-muted d-block">
+                      4. <strong>Toplam = ÖTV'li Fiyat + KDV</strong>
+                    </small>
+                  </>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      </div>
+        )}
 
-      {/* Shipping and Status Section */}
-      <div className="row mt-4">
-        <div className="col-12">
-          <h6 className="text-muted mb-4" style={{ 
-            marginTop: '0.5rem', 
-            marginBottom: '1.5rem',
-            fontSize: '1rem', 
-            fontWeight: '600',
-            paddingBottom: '0.75rem',
-            borderBottom: '1px solid #e9ecef'
-          }}>
-            <i className="fas fa-shipping-fast me-2"></i>
-            Kargo ve Durum
-          </h6>
+        {/* ===== Discount & Campaign ===== */}
+        <div className="row mb-3 mt-4">
+          <div className="col-12">
+            <h6 className="text-muted mb-3">
+              <i className="fas fa-percentage me-2" />
+              İndirim & Kampanya
+            </h6>
+          </div>
         </div>
-      </div>
+        <div className="row">
+          <div className="col-md-6">
+            <div className="mb-3">
+              <label className="form-label fw-medium">İndirim Uygula</label>
+              {(() => {
+                const origPrice = parseFloat(formData.price) || 0;
+                const salePrice = parseFloat(formData.salePrice) || 0;
+                const hasDiscount = salePrice > 0 && origPrice > 0 && salePrice < origPrice;
+                const discountPercent = hasDiscount ? (1 - salePrice / origPrice) * 100 : 0;
 
-      <div className="row">
-        <div className="col-md-6 col-12 mb-3 mb-md-0">
-          <div className="mb-3">
-            <label htmlFor="shippingRate" className="form-label">
-              <i className="fas fa-truck me-1"></i>
-              Kargo Ücreti (Desi Başına)
-            </label>
-            <div className="input-group">
-              <span className="input-group-text">₺</span>
+                const handleSalePriceChange = (e) => {
+                  setFormData((f) => ({ ...f, salePrice: e.target.value }));
+                };
+
+                const handlePercentChange = (e) => {
+                  const pct = parseFloat(e.target.value) || 0;
+                  if (origPrice > 0 && pct > 0 && pct < 100) {
+                    const calc = (origPrice * (1 - pct / 100)).toFixed(2);
+                    setFormData((f) => ({ ...f, salePrice: calc }));
+                  } else if (pct === 0 || e.target.value === '') {
+                    setFormData((f) => ({ ...f, salePrice: '' }));
+                  }
+                };
+
+                return (
+                  <div className="border rounded p-3 bg-light">
+                    <div className="row g-2 align-items-end">
+                      <div className="col-6">
+                        <label className="form-label small text-muted mb-1">Satış Fiyatı (₺)</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          className="form-control"
+                          value={formData.salePrice}
+                          onChange={handleSalePriceChange}
+                          placeholder={origPrice > 0 ? `Mevcut: ${origPrice}₺` : 'Fiyat girin'}
+                        />
+                      </div>
+                      <div className="col-6">
+                        <label className="form-label small text-muted mb-1">veya İndirim (%)</label>
+                        <div className="input-group">
+                          <span className="input-group-text">%</span>
+                          <input
+                            type="number"
+                            step="1"
+                            min="0"
+                            max="99"
+                            className="form-control"
+                            value={hasDiscount ? discountPercent.toFixed(0) : ''}
+                            onChange={handlePercentChange}
+                            placeholder="0"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    {hasDiscount && (
+                      <div className="mt-2 d-flex align-items-center gap-2">
+                        <span className="badge bg-danger">%{discountPercent.toFixed(0)} indirim</span>
+                        <small className="text-muted">
+                          <del>{origPrice.toFixed(2)}₺</del> →{' '}
+                          <strong className="text-success">{salePrice.toFixed(2)}₺</strong>
+                        </small>
+                      </div>
+                    )}
+                    {formData.salePrice && origPrice > 0 && salePrice >= origPrice && (
+                      <small className="text-danger mt-1 d-block">
+                        <i className="fas fa-exclamation-triangle me-1" />
+                        Satış fiyatı orijinal fiyattan düşük olmalıdır.
+                      </small>
+                    )}
+                    <small className="text-muted d-block mt-2">
+                      Satış fiyatı girildiğinde mağazada indirimli olarak gösterilir. Boş bırakırsanız indirim
+                      uygulanmaz.
+                    </small>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+          <div className="col-md-3">
+            <div className="mb-3">
+              <label className="form-label fw-medium">İndirim Başlangıcı</label>
               <input
-                type="number"
-                step="0.01"
-                min="0"
+                type="datetime-local"
                 className="form-control"
-                id="shippingRate"
-                name="shippingRate"
-                value={formData.shippingRate}
+                name="saleStart"
+                value={formData.saleStart}
                 onChange={handleChange}
-                placeholder="12.50"
               />
-              <span className="input-group-text">/desi</span>
             </div>
-            <small className="text-muted">Desi başına kargo ücreti tutarı</small>
+          </div>
+          <div className="col-md-3">
+            <div className="mb-3">
+              <label className="form-label fw-medium">İndirim Bitişi</label>
+              <input
+                type="datetime-local"
+                className="form-control"
+                name="saleEnd"
+                value={formData.saleEnd}
+                onChange={handleChange}
+              />
+            </div>
           </div>
         </div>
-
-        <div className="col-md-6 col-12">
-          <div className="mb-3">
-            <label className="form-label d-block">
-              <i className="fas fa-toggle-on me-1"></i>
-              Ürün Durumu
-            </label>
-            <div className="form-check form-switch mt-3">
+        <div className="row mb-3">
+          <div className="col-md-6">
+            <div className="form-check form-switch">
               <input
-                type="checkbox"
                 className="form-check-input"
-                id="isActive"
-                name="isActive"
-                checked={formData.isActive}
-                onChange={handleChange}
-                style={{ width: '48px', height: '24px', cursor: 'pointer' }}
+                type="checkbox"
+                id="isFeatured"
+                checked={formData.isFeatured}
+                onChange={(e) => setFormData((f) => ({ ...f, isFeatured: e.target.checked }))}
               />
-              <label className="form-check-label ms-2" htmlFor="isActive" style={{ cursor: 'pointer' }}>
-                <strong className={formData.isActive ? 'text-success' : 'text-secondary'}>
-                  {formData.isActive ? 'Aktif' : 'Pasif'}
-                </strong>
+              <label className="form-check-label" htmlFor="isFeatured">
+                <i className="fas fa-star text-warning me-1" />
+                Öne Çıkan Ürün
+              </label>
+            </div>
+          </div>
+          <div className="col-md-6">
+            <div className="form-check form-switch">
+              <input
+                className="form-check-input"
+                type="checkbox"
+                id="isNew"
+                checked={formData.isNew}
+                onChange={(e) => setFormData((f) => ({ ...f, isNew: e.target.checked }))}
+              />
+              <label className="form-check-label" htmlFor="isNew">
+                <i className="fas fa-sparkles text-info me-1" />
+                Yeni Ürün Etiketi
               </label>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Live Price Calculation Preview */}
-      {formData.price && parseFloat(formData.price) > 0 && (
-        <div className="alert alert-info border-start border-primary border-4 mb-3">
-          <h6 className="alert-heading mb-2">
-            <i className="fas fa-calculator me-2"></i>
-            Fiyat Hesaplama Önizlemesi
-            {priceIncludesVat && (
-              <span className="badge bg-primary ms-2">
-                <i className="fas fa-info-circle me-1"></i>
-                KDV Dahil Fiyat
-              </span>
-            )}
-          </h6>
-          <div className="row g-2">
-            <div className="col-12 col-md-6">
-              {priceIncludesVat && (
-                <div className="d-flex justify-content-between small mb-2 p-2 bg-light rounded">
-                  <span className="text-muted">Girilen Fiyat (KDV Dahil):</span>
-                  <strong className="text-primary">₺{parseFloat(formData.price).toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</strong>
-                </div>
-              )}
-              <div className="d-flex justify-content-between small">
-                <span className="text-muted">Ana Fiyat:</span>
-                <strong>₺{calculateTotalPrice().basePrice.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</strong>
-              </div>
-              {calculateTotalPrice().sctAmount > 0 && (
-                <>
-                  <div className="d-flex justify-content-between small text-success">
-                    <span>+ ÖTV (%{formData.sctRate}):</span>
-                    <span>₺{calculateTotalPrice().sctAmount.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</span>
-                  </div>
-                  <div className="d-flex justify-content-between small">
-                    <span className="text-muted">ÖTV'li Fiyat:</span>
-                    <span>₺{calculateTotalPrice().priceWithSct.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</span>
-                  </div>
-                </>
-              )}
-              {calculateTotalPrice().vatAmount > 0 && (
-                <div className="d-flex justify-content-between small text-success">
-                  <span>+ KDV (%{formData.vatRate}):</span>
-                  <span>₺{calculateTotalPrice().vatAmount.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</span>
-                </div>
-              )}
-              <hr className="my-1" />
-              <div className="d-flex justify-content-between">
-                <strong className="text-dark">Toplam Fiyat:</strong>
-                <strong className="text-success fs-5">₺{calculateTotalPrice().totalPrice.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</strong>
+        {/* ===== Product Images (edit mode only) ===== */}
+        {product?.id && (
+          <>
+            <div className="row mb-3 mt-4">
+              <div className="col-12">
+                <h6 className="text-muted mb-3">
+                  <i className="fas fa-images me-2" />
+                  Ürün Görselleri
+                </h6>
               </div>
             </div>
-            <div className="col-12 col-md-6">
-              <small className="text-muted d-block">
-                <i className="fas fa-lightbulb me-1 text-warning"></i>
-                <strong>Hesaplama Formülü:</strong>
-              </small>
-              {priceIncludesVat ? (
-                <>
-                  <small className="text-muted d-block">1. <strong>Girilen Fiyat = KDV Dahil Fiyat</strong></small>
-                  <small className="text-muted d-block">2. ÖTV'li Fiyat = KDV Dahil Fiyat ÷ (1 + KDV%)</small>
-                  {calculateTotalPrice().sctAmount > 0 && (
-                    <small className="text-muted d-block">3. Ana Fiyat = ÖTV'li Fiyat ÷ (1 + ÖTV%)</small>
-                  )}
-                  <small className="text-muted d-block">4. KDV Tutarı = KDV Dahil Fiyat - ÖTV'li Fiyat</small>
-                </>
-              ) : (
-                <>
-                  <small className="text-muted d-block">1. ÖTV Tutarı = Ana Fiyat × ÖTV%</small>
-                  <small className="text-muted d-block">2. ÖTV'li Fiyat = Ana Fiyat + ÖTV</small>
-                  <small className="text-muted d-block">3. KDV Tutarı = ÖTV'li Fiyat × KDV%</small>
-                  <small className="text-muted d-block">4. <strong>Toplam = ÖTV'li Fiyat + KDV</strong></small>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ===== Discount & Campaign ===== */}
-      <div className="row mb-3 mt-4">
-        <div className="col-12">
-          <h6 className="text-muted mb-3"><i className="fas fa-percentage me-2" />İndirim & Kampanya</h6>
-        </div>
-      </div>
-      <div className="row">
-        <div className="col-md-6">
-          <div className="mb-3">
-            <label className="form-label fw-medium">İndirim Uygula</label>
-            {(() => {
-              const origPrice = parseFloat(formData.price) || 0;
-              const salePrice = parseFloat(formData.salePrice) || 0;
-              const hasDiscount = salePrice > 0 && origPrice > 0 && salePrice < origPrice;
-              const discountPercent = hasDiscount ? ((1 - salePrice / origPrice) * 100) : 0;
-
-              const handleSalePriceChange = (e) => {
-                setFormData(f => ({ ...f, salePrice: e.target.value }));
-              };
-
-              const handlePercentChange = (e) => {
-                const pct = parseFloat(e.target.value) || 0;
-                if (origPrice > 0 && pct > 0 && pct < 100) {
-                  const calc = (origPrice * (1 - pct / 100)).toFixed(2);
-                  setFormData(f => ({ ...f, salePrice: calc }));
-                } else if (pct === 0 || e.target.value === '') {
-                  setFormData(f => ({ ...f, salePrice: '' }));
-                }
-              };
-
-              return (
-                <div className="border rounded p-3 bg-light">
-                  <div className="row g-2 align-items-end">
-                    <div className="col-6">
-                      <label className="form-label small text-muted mb-1">Satış Fiyatı (₺)</label>
-                      <input type="number" step="0.01" min="0" className="form-control"
-                        value={formData.salePrice} onChange={handleSalePriceChange}
-                        placeholder={origPrice > 0 ? `Mevcut: ${origPrice}₺` : 'Fiyat girin'} />
-                    </div>
-                    <div className="col-6">
-                      <label className="form-label small text-muted mb-1">veya İndirim (%)</label>
-                      <div className="input-group">
-                        <span className="input-group-text">%</span>
-                        <input type="number" step="1" min="0" max="99" className="form-control"
-                          value={hasDiscount ? discountPercent.toFixed(0) : ''}
-                          onChange={handlePercentChange}
-                          placeholder="0" />
-                      </div>
-                    </div>
-                  </div>
-                  {hasDiscount && (
-                    <div className="mt-2 d-flex align-items-center gap-2">
-                      <span className="badge bg-danger">%{discountPercent.toFixed(0)} indirim</span>
-                      <small className="text-muted"><del>{origPrice.toFixed(2)}₺</del> → <strong className="text-success">{salePrice.toFixed(2)}₺</strong></small>
-                    </div>
-                  )}
-                  {formData.salePrice && origPrice > 0 && salePrice >= origPrice && (
-                    <small className="text-danger mt-1 d-block"><i className="fas fa-exclamation-triangle me-1" />Satış fiyatı orijinal fiyattan düşük olmalıdır.</small>
-                  )}
-                  <small className="text-muted d-block mt-2">Satış fiyatı girildiğinde mağazada indirimli olarak gösterilir. Boş bırakırsanız indirim uygulanmaz.</small>
-                </div>
-              );
-            })()}
-          </div>
-        </div>
-        <div className="col-md-3">
-          <div className="mb-3">
-            <label className="form-label fw-medium">İndirim Başlangıcı</label>
-            <input type="datetime-local" className="form-control" name="saleStart"
-              value={formData.saleStart} onChange={handleChange} />
-          </div>
-        </div>
-        <div className="col-md-3">
-          <div className="mb-3">
-            <label className="form-label fw-medium">İndirim Bitişi</label>
-            <input type="datetime-local" className="form-control" name="saleEnd"
-              value={formData.saleEnd} onChange={handleChange} />
-          </div>
-        </div>
-      </div>
-      <div className="row mb-3">
-        <div className="col-md-6">
-          <div className="form-check form-switch">
-            <input className="form-check-input" type="checkbox" id="isFeatured" checked={formData.isFeatured}
-              onChange={e => setFormData(f => ({...f, isFeatured: e.target.checked}))} />
-            <label className="form-check-label" htmlFor="isFeatured"><i className="fas fa-star text-warning me-1" />Öne Çıkan Ürün</label>
-          </div>
-        </div>
-        <div className="col-md-6">
-          <div className="form-check form-switch">
-            <input className="form-check-input" type="checkbox" id="isNew" checked={formData.isNew}
-              onChange={e => setFormData(f => ({...f, isNew: e.target.checked}))} />
-            <label className="form-check-label" htmlFor="isNew"><i className="fas fa-sparkles text-info me-1" />Yeni Ürün Etiketi</label>
-          </div>
-        </div>
-      </div>
-
-      {/* ===== Product Images (edit mode only) ===== */}
-      {product?.id && (
-        <>
-          <div className="row mb-3 mt-4">
-            <div className="col-12">
-              <h6 className="text-muted mb-3"><i className="fas fa-images me-2" />Ürün Görselleri</h6>
-            </div>
-          </div>
-          <div className="mb-3">
-            {/* Image Grid */}
-            {productImages.length > 0 && (
-              <div className="row g-2 mb-3">
-                {productImages.sort((a,b) => a.sortOrder - b.sortOrder).map(img => (
-                  <div key={img.id} className="col-6 col-md-3">
-                    <div className={`border rounded overflow-hidden position-relative ${img.primary ? 'border-primary border-2' : ''}`}>
-                      <img src={`/api/admin/products/images/${img.id}/view?thumbnail=true`}
-                        alt="" style={{width:'100%', height:140, objectFit:'contain', background:'#f8f9fa'}}
-                        onError={e => { e.target.style.display='none'; }} />
-                      <div className="position-absolute top-0 end-0 p-1 d-flex gap-1">
-                        {!img.primary && (
-                          <button className="btn btn-sm btn-warning" title="Birincil yap"
-                            style={{width:24,height:24,padding:0,fontSize:10}}
-                            onClick={() => {
-                              axios.put(`/api/products/images/${img.id}/set-primary`).then(() => {
-                                axios.get(`/api/products/${product.id}/images`).then(r => setProductImages(r.data || []));
-                              }).catch(() => {});
-                            }}>
-                            <i className="fas fa-star" />
-                          </button>
-                        )}
-                        <button className="btn btn-sm btn-danger" title="Sil"
-                          style={{width:24,height:24,padding:0,fontSize:10}}
-                          onClick={() => setDeleteImageId(img.id)}>
-                          <i className="fas fa-times" />
-                        </button>
-                      </div>
-                      {img.primary && (
-                        <div className="position-absolute bottom-0 start-0 w-100 text-center" style={{background:'rgba(37,99,235,0.8)', padding:'2px 0'}}>
-                          <small className="text-white" style={{fontSize:10}}>Ana Görsel</small>
-                        </div>
+            <div className="mb-3">
+              {/* Bulk selection toolbar */}
+              {productImages.length > 0 && (
+                <div className="d-flex align-items-center gap-2 mb-2 flex-wrap">
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline-secondary"
+                    onClick={toggleSelectAllImages}
+                  >
+                    <i className="fas fa-check-double me-1" />
+                    {selectedImageIds.size === productImages.length && productImages.length > 0
+                      ? 'Seçimi Temizle'
+                      : 'Tümünü Seç'}
+                  </button>
+                  {selectedImageIds.size > 0 && (
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-danger"
+                      onClick={bulkDeleteImages}
+                      disabled={bulkDeletingImages}
+                    >
+                      {bulkDeletingImages ? (
+                        <span className="spinner-border spinner-border-sm me-1" />
+                      ) : (
+                        <i className="fas fa-trash me-1" />
                       )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-            {/* Upload Zone */}
-            <div className="border-2 border-dashed rounded text-center"
-              style={{cursor:'pointer', padding:'24px 16px'}}
-              onClick={() => imageInputRef.current?.click()}
-              onDragOver={e => e.preventDefault()}
-              onDrop={e => {
-                e.preventDefault();
-                const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
-                files.forEach(f => uploadImage(f));
-              }}>
-              <input type="file" ref={imageInputRef} className="d-none" accept="image/*" multiple
-                onChange={e => { Array.from(e.target.files).forEach(f => uploadImage(f)); e.target.value=''; }} />
-              {imageUploading ? (
-                <div className="py-2"><span className="spinner-border spinner-border-sm text-primary me-2" />Yükleniyor...</div>
-              ) : (
-                <div>
-                  <div className="mb-2"><i className="fas fa-cloud-upload-alt text-muted" style={{fontSize:28}} /></div>
-                  <div className="small text-muted">Görselleri sürükleyin veya <span className="text-primary fw-medium">dosya seçin</span></div>
-                  <div className="text-muted mt-1" style={{fontSize:11}}>PNG, JPG, WebP — Birden fazla seçebilirsiniz</div>
-                </div>
-              )}
-            </div>
-
-            {/* Auto-fetch from URL */}
-            <div className="mt-3 d-flex justify-content-center">
-              <button type="button" className="btn btn-sm btn-outline-info"
-                onClick={openCrawlModal} disabled={!product?.id}>
-                <i className="fas fa-globe me-2" />Üretici Sayfasından Görsel Çek (Profilo, Siemens, Bosch...)
-              </button>
-            </div>
-            {!product?.id && (
-              <div className="text-center small text-muted mt-1">
-                URL'den çekmek için önce ürünü kaydedin
-              </div>
-            )}
-          </div>
-        </>
-      )}
-
-      {/* ─── Crawl modal ─── */}
-      {crawlOpen && (
-        <div className="modal show d-block" tabIndex="-1"
-          style={{ background: 'rgba(0,0,0,0.5)' }}
-          onClick={() => !crawlLoading && !crawlImporting && setCrawlOpen(false)}>
-          <div className="modal-dialog modal-lg modal-dialog-scrollable" onClick={e => e.stopPropagation()}>
-            <div className="modal-content">
-              <div className="modal-header">
-                <h5 className="modal-title">
-                  <i className="fas fa-globe text-info me-2" />
-                  Üretici Sayfasından Görsel İndir
-                </h5>
-                <button type="button" className="btn-close"
-                  onClick={() => setCrawlOpen(false)}
-                  disabled={crawlLoading || crawlImporting}></button>
-              </div>
-              <div className="modal-body">
-                <div className="alert alert-info py-2 mb-3">
-                  <div className="small mb-2">
-                    <i className="fas fa-info-circle me-1" />
-                    Ürün detay sayfasının URL'ini yapıştırın → görseller otomatik bulunup gösterilecek.
-                  </div>
-                  <div className="d-flex flex-wrap gap-1">
-                    <small className="text-muted me-1" style={{lineHeight: '24px'}}>Desteklenen:</small>
-                    {['profilo.com','siemens.com.tr','bosch-home.com.tr','arcelik.com.tr','beko.com.tr',
-                      'vestel.com.tr','samsung.com','lg.com','miele.com','haier.com',
-                      'fakir.com.tr','altus.com.tr'].map(d => (
-                      <span key={d} className="badge bg-white text-dark border" style={{fontWeight: 400}}>
-                        {d}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="mb-3">
-                  <div className="input-group input-group-sm">
-                    <span className="input-group-text"><i className="fas fa-link" /></span>
-                    <input type="url"
-                      className={`form-control ${crawlUrl && !isLikelySupportedUrl(crawlUrl) ? 'is-invalid' : ''}`}
-                      placeholder="https://www.profilo.com/tr/tr/product/..."
-                      value={crawlUrl}
-                      onChange={e => setCrawlUrl(e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); fetchCrawlPreview(); } }}
-                      disabled={crawlLoading || crawlImporting}
-                      autoFocus />
-                    <button className="btn btn-primary" onClick={fetchCrawlPreview}
-                      disabled={crawlLoading || crawlImporting || !crawlUrl.trim()}>
-                      {crawlLoading ? (
-                        <><span className="spinner-border spinner-border-sm me-1" />Çekiliyor</>
-                      ) : <><i className="fas fa-search me-1" />Görselleri Bul</>}
+                      Seçilenleri Sil ({selectedImageIds.size})
                     </button>
-                  </div>
-                  {crawlUrl && !isLikelySupportedUrl(crawlUrl) && (
-                    <small className="text-danger d-block mt-1">
-                      <i className="fas fa-exclamation-circle me-1" />
-                      Bu domain desteklenmiyor görünüyor. Yukarıdaki listeden bir site kullanın.
-                    </small>
                   )}
-                  {crawlUrl && isLikelySupportedUrl(crawlUrl) && (
-                    <small className="text-success d-block mt-1">
-                      <i className="fas fa-check-circle me-1" />
-                      Geçerli — "Görselleri Bul"a tıklayın.
-                    </small>
-                  )}
+                  <small className="text-muted ms-auto">{productImages.length} görsel</small>
                 </div>
-
-                {crawlError && (
-                  <div className="alert alert-danger d-flex align-items-start gap-2 mb-3">
-                    <i className="fas fa-exclamation-triangle mt-1" style={{fontSize: 18}} />
-                    <div className="flex-grow-1">
-                      <strong className="d-block mb-1">URL kabul edilmedi</strong>
-                      <div className="small">{crawlError}</div>
-                      {crawlError.includes('Desteklenen') && (
-                        <div className="mt-2 small">
-                          <strong>İpucu:</strong> Yapıştırdığınız URL'in başlangıcı doğru mu?
-                          Profilo için: <code className="bg-white px-1 rounded">https://www.profilo.com/...</code>
-                        </div>
-                      )}
-                    </div>
-                    <button type="button" className="btn-close btn-close-sm"
-                      onClick={() => setCrawlError('')}></button>
-                  </div>
-                )}
-
-                {crawlResult && (
-                  <div className={`alert ${crawlResult.success > 0 ? 'alert-success' : 'alert-warning'} py-2 small mb-3`}>
-                    <i className="fas fa-check-circle me-1" />
-                    <strong>{crawlResult.success}/{crawlResult.total}</strong> görsel başarıyla yüklendi.
-                    {crawlResult.errors?.length > 0 && (
-                      <ul className="mb-0 mt-2" style={{fontSize: 11}}>
-                        {crawlResult.errors.slice(0, 5).map((e, i) => <li key={i}>{e}</li>)}
-                        {crawlResult.errors.length > 5 && <li>...ve {crawlResult.errors.length - 5} daha</li>}
-                      </ul>
-                    )}
-                  </div>
-                )}
-
-                {crawlPreview && (
-                  <>
-                    {/* ── Preview header: title + brand + tab navigation ── */}
-                    <div className="border-bottom pb-2 mb-3">
-                      {crawlPreview.title && (
-                        <div className="small text-muted text-truncate mb-2" style={{maxWidth: '100%'}}>
-                          <i className="fas fa-tag me-1" />{crawlPreview.title}
-                          {crawlPreview.brand && (
-                            <span className="badge bg-info bg-opacity-10 text-info ms-2">
-                              <i className="fas fa-trademark me-1" />{crawlPreview.brand}
-                            </span>
-                          )}
-                        </div>
-                      )}
-                      {/* Tab nav */}
-                      <ul className="nav nav-tabs nav-tabs-sm mb-0" style={{borderBottom: 'none'}}>
-                        <li className="nav-item">
-                          <button type="button"
-                            className={`nav-link ${crawlActiveTab === 'images' ? 'active' : ''}`}
-                            onClick={() => setCrawlActiveTab('images')}>
-                            <i className="fas fa-images me-1" />Görseller
-                            {crawlPreview.images?.length > 0 && (
-                              <span className="badge bg-primary ms-2">{crawlPreview.images.length}</span>
+              )}
+              {/* Image Grid */}
+              {productImages.length > 0 && (
+                <div className="row g-2 mb-3">
+                  {productImages
+                    .sort((a, b) => a.sortOrder - b.sortOrder)
+                    .map((img) => (
+                      <div key={img.id} className="col-6 col-md-3">
+                        <div
+                          className={`border rounded overflow-hidden position-relative ${selectedImageIds.has(img.id) ? 'border-danger border-2' : img.primary ? 'border-primary border-2' : ''}`}
+                        >
+                          <div className="position-absolute top-0 start-0 p-1" style={{ zIndex: 2 }}>
+                            <input
+                              type="checkbox"
+                              className="form-check-input"
+                              style={{ cursor: 'pointer', width: 18, height: 18 }}
+                              checked={selectedImageIds.has(img.id)}
+                              onChange={() => toggleImageSelect(img.id)}
+                              title="Toplu silme için seç"
+                            />
+                          </div>
+                          <img
+                            src={`/api/admin/products/images/${img.id}/view?thumbnail=true`}
+                            alt=""
+                            style={{
+                              width: '100%',
+                              height: 140,
+                              objectFit: 'contain',
+                              background: '#f8f9fa',
+                            }}
+                            onError={(e) => {
+                              e.target.style.display = 'none';
+                            }}
+                          />
+                          <div className="position-absolute top-0 end-0 p-1 d-flex gap-1">
+                            {!img.primary && (
+                              <button
+                                className="btn btn-sm btn-warning"
+                                title="Birincil yap"
+                                style={{ width: 24, height: 24, padding: 0, fontSize: 10 }}
+                                onClick={() => {
+                                  axios
+                                    .put(`/api/products/images/${img.id}/set-primary`)
+                                    .then(() => {
+                                      axios
+                                        .get(`/api/products/${product.id}/images`)
+                                        .then((r) => setProductImages(r.data || []));
+                                    })
+                                    .catch(() => {});
+                                }}
+                              >
+                                <i className="fas fa-star" />
+                              </button>
                             )}
-                          </button>
-                        </li>
-                        <li className="nav-item">
-                          <button type="button"
-                            className={`nav-link ${crawlActiveTab === 'description' ? 'active' : ''}`}
-                            onClick={() => setCrawlActiveTab('description')}>
-                            <i className="fas fa-align-left me-1" />Açıklama & Özellikler
-                            {(crawlPreview.description || crawlEditableSpecs.length > 0) && (
-                              <span className="badge bg-success ms-2">
-                                <i className="fas fa-check" style={{fontSize: 9}} />
-                              </span>
-                            )}
-                          </button>
-                        </li>
-                      </ul>
-                    </div>
-
-                    {/* ── Tab: Images ── */}
-                    {crawlActiveTab === 'images' && crawlPreview.images && crawlPreview.images.length > 0 && (
-                      <>
-                        <div className="d-flex justify-content-between align-items-center mb-2">
-                          <div>
-                            <strong className="me-2">{crawlPreview.images.length} görsel bulundu</strong>
-                            <span className="text-muted small">— {crawlSelected.size} seçili</span>
-                          </div>
-                          <div className="btn-group btn-group-sm">
-                            <button type="button" className="btn btn-outline-secondary" onClick={selectAllCrawl}>Tümünü Seç</button>
-                            <button type="button" className="btn btn-outline-secondary" onClick={deselectAllCrawl}>Temizle</button>
-                          </div>
-                        </div>
-
-                        <div className="row g-2 mb-3" style={{ maxHeight: 400, overflowY: 'auto' }}>
-                          {crawlPreview.images.map((u, idx) => {
-                            const selected = crawlSelected.has(u);
-                            return (
-                              <div key={u} className="col-4 col-md-3">
-                                <div
-                                  className={`border rounded position-relative overflow-hidden ${selected ? 'border-primary border-2' : ''}`}
-                                  style={{ cursor: 'pointer', aspectRatio: '1/1', background: '#f8f9fa' }}
-                                  onClick={() => toggleCrawlSelection(u)}
-                                  title={u}
-                                >
-                                  <CrawlThumbnail url={u} referer={crawlUrl.trim()} />
-                                  <div className="position-absolute top-0 start-0 m-1">
-                                    <span className="badge bg-dark bg-opacity-75 small">#{idx + 1}</span>
-                                  </div>
-                                  {selected && (
-                                    <div className="position-absolute top-0 end-0 m-1">
-                                      <span className="badge bg-primary"><i className="fas fa-check" /></span>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-
-                        <div className="form-check mb-2">
-                          <input className="form-check-input" type="checkbox" id="crawlReplaceCheck"
-                            checked={crawlReplace}
-                            onChange={e => setCrawlReplace(e.target.checked)} />
-                          <label className="form-check-label small" htmlFor="crawlReplaceCheck">
-                            <strong>Mevcut ürün görsellerini sil</strong>
-                            <span className="text-muted ms-1">(işaretlenmezse yenileri ek olarak yüklenir)</span>
-                          </label>
-                        </div>
-                      </>
-                    )}
-
-                    {/* ── Tab: Description & Specs ── */}
-                    {crawlActiveTab === 'description' && (
-                      <div>
-                        {!crawlPreview.description && !crawlPreview.shortDescription && crawlEditableSpecs.length === 0 ? (
-                          <div className="alert alert-warning small mb-3">
-                            <i className="fas fa-exclamation-triangle me-1" />
-                            Bu sayfadan açıklama veya teknik özellik çıkarılamadı.
-                            Manuel olarak ekleyebilir veya ürün formuna kendiniz yazabilirsiniz.
-                          </div>
-                        ) : (
-                          <div className="alert alert-info small mb-3 py-2">
-                            <i className="fas fa-magic me-1" />
-                            <strong>Açıklama bulundu!</strong> Aşağıda düzenleyip "Ürün Formuna Aktar" diyerek
-                            doğrudan formdaki "Açıklama" ve "Kısa Açıklama" alanlarına yazdırabilirsiniz.
-                          </div>
-                        )}
-
-                        {/* Short description */}
-                        <div className="mb-3">
-                          <label htmlFor="crawl-short-desc" className="form-label small fw-semibold d-flex justify-content-between">
-                            <span>Kısa Açıklama</span>
-                            <span className="text-muted" style={{fontSize: 11}}>
-                              {crawlEditableShortDesc.length} / 300
-                            </span>
-                          </label>
-                          <textarea id="crawl-short-desc"
-                            className="form-control form-control-sm"
-                            rows={2}
-                            maxLength={300}
-                            value={crawlEditableShortDesc}
-                            onChange={e => setCrawlEditableShortDesc(e.target.value)}
-                            placeholder="Listeleme sayfalarında ürün adının altında görünür..." />
-                        </div>
-
-                        {/* Long description */}
-                        <div className="mb-3">
-                          <label htmlFor="crawl-long-desc" className="form-label small fw-semibold d-flex justify-content-between">
-                            <span>Açıklama</span>
-                            <span className="text-muted" style={{fontSize: 11}}>
-                              {crawlEditableDesc.length} karakter
-                            </span>
-                          </label>
-                          <textarea id="crawl-long-desc"
-                            className="form-control"
-                            rows={6}
-                            value={crawlEditableDesc}
-                            onChange={e => setCrawlEditableDesc(e.target.value)}
-                            placeholder="Ürün detay sayfasında gösterilecek tam açıklama (HTML/Markdown desteklenir)..." />
-                          <small className="text-muted">
-                            HTML etiketleri korunur. "Ürün Formuna Aktar"a basınca formdaki zengin metin editörüne yapıştırılır.
-                          </small>
-                        </div>
-
-                        {/* Specs editor */}
-                        <div className="mb-3">
-                          <div className="d-flex justify-content-between align-items-center mb-2">
-                            <label className="form-label small fw-semibold mb-0">
-                              Teknik Özellikler ({crawlEditableSpecs.length})
-                            </label>
-                            <button type="button" className="btn btn-sm btn-outline-primary" onClick={addCrawlSpec}>
-                              <i className="fas fa-plus me-1" />Yeni Özellik
+                            <button
+                              className="btn btn-sm btn-danger"
+                              title="Sil"
+                              style={{ width: 24, height: 24, padding: 0, fontSize: 10 }}
+                              onClick={() => setDeleteImageId(img.id)}
+                            >
+                              <i className="fas fa-times" />
                             </button>
                           </div>
-                          {crawlEditableSpecs.length === 0 ? (
-                            <div className="text-muted small text-center py-3 border rounded bg-light">
-                              Özellik çıkarılamadı. "Yeni Özellik" butonu ile elle ekleyebilirsiniz.
-                            </div>
-                          ) : (
-                            <div style={{maxHeight: 280, overflowY: 'auto'}}>
-                              {crawlEditableSpecs.map((spec, idx) => (
-                                <div key={idx} className="d-flex gap-2 mb-2">
-                                  <input type="text" className="form-control form-control-sm"
-                                    placeholder="Özellik adı (örn. Kapasite)"
-                                    value={spec.key}
-                                    onChange={e => updateCrawlSpec(idx, 'key', e.target.value)}
-                                    style={{flexBasis: '40%'}} />
-                                  <input type="text" className="form-control form-control-sm"
-                                    placeholder="Değer (örn. 9 kg)"
-                                    value={spec.value}
-                                    onChange={e => updateCrawlSpec(idx, 'value', e.target.value)}
-                                    style={{flexBasis: '55%'}} />
-                                  <button type="button" className="btn btn-sm btn-outline-danger"
-                                    onClick={() => removeCrawlSpec(idx)}
-                                    title="Sil">
-                                    <i className="fas fa-trash" />
-                                  </button>
-                                </div>
-                              ))}
+                          {img.primary && (
+                            <div
+                              className="position-absolute bottom-0 start-0 w-100 text-center"
+                              style={{ background: 'rgba(37,99,235,0.8)', padding: '2px 0' }}
+                            >
+                              <small className="text-white" style={{ fontSize: 10 }}>
+                                Ana Görsel
+                              </small>
                             </div>
                           )}
-                          <small className="text-muted">
-                            Aktarınca açıklamanın altına "Teknik Özellikler" tablosu olarak eklenir.
-                          </small>
-                        </div>
-
-                        {/* Apply button */}
-                        <div className="d-flex gap-2 align-items-center">
-                          <button type="button" className="btn btn-success"
-                            onClick={applyCrawlDescriptionToProduct}
-                            disabled={!crawlEditableDesc && !crawlEditableShortDesc && crawlEditableSpecs.length === 0}>
-                            <i className="fas fa-arrow-right me-1" />
-                            Ürün Formuna Aktar
-                          </button>
-                          {crawlDescAppliedToast && (
-                            <span className="badge bg-success">
-                              <i className="fas fa-check me-1" />Aktarıldı
-                            </span>
-                          )}
-                          <small className="text-muted ms-auto">
-                            <i className="fas fa-info-circle me-1" />
-                            Formdaki mevcut değerler üzerine yazılır
-                          </small>
                         </div>
                       </div>
-                    )}
-                  </>
-                )}
-
-                {crawlPreview && crawlActiveTab === 'images' && (!crawlPreview.images || crawlPreview.images.length === 0) && (
-                  <div className="alert alert-warning py-2 small mb-0">
-                    Bu sayfada otomatik bulunabilen görsel yok. "Açıklama & Özellikler" sekmesini deneyebilir veya elle ekleyebilirsiniz.
-                  </div>
-                )}
-              </div>
-              <div className="modal-footer">
-                {crawlResult && crawlResult.success > 0 ? (
-                  <>
-                    <button type="button" className="btn btn-outline-secondary" onClick={() => setCrawlOpen(false)}>
-                      <i className="fas fa-images me-1" />Daha Fazla Görsel Ekle
-                    </button>
-                    <button type="button" className="btn btn-success" onClick={() => {
-                      setCrawlOpen(false);
-                      if (onSuccess) onSuccess({ id: product?.id });
-                    }}>
-                      <i className="fas fa-arrow-right me-1" />Ürün Detayına Dön
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button type="button" className="btn btn-secondary" onClick={() => setCrawlOpen(false)}
-                      disabled={crawlLoading || crawlImporting}>Kapat</button>
-                    <button type="button" className="btn btn-primary"
-                      disabled={!crawlPreview || crawlSelected.size === 0 || crawlImporting || crawlLoading}
-                      onClick={importCrawled}>
-                      {crawlImporting ? (
-                        <><span className="spinner-border spinner-border-sm me-1" />Yükleniyor...</>
-                      ) : (
-                        <><i className="fas fa-download me-1" />{crawlSelected.size} Görseli İndir</>
-                      )}
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── SEO Settings ── */}
-      <div className="card border-0 bg-light mt-3">
-        <div className="card-header bg-transparent border-bottom-0 d-flex align-items-center gap-2 py-2 px-3" style={{cursor:'pointer'}}
-          onClick={() => setFormData(prev => ({...prev, _seoOpen: !prev._seoOpen}))}>
-          <i className="fas fa-search text-success" />
-          <span className="small fw-semibold">SEO Ayarları</span>
-          <i className={`fas fa-chevron-${formData._seoOpen ? 'up' : 'down'} ms-auto text-muted`} style={{fontSize:11}} />
-        </div>
-        {formData._seoOpen && (
-          <div className="card-body pt-0 px-3 pb-3">
-            <div className="row g-2">
-              <div className="col-12">
-                <label className="form-label small fw-medium mb-1">Slug (URL)</label>
-                <div className="input-group input-group-sm">
-                  <span className="input-group-text text-muted" style={{fontSize:11}}>/store/urun/</span>
-                  <input className="form-control font-monospace" value={formData.slug || ''} onChange={e => setFormData(prev => ({...prev, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g,'')}))} placeholder="urun-adi-slug" />
-                  <button type="button" className="btn btn-outline-secondary" title="Ürün adından otomatik oluştur" onClick={() => {
-                    const s = (formData.name || '').toLowerCase().replace(/ş/g,'s').replace(/ç/g,'c').replace(/ğ/g,'g').replace(/ü/g,'u').replace(/ö/g,'o').replace(/ı/g,'i').replace(/İ/g,'i').replace(/[^a-z0-9\s-]/g,'').replace(/\s+/g,'-').replace(/-+/g,'-').replace(/^-|-$/g,'');
-                    setFormData(prev => ({...prev, slug: s}));
-                  }}><i className="fas fa-magic" /></button>
-                </div>
-              </div>
-              <div className="col-12">
-                <label className="form-label small fw-medium mb-1">Meta Başlık <span className="text-muted fw-normal">({(formData.metaTitle||'').length}/200)</span></label>
-                <input className="form-control form-control-sm" value={formData.metaTitle || ''} onChange={e => setFormData(prev => ({...prev, metaTitle: e.target.value}))} maxLength={200} placeholder="Arama sonuçlarında görünecek başlık" />
-              </div>
-              <div className="col-12">
-                <label className="form-label small fw-medium mb-1">Meta Açıklama <span className="text-muted fw-normal">({(formData.metaDescription||'').length}/500)</span></label>
-                <textarea className="form-control form-control-sm" rows={2} value={formData.metaDescription || ''} onChange={e => setFormData(prev => ({...prev, metaDescription: e.target.value}))} maxLength={500} placeholder="Arama sonuçlarında görünecek açıklama" />
-              </div>
-              {formData.metaTitle && (
-                <div className="col-12">
-                  <div className="border rounded p-2" style={{fontSize:12,background:'#fff'}}>
-                    <div className="text-primary" style={{fontSize:14}}>{formData.metaTitle || formData.name}</div>
-                    <div className="text-success" style={{fontSize:11}}>siteniz.com/store/urun/{formData.slug || '...'}</div>
-                    <div className="text-muted">{(formData.metaDescription || formData.shortDescription || '').substring(0, 160)}</div>
-                  </div>
-                  <small className="text-muted">Google arama sonucu önizlemesi</small>
+                    ))}
                 </div>
               )}
+              {/* Upload Zone */}
+              <div
+                className="border-2 border-dashed rounded text-center"
+                style={{ cursor: 'pointer', padding: '24px 16px' }}
+                onClick={() => imageInputRef.current?.click()}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const files = Array.from(e.dataTransfer.files).filter((f) => f.type.startsWith('image/'));
+                  files.forEach((f) => uploadImage(f));
+                }}
+              >
+                <input
+                  type="file"
+                  ref={imageInputRef}
+                  className="d-none"
+                  accept="image/*"
+                  multiple
+                  onChange={(e) => {
+                    Array.from(e.target.files).forEach((f) => uploadImage(f));
+                    e.target.value = '';
+                  }}
+                />
+                {imageUploading ? (
+                  <div className="py-2">
+                    <span className="spinner-border spinner-border-sm text-primary me-2" />
+                    Yükleniyor...
+                  </div>
+                ) : (
+                  <div>
+                    <div className="mb-2">
+                      <i className="fas fa-cloud-upload-alt text-muted" style={{ fontSize: 28 }} />
+                    </div>
+                    <div className="small text-muted">
+                      Görselleri sürükleyin veya <span className="text-primary fw-medium">dosya seçin</span>
+                    </div>
+                    <div className="text-muted mt-1" style={{ fontSize: 11 }}>
+                      PNG, JPG, WebP — Birden fazla seçebilirsiniz
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Auto-fetch from URL */}
+              <div className="mt-3 d-flex justify-content-center">
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-info"
+                  onClick={openCrawlModal}
+                  disabled={!product?.id}
+                >
+                  <i className="fas fa-globe me-2" />
+                  Üretici Sayfasından Görsel Çek (Profilo, Siemens, Bosch...)
+                </button>
+              </div>
+              {!product?.id && (
+                <div className="text-center small text-muted mt-1">
+                  URL'den çekmek için önce ürünü kaydedin
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
+        {/* ─── Crawl modal ─── */}
+        {crawlOpen && (
+          <div
+            className="modal show d-block"
+            tabIndex="-1"
+            style={{ background: 'rgba(0,0,0,0.5)' }}
+            onClick={() => !crawlLoading && !crawlImporting && setCrawlOpen(false)}
+          >
+            <div
+              className="modal-dialog modal-lg modal-dialog-scrollable"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="modal-content">
+                <div className="modal-header">
+                  <h5 className="modal-title">
+                    <i className="fas fa-globe text-info me-2" />
+                    Üretici Sayfasından Görsel İndir
+                  </h5>
+                  <button
+                    type="button"
+                    className="btn-close"
+                    onClick={() => setCrawlOpen(false)}
+                    disabled={crawlLoading || crawlImporting}
+                  ></button>
+                </div>
+                <div className="modal-body">
+                  <div className="alert alert-info py-2 mb-3">
+                    <div className="small mb-2">
+                      <i className="fas fa-info-circle me-1" />
+                      Ürün detay sayfasının URL'ini yapıştırın → görseller otomatik bulunup gösterilecek.
+                    </div>
+                    <div className="d-flex flex-wrap gap-1">
+                      <small className="text-muted me-1" style={{ lineHeight: '24px' }}>
+                        Desteklenen:
+                      </small>
+                      {[
+                        'profilo.com',
+                        'siemens.com.tr',
+                        'bosch-home.com.tr',
+                        'arcelik.com.tr',
+                        'beko.com.tr',
+                        'vestel.com.tr',
+                        'samsung.com',
+                        'lg.com',
+                        'miele.com',
+                        'haier.com',
+                        'fakir.com.tr',
+                        'altus.com.tr',
+                      ].map((d) => (
+                        <span key={d} className="badge bg-white text-dark border" style={{ fontWeight: 400 }}>
+                          {d}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="mb-3">
+                    <div className="input-group input-group-sm">
+                      <span className="input-group-text">
+                        <i className="fas fa-link" />
+                      </span>
+                      <input
+                        type="url"
+                        className={`form-control ${crawlUrl && !isLikelySupportedUrl(crawlUrl) ? 'is-invalid' : ''}`}
+                        placeholder="https://www.profilo.com/tr/tr/product/..."
+                        value={crawlUrl}
+                        onChange={(e) => setCrawlUrl(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            fetchCrawlPreview();
+                          }
+                        }}
+                        disabled={crawlLoading || crawlImporting}
+                        autoFocus
+                      />
+                      <button
+                        className="btn btn-primary"
+                        onClick={fetchCrawlPreview}
+                        disabled={crawlLoading || crawlImporting || !crawlUrl.trim()}
+                      >
+                        {crawlLoading ? (
+                          <>
+                            <span className="spinner-border spinner-border-sm me-1" />
+                            Çekiliyor
+                          </>
+                        ) : (
+                          <>
+                            <i className="fas fa-search me-1" />
+                            Görselleri Bul
+                          </>
+                        )}
+                      </button>
+                    </div>
+                    {crawlUrl && !isLikelySupportedUrl(crawlUrl) && (
+                      <small className="text-danger d-block mt-1">
+                        <i className="fas fa-exclamation-circle me-1" />
+                        Bu domain desteklenmiyor görünüyor. Yukarıdaki listeden bir site kullanın.
+                      </small>
+                    )}
+                    {crawlUrl && isLikelySupportedUrl(crawlUrl) && (
+                      <small className="text-success d-block mt-1">
+                        <i className="fas fa-check-circle me-1" />
+                        Geçerli — "Görselleri Bul"a tıklayın.
+                      </small>
+                    )}
+                  </div>
+
+                  {crawlError && (
+                    <div className="alert alert-danger d-flex align-items-start gap-2 mb-3">
+                      <i className="fas fa-exclamation-triangle mt-1" style={{ fontSize: 18 }} />
+                      <div className="flex-grow-1">
+                        <strong className="d-block mb-1">URL kabul edilmedi</strong>
+                        <div className="small">{crawlError}</div>
+                        {crawlError.includes('Desteklenen') && (
+                          <div className="mt-2 small">
+                            <strong>İpucu:</strong> Yapıştırdığınız URL'in başlangıcı doğru mu? Profilo için:{' '}
+                            <code className="bg-white px-1 rounded">https://www.profilo.com/...</code>
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        className="btn-close btn-close-sm"
+                        onClick={() => setCrawlError('')}
+                      ></button>
+                    </div>
+                  )}
+
+                  {crawlResult && (
+                    <div
+                      className={`alert ${crawlResult.success > 0 ? 'alert-success' : 'alert-warning'} py-2 small mb-3`}
+                    >
+                      <i className="fas fa-check-circle me-1" />
+                      <strong>
+                        {crawlResult.success}/{crawlResult.total}
+                      </strong>{' '}
+                      görsel başarıyla yüklendi.
+                      {crawlResult.errors?.length > 0 && (
+                        <ul className="mb-0 mt-2" style={{ fontSize: 11 }}>
+                          {crawlResult.errors.slice(0, 5).map((e, i) => (
+                            <li key={i}>{e}</li>
+                          ))}
+                          {crawlResult.errors.length > 5 && (
+                            <li>...ve {crawlResult.errors.length - 5} daha</li>
+                          )}
+                        </ul>
+                      )}
+                    </div>
+                  )}
+
+                  {crawlPreview && (
+                    <>
+                      {/* ── Preview header: title + brand + tab navigation ── */}
+                      <div className="border-bottom pb-2 mb-3">
+                        {crawlPreview.title && (
+                          <div className="small text-muted text-truncate mb-2" style={{ maxWidth: '100%' }}>
+                            <i className="fas fa-tag me-1" />
+                            {crawlPreview.title}
+                            {crawlPreview.brand && (
+                              <span className="badge bg-info bg-opacity-10 text-info ms-2">
+                                <i className="fas fa-trademark me-1" />
+                                {crawlPreview.brand}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                        {/* Tab nav */}
+                        <ul className="nav nav-tabs nav-tabs-sm mb-0" style={{ borderBottom: 'none' }}>
+                          <li className="nav-item">
+                            <button
+                              type="button"
+                              className={`nav-link ${crawlActiveTab === 'images' ? 'active' : ''}`}
+                              onClick={() => setCrawlActiveTab('images')}
+                            >
+                              <i className="fas fa-images me-1" />
+                              Görseller
+                              {crawlPreview.images?.length > 0 && (
+                                <span className="badge bg-primary ms-2">{crawlPreview.images.length}</span>
+                              )}
+                            </button>
+                          </li>
+                          <li className="nav-item">
+                            <button
+                              type="button"
+                              className={`nav-link ${crawlActiveTab === 'description' ? 'active' : ''}`}
+                              onClick={() => setCrawlActiveTab('description')}
+                            >
+                              <i className="fas fa-align-left me-1" />
+                              Açıklama & Özellikler
+                              {(crawlPreview.description || crawlEditableSpecs.length > 0) && (
+                                <span className="badge bg-success ms-2">
+                                  <i className="fas fa-check" style={{ fontSize: 9 }} />
+                                </span>
+                              )}
+                            </button>
+                          </li>
+                        </ul>
+                      </div>
+
+                      {/* ── Tab: Images ── */}
+                      {crawlActiveTab === 'images' &&
+                        crawlPreview.images &&
+                        crawlPreview.images.length > 0 && (
+                          <>
+                            <div className="d-flex justify-content-between align-items-center mb-2">
+                              <div>
+                                <strong className="me-2">{crawlPreview.images.length} görsel bulundu</strong>
+                                <span className="text-muted small">— {crawlSelected.size} seçili</span>
+                              </div>
+                              <div className="btn-group btn-group-sm">
+                                <button
+                                  type="button"
+                                  className="btn btn-outline-secondary"
+                                  onClick={selectAllCrawl}
+                                >
+                                  Tümünü Seç
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-outline-secondary"
+                                  onClick={deselectAllCrawl}
+                                >
+                                  Temizle
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="row g-2 mb-3" style={{ maxHeight: 400, overflowY: 'auto' }}>
+                              {crawlPreview.images.map((u, idx) => {
+                                const selected = crawlSelected.has(u);
+                                return (
+                                  <div key={u} className="col-4 col-md-3">
+                                    <div
+                                      className={`border rounded position-relative overflow-hidden ${selected ? 'border-primary border-2' : ''}`}
+                                      style={{ cursor: 'pointer', aspectRatio: '1/1', background: '#f8f9fa' }}
+                                      onClick={() => toggleCrawlSelection(u)}
+                                      title={u}
+                                    >
+                                      <CrawlThumbnail url={u} referer={crawlUrl.trim()} />
+                                      <div className="position-absolute top-0 start-0 m-1">
+                                        <span className="badge bg-dark bg-opacity-75 small">#{idx + 1}</span>
+                                      </div>
+                                      {selected && (
+                                        <div className="position-absolute top-0 end-0 m-1">
+                                          <span className="badge bg-primary">
+                                            <i className="fas fa-check" />
+                                          </span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+
+                            <div className="form-check mb-2">
+                              <input
+                                className="form-check-input"
+                                type="checkbox"
+                                id="crawlReplaceCheck"
+                                checked={crawlReplace}
+                                onChange={(e) => setCrawlReplace(e.target.checked)}
+                              />
+                              <label className="form-check-label small" htmlFor="crawlReplaceCheck">
+                                <strong>Mevcut ürün görsellerini sil</strong>
+                                <span className="text-muted ms-1">
+                                  (işaretlenmezse yenileri ek olarak yüklenir)
+                                </span>
+                              </label>
+                            </div>
+                          </>
+                        )}
+
+                      {/* ── Tab: Description & Specs ── */}
+                      {crawlActiveTab === 'description' && (
+                        <div>
+                          {!crawlPreview.description &&
+                          !crawlPreview.shortDescription &&
+                          crawlEditableSpecs.length === 0 ? (
+                            <div className="alert alert-warning small mb-3">
+                              <i className="fas fa-exclamation-triangle me-1" />
+                              Bu sayfadan açıklama veya teknik özellik çıkarılamadı. Manuel olarak ekleyebilir
+                              veya ürün formuna kendiniz yazabilirsiniz.
+                            </div>
+                          ) : (
+                            <div className="alert alert-info small mb-3 py-2">
+                              <i className="fas fa-magic me-1" />
+                              <strong>Açıklama bulundu!</strong> Aşağıda düzenleyip "Ürün Formuna Aktar"
+                              diyerek doğrudan formdaki "Açıklama" ve "Kısa Açıklama" alanlarına
+                              yazdırabilirsiniz.
+                            </div>
+                          )}
+
+                          {/* Short description */}
+                          <div className="mb-3">
+                            <label
+                              htmlFor="crawl-short-desc"
+                              className="form-label small fw-semibold d-flex justify-content-between"
+                            >
+                              <span>Kısa Açıklama</span>
+                              <span className="text-muted" style={{ fontSize: 11 }}>
+                                {crawlEditableShortDesc.length} / 300
+                              </span>
+                            </label>
+                            <textarea
+                              id="crawl-short-desc"
+                              className="form-control form-control-sm"
+                              rows={2}
+                              maxLength={300}
+                              value={crawlEditableShortDesc}
+                              onChange={(e) => setCrawlEditableShortDesc(e.target.value)}
+                              placeholder="Listeleme sayfalarında ürün adının altında görünür..."
+                            />
+                          </div>
+
+                          {/* Long description */}
+                          <div className="mb-3">
+                            <label
+                              htmlFor="crawl-long-desc"
+                              className="form-label small fw-semibold d-flex justify-content-between"
+                            >
+                              <span>Açıklama</span>
+                              <span className="text-muted" style={{ fontSize: 11 }}>
+                                {crawlEditableDesc.length} karakter
+                              </span>
+                            </label>
+                            <textarea
+                              id="crawl-long-desc"
+                              className="form-control"
+                              rows={6}
+                              value={crawlEditableDesc}
+                              onChange={(e) => setCrawlEditableDesc(e.target.value)}
+                              placeholder="Ürün detay sayfasında gösterilecek tam açıklama (HTML/Markdown desteklenir)..."
+                            />
+                            <small className="text-muted">
+                              HTML etiketleri korunur. "Ürün Formuna Aktar"a basınca formdaki zengin metin
+                              editörüne yapıştırılır.
+                            </small>
+                          </div>
+
+                          {/* Specs editor */}
+                          <div className="mb-3">
+                            <div className="d-flex justify-content-between align-items-center mb-2">
+                              <label className="form-label small fw-semibold mb-0">
+                                Teknik Özellikler ({crawlEditableSpecs.length})
+                              </label>
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-outline-primary"
+                                onClick={addCrawlSpec}
+                              >
+                                <i className="fas fa-plus me-1" />
+                                Yeni Özellik
+                              </button>
+                            </div>
+                            {crawlEditableSpecs.length === 0 ? (
+                              <div className="text-muted small text-center py-3 border rounded bg-light">
+                                Özellik çıkarılamadı. "Yeni Özellik" butonu ile elle ekleyebilirsiniz.
+                              </div>
+                            ) : (
+                              <div style={{ maxHeight: 280, overflowY: 'auto' }}>
+                                {crawlEditableSpecs.map((spec, idx) => (
+                                  <div key={idx} className="d-flex gap-2 mb-2">
+                                    <input
+                                      type="text"
+                                      className="form-control form-control-sm"
+                                      placeholder="Özellik adı (örn. Kapasite)"
+                                      value={spec.key}
+                                      onChange={(e) => updateCrawlSpec(idx, 'key', e.target.value)}
+                                      style={{ flexBasis: '40%' }}
+                                    />
+                                    <input
+                                      type="text"
+                                      className="form-control form-control-sm"
+                                      placeholder="Değer (örn. 9 kg)"
+                                      value={spec.value}
+                                      onChange={(e) => updateCrawlSpec(idx, 'value', e.target.value)}
+                                      style={{ flexBasis: '55%' }}
+                                    />
+                                    <button
+                                      type="button"
+                                      className="btn btn-sm btn-outline-danger"
+                                      onClick={() => removeCrawlSpec(idx)}
+                                      title="Sil"
+                                    >
+                                      <i className="fas fa-trash" />
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            <small className="text-muted">
+                              Aktarınca açıklamanın altına "Teknik Özellikler" tablosu olarak eklenir.
+                            </small>
+                          </div>
+
+                          {/* Apply button */}
+                          <div className="d-flex gap-2 align-items-center">
+                            <button
+                              type="button"
+                              className="btn btn-success"
+                              onClick={applyCrawlDescriptionToProduct}
+                              disabled={
+                                !crawlEditableDesc &&
+                                !crawlEditableShortDesc &&
+                                crawlEditableSpecs.length === 0
+                              }
+                            >
+                              <i className="fas fa-arrow-right me-1" />
+                              Ürün Formuna Aktar
+                            </button>
+                            {crawlDescAppliedToast && (
+                              <span className="badge bg-success">
+                                <i className="fas fa-check me-1" />
+                                Aktarıldı
+                              </span>
+                            )}
+                            <small className="text-muted ms-auto">
+                              <i className="fas fa-info-circle me-1" />
+                              Formdaki mevcut değerler üzerine yazılır
+                            </small>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {crawlPreview &&
+                    crawlActiveTab === 'images' &&
+                    (!crawlPreview.images || crawlPreview.images.length === 0) && (
+                      <div className="alert alert-warning py-2 small mb-0">
+                        Bu sayfada otomatik bulunabilen görsel yok. "Açıklama & Özellikler" sekmesini
+                        deneyebilir veya elle ekleyebilirsiniz.
+                      </div>
+                    )}
+                </div>
+                <div className="modal-footer">
+                  {crawlResult && crawlResult.success > 0 ? (
+                    <>
+                      <button
+                        type="button"
+                        className="btn btn-outline-secondary"
+                        onClick={() => setCrawlOpen(false)}
+                      >
+                        <i className="fas fa-images me-1" />
+                        Daha Fazla Görsel Ekle
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-success"
+                        onClick={() => {
+                          setCrawlOpen(false);
+                          if (onSuccess) onSuccess({ id: product?.id });
+                        }}
+                      >
+                        <i className="fas fa-arrow-right me-1" />
+                        Ürün Detayına Dön
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() => setCrawlOpen(false)}
+                        disabled={crawlLoading || crawlImporting}
+                      >
+                        Kapat
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        disabled={!crawlPreview || crawlSelected.size === 0 || crawlImporting || crawlLoading}
+                        onClick={importCrawled}
+                      >
+                        {crawlImporting ? (
+                          <>
+                            <span className="spinner-border spinner-border-sm me-1" />
+                            Yükleniyor...
+                          </>
+                        ) : (
+                          <>
+                            <i className="fas fa-download me-1" />
+                            {crawlSelected.size} Görseli İndir
+                          </>
+                        )}
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         )}
-      </div>
 
-      <div className="d-flex justify-content-end gap-2 mt-3">
-        <button
-          type="button"
-          className="btn btn-secondary"
-          onClick={onCancel}
-          disabled={loading}
-        >
-          İptal
-        </button>
-        <button
-          type="button"
-          className="btn btn-primary"
-          disabled={loading}
-          onClick={handleSubmit}
-        >
-          {loading ? (
-            <>
-              <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-              Kaydediliyor...
-            </>
-          ) : (
-            <>
-              <i className="fas fa-save me-2"></i>
-              {product ? 'Güncelle' : 'Kaydet'}
-            </>
-          )}
-        </button>
-      </div>
-
-      {/* Create Modal */}
-      <ConfirmModal
-        show={!!deleteImageId}
-        title="Gorseli Sil"
-        message="Bu gorseli silmek istediginize emin misiniz? Bu islem geri alinamaz."
-        icon="trash"
-        confirmText="Sil"
-        confirmVariant="danger"
-        onConfirm={() => {
-          const imgId = deleteImageId;
-          setDeleteImageId(null);
-          axios.delete(`/api/products/images/${imgId}`).then(() => {
-            setProductImages(prev => prev.filter(i => i.id !== imgId));
-          }).catch(() => {});
-        }}
-        onCancel={() => setDeleteImageId(null)}
-      />
-
-      {showCreateModal && (
-        <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} tabIndex="-1">
-          <div className="modal-dialog modal-dialog-centered">
-            <div className="modal-content">
-              <div className="modal-header">
-                <h5 className="modal-title">
-                  {createModalType === 'brand' && <><i className="fas fa-copyright me-2"></i>Yeni Marka</>}
-                  {createModalType === 'color' && <><i className="fas fa-palette me-2"></i>Yeni Renk</>}
-                  {createModalType === 'category' && <><i className="fas fa-folder me-2"></i>Yeni Kategori</>}
-                  {createModalType === 'subcategory' && <><i className="fas fa-folder-open me-2"></i>Yeni Alt Kategori</>}
-                </h5>
-                <button
-                  type="button"
-                  className="btn-close"
-                  onClick={() => setShowCreateModal(false)}
-                  disabled={createModalLoading}
-                ></button>
-              </div>
-              <div className="modal-body">
-                <div className="mb-3">
-                  <label className="form-label">
-                    İsim <span className="text-danger">*</span>
+        {/* ── SEO Settings ── */}
+        <div className="card border-0 bg-light mt-3">
+          <div
+            className="card-header bg-transparent border-bottom-0 d-flex align-items-center gap-2 py-2 px-3"
+            style={{ cursor: 'pointer' }}
+            onClick={() => setFormData((prev) => ({ ...prev, _seoOpen: !prev._seoOpen }))}
+          >
+            <i className="fas fa-search text-success" />
+            <span className="small fw-semibold">SEO Ayarları</span>
+            <i
+              className={`fas fa-chevron-${formData._seoOpen ? 'up' : 'down'} ms-auto text-muted`}
+              style={{ fontSize: 11 }}
+            />
+          </div>
+          {formData._seoOpen && (
+            <div className="card-body pt-0 px-3 pb-3">
+              <div className="row g-2">
+                <div className="col-12">
+                  <label className="form-label small fw-medium mb-1">Slug (URL)</label>
+                  <div className="input-group input-group-sm">
+                    <span className="input-group-text text-muted" style={{ fontSize: 11 }}>
+                      /store/urun/
+                    </span>
+                    <input
+                      className="form-control font-monospace"
+                      value={formData.slug || ''}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''),
+                        }))
+                      }
+                      placeholder="urun-adi-slug"
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-outline-secondary"
+                      title="Ürün adından otomatik oluştur"
+                      onClick={() => {
+                        const s = (formData.name || '')
+                          .toLowerCase()
+                          .replace(/ş/g, 's')
+                          .replace(/ç/g, 'c')
+                          .replace(/ğ/g, 'g')
+                          .replace(/ü/g, 'u')
+                          .replace(/ö/g, 'o')
+                          .replace(/ı/g, 'i')
+                          .replace(/İ/g, 'i')
+                          .replace(/[^a-z0-9\s-]/g, '')
+                          .replace(/\s+/g, '-')
+                          .replace(/-+/g, '-')
+                          .replace(/^-|-$/g, '');
+                        setFormData((prev) => ({ ...prev, slug: s }));
+                      }}
+                    >
+                      <i className="fas fa-magic" />
+                    </button>
+                  </div>
+                </div>
+                <div className="col-12">
+                  <label className="form-label small fw-medium mb-1">
+                    Meta Başlık{' '}
+                    <span className="text-muted fw-normal">({(formData.metaTitle || '').length}/200)</span>
                   </label>
                   <input
-                    type="text"
-                    className="form-control"
-                    value={createModalName}
-                    onChange={(e) => setCreateModalName(e.target.value)}
-                    placeholder={
-                      createModalType === 'brand' ? 'Marka adı' :
-                      createModalType === 'color' ? 'Renk adı' :
-                      createModalType === 'category' ? 'Kategori adı' :
-                      'Alt kategori adı'
-                    }
-                    autoFocus
-                    disabled={createModalLoading}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !createModalLoading) {
-                        handleCreateSubmit();
-                      }
-                    }}
+                    className="form-control form-control-sm"
+                    value={formData.metaTitle || ''}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, metaTitle: e.target.value }))}
+                    maxLength={200}
+                    placeholder="Arama sonuçlarında görünecek başlık"
                   />
                 </div>
-                {createModalType === 'color' && (
-                  <div className="mb-3">
-                    <label className="form-label">Renk Kodu (Hex)</label>
-                    <div className="input-group">
-                      <input
-                        type="color"
-                        className="form-control form-control-color"
-                        value={createModalColorHex}
-                        onChange={(e) => setCreateModalColorHex(e.target.value)}
-                        disabled={createModalLoading}
-                        style={{ width: '60px', height: '38px' }}
-                      />
-                      <input
-                        type="text"
-                        className="form-control"
-                        value={createModalColorHex}
-                        onChange={(e) => setCreateModalColorHex(e.target.value)}
-                        placeholder="#000000"
-                        disabled={createModalLoading}
-                        maxLength={7}
-                      />
+                <div className="col-12">
+                  <label className="form-label small fw-medium mb-1">
+                    Meta Açıklama{' '}
+                    <span className="text-muted fw-normal">
+                      ({(formData.metaDescription || '').length}/500)
+                    </span>
+                  </label>
+                  <textarea
+                    className="form-control form-control-sm"
+                    rows={2}
+                    value={formData.metaDescription || ''}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, metaDescription: e.target.value }))}
+                    maxLength={500}
+                    placeholder="Arama sonuçlarında görünecek açıklama"
+                  />
+                </div>
+                {formData.metaTitle && (
+                  <div className="col-12">
+                    <div className="border rounded p-2" style={{ fontSize: 12, background: '#fff' }}>
+                      <div className="text-primary" style={{ fontSize: 14 }}>
+                        {formData.metaTitle || formData.name}
+                      </div>
+                      <div className="text-success" style={{ fontSize: 11 }}>
+                        siteniz.com/store/urun/{formData.slug || '...'}
+                      </div>
+                      <div className="text-muted">
+                        {(formData.metaDescription || formData.shortDescription || '').substring(0, 160)}
+                      </div>
                     </div>
-                  </div>
-                )}
-                {(createModalType === 'category' || createModalType === 'subcategory') && (
-                  <div className="mb-3">
-                    <label className="form-label">Açıklama (Opsiyonel)</label>
-                    <textarea
-                      className="form-control"
-                      value={createModalDescription}
-                      onChange={(e) => setCreateModalDescription(e.target.value)}
-                      placeholder="Kategori açıklaması"
-                      rows={3}
-                      disabled={createModalLoading}
-                    />
+                    <small className="text-muted">Google arama sonucu önizlemesi</small>
                   </div>
                 )}
               </div>
-              <div className="modal-footer">
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={() => setShowCreateModal(false)}
-                  disabled={createModalLoading}
-                >
-                  İptal
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={handleCreateSubmit}
-                  disabled={createModalLoading || !createModalName.trim()}
-                >
-                  {createModalLoading ? (
-                    <>
-                      <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                      Oluşturuluyor...
-                    </>
-                  ) : (
-                    'Oluştur'
+            </div>
+          )}
+        </div>
+
+        <div className="d-flex justify-content-end gap-2 mt-3">
+          <button type="button" className="btn btn-secondary" onClick={onCancel} disabled={loading}>
+            İptal
+          </button>
+          <button type="button" className="btn btn-primary" disabled={loading} onClick={handleSubmit}>
+            {loading ? (
+              <>
+                <span
+                  className="spinner-border spinner-border-sm me-2"
+                  role="status"
+                  aria-hidden="true"
+                ></span>
+                Kaydediliyor...
+              </>
+            ) : (
+              <>
+                <i className="fas fa-save me-2"></i>
+                {product ? 'Güncelle' : 'Kaydet'}
+              </>
+            )}
+          </button>
+        </div>
+
+        {/* Create Modal */}
+        <ConfirmModal
+          show={!!deleteImageId}
+          title="Gorseli Sil"
+          message="Bu gorseli silmek istediginize emin misiniz? Bu islem geri alinamaz."
+          icon="trash"
+          confirmText="Sil"
+          confirmVariant="danger"
+          onConfirm={() => {
+            const imgId = deleteImageId;
+            setDeleteImageId(null);
+            axios
+              .delete(`/api/products/images/${imgId}`)
+              .then(() => {
+                setProductImages((prev) => prev.filter((i) => i.id !== imgId));
+              })
+              .catch(() => {});
+          }}
+          onCancel={() => setDeleteImageId(null)}
+        />
+
+        {showCreateModal && (
+          <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} tabIndex="-1">
+            <div className="modal-dialog modal-dialog-centered">
+              <div className="modal-content">
+                <div className="modal-header">
+                  <h5 className="modal-title">
+                    {createModalType === 'brand' && (
+                      <>
+                        <i className="fas fa-copyright me-2"></i>Yeni Marka
+                      </>
+                    )}
+                    {createModalType === 'color' && (
+                      <>
+                        <i className="fas fa-palette me-2"></i>Yeni Renk
+                      </>
+                    )}
+                    {createModalType === 'category' && (
+                      <>
+                        <i className="fas fa-folder me-2"></i>Yeni Kategori
+                      </>
+                    )}
+                    {createModalType === 'subcategory' && (
+                      <>
+                        <i className="fas fa-folder-open me-2"></i>Yeni Alt Kategori
+                      </>
+                    )}
+                  </h5>
+                  <button
+                    type="button"
+                    className="btn-close"
+                    onClick={() => setShowCreateModal(false)}
+                    disabled={createModalLoading}
+                  ></button>
+                </div>
+                <div className="modal-body">
+                  <div className="mb-3">
+                    <label className="form-label">
+                      İsim <span className="text-danger">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={createModalName}
+                      onChange={(e) => setCreateModalName(e.target.value)}
+                      placeholder={
+                        createModalType === 'brand'
+                          ? 'Marka adı'
+                          : createModalType === 'color'
+                            ? 'Renk adı'
+                            : createModalType === 'category'
+                              ? 'Kategori adı'
+                              : 'Alt kategori adı'
+                      }
+                      autoFocus
+                      disabled={createModalLoading}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !createModalLoading) {
+                          handleCreateSubmit();
+                        }
+                      }}
+                    />
+                  </div>
+                  {createModalType === 'color' && (
+                    <div className="mb-3">
+                      <label className="form-label">Renk Kodu (Hex)</label>
+                      <div className="input-group">
+                        <input
+                          type="color"
+                          className="form-control form-control-color"
+                          value={createModalColorHex}
+                          onChange={(e) => setCreateModalColorHex(e.target.value)}
+                          disabled={createModalLoading}
+                          style={{ width: '60px', height: '38px' }}
+                        />
+                        <input
+                          type="text"
+                          className="form-control"
+                          value={createModalColorHex}
+                          onChange={(e) => setCreateModalColorHex(e.target.value)}
+                          placeholder="#000000"
+                          disabled={createModalLoading}
+                          maxLength={7}
+                        />
+                      </div>
+                    </div>
                   )}
-                </button>
+                  {(createModalType === 'category' || createModalType === 'subcategory') && (
+                    <div className="mb-3">
+                      <label className="form-label">Açıklama (Opsiyonel)</label>
+                      <textarea
+                        className="form-control"
+                        value={createModalDescription}
+                        onChange={(e) => setCreateModalDescription(e.target.value)}
+                        placeholder="Kategori açıklaması"
+                        rows={3}
+                        disabled={createModalLoading}
+                      />
+                    </div>
+                  )}
+                </div>
+                <div className="modal-footer">
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => setShowCreateModal(false)}
+                    disabled={createModalLoading}
+                  >
+                    İptal
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={handleCreateSubmit}
+                    disabled={createModalLoading || !createModalName.trim()}
+                  >
+                    {createModalLoading ? (
+                      <>
+                        <span
+                          className="spinner-border spinner-border-sm me-2"
+                          role="status"
+                          aria-hidden="true"
+                        ></span>
+                        Oluşturuluyor...
+                      </>
+                    ) : (
+                      'Oluştur'
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
-    </form>
+        )}
+      </form>
     </div>
   );
 };
