@@ -62,6 +62,14 @@ public class HostValidationFilter extends OncePerRequestFilter {
         String host = request.getServerName();
         String uri = request.getRequestURI();
 
+        // Public read-only image serving (product photos, site banners/assets, logo view).
+        // These contain no sensitive data and are shown on the public storefront, so they
+        // must load on BOTH the store and admin hosts — exempt from host validation.
+        if (isPublicImagePath(uri)) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
         boolean isAdminEndpoint = uri.startsWith("/api/admin/") || uri.startsWith("/api/cezeri/");
         boolean isStoreEndpoint = uri.startsWith("/api/store/");
 
@@ -80,6 +88,18 @@ public class HostValidationFilter extends OncePerRequestFilter {
             return;
         }
         filterChain.doFilter(request, response);
+    }
+
+    /**
+     * Public read-only image endpoints that must be reachable from any host
+     * (storefront banners/assets + product photos + logo view). Read-only GET,
+     * no sensitive data — safe to bypass the admin/store host restriction.
+     */
+    private boolean isPublicImagePath(String uri) {
+        if (uri == null) return false;
+        return uri.contains("/settings/site/asset/view/")
+            || uri.contains("/settings/site/logo/view")
+            || (uri.contains("/products/images/") && uri.endsWith("/view"));
     }
 
     private boolean matchesAny(String host, List<String> patterns) {
