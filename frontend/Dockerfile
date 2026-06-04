@@ -3,8 +3,8 @@ FROM node:18-alpine as build
 
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
+# Copy package files (+ .npmrc so legacy-peer-deps applies to npm ci/install)
+COPY package*.json .npmrc ./
 
 # Install dependencies (prefer lockfile, fallback to install if out of sync)
 RUN npm ci --omit=dev || npm install --omit=dev

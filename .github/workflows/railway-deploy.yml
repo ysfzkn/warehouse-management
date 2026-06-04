@@ -44,7 +44,9 @@ jobs:
 
       # ── Backend ──
       - name: Backend tests
-        run: mvn -B clean test
+        # Maven Central paylaşımlı runner IP'lerine ara sıra 403/5xx döndürür;
+        # wagon retry handler ile geçici ağ hatalarını otomatik tekrar dene.
+        run: mvn -B -Dmaven.wagon.http.retryHandler.count=5 -Dmaven.wagon.httpconnectionManager.ttlSeconds=120 clean test
 
       - name: Backend Flyway validate (offline check, no DB)
         run: |
@@ -124,7 +126,7 @@ jobs:
           cache-dependency-path: 'frontend/package-lock.json'
 
       - name: Build backend (skip tests, already validated)
-        run: mvn -B clean package -DskipTests
+        run: mvn -B -Dmaven.wagon.http.retryHandler.count=5 -Dmaven.wagon.httpconnectionManager.ttlSeconds=120 clean package -DskipTests
 
       - name: Build frontend
         run: |
