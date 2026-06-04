@@ -232,6 +232,24 @@ public class ProductController {
         return ResponseEntity.noContent().build();
     }
 
+    /** Bulk delete product images (multi-select in the product form). */
+    @DeleteMapping("/images/bulk")
+    public ResponseEntity<Map<String, Object>> deleteProductImagesBulk(@RequestBody List<Long> imageIds) {
+        if (imageIds == null || imageIds.isEmpty()) {
+            return ResponseEntity.badRequest().build();
+        }
+        int deleted = 0;
+        for (Long imageId : imageIds) {
+            try {
+                productImageService.deleteImage(imageId);
+                deleted++;
+            } catch (Exception ignored) {
+                // Skip already-removed / missing images so one bad id doesn't abort the batch.
+            }
+        }
+        return ResponseEntity.ok(Map.of("deleted", deleted, "requested", imageIds.size()));
+    }
+
     @GetMapping("/images/{imageId}/view")
     @Transactional(readOnly = true)
     public ResponseEntity<byte[]> viewProductImage(@PathVariable Long imageId,

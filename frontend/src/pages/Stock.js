@@ -6,6 +6,7 @@ import { compressImage } from '../utils/image';
 import { formatPhoneForDisplay } from '../utils/phone';
 import StockForm from '../components/StockForm';
 import QuickStockAdjustModal from '../components/QuickStockAdjustModal';
+import StockRemoveSearchModal from '../components/StockRemoveSearchModal';
 import StockSettingsModal from '../components/StockSettingsModal';
 import StockTransferModal from '../components/StockTransferModal';
 import StockRequestApprovalModal from '../components/StockRequestApprovalModal';
@@ -26,7 +27,7 @@ const formatDateInTurkeyTimezone = (isoDateString, options = {}) => {
     // Force Turkey timezone display
     return date.toLocaleString('tr-TR', {
       timeZone: 'Europe/Istanbul',
-      ...options
+      ...options,
     });
   } catch (error) {
     console.error('Date formatting error:', error);
@@ -81,7 +82,7 @@ const StockFiltersBar = ({
   setStockLastUpdatedFromTime,
   stockLastUpdatedToTime,
   setStockLastUpdatedToTime,
-  getWarehouseById
+  getWarehouseById,
 }) => {
   const searchInputRef = useRef(null);
 
@@ -89,7 +90,9 @@ const StockFiltersBar = ({
     if (searchInputRef.current && document.activeElement !== searchInputRef.current) {
       searchInputRef.current.focus();
       const len = searchInputRef.current.value.length;
-      try { searchInputRef.current.setSelectionRange(len, len); } catch { }
+      try {
+        searchInputRef.current.setSelectionRange(len, len);
+      } catch {}
     }
   }, [searchTerm]);
 
@@ -476,7 +479,9 @@ const StockFiltersBar = ({
           <div className="stock-filter-card">
             <small>Arama</small>
             <div className="input-group mt-2">
-              <span className="input-group-text bg-transparent border-end-0"><i className="fas fa-search text-secondary"></i></span>
+              <span className="input-group-text bg-transparent border-end-0">
+                <i className="fas fa-search text-secondary"></i>
+              </span>
               <input
                 ref={searchInputRef}
                 type="text"
@@ -500,7 +505,9 @@ const StockFiltersBar = ({
                   setSelectedWarehouseById(nextById || {});
                 }}
                 searchEndpoint="/api/warehouses"
-                placeholder={selectedWarehouseIds?.length ? `Seçili depo: ${selectedWarehouseIds.length}` : 'Depo ara...'}
+                placeholder={
+                  selectedWarehouseIds?.length ? `Seçili depo: ${selectedWarehouseIds.length}` : 'Depo ara...'
+                }
                 renderOption={(w) => w.name}
                 getOptionLabel={(w) => w?.name || (w?.id != null ? String(w.id) : '')}
               />
@@ -562,11 +569,12 @@ const StockFiltersBar = ({
               onChange={(e) => setSelectedCategory(e.target.value)}
             >
               <option value="">Tüm Ana Kategoriler</option>
-              {Array.isArray(categories) && categories.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.name}
-                </option>
-              ))}
+              {Array.isArray(categories) &&
+                categories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.name}
+                  </option>
+                ))}
             </select>
           </div>
         </div>
@@ -580,11 +588,12 @@ const StockFiltersBar = ({
               disabled={!selectedCategory}
             >
               <option value="">{selectedCategory ? 'Tüm Alt Kategoriler' : 'Önce ana kategori seçin'}</option>
-              {Array.isArray(subcategories) && subcategories.map((subcategory) => (
-                <option key={subcategory.id} value={subcategory.id}>
-                  {subcategory.name}
-                </option>
-              ))}
+              {Array.isArray(subcategories) &&
+                subcategories.map((subcategory) => (
+                  <option key={subcategory.id} value={subcategory.id}>
+                    {subcategory.name}
+                  </option>
+                ))}
             </select>
           </div>
         </div>
@@ -656,7 +665,10 @@ const StockFiltersBar = ({
             checked={showReserved}
             onChange={(e) => setShowReserved(e.target.checked)}
           />
-          <label className={`btn btn-sm btn-outline-secondary ${showReserved ? 'active' : ''}`} htmlFor="showReserved">
+          <label
+            className={`btn btn-sm btn-outline-secondary ${showReserved ? 'active' : ''}`}
+            htmlFor="showReserved"
+          >
             <i className="fas fa-lock me-1"></i>
             Rezerve
           </label>
@@ -669,7 +681,10 @@ const StockFiltersBar = ({
             checked={showConsigned}
             onChange={(e) => setShowConsigned(e.target.checked)}
           />
-          <label className={`btn btn-sm btn-outline-secondary ${showConsigned ? 'active' : ''}`} htmlFor="showConsigned">
+          <label
+            className={`btn btn-sm btn-outline-secondary ${showConsigned ? 'active' : ''}`}
+            htmlFor="showConsigned"
+          >
             <i className="fas fa-handshake me-1"></i>
             Emanet
           </label>
@@ -682,7 +697,10 @@ const StockFiltersBar = ({
             checked={hideOutOfStock}
             onChange={(e) => setHideOutOfStock(e.target.checked)}
           />
-          <label className={`btn btn-sm btn-outline-secondary ${hideOutOfStock ? 'active' : ''}`} htmlFor="hideOutOfStock">
+          <label
+            className={`btn btn-sm btn-outline-secondary ${hideOutOfStock ? 'active' : ''}`}
+            htmlFor="hideOutOfStock"
+          >
             <i className="fas fa-eye-slash me-1"></i>
             Stokta Olmayanları Gizle
           </label>
@@ -707,39 +725,93 @@ const StockFiltersBar = ({
       <FilterChips
         className="mb-3"
         chips={[
-          searchTerm ? { icon: 'fas fa-search', label: `Arama: "${searchTerm}"`, onClear: () => setSearchTerm('') } : null,
-          ...(Array.isArray(selectedWarehouseIds) ? selectedWarehouseIds : []).map((wid) => {
-            const idNum = Number(wid);
-            if (Number.isNaN(idNum)) return null;
-            const name =
-              selectedWarehouseById?.[idNum]?.name ||
-              getWarehouseById(idNum)?.name ||
-              idNum;
-            return {
-              icon: 'fas fa-warehouse',
-              label: `Depo: ${name}`,
-              onClear: () => {
-                setSelectedWarehouseIds(prev => (Array.isArray(prev) ? prev.filter(x => Number(x) !== idNum) : []));
-                setSelectedWarehouseById(prev => {
-                  const next = { ...(prev || {}) };
-                  delete next[idNum];
-                  return next;
-                });
+          searchTerm
+            ? { icon: 'fas fa-search', label: `Arama: "${searchTerm}"`, onClear: () => setSearchTerm('') }
+            : null,
+          ...(Array.isArray(selectedWarehouseIds) ? selectedWarehouseIds : [])
+            .map((wid) => {
+              const idNum = Number(wid);
+              if (Number.isNaN(idNum)) return null;
+              const name = selectedWarehouseById?.[idNum]?.name || getWarehouseById(idNum)?.name || idNum;
+              return {
+                icon: 'fas fa-warehouse',
+                label: `Depo: ${name}`,
+                onClear: () => {
+                  setSelectedWarehouseIds((prev) =>
+                    Array.isArray(prev) ? prev.filter((x) => Number(x) !== idNum) : []
+                  );
+                  setSelectedWarehouseById((prev) => {
+                    const next = { ...(prev || {}) };
+                    delete next[idNum];
+                    return next;
+                  });
+                },
+              };
+            })
+            .filter(Boolean),
+          selectedCategory
+            ? {
+                icon: 'fas fa-tag',
+                label: `Ana Kategori: ${Array.isArray(categories) ? categories.find((c) => c.id.toString() === selectedCategory)?.name || selectedCategory : selectedCategory}`,
+                onClear: () => {
+                  setSelectedCategory('');
+                  setSelectedSubcategory('');
+                  setSubcategories([]);
+                },
               }
-            };
-          }).filter(Boolean),
-          selectedCategory ? { icon: 'fas fa-tag', label: `Ana Kategori: ${Array.isArray(categories) ? categories.find(c => c.id.toString() === selectedCategory)?.name || selectedCategory : selectedCategory}`, onClear: () => { setSelectedCategory(''); setSelectedSubcategory(''); setSubcategories([]); } } : null,
-          selectedSubcategory ? { icon: 'fas fa-tags', label: `Alt Kategori: ${subcategories.find(c => c.id.toString() === selectedSubcategory)?.name || selectedSubcategory}`, onClear: () => setSelectedSubcategory('') } : null,
-          brandId ? { icon: 'fas fa-copyright', label: `Marka: ${brandOpt?.name || brandId}`, onClear: () => { setBrandId(null); setBrandOpt(null); } } : null,
-          colorId ? { icon: 'fas fa-palette', label: `Renk: ${colorOpt?.name || colorId}`, onClear: () => { setColorId(null); setColorOpt(null); } } : null,
-          showReserved ? { icon: 'fas fa-lock', label: 'Rezerve Olanlar', onClear: () => setShowReserved(false) } : null,
-          showConsigned ? { icon: 'fas fa-handshake', label: 'Emanet Olanlar', onClear: () => setShowConsigned(false) } : null,
-          hideOutOfStock ? { icon: 'fas fa-eye-slash', label: 'Stokta Olmayanlar Gizli', onClear: () => setHideOutOfStock(false) } : null,
-          stockLastUpdatedFrom || stockLastUpdatedTo ? { 
-            icon: 'fas fa-calendar-alt', 
-            label: `Tarih: ${stockLastUpdatedFrom ? new Date(stockLastUpdatedFrom + 'T12:00:00').toLocaleDateString('tr-TR') : '...'} - ${stockLastUpdatedTo ? new Date(stockLastUpdatedTo + 'T12:00:00').toLocaleDateString('tr-TR') : '...'}${(stockLastUpdatedFromTime || stockLastUpdatedToTime) ? ' (saatli)' : ''}`, 
-            onClear: () => { setStockLastUpdatedFrom(''); setStockLastUpdatedTo(''); setStockLastUpdatedFromTime(''); setStockLastUpdatedToTime(''); } 
-          } : null,
+            : null,
+          selectedSubcategory
+            ? {
+                icon: 'fas fa-tags',
+                label: `Alt Kategori: ${subcategories.find((c) => c.id.toString() === selectedSubcategory)?.name || selectedSubcategory}`,
+                onClear: () => setSelectedSubcategory(''),
+              }
+            : null,
+          brandId
+            ? {
+                icon: 'fas fa-copyright',
+                label: `Marka: ${brandOpt?.name || brandId}`,
+                onClear: () => {
+                  setBrandId(null);
+                  setBrandOpt(null);
+                },
+              }
+            : null,
+          colorId
+            ? {
+                icon: 'fas fa-palette',
+                label: `Renk: ${colorOpt?.name || colorId}`,
+                onClear: () => {
+                  setColorId(null);
+                  setColorOpt(null);
+                },
+              }
+            : null,
+          showReserved
+            ? { icon: 'fas fa-lock', label: 'Rezerve Olanlar', onClear: () => setShowReserved(false) }
+            : null,
+          showConsigned
+            ? { icon: 'fas fa-handshake', label: 'Emanet Olanlar', onClear: () => setShowConsigned(false) }
+            : null,
+          hideOutOfStock
+            ? {
+                icon: 'fas fa-eye-slash',
+                label: 'Stokta Olmayanlar Gizli',
+                onClear: () => setHideOutOfStock(false),
+              }
+            : null,
+          stockLastUpdatedFrom || stockLastUpdatedTo
+            ? {
+                icon: 'fas fa-calendar-alt',
+                label: `Tarih: ${stockLastUpdatedFrom ? new Date(stockLastUpdatedFrom + 'T12:00:00').toLocaleDateString('tr-TR') : '...'} - ${stockLastUpdatedTo ? new Date(stockLastUpdatedTo + 'T12:00:00').toLocaleDateString('tr-TR') : '...'}${stockLastUpdatedFromTime || stockLastUpdatedToTime ? ' (saatli)' : ''}`,
+                onClear: () => {
+                  setStockLastUpdatedFrom('');
+                  setStockLastUpdatedTo('');
+                  setStockLastUpdatedFromTime('');
+                  setStockLastUpdatedToTime('');
+                },
+              }
+            : null,
         ].filter(Boolean)}
         onClearAll={() => {
           setSearchTerm('');
@@ -804,6 +876,7 @@ const Stock = () => {
   const [showForm, setShowForm] = useState(false);
   const [stockFormMode, setStockFormMode] = useState('create'); // create | request
   const [quickAdjustModal, setQuickAdjustModal] = useState({ show: false, stock: null, type: null });
+  const [showStockRemoveSearch, setShowStockRemoveSearch] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [showTransferHistory, setShowTransferHistory] = useState(false);
@@ -868,7 +941,13 @@ const Stock = () => {
   const [errorDetailsModal, setErrorDetailsModal] = useState({ show: false, title: '', errors: [] });
   const [notesModal, setNotesModal] = useState({ show: false, notes: '', transferId: null, title: '' });
   const [cancellationModal, setCancellationModal] = useState({ show: false, transferId: null, reason: '' });
-  const [completionModal, setCompletionModal] = useState({ show: false, transferId: null, note: '', message: '', transfer: null });
+  const [completionModal, setCompletionModal] = useState({
+    show: false,
+    transferId: null,
+    note: '',
+    message: '',
+    transfer: null,
+  });
   const [auditModal, setAuditModal] = useState({ show: false, entityType: null, entityId: null });
   const [pendingStockId, setPendingStockId] = useState(null);
   const [showExcelModal, setShowExcelModal] = useState(false);
@@ -893,15 +972,27 @@ const Stock = () => {
     const normalizedBrandId = brandId != null ? Number(brandId) : undefined;
     const normalizedColorId = colorId != null ? Number(colorId) : undefined;
     const normalizedWarehouseIds = Array.isArray(selectedWarehouseIds)
-      ? selectedWarehouseIds.map(id => Number(id)).filter(id => !Number.isNaN(id))
+      ? selectedWarehouseIds.map((id) => Number(id)).filter((id) => !Number.isNaN(id))
       : [];
     const normalizedSearch = searchTerm ? searchTerm.trim() : undefined;
-    
+
     // Date + optional time (HH:mm): no time = full day, with time = that moment
-    const fromTimeStr = stockLastUpdatedFromTime ? (stockLastUpdatedFromTime.length === 5 ? stockLastUpdatedFromTime + ':00' : stockLastUpdatedFromTime) : '00:00:00';
-    const toTimeStr = stockLastUpdatedToTime ? (stockLastUpdatedToTime.length === 5 ? stockLastUpdatedToTime + ':59.999' : stockLastUpdatedToTime) : '23:59:59.999';
-    const lastUpdatedFrom = stockLastUpdatedFrom ? new Date(stockLastUpdatedFrom + 'T' + fromTimeStr).toISOString() : undefined;
-    const lastUpdatedTo = stockLastUpdatedTo ? new Date(stockLastUpdatedTo + 'T' + toTimeStr).toISOString() : undefined;
+    const fromTimeStr = stockLastUpdatedFromTime
+      ? stockLastUpdatedFromTime.length === 5
+        ? stockLastUpdatedFromTime + ':00'
+        : stockLastUpdatedFromTime
+      : '00:00:00';
+    const toTimeStr = stockLastUpdatedToTime
+      ? stockLastUpdatedToTime.length === 5
+        ? stockLastUpdatedToTime + ':59.999'
+        : stockLastUpdatedToTime
+      : '23:59:59.999';
+    const lastUpdatedFrom = stockLastUpdatedFrom
+      ? new Date(stockLastUpdatedFrom + 'T' + fromTimeStr).toISOString()
+      : undefined;
+    const lastUpdatedTo = stockLastUpdatedTo
+      ? new Date(stockLastUpdatedTo + 'T' + toTimeStr).toISOString()
+      : undefined;
 
     return {
       brandId: Number.isNaN(normalizedBrandId) ? undefined : normalizedBrandId,
@@ -915,30 +1006,44 @@ const Stock = () => {
       hideOutOfStock: hideOutOfStock || undefined,
       search: normalizedSearch || undefined,
       lastUpdatedFrom: lastUpdatedFrom,
-      lastUpdatedTo: lastUpdatedTo
+      lastUpdatedTo: lastUpdatedTo,
     };
-  }, [brandId, colorId, selectedWarehouseIds, selectedCategory, selectedSubcategory, showReserved, showConsigned, hideOutOfStock, searchTerm, stockLastUpdatedFrom, stockLastUpdatedTo, stockLastUpdatedFromTime, stockLastUpdatedToTime]);
+  }, [
+    brandId,
+    colorId,
+    selectedWarehouseIds,
+    selectedCategory,
+    selectedSubcategory,
+    showReserved,
+    showConsigned,
+    hideOutOfStock,
+    searchTerm,
+    stockLastUpdatedFrom,
+    stockLastUpdatedTo,
+    stockLastUpdatedFromTime,
+    stockLastUpdatedToTime,
+  ]);
 
   const handleExportToExcel = useCallback(async () => {
     try {
       const params = {
         ...buildStockFilterParams(),
-        status: filter
+        status: filter,
       };
-      
+
       // Remove undefined values
-      Object.keys(params).forEach(key => params[key] === undefined && delete params[key]);
-      
+      Object.keys(params).forEach((key) => params[key] === undefined && delete params[key]);
+
       const response = await axios.get('/api/stocks/export', {
         params,
-        responseType: 'blob'
+        responseType: 'blob',
       });
-      
+
       // Create download link
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
-      
+
       // Get filename from Content-Disposition header or use default
       const contentDisposition = response.headers['content-disposition'];
       let filename = 'stok-raporu.xlsx';
@@ -948,13 +1053,13 @@ const Stock = () => {
           filename = filenameMatch[1].replace(/['"]/g, '');
         }
       }
-      
+
       link.setAttribute('download', filename);
       document.body.appendChild(link);
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
-      
+
       setSuccessToast({ show: true, message: 'Excel dosyası başarıyla indirildi.' });
       if (toastTimeoutRef.current) {
         clearTimeout(toastTimeoutRef.current);
@@ -967,35 +1072,39 @@ const Stock = () => {
       setErrorModal({
         show: true,
         title: 'Excel Export Hatası',
-        message: error.response?.data?.message || 'Excel dosyası oluşturulurken bir hata oluştu. Lütfen tekrar deneyin.'
+        message:
+          error.response?.data?.message ||
+          'Excel dosyası oluşturulurken bir hata oluştu. Lütfen tekrar deneyin.',
       });
     }
   }, [buildStockFilterParams, filter]);
 
-  const fetchStocks = useCallback(async (pageOverride = 0, pageSizeOverride) => {
-    const size = pageSizeOverride ?? stockPageSize;
-    const sortByParam = stockSortBy === 'lastUpdated'
-      ? 'lastUpdated'
-      : (stockSortBy === 'quantity' ? 'quantity' : 'warehouse');
-    const params = {
-      ...buildStockFilterParams(),
-      page: pageOverride,
-      size,
-      status: filter,
-      sortBy: sortByParam,
-      sortDir: stockSortDir
-    };
+  const fetchStocks = useCallback(
+    async (pageOverride = 0, pageSizeOverride) => {
+      const size = pageSizeOverride ?? stockPageSize;
+      const sortByParam =
+        stockSortBy === 'lastUpdated' ? 'lastUpdated' : stockSortBy === 'quantity' ? 'quantity' : 'warehouse';
+      const params = {
+        ...buildStockFilterParams(),
+        page: pageOverride,
+        size,
+        status: filter,
+        sortBy: sortByParam,
+        sortDir: stockSortDir,
+      };
 
-    const response = await axios.get('/api/stocks', { params });
-    const data = response.data || {};
-    const content = Array.isArray(data.content) ? data.content : [];
+      const response = await axios.get('/api/stocks', { params });
+      const data = response.data || {};
+      const content = Array.isArray(data.content) ? data.content : [];
 
-    setStocks(content);
-    setStockPage(data.page ?? pageOverride);
-    setTotalStockCount(typeof data.totalElements === 'number' ? data.totalElements : content.length);
-    setStockTotalPages(typeof data.totalPages === 'number' ? data.totalPages : 0);
-    return data;
-  }, [stockPageSize, filter, stockSortBy, stockSortDir, buildStockFilterParams]);
+      setStocks(content);
+      setStockPage(data.page ?? pageOverride);
+      setTotalStockCount(typeof data.totalElements === 'number' ? data.totalElements : content.length);
+      setStockTotalPages(typeof data.totalPages === 'number' ? data.totalPages : 0);
+      return data;
+    },
+    [stockPageSize, filter, stockSortBy, stockSortDir, buildStockFilterParams]
+  );
 
   const fetchStockStatusCounts = useCallback(async () => {
     const baseParams = buildStockFilterParams();
@@ -1005,18 +1114,18 @@ const Stock = () => {
       page: 0,
       size: 1,
       sortBy: 'lastUpdated',
-      sortDir: 'desc'
+      sortDir: 'desc',
     });
     try {
       const [allRes, lowRes, outRes] = await Promise.all([
         axios.get('/api/stocks', { params: createParams('all') }),
         axios.get('/api/stocks', { params: createParams('low-stock') }),
-        axios.get('/api/stocks', { params: createParams('out-of-stock') })
+        axios.get('/api/stocks', { params: createParams('out-of-stock') }),
       ]);
       setStockStatusCounts({
         all: getTotalElementsFromResponse(allRes.data),
         low: getTotalElementsFromResponse(lowRes.data),
-        out: getTotalElementsFromResponse(outRes.data)
+        out: getTotalElementsFromResponse(outRes.data),
       });
     } catch (error) {
       console.error('Error fetching stock status counts:', error);
@@ -1026,7 +1135,7 @@ const Stock = () => {
   const fetchTotalQuantity = useCallback(async () => {
     const params = {
       ...buildStockFilterParams(),
-      status: filter
+      status: filter,
     };
     try {
       const res = await axios.get('/api/stocks/total-quantity', { params });
@@ -1038,71 +1147,103 @@ const Stock = () => {
     }
   }, [buildStockFilterParams, filter]);
 
-  const fetchTransfers = useCallback(async (page = 0, append = false, pageSizeOverride) => {
-    const size = pageSizeOverride ?? transferPageSize;
-    try {
-      const normalizedProductName = transferProductName ? transferProductName.toLocaleLowerCase('tr-TR') : undefined;
-      const normalizedSku = transferSku ? transferSku.toLocaleLowerCase('tr-TR') : undefined;
-      const normalizedDriver = transferDriver ? transferDriver.toLocaleLowerCase('tr-TR') : undefined;
-      const normalizedNotes = transferNotes ? transferNotes.toLocaleLowerCase('tr-TR') : undefined;
-      
-      // Date + optional time (HH:mm): no time = full day, with time = that moment
-      const toIso = (d, t, end) => {
-        if (!d) return undefined;
-        const timeStr = end
-          ? (!t ? '23:59:59.999' : (t.length === 5 ? t + ':59.999' : t.slice(0, 6) + '59.999'))
-          : (!t ? '00:00:00' : (t.length === 5 ? t + ':00' : t));
-        return new Date(d + 'T' + timeStr).toISOString();
-      };
-      const transferDateFromFormatted = toIso(transferDateFrom, transferDateFromTime, false);
-      const transferDateToFormatted = toIso(transferDateTo, transferDateToTime, true);
-      const createdAtFromFormatted = toIso(transferCreatedAtFrom, transferCreatedAtFromTime, false);
-      const createdAtToFormatted = toIso(transferCreatedAtTo, transferCreatedAtToTime, true);
-      
-      const params = {
-        page,
-        size,
-        status: transferStatusFilter !== 'ALL' ? transferStatusFilter : undefined,
-        transferType: transferTypeFilter !== 'ALL' ? transferTypeFilter : undefined,
-        productName: normalizedProductName,
-        sku: normalizedSku,
-        driverName: normalizedDriver,
-        notes: normalizedNotes,
-        sourceWarehouseId: transferSourceWarehouseId || undefined,
-        destinationWarehouseId: transferDestinationWarehouseId || undefined,
-        transferDateFrom: transferDateFromFormatted,
-        transferDateTo: transferDateToFormatted,
-        createdAtFrom: createdAtFromFormatted,
-        createdAtTo: createdAtToFormatted,
-        sort: 'updatedAt,desc'
-      };
-      // Remove undefined/null so only set filters are sent to API
-      Object.keys(params).forEach(k => { if (params[k] === undefined || params[k] === null || params[k] === '') delete params[k]; });
-      const endpoint = isAdmin ? '/api/stock-transfers' : '/api/stock-transfers/current-user';
-      const response = await axios.get(endpoint, { params });
-      const data = response.data || {};
-      const content = Array.isArray(data.content)
-        ? data.content
-        : (Array.isArray(data) ? data : []);
-      setTransfers(prev => append ? [...prev, ...content] : content);
-      setTransferPage(data.page ?? page);
-      setTransferTotalCount(prevCount => {
-        if (typeof data.totalElements === 'number') {
-          return data.totalElements;
-        }
-        return append ? prevCount + content.length : content.length;
-      });
-      setTransferTotalPages(typeof data.totalPages === 'number' ? data.totalPages : 0);
+  const fetchTransfers = useCallback(
+    async (page = 0, append = false, pageSizeOverride) => {
+      const size = pageSizeOverride ?? transferPageSize;
+      try {
+        const normalizedProductName = transferProductName
+          ? transferProductName.toLocaleLowerCase('tr-TR')
+          : undefined;
+        const normalizedSku = transferSku ? transferSku.toLocaleLowerCase('tr-TR') : undefined;
+        const normalizedDriver = transferDriver ? transferDriver.toLocaleLowerCase('tr-TR') : undefined;
+        const normalizedNotes = transferNotes ? transferNotes.toLocaleLowerCase('tr-TR') : undefined;
 
-      const metadata = data.metadata || {};
-      setTransferStatusCounts(metadata.statusCounts || {});
-      setTransferTypeCounts(metadata.transferTypeCounts || {});
-      return data;
-    } catch (error) {
-      console.error('Error fetching transfers:', error);
-      throw error;
-    }
-  }, [isAdmin, transferStatusFilter, transferTypeFilter, transferProductName, transferSku, transferDriver, transferNotes, transferSourceWarehouseId, transferDestinationWarehouseId, transferPageSize, transferDateFrom, transferDateTo, transferCreatedAtFrom, transferCreatedAtTo, transferDateFromTime, transferDateToTime, transferCreatedAtFromTime, transferCreatedAtToTime]);
+        // Date + optional time (HH:mm): no time = full day, with time = that moment
+        const toIso = (d, t, end) => {
+          if (!d) return undefined;
+          const timeStr = end
+            ? !t
+              ? '23:59:59.999'
+              : t.length === 5
+                ? t + ':59.999'
+                : t.slice(0, 6) + '59.999'
+            : !t
+              ? '00:00:00'
+              : t.length === 5
+                ? t + ':00'
+                : t;
+          return new Date(d + 'T' + timeStr).toISOString();
+        };
+        const transferDateFromFormatted = toIso(transferDateFrom, transferDateFromTime, false);
+        const transferDateToFormatted = toIso(transferDateTo, transferDateToTime, true);
+        const createdAtFromFormatted = toIso(transferCreatedAtFrom, transferCreatedAtFromTime, false);
+        const createdAtToFormatted = toIso(transferCreatedAtTo, transferCreatedAtToTime, true);
+
+        const params = {
+          page,
+          size,
+          status: transferStatusFilter !== 'ALL' ? transferStatusFilter : undefined,
+          transferType: transferTypeFilter !== 'ALL' ? transferTypeFilter : undefined,
+          productName: normalizedProductName,
+          sku: normalizedSku,
+          driverName: normalizedDriver,
+          notes: normalizedNotes,
+          sourceWarehouseId: transferSourceWarehouseId || undefined,
+          destinationWarehouseId: transferDestinationWarehouseId || undefined,
+          transferDateFrom: transferDateFromFormatted,
+          transferDateTo: transferDateToFormatted,
+          createdAtFrom: createdAtFromFormatted,
+          createdAtTo: createdAtToFormatted,
+          sort: 'updatedAt,desc',
+        };
+        // Remove undefined/null so only set filters are sent to API
+        Object.keys(params).forEach((k) => {
+          if (params[k] === undefined || params[k] === null || params[k] === '') delete params[k];
+        });
+        const endpoint = isAdmin ? '/api/stock-transfers' : '/api/stock-transfers/current-user';
+        const response = await axios.get(endpoint, { params });
+        const data = response.data || {};
+        const content = Array.isArray(data.content) ? data.content : Array.isArray(data) ? data : [];
+        setTransfers((prev) => (append ? [...prev, ...content] : content));
+        setTransferPage(data.page ?? page);
+        setTransferTotalCount((prevCount) => {
+          if (typeof data.totalElements === 'number') {
+            return data.totalElements;
+          }
+          return append ? prevCount + content.length : content.length;
+        });
+        setTransferTotalPages(typeof data.totalPages === 'number' ? data.totalPages : 0);
+
+        const metadata = data.metadata || {};
+        setTransferStatusCounts(metadata.statusCounts || {});
+        setTransferTypeCounts(metadata.transferTypeCounts || {});
+        return data;
+      } catch (error) {
+        console.error('Error fetching transfers:', error);
+        throw error;
+      }
+    },
+    [
+      isAdmin,
+      transferStatusFilter,
+      transferTypeFilter,
+      transferProductName,
+      transferSku,
+      transferDriver,
+      transferNotes,
+      transferSourceWarehouseId,
+      transferDestinationWarehouseId,
+      transferPageSize,
+      transferDateFrom,
+      transferDateTo,
+      transferCreatedAtFrom,
+      transferCreatedAtTo,
+      transferDateFromTime,
+      transferDateToTime,
+      transferCreatedAtFromTime,
+      transferCreatedAtToTime,
+    ]
+  );
 
   const fetchAllData = useCallback(async () => {
     try {
@@ -1117,15 +1258,15 @@ const Stock = () => {
 
       while (hasMore) {
         const response = await axios.get('/api/products', {
-          params: { 
-            page: currentPage, 
+          params: {
+            page: currentPage,
             size: pageSize,
             sortBy: 'updatedAt',
-            sortDir: 'desc'
-          }
+            sortDir: 'desc',
+          },
         });
         const data = response.data || {};
-        const productsList = Array.isArray(data.content) ? data.content : (Array.isArray(data) ? data : []);
+        const productsList = Array.isArray(data.content) ? data.content : Array.isArray(data) ? data : [];
         allProducts = [...allProducts, ...productsList];
 
         // Check if there are more pages
@@ -1140,7 +1281,7 @@ const Stock = () => {
 
       const calls = [
         Promise.resolve({ data: allProducts }), // Use fetched products
-        axios.get('/api/warehouses')
+        axios.get('/api/warehouses'),
       ];
 
       // Fetch pending requests count for admins
@@ -1157,8 +1298,20 @@ const Stock = () => {
       const productsData = results[index++].data;
       const warehousesData = results[index++].data;
       // Handle paginated response
-      setProducts(Array.isArray(productsData) ? productsData : (Array.isArray(productsData?.content) ? productsData.content : []));
-      setWarehouses(Array.isArray(warehousesData) ? warehousesData : (Array.isArray(warehousesData?.content) ? warehousesData.content : []));
+      setProducts(
+        Array.isArray(productsData)
+          ? productsData
+          : Array.isArray(productsData?.content)
+            ? productsData.content
+            : []
+      );
+      setWarehouses(
+        Array.isArray(warehousesData)
+          ? warehousesData
+          : Array.isArray(warehousesData?.content)
+            ? warehousesData.content
+            : []
+      );
 
       if (role === 'ADMIN') {
         const stockPendingResult = results[index] || null;
@@ -1231,27 +1384,27 @@ const Stock = () => {
         maxWidth: 1920,
         maxHeight: 1920,
         quality: 0.75,
-        mimeType: 'image/jpeg'
+        mimeType: 'image/jpeg',
       });
 
       const formData = new FormData();
       formData.append('file', optimizedFile);
 
       await axios.post(`/api/stock-transfer-items/${item.id}/photo`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
 
       // After the photo is updated, re-fetch the metadata for that item
       try {
         const metaResp = await axios.get(`/api/stock-transfer-items/${item.id}/photo`);
-        setTransferDetailPhotos(prev => ({
+        setTransferDetailPhotos((prev) => ({
           ...prev,
-          [item.id]: metaResp.data
+          [item.id]: metaResp.data,
         }));
         // Add a timestamp for cache-busting
-        setPhotoUpdateTimestamps(prev => ({
+        setPhotoUpdateTimestamps((prev) => ({
           ...prev,
-          [item.id]: Date.now()
+          [item.id]: Date.now(),
         }));
       } catch (metaError) {
         // If the metadata fetch fails, reload the entire transfer
@@ -1264,7 +1417,7 @@ const Stock = () => {
       setErrorModal({
         show: true,
         title: 'Fotoğraf Güncellenemedi',
-        message: 'Transfer satırı fotoğrafı güncellenirken bir hata oluştu. Lütfen tekrar deneyin.'
+        message: 'Transfer satırı fotoğrafı güncellenirken bir hata oluştu. Lütfen tekrar deneyin.',
       });
     }
   };
@@ -1276,7 +1429,7 @@ const Stock = () => {
       if (headers === null) return;
       await axios.delete(`/api/stock-transfer-items/${item.id}/photo`, { headers });
       // Remove from state after the photo is deleted
-      setTransferDetailPhotos(prev => {
+      setTransferDetailPhotos((prev) => {
         const updated = { ...prev };
         delete updated[item.id];
         return updated;
@@ -1288,7 +1441,7 @@ const Stock = () => {
       setErrorModal({
         show: true,
         title: 'Fotoğraf Kaldırılamadı',
-        message: 'Transfer satırı fotoğrafı silinirken bir hata oluştu. Lütfen tekrar deneyin.'
+        message: 'Transfer satırı fotoğrafı silinirken bir hata oluştu. Lütfen tekrar deneyin.',
       });
     }
   };
@@ -1307,7 +1460,7 @@ const Stock = () => {
         if (!src) return null;
         return {
           src,
-          title: `${item.product?.name || 'Ürün'} • ${item.product?.sku || ''}`.trim()
+          title: `${item.product?.name || 'Ürün'} • ${item.product?.sku || ''}`.trim(),
         };
       })
       .filter(Boolean);
@@ -1324,7 +1477,7 @@ const Stock = () => {
     setTransferLightbox({
       show: true,
       images,
-      index: startIndex === -1 ? 0 : startIndex
+      index: startIndex === -1 ? 0 : startIndex,
     });
   };
 
@@ -1347,7 +1500,6 @@ const Stock = () => {
     }
     setTransferPage(newPage);
   };
-
 
   useEffect(() => {
     fetchStocks(stockPage);
@@ -1373,11 +1525,45 @@ const Stock = () => {
 
   useEffect(() => {
     setStockPage(0);
-  }, [filter, searchTerm, selectedCategory, selectedSubcategory, showReserved, showConsigned, hideOutOfStock, brandId, colorId, selectedWarehouseIds, stockSortBy, stockSortDir, stockLastUpdatedFrom, stockLastUpdatedTo, stockLastUpdatedFromTime, stockLastUpdatedToTime]);
+  }, [
+    filter,
+    searchTerm,
+    selectedCategory,
+    selectedSubcategory,
+    showReserved,
+    showConsigned,
+    hideOutOfStock,
+    brandId,
+    colorId,
+    selectedWarehouseIds,
+    stockSortBy,
+    stockSortDir,
+    stockLastUpdatedFrom,
+    stockLastUpdatedTo,
+    stockLastUpdatedFromTime,
+    stockLastUpdatedToTime,
+  ]);
 
   useEffect(() => {
     setTransferPage(0);
-  }, [transferStatusFilter, transferTypeFilter, transferProductName, transferSku, transferDriver, transferNotes, transferSourceWarehouseId, transferDestinationWarehouseId, transferDateFrom, transferDateTo, transferCreatedAtFrom, transferCreatedAtTo, transferDateFromTime, transferDateToTime, transferCreatedAtFromTime, transferCreatedAtToTime]);
+  }, [
+    transferStatusFilter,
+    transferTypeFilter,
+    transferProductName,
+    transferSku,
+    transferDriver,
+    transferNotes,
+    transferSourceWarehouseId,
+    transferDestinationWarehouseId,
+    transferDateFrom,
+    transferDateTo,
+    transferCreatedAtFrom,
+    transferCreatedAtTo,
+    transferDateFromTime,
+    transferDateToTime,
+    transferCreatedAtFromTime,
+    transferCreatedAtToTime,
+  ]);
 
   // Fetch main categories on mount
   useEffect(() => {
@@ -1388,10 +1574,16 @@ const Stock = () => {
         const categoriesData = response.data;
         const list = Array.isArray(categoriesData?.content)
           ? categoriesData.content
-          : (Array.isArray(categoriesData) ? categoriesData : []);
-        const normalized = list.map(cat => ({
+          : Array.isArray(categoriesData)
+            ? categoriesData
+            : [];
+        const normalized = list.map((cat) => ({
           ...cat,
-          children: Array.isArray(cat.children) ? cat.children : (Array.isArray(cat.subcategories) ? cat.subcategories : [])
+          children: Array.isArray(cat.children)
+            ? cat.children
+            : Array.isArray(cat.subcategories)
+              ? cat.subcategories
+              : [],
         }));
         setCategories(normalized);
       } catch (error) {
@@ -1409,7 +1601,7 @@ const Stock = () => {
         setSelectedSubcategory('');
         return;
       }
-      const parent = categories.find(cat => cat.id?.toString() === String(selectedCategory));
+      const parent = categories.find((cat) => cat.id?.toString() === String(selectedCategory));
       if (parent && Array.isArray(parent.children) && parent.children.length > 0) {
         setSubcategories(parent.children);
         setSelectedSubcategory('');
@@ -1446,8 +1638,8 @@ const Stock = () => {
     if (ws) {
       const ids = String(ws)
         .split(',')
-        .map(s => Number(s.trim()))
-        .filter(n => !Number.isNaN(n));
+        .map((s) => Number(s.trim()))
+        .filter((n) => !Number.isNaN(n));
       setSelectedWarehouseIds(ids);
     } else if (w) {
       const idNum = Number(w);
@@ -1460,7 +1652,9 @@ const Stock = () => {
       // Open transfer history and highlight by filtering to ALL
       setShowTransferHistory(true);
       // No direct single transfer view page exists; focus by opening history
-      setTimeout(() => { fetchTransfers(0, false); }, 0);
+      setTimeout(() => {
+        fetchTransfers(0, false);
+      }, 0);
     }
     if (auditStockIdParam) {
       const idNum = Number(auditStockIdParam);
@@ -1474,7 +1668,7 @@ const Stock = () => {
         setAuditModal({ show: true, entityType: 'StockTransfer', entityId: idNum });
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.search]);
 
   // Listen to global event to open audit directly from Navbar without navigation
@@ -1522,7 +1716,7 @@ const Stock = () => {
   // Open quick adjustment modal when stocks loaded and pendingStockId exists
   useEffect(() => {
     if (!pendingStockId || !Array.isArray(stocks) || stocks.length === 0) return;
-    const s = stocks.find(x => x.id === pendingStockId);
+    const s = stocks.find((x) => x.id === pendingStockId);
     if (s) {
       setQuickAdjustModal({ show: true, stock: s, type: 'add' });
       setPendingStockId(null);
@@ -1531,7 +1725,7 @@ const Stock = () => {
 
   useEffect(() => {
     if (!selectedStocks.length) return;
-    setSelectedStocks(prev => prev.filter(id => stocks.some(stock => stock.id === id)));
+    setSelectedStocks((prev) => prev.filter((id) => stocks.some((stock) => stock.id === id)));
   }, [stocks, selectedStocks.length]);
 
   // Handle highlight parameter from URL (for direct navigation from audit logs)
@@ -1625,14 +1819,15 @@ const Stock = () => {
     }
 
     // Prefer transfer from current list if present (avoids extra request)
-    const fromList = transfers.find(t => t.id === transferId);
+    const fromList = transfers.find((t) => t.id === transferId);
     if (fromList) {
       openAndClean(fromList);
       return;
     }
 
     // Otherwise fetch by ID so it works when filters (e.g. date) exclude it from the list
-    axios.get(`/api/stock-transfers/${transferId}`)
+    axios
+      .get(`/api/stock-transfers/${transferId}`)
       .then((res) => {
         if (cancelled || !res?.data) return;
         openAndClean(res.data);
@@ -1645,7 +1840,9 @@ const Stock = () => {
         window.history.replaceState({}, '', newUrl);
       });
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname, location.search, showTransferHistory, transfers]);
 
@@ -1655,38 +1852,36 @@ const Stock = () => {
     return val;
   }, []);
 
-  const allVisibleStockIds = useMemo(() => stocks.map(stock => stock.id), [stocks]);
-  const areAllVisibleSelected = stocks.length > 0 && allVisibleStockIds.every(id => selectedStocks.includes(id));
+  const allVisibleStockIds = useMemo(() => stocks.map((stock) => stock.id), [stocks]);
+  const areAllVisibleSelected =
+    stocks.length > 0 && allVisibleStockIds.every((id) => selectedStocks.includes(id));
   const selectedStockCount = selectedStocks.length;
   const localLowStockCount = useMemo(
-    () => stocks.filter(s => s.quantity <= getEffectiveMin(s) && s.quantity > 0).length,
+    () => stocks.filter((s) => s.quantity <= getEffectiveMin(s) && s.quantity > 0).length,
     [stocks, getEffectiveMin]
   );
-  const localOutOfStockCount = useMemo(
-    () => stocks.filter(s => s.quantity === 0).length,
-    [stocks]
-  );
+  const localOutOfStockCount = useMemo(() => stocks.filter((s) => s.quantity === 0).length, [stocks]);
   const safeAllCount = Number.isFinite(stockStatusCounts.all)
     ? stockStatusCounts.all
-    : (totalStockCount || stocks.length);
+    : totalStockCount || stocks.length;
   const safeLowCount = Number.isFinite(stockStatusCounts.low) ? stockStatusCounts.low : localLowStockCount;
   const safeOutCount = Number.isFinite(stockStatusCounts.out) ? stockStatusCounts.out : localOutOfStockCount;
 
   const toggleSelectAllVisible = () => {
     if (!stocks.length) return;
-    setSelectedStocks(prev => {
+    setSelectedStocks((prev) => {
       if (areAllVisibleSelected) {
-        return prev.filter(id => !allVisibleStockIds.includes(id));
+        return prev.filter((id) => !allVisibleStockIds.includes(id));
       }
       const merged = new Set(prev);
-      allVisibleStockIds.forEach(id => merged.add(id));
+      allVisibleStockIds.forEach((id) => merged.add(id));
       return Array.from(merged);
     });
   };
 
   const toggleStockSelection = (id) => {
-    setSelectedStocks(prev =>
-      prev.includes(id) ? prev.filter(existingId => existingId !== id) : [...prev, id]
+    setSelectedStocks((prev) =>
+      prev.includes(id) ? prev.filter((existingId) => existingId !== id) : [...prev, id]
     );
   };
 
@@ -1694,22 +1889,21 @@ const Stock = () => {
   const clearSelectedTransfers = () => setSelectedTransfers([]);
 
   const toggleTransferSelection = (id) => {
-    setSelectedTransfers(prev =>
-      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
-    );
+    setSelectedTransfers((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
 
   const toggleSelectAllVisibleTransfers = () => {
-    const allVisibleTransferIds = transfers.map(t => t.id);
-    const allSelected = allVisibleTransferIds.every(id => selectedTransfers.includes(id));
+    const allVisibleTransferIds = transfers.map((t) => t.id);
+    const allSelected = allVisibleTransferIds.every((id) => selectedTransfers.includes(id));
     if (allSelected) {
-      setSelectedTransfers(prev => prev.filter(id => !allVisibleTransferIds.includes(id)));
+      setSelectedTransfers((prev) => prev.filter((id) => !allVisibleTransferIds.includes(id)));
     } else {
-      setSelectedTransfers(prev => [...new Set([...prev, ...allVisibleTransferIds])]);
+      setSelectedTransfers((prev) => [...new Set([...prev, ...allVisibleTransferIds])]);
     }
   };
 
-  const areAllVisibleTransfersSelected = transfers.length > 0 && transfers.every(t => selectedTransfers.includes(t.id));
+  const areAllVisibleTransfersSelected =
+    transfers.length > 0 && transfers.every((t) => selectedTransfers.includes(t.id));
   const selectedTransferCount = selectedTransfers.length;
 
   const showSuccessToast = (message) => {
@@ -1724,22 +1918,16 @@ const Stock = () => {
 
   // Toast notification function (for error, warning, success)
   const showToast = (message, type = 'success', duration) => {
-    const displayDuration = typeof duration === 'number'
-      ? duration
-      : (type === 'success' ? 4000 : 10000);
+    const displayDuration = typeof duration === 'number' ? duration : type === 'success' ? 4000 : 10000;
     const toast = document.createElement('div');
     const bgClass =
-      type === 'success'
-        ? 'text-bg-success'
-        : type === 'warning'
-        ? 'text-bg-warning'
-        : 'text-bg-danger';
+      type === 'success' ? 'text-bg-success' : type === 'warning' ? 'text-bg-warning' : 'text-bg-danger';
     const icon =
       type === 'success'
         ? 'fa-check-circle'
         : type === 'warning'
-        ? 'fa-exclamation-triangle'
-        : 'fa-times-circle';
+          ? 'fa-exclamation-triangle'
+          : 'fa-times-circle';
     toast.className = `toast align-items-center ${bgClass} border-0 position-fixed top-0 end-0 m-3 show`;
     toast.setAttribute('role', 'alert');
     toast.style.zIndex = '9999';
@@ -1769,11 +1957,22 @@ const Stock = () => {
     }, displayDuration);
   };
 
-  const { askCode: askSecurityCode, SecurityCodePrompt, closePrompt: closeSecurityPrompt } = useSecurityCodePrompt();
+  const {
+    askCode: askSecurityCode,
+    SecurityCodePrompt,
+    closePrompt: closeSecurityPrompt,
+  } = useSecurityCodePrompt();
 
   const adminSecurityErrorCodes = new Set([
-    'AUTH_002','AUTH_003','AUTH_004','AUTH_005','AUTH_006','AUTH_007',
-    'ADMIN_SECURITY_CODE_REQUIRED','INVALID_ADMIN_SECURITY_CODE','ADMIN_SECURITY_CODE_MISMATCH'
+    'AUTH_002',
+    'AUTH_003',
+    'AUTH_004',
+    'AUTH_005',
+    'AUTH_006',
+    'AUTH_007',
+    'ADMIN_SECURITY_CODE_REQUIRED',
+    'INVALID_ADMIN_SECURITY_CODE',
+    'ADMIN_SECURITY_CODE_MISMATCH',
   ]);
 
   const parseSecurityError = (error) => {
@@ -1876,7 +2075,7 @@ const Stock = () => {
 
     const status = error.response?.status;
     const data = error.response?.data;
-    const errorMessage = typeof data === 'string' ? data : (data?.message || data?.error || '');
+    const errorMessage = typeof data === 'string' ? data : data?.message || data?.error || '';
 
     // Error messages by HTTP status code
     switch (status) {
@@ -1884,7 +2083,11 @@ const Stock = () => {
         if (errorMessage.includes('Warehouse not found') || errorMessage.includes('Depo bulunamadı')) {
           return 'Seçilen depo bulunamadı. Lütfen geçerli bir depo seçtiğinizden emin olun.';
         }
-        if (errorMessage.includes('file') || errorMessage.includes('dosya') || errorMessage.includes('format')) {
+        if (
+          errorMessage.includes('file') ||
+          errorMessage.includes('dosya') ||
+          errorMessage.includes('format')
+        ) {
           return 'Dosya formatı geçersiz. Lütfen .xlsx uzantılı bir Excel dosyası yüklediğinizden emin olun.';
         }
         if (errorMessage.includes('empty') || errorMessage.includes('boş')) {
@@ -1914,7 +2117,11 @@ const Stock = () => {
       case 502:
       case 503:
       case 504:
-        if (errorMessage.includes('Excel') || errorMessage.includes('workbook') || errorMessage.includes('sheet')) {
+        if (
+          errorMessage.includes('Excel') ||
+          errorMessage.includes('workbook') ||
+          errorMessage.includes('sheet')
+        ) {
           return `Excel dosyası işlenirken hata oluştu: ${errorMessage || 'Dosya bozuk veya geçersiz format olabilir. Lütfen dosyanızı kontrol edin ve şablonu kullanarak yeniden oluşturun.'}`;
         }
         if (errorMessage.includes('IOException') || errorMessage.includes('dosya')) {
@@ -1923,7 +2130,10 @@ const Stock = () => {
         return `Sunucu hatası: ${errorMessage || 'Sunucuda bir hata oluştu. Lütfen daha sonra tekrar deneyin veya yöneticinizle iletişime geçin.'}`;
 
       default:
-        return errorMessage || `Beklenmeyen bir hata oluştu (${status}). Lütfen tekrar deneyin veya yöneticinizle iletişime geçin.`;
+        return (
+          errorMessage ||
+          `Beklenmeyen bir hata oluştu (${status}). Lütfen tekrar deneyin veya yöneticinizle iletişime geçin.`
+        );
     }
   };
 
@@ -1935,8 +2145,6 @@ const Stock = () => {
     };
   }, []);
 
-
-
   const handleCreateStock = (mode = 'create') => {
     setSelectedStock(null);
     setStockFormMode(mode);
@@ -1944,10 +2152,7 @@ const Stock = () => {
   };
 
   const handleCreateStockRequest = () => {
-    showToast(
-      'Stok ekleme talebi oluşturacaksınız. Kayıtlar yönetici onayına gidecek.',
-      'warning'
-    );
+    showToast('Stok ekleme talebi oluşturacaksınız. Kayıtlar yönetici onayına gidecek.', 'warning');
     handleCreateStock('request');
   };
 
@@ -1986,7 +2191,7 @@ const Stock = () => {
             setErrorModal({
               show: true,
               title: 'Stok Silme Hatası',
-              message: `Stok silinirken hata oluştu: ${msg}`
+              message: `Stok silinirken hata oluştu: ${msg}`,
             });
           }
           return;
@@ -1999,7 +2204,7 @@ const Stock = () => {
           const code = await askSecurityCode({
             prefill: lastCode,
             errorMessage: lastErrorMsg || (lastCode ? 'Güvenlik şifresi hatalı, tekrar deneyin.' : ''),
-            persistOnResolve: true
+            persistOnResolve: true,
           });
           if (code === null) {
             closeSecurityPrompt();
@@ -2025,7 +2230,7 @@ const Stock = () => {
               setErrorModal({
                 show: true,
                 title: 'Stok Silme Hatası',
-                message: `Stok silinirken hata oluştu: ${msg}`
+                message: `Stok silinirken hata oluştu: ${msg}`,
               });
               await Promise.all([fetchAllData(), fetchStocks(stockPage)]);
               break;
@@ -2033,7 +2238,7 @@ const Stock = () => {
             // If it's a security error, keep the modal open and retry
           }
         }
-      }
+      },
     });
   };
 
@@ -2058,7 +2263,7 @@ const Stock = () => {
           const code = await askSecurityCode({
             prefill: lastCode,
             errorMessage: lastErrorMsg || (lastCode ? 'Güvenlik şifresi hatalı, tekrar deneyin.' : ''),
-            persistOnResolve: true
+            persistOnResolve: true,
           });
           if (code === null) {
             closeSecurityPrompt();
@@ -2068,7 +2273,10 @@ const Stock = () => {
           lastErrorMsg = '';
 
           try {
-            const response = await axios.delete('/api/stocks/bulk', { data: ids, headers: { 'X-ADMIN-SECURITY-CODE': code } });
+            const response = await axios.delete('/api/stocks/bulk', {
+              data: ids,
+              headers: { 'X-ADMIN-SECURITY-CODE': code },
+            });
             const result = response.data;
 
             if (result.successCount > 0) {
@@ -2076,28 +2284,30 @@ const Stock = () => {
             }
 
             if (result.errors && result.errors.length > 0) {
-              const formattedErrors = result.errors.map(err => ({
+              const formattedErrors = result.errors.map((err) => ({
                 stockId: err.id,
                 stockInfo: err.name || `Stok #${err.id}`,
                 error: err.errorMessage || 'Bilinmeyen hata',
                 errorCode: err.errorCode || null,
-                sku: err.sku || null
+                sku: err.sku || null,
               }));
 
               setErrorDetailsModal({
                 show: true,
                 title: 'Silinemeyen Stoklar',
-                errors: formattedErrors
+                errors: formattedErrors,
               });
             }
 
-            const errorIds = new Set((result.errors || []).map(err => err.id));
-            setSelectedStocks(prev => prev.filter(id => {
-              if (ids.includes(id)) {
-                return errorIds.has(id);
-              }
-              return true;
-            }));
+            const errorIds = new Set((result.errors || []).map((err) => err.id));
+            setSelectedStocks((prev) =>
+              prev.filter((id) => {
+                if (ids.includes(id)) {
+                  return errorIds.has(id);
+                }
+                return true;
+              })
+            );
 
             closeSecurityPrompt();
             await Promise.all([fetchAllData(), fetchStocks(stockPage)]);
@@ -2105,7 +2315,8 @@ const Stock = () => {
           } catch (error) {
             const errorData = error?.response?.data;
             const errCode = errorData?.code || errorData?.errorCode;
-            const msg = errorData?.message || errorData?.error || error.message || 'Stoklar silinirken hata oluştu';
+            const msg =
+              errorData?.message || errorData?.error || error.message || 'Stoklar silinirken hata oluştu';
             lastErrorMsg = msg;
 
             if (!adminSecurityErrorCodes.has(errCode)) {
@@ -2113,7 +2324,7 @@ const Stock = () => {
               setErrorModal({
                 show: true,
                 title: 'Toplu Silme Hatası',
-                message: msg
+                message: msg,
               });
               await Promise.all([fetchAllData(), fetchStocks(stockPage)]);
               break;
@@ -2121,7 +2332,7 @@ const Stock = () => {
             // if it's a security error, the loop continues and the modal stays open
           }
         }
-      }
+      },
     });
   };
 
@@ -2131,8 +2342,8 @@ const Stock = () => {
     }
 
     // Stronger, status-based warning text
-    const transfersById = new Map(transfers.map(t => [t.id, t]));
-    const hasSensitiveStatusInBatch = ids.some(id => {
+    const transfersById = new Map(transfers.map((t) => [t.id, t]));
+    const hasSensitiveStatusInBatch = ids.some((id) => {
       const t = transfersById.get(id);
       return t && (t.status === 'IN_TRANSIT' || t.status === 'PENDING');
     });
@@ -2160,7 +2371,7 @@ const Stock = () => {
           const code = await askSecurityCode({
             prefill: lastCode,
             errorMessage: lastErrorMsg || (lastCode ? 'Güvenlik şifresi hatalı, tekrar deneyin.' : ''),
-            persistOnResolve: true
+            persistOnResolve: true,
           });
           if (code === null) {
             closeSecurityPrompt();
@@ -2170,7 +2381,10 @@ const Stock = () => {
           lastErrorMsg = '';
 
           try {
-            const response = await axios.delete('/api/stock-transfers/bulk', { data: ids, headers: { 'X-ADMIN-SECURITY-CODE': code } });
+            const response = await axios.delete('/api/stock-transfers/bulk', {
+              data: ids,
+              headers: { 'X-ADMIN-SECURITY-CODE': code },
+            });
             const result = response.data;
 
             if (result.successCount > 0) {
@@ -2178,27 +2392,29 @@ const Stock = () => {
             }
 
             if (result.errors && result.errors.length > 0) {
-              const formattedErrors = result.errors.map(err => ({
+              const formattedErrors = result.errors.map((err) => ({
                 transferId: err.id,
                 transferInfo: err.name || `Transfer #${err.id}`,
                 error: err.errorMessage || 'Bilinmeyen hata',
-                errorCode: err.errorCode || null
+                errorCode: err.errorCode || null,
               }));
 
               setErrorDetailsModal({
                 show: true,
                 title: 'Silinemeyen Transferler',
-                errors: formattedErrors
+                errors: formattedErrors,
               });
             }
 
-            const errorIds = new Set((result.errors || []).map(err => err.id));
-            setSelectedTransfers(prev => prev.filter(id => {
-              if (ids.includes(id)) {
-                return errorIds.has(id);
-              }
-              return true;
-            }));
+            const errorIds = new Set((result.errors || []).map((err) => err.id));
+            setSelectedTransfers((prev) =>
+              prev.filter((id) => {
+                if (ids.includes(id)) {
+                  return errorIds.has(id);
+                }
+                return true;
+              })
+            );
 
             closeSecurityPrompt();
             await fetchTransfers(0, false);
@@ -2211,7 +2427,7 @@ const Stock = () => {
               setErrorModal({
                 show: true,
                 title: 'Toplu Silme Hatası',
-                message: msg
+                message: msg,
               });
               await fetchTransfers(0, false);
               break;
@@ -2220,7 +2436,7 @@ const Stock = () => {
             // security error; the modal will stay open and ask again
           }
         }
-      }
+      },
     });
   };
 
@@ -2235,7 +2451,6 @@ const Stock = () => {
       showSuccessToast(options.message);
     }
   };
-
 
   const handleStockRequestSubmit = async (payload, meta = {}) => {
     if (!Array.isArray(payload) || payload.length === 0) {
@@ -2257,23 +2472,20 @@ const Stock = () => {
 
       try {
         await axios.post('/api/stock-requests', {
-          stockId: stocks.find(
-            (s) =>
-              String(s.product?.id) === String(productId) &&
-              String(s.warehouse?.id) === String(warehouseId)
-          )?.id ?? null,
+          stockId:
+            stocks.find(
+              (s) =>
+                String(s.product?.id) === String(productId) && String(s.warehouse?.id) === String(warehouseId)
+            )?.id ?? null,
           productId,
           warehouseId,
           type: 'ADD',
           quantity: entry.quantity,
-          notes
+          notes,
         });
         successCount += 1;
       } catch (error) {
-        const msg =
-          error?.response?.data?.message ||
-          error?.response?.data?.error ||
-          'Talep oluşturulamadı.';
+        const msg = error?.response?.data?.message || error?.response?.data?.error || 'Talep oluşturulamadı.';
         failures.push({ ...entry, reason: msg });
       }
     }
@@ -2324,11 +2536,11 @@ const Stock = () => {
         // Fetch complete product details to ensure consistency
         const response = await axios.get(`/api/products/${newProduct.id}`);
         const fullProduct = response.data;
-        setProducts(prev => [fullProduct, ...prev]);
+        setProducts((prev) => [fullProduct, ...prev]);
       } catch (error) {
         console.error('Error fetching new product for parent list:', error);
         // Fallback to adding the product as-is
-        setProducts(prev => [newProduct, ...prev]);
+        setProducts((prev) => [newProduct, ...prev]);
       }
     }
   };
@@ -2379,7 +2591,7 @@ const Stock = () => {
         setErrorModal({
           show: true,
           title: 'Onay Talebi Oluşturuldu',
-          message: 'Transferi başlatmak için yönetici onayı bekleniyor.'
+          message: 'Transferi başlatmak için yönetici onayı bekleniyor.',
         });
       }
     } catch (error) {
@@ -2397,16 +2609,16 @@ const Stock = () => {
       }
 
       const actionNames = {
-        'cancel': 'iptal',
-        'start': 'başlatma',
-        'complete': 'tamamlama'
+        cancel: 'iptal',
+        start: 'başlatma',
+        complete: 'tamamlama',
       };
       const actionName = actionNames[action] || action;
 
       setErrorModal({
         show: true,
         title: 'Transfer İşlemi Hatası',
-        message: `Transfer ${actionName} işlemi sırasında hata oluştu: ${errorMessage}`
+        message: `Transfer ${actionName} işlemi sırasında hata oluştu: ${errorMessage}`,
       });
     } finally {
       setTransferActionState((prev) => {
@@ -2441,11 +2653,12 @@ const Stock = () => {
             await fetchTransfers(0, false);
           } catch (error) {
             const errorData = error?.response?.data;
-            const msg = errorData?.message || errorData?.error || error.message || 'Beklenmeyen bir durum oluştu';
+            const msg =
+              errorData?.message || errorData?.error || error.message || 'Beklenmeyen bir durum oluştu';
             setErrorModal({
               show: true,
               title: 'Transfer Silme Hatası',
-              message: `Transfer silinirken hata oluştu: ${msg}`
+              message: `Transfer silinirken hata oluştu: ${msg}`,
             });
           }
           return;
@@ -2458,7 +2671,7 @@ const Stock = () => {
           const code = await askSecurityCode({
             prefill: lastCode,
             errorMessage: lastErrorMsg || (lastCode ? 'Güvenlik şifresi hatalı, tekrar deneyin.' : ''),
-            persistOnResolve: true
+            persistOnResolve: true,
           });
           if (code === null) {
             closeSecurityPrompt();
@@ -2468,7 +2681,9 @@ const Stock = () => {
           lastErrorMsg = '';
 
           try {
-            const response = await axios.delete(`/api/stock-transfers/${transferId}`, { headers: { 'X-ADMIN-SECURITY-CODE': code } });
+            const response = await axios.delete(`/api/stock-transfers/${transferId}`, {
+              headers: { 'X-ADMIN-SECURITY-CODE': code },
+            });
             if (response?.status === 202 && response?.data?.message) {
               showToast(response.data.message, 'success', 7000);
             } else {
@@ -2485,7 +2700,7 @@ const Stock = () => {
               setErrorModal({
                 show: true,
                 title: 'Transfer Silme Hatası',
-                message: `Transfer silinirken hata oluştu: ${msg}`
+                message: `Transfer silinirken hata oluştu: ${msg}`,
               });
               await fetchTransfers(0, false);
               break;
@@ -2493,7 +2708,7 @@ const Stock = () => {
             lastErrorMsg = msg || 'Güvenlik şifresi hatalı, tekrar deneyin.';
           }
         }
-      }
+      },
     });
   };
 
@@ -2504,7 +2719,7 @@ const Stock = () => {
         transferId: transfer.id,
         note: '',
         message,
-        transfer
+        transfer,
       });
       return;
     }
@@ -2519,17 +2734,17 @@ const Stock = () => {
       onConfirm: () => {
         setConfirmModal({ show: false });
         handleTransferStatusChange(transfer.id, 'complete');
-      }
+      },
     });
   };
 
   const getProductById = (id) => {
     if (!Array.isArray(products)) return null;
-    return products.find(p => p.id === id);
+    return products.find((p) => p.id === id);
   };
 
   const getWarehouseById = (id) => {
-    return warehouses.find(w => w.id === id);
+    return warehouses.find((w) => w.id === id);
   };
 
   const getTransferItemsList = (transfer) => {
@@ -2537,10 +2752,12 @@ const Stock = () => {
       return transfer.items;
     }
     if (transfer.product) {
-      return [{
-        product: transfer.product,
-        quantity: transfer.quantity
-      }];
+      return [
+        {
+          product: transfer.product,
+          quantity: transfer.quantity,
+        },
+      ];
     }
     return [];
   };
@@ -2556,7 +2773,7 @@ const Stock = () => {
     if (transferStatusCounts && Object.prototype.hasOwnProperty.call(transferStatusCounts, status)) {
       return transferStatusCounts[status];
     }
-    return transfers.filter(t => t.status === status).length;
+    return transfers.filter((t) => t.status === status).length;
   };
 
   const getTransferTypeCount = (type) => {
@@ -2564,9 +2781,9 @@ const Stock = () => {
       return transferTypeCounts[type];
     }
     if (type === 'CUSTOMER_DELIVERY') {
-      return transfers.filter(t => t.transferType === 'CUSTOMER_DELIVERY').length;
+      return transfers.filter((t) => t.transferType === 'CUSTOMER_DELIVERY').length;
     }
-    return transfers.filter(t => (t.transferType || 'WAREHOUSE') === 'WAREHOUSE').length;
+    return transfers.filter((t) => (t.transferType || 'WAREHOUSE') === 'WAREHOUSE').length;
   };
 
   const clearUrlQuery = () => {
@@ -2582,9 +2799,8 @@ const Stock = () => {
     return { status: 'normal', label: 'Normal', class: 'success' };
   };
 
-  const totalTransfers = (typeof transferTotalCount === 'number' && transferTotalCount > 0)
-    ? transferTotalCount
-    : transfers.length;
+  const totalTransfers =
+    typeof transferTotalCount === 'number' && transferTotalCount > 0 ? transferTotalCount : transfers.length;
   const warehouseTransferCount = getTransferTypeCount('WAREHOUSE');
   const customerTransferCount = getTransferTypeCount('CUSTOMER_DELIVERY');
 
@@ -2687,31 +2903,45 @@ const Stock = () => {
         <div className="stock-page-actions w-100 w-lg-auto justify-content-lg-end">
           {isAdmin ? (
             <div className="d-flex flex-wrap gap-2 justify-content-lg-end w-100">
-              <button className="btn btn-outline-success" onClick={async () => {
-                try {
-                  const res = await axios.get('/api/stock-imports/template', { responseType: 'blob' });
-                  const url = window.URL.createObjectURL(new Blob([res.data]));
-                  const link = document.createElement('a');
-                  link.href = url;
-                  link.setAttribute('download', 'stok_sablon.xlsx');
-                  document.body.appendChild(link);
-                  link.click();
-                  link.remove();
-                  window.URL.revokeObjectURL(url);
-                } catch (e) {
-                  setError('Excel şablonu indirilirken hata oluştu');
-                }
-              }}>
+              <button
+                className="btn btn-outline-success"
+                onClick={async () => {
+                  try {
+                    const res = await axios.get('/api/stock-imports/template', { responseType: 'blob' });
+                    const url = window.URL.createObjectURL(new Blob([res.data]));
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.setAttribute('download', 'stok_sablon.xlsx');
+                    document.body.appendChild(link);
+                    link.click();
+                    link.remove();
+                    window.URL.revokeObjectURL(url);
+                  } catch (e) {
+                    setError('Excel şablonu indirilirken hata oluştu');
+                  }
+                }}
+              >
                 <i className="fas fa-download me-2"></i>
                 Excel Şablonunu İndir
               </button>
-              <button className="btn btn-outline-primary" onClick={() => { setExcelResult(null); setExcelFile(null); setExcelWarehouseId(null); setShowExcelModal(true); }}>
+              <button
+                className="btn btn-outline-primary"
+                onClick={() => {
+                  setExcelResult(null);
+                  setExcelFile(null);
+                  setExcelWarehouseId(null);
+                  setShowExcelModal(true);
+                }}
+              >
                 <i className="fas fa-file-import me-2"></i>
                 Excel'den Yükle
               </button>
               <button
                 className="btn btn-warning position-relative"
-                onClick={() => { setApprovalModalTab('stock'); setShowApprovalModal(true); }}
+                onClick={() => {
+                  setApprovalModalTab('stock');
+                  setShowApprovalModal(true);
+                }}
                 title="Stok talep onayları"
                 style={{ zIndex: 1 }}
               >
@@ -2730,7 +2960,7 @@ const Stock = () => {
               {canTransfer && (
                 <button
                   className="btn btn-primary"
-                onClick={() => handleStockTransfer(null, role === 'STOCK_OUT')}
+                  onClick={() => handleStockTransfer(null, role === 'STOCK_OUT')}
                   style={{ minWidth: 160 }}
                 >
                   <i className="fas fa-play me-2"></i>
@@ -2740,6 +2970,10 @@ const Stock = () => {
               <button className="btn btn-outline-primary" onClick={handleCreateStock}>
                 <i className="fas fa-plus me-2"></i>
                 Yeni Stok / Stok Ekle
+              </button>
+              <button className="btn btn-outline-danger" onClick={() => setShowStockRemoveSearch(true)}>
+                <i className="fas fa-minus me-2"></i>
+                Stok Çıkar (Ara)
               </button>
               {!showTransferHistory && (
                 <button className="btn btn-info text-white" onClick={handleExportToExcel}>
@@ -2757,13 +2991,18 @@ const Stock = () => {
               <div className="alert alert-info mb-0 py-2 px-3 flex-grow-1">
                 <i className="fas fa-info-circle me-2"></i>
                 <span>
-                  {(role === 'STOCK_IN') && 'Stok ekleme talepleri oluşturabilir, müşteri sevkiyat transferlerinizi görüntüleyebilirsiniz.'}
-                  {role === 'STOCK_OUT' && 'Stok çıkarma talepleri oluşturabilir, müşteri sevkiyat transferlerinizi görüntüleyebilirsiniz.'}
+                  {role === 'STOCK_IN' &&
+                    'Stok ekleme talepleri oluşturabilir, müşteri sevkiyat transferlerinizi görüntüleyebilirsiniz.'}
+                  {role === 'STOCK_OUT' &&
+                    'Stok çıkarma talepleri oluşturabilir, müşteri sevkiyat transferlerinizi görüntüleyebilirsiniz.'}
                 </span>
               </div>
               <div className="d-flex justify-content-between align-items-center px-3 py-2 flex-wrap gap-2">
                 <small className="text-muted">
-                  Gösterilen kayıt: {stocks.length}/{(typeof totalStockCount === 'number' && totalStockCount > 0) ? totalStockCount : stocks.length}
+                  Gösterilen kayıt: {stocks.length}/
+                  {typeof totalStockCount === 'number' && totalStockCount > 0
+                    ? totalStockCount
+                    : stocks.length}
                 </small>
                 <PaginationControls
                   page={stockPage}
@@ -2773,10 +3012,7 @@ const Stock = () => {
               </div>
               <div className="d-flex flex-wrap gap-2 justify-content-lg-end">
                 {role === 'STOCK_IN' && (
-                  <button
-                    className="btn btn-outline-primary"
-                    onClick={handleCreateStockRequest}
-                  >
+                  <button className="btn btn-outline-primary" onClick={handleCreateStockRequest}>
                     <i className="fas fa-plus me-2"></i>
                     Yeni Stok / Stok Ekle (Talep)
                   </button>
@@ -2801,10 +3037,7 @@ const Stock = () => {
                   <i className={`fas fa-${showTransferHistory ? 'cubes' : 'exchange-alt'} me-2`}></i>
                   {showTransferHistory ? 'Stok Listesi' : 'Transferlerim'}
                 </button>
-                <button
-                  className="btn btn-outline-primary"
-                  onClick={() => setShowMyRequestsModal(true)}
-                >
+                <button className="btn btn-outline-primary" onClick={() => setShowMyRequestsModal(true)}>
                   <i className="fas fa-clipboard-list me-2"></i>
                   Taleplerim
                 </button>
@@ -2937,98 +3170,159 @@ const Stock = () => {
               <div className="modal-body">
                 <div className="mb-3">
                   <label className="form-label">Depo Seç</label>
-                  <select className="form-select" value={excelWarehouseId || ''} onChange={(e) => setExcelWarehouseId(e.target.value ? parseInt(e.target.value) : null)}>
+                  <select
+                    className="form-select"
+                    value={excelWarehouseId || ''}
+                    onChange={(e) => setExcelWarehouseId(e.target.value ? parseInt(e.target.value) : null)}
+                  >
                     <option value="">Depo seçiniz...</option>
-                    {warehouses.map(w => (
-                      <option key={w.id} value={w.id}>{w.name}</option>
+                    {warehouses.map((w) => (
+                      <option key={w.id} value={w.id}>
+                        {w.name}
+                      </option>
                     ))}
                   </select>
                 </div>
                 <div className="mb-3">
                   <label className="form-label">Excel Dosyası (.xlsx)</label>
-                  <input type="file" accept=".xlsx" className="form-control" onChange={(e) => setExcelFile(e.target.files && e.target.files[0] ? e.target.files[0] : null)} />
+                  <input
+                    type="file"
+                    accept=".xlsx"
+                    className="form-control"
+                    onChange={(e) =>
+                      setExcelFile(e.target.files && e.target.files[0] ? e.target.files[0] : null)
+                    }
+                  />
                 </div>
                 {excelResult && (
-                  <div className={`alert alert-${(excelResult.status === 'SUCCESS' || excelResult.status === 'BAŞARILI') ? 'success' : ((excelResult.status === 'FAILED' || excelResult.status === 'BAŞARISIZ') ? 'danger' : 'warning')}`}>
-                    <div className="fw-bold mb-1">{(excelResult.status === 'SUCCESS' || excelResult.status === 'BAŞARILI') ? 'Aktarım başarılı' : ((excelResult.status === 'FAILED' || excelResult.status === 'BAŞARISIZ') ? 'Aktarım başarısız' : 'Kısmen başarılı')}</div>
+                  <div
+                    className={`alert alert-${excelResult.status === 'SUCCESS' || excelResult.status === 'BAŞARILI' ? 'success' : excelResult.status === 'FAILED' || excelResult.status === 'BAŞARISIZ' ? 'danger' : 'warning'}`}
+                  >
+                    <div className="fw-bold mb-1">
+                      {excelResult.status === 'SUCCESS' || excelResult.status === 'BAŞARILI'
+                        ? 'Aktarım başarılı'
+                        : excelResult.status === 'FAILED' || excelResult.status === 'BAŞARISIZ'
+                          ? 'Aktarım başarısız'
+                          : 'Kısmen başarılı'}
+                    </div>
                     <div>Satır: {excelResult.totalRows ?? '-'}</div>
-                    <div>Ürün (Yeni): {(excelResult.createdProducts ?? 0)}</div>
-                    <div>Stok (Yeni/Güncellenen): {(excelResult.createdStocks ?? 0)} / {(excelResult.updatedStocks ?? 0)}</div>
-                    {excelResult.errorMessage && (<div className="mt-2 text-danger small">Hata: {excelResult.errorMessage}</div>)}
+                    <div>Ürün (Yeni): {excelResult.createdProducts ?? 0}</div>
+                    <div>
+                      Stok (Yeni/Güncellenen): {excelResult.createdStocks ?? 0} /{' '}
+                      {excelResult.updatedStocks ?? 0}
+                    </div>
+                    {excelResult.errorMessage && (
+                      <div className="mt-2 text-danger small">Hata: {excelResult.errorMessage}</div>
+                    )}
                   </div>
                 )}
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowExcelModal(false)} disabled={excelUploading}>Kapat</button>
-                <button type="button" className="btn btn-primary" disabled={!excelWarehouseId || !excelFile || excelUploading} onClick={async () => {
-                  try {
-                    setExcelUploading(true);
-                    setExcelResult(null);
-                    
-                    // Dosya validasyonu
-                    if (!excelFile) {
-                      showToast('Lütfen bir Excel dosyası seçin.', 'error');
-                      setExcelUploading(false);
-                      return;
-                    }
-                    
-                    // File extension check
-                    const fileName = excelFile.name.toLowerCase();
-                    if (!fileName.endsWith('.xlsx') && !fileName.endsWith('.xls')) {
-                      showToast('Sadece Excel dosyaları (.xlsx veya .xls) yüklenebilir. Lütfen doğru formatta bir dosya seçin.', 'error');
-                      setExcelUploading(false);
-                      return;
-                    }
-                    
-                    // File size check (50MB limit)
-                    const maxSize = 50 * 1024 * 1024; // 50MB
-                    if (excelFile.size > maxSize) {
-                      showToast('Dosya boyutu çok büyük. Maksimum dosya boyutu 50MB\'dır. Lütfen daha küçük bir dosya yükleyin veya dosyanızdaki satır sayısını azaltın.', 'error');
-                      setExcelUploading(false);
-                      return;
-                    }
-                    
-                    const form = new FormData();
-                    form.append('warehouseId', String(excelWarehouseId));
-                    form.append('file', excelFile);
-                    const res = await axios.post('/api/stock-imports/upload', form, { 
-                      headers: { 'Content-Type': 'multipart/form-data' },
-                      timeout: 300000 // 5 dakika timeout
-                    });
-                    setExcelResult(res.data);
-                    if (res.data?.failedRows || res.data?.failedRowsJson) {
-                      showMissingFieldsToast(res.data.failedRows || res.data.failedRowsJson);
-                    }
-                    
-                    // Refresh all data after a successful upload
-                    if (res.data && (res.data.status === 'BAŞARILI' || res.data.status === 'SUCCESS' || res.data.status === 'KISMEN' || res.data.status === 'PARTIAL')) {
-                      await Promise.all([fetchAllData(), fetchStocks(0)]);
-                      if (res.data.status === 'BAŞARILI' || res.data.status === 'SUCCESS') {
-                        showToast('Excel dosyası başarıyla yüklendi ve stoklar aktarıldı.', 'success');
-                      } else if (res.data.status === 'KISMEN' || res.data.status === 'PARTIAL') {
-                        showToast(`Excel dosyası kısmen yüklendi. Bazı satırlar atlandı. Detaylar için sonuçları kontrol edin.`, 'warning');
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setShowExcelModal(false)}
+                  disabled={excelUploading}
+                >
+                  Kapat
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  disabled={!excelWarehouseId || !excelFile || excelUploading}
+                  onClick={async () => {
+                    try {
+                      setExcelUploading(true);
+                      setExcelResult(null);
+
+                      // Dosya validasyonu
+                      if (!excelFile) {
+                        showToast('Lütfen bir Excel dosyası seçin.', 'error');
+                        setExcelUploading(false);
+                        return;
                       }
-                    } else if (res.data && (res.data.status === 'BAŞARISIZ' || res.data.status === 'FAILED')) {
-                      const errorMsg = res.data.errorMessage || 'Yükleme başarısız oldu.';
-                      showToast(`Excel yükleme başarısız: ${errorMsg}`, 'error');
+
+                      // File extension check
+                      const fileName = excelFile.name.toLowerCase();
+                      if (!fileName.endsWith('.xlsx') && !fileName.endsWith('.xls')) {
+                        showToast(
+                          'Sadece Excel dosyaları (.xlsx veya .xls) yüklenebilir. Lütfen doğru formatta bir dosya seçin.',
+                          'error'
+                        );
+                        setExcelUploading(false);
+                        return;
+                      }
+
+                      // File size check (50MB limit)
+                      const maxSize = 50 * 1024 * 1024; // 50MB
+                      if (excelFile.size > maxSize) {
+                        showToast(
+                          "Dosya boyutu çok büyük. Maksimum dosya boyutu 50MB'dır. Lütfen daha küçük bir dosya yükleyin veya dosyanızdaki satır sayısını azaltın.",
+                          'error'
+                        );
+                        setExcelUploading(false);
+                        return;
+                      }
+
+                      const form = new FormData();
+                      form.append('warehouseId', String(excelWarehouseId));
+                      form.append('file', excelFile);
+                      const res = await axios.post('/api/stock-imports/upload', form, {
+                        headers: { 'Content-Type': 'multipart/form-data' },
+                        timeout: 300000, // 5 dakika timeout
+                      });
+                      setExcelResult(res.data);
+                      if (res.data?.failedRows || res.data?.failedRowsJson) {
+                        showMissingFieldsToast(res.data.failedRows || res.data.failedRowsJson);
+                      }
+
+                      // Refresh all data after a successful upload
+                      if (
+                        res.data &&
+                        (res.data.status === 'BAŞARILI' ||
+                          res.data.status === 'SUCCESS' ||
+                          res.data.status === 'KISMEN' ||
+                          res.data.status === 'PARTIAL')
+                      ) {
+                        await Promise.all([fetchAllData(), fetchStocks(0)]);
+                        if (res.data.status === 'BAŞARILI' || res.data.status === 'SUCCESS') {
+                          showToast('Excel dosyası başarıyla yüklendi ve stoklar aktarıldı.', 'success');
+                        } else if (res.data.status === 'KISMEN' || res.data.status === 'PARTIAL') {
+                          showToast(
+                            `Excel dosyası kısmen yüklendi. Bazı satırlar atlandı. Detaylar için sonuçları kontrol edin.`,
+                            'warning'
+                          );
+                        }
+                      } else if (
+                        res.data &&
+                        (res.data.status === 'BAŞARISIZ' || res.data.status === 'FAILED')
+                      ) {
+                        const errorMsg = res.data.errorMessage || 'Yükleme başarısız oldu.';
+                        showToast(`Excel yükleme başarısız: ${errorMsg}`, 'error');
+                      }
+                    } catch (e) {
+                      const errorMessage = getExcelUploadErrorMessage(e);
+                      const data = e?.response?.data;
+                      if (data && (data.failedRows || data.failedRowsJson)) {
+                        showMissingFieldsToast(data.failedRows || data.failedRowsJson);
+                      }
+                      const errorMsg =
+                        typeof data === 'string' ? data : data?.message || data?.error || errorMessage;
+                      setExcelResult({ status: 'FAILED', errorMessage: errorMsg });
+                      // Show a detailed error message via a toast notification
+                      showToast(errorMessage, 'error');
+                    } finally {
+                      setExcelUploading(false);
                     }
-                  } catch (e) {
-                    const errorMessage = getExcelUploadErrorMessage(e);
-                    const data = e?.response?.data;
-                    if (data && (data.failedRows || data.failedRowsJson)) {
-                      showMissingFieldsToast(data.failedRows || data.failedRowsJson);
-                    }
-                    const errorMsg = typeof data === 'string' ? data : (data?.message || data?.error || errorMessage);
-                    setExcelResult({ status: 'FAILED', errorMessage: errorMsg });
-                    // Show a detailed error message via a toast notification
-                    showToast(errorMessage, 'error');
-                  } finally {
-                    setExcelUploading(false);
-                  }
-                }}>
+                  }}
+                >
                   {excelUploading ? (
                     <>
-                      <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                      <span
+                        className="spinner-border spinner-border-sm me-2"
+                        role="status"
+                        aria-hidden="true"
+                      ></span>
                       Yükleniyor...
                     </>
                   ) : (
@@ -3046,9 +3340,7 @@ const Stock = () => {
       {!showTransferHistory && stocks.length > 0 && (
         <div className="mobile-selection-toolbar d-lg-none mb-3">
           <div className="d-flex flex-wrap justify-content-between align-items-center gap-2">
-            <div className="fw-semibold">
-              Seçili stok: {selectedStockCount}
-            </div>
+            <div className="fw-semibold">Seçili stok: {selectedStockCount}</div>
             <div className="d-flex flex-wrap gap-2">
               <button
                 type="button"
@@ -3092,8 +3384,10 @@ const Stock = () => {
                   value={stockPageSize}
                   onChange={handleStockPageSizeChange}
                 >
-                  {PAGE_SIZE_OPTIONS.map(size => (
-                    <option key={`stock-page-${size}`} value={size}>{size}</option>
+                  {PAGE_SIZE_OPTIONS.map((size) => (
+                    <option key={`stock-page-${size}`} value={size}>
+                      {size}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -3124,8 +3418,14 @@ const Stock = () => {
               </div>
             )}
             {/* Desktop Table View */}
-            <div className="breakpoint-1155-desktop table-responsive" style={{ transition: 'opacity 0.3s ease-in-out' }}>
-              <table className="table table-striped table-hover" style={{ transition: 'opacity 0.3s ease-in-out' }}>
+            <div
+              className="breakpoint-1155-desktop table-responsive"
+              style={{ transition: 'opacity 0.3s ease-in-out' }}
+            >
+              <table
+                className="table table-striped table-hover"
+                style={{ transition: 'opacity 0.3s ease-in-out' }}
+              >
                 <thead>
                   <tr>
                     <th className="text-center" style={{ width: '40px' }}>
@@ -3147,7 +3447,9 @@ const Stock = () => {
                     <th className="d-none d-lg-table-cell">Kullanılabilir</th>
                     <th className="d-none d-xl-table-cell">Rezerve</th>
                     <th className="d-none d-xl-table-cell">Emanet</th>
-                    <th className="d-none d-md-table-cell" style={{ minWidth: '120px' }}>Müşteri</th>
+                    <th className="d-none d-md-table-cell" style={{ minWidth: '120px' }}>
+                      Müşteri
+                    </th>
                     <th className="d-none d-xl-table-cell">Min. Stok</th>
                     <th>Durum</th>
                     <th className="text-center d-none d-md-table-cell">
@@ -3171,25 +3473,29 @@ const Stock = () => {
                         ></i>
                       </button>
                     </th>
-                    <th className="table-actions text-center" style={{ minWidth: '140px' }}>İşlemler</th>
+                    <th className="table-actions text-center" style={{ minWidth: '140px' }}>
+                      İşlemler
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {stocks.map((stock) => {
                     // Use product from stock directly (it comes from backend with name and sku)
                     // stock.product already contains name and sku from backend
-                    const productName = stock.product?.name || (getProductById(stock.product?.id)?.name);
-                    const productSku = stock.product?.sku || (getProductById(stock.product?.id)?.sku);
+                    const productName = stock.product?.name || getProductById(stock.product?.id)?.name;
+                    const productSku = stock.product?.sku || getProductById(stock.product?.id)?.sku;
                     const warehouse = stock.warehouse || getWarehouseById(stock.warehouse?.id);
                     const stockStatus = getStockStatus(stock);
                     // Try to get category from product if available, otherwise use getProductById
                     const productWithCategory = getProductById(stock.product?.id);
-                    const categoryPath = productWithCategory?.category ? `${productWithCategory.category.parentName ? productWithCategory.category.parentName + ' > ' : ''}${productWithCategory.category.name}` : null;
+                    const categoryPath = productWithCategory?.category
+                      ? `${productWithCategory.category.parentName ? productWithCategory.category.parentName + ' > ' : ''}${productWithCategory.category.name}`
+                      : null;
                     const isSelected = selectedStocks.includes(stock.id);
 
                     return (
-                      <tr 
-                        key={stock.id} 
+                      <tr
+                        key={stock.id}
                         id={`stock-${stock.id}`}
                         className={`${isSelected ? 'table-active' : ''} ${highlightedStockId === stock.id ? 'stock-highlighted' : ''}`}
                       >
@@ -3234,7 +3540,7 @@ const Stock = () => {
                                 wordWrap: 'break-word',
                                 fontSize: '0.875rem',
                                 lineHeight: '1.4',
-                                paddingRight: '4px'
+                                paddingRight: '4px',
                               }}
                               title={stock.additionNote}
                             >
@@ -3247,18 +3553,33 @@ const Stock = () => {
                         <td>
                           <span className="fw-bold">{stock.quantity}</span>
                           <small className="text-muted d-lg-none d-block">
-                            Kullanılabilir: <span className={stock.availableQuantity < getEffectiveMin(stock) ? 'text-danger' : 'text-success'}>
+                            Kullanılabilir:{' '}
+                            <span
+                              className={
+                                stock.availableQuantity < getEffectiveMin(stock)
+                                  ? 'text-danger'
+                                  : 'text-success'
+                              }
+                            >
                               {stock.availableQuantity}
                             </span>
                           </small>
                         </td>
                         <td className="d-none d-lg-table-cell">
-                          <span className={stock.availableQuantity < getEffectiveMin(stock) ? 'text-danger' : 'text-success'}>
+                          <span
+                            className={
+                              stock.availableQuantity < getEffectiveMin(stock)
+                                ? 'text-danger'
+                                : 'text-success'
+                            }
+                          >
                             {stock.availableQuantity}
                           </span>
                         </td>
                         <td className="d-none d-xl-table-cell">
-                          <span className={stock.reservedQuantity > 0 ? 'text-warning fw-bold' : 'text-muted'}>
+                          <span
+                            className={stock.reservedQuantity > 0 ? 'text-warning fw-bold' : 'text-muted'}
+                          >
                             <i className="fas fa-lock me-1" style={{ fontSize: '0.75rem' }}></i>
                             {stock.reservedQuantity || 0}
                           </span>
@@ -3269,14 +3590,28 @@ const Stock = () => {
                             <div style={{ maxWidth: '150px' }}>
                               <span
                                 className="badge bg-info bg-opacity-10 text-info border border-info mb-1 d-block"
-                                title={stock.customerName + (stock.customerPhone ? `\nTel: ${formatPhoneForDisplay(stock.customerPhone)}` : '')}
-                                style={{ fontSize: '0.75rem', whiteSpace: 'normal', wordWrap: 'break-word', lineHeight: '1.3' }}
+                                title={
+                                  stock.customerName +
+                                  (stock.customerPhone
+                                    ? `\nTel: ${formatPhoneForDisplay(stock.customerPhone)}`
+                                    : '')
+                                }
+                                style={{
+                                  fontSize: '0.75rem',
+                                  whiteSpace: 'normal',
+                                  wordWrap: 'break-word',
+                                  lineHeight: '1.3',
+                                }}
                               >
                                 <i className="fas fa-user me-1"></i>
                                 {stock.customerName}
                               </span>
                               {stock.customerPhone && (
-                                <small className="text-muted d-block" style={{ fontSize: '0.7rem', whiteSpace: 'normal', wordWrap: 'break-word' }} title={formatPhoneForDisplay(stock.customerPhone)}>
+                                <small
+                                  className="text-muted d-block"
+                                  style={{ fontSize: '0.7rem', whiteSpace: 'normal', wordWrap: 'break-word' }}
+                                  title={formatPhoneForDisplay(stock.customerPhone)}
+                                >
                                   <i className="fas fa-phone me-1"></i>
                                   {formatPhoneForDisplay(stock.customerPhone)}
                                 </small>
@@ -3288,16 +3623,21 @@ const Stock = () => {
                         </td>
                         <td className="d-none d-xl-table-cell">{stock.minStockLevel}</td>
                         <td>
-                          <span className={`badge bg-${stockStatus.class}`}>
-                            {stockStatus.label}
-                          </span>
+                          <span className={`badge bg-${stockStatus.class}`}>{stockStatus.label}</span>
                         </td>
                         <td className="d-none d-md-table-cell">
                           <div className="text-nowrap text-center">
-                            {formatDateInTurkeyTimezone(stock.lastUpdated, { year: 'numeric', month: '2-digit', day: '2-digit' })}
+                            {formatDateInTurkeyTimezone(stock.lastUpdated, {
+                              year: 'numeric',
+                              month: '2-digit',
+                              day: '2-digit',
+                            })}
                           </div>
                           <small className="text-muted text-nowrap d-block text-center">
-                            {formatDateInTurkeyTimezone(stock.lastUpdated, { hour: '2-digit', minute: '2-digit' })}
+                            {formatDateInTurkeyTimezone(stock.lastUpdated, {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
                           </small>
                         </td>
                         <td className="table-actions">
@@ -3352,7 +3692,9 @@ const Stock = () => {
                                 </button>
                                 <button
                                   className="btn btn-sm btn-outline-secondary d-none d-xl-inline-flex"
-                                  onClick={() => setAuditModal({ show: true, entityType: 'Stock', entityId: stock.id })}
+                                  onClick={() =>
+                                    setAuditModal({ show: true, entityType: 'Stock', entityId: stock.id })
+                                  }
                                   title="Hareket Geçmişi"
                                   style={{ padding: '0.25rem 0.375rem', fontSize: '0.75rem' }}
                                 >
@@ -3373,8 +3715,8 @@ const Stock = () => {
             <div className="breakpoint-1155-mobile" style={{ transition: 'opacity 0.3s ease-in-out' }}>
               <div className="d-flex flex-column gap-3" style={{ transition: 'opacity 0.3s ease-in-out' }}>
                 {stocks.map((stock) => {
-                  const productName = stock.product?.name || (getProductById(stock.product?.id)?.name);
-                  const productSku = stock.product?.sku || (getProductById(stock.product?.id)?.sku);
+                  const productName = stock.product?.name || getProductById(stock.product?.id)?.name;
+                  const productSku = stock.product?.sku || getProductById(stock.product?.id)?.sku;
                   const warehouse = stock.warehouse || getWarehouseById(stock.warehouse?.id);
                   const stockStatus = getStockStatus(stock);
                   const productWithCategory = getProductById(stock.product?.id);
@@ -3423,7 +3765,9 @@ const Stock = () => {
                             {categoryPath && (
                               <span className="mobile-chip bg-info bg-opacity-10 text-info border border-info">
                                 <i className="fas fa-tag me-1"></i>
-                                {categoryPath.length > 24 ? `${categoryPath.substring(0, 24)}…` : categoryPath}
+                                {categoryPath.length > 24
+                                  ? `${categoryPath.substring(0, 24)}…`
+                                  : categoryPath}
                               </span>
                             )}
                           </div>
@@ -3470,7 +3814,9 @@ const Stock = () => {
                             </div>
                           </div>
                           <div className="col-6">
-                            <div className={`mobile-stat-tile ${availableIsLow ? 'border-danger bg-danger bg-opacity-10' : ''}`}>
+                            <div
+                              className={`mobile-stat-tile ${availableIsLow ? 'border-danger bg-danger bg-opacity-10' : ''}`}
+                            >
                               <div className="label">
                                 <i className="fas fa-check-circle me-1"></i>
                                 Kullanılabilir
@@ -3489,7 +3835,9 @@ const Stock = () => {
                                 <i className="fas fa-lock me-1"></i>
                                 Rezerve
                               </div>
-                              <div className={`value ${stock.reservedQuantity > 0 ? 'text-warning' : 'text-muted'}`}>
+                              <div
+                                className={`value ${stock.reservedQuantity > 0 ? 'text-warning' : 'text-muted'}`}
+                              >
                                 {stock.reservedQuantity || 0}
                               </div>
                             </div>
@@ -3522,7 +3870,7 @@ const Stock = () => {
                               month: '2-digit',
                               day: '2-digit',
                               hour: '2-digit',
-                              minute: '2-digit'
+                              minute: '2-digit',
                             })}
                           </small>
                           <div className="stock-mobile-card__actions">
@@ -3571,7 +3919,9 @@ const Stock = () => {
                                 </button>
                                 <button
                                   className="btn btn-outline-secondary mobile-action-btn"
-                                  onClick={() => setAuditModal({ show: true, entityType: 'Stock', entityId: stock.id })}
+                                  onClick={() =>
+                                    setAuditModal({ show: true, entityType: 'Stock', entityId: stock.id })
+                                  }
                                   title="Geçmiş"
                                 >
                                   <i className="fas fa-history"></i>
@@ -3602,16 +3952,12 @@ const Stock = () => {
               <div className="text-center py-4">
                 <i className="fas fa-cubes fa-3x text-muted mb-3"></i>
                 <h5 className="text-muted">
-                  {filter === 'all'
-                    ? 'Henüz stok kaydı bulunmuyor'
-                    : `Bu kategoride stok kaydı bulunmuyor`
-                  }
+                  {filter === 'all' ? 'Henüz stok kaydı bulunmuyor' : `Bu kategoride stok kaydı bulunmuyor`}
                 </h5>
                 <p className="text-muted">
                   {filter === 'all'
                     ? 'İlk stok kaydını oluşturmak için "Yeni Stok / Stok Ekle" butonuna tıklayın.'
-                    : 'Farklı filtre seçeneği deneyin.'
-                  }
+                    : 'Farklı filtre seçeneği deneyin.'}
                 </p>
               </div>
             )}
@@ -3626,11 +3972,7 @@ const Stock = () => {
             <div className="modal-content">
               <div className="modal-header">
                 <h5 className="modal-title">Yeni Stok / Stok Ekle</h5>
-                <button
-                  type="button"
-                  className="btn-close"
-                  onClick={() => setShowForm(false)}
-                ></button>
+                <button type="button" className="btn-close" onClick={() => setShowForm(false)}></button>
               </div>
               <div className="modal-body">
                 <StockForm
@@ -3647,6 +3989,17 @@ const Stock = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Search-based stock removal: pick a stock, then reuse the quick-adjust (remove) modal */}
+      {showStockRemoveSearch && (
+        <StockRemoveSearchModal
+          onSelect={(stock) => {
+            setShowStockRemoveSearch(false);
+            setQuickAdjustModal({ show: true, stock, type: 'remove' });
+          }}
+          onClose={() => setShowStockRemoveSearch(false)}
+        />
       )}
 
       {/* Quick Stock Adjustment Modal */}
@@ -3687,20 +4040,36 @@ const Stock = () => {
       )}
 
       {transferDetailModal.show && transferDetailModal.transfer && (
-        <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 2000 }}>
+        <div
+          className="modal show d-block"
+          tabIndex="-1"
+          style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 2000 }}
+        >
           <div className="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
             <div className="modal-content shadow border-0 rounded-4">
-              <div className="modal-header text-white" style={{ background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)' }}>
+              <div
+                className="modal-header text-white"
+                style={{ background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)' }}
+              >
                 <h5 className="modal-title">
                   <i className="fas fa-eye me-2"></i>
                   Transfer {transferDetailModal.transfer.id} Detayı
                 </h5>
-                <button type="button" className="btn-close btn-close-white" onClick={closeTransferDetailModal}></button>
+                <button
+                  type="button"
+                  className="btn-close btn-close-white"
+                  onClick={closeTransferDetailModal}
+                ></button>
               </div>
               <div className="modal-body">
                 {(() => {
                   const t = transferDetailModal.transfer;
-                  const items = Array.isArray(t.items) && t.items.length ? t.items : (Array.isArray(t.transferItems) ? t.transferItems : []);
+                  const items =
+                    Array.isArray(t.items) && t.items.length
+                      ? t.items
+                      : Array.isArray(t.transferItems)
+                        ? t.transferItems
+                        : [];
                   const routeLabel =
                     (t.transferType || 'WAREHOUSE') === 'CUSTOMER_DELIVERY'
                       ? `${t.sourceWarehouse?.name || '-'} → ${t.customerFullName || 'Müşteri'}`
@@ -3733,7 +4102,15 @@ const Stock = () => {
                         <div className="col-md-4">
                           <div className="border rounded-3 p-3 h-100">
                             <small className="text-muted text-uppercase">Tarih</small>
-                            <div className="fw-semibold">{formatDateInTurkeyTimezone(t.transferDate, { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</div>
+                            <div className="fw-semibold">
+                              {formatDateInTurkeyTimezone(t.transferDate, {
+                                year: 'numeric',
+                                month: '2-digit',
+                                day: '2-digit',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -3794,9 +4171,9 @@ const Stock = () => {
                                 // Add a timestamp for cache-busting (only when the photo is updated)
                                 const updateTimestamp = photoUpdateTimestamps[item.id];
                                 const thumbUrl = baseThumbUrl
-                                  ? (updateTimestamp
+                                  ? updateTimestamp
                                     ? `${baseThumbUrl}${baseThumbUrl.includes('?') ? '&' : '?'}_t=${updateTimestamp}`
-                                    : baseThumbUrl)
+                                    : baseThumbUrl
                                   : null;
                                 return (
                                   <tr key={`${t.id}-detail-${item.id || idx}`}>
@@ -3820,10 +4197,12 @@ const Stock = () => {
                                               width: 48,
                                               height: 48,
                                               overflow: 'hidden',
-                                              cursor: 'pointer'
+                                              cursor: 'pointer',
                                             }}
                                             title="Fotoğrafı büyüt"
-                                            onClick={() => openTransferLightbox(t, items, transferDetailPhotos, item.id)}
+                                            onClick={() =>
+                                              openTransferLightbox(t, items, transferDetailPhotos, item.id)
+                                            }
                                           >
                                             <img
                                               key={thumbUrl}
@@ -3836,7 +4215,10 @@ const Stock = () => {
                                           <span className="text-muted small">Yok</span>
                                         )}
                                         <div className="d-flex flex-column align-items-center gap-1">
-                                          <label className="btn btn-link btn-xs p-0" style={{ fontSize: '0.7rem' }}>
+                                          <label
+                                            className="btn btn-link btn-xs p-0"
+                                            style={{ fontSize: '0.7rem' }}
+                                          >
                                             <i className="fas fa-camera me-1"></i>
                                             {hasPhoto ? 'Değiştir' : 'Ekle'}
                                             <input
@@ -3945,8 +4327,7 @@ const Stock = () => {
                 onClick={() =>
                   setTransferLightbox((prev) => ({
                     ...prev,
-                    index:
-                      (prev.index - 1 + prev.images.length) % prev.images.length
+                    index: (prev.index - 1 + prev.images.length) % prev.images.length,
                   }))
                 }
               >
@@ -3957,7 +4338,7 @@ const Stock = () => {
                 style={{
                   maxWidth: '90vw',
                   maxHeight: '80vh',
-                  overflow: 'hidden'
+                  overflow: 'hidden',
                 }}
               >
                 <img
@@ -3966,7 +4347,7 @@ const Stock = () => {
                   style={{
                     maxWidth: '100%',
                     maxHeight: '80vh',
-                    objectFit: 'contain'
+                    objectFit: 'contain',
                   }}
                 />
               </div>
@@ -3976,7 +4357,7 @@ const Stock = () => {
                 onClick={() =>
                   setTransferLightbox((prev) => ({
                     ...prev,
-                    index: (prev.index + 1) % prev.images.length
+                    index: (prev.index + 1) % prev.images.length,
                   }))
                 }
               >
@@ -4178,7 +4559,9 @@ const Stock = () => {
               <div className="row g-2 mt-3">
                 <div className="col-md-4">
                   <div className="input-group">
-                    <span className="input-group-text"><i className="fas fa-box"></i></span>
+                    <span className="input-group-text">
+                      <i className="fas fa-box"></i>
+                    </span>
                     <input
                       type="text"
                       className="form-control"
@@ -4190,7 +4573,9 @@ const Stock = () => {
                 </div>
                 <div className="col-md-4">
                   <div className="input-group">
-                    <span className="input-group-text"><i className="fas fa-barcode"></i></span>
+                    <span className="input-group-text">
+                      <i className="fas fa-barcode"></i>
+                    </span>
                     <input
                       type="text"
                       className="form-control"
@@ -4202,7 +4587,9 @@ const Stock = () => {
                 </div>
                 <div className="col-md-4">
                   <div className="input-group">
-                    <span className="input-group-text"><i className="fas fa-id-card"></i></span>
+                    <span className="input-group-text">
+                      <i className="fas fa-id-card"></i>
+                    </span>
                     <input
                       type="text"
                       className="form-control"
@@ -4216,7 +4603,9 @@ const Stock = () => {
               <div className="row g-2 mt-2">
                 <div className="col-md-12">
                   <div className="input-group">
-                    <span className="input-group-text"><i className="fas fa-sticky-note"></i></span>
+                    <span className="input-group-text">
+                      <i className="fas fa-sticky-note"></i>
+                    </span>
                     <input
                       type="text"
                       className="form-control"
@@ -4238,29 +4627,83 @@ const Stock = () => {
                 <div className="col-md-3">
                   <label className="form-label small text-muted">Transfer Tarihi (Başlangıç)</label>
                   <div className="d-flex gap-1 flex-wrap">
-                    <input type="date" className="form-control" value={transferDateFrom} onChange={(e) => setTransferDateFrom(e.target.value)} style={{ flex: '1 1 120px' }} />
-                    <input type="time" className="form-control" value={transferDateFromTime} onChange={(e) => setTransferDateFromTime(e.target.value)} title="Saat (opsiyonel)" style={{ maxWidth: '95px' }} />
+                    <input
+                      type="date"
+                      className="form-control"
+                      value={transferDateFrom}
+                      onChange={(e) => setTransferDateFrom(e.target.value)}
+                      style={{ flex: '1 1 120px' }}
+                    />
+                    <input
+                      type="time"
+                      className="form-control"
+                      value={transferDateFromTime}
+                      onChange={(e) => setTransferDateFromTime(e.target.value)}
+                      title="Saat (opsiyonel)"
+                      style={{ maxWidth: '95px' }}
+                    />
                   </div>
                 </div>
                 <div className="col-md-3">
                   <label className="form-label small text-muted">Transfer Tarihi (Bitiş)</label>
                   <div className="d-flex gap-1 flex-wrap">
-                    <input type="date" className="form-control" value={transferDateTo} onChange={(e) => setTransferDateTo(e.target.value)} min={transferDateFrom || undefined} style={{ flex: '1 1 120px' }} />
-                    <input type="time" className="form-control" value={transferDateToTime} onChange={(e) => setTransferDateToTime(e.target.value)} title="Saat (opsiyonel)" style={{ maxWidth: '95px' }} />
+                    <input
+                      type="date"
+                      className="form-control"
+                      value={transferDateTo}
+                      onChange={(e) => setTransferDateTo(e.target.value)}
+                      min={transferDateFrom || undefined}
+                      style={{ flex: '1 1 120px' }}
+                    />
+                    <input
+                      type="time"
+                      className="form-control"
+                      value={transferDateToTime}
+                      onChange={(e) => setTransferDateToTime(e.target.value)}
+                      title="Saat (opsiyonel)"
+                      style={{ maxWidth: '95px' }}
+                    />
                   </div>
                 </div>
                 <div className="col-md-3">
                   <label className="form-label small text-muted">Oluşturulma Tarihi (Başlangıç)</label>
                   <div className="d-flex gap-1 flex-wrap">
-                    <input type="date" className="form-control" value={transferCreatedAtFrom} onChange={(e) => setTransferCreatedAtFrom(e.target.value)} style={{ flex: '1 1 120px' }} />
-                    <input type="time" className="form-control" value={transferCreatedAtFromTime} onChange={(e) => setTransferCreatedAtFromTime(e.target.value)} title="Saat (opsiyonel)" style={{ maxWidth: '95px' }} />
+                    <input
+                      type="date"
+                      className="form-control"
+                      value={transferCreatedAtFrom}
+                      onChange={(e) => setTransferCreatedAtFrom(e.target.value)}
+                      style={{ flex: '1 1 120px' }}
+                    />
+                    <input
+                      type="time"
+                      className="form-control"
+                      value={transferCreatedAtFromTime}
+                      onChange={(e) => setTransferCreatedAtFromTime(e.target.value)}
+                      title="Saat (opsiyonel)"
+                      style={{ maxWidth: '95px' }}
+                    />
                   </div>
                 </div>
                 <div className="col-md-3">
                   <label className="form-label small text-muted">Oluşturulma Tarihi (Bitiş)</label>
                   <div className="d-flex gap-1 flex-wrap">
-                    <input type="date" className="form-control" value={transferCreatedAtTo} onChange={(e) => setTransferCreatedAtTo(e.target.value)} min={transferCreatedAtFrom || undefined} style={{ flex: '1 1 120px' }} />
-                    <input type="time" className="form-control" value={transferCreatedAtToTime} onChange={(e) => setTransferCreatedAtToTime(e.target.value)} title="Saat (opsiyonel)" style={{ maxWidth: '95px' }} />
+                    <input
+                      type="date"
+                      className="form-control"
+                      value={transferCreatedAtTo}
+                      onChange={(e) => setTransferCreatedAtTo(e.target.value)}
+                      min={transferCreatedAtFrom || undefined}
+                      style={{ flex: '1 1 120px' }}
+                    />
+                    <input
+                      type="time"
+                      className="form-control"
+                      value={transferCreatedAtToTime}
+                      onChange={(e) => setTransferCreatedAtToTime(e.target.value)}
+                      title="Saat (opsiyonel)"
+                      style={{ maxWidth: '95px' }}
+                    />
                   </div>
                 </div>
                 <div className="col-md-12 d-flex flex-wrap gap-2 align-items-end">
@@ -4345,7 +4788,12 @@ const Stock = () => {
                 </div>
               </div>
               <div className="col-md-12 d-flex flex-wrap gap-2 mt-1">
-                {(transferProductName || transferSku || transferDriver || transferNotes || transferSourceWarehouseId || transferDestinationWarehouseId) && (
+                {(transferProductName ||
+                  transferSku ||
+                  transferDriver ||
+                  transferNotes ||
+                  transferSourceWarehouseId ||
+                  transferDestinationWarehouseId) && (
                   <button
                     className="btn btn-sm btn-outline-secondary"
                     onClick={() => {
@@ -4368,9 +4816,7 @@ const Stock = () => {
           {transfers.length > 0 && (
             <div className="mobile-selection-toolbar d-lg-none mb-3">
               <div className="d-flex flex-wrap justify-content-between align-items-center gap-2">
-                <div className="fw-semibold">
-                  Seçili transfer: {selectedTransferCount}
-                </div>
+                <div className="fw-semibold">Seçili transfer: {selectedTransferCount}</div>
                 <div className="d-flex flex-wrap gap-2">
                   <button
                     type="button"
@@ -4403,7 +4849,10 @@ const Stock = () => {
           )}
 
           <div className="card shadow-sm">
-            <div className="card-header bg-gradient text-white" style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
+            <div
+              className="card-header bg-gradient text-white"
+              style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}
+            >
               <div className="d-flex justify-content-between align-items-center">
                 <h5 className="mb-0">
                   <i className="fas fa-history me-2"></i>
@@ -4445,8 +4894,10 @@ const Stock = () => {
                     value={transferPageSize}
                     onChange={handleTransferPageSizeChange}
                   >
-                    {PAGE_SIZE_OPTIONS.map(size => (
-                      <option key={`transfer-page-${size}`} value={size}>{size}</option>
+                    {PAGE_SIZE_OPTIONS.map((size) => (
+                      <option key={`transfer-page-${size}`} value={size}>
+                        {size}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -4457,11 +4908,11 @@ const Stock = () => {
                   <h5 className="text-muted">
                     {transferStatusFilter === 'ALL'
                       ? 'Henüz transfer kaydı bulunmuyor'
-                      : `${transferStatusFilter === 'PENDING' ? 'Beklemede' : transferStatusFilter === 'IN_TRANSIT' ? 'Yolda' : transferStatusFilter === 'COMPLETED' ? 'Tamamlanmış' : 'İptal edilmiş'} transfer bulunmuyor`
-                    }
+                      : `${transferStatusFilter === 'PENDING' ? 'Beklemede' : transferStatusFilter === 'IN_TRANSIT' ? 'Yolda' : transferStatusFilter === 'COMPLETED' ? 'Tamamlanmış' : 'İptal edilmiş'} transfer bulunmuyor`}
                   </h5>
                   <p className="text-muted">
-                    {transferStatusFilter === 'ALL' && 'İlk transferi oluşturmak için stok listesinden "Transfer Yap" butonuna tıklayın.'}
+                    {transferStatusFilter === 'ALL' &&
+                      'İlk transferi oluşturmak için stok listesinden "Transfer Yap" butonuna tıklayın.'}
                   </p>
                 </div>
               ) : (
@@ -4471,19 +4922,22 @@ const Stock = () => {
                     <table className="table table-hover table-sm mb-0 align-middle transfer-table-compact">
                       {/* Fixed layout for desktop - on wide screens */}
                       <colgroup className="d-none d-xl-table-column-group">
-                        {isAdmin && <col style={{ width: '40px' }} />}  {/* Checkbox */}
-                        <col style={{ width: '60px' }} />      {/* No */}
-                        <col style={{ width: '110px' }} />     {/* Date */}
-                        <col style={{ width: '140px' }} />     {/* Product */}
-                        <col style={{ width: '140px' }} />     {/* Source */}
-                        <col style={{ width: '140px' }} />     {/* Destination */}
-                        <col style={{ width: '70px' }} />      {/* Quantity */}
-                        <col style={{ width: '110px' }} />     {/* Driver */}
-                        <col style={{ width: '70px' }} />      {/* Plate */}
-                        <col style={{ width: '90px' }} />      {/* Status */}
-                        <col style={{ width: '140px' }} />     {/* Actions */}
+                        {isAdmin && <col style={{ width: '40px' }} />} {/* Checkbox */}
+                        <col style={{ width: '60px' }} /> {/* No */}
+                        <col style={{ width: '110px' }} /> {/* Date */}
+                        <col style={{ width: '140px' }} /> {/* Product */}
+                        <col style={{ width: '140px' }} /> {/* Source */}
+                        <col style={{ width: '140px' }} /> {/* Destination */}
+                        <col style={{ width: '70px' }} /> {/* Quantity */}
+                        <col style={{ width: '110px' }} /> {/* Driver */}
+                        <col style={{ width: '70px' }} /> {/* Plate */}
+                        <col style={{ width: '90px' }} /> {/* Status */}
+                        <col style={{ width: '140px' }} /> {/* Actions */}
                       </colgroup>
-                      <thead className="table-light sticky-top" style={{ position: 'sticky', top: 0, zIndex: 10 }}>
+                      <thead
+                        className="table-light sticky-top"
+                        style={{ position: 'sticky', top: 0, zIndex: 10 }}
+                      >
                         <tr>
                           {isAdmin && (
                             <th className="text-center align-middle" style={{ width: '40px' }}>
@@ -4529,7 +4983,10 @@ const Stock = () => {
                             <div className="small">Şoför</div>
                           </th>
                           {/* Plate column - show only on wide screens */}
-                          <th className="text-center align-middle d-none d-xl-table-cell" style={{ width: '70px' }}>
+                          <th
+                            className="text-center align-middle d-none d-xl-table-cell"
+                            style={{ width: '70px' }}
+                          >
                             <i className="fas fa-car me-1"></i>
                             <div className="small">Plaka</div>
                           </th>
@@ -4549,13 +5006,15 @@ const Stock = () => {
                             PENDING: { label: 'Beklemede', class: 'warning', icon: 'clock' },
                             IN_TRANSIT: { label: 'Yolda', class: 'info', icon: 'truck' },
                             COMPLETED: { label: 'Tamamlandı', class: 'success', icon: 'check-circle' },
-                            CANCELLED: { label: 'İptal Edildi', class: 'danger', icon: 'times-circle' }
+                            CANCELLED: { label: 'İptal Edildi', class: 'danger', icon: 'times-circle' },
                           };
                           const status = statusConfig[transfer.status] || statusConfig.PENDING;
                           const transferItemsPreview = getTransferItemsList(transfer);
                           const totalQuantity = getTransferTotalQuantity(transfer);
-                          const awaitingApproval = (transfer.approvalStatus || '').toUpperCase() === 'PENDING';
-                          const approvalRejected = (transfer.approvalStatus || '').toUpperCase() === 'REJECTED';
+                          const awaitingApproval =
+                            (transfer.approvalStatus || '').toUpperCase() === 'PENDING';
+                          const approvalRejected =
+                            (transfer.approvalStatus || '').toUpperCase() === 'REJECTED';
                           const isDeleteRequest = !!transfer.deleteRequest;
 
                           const isSelected = selectedTransfers.includes(transfer.id);
@@ -4578,24 +5037,35 @@ const Stock = () => {
                               <td className="text-center align-middle">
                                 <span className="badge bg-dark d-block">#{transfer.id}</span>
                                 <span
-                                  className={`badge d-block mt-1 ${(transfer.transferType || 'WAREHOUSE') === 'CUSTOMER_DELIVERY'
-                                    ? 'bg-info text-dark'
-                                    : 'bg-secondary'
-                                    }`}
-                                  title={(transfer.transferType || 'WAREHOUSE') === 'CUSTOMER_DELIVERY' ? 'Müşteri Sevkiyatı' : 'Depo Transferi'}
+                                  className={`badge d-block mt-1 ${
+                                    (transfer.transferType || 'WAREHOUSE') === 'CUSTOMER_DELIVERY'
+                                      ? 'bg-info text-dark'
+                                      : 'bg-secondary'
+                                  }`}
+                                  title={
+                                    (transfer.transferType || 'WAREHOUSE') === 'CUSTOMER_DELIVERY'
+                                      ? 'Müşteri Sevkiyatı'
+                                      : 'Depo Transferi'
+                                  }
                                 >
-                                  {(transfer.transferType || 'WAREHOUSE') === 'CUSTOMER_DELIVERY' ? 'Müşteri' : 'Depo'}
+                                  {(transfer.transferType || 'WAREHOUSE') === 'CUSTOMER_DELIVERY'
+                                    ? 'Müşteri'
+                                    : 'Depo'}
                                 </span>
                               </td>
                               <td className="align-middle">
                                 <div className="small">
                                   <div className="fw-bold text-nowrap">
-                                    {formatDateInTurkeyTimezone(transfer.transferDate, { year: 'numeric', month: '2-digit', day: '2-digit' })}
+                                    {formatDateInTurkeyTimezone(transfer.transferDate, {
+                                      year: 'numeric',
+                                      month: '2-digit',
+                                      day: '2-digit',
+                                    })}
                                   </div>
                                   <div className="text-muted text-nowrap">
                                     {formatDateInTurkeyTimezone(transfer.transferDate, {
                                       hour: '2-digit',
-                                      minute: '2-digit'
+                                      minute: '2-digit',
                                     })}
                                   </div>
                                 </div>
@@ -4607,12 +5077,23 @@ const Stock = () => {
                                   ) : (
                                     <>
                                       {transferItemsPreview.slice(0, 3).map((item, idx) => (
-                                        <div key={`${transfer.id}-${item.product?.id || idx}`} className="d-flex justify-content-between align-items-center mb-1">
+                                        <div
+                                          key={`${transfer.id}-${item.product?.id || idx}`}
+                                          className="d-flex justify-content-between align-items-center mb-1"
+                                        >
                                           <div className="me-2 overflow-hidden">
-                                            <div className="fw-bold small text-break" style={wrapTextStyle} title={item.product?.name || '-'}>
+                                            <div
+                                              className="fw-bold small text-break"
+                                              style={wrapTextStyle}
+                                              title={item.product?.name || '-'}
+                                            >
                                               {item.product?.name || '-'}
                                             </div>
-                                            <small className="text-muted text-break d-block" style={wrapTextStyle} title={item.product?.sku || '-'}>
+                                            <small
+                                              className="text-muted text-break d-block"
+                                              style={wrapTextStyle}
+                                              title={item.product?.sku || '-'}
+                                            >
                                               {item.product?.sku || '-'}
                                             </small>
                                           </div>
@@ -4620,7 +5101,9 @@ const Stock = () => {
                                         </div>
                                       ))}
                                       {transferItemsPreview.length > 3 && (
-                                        <small className="text-muted">+ {transferItemsPreview.length - 3} ürün daha</small>
+                                        <small className="text-muted">
+                                          + {transferItemsPreview.length - 3} ürün daha
+                                        </small>
                                       )}
                                     </>
                                   )}
@@ -4634,15 +5117,31 @@ const Stock = () => {
                               </td>
                               <td className="align-middle">
                                 <div className="d-flex align-items-center">
-                                  <div className="bg-danger bg-opacity-10 rounded-circle p-1 me-1 me-sm-2 flex-shrink-0 d-none d-sm-flex" style={{ width: '30px', height: '30px', alignItems: 'center', justifyContent: 'center' }}>
+                                  <div
+                                    className="bg-danger bg-opacity-10 rounded-circle p-1 me-1 me-sm-2 flex-shrink-0 d-none d-sm-flex"
+                                    style={{
+                                      width: '30px',
+                                      height: '30px',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                    }}
+                                  >
                                     <i className="fas fa-warehouse text-danger fa-sm"></i>
                                   </div>
                                   <div className="small overflow-hidden w-100">
-                                      <div className="fw-bold text-break" style={wrapTextStyle} title={transfer.sourceWarehouse?.name}>
+                                    <div
+                                      className="fw-bold text-break"
+                                      style={wrapTextStyle}
+                                      title={transfer.sourceWarehouse?.name}
+                                    >
                                       <i className="fas fa-warehouse text-danger fa-xs me-1 d-inline d-sm-none"></i>
                                       {transfer.sourceWarehouse?.name}
                                     </div>
-                                      <small className="text-muted d-block text-break" style={wrapTextStyle} title={transfer.sourceWarehouse?.location}>
+                                    <small
+                                      className="text-muted d-block text-break"
+                                      style={wrapTextStyle}
+                                      title={transfer.sourceWarehouse?.location}
+                                    >
                                       {transfer.sourceWarehouse?.location}
                                     </small>
                                   </div>
@@ -4652,36 +5151,64 @@ const Stock = () => {
                                 <div className="d-flex align-items-center">
                                   <div
                                     className={`bg-${(transfer.transferType || 'WAREHOUSE') === 'CUSTOMER_DELIVERY' ? 'info' : 'success'} bg-opacity-10 rounded-circle p-1 me-1 me-sm-2 flex-shrink-0 d-none d-sm-flex`}
-                                    style={{ width: '30px', height: '30px', alignItems: 'center', justifyContent: 'center' }}
+                                    style={{
+                                      width: '30px',
+                                      height: '30px',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                    }}
                                   >
                                     <i
-                                      className={`fas ${(transfer.transferType || 'WAREHOUSE') === 'CUSTOMER_DELIVERY' ? 'fa-user-tag text-info' : 'fa-warehouse text-success'
-                                        } fa-sm`}
+                                      className={`fas ${
+                                        (transfer.transferType || 'WAREHOUSE') === 'CUSTOMER_DELIVERY'
+                                          ? 'fa-user-tag text-info'
+                                          : 'fa-warehouse text-success'
+                                      } fa-sm`}
                                     ></i>
                                   </div>
                                   <div className="small overflow-hidden w-100">
                                     {(transfer.transferType || 'WAREHOUSE') === 'CUSTOMER_DELIVERY' ? (
                                       <>
-                                        <div className="fw-bold text-break" style={wrapTextStyle} title={transfer.customerFullName}>
+                                        <div
+                                          className="fw-bold text-break"
+                                          style={wrapTextStyle}
+                                          title={transfer.customerFullName}
+                                        >
                                           <i className="fas fa-user-tag text-info fa-xs me-1 d-inline d-sm-none"></i>
                                           {transfer.customerFullName}
                                         </div>
-                                        <small className="text-muted d-block text-break" style={wrapTextStyle} title={transfer.customerPhone}>
+                                        <small
+                                          className="text-muted d-block text-break"
+                                          style={wrapTextStyle}
+                                          title={transfer.customerPhone}
+                                        >
                                           <i className="fas fa-phone me-1"></i>
                                           {transfer.customerPhone || '-'}
                                         </small>
-                                        <small className="text-muted d-block text-break" style={wrapTextStyle} title={transfer.customerAddress}>
+                                        <small
+                                          className="text-muted d-block text-break"
+                                          style={wrapTextStyle}
+                                          title={transfer.customerAddress}
+                                        >
                                           <i className="fas fa-map-marker-alt me-1"></i>
                                           {transfer.customerAddress || '-'}
                                         </small>
                                       </>
                                     ) : (
                                       <>
-                                        <div className="fw-bold text-break" style={wrapTextStyle} title={transfer.destinationWarehouse?.name}>
+                                        <div
+                                          className="fw-bold text-break"
+                                          style={wrapTextStyle}
+                                          title={transfer.destinationWarehouse?.name}
+                                        >
                                           <i className="fas fa-warehouse text-success fa-xs me-1 d-inline d-sm-none"></i>
                                           {transfer.destinationWarehouse?.name}
                                         </div>
-                                        <small className="text-muted d-block text-break" style={wrapTextStyle} title={transfer.destinationWarehouse?.location}>
+                                        <small
+                                          className="text-muted d-block text-break"
+                                          style={wrapTextStyle}
+                                          title={transfer.destinationWarehouse?.location}
+                                        >
                                           {transfer.destinationWarehouse?.location}
                                         </small>
                                       </>
@@ -4695,8 +5222,18 @@ const Stock = () => {
                               {/* Driver column - show on tablet and above */}
                               <td className="align-middle d-none d-md-table-cell">
                                 <div className="small overflow-hidden text-break" style={wrapTextStyle}>
-                                  <div className="fw-bold text-break" style={wrapTextStyle} title={transfer.driverName}>{transfer.driverName}</div>
-                                  <div className="text-muted text-break" style={wrapTextStyle} title={transfer.driverPhone}>
+                                  <div
+                                    className="fw-bold text-break"
+                                    style={wrapTextStyle}
+                                    title={transfer.driverName}
+                                  >
+                                    {transfer.driverName}
+                                  </div>
+                                  <div
+                                    className="text-muted text-break"
+                                    style={wrapTextStyle}
+                                    title={transfer.driverPhone}
+                                  >
                                     <i className="fas fa-phone me-1"></i>
                                     {transfer.driverPhone}
                                   </div>
@@ -4704,7 +5241,11 @@ const Stock = () => {
                               </td>
                               {/* Plate column - show on desktop */}
                               <td className="text-center align-middle d-none d-lg-table-cell">
-                                <span className="badge bg-secondary text-truncate d-block mx-auto" style={{ maxWidth: '100%' }} title={transfer.vehiclePlate}>
+                                <span
+                                  className="badge bg-secondary text-truncate d-block mx-auto"
+                                  style={{ maxWidth: '100%' }}
+                                  title={transfer.vehiclePlate}
+                                >
                                   {transfer.vehiclePlate}
                                 </span>
                               </td>
@@ -4714,17 +5255,29 @@ const Stock = () => {
                                   <span className="small">{status.label}</span>
                                 </span>
                                 {transfer.completedDate && (
-                                  <small className="d-block text-success mt-1" title={`Tamamlanma Tarihi: ${formatDateInTurkeyTimezone(transfer.completedDate, { year: 'numeric', month: '2-digit', day: '2-digit' })}`}>
+                                  <small
+                                    className="d-block text-success mt-1"
+                                    title={`Tamamlanma Tarihi: ${formatDateInTurkeyTimezone(transfer.completedDate, { year: 'numeric', month: '2-digit', day: '2-digit' })}`}
+                                  >
                                     <i className="fas fa-check-circle me-1"></i>
                                     <span className="d-none d-md-inline">Tamamlandı: </span>
-                                    {formatDateInTurkeyTimezone(transfer.completedDate, { day: '2-digit', month: '2-digit' })}
+                                    {formatDateInTurkeyTimezone(transfer.completedDate, {
+                                      day: '2-digit',
+                                      month: '2-digit',
+                                    })}
                                   </small>
                                 )}
                                 {transfer.cancelledDate && (
-                                  <small className="d-block text-danger mt-1" title={`İptal Tarihi: ${formatDateInTurkeyTimezone(transfer.cancelledDate, { year: 'numeric', month: '2-digit', day: '2-digit' })}`}>
+                                  <small
+                                    className="d-block text-danger mt-1"
+                                    title={`İptal Tarihi: ${formatDateInTurkeyTimezone(transfer.cancelledDate, { year: 'numeric', month: '2-digit', day: '2-digit' })}`}
+                                  >
                                     <i className="fas fa-times-circle me-1"></i>
                                     <span className="d-none d-md-inline">İptal: </span>
-                                    {formatDateInTurkeyTimezone(transfer.cancelledDate, { day: '2-digit', month: '2-digit' })}
+                                    {formatDateInTurkeyTimezone(transfer.cancelledDate, {
+                                      day: '2-digit',
+                                      month: '2-digit',
+                                    })}
                                   </small>
                                 )}
                                 {awaitingApproval && (
@@ -4743,18 +5296,21 @@ const Stock = () => {
                                     Onay Reddedildi
                                   </small>
                                 )}
-                                {(transfer.approvalStatus || '').toUpperCase() === 'APPROVED' && transfer.approvalDecisionBy && (
-                                  <small className="d-block text-muted mt-1">
-                                    Onaylayan: {transfer.approvalDecisionBy}
-                                  </small>
-                                )}
+                                {(transfer.approvalStatus || '').toUpperCase() === 'APPROVED' &&
+                                  transfer.approvalDecisionBy && (
+                                    <small className="d-block text-muted mt-1">
+                                      Onaylayan: {transfer.approvalDecisionBy}
+                                    </small>
+                                  )}
                               </td>
                               <td className="text-center align-middle" style={{ padding: '6px' }}>
                                 <div className="d-flex flex-column gap-1">
-                                  {transfer.status === 'PENDING' && (
-                                    awaitingApproval ? (
+                                  {transfer.status === 'PENDING' &&
+                                    (awaitingApproval ? (
                                       <div className="d-flex flex-column gap-2">
-                                        <span className={`badge ${isDeleteRequest ? 'bg-dark' : 'bg-warning text-dark'}`}>
+                                        <span
+                                          className={`badge ${isDeleteRequest ? 'bg-dark' : 'bg-warning text-dark'}`}
+                                        >
                                           <i className="fas fa-hourglass-half me-1"></i>
                                           {isDeleteRequest ? 'Silme Onayı Bekleniyor' : 'Onay Bekleniyor'}
                                         </span>
@@ -4772,19 +5328,23 @@ const Stock = () => {
                                       <>
                                         <button
                                           className="btn btn-sm btn-info w-100 py-1 px-2"
-                                          style={{ fontSize: 'clamp(0.7rem, 2vw, 0.8rem)', whiteSpace: 'nowrap' }}
+                                          style={{
+                                            fontSize: 'clamp(0.7rem, 2vw, 0.8rem)',
+                                            whiteSpace: 'nowrap',
+                                          }}
                                           onClick={() => {
                                             setConfirmModal({
                                               show: true,
                                               title: 'Transferi Yola Çıkart',
-                                              message: 'Transfer yola çıkartılacak ve stok rezerve edilecek. Onaylıyor musunuz?',
+                                              message:
+                                                'Transfer yola çıkartılacak ve stok rezerve edilecek. Onaylıyor musunuz?',
                                               confirmText: 'Evet, Yola Çıkar',
                                               confirmVariant: 'info',
                                               icon: 'truck',
                                               onConfirm: () => {
                                                 setConfirmModal({ show: false });
                                                 handleTransferStatusChange(transfer.id, 'start');
-                                              }
+                                              },
                                             });
                                           }}
                                           title="Transfer yola çıkartılacak"
@@ -4795,7 +5355,10 @@ const Stock = () => {
                                         </button>
                                         <button
                                           className="btn btn-sm btn-success w-100 py-1 px-2"
-                                          style={{ fontSize: 'clamp(0.7rem, 2vw, 0.8rem)', whiteSpace: 'nowrap' }}
+                                          style={{
+                                            fontSize: 'clamp(0.7rem, 2vw, 0.8rem)',
+                                            whiteSpace: 'nowrap',
+                                          }}
                                           onClick={() =>
                                             openCompletionFlow(
                                               transfer,
@@ -4809,12 +5372,15 @@ const Stock = () => {
                                         </button>
                                         <button
                                           className="btn btn-sm btn-danger w-100 py-1 px-2"
-                                          style={{ fontSize: 'clamp(0.7rem, 2vw, 0.8rem)', whiteSpace: 'nowrap' }}
+                                          style={{
+                                            fontSize: 'clamp(0.7rem, 2vw, 0.8rem)',
+                                            whiteSpace: 'nowrap',
+                                          }}
                                           onClick={() => {
                                             setCancellationModal({
                                               show: true,
                                               transferId: transfer.id,
-                                              reason: ''
+                                              reason: '',
                                             });
                                           }}
                                           title="Transferi iptal et"
@@ -4823,13 +5389,15 @@ const Stock = () => {
                                           İptal
                                         </button>
                                       </>
-                                    )
-                                  )}
+                                    ))}
                                   {transfer.status === 'IN_TRANSIT' && (
                                     <>
                                       <button
                                         className="btn btn-sm btn-success w-100 py-1 px-2"
-                                        style={{ fontSize: 'clamp(0.7rem, 2vw, 0.8rem)', whiteSpace: 'nowrap' }}
+                                        style={{
+                                          fontSize: 'clamp(0.7rem, 2vw, 0.8rem)',
+                                          whiteSpace: 'nowrap',
+                                        }}
                                         onClick={() =>
                                           openCompletionFlow(
                                             transfer,
@@ -4843,12 +5411,15 @@ const Stock = () => {
                                       </button>
                                       <button
                                         className="btn btn-sm btn-warning w-100 py-1 px-2"
-                                        style={{ fontSize: 'clamp(0.7rem, 2vw, 0.8rem)', whiteSpace: 'nowrap' }}
+                                        style={{
+                                          fontSize: 'clamp(0.7rem, 2vw, 0.8rem)',
+                                          whiteSpace: 'nowrap',
+                                        }}
                                         onClick={() => {
                                           setCancellationModal({
                                             show: true,
                                             transferId: transfer.id,
-                                            reason: ''
+                                            reason: '',
                                           });
                                         }}
                                         title="Transferi iptal et ve rezervasyonu kaldır"
@@ -4872,12 +5443,14 @@ const Stock = () => {
                                     <button
                                       className="btn btn-sm btn-outline-danger w-100 py-1 px-2"
                                       style={{ fontSize: 'clamp(0.7rem, 2vw, 0.8rem)', whiteSpace: 'nowrap' }}
-                                      onClick={() => setNotesModal({
-                                        show: true,
-                                        notes: transfer.cancellationReason,
-                                        transferId: transfer.id,
-                                        title: 'İptal Nedeni'
-                                      })}
+                                      onClick={() =>
+                                        setNotesModal({
+                                          show: true,
+                                          notes: transfer.cancellationReason,
+                                          transferId: transfer.id,
+                                          title: 'İptal Nedeni',
+                                        })
+                                      }
                                       title="İptal nedenini görüntüle"
                                     >
                                       <i className="fas fa-exclamation-circle me-1"></i>
@@ -4889,12 +5462,14 @@ const Stock = () => {
                                     <button
                                       className="btn btn-sm btn-outline-secondary w-100 py-1 px-2"
                                       style={{ fontSize: 'clamp(0.7rem, 2vw, 0.8rem)', whiteSpace: 'nowrap' }}
-                                      onClick={() => setNotesModal({
-                                        show: true,
-                                        notes: transfer.notes,
-                                        transferId: transfer.id,
-                                        title: 'Transfer Notları'
-                                      })}
+                                      onClick={() =>
+                                        setNotesModal({
+                                          show: true,
+                                          notes: transfer.notes,
+                                          transferId: transfer.id,
+                                          title: 'Transfer Notları',
+                                        })
+                                      }
                                       title="Notları görüntüle"
                                     >
                                       <i className="fas fa-sticky-note me-1"></i>
@@ -4905,12 +5480,14 @@ const Stock = () => {
                                     <button
                                       className="btn btn-sm btn-outline-danger w-100 py-1 px-2"
                                       style={{ fontSize: 'clamp(0.7rem, 2vw, 0.8rem)', whiteSpace: 'nowrap' }}
-                                      onClick={() => setNotesModal({
-                                        show: true,
-                                        notes: transfer.approvalNote,
-                                        transferId: transfer.id,
-                                        title: 'Onay Red Notu'
-                                      })}
+                                      onClick={() =>
+                                        setNotesModal({
+                                          show: true,
+                                          notes: transfer.approvalNote,
+                                          transferId: transfer.id,
+                                          title: 'Onay Red Notu',
+                                        })
+                                      }
                                       title="Onay reddetme notunu görüntüle"
                                     >
                                       <i className="fas fa-exclamation-circle me-1"></i>
@@ -4921,12 +5498,14 @@ const Stock = () => {
                                     <button
                                       className="btn btn-sm btn-outline-success w-100 py-1 px-2"
                                       style={{ fontSize: 'clamp(0.7rem, 2vw, 0.8rem)', whiteSpace: 'nowrap' }}
-                                      onClick={() => setNotesModal({
-                                        show: true,
-                                        notes: transfer.completionNote,
-                                        transferId: transfer.id,
-                                        title: 'Tamamlama Notu'
-                                      })}
+                                      onClick={() =>
+                                        setNotesModal({
+                                          show: true,
+                                          notes: transfer.completionNote,
+                                          transferId: transfer.id,
+                                          title: 'Tamamlama Notu',
+                                        })
+                                      }
                                       title="Tamamlama notunu görüntüle"
                                     >
                                       <i className="fas fa-clipboard-check me-1"></i>
@@ -4937,7 +5516,13 @@ const Stock = () => {
                                     <button
                                       className="btn btn-sm btn-outline-secondary w-100 py-1 px-2"
                                       style={{ fontSize: 'clamp(0.7rem, 2vw, 0.8rem)', whiteSpace: 'nowrap' }}
-                                      onClick={() => setAuditModal({ show: true, entityType: 'StockTransfer', entityId: transfer.id })}
+                                      onClick={() =>
+                                        setAuditModal({
+                                          show: true,
+                                          entityType: 'StockTransfer',
+                                          entityId: transfer.id,
+                                        })
+                                      }
                                       title="Hareket Geçmişi"
                                     >
                                       <i className="fas fa-history me-1"></i>
@@ -4980,7 +5565,7 @@ const Stock = () => {
                           month: '2-digit',
                           day: '2-digit',
                           hour: '2-digit',
-                          minute: '2-digit'
+                          minute: '2-digit',
                         });
 
                         return (
@@ -4993,10 +5578,11 @@ const Stock = () => {
                                 return (
                                   <>
                                     <div className="transfer-mobile-card__header mb-2 d-flex justify-content-between align-items-center">
-
                                       {/* Left block: Transfer + Route */}
                                       <div className="d-flex flex-column">
-                                        <div className="transfer-mobile-card__title">Transfer {transfer.id}</div>
+                                        <div className="transfer-mobile-card__title">
+                                          Transfer {transfer.id}
+                                        </div>
                                         <div className="text-muted small mb-2 mt-2">{routeLabel}</div>
                                       </div>
 
@@ -5027,8 +5613,12 @@ const Stock = () => {
                                           <i className="fas fa-route me-2"></i>
                                           {getTransferTypeLabel(transfer.transferType)}
                                         </span>
-                                        <span className={`mobile-chip badge bg-${getTransferStatusMeta(transfer.status).bootstrap} text-end`}>
-                                          <i className={`fas fa-${getTransferStatusMeta(transfer.status).icon} me-2`}></i>
+                                        <span
+                                          className={`mobile-chip badge bg-${getTransferStatusMeta(transfer.status).bootstrap} text-end`}
+                                        >
+                                          <i
+                                            className={`fas fa-${getTransferStatusMeta(transfer.status).icon} me-2`}
+                                          ></i>
                                           {getTransferStatusMeta(transfer.status).label}
                                         </span>
                                       </div>
@@ -5048,7 +5638,11 @@ const Stock = () => {
                                       <div
                                         key={`${transfer.id}-${item.product?.id || idx}`}
                                         className="mobile-stat-tile d-grid align-items-center"
-                                        style={{ textAlign: 'left', gridTemplateColumns: '1fr auto', columnGap: '0.75rem' }}
+                                        style={{
+                                          textAlign: 'left',
+                                          gridTemplateColumns: '1fr auto',
+                                          columnGap: '0.75rem',
+                                        }}
                                       >
                                         <div className="d-flex flex-column gap-1">
                                           <div className="fw-semibold small">{item.product?.name || '-'}</div>
@@ -5079,25 +5673,39 @@ const Stock = () => {
                                       <i className="fas fa-warehouse me-1"></i>
                                       Kaynak
                                     </div>
-                                    <div className="value" style={{ fontSize: '0.95rem' }}>{transfer.sourceWarehouse?.name || '-'}</div>
-                                    <small className="text-muted d-block">{transfer.sourceWarehouse?.location || ''}</small>
+                                    <div className="value" style={{ fontSize: '0.95rem' }}>
+                                      {transfer.sourceWarehouse?.name || '-'}
+                                    </div>
+                                    <small className="text-muted d-block">
+                                      {transfer.sourceWarehouse?.location || ''}
+                                    </small>
                                   </div>
                                 </div>
                                 <div className="col-6">
                                   <div className="mobile-stat-tile" style={{ textAlign: 'left' }}>
                                     <div className="label">
-                                      <i className={`fas ${(transfer.transferType || 'WAREHOUSE') === 'CUSTOMER_DELIVERY' ? 'fa-user-tag' : 'fa-warehouse'} me-1`}></i>
+                                      <i
+                                        className={`fas ${(transfer.transferType || 'WAREHOUSE') === 'CUSTOMER_DELIVERY' ? 'fa-user-tag' : 'fa-warehouse'} me-1`}
+                                      ></i>
                                       Hedef
                                     </div>
                                     {(transfer.transferType || 'WAREHOUSE') === 'CUSTOMER_DELIVERY' ? (
                                       <>
-                                        <div className="value" style={{ fontSize: '0.95rem' }}>{transfer.customerFullName || '-'}</div>
-                                        <small className="text-muted d-block">{transfer.customerPhone || ''}</small>
+                                        <div className="value" style={{ fontSize: '0.95rem' }}>
+                                          {transfer.customerFullName || '-'}
+                                        </div>
+                                        <small className="text-muted d-block">
+                                          {transfer.customerPhone || ''}
+                                        </small>
                                       </>
                                     ) : (
                                       <>
-                                        <div className="value" style={{ fontSize: '0.95rem' }}>{transfer.destinationWarehouse?.name || '-'}</div>
-                                        <small className="text-muted d-block">{transfer.destinationWarehouse?.location || ''}</small>
+                                        <div className="value" style={{ fontSize: '0.95rem' }}>
+                                          {transfer.destinationWarehouse?.name || '-'}
+                                        </div>
+                                        <small className="text-muted d-block">
+                                          {transfer.destinationWarehouse?.location || ''}
+                                        </small>
                                       </>
                                     )}
                                   </div>
@@ -5113,7 +5721,9 @@ const Stock = () => {
                                           <i className="fas fa-user me-1"></i>
                                           Şoför
                                         </div>
-                                        <div className="value" style={{ fontSize: '0.95rem' }}>{transfer.driverName}</div>
+                                        <div className="value" style={{ fontSize: '0.95rem' }}>
+                                          {transfer.driverName}
+                                        </div>
                                       </div>
                                     </div>
                                   )}
@@ -5124,7 +5734,9 @@ const Stock = () => {
                                           <i className="fas fa-car me-1"></i>
                                           Plaka
                                         </div>
-                                        <div className="value" style={{ fontSize: '0.95rem' }}>{transfer.vehiclePlate}</div>
+                                        <div className="value" style={{ fontSize: '0.95rem' }}>
+                                          {transfer.vehiclePlate}
+                                        </div>
                                       </div>
                                     </div>
                                   )}
@@ -5180,14 +5792,15 @@ const Stock = () => {
                                         setConfirmModal({
                                           show: true,
                                           title: 'Transferi Yola Çıkar',
-                                          message: 'Transfer yola çıkarılacak ve stok rezerve edilecek. Onaylıyor musunuz?',
+                                          message:
+                                            'Transfer yola çıkarılacak ve stok rezerve edilecek. Onaylıyor musunuz?',
                                           confirmText: 'Evet, Yola Çıkar',
                                           confirmVariant: 'info',
                                           icon: 'truck',
                                           onConfirm: () => {
                                             setConfirmModal({ show: false });
                                             handleTransferStatusChange(transfer.id, 'start');
-                                          }
+                                          },
                                         });
                                       }}
                                     >
@@ -5212,7 +5825,7 @@ const Stock = () => {
                                         setCancellationModal({
                                           show: true,
                                           transferId: transfer.id,
-                                          reason: ''
+                                          reason: '',
                                         })
                                       }
                                     >
@@ -5241,7 +5854,7 @@ const Stock = () => {
                                         setCancellationModal({
                                           show: true,
                                           transferId: transfer.id,
-                                          reason: ''
+                                          reason: '',
                                         })
                                       }
                                     >
@@ -5253,12 +5866,14 @@ const Stock = () => {
                                 {transfer.status === 'CANCELLED' && transfer.cancellationReason && (
                                   <button
                                     className="btn btn-outline-danger w-100"
-                                    onClick={() => setNotesModal({
-                                      show: true,
-                                      notes: transfer.cancellationReason,
-                                      transferId: transfer.id,
-                                      title: 'İptal Nedeni'
-                                    })}
+                                    onClick={() =>
+                                      setNotesModal({
+                                        show: true,
+                                        notes: transfer.cancellationReason,
+                                        transferId: transfer.id,
+                                        title: 'İptal Nedeni',
+                                      })
+                                    }
                                   >
                                     <i className="fas fa-exclamation-circle me-1"></i>
                                     İptal Nedeni
@@ -5267,12 +5882,14 @@ const Stock = () => {
                                 {approvalRejected && transfer.approvalNote && (
                                   <button
                                     className="btn btn-outline-danger w-100"
-                                    onClick={() => setNotesModal({
-                                      show: true,
-                                      notes: transfer.approvalNote,
-                                      transferId: transfer.id,
-                                      title: 'Onay Red Notu'
-                                    })}
+                                    onClick={() =>
+                                      setNotesModal({
+                                        show: true,
+                                        notes: transfer.approvalNote,
+                                        transferId: transfer.id,
+                                        title: 'Onay Red Notu',
+                                      })
+                                    }
                                   >
                                     <i className="fas fa-exclamation-circle me-1"></i>
                                     Onay Notu
@@ -5284,12 +5901,14 @@ const Stock = () => {
                                 {transfer.notes && (
                                   <button
                                     className="btn btn-outline-secondary mobile-action-btn"
-                                    onClick={() => setNotesModal({
-                                      show: true,
-                                      notes: transfer.notes,
-                                      transferId: transfer.id,
-                                      title: 'Transfer Notu'
-                                    })}
+                                    onClick={() =>
+                                      setNotesModal({
+                                        show: true,
+                                        notes: transfer.notes,
+                                        transferId: transfer.id,
+                                        title: 'Transfer Notu',
+                                      })
+                                    }
                                     title="Transfer notunu aç"
                                   >
                                     <i className="fas fa-sticky-note"></i>
@@ -5298,12 +5917,14 @@ const Stock = () => {
                                 {transfer.completionNote && (
                                   <button
                                     className="btn btn-outline-success mobile-action-btn"
-                                    onClick={() => setNotesModal({
-                                      show: true,
-                                      notes: transfer.completionNote,
-                                      transferId: transfer.id,
-                                      title: 'Tamamlama Notu'
-                                    })}
+                                    onClick={() =>
+                                      setNotesModal({
+                                        show: true,
+                                        notes: transfer.completionNote,
+                                        transferId: transfer.id,
+                                        title: 'Tamamlama Notu',
+                                      })
+                                    }
                                     title="Tamamlama notunu aç"
                                   >
                                     <i className="fas fa-clipboard-check"></i>
@@ -5312,7 +5933,13 @@ const Stock = () => {
                                 {isAdmin && (
                                   <button
                                     className="btn btn-outline-secondary mobile-action-btn"
-                                    onClick={() => setAuditModal({ show: true, entityType: 'StockTransfer', entityId: transfer.id })}
+                                    onClick={() =>
+                                      setAuditModal({
+                                        show: true,
+                                        entityType: 'StockTransfer',
+                                        entityId: transfer.id,
+                                      })
+                                    }
                                     title="Hareket geçmişi"
                                   >
                                     <i className="fas fa-history"></i>
@@ -5348,8 +5975,7 @@ const Stock = () => {
             </div>
           </div>
         </div>
-      )
-      }
+      )}
 
       {/* Confirmation Modal */}
       <ConfirmModal
@@ -5404,11 +6030,14 @@ const Stock = () => {
                       <div className="d-flex flex-column gap-2">
                         <div className="fw-bold text-danger">
                           <i className={`fas ${error.transferInfo ? 'fa-truck' : 'fa-box'} me-2`}></i>
-                          {error.transferInfo || error.stockInfo || `#${error.transferId || error.stockId || index + 1}`}
+                          {error.transferInfo ||
+                            error.stockInfo ||
+                            `#${error.transferId || error.stockId || index + 1}`}
                         </div>
                         {error.sku && (
                           <div className="text-muted">
-                            <strong>Stok Kodu:</strong> <span className="badge bg-secondary">{error.sku}</span>
+                            <strong>Stok Kodu:</strong>{' '}
+                            <span className="badge bg-secondary">{error.sku}</span>
                           </div>
                         )}
                         <div className="text-danger mt-1">
@@ -5443,207 +6072,211 @@ const Stock = () => {
       />
 
       {/* Cancellation Reason Modal */}
-      {
-        cancellationModal.show && (
-          <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-            <div className="modal-dialog modal-dialog-centered">
-              <div className="modal-content">
-                <div className="modal-header bg-danger text-white">
-                  <h5 className="modal-title">
-                    <i className="fas fa-ban me-2"></i>
-                    Transferi İptal Et
-                  </h5>
-                  <button
-                    type="button"
-                    className="btn-close btn-close-white"
-                    onClick={() => setCancellationModal({ show: false, transferId: null, reason: '' })}
-                  ></button>
+      {cancellationModal.show && (
+        <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content">
+              <div className="modal-header bg-danger text-white">
+                <h5 className="modal-title">
+                  <i className="fas fa-ban me-2"></i>
+                  Transferi İptal Et
+                </h5>
+                <button
+                  type="button"
+                  className="btn-close btn-close-white"
+                  onClick={() => setCancellationModal({ show: false, transferId: null, reason: '' })}
+                ></button>
+              </div>
+              <div className="modal-body">
+                <div className="alert alert-warning">
+                  <i className="fas fa-exclamation-triangle me-2"></i>
+                  Transfer iptal edilecek. Bu işlem geri alınamaz.
                 </div>
-                <div className="modal-body">
-                  <div className="alert alert-warning">
-                    <i className="fas fa-exclamation-triangle me-2"></i>
-                    Transfer iptal edilecek. Bu işlem geri alınamaz.
-                  </div>
+                <div className="mb-3">
+                  <label htmlFor="cancellationReason" className="form-label">
+                    <i className="fas fa-comment-alt me-1"></i>
+                    İptal Nedeni <span className="text-muted">(Opsiyonel)</span>
+                  </label>
+                  <textarea
+                    id="cancellationReason"
+                    className="form-control"
+                    rows="4"
+                    value={cancellationModal.reason}
+                    onChange={(e) => setCancellationModal({ ...cancellationModal, reason: e.target.value })}
+                    placeholder="İptal nedenini buraya yazabilirsiniz..."
+                    maxLength="500"
+                  />
+                  <small className="text-muted">{cancellationModal.reason.length}/500 karakter</small>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setCancellationModal({ show: false, transferId: null, reason: '' })}
+                >
+                  <i className="fas fa-times me-2"></i>
+                  Vazgeç
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-danger"
+                  onClick={() => {
+                    handleTransferStatusChange(
+                      cancellationModal.transferId,
+                      'cancel',
+                      cancellationModal.reason.trim()
+                        ? { cancellationReason: cancellationModal.reason.trim() }
+                        : undefined
+                    );
+                    setCancellationModal({ show: false, transferId: null, reason: '' });
+                  }}
+                >
+                  <i className="fas fa-ban me-2"></i>
+                  İptal Et
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {completionModal.show && (
+        <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content">
+              <div className="modal-header bg-success text-white">
+                <h5 className="modal-title">
+                  <i className="fas fa-clipboard-check me-2"></i>
+                  Tamamlama Notu
+                </h5>
+                <button
+                  type="button"
+                  className="btn-close btn-close-white"
+                  onClick={() =>
+                    setCompletionModal({
+                      show: false,
+                      transferId: null,
+                      note: '',
+                      message: '',
+                      transfer: null,
+                    })
+                  }
+                ></button>
+              </div>
+              <div className="modal-body">
+                <div className="alert alert-info">
+                  <i className="fas fa-info-circle me-2"></i>
+                  {completionModal.message ||
+                    'Sevk tamamlanmadan önce teslimat durumunu ve varsa özel notları ekleyebilirsiniz.'}
+                </div>
+                {completionModal.transfer?.transferType === 'CUSTOMER_DELIVERY' && (
                   <div className="mb-3">
-                    <label htmlFor="cancellationReason" className="form-label">
-                      <i className="fas fa-comment-alt me-1"></i>
-                      İptal Nedeni <span className="text-muted">(Opsiyonel)</span>
-                    </label>
-                    <textarea
-                      id="cancellationReason"
-                      className="form-control"
-                      rows="4"
-                      value={cancellationModal.reason}
-                      onChange={(e) => setCancellationModal({ ...cancellationModal, reason: e.target.value })}
-                      placeholder="İptal nedenini buraya yazabilirsiniz..."
-                      maxLength="500"
-                    />
-                    <small className="text-muted">
-                      {cancellationModal.reason.length}/500 karakter
+                    <div className="fw-bold">
+                      <i className="fas fa-user-tag me-2 text-info"></i>
+                      {completionModal.transfer.customerFullName}
+                    </div>
+                    <small className="text-muted d-block">
+                      <i className="fas fa-phone me-1"></i>
+                      {completionModal.transfer.customerPhone}
+                    </small>
+                    <small className="text-muted d-block">
+                      <i className="fas fa-map-marker-alt me-1"></i>
+                      {completionModal.transfer.customerAddress}
                     </small>
                   </div>
+                )}
+                <div className="mb-3">
+                  <label htmlFor="completionNote" className="form-label">
+                    <i className="fas fa-comment-alt me-1"></i>
+                    Tamamlama Notu <span className="text-muted">(Opsiyonel)</span>
+                  </label>
+                  <textarea
+                    id="completionNote"
+                    className="form-control"
+                    rows="4"
+                    value={completionModal.note}
+                    onChange={(e) => setCompletionModal({ ...completionModal, note: e.target.value })}
+                    placeholder="Teslim alan kişi, adres detayları veya önemli gözlemler..."
+                    maxLength="500"
+                  />
+                  <small className="text-muted">{completionModal.note.length}/500 karakter</small>
                 </div>
-                <div className="modal-footer">
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    onClick={() => setCancellationModal({ show: false, transferId: null, reason: '' })}
-                  >
-                    <i className="fas fa-times me-2"></i>
-                    Vazgeç
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-danger"
-                    onClick={() => {
-                      handleTransferStatusChange(
-                        cancellationModal.transferId,
-                        'cancel',
-                        cancellationModal.reason.trim()
-                          ? { cancellationReason: cancellationModal.reason.trim() }
-                          : undefined
-                      );
-                      setCancellationModal({ show: false, transferId: null, reason: '' });
-                    }}
-                  >
-                    <i className="fas fa-ban me-2"></i>
-                    İptal Et
-                  </button>
-                </div>
+              </div>
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() =>
+                    setCompletionModal({
+                      show: false,
+                      transferId: null,
+                      note: '',
+                      message: '',
+                      transfer: null,
+                    })
+                  }
+                >
+                  <i className="fas fa-times me-2"></i>
+                  Vazgeç
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-success"
+                  onClick={() => {
+                    handleTransferStatusChange(
+                      completionModal.transferId,
+                      'complete',
+                      completionModal.note.trim()
+                        ? { completionNote: completionModal.note.trim() }
+                        : undefined
+                    );
+                    setCompletionModal({
+                      show: false,
+                      transferId: null,
+                      note: '',
+                      message: '',
+                      transfer: null,
+                    });
+                  }}
+                >
+                  <i className="fas fa-check me-2"></i>
+                  Kaydet ve Tamamla
+                </button>
               </div>
             </div>
           </div>
-        )
-      }
-
-      {
-        completionModal.show && (
-          <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-            <div className="modal-dialog modal-dialog-centered">
-              <div className="modal-content">
-                <div className="modal-header bg-success text-white">
-                  <h5 className="modal-title">
-                    <i className="fas fa-clipboard-check me-2"></i>
-                    Tamamlama Notu
-                  </h5>
-                  <button
-                    type="button"
-                    className="btn-close btn-close-white"
-                    onClick={() => setCompletionModal({ show: false, transferId: null, note: '', message: '', transfer: null })}
-                  ></button>
-                </div>
-                <div className="modal-body">
-                  <div className="alert alert-info">
-                    <i className="fas fa-info-circle me-2"></i>
-                    {completionModal.message || 'Sevk tamamlanmadan önce teslimat durumunu ve varsa özel notları ekleyebilirsiniz.'}
-                  </div>
-                  {completionModal.transfer?.transferType === 'CUSTOMER_DELIVERY' && (
-                    <div className="mb-3">
-                      <div className="fw-bold">
-                        <i className="fas fa-user-tag me-2 text-info"></i>
-                        {completionModal.transfer.customerFullName}
-                      </div>
-                      <small className="text-muted d-block">
-                        <i className="fas fa-phone me-1"></i>
-                        {completionModal.transfer.customerPhone}
-                      </small>
-                      <small className="text-muted d-block">
-                        <i className="fas fa-map-marker-alt me-1"></i>
-                        {completionModal.transfer.customerAddress}
-                      </small>
-                    </div>
-                  )}
-                  <div className="mb-3">
-                    <label htmlFor="completionNote" className="form-label">
-                      <i className="fas fa-comment-alt me-1"></i>
-                      Tamamlama Notu <span className="text-muted">(Opsiyonel)</span>
-                    </label>
-                    <textarea
-                      id="completionNote"
-                      className="form-control"
-                      rows="4"
-                      value={completionModal.note}
-                      onChange={(e) => setCompletionModal({ ...completionModal, note: e.target.value })}
-                      placeholder="Teslim alan kişi, adres detayları veya önemli gözlemler..."
-                      maxLength="500"
-                    />
-                    <small className="text-muted">{completionModal.note.length}/500 karakter</small>
-                  </div>
-                </div>
-                <div className="modal-footer">
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    onClick={() => setCompletionModal({ show: false, transferId: null, note: '', message: '', transfer: null })}
-                  >
-                    <i className="fas fa-times me-2"></i>
-                    Vazgeç
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-success"
-                    onClick={() => {
-                      handleTransferStatusChange(
-                        completionModal.transferId,
-                        'complete',
-                        completionModal.note.trim()
-                          ? { completionNote: completionModal.note.trim() }
-                          : undefined
-                      );
-                      setCompletionModal({ show: false, transferId: null, note: '', message: '', transfer: null });
-                    }}
-                  >
-                    <i className="fas fa-check me-2"></i>
-                    Kaydet ve Tamamla
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )
-      }
+        </div>
+      )}
 
       {/* Audit Timeline Modal */}
-      {
-        auditModal.show && (
-          <AuditTimelineModal
-            entityType={auditModal.entityType}
-            entityId={auditModal.entityId}
-            onClose={() => setAuditModal({ show: false, entityType: null, entityId: null })}
-          />
-        )
-      }
+      {auditModal.show && (
+        <AuditTimelineModal
+          entityType={auditModal.entityType}
+          entityId={auditModal.entityId}
+          onClose={() => setAuditModal({ show: false, entityType: null, entityId: null })}
+        />
+      )}
 
       {/* Stock Request Approval Modal */}
-      {
-        showApprovalModal && (
-          <StockRequestApprovalModal
-            onClose={() => setShowApprovalModal(false)}
-            onApprove={async () => {
-              try {
-                await Promise.all([
-                  fetchAllData(),
-                  fetchStocks(stockPage)
-                ]);
-                showSuccessToast('Stok listesi güncellendi.');
-              } catch (err) {
-                console.warn('Stock refresh after approval failed', err);
-                showToast('Stoklar yenilenirken hata oluştu. Sayfayı yenileyin.', 'warning', 6000);
-              }
-            }}
-            initialTab={approvalModalTab}
-          />
-        )
-      }
-      {
-        showMyRequestsModal && (
-          <MyStockRequestsModal
-            onClose={() => setShowMyRequestsModal(false)}
-          />
-        )
-      }
+      {showApprovalModal && (
+        <StockRequestApprovalModal
+          onClose={() => setShowApprovalModal(false)}
+          onApprove={async () => {
+            try {
+              await Promise.all([fetchAllData(), fetchStocks(stockPage)]);
+              showSuccessToast('Stok listesi güncellendi.');
+            } catch (err) {
+              console.warn('Stock refresh after approval failed', err);
+              showToast('Stoklar yenilenirken hata oluştu. Sayfayı yenileyin.', 'warning', 6000);
+            }
+          }}
+          initialTab={approvalModalTab}
+        />
+      )}
+      {showMyRequestsModal && <MyStockRequestsModal onClose={() => setShowMyRequestsModal(false)} />}
       {SecurityCodePrompt}
-    </div >
+    </div>
   );
 };
 
