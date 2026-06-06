@@ -7,6 +7,7 @@ import SeoHead from '../../components/store/SeoHead';
 import { useSiteSettings } from '../../hooks/useSiteSettings';
 import { buildArticleSchema, buildBreadcrumbSchema } from '../../utils/seo';
 import { FiPhone, FiMail, FiMapPin } from 'react-icons/fi';
+import { groupPhoneDirectory, telHref } from '../../utils/phones';
 
 export default function StoreCmsPage() {
   const { slug } = useParams();
@@ -17,23 +18,36 @@ export default function StoreCmsPage() {
 
   useEffect(() => {
     setLoading(true);
-    axios.get(`/api/store/pages/${slug}`).then(r => setPage(r.data)).catch(() => setPage(null)).finally(() => setLoading(false));
+    axios
+      .get(`/api/store/pages/${slug}`)
+      .then((r) => setPage(r.data))
+      .catch(() => setPage(null))
+      .finally(() => setLoading(false));
   }, [slug]);
 
-  if (loading) return <div className="container my-5 text-center"><div className="spinner-border" /></div>;
-  if (!page) return (
-    <div className="container my-5 text-center">
-      <h3 className="text-muted">Sayfa Bulunamadı</h3>
-      <p className="text-muted">Aradığınız sayfa henüz oluşturulmamış olabilir.</p>
-    </div>
-  );
+  if (loading)
+    return (
+      <div className="container my-5 text-center">
+        <div className="spinner-border" />
+      </div>
+    );
+  if (!page)
+    return (
+      <div className="container my-5 text-center">
+        <h3 className="text-muted">Sayfa Bulunamadı</h3>
+        <p className="text-muted">Aradığınız sayfa henüz oluşturulmamış olabilir.</p>
+      </div>
+    );
 
   // SEO: CMS article schema + breadcrumbs
   const articleSchema = buildArticleSchema(page, settings);
-  const breadcrumbSchema = buildBreadcrumbSchema([
-    { name: 'Ana Sayfa', url: '/' },
-    { name: page.title, url: `/sayfa/${page.slug}` }
-  ], settings);
+  const breadcrumbSchema = buildBreadcrumbSchema(
+    [
+      { name: 'Ana Sayfa', url: '/' },
+      { name: page.title, url: `/sayfa/${page.slug}` },
+    ],
+    settings
+  );
 
   const SeoHeader = (
     <SeoHead
@@ -65,18 +79,53 @@ export default function StoreCmsPage() {
                       <span>{siteSettings.get('contact_address')}</span>
                     </li>
                   )}
-                  {siteSettings.get('contact_phone') && (
-                    <li className="d-flex align-items-center gap-3 mb-3">
-                      <FiPhone size={18} className="text-primary flex-shrink-0" />
-                      <a href={`tel:${siteSettings.get('contact_phone')}`} className="text-decoration-none">
-                        {siteSettings.get('contact_phone')}
-                      </a>
-                    </li>
-                  )}
+                  {(() => {
+                    const groups = groupPhoneDirectory(siteSettings.settings);
+                    if (groups.length === 0) {
+                      return siteSettings.get('contact_phone') ? (
+                        <li className="d-flex align-items-center gap-3 mb-3">
+                          <FiPhone size={18} className="text-primary flex-shrink-0" />
+                          <a
+                            href={telHref(siteSettings.get('contact_phone'))}
+                            className="text-decoration-none"
+                          >
+                            {siteSettings.get('contact_phone')}
+                          </a>
+                        </li>
+                      ) : null;
+                    }
+                    return groups.map((cat) => (
+                      <li key={cat.key} className="d-flex align-items-start gap-3 mb-3">
+                        <FiPhone size={18} className="text-primary mt-1 flex-shrink-0" />
+                        <div>
+                          <div className="fw-semibold">{cat.title}</div>
+                          {cat.groups.map((sub) => (
+                            <div key={String(sub.key)} className="mt-1">
+                              {sub.rows.map((r, idx) => (
+                                <div key={idx}>
+                                  <a href={telHref(r.number)} className="text-decoration-none">
+                                    {r.number}
+                                  </a>
+                                  {(r.label || sub.title) && (
+                                    <span className="text-muted ms-2" style={{ fontSize: '0.85em' }}>
+                                      {r.label || sub.title}
+                                    </span>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          ))}
+                        </div>
+                      </li>
+                    ));
+                  })()}
                   {siteSettings.get('contact_email') && (
                     <li className="d-flex align-items-center gap-3 mb-3">
                       <FiMail size={18} className="text-primary flex-shrink-0" />
-                      <a href={`mailto:${siteSettings.get('contact_email')}`} className="text-decoration-none">
+                      <a
+                        href={`mailto:${siteSettings.get('contact_email')}`}
+                        className="text-decoration-none"
+                      >
                         {siteSettings.get('contact_email')}
                       </a>
                     </li>
@@ -123,7 +172,7 @@ export default function StoreCmsPage() {
 
   // Standard CMS page
   return (
-    <div className="container my-4" style={{maxWidth: 800}}>
+    <div className="container my-4" style={{ maxWidth: 800 }}>
       {SeoHeader}
       <Breadcrumb items={[{ label: page.title }]} />
       <h1 className="h3 fw-bold mb-4">{page.title}</h1>

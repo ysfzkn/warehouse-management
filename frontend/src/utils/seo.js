@@ -9,6 +9,8 @@
  *   const productLd = buildProductSchema(product, siteSettings);
  */
 
+import { getDefaultPhone } from './phones';
+
 /** Builds the canonical URL. Uses the canonical domain from site settings if present, otherwise window.location.origin. */
 export function getCanonicalUrl(path = '', siteSettings) {
   const canonicalDomain = siteSettings?.seo_canonical_domain?.trim();
@@ -153,11 +155,11 @@ export function buildOrganizationSchema(siteSettings) {
   if (sameAs.length > 0) schema.sameAs = sameAs;
 
   // Contact information
-  if (siteSettings.contact_phone || siteSettings.contact_email) {
+  if (getDefaultPhone(siteSettings) || siteSettings.contact_email) {
     schema.contactPoint = {
       '@type': 'ContactPoint',
       contactType: 'customer service',
-      telephone: siteSettings.contact_phone || undefined,
+      telephone: getDefaultPhone(siteSettings) || undefined,
       email: siteSettings.contact_email || undefined,
       areaServed: 'TR',
       availableLanguage: ['Turkish'],
@@ -289,7 +291,7 @@ export function buildLocalBusinessSchema(siteSettings) {
     url: getCanonicalUrl('/', siteSettings),
     image: toAbsoluteUrl(siteSettings.site_logo_url, siteSettings) || undefined,
     logo: toAbsoluteUrl(siteSettings.site_logo_url, siteSettings) || undefined,
-    telephone: siteSettings.contact_phone || undefined,
+    telephone: getDefaultPhone(siteSettings) || undefined,
     email: siteSettings.contact_email || undefined,
     priceRange: siteSettings.seo_local_price_range || '₺₺',
     address: {
