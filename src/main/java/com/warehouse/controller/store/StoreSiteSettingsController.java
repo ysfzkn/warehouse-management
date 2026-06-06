@@ -22,7 +22,8 @@ public class StoreSiteSettingsController {
 
     @GetMapping
     public ResponseEntity<Map<String, String>> getSettings() {
-        return ResponseEntity.ok(siteSettingService.getAllSettings());
+        // Public endpoint — secrets (passwords, API tokens, webhook secrets) are stripped.
+        return ResponseEntity.ok(siteSettingService.getPublicSettings());
     }
 
     @GetMapping("/logo")
