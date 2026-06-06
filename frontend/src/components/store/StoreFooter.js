@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { FiPhone, FiMail, FiMapPin, FiInstagram, FiMessageCircle, FiFacebook } from 'react-icons/fi';
-import { groupPhoneDirectory, telHref } from '../../utils/phones';
+import { groupPhoneDirectory, telHref, waHref } from '../../utils/phones';
 
 export default function StoreFooter({ settings }) {
   return (
@@ -28,21 +28,25 @@ export default function StoreFooter({ settings }) {
                   ) : null;
                 }
                 return groups.flatMap((cat) =>
-                  cat.groups.flatMap((sub) =>
-                    sub.rows.map((r, idx) => {
-                      const tag = r.label || sub.title || cat.title;
-                      return (
-                        <li key={`${cat.key}-${sub.key}-${idx}`}>
-                          <FiPhone size={14} /> <a href={telHref(r.number)}>{r.number}</a>
-                          {tag && (
-                            <span className="text-muted ms-1" style={{ fontSize: '0.8em' }}>
-                              ({tag})
-                            </span>
-                          )}
-                        </li>
-                      );
-                    })
-                  )
+                  cat.rows.map((r, idx) => {
+                    const tag = r.label || cat.title;
+                    const Icon = r.isWhatsapp ? FiMessageCircle : FiPhone;
+                    const href = r.isWhatsapp ? waHref(r.number) : telHref(r.number);
+                    const extra = r.isWhatsapp ? { target: '_blank', rel: 'noopener noreferrer' } : {};
+                    return (
+                      <li key={`${cat.key}-${idx}`}>
+                        <Icon size={14} />{' '}
+                        <a href={href} {...extra}>
+                          {r.number}
+                        </a>
+                        {tag && (
+                          <span className="text-muted ms-1" style={{ fontSize: '0.8em' }}>
+                            ({tag})
+                          </span>
+                        )}
+                      </li>
+                    );
+                  })
                 );
               })()}
               {settings.get('contact_email') && (

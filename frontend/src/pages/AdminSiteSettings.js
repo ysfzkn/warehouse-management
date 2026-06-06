@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import axios from 'axios';
 import useSecurityCodePrompt from '../components/useSecurityCodePrompt';
 import { useAdminToast } from '../components/AdminToast';
-import { parsePhoneDirectory } from '../utils/phones';
+import { parsePhoneDirectoryEditable, PHONE_TYPES } from '../utils/phones';
 
 // ─────────────────────────────────────────────────────────────
 // Setting groups organized into sections
@@ -356,7 +356,7 @@ const FIELD_TOOLTIPS = {
   header_announcement: 'Mağaza üst barında kayan kampanya mesajı olarak gösterilir',
   social_whatsapp: 'Ülke kodu ile (ör: 905551234567)',
   phone_directory:
-    'Birden fazla telefon ekleyin: İş Yeri (Merkez/Şube) ve Cep. Biri "Varsayılan" işaretlenir — header ve tek-numara gereken yerlerde o kullanılır; footer ve iletişim sayfasında hepsi gruplu görünür. Boş bırakılırsa üstteki tek "Telefon" alanı kullanılır.',
+    'Birden fazla numara ekleyin; her biri için tür seçin: Merkez (İş), Şube (İş), WhatsApp Kanalı (Business) veya Cep Telefonu. Biri "Varsayılan" işaretlenir — header ve tek-numara gereken yerlerde o kullanılır. Footer ve iletişim sayfasında hepsi gruplu görünür (WhatsApp türü, WhatsApp sohbet linki olarak). WhatsApp için ülke kodu ile yazın (ör: 905551234567). Boş bırakılırsa üstteki tek "Telefon" alanı kullanılır.',
   whatsapp_order_number:
     'Ürün sayfasındaki "WhatsApp ile Sipariş" butonu bu numaraya yazar. Boşsa sosyal WhatsApp numarası kullanılır. Ülke kodu ile (ör: 905551234567).',
   whatsapp_order_template:
@@ -838,22 +838,12 @@ export default function AdminSiteSettings() {
   // ===== Field renderer =====
   const renderPhoneDirectory = (key) => {
     const isDirtyField = dirtyKeys.has(key);
-    const rows = parsePhoneDirectory(settings);
+    const rows = parsePhoneDirectoryEditable(settings[key]);
     const commit = (next) => handleChange(key, JSON.stringify(next));
     const update = (i, patch) => commit(rows.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
     const setDefault = (i) => commit(rows.map((r, idx) => ({ ...r, isDefault: idx === i })));
-    const changeCategory = (i, category) =>
-      update(
-        i,
-        category === 'mobile'
-          ? { category: 'mobile', subType: null }
-          : { category: 'business', subType: rows[i].subType || 'merkez' }
-      );
     const addRow = () =>
-      commit([
-        ...rows,
-        { category: 'business', subType: 'merkez', label: '', number: '', isDefault: rows.length === 0 },
-      ]);
+      commit([...rows, { type: 'merkez', label: '', number: '', isDefault: rows.length === 0 }]);
     const removeRow = (i) => {
       let next = rows.filter((_, idx) => idx !== i);
       if (next.length && !next.some((r) => r.isDefault))
@@ -871,33 +861,30 @@ export default function AdminSiteSettings() {
               Henüz numara yok. Eklenmezse üstteki tek "Telefon" alanı (varsayılan/yedek) kullanılır.
             </div>
           )}
+          {rows.length > 0 && (
+            <div className="row g-2 d-none d-md-flex text-muted small fw-semibold mb-1 px-1">
+              <div className="col-md-4">Numara Türü</div>
+              <div className="col-md-3">Etiket (opsiyonel)</div>
+              <div className="col-md-3">Numara</div>
+              <div className="col-md-1 text-center">Varsayılan</div>
+              <div className="col-md-1"></div>
+            </div>
+          )}
           {rows.map((r, i) => (
-            <div key={i} className="row g-1 align-items-center mb-2">
-              <div className="col-6 col-md-2">
+            <div key={i} className="row g-2 align-items-center mb-2">
+              <div className="col-12 col-md-4">
                 <select
                   className="form-select form-select-sm"
-                  value={r.category}
-                  onChange={(e) => changeCategory(i, e.target.value)}
-                  aria-label="Kategori"
+                  value={r.type}
+                  onChange={(e) => update(i, { type: e.target.value })}
+                  aria-label="Numara türü"
                 >
-                  <option value="business">İş Yeri</option>
-                  <option value="mobile">Cep</option>
+                  {PHONE_TYPES.map((t) => (
+                    <option key={t.value} value={t.value}>
+                      {t.label}
+                    </option>
+                  ))}
                 </select>
-              </div>
-              <div className="col-6 col-md-2">
-                {r.category === 'business' ? (
-                  <select
-                    className="form-select form-select-sm"
-                    value={r.subType || 'merkez'}
-                    onChange={(e) => update(i, { subType: e.target.value })}
-                    aria-label="Alt tip"
-                  >
-                    <option value="merkez">Merkez</option>
-                    <option value="sube">Şube</option>
-                  </select>
-                ) : (
-                  <span className="text-muted small ps-1">—</span>
-                )}
               </div>
               <div className="col-12 col-md-3">
                 <input

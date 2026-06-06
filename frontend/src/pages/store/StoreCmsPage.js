@@ -7,7 +7,7 @@ import SeoHead from '../../components/store/SeoHead';
 import { useSiteSettings } from '../../hooks/useSiteSettings';
 import { buildArticleSchema, buildBreadcrumbSchema } from '../../utils/seo';
 import { FiPhone, FiMail, FiMapPin } from 'react-icons/fi';
-import { groupPhoneDirectory, telHref } from '../../utils/phones';
+import { groupPhoneDirectory, telHref, waHref } from '../../utils/phones';
 
 export default function StoreCmsPage() {
   const { slug } = useParams();
@@ -99,22 +99,24 @@ export default function StoreCmsPage() {
                         <FiPhone size={18} className="text-primary mt-1 flex-shrink-0" />
                         <div>
                           <div className="fw-semibold">{cat.title}</div>
-                          {cat.groups.map((sub) => (
-                            <div key={String(sub.key)} className="mt-1">
-                              {sub.rows.map((r, idx) => (
-                                <div key={idx}>
-                                  <a href={telHref(r.number)} className="text-decoration-none">
-                                    {r.number}
-                                  </a>
-                                  {(r.label || sub.title) && (
-                                    <span className="text-muted ms-2" style={{ fontSize: '0.85em' }}>
-                                      {r.label || sub.title}
-                                    </span>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          ))}
+                          {cat.rows.map((r, idx) => {
+                            const href = r.isWhatsapp ? waHref(r.number) : telHref(r.number);
+                            const extra = r.isWhatsapp
+                              ? { target: '_blank', rel: 'noopener noreferrer' }
+                              : {};
+                            return (
+                              <div key={idx} className="mt-1">
+                                <a href={href} {...extra} className="text-decoration-none">
+                                  {r.number}
+                                </a>
+                                {r.label && (
+                                  <span className="text-muted ms-2" style={{ fontSize: '0.85em' }}>
+                                    {r.label}
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       </li>
                     ));

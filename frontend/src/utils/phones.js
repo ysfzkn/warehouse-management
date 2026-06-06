@@ -7,17 +7,44 @@
  * hook object must pass `.settings`.
  *
  * Entry shape:
- *   { category: 'business'|'mobile', subType: 'merkez'|'sube'|null,
- *     label?: string, number: string, isDefault?: boolean }
+ *   { type: 'merkez'|'sube'|'whatsapp'|'mobile', label?: string,
+ *     number: string, isDefault?: boolean }
  */
 
-export const CATEGORY_LABELS = { business: 'İş Yeri Telefonu', mobile: 'Cep Telefonu' };
-export const SUBTYPE_LABELS = { merkez: 'Merkez', sube: 'Şube' };
+/** The selectable phone types (admin dropdown + display grouping). */
+export const PHONE_TYPES = [
+  { value: 'merkez', label: 'Merkez (İş Yeri)', group: 'İş Yeri Telefonu', isWhatsapp: false },
+  { value: 'sube', label: 'Şube (İş Yeri)', group: 'İş Yeri Telefonu', isWhatsapp: false },
+  { value: 'whatsapp', label: 'WhatsApp Kanalı (Business)', group: 'WhatsApp Hattı', isWhatsapp: true },
+  { value: 'mobile', label: 'Cep Telefonu', group: 'Cep Telefonu', isWhatsapp: false },
+];
+
+const TYPE_MAP = Object.fromEntries(PHONE_TYPES.map((t) => [t.value, t]));
+const GROUP_ORDER = ['İş Yeri Telefonu', 'WhatsApp Hattı', 'Cep Telefonu'];
 
 export const DEFAULT_WHATSAPP_TEMPLATE =
   'Merhaba, şu ürünle ilgileniyorum:\n\n{urun}\nFiyat: {fiyat}\nSKU: {sku}\n\n{link}';
 
-/** Parse the phone_directory JSON setting into a clean array (never throws). */
+/** Resolve an entry's type, accepting the legacy {category, subType} shape too. */
+function resolveType(e) {
+  if (e && TYPE_MAP[e.type]) return e.type;
+  // Legacy fallback (category/subType from the first iteration)
+  if (e && e.category === 'mobile') return 'mobile';
+  if (e && e.category === 'business') return e.subType === 'sube' ? 'sube' : 'merkez';
+  return 'merkez';
+}
+
+function mapEntry(e, keepEmptyNumber) {
+  const number = keepEmptyNumber ? String(e?.number ?? '') : String(e?.number ?? '').trim();
+  return {
+    type: resolveType(e),
+    label: typeof e?.label === 'string' ? e.label : '',
+    number,
+    isDefault: !!e?.isDefault,
+  };
+}
+
+/** Display parse: clean array, drops rows without a number (never throws). */
 export function parsePhoneDirectory(settings) {
   const raw = settings?.phone_directory;
   if (!raw || typeof raw !== 'string') return [];
@@ -26,19 +53,30 @@ export function parsePhoneDirectory(settings) {
     if (!Array.isArray(arr)) return [];
     return arr
       .filter((e) => e && typeof e === 'object' && String(e.number || '').trim())
-      .map((e) => ({
-        category: e.category === 'mobile' ? 'mobile' : 'business',
-        subType: e.category === 'mobile' ? null : e.subType === 'sube' ? 'sube' : 'merkez',
-        label: typeof e.label === 'string' ? e.label : '',
-        number: String(e.number).trim(),
-        isDefault: !!e.isDefault,
-      }));
+      .map((e) => mapEntry(e, false));
   } catch {
     return [];
   }
 }
 
-/** The single default number: first isDefault, else first entry, else contact_phone. */
+/** Editor parse: KEEP all rows (including empty ones being filled in). */
+export function parsePhoneDirectoryEditable(value) {
+  if (!value || typeof value !== 'string') return [];
+  try {
+    const arr = JSON.parse(value);
+    if (!Array.isArray(arr)) return [];
+    return arr.filter((e) => e && typeof e === 'object').map((e) => mapEntry(e, true));
+  } catch {
+    return [];
+  }
+}
+
+/** Whether a type renders as a WhatsApp (chat) link rather than a tel: link. */
+export function isWhatsappType(type) {
+  return !!TYPE_MAP[type]?.isWhatsapp;
+}
+
+/** The single default callable number: first isDefault, else first, else contact_phone. */
 export function getDefaultPhone(settings) {
   const dir = parsePhoneDirectory(settings);
   const def = dir.find((e) => e.isDefault) || dir[0];
@@ -57,37 +95,31 @@ export function telHref(number) {
   return `tel:${plus}${n.replace(/[^\d]/g, '')}`;
 }
 
+/** wa.me chat href for a WhatsApp-channel number. */
+export function waHref(number) {
+  return `https://wa.me/${normalizePhone(number)}`;
+}
+
 /**
- * Group the directory for display: ordered business (Merkez, Şube) then mobile.
- * Returns [{ key, title, groups: [{ key, title, rows: [...] }] }] with empties omitted.
+ * Group the directory for display, ordered: İş Yeri → WhatsApp → Cep.
+ * Returns [{ key, title, rows: [{ type, label, number, isDefault, isWhatsapp }] }].
  */
 export function groupPhoneDirectory(settings) {
   const dir = parsePhoneDirectory(settings);
   if (dir.length === 0) return [];
-  const out = [];
-
-  const business = dir.filter((e) => e.category === 'business');
-  if (business.length) {
-    const sub = [];
-    ['merkez', 'sube'].forEach((st) => {
-      const rows = business.filter((e) => e.subType === st);
-      if (rows.length) sub.push({ key: st, title: SUBTYPE_LABELS[st], rows });
-    });
-    if (sub.length) out.push({ key: 'business', title: CATEGORY_LABELS.business, groups: sub });
-  }
-
-  const mobile = dir.filter((e) => e.category === 'mobile');
-  if (mobile.length) {
-    out.push({
-      key: 'mobile',
-      title: CATEGORY_LABELS.mobile,
-      groups: [{ key: null, title: null, rows: mobile }],
-    });
-  }
-  return out;
+  const byGroup = {};
+  dir.forEach((e) => {
+    const meta = TYPE_MAP[e.type] || TYPE_MAP.merkez;
+    (byGroup[meta.group] = byGroup[meta.group] || []).push({ ...e, isWhatsapp: meta.isWhatsapp });
+  });
+  return GROUP_ORDER.filter((g) => byGroup[g] && byGroup[g].length).map((g) => ({
+    key: g,
+    title: g,
+    rows: byGroup[g],
+  }));
 }
 
-// ─── Manual WhatsApp order (Feature 3) ───
+// ─── Manual WhatsApp order (product page) ───
 
 /** Digits-only WhatsApp order number (falls back to social_whatsapp). */
 export function getWhatsappOrderNumber(settings) {
