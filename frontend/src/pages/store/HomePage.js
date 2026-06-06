@@ -94,11 +94,12 @@ export default function HomePage() {
   const siteSchema = buildWebSiteSchema(settings);
   const localSchema = buildLocalBusinessSchema(settings);
   const city = getLocalCity(settings);
+  // Keep the homepage title concise (Google truncates ~60 chars): city + lead
+  // brand + value prop. The full brand list lives in keywords/structured data.
+  const leadBrand = (settings?.seo_local_primary_brands || '').split(',')[0]?.trim();
   const homeTitle =
     settings?.seo_meta_title_home ||
-    (city
-      ? `${city} Beyaz Eşya, Çamaşır Makinesi, Buzdolabı${settings?.seo_local_primary_brands ? ' — ' + settings.seo_local_primary_brands : ''}`
-      : null);
+    (city ? `${city} ${leadBrand ? leadBrand + ', ' : ''}Beyaz Eşya & Küçük Ev Aletleri` : null);
   const homeKeywords = buildHomeLocalKeywords(settings);
 
   return (
