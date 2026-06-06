@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import axios from 'axios';
 import useSecurityCodePrompt from '../components/useSecurityCodePrompt';
 import { useAdminToast } from '../components/AdminToast';
+import { parsePhoneDirectory } from '../utils/phones';
 
 // ─────────────────────────────────────────────────────────────
 // Setting groups organized into sections
@@ -29,7 +30,7 @@ const SETTING_GROUPS = [
     section: 'Mağaza',
     title: 'İletişim Bilgileri',
     icon: 'fas fa-phone',
-    keys: ['contact_phone', 'contact_email', 'contact_address', 'contact_map_embed'],
+    keys: ['contact_phone', 'phone_directory', 'contact_email', 'contact_address', 'contact_map_embed'],
     tooltip: 'Footer, iletişim sayfası ve e-posta bildirimlerinde gösterilir.',
   },
   {
@@ -37,7 +38,13 @@ const SETTING_GROUPS = [
     section: 'Mağaza',
     title: 'Sosyal Medya',
     icon: 'fas fa-share-alt',
-    keys: ['social_instagram', 'social_facebook', 'social_whatsapp'],
+    keys: [
+      'social_instagram',
+      'social_facebook',
+      'social_whatsapp',
+      'whatsapp_order_number',
+      'whatsapp_order_template',
+    ],
     tooltip: 'Footer ve iletişim sayfasında ikon olarak görünür.',
   },
   {
@@ -236,13 +243,16 @@ const LABELS = {
   site_favicon_url: 'Favicon',
   primary_color: 'Ana Renk',
   secondary_color: 'İkincil Renk',
-  contact_phone: 'Telefon',
+  contact_phone: 'Telefon (varsayılan / yedek)',
+  phone_directory: 'Telefon Rehberi (Çoklu Numara)',
   contact_email: 'E-posta',
   contact_address: 'Adres',
   contact_map_embed: 'Google Maps Embed URL',
   social_instagram: 'Instagram Profil URL',
   social_facebook: 'Facebook Sayfa URL',
   social_whatsapp: 'WhatsApp Numarası',
+  whatsapp_order_number: 'Sipariş WhatsApp Numarası',
+  whatsapp_order_template: 'WhatsApp Sipariş Mesaj Şablonu',
   company_legal_name: 'Ticari Unvan',
   mersis_number: 'MERSİS Numarası',
   kep_address: 'KEP Adresi',
@@ -345,6 +355,12 @@ const FIELD_TOOLTIPS = {
   contact_map_embed: "Google Maps → Paylaş → Yerleştir → src URL'sini yapıştırın",
   header_announcement: 'Mağaza üst barında kayan kampanya mesajı olarak gösterilir',
   social_whatsapp: 'Ülke kodu ile (ör: 905551234567)',
+  phone_directory:
+    'Birden fazla telefon ekleyin: İş Yeri (Merkez/Şube) ve Cep. Biri "Varsayılan" işaretlenir — header ve tek-numara gereken yerlerde o kullanılır; footer ve iletişim sayfasında hepsi gruplu görünür. Boş bırakılırsa üstteki tek "Telefon" alanı kullanılır.',
+  whatsapp_order_number:
+    'Ürün sayfasındaki "WhatsApp ile Sipariş" butonu bu numaraya yazar. Boşsa sosyal WhatsApp numarası kullanılır. Ülke kodu ile (ör: 905551234567).',
+  whatsapp_order_template:
+    'Hazır mesaj şablonu. Kullanılabilir alanlar: {urun} {fiyat} {sku} {link} (ayrıca {marka} {kategori}). Boşsa varsayılan şablon kullanılır.',
   free_shipping_threshold: 'Bu tutarın üzerindeki siparişlerde kargo ücretsiz olur',
   default_shipping_cost: 'Ücretsiz kargo limitinin altındaki siparişlere uygulanır',
   contact_form_email: 'İletişim formundan gelen mesajlar bu adrese yönlendirilir',
@@ -498,7 +514,10 @@ const validateField = (key, value) => {
   if (key === 'seo_twitter_handle' && !v.startsWith('@')) {
     return { type: 'info', msg: '@ ile başlamalı' };
   }
-  if (key === 'social_whatsapp' && !/^\d{10,15}$/.test(v.replace(/\D/g, ''))) {
+  if (
+    (key === 'social_whatsapp' || key === 'whatsapp_order_number') &&
+    !/^\d{10,15}$/.test(v.replace(/\D/g, ''))
+  ) {
     return { type: 'warning', msg: 'Ülke kodu ile (ör: 905551234567)' };
   }
   return null;
@@ -611,8 +630,9 @@ export default function AdminSiteSettings() {
           setSaving(false);
         }
       }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [settings]
-  ); // eslint-disable-line
+  );
 
   const handleDiscard = () => {
     if (!window.confirm('Kaydedilmemiş değişiklikler silinecek. Emin misiniz?')) return;
@@ -816,6 +836,120 @@ export default function AdminSiteSettings() {
   };
 
   // ===== Field renderer =====
+  const renderPhoneDirectory = (key) => {
+    const isDirtyField = dirtyKeys.has(key);
+    const rows = parsePhoneDirectory(settings);
+    const commit = (next) => handleChange(key, JSON.stringify(next));
+    const update = (i, patch) => commit(rows.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
+    const setDefault = (i) => commit(rows.map((r, idx) => ({ ...r, isDefault: idx === i })));
+    const changeCategory = (i, category) =>
+      update(
+        i,
+        category === 'mobile'
+          ? { category: 'mobile', subType: null }
+          : { category: 'business', subType: rows[i].subType || 'merkez' }
+      );
+    const addRow = () =>
+      commit([
+        ...rows,
+        { category: 'business', subType: 'merkez', label: '', number: '', isDefault: rows.length === 0 },
+      ]);
+    const removeRow = (i) => {
+      let next = rows.filter((_, idx) => idx !== i);
+      if (next.length && !next.some((r) => r.isDefault))
+        next = next.map((r, idx) => ({ ...r, isDefault: idx === 0 }));
+      commit(next);
+    };
+
+    return (
+      <div key={key} className="col-12">
+        <FieldLabel label={LABELS[key] || key} tooltip={FIELD_TOOLTIPS[key]} dirty={isDirtyField} />
+        <div className="border rounded p-2 bg-light">
+          {rows.length === 0 && (
+            <div className="text-muted small mb-2">
+              <i className="fas fa-info-circle me-1" />
+              Henüz numara yok. Eklenmezse üstteki tek "Telefon" alanı (varsayılan/yedek) kullanılır.
+            </div>
+          )}
+          {rows.map((r, i) => (
+            <div key={i} className="row g-1 align-items-center mb-2">
+              <div className="col-6 col-md-2">
+                <select
+                  className="form-select form-select-sm"
+                  value={r.category}
+                  onChange={(e) => changeCategory(i, e.target.value)}
+                  aria-label="Kategori"
+                >
+                  <option value="business">İş Yeri</option>
+                  <option value="mobile">Cep</option>
+                </select>
+              </div>
+              <div className="col-6 col-md-2">
+                {r.category === 'business' ? (
+                  <select
+                    className="form-select form-select-sm"
+                    value={r.subType || 'merkez'}
+                    onChange={(e) => update(i, { subType: e.target.value })}
+                    aria-label="Alt tip"
+                  >
+                    <option value="merkez">Merkez</option>
+                    <option value="sube">Şube</option>
+                  </select>
+                ) : (
+                  <span className="text-muted small ps-1">—</span>
+                )}
+              </div>
+              <div className="col-12 col-md-3">
+                <input
+                  className="form-control form-control-sm"
+                  placeholder="Etiket (ör: Bor Şubesi)"
+                  value={r.label}
+                  onChange={(e) => update(i, { label: e.target.value })}
+                />
+              </div>
+              <div className="col-8 col-md-3">
+                <input
+                  className="form-control form-control-sm"
+                  placeholder="+90 388 000 00 00"
+                  value={r.number}
+                  onChange={(e) => update(i, { number: e.target.value })}
+                />
+              </div>
+              <div className="col-2 col-md-1 text-center">
+                <input
+                  className="form-check-input mt-0"
+                  type="radio"
+                  name="phone-directory-default"
+                  checked={!!r.isDefault}
+                  onChange={() => setDefault(i)}
+                  title="Varsayılan numara"
+                />
+              </div>
+              <div className="col-2 col-md-1 text-end">
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-danger"
+                  title="Sil"
+                  onClick={() => removeRow(i)}
+                >
+                  <i className="fas fa-trash" />
+                </button>
+              </div>
+            </div>
+          ))}
+          <button type="button" className="btn btn-sm btn-outline-primary mt-1" onClick={addRow}>
+            <i className="fas fa-plus me-1" /> Numara Ekle
+          </button>
+          <div className="form-text mt-1">
+            <i className="fas fa-star text-warning me-1" />
+            İşaretli numara "varsayılan"dır (header + tek-numara gereken yerler). Footer ve iletişim
+            sayfasında hepsi gruplu görünür.
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderField = (key) => {
     const isDirtyField = dirtyKeys.has(key);
     const validation = validateField(key, settings[key]);
@@ -848,6 +982,8 @@ export default function AdminSiteSettings() {
         />
       );
     }
+
+    if (key === 'phone_directory') return renderPhoneDirectory(key);
 
     // Dropdowns
     if (key === 'sms_provider')
@@ -1117,7 +1253,7 @@ export default function AdminSiteSettings() {
     }
 
     // Textarea fields
-    if (key.includes('text') || key.includes('announcement')) {
+    if (key.includes('text') || key.includes('announcement') || key === 'whatsapp_order_template') {
       return (
         <div key={key} className="col-12">
           <FieldLabel label={LABELS[key]} tooltip={FIELD_TOOLTIPS[key]} dirty={isDirtyField} />

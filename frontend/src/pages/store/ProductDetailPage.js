@@ -19,10 +19,19 @@ import {
   FiStar,
   FiBell,
   FiMail,
+  FiPhone,
+  FiMessageCircle,
 } from 'react-icons/fi';
 import { useWishlist } from '../../components/store/WishlistContext';
 import { useSiteSettings } from '../../hooks/useSiteSettings';
-import { buildProductSchema, buildBreadcrumbSchema, buildLocalKeywords, withCity } from '../../utils/seo';
+import {
+  buildProductSchema,
+  buildBreadcrumbSchema,
+  buildLocalKeywords,
+  withCity,
+  getCanonicalUrl,
+} from '../../utils/seo';
+import { getDefaultPhone, telHref, buildWhatsappOrderUrl } from '../../utils/phones';
 
 export default function ProductDetailPage() {
   const { slug } = useParams();
@@ -124,6 +133,11 @@ export default function ProductDetailPage() {
     category: product.categoryName,
     productName: product.name,
   });
+
+  // Manual order (works even when store_purchasing_enabled=false)
+  const defaultPhone = getDefaultPhone(settings);
+  const productUrl = getCanonicalUrl(`/urun/${product.slug}`, settings);
+  const waOrderUrl = buildWhatsappOrderUrl(settings, product, productUrl, settings.currency_symbol);
 
   return (
     <div className="container my-3">
@@ -322,6 +336,30 @@ export default function ProductDetailPage() {
               <FiHeart size={18} style={wishlisted ? { fill: 'currentColor' } : {}} />
             </button>
           </div>
+
+          {/* Manual order — phone / WhatsApp (always available, incl. test mode) */}
+          {(defaultPhone || waOrderUrl) && (
+            <div className="d-flex gap-2 mb-3 flex-wrap">
+              {defaultPhone && (
+                <a
+                  href={telHref(defaultPhone)}
+                  className="btn btn-outline-success flex-grow-1 d-flex align-items-center justify-content-center gap-2"
+                >
+                  <FiPhone size={18} /> Telefonla Sipariş
+                </a>
+              )}
+              {waOrderUrl && (
+                <a
+                  href={waOrderUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn btn-success flex-grow-1 d-flex align-items-center justify-content-center gap-2"
+                >
+                  <FiMessageCircle size={18} /> WhatsApp ile Sipariş
+                </a>
+              )}
+            </div>
+          )}
 
           {/* Trust Badges */}
           <div className="d-flex gap-2 mb-3 flex-wrap">
