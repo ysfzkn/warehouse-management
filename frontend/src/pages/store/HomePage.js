@@ -6,7 +6,13 @@ import ProductCard from '../../components/store/ProductCard';
 import SeoHead from '../../components/store/SeoHead';
 import { useToast } from '../../components/store/Toast';
 import { useSiteSettings } from '../../hooks/useSiteSettings';
-import { buildOrganizationSchema, buildWebSiteSchema } from '../../utils/seo';
+import {
+  buildOrganizationSchema,
+  buildWebSiteSchema,
+  buildLocalBusinessSchema,
+  buildHomeLocalKeywords,
+  getLocalCity,
+} from '../../utils/seo';
 import { FiShoppingBag, FiArrowRight, FiStar, FiZap, FiTrendingUp } from 'react-icons/fi';
 
 export default function HomePage() {
@@ -21,26 +27,38 @@ export default function HomePage() {
 
   useEffect(() => {
     Promise.all([
-      axios.get('/api/store/products?size=8&sortBy=viewCount&sortDir=desc').catch(() => ({ data: { content: [] } })),
-      axios.get('/api/store/products?size=8&sortBy=createdAt&sortDir=desc').catch(() => ({ data: { content: [] } })),
+      axios
+        .get('/api/store/products?size=8&sortBy=viewCount&sortDir=desc')
+        .catch(() => ({ data: { content: [] } })),
+      axios
+        .get('/api/store/products?size=8&sortBy=createdAt&sortDir=desc')
+        .catch(() => ({ data: { content: [] } })),
       axios.get('/api/store/categories/tree').catch(() => ({ data: [] })),
-    ]).then(([featuredRes, newRes, catRes]) => {
-      const allFeatured = (featuredRes.data?.content || []);
-      const allNew = (newRes.data?.content || []);
-      setFeatured(allFeatured.filter(p => p.featured));
-      setNewProducts(allNew.filter(p => p.isNew));
-      // Sale products — those with salePrice < price
-      setSaleProducts(allFeatured.filter(p => p.salePrice && p.salePrice > 0 && p.salePrice < p.price).slice(0, 8));
-      // If no featured flag, show by view count
-      if (allFeatured.filter(p => p.featured).length === 0) setFeatured(allFeatured.slice(0, 8));
-      if (allNew.filter(p => p.isNew).length === 0) setNewProducts(allNew.slice(0, 8));
-      setCategories(catRes.data || []);
-    }).finally(() => setLoading(false));
+    ])
+      .then(([featuredRes, newRes, catRes]) => {
+        const allFeatured = featuredRes.data?.content || [];
+        const allNew = newRes.data?.content || [];
+        setFeatured(allFeatured.filter((p) => p.featured));
+        setNewProducts(allNew.filter((p) => p.isNew));
+        // Sale products — those with salePrice < price
+        setSaleProducts(
+          allFeatured.filter((p) => p.salePrice && p.salePrice > 0 && p.salePrice < p.price).slice(0, 8)
+        );
+        // If no featured flag, show by view count
+        if (allFeatured.filter((p) => p.featured).length === 0) setFeatured(allFeatured.slice(0, 8));
+        if (allNew.filter((p) => p.isNew).length === 0) setNewProducts(allNew.slice(0, 8));
+        setCategories(catRes.data || []);
+      })
+      .finally(() => setLoading(false));
   }, []);
 
   const handleAddToCart = async (id) => {
-    try { await cart.addItem(id); toast.success('Ürün sepete eklendi'); }
-    catch (e) { toast.error(e?.response?.data?.message || 'Sepete eklenemedi'); }
+    try {
+      await cart.addItem(id);
+      toast.success('Ürün sepete eklendi');
+    } catch (e) {
+      toast.error(e?.response?.data?.message || 'Sepete eklenemedi');
+    }
   };
 
   const hasContent = featured.length > 0 || newProducts.length > 0 || categories.length > 0;
@@ -53,13 +71,16 @@ export default function HomePage() {
             {icon} {title}
           </h2>
           {linkTo && (
-            <Link to={linkTo} className="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1">
+            <Link
+              to={linkTo}
+              className="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1"
+            >
               {linkLabel || 'Tümünü Gör'} <FiArrowRight size={14} />
             </Link>
           )}
         </div>
         <div className="row g-3 row-cols-2 row-cols-md-3 row-cols-lg-4">
-          {products.map(p => (
+          {products.map((p) => (
             <div key={p.id} className="col">
               <ProductCard product={p} onAddToCart={handleAddToCart} />
             </div>
@@ -71,15 +92,24 @@ export default function HomePage() {
 
   const orgSchema = buildOrganizationSchema(settings);
   const siteSchema = buildWebSiteSchema(settings);
+  const localSchema = buildLocalBusinessSchema(settings);
+  const city = getLocalCity(settings);
+  const homeTitle =
+    settings?.seo_meta_title_home ||
+    (city
+      ? `${city} Beyaz Eşya, Çamaşır Makinesi, Buzdolabı${settings?.seo_local_primary_brands ? ' — ' + settings.seo_local_primary_brands : ''}`
+      : null);
+  const homeKeywords = buildHomeLocalKeywords(settings);
 
   return (
     <div>
       <SeoHead
-        title={settings?.seo_meta_title_home || null}
+        title={homeTitle}
         description={settings?.seo_default_meta_description}
+        keywords={homeKeywords}
         path="/"
         type="website"
-        jsonLd={[orgSchema, siteSchema].filter(Boolean)}
+        jsonLd={[localSchema, orgSchema, siteSchema].filter(Boolean)}
       />
       {/* Hero Banner */}
       <div className="container mt-3">
@@ -107,7 +137,7 @@ export default function HomePage() {
               <Link to="/kategori/tumu" className="store-cat-chip store-cat-chip-all">
                 <FiShoppingBag size={15} /> Tüm Ürünler
               </Link>
-              {categories.map(cat => (
+              {categories.map((cat) => (
                 <Link key={cat.id} to={`/kategori/${cat.slug}`} className="store-cat-chip">
                   {cat.name}
                 </Link>

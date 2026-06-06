@@ -36,6 +36,32 @@ public class SiteSettingServiceImpl implements SiteSettingService {
             .collect(Collectors.toMap(SiteSetting::getSettingKey, SiteSetting::getSettingValue));
     }
 
+    /**
+     * Key-name substrings that mark a setting as a credential/secret. Any key
+     * containing one of these (case-insensitive) is NEVER sent to the public
+     * storefront — prevents SMS/cargo/e-invoice credentials from leaking via
+     * /api/store/settings.
+     */
+    private static final List<String> SENSITIVE_KEY_PATTERNS = List.of(
+        "password", "secret", "token", "api_key", "apikey", "app_key", "appkey",
+        "private", "webhook", "credential", "username"
+    );
+
+    private static boolean isSensitiveKey(String key) {
+        if (key == null || key.isBlank()) return true;
+        String k = key.toLowerCase();
+        return SENSITIVE_KEY_PATTERNS.stream().anyMatch(k::contains);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<String, String> getPublicSettings() {
+        return repository.findAll().stream()
+            .filter(s -> !isSensitiveKey(s.getSettingKey()))
+            .filter(s -> s.getSettingValue() != null)
+            .collect(Collectors.toMap(SiteSetting::getSettingKey, SiteSetting::getSettingValue));
+    }
+
     @Override
     @Transactional(readOnly = true)
     public String getSetting(String key) {

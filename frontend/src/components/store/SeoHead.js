@@ -23,13 +23,14 @@ export default function SeoHead({
   image,
   type = 'website',
   jsonLd,
+  keywords,
   noindex = false,
-  children
+  children,
 }) {
   const { settings } = useSiteSettings();
   const settingsMap = toSettingsMap(settings);
 
-  const meta = buildMetaTags({ title, description, path, image, type }, settingsMap);
+  const meta = buildMetaTags({ title, description, path, image, type, keywords }, settingsMap);
 
   const jsonLdArray = jsonLd ? (Array.isArray(jsonLd) ? jsonLd : [jsonLd]).filter(Boolean) : [];
 
@@ -38,6 +39,7 @@ export default function SeoHead({
       {/* Basic meta */}
       <title>{meta.title}</title>
       {meta.description && <meta name="description" content={meta.description} />}
+      {meta.keywords && <meta name="keywords" content={meta.keywords} />}
       {meta.canonicalUrl && <link rel="canonical" href={meta.canonicalUrl} />}
 
       {/* Robots */}

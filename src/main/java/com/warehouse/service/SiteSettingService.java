@@ -6,6 +6,14 @@ import java.util.Map;
 
 public interface SiteSettingService {
     Map<String, String> getAllSettings();
+
+    /**
+     * Public-safe settings for the storefront: same as {@link #getAllSettings()}
+     * but with secret-bearing keys (passwords, API tokens, webhook secrets, etc.)
+     * stripped out. The public /api/store/settings endpoint MUST use this.
+     */
+    Map<String, String> getPublicSettings();
+
     String getSetting(String key);
     void updateSettings(Map<String, String> settings, String updatedBy);
     List<SiteSetting> getAllSettingEntities();
