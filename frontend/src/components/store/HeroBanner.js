@@ -13,7 +13,10 @@ export default function HeroBanner() {
   const SLIDE_DURATION = 6000;
 
   useEffect(() => {
-    axios.get('/api/store/pages/banners?position=HERO').then(r => setBanners(r.data || [])).catch(() => {});
+    axios
+      .get('/api/store/pages/banners?position=HERO')
+      .then((r) => setBanners(r.data || []))
+      .catch(() => {});
   }, []);
 
   // Auto-slide with progress bar
@@ -33,7 +36,7 @@ export default function HeroBanner() {
     }, 50);
 
     timerRef.current = setInterval(() => {
-      setCurrent(c => (c + 1) % banners.length);
+      setCurrent((c) => (c + 1) % banners.length);
     }, SLIDE_DURATION);
 
     return () => {
@@ -56,11 +59,17 @@ export default function HeroBanner() {
   }, [current, banners.length, goTo]);
 
   // Keyboard navigation
-  const handleKeyDown = useCallback((e) => {
-    if (e.key === 'ArrowLeft') prev();
-    if (e.key === 'ArrowRight') next();
-    if (e.key === ' ') { e.preventDefault(); setPaused(p => !p); }
-  }, [prev, next]);
+  const handleKeyDown = useCallback(
+    (e) => {
+      if (e.key === 'ArrowLeft') prev();
+      if (e.key === 'ArrowRight') next();
+      if (e.key === ' ') {
+        e.preventDefault();
+        setPaused((p) => !p);
+      }
+    },
+    [prev, next]
+  );
 
   if (banners.length === 0) {
     // Default welcome banner when no banners configured
@@ -93,30 +102,40 @@ export default function HeroBanner() {
       onKeyDown={handleKeyDown}
       tabIndex={0}
     >
-      {/* Slides */}
-      <div className="theme-slide" style={{ backgroundImage: banner.imageUrl ? `url(${banner.imageUrl})` : undefined }}>
-        <div className="theme-slide-overlay" />
-        <div className="theme-slide-content">
-          {banner.title && (
-            <>
-              <h2 className="theme-slide-title">{banner.title}</h2>
-              {banner.link && (
-                <a href={banner.link} className="theme-slide-cta">
-                  Detaylı İncele
-                </a>
-              )}
-            </>
-          )}
-        </div>
+      {/* Slides — real <img> so the full uploaded banner shows at its natural
+          aspect ratio (full width, no cropping). Title/CTA overlay only when set. */}
+      <div className={`theme-slide ${banner.imageUrl ? 'theme-slide--image' : ''}`}>
+        {banner.imageUrl && (
+          <img src={banner.imageUrl} alt={banner.title || 'Kampanya görseli'} className="theme-slide-img" />
+        )}
+        {banner.title && <div className="theme-slide-overlay" />}
+        {banner.title && (
+          <div className="theme-slide-content">
+            <h2 className="theme-slide-title">{banner.title}</h2>
+            {banner.link && (
+              <a href={banner.link} className="theme-slide-cta">
+                Detaylı İncele
+              </a>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Navigation Arrows */}
       {banners.length > 1 && (
         <>
-          <button className="theme-slider-arrow theme-slider-arrow-left" onClick={prev} aria-label="Önceki slayt">
+          <button
+            className="theme-slider-arrow theme-slider-arrow-left"
+            onClick={prev}
+            aria-label="Önceki slayt"
+          >
             <FiChevronLeft size={24} />
           </button>
-          <button className="theme-slider-arrow theme-slider-arrow-right" onClick={next} aria-label="Sonraki slayt">
+          <button
+            className="theme-slider-arrow theme-slider-arrow-right"
+            onClick={next}
+            aria-label="Sonraki slayt"
+          >
             <FiChevronRight size={24} />
           </button>
         </>
@@ -139,7 +158,11 @@ export default function HeroBanner() {
           </div>
 
           {/* Pause/Play */}
-          <button className="theme-slider-pause" onClick={() => setPaused(p => !p)} aria-label={paused ? 'Oynat' : 'Duraklat'}>
+          <button
+            className="theme-slider-pause"
+            onClick={() => setPaused((p) => !p)}
+            aria-label={paused ? 'Oynat' : 'Duraklat'}
+          >
             {paused ? <FiPlay size={14} /> : <FiPause size={14} />}
           </button>
 
