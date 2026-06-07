@@ -427,7 +427,11 @@ export default function ProductDetailPage() {
         <div className="d-flex gap-1 border-bottom mb-0" style={{ overflowX: 'auto' }}>
           {[
             { key: 'description', label: 'Ürün Açıklaması' },
-            ...(product.weight || product.vatRate ? [{ key: 'specs', label: 'Teknik Özellikler' }] : []),
+            ...(product.weight ||
+            product.vatRate ||
+            (Array.isArray(product.technicalSpecs) && product.technicalSpecs.length > 0)
+              ? [{ key: 'specs', label: 'Teknik Özellikler' }]
+              : []),
             { key: 'shipping', label: 'Kargo & İade' },
           ].map((tab) => (
             <button
@@ -480,56 +484,91 @@ export default function ProductDetailPage() {
             </div>
           )}
           {activeTab === 'specs' && (
-            <table className="table table-sm table-striped mb-0">
-              <tbody>
-                {product.sku && (
-                  <tr>
-                    <td className="text-muted" style={{ width: '40%' }}>
-                      Stok Kodu
-                    </td>
-                    <td className="fw-medium">{product.sku}</td>
-                  </tr>
-                )}
-                {product.brandName && (
-                  <tr>
-                    <td className="text-muted">Marka</td>
-                    <td className="fw-medium">{product.brandName}</td>
-                  </tr>
-                )}
-                {product.categoryName && (
-                  <tr>
-                    <td className="text-muted">Kategori</td>
-                    <td className="fw-medium">{product.categoryName}</td>
-                  </tr>
-                )}
-                {product.colorName && (
-                  <tr>
-                    <td className="text-muted">Renk</td>
-                    <td className="fw-medium">{product.colorName}</td>
-                  </tr>
-                )}
-                {product.weight && (
-                  <tr>
-                    <td className="text-muted">Ağırlık</td>
-                    <td className="fw-medium">{product.weight} kg</td>
-                  </tr>
-                )}
-                {product.lengthCm && (
-                  <tr>
-                    <td className="text-muted">Boyutlar (E×G×Y)</td>
-                    <td className="fw-medium">
-                      {product.lengthCm} × {product.widthCm} × {product.heightCm} cm
-                    </td>
-                  </tr>
-                )}
-                {product.vatRate && (
-                  <tr>
-                    <td className="text-muted">KDV Oranı</td>
-                    <td className="fw-medium">%{product.vatRate}</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+            <div>
+              {/* Structured technical specifications (crawler / admin) */}
+              {Array.isArray(product.technicalSpecs) &&
+                product.technicalSpecs
+                  .filter((g) => g && Array.isArray(g.items) && g.items.some((it) => it && it.value))
+                  .map((group, gi) => (
+                    <div key={gi} className="mb-3 rounded overflow-hidden border">
+                      <div
+                        className="px-3 py-2 fw-semibold"
+                        style={{ background: 'var(--store-primary, #2563eb)', color: '#fff' }}
+                      >
+                        {group.title || 'Özellikler'}
+                      </div>
+                      <table className="table table-sm mb-0">
+                        <tbody>
+                          {group.items
+                            .filter((it) => it && it.value)
+                            .map((it, ii) => (
+                              <tr key={ii}>
+                                <td className="text-muted" style={{ width: '45%' }}>
+                                  {it.label}
+                                </td>
+                                <td className="fw-medium">{it.value}</td>
+                              </tr>
+                            ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ))}
+
+              {/* Basic info — always available */}
+              <div className="rounded overflow-hidden border">
+                <div className="px-3 py-2 fw-semibold bg-light">Genel Bilgiler</div>
+                <table className="table table-sm table-striped mb-0">
+                  <tbody>
+                    {product.sku && (
+                      <tr>
+                        <td className="text-muted" style={{ width: '45%' }}>
+                          Stok Kodu
+                        </td>
+                        <td className="fw-medium">{product.sku}</td>
+                      </tr>
+                    )}
+                    {product.brandName && (
+                      <tr>
+                        <td className="text-muted">Marka</td>
+                        <td className="fw-medium">{product.brandName}</td>
+                      </tr>
+                    )}
+                    {product.categoryName && (
+                      <tr>
+                        <td className="text-muted">Kategori</td>
+                        <td className="fw-medium">{product.categoryName}</td>
+                      </tr>
+                    )}
+                    {product.colorName && (
+                      <tr>
+                        <td className="text-muted">Renk</td>
+                        <td className="fw-medium">{product.colorName}</td>
+                      </tr>
+                    )}
+                    {product.weight && (
+                      <tr>
+                        <td className="text-muted">Ağırlık</td>
+                        <td className="fw-medium">{product.weight} kg</td>
+                      </tr>
+                    )}
+                    {product.lengthCm && (
+                      <tr>
+                        <td className="text-muted">Boyutlar (E×G×Y)</td>
+                        <td className="fw-medium">
+                          {product.lengthCm} × {product.widthCm} × {product.heightCm} cm
+                        </td>
+                      </tr>
+                    )}
+                    {product.vatRate && (
+                      <tr>
+                        <td className="text-muted">KDV Oranı</td>
+                        <td className="fw-medium">%{product.vatRate}</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           )}
           {activeTab === 'shipping' && (
             <div className="text-muted" style={{ lineHeight: 1.8 }}>

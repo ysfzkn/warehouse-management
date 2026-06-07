@@ -2838,18 +2838,24 @@
   left: 0;
   right: 0;
   z-index: 1029; /* MobileNav (1030) altında */
-  background: var(--surface-card, #fff);
+  background: #ffffff;
   border-top: 1px solid var(--border-subtle, #e5e7eb);
   padding: 8px 12px;
   display: flex;
   align-items: center;
   gap: 12px;
-  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.12);
 }
 
 .store-pdp-sticky-price {
   flex-shrink: 0;
   min-width: 90px;
+}
+.store-pdp-sticky-price small {
+  color: #64748b; /* readable label on the white bar */
+}
+.store-pdp-sticky-price strong {
+  color: var(--store-primary, #2563eb); /* brand-blue price, always legible */
 }
 
 /* MobileNav olmadığında bottom: 0 — gelecek kullanım için */

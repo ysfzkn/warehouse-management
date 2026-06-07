@@ -19,6 +19,9 @@ public interface ProductImageService {
 
     void setPrimaryImage(Long imageId);
 
+    /** Persist a new display order for a product's images (drag-and-drop). */
+    void reorderImages(Long productId, List<Long> orderedImageIds);
+
     ProductImage getImageOrThrow(Long imageId);
 }
 

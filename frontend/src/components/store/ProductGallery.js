@@ -9,16 +9,17 @@ export default function ProductGallery({ images, productName }) {
   const touchRef = useRef({ startX: 0, startY: 0 });
   const galleryRef = useRef(null);
 
-  const sorted = images && images.length > 0
-    ? [...images].sort((a, b) => a.sortOrder - b.sortOrder)
-    : [];
+  const sorted = images && images.length > 0 ? [...images].sort((a, b) => a.sortOrder - b.sortOrder) : [];
 
-  const goTo = useCallback((index) => {
-    if (isTransitioning || sorted.length <= 1) return;
-    setIsTransitioning(true);
-    setActiveIndex((index + sorted.length) % sorted.length);
-    setTimeout(() => setIsTransitioning(false), 350);
-  }, [isTransitioning, sorted.length]);
+  const goTo = useCallback(
+    (index) => {
+      if (isTransitioning || sorted.length <= 1) return;
+      setIsTransitioning(true);
+      setActiveIndex((index + sorted.length) % sorted.length);
+      setTimeout(() => setIsTransitioning(false), 350);
+    },
+    [isTransitioning, sorted.length]
+  );
 
   const goPrev = useCallback(() => goTo(activeIndex - 1), [activeIndex, goTo]);
   const goNext = useCallback(() => goTo(activeIndex + 1), [activeIndex, goTo]);
@@ -26,8 +27,14 @@ export default function ProductGallery({ images, productName }) {
   // Keyboard navigation
   useEffect(() => {
     const handler = (e) => {
-      if (e.key === 'ArrowLeft') { e.preventDefault(); goPrev(); }
-      if (e.key === 'ArrowRight') { e.preventDefault(); goNext(); }
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        goPrev();
+      }
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        goNext();
+      }
       if (e.key === 'Escape') setZoomed(false);
     };
     window.addEventListener('keydown', handler);
@@ -58,10 +65,17 @@ export default function ProductGallery({ images, productName }) {
 
   if (sorted.length === 0) {
     return (
-      <div className="store-gallery-main" style={{
-        height: 450, background: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 16,
-      }}>
+      <div
+        className="store-gallery-main"
+        style={{
+          height: 450,
+          background: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          borderRadius: 16,
+        }}
+      >
         <div className="text-center text-muted">
           <FiZoomIn size={40} className="mb-2 opacity-25" />
           <p className="mb-0">Görsel Yok</p>
@@ -87,12 +101,18 @@ export default function ProductGallery({ images, productName }) {
         <img
           src={mainImage.url || mainImage.thumbnailUrl}
           alt={productName ? `${productName} - görsel ${activeIndex + 1}` : 'Ürün görseli'}
+          onError={(e) => {
+            // Fall back to the thumbnail variant, then to a neutral placeholder.
+            if (mainImage.thumbnailUrl && e.target.src.indexOf(mainImage.thumbnailUrl) === -1) {
+              e.target.src = mainImage.thumbnailUrl;
+            } else {
+              e.target.style.visibility = 'hidden';
+            }
+          }}
           style={{
             transition: 'opacity 0.35s ease, transform 0.35s ease',
             opacity: isTransitioning ? 0.6 : 1,
-            transform: zoomed
-              ? `scale(2)`
-              : (isTransitioning ? 'scale(0.97)' : 'scale(1)'),
+            transform: zoomed ? `scale(2)` : isTransitioning ? 'scale(0.97)' : 'scale(1)',
             transformOrigin: zoomed ? `${zoomPos.x}% ${zoomPos.y}%` : 'center',
           }}
         />
@@ -102,14 +122,20 @@ export default function ProductGallery({ images, productName }) {
           <>
             <button
               className="store-gallery-arrow store-gallery-arrow-left"
-              onClick={(e) => { e.stopPropagation(); goPrev(); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                goPrev();
+              }}
               aria-label="Önceki görsel"
             >
               <FiChevronLeft size={22} />
             </button>
             <button
               className="store-gallery-arrow store-gallery-arrow-right"
-              onClick={(e) => { e.stopPropagation(); goNext(); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                goNext();
+              }}
               aria-label="Sonraki görsel"
             >
               <FiChevronRight size={22} />
@@ -137,9 +163,11 @@ export default function ProductGallery({ images, productName }) {
               aria-selected={i === activeIndex}
               aria-label={`Görsel ${i + 1}`}
             >
-              <img src={img.thumbnailUrl || img.url}
-                   alt={productName ? `${productName} - görsel ${i + 1}` : `Ürün görseli ${i + 1}`}
-                   loading="lazy" />
+              <img
+                src={img.thumbnailUrl || img.url}
+                alt={productName ? `${productName} - görsel ${i + 1}` : `Ürün görseli ${i + 1}`}
+                loading="lazy"
+              />
             </button>
           ))}
         </div>

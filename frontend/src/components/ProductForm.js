@@ -4,6 +4,19 @@ import SearchableSelect from './SearchableSelect';
 import ConfirmModal from './ConfirmModal';
 import './ProductForm.css';
 
+/** Drop empty groups/items from the structured technical specs before saving. */
+function cleanTechnicalSpecs(groups) {
+  if (!Array.isArray(groups)) return [];
+  return groups
+    .map((g) => ({
+      title: (g?.title || '').trim(),
+      items: (Array.isArray(g?.items) ? g.items : [])
+        .map((it) => ({ label: (it?.label || '').trim(), value: (it?.value || '').trim() }))
+        .filter((it) => it.label || it.value),
+    }))
+    .filter((g) => g.title || g.items.length > 0);
+}
+
 /**
  * Crawler preview thumbnail: downloads via the backend proxy with a Referer
  * (for hotlink-protected CDNs) + attaches the JWT Bearer through axios.
@@ -86,6 +99,9 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
   const [selectedImageIds, setSelectedImageIds] = useState(() => new Set());
   const [bulkDeletingImages, setBulkDeletingImages] = useState(false);
   const imageInputRef = React.useRef(null);
+  // Structured technical specs: [{ title, items: [{ label, value }] }]
+  const [technicalSpecs, setTechnicalSpecs] = useState([]);
+  const [dragImageIndex, setDragImageIndex] = useState(null);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
   const [mainCategories, setMainCategories] = useState([]);
@@ -199,6 +215,7 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
       metaTitle: product.metaTitle || '',
       metaDescription: product.metaDescription || '',
     }));
+    setTechnicalSpecs(Array.isArray(product.technicalSpecs) ? product.technicalSpecs : []);
     // Load product images
     if (product.id) {
       axios
@@ -623,6 +640,55 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
       else next.add(id);
       return next;
     });
+  // ─── Drag-and-drop image ordering ───
+  const persistImageOrder = async (orderedImages) => {
+    setProductImages(orderedImages);
+    if (!product?.id) return;
+    try {
+      await axios.put(
+        `/api/products/${product.id}/images/reorder`,
+        orderedImages.map((i) => i.id)
+      );
+    } catch {
+      showToast('Sıralama kaydedilemedi, lütfen tekrar deneyin.', 'error');
+    }
+  };
+  const handleImageDrop = (targetIndex) => {
+    if (dragImageIndex === null || dragImageIndex === targetIndex) {
+      setDragImageIndex(null);
+      return;
+    }
+    const sorted = [...productImages].sort((a, b) => a.sortOrder - b.sortOrder);
+    const [moved] = sorted.splice(dragImageIndex, 1);
+    sorted.splice(targetIndex, 0, moved);
+    const reindexed = sorted.map((img, i) => ({ ...img, sortOrder: i }));
+    setDragImageIndex(null);
+    persistImageOrder(reindexed);
+  };
+  // ─── Structured technical specs editor ───
+  const addSpecGroup = () =>
+    setTechnicalSpecs((p) => [...(p || []), { title: '', items: [{ label: '', value: '' }] }]);
+  const removeSpecGroup = (gi) => setTechnicalSpecs((p) => (p || []).filter((_, i) => i !== gi));
+  const updateSpecGroupTitle = (gi, title) =>
+    setTechnicalSpecs((p) => (p || []).map((g, i) => (i === gi ? { ...g, title } : g)));
+  const addSpecItem = (gi) =>
+    setTechnicalSpecs((p) =>
+      (p || []).map((g, i) =>
+        i === gi ? { ...g, items: [...(g.items || []), { label: '', value: '' }] } : g
+      )
+    );
+  const removeSpecItem = (gi, ii) =>
+    setTechnicalSpecs((p) =>
+      (p || []).map((g, i) => (i === gi ? { ...g, items: (g.items || []).filter((_, j) => j !== ii) } : g))
+    );
+  const updateSpecItem = (gi, ii, field, val) =>
+    setTechnicalSpecs((p) =>
+      (p || []).map((g, i) =>
+        i === gi
+          ? { ...g, items: (g.items || []).map((it, j) => (j === ii ? { ...it, [field]: val } : it)) }
+          : g
+      )
+    );
   const toggleSelectAllImages = () =>
     setSelectedImageIds((prev) =>
       prev.size === productImages.length ? new Set() : new Set(productImages.map((i) => i.id))
@@ -654,14 +720,6 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
     'siemens-home.bsh-group.com',
     'bosch-home.com',
     'bosch-home.com.tr',
-    'arcelik.com',
-    'arcelik.com.tr',
-    'beko.com',
-    'beko.com.tr',
-    'vestel.com',
-    'vestel.com.tr',
-    'samsung.com',
-    'samsung.com.tr',
     'lg.com',
     'lg.com.tr',
     'miele.com',
@@ -670,8 +728,14 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
     'haier.com.tr',
     'fakir.com.tr',
     'fakir.com',
-    'altus.com.tr',
-    'altus.com',
+    'simfer.com.tr',
+    'simfer.com',
+    'ferreturkiye.com',
+    'kaercher.com',
+    'kumtel.com',
+    'tefal.com.tr',
+    'tefal.com',
+    'braunshop.com.tr',
   ];
   const isLikelySupportedUrl = (url) => {
     if (!url || typeof url !== 'string') return false;
@@ -781,33 +845,33 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
       updates.shortDescription = trimmed.length > 1000 ? trimmed.substring(0, 997) + '...' : trimmed;
     }
 
-    // Long description + specs (HTML table append). The total 5000 char limit is on the backend.
+    // Long description (plain text; specs go to the STRUCTURED technical specs below).
     let fullDesc = (crawlEditableDesc || '').trim();
-    if (crawlEditableSpecs.length > 0) {
-      const validSpecs = crawlEditableSpecs.filter((s) => s.key.trim() && s.value.trim());
-      if (validSpecs.length > 0) {
-        const table =
-          '\n\n<h3>Teknik Özellikler</h3>\n<table class="product-specs-table">\n' +
-          validSpecs
-            .map(
-              (s) =>
-                `  <tr><td><strong>${escapeHtmlEntity(s.key)}</strong></td>` +
-                `<td>${escapeHtmlEntity(s.value)}</td></tr>`
-            )
-            .join('\n') +
-          '\n</table>';
-        fullDesc = fullDesc + table;
-      }
-    }
-    // Backend description @Size(max=5000) — stay safe with 4800 chars; gracefully truncate if exceeded
     if (fullDesc.length > 4800) {
-      fullDesc = fullDesc.substring(0, 4800) + '\n\n<p><em>... (açıklama 4800 karaktere kısaltıldı)</em></p>';
+      fullDesc = fullDesc.substring(0, 4800) + '\n\n... (açıklama kısaltıldı)';
     }
     if (fullDesc) {
       updates.description = fullDesc;
     }
 
-    if (Object.keys(updates).length === 0) {
+    // Structured technical specs (replaces a previously auto-imported group).
+    const validSpecs = crawlEditableSpecs.filter((s) => s.key.trim() && s.value.trim());
+    let specsApplied = false;
+    if (validSpecs.length > 0) {
+      const importedGroup = {
+        title: 'Teknik Özellikler',
+        items: validSpecs.map((s) => ({ label: s.key.trim(), value: s.value.trim() })),
+      };
+      setTechnicalSpecs((prev) => {
+        const others = (Array.isArray(prev) ? prev : []).filter(
+          (g) => (g.title || '').trim() !== 'Teknik Özellikler'
+        );
+        return [...others, importedGroup];
+      });
+      specsApplied = true;
+    }
+
+    if (Object.keys(updates).length === 0 && !specsApplied) {
       showToast('Aktarılacak açıklama veya özellik yok', 'warning');
       return;
     }
@@ -844,15 +908,6 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
       setCrawlDescAppliedToast(false);
     }, 400);
   };
-
-  // Simple HTML entity escape (XSS protection)
-  const escapeHtmlEntity = (s) =>
-    String(s)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
 
   const updateCrawlSpec = (index, field, value) => {
     setCrawlEditableSpecs((prev) => prev.map((s, i) => (i === index ? { ...s, [field]: value } : s)));
@@ -940,6 +995,7 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
         slug: formData.slug || null,
         metaTitle: formData.metaTitle || null,
         metaDescription: formData.metaDescription || null,
+        technicalSpecs: cleanTechnicalSpecs(technicalSpecs),
       };
 
       let savedProductId = product?.id;
@@ -1079,6 +1135,80 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
             maxLength={1000}
           />
           {errors.shortDescription && <div className="invalid-feedback">{errors.shortDescription}</div>}
+        </div>
+
+        {/* Technical Specifications (structured — shown in a clean section on the store) */}
+        <div className="mb-3">
+          <div className="d-flex align-items-center mb-2">
+            <h6 className="text-muted mb-0">
+              <i className="fas fa-list-ul me-2" />
+              Teknik Özellikler
+            </h6>
+            <button type="button" className="btn btn-sm btn-outline-primary ms-auto" onClick={addSpecGroup}>
+              <i className="fas fa-plus me-1" />
+              Grup Ekle
+            </button>
+          </div>
+          {(!technicalSpecs || technicalSpecs.length === 0) && (
+            <div className="text-muted small mb-2">
+              Henüz teknik özellik yok. "Grup Ekle" ile manuel girin veya yukarıdaki URL'den crawl ederek
+              otomatik doldurun.
+            </div>
+          )}
+          {(technicalSpecs || []).map((group, gi) => (
+            <div key={gi} className="border rounded p-2 mb-2 bg-light">
+              <div className="d-flex align-items-center gap-2 mb-2">
+                <input
+                  className="form-control form-control-sm fw-semibold"
+                  placeholder="Grup başlığı (ör: Genel Özellikler, Boyutlar, Güvenlik)"
+                  value={group.title || ''}
+                  onChange={(e) => updateSpecGroupTitle(gi, e.target.value)}
+                />
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-danger"
+                  title="Grubu sil"
+                  onClick={() => removeSpecGroup(gi)}
+                >
+                  <i className="fas fa-trash" />
+                </button>
+              </div>
+              {(group.items || []).map((it, ii) => (
+                <div key={ii} className="row g-1 mb-1 align-items-center">
+                  <div className="col-5">
+                    <input
+                      className="form-control form-control-sm"
+                      placeholder="Etiket (ör: Enerji Sınıfı)"
+                      value={it.label || ''}
+                      onChange={(e) => updateSpecItem(gi, ii, 'label', e.target.value)}
+                    />
+                  </div>
+                  <div className="col-6">
+                    <input
+                      className="form-control form-control-sm"
+                      placeholder="Değer (ör: A++)"
+                      value={it.value || ''}
+                      onChange={(e) => updateSpecItem(gi, ii, 'value', e.target.value)}
+                    />
+                  </div>
+                  <div className="col-1 text-end">
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline-secondary"
+                      title="Satırı sil"
+                      onClick={() => removeSpecItem(gi, ii)}
+                    >
+                      <i className="fas fa-times" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+              <button type="button" className="btn btn-sm btn-link p-0 mt-1" onClick={() => addSpecItem(gi)}>
+                <i className="fas fa-plus me-1" />
+                Satır Ekle
+              </button>
+            </div>
+          ))}
         </div>
 
         {/* Price and Tax Section */}
@@ -1865,18 +1995,28 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
                       Seçilenleri Sil ({selectedImageIds.size})
                     </button>
                   )}
-                  <small className="text-muted ms-auto">{productImages.length} görsel</small>
+                  <small className="text-muted ms-auto">
+                    <i className="fas fa-arrows-alt me-1" />
+                    Sürükleyerek sırala · {productImages.length} görsel
+                  </small>
                 </div>
               )}
               {/* Image Grid */}
               {productImages.length > 0 && (
                 <div className="row g-2 mb-3">
-                  {productImages
+                  {[...productImages]
                     .sort((a, b) => a.sortOrder - b.sortOrder)
-                    .map((img) => (
+                    .map((img, index) => (
                       <div key={img.id} className="col-6 col-md-3">
                         <div
-                          className={`border rounded overflow-hidden position-relative ${selectedImageIds.has(img.id) ? 'border-danger border-2' : img.primary ? 'border-primary border-2' : ''}`}
+                          draggable
+                          onDragStart={() => setDragImageIndex(index)}
+                          onDragOver={(e) => e.preventDefault()}
+                          onDrop={() => handleImageDrop(index)}
+                          onDragEnd={() => setDragImageIndex(null)}
+                          style={{ cursor: 'grab' }}
+                          title="Sürükleyerek sırala"
+                          className={`border rounded overflow-hidden position-relative ${dragImageIndex === index ? 'opacity-50' : ''} ${selectedImageIds.has(img.id) ? 'border-danger border-2' : img.primary ? 'border-primary border-2' : ''}`}
                         >
                           <div className="position-absolute top-0 start-0 p-1" style={{ zIndex: 2 }}>
                             <input
@@ -2046,17 +2186,17 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
                       </small>
                       {[
                         'profilo.com',
+                        'simfer.com.tr',
+                        'ferreturkiye.com',
+                        'kaercher.com',
+                        'kumtel.com',
+                        'tefal.com.tr',
+                        'braunshop.com.tr',
+                        'lg.com',
                         'siemens.com.tr',
                         'bosch-home.com.tr',
-                        'arcelik.com.tr',
-                        'beko.com.tr',
-                        'vestel.com.tr',
-                        'samsung.com',
-                        'lg.com',
                         'miele.com',
-                        'haier.com',
                         'fakir.com.tr',
-                        'altus.com.tr',
                       ].map((d) => (
                         <span key={d} className="badge bg-white text-dark border" style={{ fontWeight: 400 }}>
                           {d}

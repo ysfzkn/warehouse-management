@@ -226,6 +226,17 @@ public class ProductController {
         return ResponseEntity.ok(Map.of("message", "Birincil görsel güncellendi."));
     }
 
+    /** Reorder a product's images (drag-and-drop). Body: ordered list of image ids. */
+    @PutMapping("/{productId}/images/reorder")
+    public ResponseEntity<Map<String, String>> reorderImages(@PathVariable Long productId,
+                                                             @RequestBody List<Long> orderedImageIds) {
+        if (orderedImageIds == null || orderedImageIds.isEmpty()) {
+            return ResponseEntity.badRequest().build();
+        }
+        productImageService.reorderImages(productId, orderedImageIds);
+        return ResponseEntity.ok(Map.of("message", "Görsel sırası güncellendi."));
+    }
+
     @DeleteMapping("/images/{imageId}")
     public ResponseEntity<Void> deleteProductImage(@PathVariable Long imageId) {
         productImageService.deleteImage(imageId);
@@ -255,18 +266,55 @@ public class ProductController {
     public ResponseEntity<byte[]> viewProductImage(@PathVariable Long imageId,
                                                    @RequestParam(name = "thumbnail", defaultValue = "false") boolean thumbnail) {
         ProductImage image = productImageService.getImageOrThrow(imageId);
-        String path = thumbnail ? image.getThumbnailPath() : image.getRelativePath();
-        try (java.io.InputStream is = thumbnail
+        // Try the requested variant; if it's missing in storage, fall back to the
+        // other variant so the image still renders instead of a broken icon.
+        String primaryPath = thumbnail ? image.getThumbnailPath() : image.getRelativePath();
+        String fallbackPath = thumbnail ? image.getRelativePath() : image.getThumbnailPath();
+        String servedPath = primaryPath;
+        byte[] bytes = readImageBytes(primaryPath, thumbnail);
+        if (bytes == null) {
+            bytes = readImageBytes(fallbackPath, !thumbnail);
+            servedPath = fallbackPath;
+        }
+        if (bytes == null) {
+            return ResponseEntity.notFound().build();
+        }
+        HttpHeaders headers = new HttpHeaders();
+        try {
+            headers.setContentType(MediaType.parseMediaType(guessImageContentType(servedPath, image.getContentType())));
+        } catch (Exception ignored) {
+            headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
+        }
+        headers.setContentLength(bytes.length);
+        headers.set(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + image.getFileName() + "\"");
+        headers.setCacheControl("public, max-age=86400");
+        return new ResponseEntity<>(bytes, headers, HttpStatus.OK);
+    }
+
+    /** Content type for the actually-served variant (extension-based), with a fallback. */
+    private static String guessImageContentType(String path, String fallback) {
+        if (path != null) {
+            String p = path.toLowerCase();
+            if (p.endsWith(".webp")) return "image/webp";
+            if (p.endsWith(".png")) return "image/png";
+            if (p.endsWith(".jpg") || p.endsWith(".jpeg")) return "image/jpeg";
+            if (p.endsWith(".gif")) return "image/gif";
+            if (p.endsWith(".avif")) return "image/avif";
+            if (p.endsWith(".svg")) return "image/svg+xml";
+        }
+        return (fallback != null && !fallback.isBlank()) ? fallback : "application/octet-stream";
+    }
+
+    /** Read image bytes from storage; returns null on any error or empty result. */
+    private byte[] readImageBytes(String path, boolean isThumbnail) {
+        if (path == null || path.isBlank()) return null;
+        try (java.io.InputStream is = isThumbnail
                 ? photoStorageService.openThumbnailStream(path)
                 : photoStorageService.openPhotoStream(path)) {
-            byte[] bytes = is.readAllBytes();
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.parseMediaType(image.getContentType()));
-            headers.setContentLength(bytes.length);
-            headers.set(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + image.getFileName() + "\"");
-            return new ResponseEntity<>(bytes, headers, HttpStatus.OK);
+            byte[] b = is.readAllBytes();
+            return b.length > 0 ? b : null;
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            return null;
         }
     }
 
@@ -338,6 +386,7 @@ public class ProductController {
         dto.vatRate = p.getVatRate();
         dto.sctRate = p.getSctRate();
         dto.shortDescription = p.getShortDescription();
+        dto.technicalSpecs = p.getTechnicalSpecs();
         dto.salePrice = p.getSalePrice();
         dto.saleStart = p.getSaleStart();
         dto.saleEnd = p.getSaleEnd();

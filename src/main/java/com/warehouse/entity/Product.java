@@ -111,6 +111,14 @@ public class Product {
     @Column(name = "short_description", length = 1000)
     private String shortDescription;
 
+    /**
+     * Structured technical specifications (JSONB). Array of groups:
+     * [{ "title": "...", "items": [{ "label": "...", "value": "..." }] }]
+     */
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    @Column(name = "technical_specs", columnDefinition = "jsonb")
+    private List<java.util.Map<String, Object>> technicalSpecs;
+
     @Column(name = "is_featured", nullable = false)
     private boolean isFeatured = false;
 
