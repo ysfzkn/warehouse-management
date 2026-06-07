@@ -89,8 +89,20 @@ public class ProductImageServiceImpl implements ProductImageService {
     public void deleteImage(Long imageId) {
         ProductImage image = imageRepository.findById(imageId)
                 .orElseThrow(() -> new WarehouseManagementException(ErrorCode.PRODUCT_NOT_FOUND));
+        boolean wasPrimary = image.isPrimary();
+        var product = image.getProduct();
         photoStorageService.deletePhotoFiles(image.getRelativePath(), image.getThumbnailPath());
         imageRepository.delete(image);
+
+        // If we removed the primary image, promote the next one (by sort order) so
+        // the product never ends up without a primary → broken first image on store.
+        if (wasPrimary && product != null) {
+            List<ProductImage> remaining = imageRepository.findByProductOrderBySortOrderAscIdAsc(product);
+            if (!remaining.isEmpty() && remaining.stream().noneMatch(ProductImage::isPrimary)) {
+                remaining.get(0).setPrimary(true);
+                imageRepository.save(remaining.get(0));
+            }
+        }
     }
 
     @Override
@@ -103,6 +115,26 @@ public class ProductImageServiceImpl implements ProductImageService {
             img.setPrimary(img.getId().equals(imageId));
         }
         imageRepository.saveAll(allImages);
+    }
+
+    @Override
+    public void reorderImages(Long productId, List<Long> orderedImageIds) {
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new WarehouseManagementException(ErrorCode.PRODUCT_NOT_FOUND));
+        List<ProductImage> images = imageRepository.findByProductOrderBySortOrderAscIdAsc(product);
+        java.util.Map<Long, ProductImage> byId = new java.util.HashMap<>();
+        for (ProductImage img : images) byId.put(img.getId(), img);
+
+        int order = 0;
+        // Apply the requested order for known ids first.
+        for (Long id : orderedImageIds) {
+            ProductImage img = byId.remove(id);
+            if (img != null) img.setSortOrder(order++);
+        }
+        // Any images not included in the payload keep a stable order at the end.
+        for (ProductImage img : byId.values()) img.setSortOrder(order++);
+
+        imageRepository.saveAll(images);
     }
 
     @Override

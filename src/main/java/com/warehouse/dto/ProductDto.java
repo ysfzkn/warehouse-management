@@ -31,6 +31,7 @@ public class ProductDto {
     public BigDecimal vatRate;
     public BigDecimal sctRate;
     public String shortDescription;
+    public java.util.List<java.util.Map<String, Object>> technicalSpecs;
     public BigDecimal salePrice;
     public LocalDateTime saleStart;
     public LocalDateTime saleEnd;

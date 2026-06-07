@@ -14,6 +14,7 @@ public class StoreProductDto {
     private String name;
     private String description;
     private String shortDescription;
+    private List<java.util.Map<String, Object>> technicalSpecs;
     private String sku;
     private BigDecimal price;
     private BigDecimal salePrice;

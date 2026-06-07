@@ -168,7 +168,7 @@ public class StoreProductController {
             avgRating = reviewRepository.getAverageRatingByProductId(product.getId());
             reviewCount = reviewRepository.countApprovedByProductId(product.getId());
         } catch (Exception ignored) {}
-        return buildDto(product, totalAvailable, avgRating, reviewCount);
+        return buildDto(product, totalAvailable, avgRating, reviewCount, true);
     }
 
     /**
@@ -182,7 +182,8 @@ public class StoreProductController {
         double[] rv = reviewMap.get(product.getId());
         Double avgRating = (rv != null && rv[1] > 0) ? rv[0] : null;
         long reviewCount = (rv != null) ? (long) rv[1] : 0;
-        return buildDto(product, totalAvailable, avgRating, reviewCount);
+        // List view: omit technical specs to keep the payload lean (detail-only).
+        return buildDto(product, totalAvailable, avgRating, reviewCount, false);
     }
 
     /** Page-based total available stock for all products (single query). */
@@ -215,7 +216,7 @@ public class StoreProductController {
     }
 
     /** Shared DTO builder — stock and review values are passed as parameters. */
-    private StoreProductDto buildDto(Product product, int totalAvailable, Double avgRating, long reviewCount) {
+    private StoreProductDto buildDto(Product product, int totalAvailable, Double avgRating, long reviewCount, boolean includeSpecs) {
         String stockStatus = totalAvailable > 0 ? "IN_STOCK" : "OUT_OF_STOCK";
         if (totalAvailable > 0 && totalAvailable <= 5) {
             stockStatus = "LOW_STOCK";
@@ -241,7 +242,9 @@ public class StoreProductController {
                 primaryImageUrl = product.getImages().stream()
                     .filter(ProductImage::isPrimary)
                     .findFirst()
-                    .or(() -> product.getImages().stream().findFirst())
+                    .or(() -> product.getImages().stream()
+                        .min(java.util.Comparator.comparingInt(
+                            img -> img.getSortOrder() == null ? Integer.MAX_VALUE : img.getSortOrder())))
                     .map(img -> "/api/admin/products/images/" + img.getId() + "/view?thumbnail=true")
                     .orElse(null);
             } catch (Exception ignored) {}
@@ -254,6 +257,7 @@ public class StoreProductController {
             .name(product.getName())
             .description(product.getDescription())
             .shortDescription(product.getShortDescription())
+            .technicalSpecs(includeSpecs ? product.getTechnicalSpecs() : null)
             .sku(product.getSku())
             .price(product.getPrice())
             .salePrice(product.getSalePrice())

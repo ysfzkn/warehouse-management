@@ -73,17 +73,20 @@ public class ProductImageCrawlerService {
             "profilo.com",          "profilo.com.tr",
             "siemens-home.bsh-group.com", "siemens.com.tr", "siemens-home.com.tr",
             "bosch-home.com",       "bosch-home.com.tr",
-            "arcelik.com",          "arcelik.com.tr",
-            "beko.com.tr",          "beko.com",
-            "vestel.com.tr",        "vestel.com",
-            "samsung.com",          "samsung.com.tr",
             "lg.com",               "lg.com.tr",
             "miele.com",            "miele.com.tr",
             "haier.com",            "haier.com.tr",
-            "fakir.com.tr",         "fakir.com"
+            "fakir.com.tr",         "fakir.com",
+            // Merchant's active supplier brands:
+            "simfer.com.tr",        "simfer.com",
+            "ferreturkiye.com",
+            "kaercher.com",
+            "kumtel.com",
+            "tefal.com.tr",         "tefal.com",
+            "braunshop.com.tr"
+            // Removed (not needed): arcelik, beko, vestel, samsung.
             // NOTE: altus.com.tr does TLS fingerprinting with Akamai Bot Manager;
             // it cannot be bypassed with server-side HTTP clients (Jsoup/HttpURLConnection).
-            // Supporting it would require a headless browser (Playwright) or ScraperAPI.
     );
 
     private static final int MAX_IMAGES = 20;
@@ -364,74 +367,105 @@ public class ProductImageCrawlerService {
      */
     java.util.Map<String, String> extractSpecs(Document doc) {
         java.util.Map<String, String> specs = new java.util.LinkedHashMap<>();
+        final int MAX = 50;
 
-        // 1) schema.org Product.additionalProperty (JSON-LD)
+        // 1) schema.org PropertyValue (JSON-LD) — highest quality, takes priority.
         try {
             for (var el : doc.select("script[type=application/ld+json]")) {
                 String json = el.data();
                 if (json == null || json.isBlank()) continue;
-                // additionalProperty: [{ "name": "...", "value": "..." }, ...]
                 java.util.regex.Matcher m = java.util.regex.Pattern.compile(
-                        "\\{\\s*\"@type\"\\s*:\\s*\"PropertyValue\"\\s*,[^}]*\"name\"\\s*:\\s*\"([^\"]+)\"[^}]*\"value\"\\s*:\\s*\"([^\"]+)\"")
+                        "\"@type\"\\s*:\\s*\"PropertyValue\"\\s*,[^}]*?\"name\"\\s*:\\s*\"([^\"]+)\"[^}]*?\"value\"\\s*:\\s*\"([^\"]+)\"")
                         .matcher(json);
-                while (m.find() && specs.size() < 30) {
-                    String k = m.group(1).trim();
-                    String v = m.group(2).trim();
-                    if (!k.isEmpty() && !v.isEmpty()) specs.put(k, v);
+                while (m.find() && specs.size() < MAX) {
+                    putSpecRow(specs, m.group(1), m.group(2));
                 }
             }
         } catch (Exception ignored) {}
 
-        // 2) "spec table" inside a <table> (key-value pattern)
-        if (specs.size() < 5) {
-            for (var table : doc.select("table.product-specs, table.specs, table.specifications, .specs-table, table[class*=spec]")) {
+        // 2) Generic: ANY <table> whose rows are 2-cell key/value pairs. Covers
+        //    site-specific spec tables with arbitrary classes (e.g. Ferre's
+        //    "mytable"). Only tables yielding >= 2 spec-like rows are accepted, so
+        //    layout/price tables are skipped.
+        try {
+            for (var table : doc.select("table")) {
+                java.util.Map<String, String> fromTable = new java.util.LinkedHashMap<>();
                 for (var row : table.select("tr")) {
-                    var cells = row.select("td, th");
-                    if (cells.size() >= 2) {
-                        String k = cells.get(0).text().trim();
+                    var cells = row.select("th, td");
+                    if (cells.size() == 2) {
+                        String k = cleanSpecLabel(cells.get(0).text());
                         String v = cells.get(1).text().trim();
-                        if (!k.isEmpty() && !v.isEmpty() && k.length() < 80 && v.length() < 200) {
-                            specs.putIfAbsent(k, v);
-                        }
+                        if (looksLikeSpec(k, v)) fromTable.put(k, v);
                     }
-                    if (specs.size() >= 30) break;
+                }
+                if (fromTable.size() >= 2) {
+                    for (var e : fromTable.entrySet()) {
+                        if (specs.size() >= MAX) break;
+                        specs.putIfAbsent(e.getKey(), e.getValue());
+                    }
                 }
             }
-        }
+        } catch (Exception ignored) {}
 
-        // 3) <dl> definition list
-        if (specs.size() < 5) {
-            for (var dl : doc.select("dl.specs, dl.product-attributes, dl[class*=spec]")) {
+        // 3) <dl> definition lists (any).
+        try {
+            for (var dl : doc.select("dl")) {
                 var dts = dl.select("dt");
                 var dds = dl.select("dd");
                 int n = Math.min(dts.size(), dds.size());
-                for (int i = 0; i < n && specs.size() < 30; i++) {
-                    String k = dts.get(i).text().trim();
-                    String v = dds.get(i).text().trim();
-                    if (!k.isEmpty() && !v.isEmpty()) specs.putIfAbsent(k, v);
+                for (int i = 0; i < n && specs.size() < MAX; i++) {
+                    putSpecRow(specs, dts.get(i).text(), dds.get(i).text());
                 }
             }
-        }
+        } catch (Exception ignored) {}
 
-        // 4) "Key: Value" pattern in list items
-        if (specs.size() < 3) {
-            for (var li : doc.select("ul.features li, ul.specs li, .product-features li")) {
+        // 4) "Label: Value" rows inside spec/detail/özellik containers (list items).
+        try {
+            for (var li : doc.select(
+                    ".specs li, .features li, .product-features li, [class*=spec] li, [class*=ozellik] li,"
+                    + " [class*=teknik] li, [class*=detail] li, [class*=attribute] li, [class*=property] li")) {
                 String txt = li.text().trim();
-                if (txt.contains(":")) {
-                    String[] kv = txt.split(":", 2);
-                    if (kv.length == 2) {
-                        String k = kv[0].trim();
-                        String v = kv[1].trim();
-                        if (!k.isEmpty() && !v.isEmpty() && k.length() < 80 && v.length() < 200) {
-                            specs.putIfAbsent(k, v);
-                        }
-                    }
+                int idx = txt.indexOf(':');
+                if (idx > 0 && idx < 70 && idx < txt.length() - 1) {
+                    putSpecRow(specs, txt.substring(0, idx), txt.substring(idx + 1));
                 }
-                if (specs.size() >= 30) break;
+                if (specs.size() >= MAX) break;
             }
-        }
+        } catch (Exception ignored) {}
 
         return specs;
+    }
+
+    private static void putSpecRow(java.util.Map<String, String> specs, String rawK, String rawV) {
+        String k = cleanSpecLabel(rawK);
+        String v = rawV == null ? "" : rawV.trim();
+        if (looksLikeSpec(k, v)) specs.putIfAbsent(k, v);
+    }
+
+    private static String cleanSpecLabel(String s) {
+        if (s == null) return "";
+        String k = s.trim();
+        if (k.endsWith(":")) k = k.substring(0, k.length() - 1).trim();
+        return k;
+    }
+
+    /** Commerce/navigation labels that look like 2-cell rows but aren't product specs. */
+    private static final java.util.regex.Pattern SPEC_JUNK_KEY = java.util.regex.Pattern.compile(
+            "(?i)(price|fiyat|cost|[uü]cret|kdv|vat|tax|taksit|installment|sepet|cart|kargo|"
+            + "shipping|stok|stock|menu|login|giri[sş]|payment|[oö]deme|toplam|ara\\s*toplam|indirim)");
+
+    private static boolean looksLikeSpec(String k, String v) {
+        if (k == null || v == null || k.isEmpty() || v.isEmpty()) return false;
+        if (k.length() < 2 || k.length() > 60 || v.length() > 300) return false;
+        String lk = k.toLowerCase();
+        if (lk.contains("function") || lk.contains("{") || lk.startsWith("http")) return false;
+        if (v.contains("{") || v.contains("</") || v.startsWith("http")) return false;
+        // Skip pricing / cart / navigation rows.
+        if (SPEC_JUNK_KEY.matcher(k).find()) return false;
+        // Skip pure currency amounts (e.g. "1.299,00 TL", "₺99") — but keep plain
+        // numeric specs like "350" (no currency marker).
+        if (v.matches("(?i)^\\s*[₺$€]?\\s*\\d[\\d.,]*\\s*(tl|try|usd|eur|₺|\\$|€)\\s*$")) return false;
+        return true;
     }
 
     /** Brand name extraction (schema.org brand or meta). */
