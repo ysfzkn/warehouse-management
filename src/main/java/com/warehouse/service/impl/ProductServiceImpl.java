@@ -3,6 +3,8 @@ package com.warehouse.service.impl;
 import com.warehouse.dto.BulkDeleteResponse;
 import com.warehouse.dto.BulkPriceUpdateRequest;
 import com.warehouse.entity.Product;
+import com.warehouse.entity.ProductType;
+import com.warehouse.entity.BundleItem;
 import com.warehouse.entity.Category;
 import com.warehouse.entity.Brand;
 import com.warehouse.entity.Color;
@@ -28,8 +30,13 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Implementation of ProductService for managing products.
@@ -82,6 +89,14 @@ public class ProductServiceImpl implements ProductService {
                 pageable.getPageNumber(), pageable.getPageSize(), search, categoryId, brandId, colorId);
         String normalizedSearch = (search != null && !search.trim().isEmpty()) ? search.trim() : null;
         return productRepository.findByFilters(normalizedSearch, categoryId, brandId, colorId, pageable);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<Product> getAllProducts(Pageable pageable, String search, Long categoryId, Long brandId, Long colorId,
+                                        ProductType productType) {
+        String normalizedSearch = (search != null && !search.trim().isEmpty()) ? search.trim() : null;
+        return productRepository.findByFilters(normalizedSearch, categoryId, brandId, colorId, productType, pageable);
     }
 
     @Override
@@ -172,15 +187,19 @@ public class ProductServiceImpl implements ProductService {
         product.setCategory(category);
         setBrandIfPresent(product);
         setColorIfPresent(product);
-        if (product.getSlug() == null || product.getSlug().isBlank()) {
-            product.setSlug(product.getSku().toLowerCase()
-                .replace(" ", "-").replaceAll("[^a-z0-9\\-]", ""));
-        }
+        // Always store a URL-safe slug (sanitize even an admin-supplied one) so links never break.
+        String slugBase = (product.getSlug() != null && !product.getSlug().isBlank())
+                ? product.getSlug()
+                : (product.getName() != null ? product.getName() : product.getSku());
+        product.setSlug(safeSlug(slugBase, product.getSku()));
+        applyBundleMembers(product, product.getProductType(), product.getBundleMemberRefs());
 
         Product saved = productRepository.save(product);
         logger.info("Product created successfully with id: {}", saved.getId());
         eventPublisher.publishEvent(ProductIndexEvent.upsert(saved.getId()));
-        return productRepository.findByIdWithRelations(saved.getId()).orElse(saved);
+        Product result = productRepository.findByIdWithRelations(saved.getId()).orElse(saved);
+        touchBundleItems(result);
+        return result;
     }
 
     @Override
@@ -193,11 +212,120 @@ public class ProductServiceImpl implements ProductService {
         updateColor(product, productDetails);
         validateSkuUniquenessOnUpdate(product, productDetails);
         updateProductFields(product, productDetails);
+        applyBundleMembers(product, productDetails.getProductType(), productDetails.getBundleMemberRefs());
 
         Product saved = productRepository.save(product);
         logger.info("Product updated successfully with id: {}", saved.getId());
         eventPublisher.publishEvent(ProductIndexEvent.upsert(saved.getId()));
-        return productRepository.findByIdWithRelations(saved.getId()).orElse(saved);
+        Product result = productRepository.findByIdWithRelations(saved.getId()).orElse(saved);
+        touchBundleItems(result);
+        return result;
+    }
+
+    /**
+     * Rebuilds a bundle's member lines from the admin editor input.
+     * For SIMPLE products this clears any stray members. For BUNDLE products it
+     * validates and replaces the {@code bundle_items} (orphanRemoval handles deletes).
+     */
+    private void applyBundleMembers(Product bundle, ProductType type, List<Map<String, Object>> refs) {
+        bundle.setProductType(type != null ? type : ProductType.SIMPLE);
+
+        if (bundle.getBundleItems() == null) {
+            bundle.setBundleItems(new ArrayList<>());
+        }
+        List<BundleItem> current = bundle.getBundleItems();
+
+        if (bundle.getProductType() != ProductType.BUNDLE) {
+            current.clear(); // ensure a converted-back product keeps no members
+            return;
+        }
+
+        if (refs == null || refs.isEmpty()) {
+            throw new WarehouseManagementException(ErrorCode.INVALID_VALUE, "Bir set en az bir üye ürün içermelidir.");
+        }
+
+        // Reconcile the existing rows IN PLACE: update unchanged members, add only genuinely
+        // new ones, delete removed ones. Re-creating every row (clear + addAll) would try to
+        // INSERT a duplicate (bundle_id, product_id) before the old row is deleted → uq violation.
+        Map<Long, BundleItem> existingByProduct = new HashMap<>();
+        for (BundleItem bi : current) {
+            if (bi.getProduct() != null) existingByProduct.put(bi.getProduct().getId(), bi);
+        }
+
+        Set<Long> desiredIds = new HashSet<>();
+        int order = 0;
+        for (Map<String, Object> ref : refs) {
+            if (ref == null) continue;
+            Long memberId = toLongOrNull(ref.get("productId"));
+            if (memberId == null) continue;
+            if (memberId.equals(bundle.getId())) {
+                throw new WarehouseManagementException(ErrorCode.INVALID_VALUE, "Bir set kendisini üye olarak içeremez.");
+            }
+            if (!desiredIds.add(memberId)) continue; // de-duplicate
+            int qty = Math.max(1, toIntOrDefault(ref.get("quantity"), 1));
+
+            BundleItem existing = existingByProduct.get(memberId);
+            if (existing != null) {
+                existing.setQuantity(qty);
+                existing.setSortOrder(order++);
+            } else {
+                Product member = productRepository.findById(memberId)
+                        .orElseThrow(() -> new WarehouseManagementException(ErrorCode.PRODUCT_NOT_FOUND, BusinessMessages.ID_PREFIX + memberId));
+                if (member.getProductType() == ProductType.BUNDLE) {
+                    throw new WarehouseManagementException(ErrorCode.INVALID_VALUE,
+                            "İç içe set oluşturulamaz: \"" + member.getName() + "\" bir set ürünüdür.");
+                }
+                BundleItem created = new BundleItem();
+                created.setBundle(bundle);
+                created.setProduct(member);
+                created.setQuantity(qty);
+                created.setSortOrder(order++);
+                current.add(created);
+            }
+        }
+
+        if (desiredIds.isEmpty()) {
+            throw new WarehouseManagementException(ErrorCode.INVALID_VALUE, "Set için geçerli üye ürün bulunamadı.");
+        }
+
+        // Remove members no longer present (orphanRemoval deletes their rows).
+        current.removeIf(bi -> bi.getProduct() == null || !desiredIds.contains(bi.getProduct().getId()));
+    }
+
+    /** Force-initialize a bundle's members + images before the tx closes (for the response DTO). */
+    private void touchBundleItems(Product product) {
+        if (product != null && product.getProductType() == ProductType.BUNDLE) {
+            if (product.getBundleItems() != null) {
+                for (BundleItem bi : product.getBundleItems()) {
+                    if (bi.getProduct() != null) {
+                        bi.getProduct().getName(); // trigger lazy load within the transaction
+                    }
+                }
+            }
+            if (product.getImages() != null) {
+                product.getImages().size(); // initialize images so toDto can build primaryImageUrl
+            }
+        }
+    }
+
+    private static Long toLongOrNull(Object v) {
+        if (v == null) return null;
+        if (v instanceof Number n) return n.longValue();
+        try {
+            return Long.parseLong(v.toString().trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private static int toIntOrDefault(Object v, int def) {
+        if (v == null) return def;
+        if (v instanceof Number n) return n.intValue();
+        try {
+            return Integer.parseInt(v.toString().trim());
+        } catch (NumberFormatException e) {
+            return def;
+        }
     }
 
     @Override
@@ -446,8 +574,47 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional(readOnly = true)
     public Product getProductBySlug(String slug) {
-        return productRepository.findBySlug(slug)
-            .orElseThrow(() -> new WarehouseManagementException(ErrorCode.PRODUCT_NOT_FOUND, "Slug: " + slug));
+        Optional<Product> bySlug = productRepository.findBySlug(slug);
+        if (bySlug.isPresent()) return bySlug.get();
+
+        // Fallback: legacy/broken links where the path collapsed to a leading numeric id
+        // (e.g. "/urun/32" because the real slug contained an unsafe character). Resolve by id.
+        if (slug != null) {
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile("^(\\d+)").matcher(slug);
+            if (m.find()) {
+                try {
+                    Long id = Long.parseLong(m.group(1));
+                    Optional<Product> byId = productRepository.findByIdWithRelations(id);
+                    if (byId.isPresent()) return byId.get();
+                } catch (NumberFormatException ignored) {
+                    // not a usable id — fall through
+                }
+            }
+        }
+        throw new WarehouseManagementException(ErrorCode.PRODUCT_NOT_FOUND, "Slug: " + slug);
+    }
+
+    /** Build a URL-safe slug from {@code base}; fall back to the SKU, then "urun". */
+    private static String safeSlug(String base, String sku) {
+        String s = slugify(base);
+        if (s == null || s.isBlank()) s = slugify(sku);
+        if (s == null || s.isBlank()) s = "urun";
+        return s;
+    }
+
+    /**
+     * Lowercases, transliterates Turkish characters and strips everything that is not
+     * {@code [a-z0-9-]} so the slug is always safe to place in a URL path.
+     */
+    private static String slugify(String input) {
+        if (input == null) return null;
+        String s = input.trim().toLowerCase(java.util.Locale.forLanguageTag("tr"));
+        s = s.replace('ç', 'c').replace('ğ', 'g').replace('ı', 'i')
+             .replace('ö', 'o').replace('ş', 's').replace('ü', 'u')
+             .replace('â', 'a').replace('î', 'i').replace('û', 'u');
+        s = s.replaceAll("[^a-z0-9]+", "-");          // unsafe runs → single dash
+        s = s.replaceAll("(^-+)|(-+$)", "");           // trim leading/trailing dashes
+        return s;
     }
 
     @Override
@@ -566,7 +733,7 @@ public class ProductServiceImpl implements ProductService {
         product.setVatRate(productDetails.getVatRate());
         product.setSctRate(productDetails.getSctRate());
         product.setActive(productDetails.isActive());
-        if (productDetails.getSlug() != null) product.setSlug(productDetails.getSlug());
+        if (productDetails.getSlug() != null) product.setSlug(safeSlug(productDetails.getSlug(), product.getSku()));
         if (productDetails.getMetaTitle() != null) product.setMetaTitle(productDetails.getMetaTitle());
         if (productDetails.getMetaDescription() != null) product.setMetaDescription(productDetails.getMetaDescription());
     }

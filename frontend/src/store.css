@@ -533,12 +533,63 @@
   position: fixed;
   top: 0;
   left: 0;
-  width: 280px;
+  width: 84vw;
+  max-width: 320px;
   height: 100vh;
   background: #fff;
   z-index: 1999;
   overflow-y: auto;
   box-shadow: var(--shadow-xl);
+  animation: storeMenuSlideIn 0.25s ease;
+}
+@keyframes storeMenuSlideIn {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+.store-mobile-overlay {
+  animation: storeOverlayFade 0.2s ease;
+}
+@keyframes storeOverlayFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.store-mobile-menu-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 14px 16px;
+  background: #fff;
+  border-bottom: 1px solid var(--color-gray-200, #e5e7eb);
+}
+.store-mobile-menu-close {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 10px;
+  background: #f1f5f9;
+  color: #1f2937;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.store-mobile-menu-close:active,
+.store-mobile-menu-close:hover {
+  background: #e2e8f0;
 }
 .store-mobile-cat-list {
   list-style: none;
@@ -941,6 +992,211 @@
   background: linear-gradient(135deg, #f59e0b, #d97706);
   color: #fff;
   box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
+}
+.card-badge-set {
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+}
+.card-bundle-saving {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #047857;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+}
+/* ── Product reviews ── */
+.rating-stars-input {
+  display: inline-flex;
+  gap: 4px;
+}
+.rating-star-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  line-height: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+.store-review-avg {
+  font-size: 2.6rem;
+  font-weight: 800;
+  line-height: 1;
+  color: #1f2937;
+}
+.store-review-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: #eef2f6;
+  overflow: hidden;
+}
+.store-review-bar-fill {
+  height: 100%;
+  background: #f59e0b;
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+.store-review-verified {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #047857;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.store-review-reply {
+  background: #f8fafc;
+  border-left: 3px solid var(--store-primary, #2563eb);
+}
+.store-review-thumb {
+  width: 64px;
+  height: 64px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  padding: 0;
+  background: #f8fafc;
+  cursor: pointer;
+}
+.store-review-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.store-review-thumb-x {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: none;
+  background: #ef4444;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.store-review-add-photo {
+  width: 64px;
+  height: 64px;
+  border-radius: 8px;
+  border: 1px dashed #cbd5e1;
+  background: #f8fafc;
+  color: #64748b;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  font-size: 0.62rem;
+  cursor: pointer;
+}
+.store-review-add-photo:hover {
+  border-color: var(--store-primary, #2563eb);
+  color: var(--store-primary, #2563eb);
+}
+.store-review-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  background: rgba(0, 0, 0, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.store-review-lightbox img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 8px;
+}
+.store-review-lightbox-x {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  border: none;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.store-warranty-box {
+  background: linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%);
+  border: 1px solid #a7f3d0;
+}
+.store-warranty-icon {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #10b981;
+  color: #fff;
+  box-shadow: 0 4px 10px rgba(16, 185, 129, 0.35);
+}
+:root[data-theme='dark'] .store-warranty-box {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+.store-bundle-member {
+  transition: background 0.15s ease;
+}
+.store-bundle-member:hover {
+  background: #eef2ff !important;
+}
+.store-bundle-box {
+  border-color: #e0e7ff !important;
+}
+.store-bundle-box-head {
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  color: #fff;
+  padding: 10px 14px;
+  font-size: 0.95rem;
+}
+.store-bundle-thumb {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.store-bundle-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.store-bundle-value {
+  background: #ecfdf5;
+  border-top: 1px solid #d1fae5;
+}
+:root[data-theme='dark'] .store-bundle-value {
+  background: rgba(16, 185, 129, 0.12);
+  border-top-color: rgba(16, 185, 129, 0.25);
 }
 .store-product-card .card-body {
   padding: 14px;
@@ -2877,4 +3133,409 @@
 :root[data-theme='dark'] .store-pdp-sticky-cta {
   background: var(--surface-card);
   border-top-color: var(--border-subtle);
+}
+
+/* ============================================================
+   MOBİL UX CİLA (2026)
+   Dokunmatik hedefler (≥44px), safe-area (çentik), sticky
+   sepet/ödeme bar'ları, mobil arama sheet'i, akıcı tipografi.
+   Tüm kurallar mobil-sınırlı (max-width:767.98px) → desktop
+   görünümü etkilenmez.
+   ============================================================ */
+
+/* Dokunmatik his — gri tap flash'ını kaldır (tüm boyutlar) */
+.store-action-btn,
+.store-mobile-menu-btn,
+.store-gallery-arrow,
+.store-mobile-nav-item,
+.store-product-card .btn-add-cart,
+.card-wishlist-btn,
+.store-mobile-search-toggle {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* PDP sticky CTA — çentik boşluğu (safe-area) */
+.store-pdp-sticky-cta {
+  bottom: calc(56px + env(safe-area-inset-bottom));
+  padding-bottom: max(8px, env(safe-area-inset-bottom));
+}
+@media (max-width: 767.98px) {
+  body:has(.store-mobile-nav) .store-pdp-sticky-cta {
+    bottom: calc(56px + env(safe-area-inset-bottom));
+  }
+}
+
+/* ---- Grup 3: Sepet / Ödeme sticky alt bar (PDP CTA desenini paylaşır) ---- */
+.store-cart-sticky-bar,
+.store-checkout-sticky-bar {
+  position: fixed;
+  bottom: calc(56px + env(safe-area-inset-bottom));
+  left: 0;
+  right: 0;
+  z-index: 1029;
+  background: #ffffff;
+  border-top: 1px solid var(--border-subtle, #e5e7eb);
+  padding: 10px 14px;
+  padding-bottom: max(10px, env(safe-area-inset-bottom));
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.12);
+}
+.store-cart-sticky-info,
+.store-checkout-sticky-info {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+.store-cart-sticky-info small,
+.store-checkout-sticky-info small {
+  color: #64748b;
+  font-size: 0.72rem;
+}
+.store-cart-sticky-info strong,
+.store-checkout-sticky-info strong {
+  color: var(--store-primary, #2563eb);
+  font-size: 1.05rem;
+}
+.store-cart-sticky-bar .btn,
+.store-checkout-sticky-bar .btn {
+  flex: 1;
+  min-height: 48px;
+  font-weight: 600;
+}
+:root[data-theme='dark'] .store-cart-sticky-bar,
+:root[data-theme='dark'] .store-checkout-sticky-bar {
+  background: var(--surface-card);
+  border-top-color: var(--border-subtle);
+}
+/* Sayfa altına nefes payı (sticky bar içeriği örtmesin) */
+@media (max-width: 767.98px) {
+  .store-cart-has-sticky,
+  .store-checkout-has-sticky {
+    padding-bottom: 150px;
+  }
+}
+
+/* ---- Grup 2: Mobil arama sheet ---- */
+.store-mobile-search-toggle {
+  min-width: 44px;
+  min-height: 44px;
+  display: none; /* yalnızca mobilde görünür (aşağıda) */
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--color-gray-700);
+  cursor: pointer;
+  border-radius: var(--radius-md);
+}
+.store-mobile-search-sheet {
+  display: none;
+}
+@media (max-width: 767.98px) {
+  .store-mobile-search-toggle {
+    display: inline-flex;
+  }
+  .store-mobile-search-sheet {
+    display: block;
+    position: relative;
+    padding: 8px 12px 10px;
+    background: #fff;
+    border-bottom: 1px solid var(--color-gray-200);
+  }
+  .store-mobile-search-sheet .store-search-form {
+    width: 100%;
+  }
+  .store-mobile-search-results {
+    margin-top: 8px;
+    max-height: 60vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    border-top: 1px solid var(--color-gray-100, #f1f5f9);
+  }
+  .store-mobile-search-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 4px;
+    min-height: 52px;
+    color: var(--color-gray-800, #1f2937);
+    text-decoration: none;
+    border-bottom: 1px solid var(--color-gray-100, #f1f5f9);
+  }
+  .store-mobile-search-row:active {
+    background: var(--color-gray-50, #f8fafc);
+  }
+  .store-mobile-search-thumb {
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+    object-fit: contain;
+    border-radius: 8px;
+    background: #f8fafc;
+    border: 1px solid #f1f5f9;
+  }
+  .store-mobile-search-tag {
+    flex-shrink: 0;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 999px;
+  }
+  .store-mobile-search-tag.tag-cat {
+    color: var(--store-primary, #2563eb);
+    background: #eff6ff;
+  }
+  .store-mobile-search-tag.tag-brand {
+    color: #16a34a;
+    background: #f0fdf4;
+  }
+  .store-mobile-search-all {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: var(--store-primary, #2563eb);
+    text-decoration: none;
+  }
+}
+
+/* ---- Grup 1 + 4: dokunmatik hedefler, tipografi, hero, galeri ---- */
+@media (max-width: 767.98px) {
+  /* 44px dokunmatik hedefler */
+  .store-mobile-menu-btn,
+  .store-header-actions .store-action-btn {
+    min-width: 44px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .store-header-actions .store-action-btn {
+    flex-direction: column; /* ikon + minik etiket, 44px kutuda ortalı */
+  }
+
+  /* Galeri okları 44px, thumbnail 56px */
+  .store-gallery-arrow {
+    width: 44px;
+    height: 44px;
+  }
+  .store-gallery-thumb {
+    width: 56px;
+    height: 56px;
+  }
+
+  /* Ürün kartı: Sepete Ekle rahat dokunulabilir; wishlist hep görünür */
+  .store-product-card .btn-add-cart {
+    min-height: 40px;
+    padding: 9px 10px;
+  }
+  .card-wishlist-btn {
+    opacity: 1; /* mobilde hover yok — her zaman göster */
+  }
+
+  /* Kategori nav — kaydırılabilir ipucu (sağ kenar fade) */
+  .store-mega-menu {
+    position: relative;
+  }
+  .store-mega-menu::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 32px;
+    pointer-events: none;
+    background: linear-gradient(to right, rgba(255, 255, 255, 0), #fff 80%);
+  }
+
+  /* Akıcı tipografi — 375↔768 sert sıçramayı yumuşat */
+  .store-section-title {
+    font-size: clamp(1.1rem, 4.6vw, 1.45rem);
+  }
+  .store-product-card .product-name {
+    font-size: clamp(0.78rem, 3.4vw, 0.9rem);
+  }
+  .store-product-card .product-price {
+    font-size: clamp(0.95rem, 4.2vw, 1.12rem);
+  }
+  .theme-slide-title {
+    font-size: clamp(1.15rem, 5.2vw, 1.6rem);
+  }
+
+  /* Hero — mobil dikey nefes alanı */
+  .theme-slide {
+    min-height: 240px;
+  }
+}
+
+/* Çentikli cihazda alt nav fade'i safe-area kadar yukarı taşımayı önler */
+:root[data-theme='dark'] .store-mega-menu::after {
+  background: linear-gradient(to right, rgba(17, 24, 39, 0), var(--surface-card, #111827) 80%);
+}
+
+/* Galeri büyüt butonu (sağ-alt, ana görsel üzerinde) */
+.store-gallery-zoom-btn {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  color: #1f2937;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  cursor: pointer;
+  z-index: 3;
+  -webkit-tap-highlight-color: transparent;
+}
+.store-gallery-zoom-btn:hover {
+  background: #fff;
+}
+
+/* Tam ekran lightbox — pinch / çift dokun zoom */
+.store-gallery-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  background: rgba(0, 0, 0, 0.92);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding-bottom: env(safe-area-inset-bottom);
+  animation: fadeIn 0.15s ease;
+}
+.store-gallery-lb-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  will-change: transform;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+.store-gallery-lb-close {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top));
+  right: 12px;
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  cursor: pointer;
+  z-index: 2;
+  -webkit-tap-highlight-color: transparent;
+}
+.store-gallery-lb-close:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+.store-gallery-lightbox .store-gallery-arrow {
+  opacity: 1;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.15);
+}
+.store-gallery-lb-hint {
+  position: absolute;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  left: 0;
+  right: 0;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.78rem;
+  padding: 0 16px;
+  pointer-events: none;
+}
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Infinite scroll (kategori/arama) — sentinel + "Daha Fazla Yükle" */
+.store-infinite-scroll {
+  margin-top: 24px;
+}
+.store-infinite-sentinel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 64px;
+  padding: 12px 0;
+}
+
+/* PDP sekme şeridi — momentum kaydırma + gizli scrollbar (dar ekranda kesilmez) */
+.store-pdp-tabs {
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.store-pdp-tabs::-webkit-scrollbar {
+  display: none;
+}
+/* Teknik özellik tablosu — uzun değerler taşmasın */
+.store-pdp-specs td {
+  word-break: break-word;
+}
+
+/* PDP mobil akordeon (Açıklama / Teknik Özellikler / Kargo) */
+.store-pdp-accordion {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: hidden;
+}
+.store-pdp-acc-item + .store-pdp-acc-item {
+  border-top: 1px solid #e2e8f0;
+}
+.store-pdp-acc-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px;
+  min-height: 52px;
+  background: #fff;
+  border: none;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--color-gray-800, #1f2937);
+  text-align: left;
+  cursor: pointer;
+}
+.store-pdp-acc-header[aria-expanded='true'] {
+  color: var(--store-primary, #2563eb);
+}
+.store-pdp-acc-caret {
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+.store-pdp-acc-body {
+  padding: 16px;
+  background: #fafbfc;
+  border-top: 1px solid #eef2f6;
+}
+:root[data-theme='dark'] .store-pdp-accordion {
+  border-color: var(--border-subtle);
+}
+:root[data-theme='dark'] .store-pdp-acc-header {
+  background: var(--surface-card);
+  color: var(--text-primary, #e5e7eb);
+}
+:root[data-theme='dark'] .store-pdp-acc-body {
+  background: var(--surface-muted, #1f2937);
 }

@@ -31,6 +31,8 @@ public class ProductDto {
     public BigDecimal vatRate;
     public BigDecimal sctRate;
     public String shortDescription;
+    public Integer warrantyMonths;
+    public String warrantyText;
     public java.util.List<java.util.Map<String, Object>> technicalSpecs;
     public BigDecimal salePrice;
     public LocalDateTime saleStart;
@@ -44,6 +46,22 @@ public class ProductDto {
     public LocalDateTime createdAt;
     public LocalDateTime updatedAt;
     public Long totalQuantity;
+
+    // Product sets (bundles)
+    public String productType; // "SIMPLE" | "BUNDLE"
+    public Integer bundleItemCount;
+    public String primaryImageUrl; // set thumbnail (bundles only)
+    public java.util.List<BundleItemDto> bundleItems;
+
+    public static class BundleItemDto {
+        public Long productId;
+        public String name;
+        public String sku;
+        public Integer quantity;
+        public Integer sortOrder;
+        public BigDecimal price;
+        public BigDecimal salePrice;
+    }
 
     public static class CategoryInfo {
         public Long id;

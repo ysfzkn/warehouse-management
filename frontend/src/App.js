@@ -14,6 +14,7 @@ import ScrollToTop from './components/ScrollToTop';
 import Dashboard from './pages/Dashboard';
 import Warehouses from './pages/Warehouses';
 import Products from './pages/Products';
+import ProductSets from './pages/ProductSets';
 import Categories from './pages/Categories';
 import Stock from './pages/Stock';
 import Login from './pages/Login';
@@ -94,21 +95,21 @@ function App() {
   // container; only this host check determines which route tree gets rendered.
   // Customizable via the REACT_APP_ADMIN_HOSTS env variable (e.g. "admin,wms,panel").
   const ADMIN_HOST_PREFIXES = (process.env.REACT_APP_ADMIN_HOSTS || 'admin,wms')
-      .split(',').map(s => s.trim()).filter(Boolean);
-  const isAdminHost = typeof window !== 'undefined' && (() => {
-    const h = window.location.hostname || '';
-    return ADMIN_HOST_PREFIXES.some(p => h.startsWith(p + '.'));
-  })();
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const isAdminHost =
+    typeof window !== 'undefined' &&
+    (() => {
+      const h = window.location.hostname || '';
+      return ADMIN_HOST_PREFIXES.some((p) => h.startsWith(p + '.'));
+    })();
 
   return (
     <div className="App">
       {/* Auto-scroll to top on page transitions — user always starts at the top of the page */}
       <ScrollToTop />
-      {isAdminHost ? (
-        <AdminRoutes authed={authed} role={role} />
-      ) : (
-        <StoreRoutes />
-      )}
+      {isAdminHost ? <AdminRoutes authed={authed} role={role} /> : <StoreRoutes />}
     </div>
   );
 }
@@ -184,114 +185,347 @@ function AdminRoutes({ authed, role }) {
       {/* ===== ADMIN LOGIN ===== */}
       <Route path="/login" element={<Login />} />
 
-        {/* ===== ADMIN (auth required, uses AdminLayout with Outlet) ===== */}
-        <Route path="/" element={<AdminLayout />}>
-          <Route index element={
-            authed && role === 'ADMIN' ? <Dashboard /> : <Navigate to={authed ? '/stock' : '/login'} replace />
-          } />
-          <Route path="warehouses" element={
-            authed && role === 'ADMIN' ? <Warehouses /> : <Navigate to={authed ? '/stock' : '/login'} replace />
-          } />
-          <Route path="products" element={
+      {/* ===== ADMIN (auth required, uses AdminLayout with Outlet) ===== */}
+      <Route path="/" element={<AdminLayout />}>
+        <Route
+          index
+          element={
+            authed && role === 'ADMIN' ? (
+              <Dashboard />
+            ) : (
+              <Navigate to={authed ? '/stock' : '/login'} replace />
+            )
+          }
+        />
+        <Route
+          path="warehouses"
+          element={
+            authed && role === 'ADMIN' ? (
+              <Warehouses />
+            ) : (
+              <Navigate to={authed ? '/stock' : '/login'} replace />
+            )
+          }
+        />
+        <Route
+          path="products"
+          element={
             authed && role === 'ADMIN' ? <Products /> : <Navigate to={authed ? '/stock' : '/login'} replace />
-          } />
-          <Route path="categories" element={
-            authed && role === 'ADMIN' ? <Categories /> : <Navigate to={authed ? '/stock' : '/login'} replace />
-          } />
-          <Route path="stock" element={
-            authed && ['ADMIN', 'STOCK_IN', 'STOCK_OUT'].includes(role) ? <Stock /> : <Navigate to="/login" replace />
-          } />
-          <Route path="stock-imports" element={
-            authed && role === 'ADMIN' ? <StockImportHistory /> : <Navigate to={authed ? '/stock' : '/login'} replace />
-          } />
-          <Route path="admin-settings" element={
-            authed && role === 'ADMIN' ? <AdminSettings allowedTabs={['users']} /> : <Navigate to={authed ? '/stock' : '/login'} replace />
-          } />
-          <Route path="admin/brands" element={
-            authed && role === 'ADMIN' ? <AdminSettings allowedTabs={['brand']} /> : <Navigate to={authed ? '/stock' : '/login'} replace />
-          } />
-          <Route path="admin/colors" element={
-            authed && role === 'ADMIN' ? <AdminSettings allowedTabs={['color']} /> : <Navigate to={authed ? '/stock' : '/login'} replace />
-          } />
-          <Route path="desi" element={
-            authed && role === 'ADMIN' ? <DesiCalculator /> : <Navigate to={authed ? '/stock' : '/login'} replace />
-          } />
-          <Route path="admin/audit/:entityType/:entityId" element={
-            authed && role === 'ADMIN' ? <AdminAuditDetails /> : <Navigate to={authed ? '/stock' : '/login'} replace />
-          } />
-          <Route path="admin/notifications" element={
-            authed && role === 'ADMIN' ? <AdminNotifications /> : <Navigate to={authed ? '/stock' : '/login'} replace />
-          } />
-          <Route path="warehouses/:warehouseId/activity" element={
-            authed && role === 'ADMIN' ? <WarehouseActivity /> : <Navigate to={authed ? '/stock' : '/login'} replace />
-          } />
-          {/* E-commerce admin */}
-          <Route path="admin/orders" element={
-            authed && role === 'ADMIN' ? <AdminOrders /> : <Navigate to={authed ? '/stock' : '/login'} replace />
-          } />
-          <Route path="admin/cms" element={
+          }
+        />
+        <Route
+          path="admin/product-sets"
+          element={
+            authed && role === 'ADMIN' ? (
+              <ProductSets />
+            ) : (
+              <Navigate to={authed ? '/stock' : '/login'} replace />
+            )
+          }
+        />
+        <Route
+          path="categories"
+          element={
+            authed && role === 'ADMIN' ? (
+              <Categories />
+            ) : (
+              <Navigate to={authed ? '/stock' : '/login'} replace />
+            )
+          }
+        />
+        <Route
+          path="stock"
+          element={
+            authed && ['ADMIN', 'STOCK_IN', 'STOCK_OUT'].includes(role) ? (
+              <Stock />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
+        <Route
+          path="stock-imports"
+          element={
+            authed && role === 'ADMIN' ? (
+              <StockImportHistory />
+            ) : (
+              <Navigate to={authed ? '/stock' : '/login'} replace />
+            )
+          }
+        />
+        <Route
+          path="admin-settings"
+          element={
+            authed && role === 'ADMIN' ? (
+              <AdminSettings allowedTabs={['users']} />
+            ) : (
+              <Navigate to={authed ? '/stock' : '/login'} replace />
+            )
+          }
+        />
+        <Route
+          path="admin/brands"
+          element={
+            authed && role === 'ADMIN' ? (
+              <AdminSettings allowedTabs={['brand']} />
+            ) : (
+              <Navigate to={authed ? '/stock' : '/login'} replace />
+            )
+          }
+        />
+        <Route
+          path="admin/colors"
+          element={
+            authed && role === 'ADMIN' ? (
+              <AdminSettings allowedTabs={['color']} />
+            ) : (
+              <Navigate to={authed ? '/stock' : '/login'} replace />
+            )
+          }
+        />
+        <Route
+          path="desi"
+          element={
+            authed && role === 'ADMIN' ? (
+              <DesiCalculator />
+            ) : (
+              <Navigate to={authed ? '/stock' : '/login'} replace />
+            )
+          }
+        />
+        <Route
+          path="admin/audit/:entityType/:entityId"
+          element={
+            authed && role === 'ADMIN' ? (
+              <AdminAuditDetails />
+            ) : (
+              <Navigate to={authed ? '/stock' : '/login'} replace />
+            )
+          }
+        />
+        <Route
+          path="admin/notifications"
+          element={
+            authed && role === 'ADMIN' ? (
+              <AdminNotifications />
+            ) : (
+              <Navigate to={authed ? '/stock' : '/login'} replace />
+            )
+          }
+        />
+        <Route
+          path="warehouses/:warehouseId/activity"
+          element={
+            authed && role === 'ADMIN' ? (
+              <WarehouseActivity />
+            ) : (
+              <Navigate to={authed ? '/stock' : '/login'} replace />
+            )
+          }
+        />
+        {/* E-commerce admin */}
+        <Route
+          path="admin/orders"
+          element={
+            authed && role === 'ADMIN' ? (
+              <AdminOrders />
+            ) : (
+              <Navigate to={authed ? '/stock' : '/login'} replace />
+            )
+          }
+        />
+        <Route
+          path="admin/cms"
+          element={
             authed && role === 'ADMIN' ? <AdminCms /> : <Navigate to={authed ? '/stock' : '/login'} replace />
-          } />
-          <Route path="admin/site-settings" element={
-            authed && role === 'ADMIN' ? <AdminSiteSettings /> : <Navigate to={authed ? '/stock' : '/login'} replace />
-          } />
-          <Route path="admin/customers" element={
-            authed && role === 'ADMIN' ? <AdminCustomers /> : <Navigate to={authed ? '/stock' : '/login'} replace />
-          } />
-          <Route path="admin/payments" element={
-            authed && role === 'ADMIN' ? <AdminPayments /> : <Navigate to={authed ? '/stock' : '/login'} replace />
-          } />
-          <Route path="admin/payment-gateways" element={
-            authed && role === 'ADMIN' ? <AdminPaymentGateways /> : <Navigate to={authed ? '/stock' : '/login'} replace />
-          } />
-          <Route path="admin/coupons" element={
-            authed && role === 'ADMIN' ? <AdminCoupons /> : <Navigate to={authed ? '/stock' : '/login'} replace />
-          } />
-          <Route path="admin/invoices" element={
-            authed && role === 'ADMIN' ? <AdminInvoices /> : <Navigate to={authed ? '/stock' : '/login'} replace />
-          } />
-          <Route path="admin/stock-movements" element={
-            authed && role === 'ADMIN' ? <AdminStockMovements /> : <Navigate to={authed ? '/stock' : '/login'} replace />
-          } />
-          <Route path="admin/cargo-providers" element={
-            authed && role === 'ADMIN' ? <AdminCargoProviders /> : <Navigate to={authed ? '/stock' : '/login'} replace />
-          } />
-          <Route path="admin/support-tickets" element={
-            authed && role === 'ADMIN' ? <AdminSupportTickets /> : <Navigate to={authed ? '/stock' : '/login'} replace />
-          } />
-          <Route path="admin/reviews" element={
-            authed && role === 'ADMIN' ? <AdminReviews /> : <Navigate to={authed ? '/stock' : '/login'} replace />
-          } />
-          <Route path="admin/contact-messages" element={
-            authed && role === 'ADMIN' ? <AdminContactMessages /> : <Navigate to={authed ? '/stock' : '/login'} replace />
-          } />
-          <Route path="admin/sales-dashboard" element={
-            authed && role === 'ADMIN' ? <AdminSalesDashboard /> : <Navigate to={authed ? '/stock' : '/login'} replace />
-          } />
-          <Route path="admin/help" element={
-            authed && role === 'ADMIN' ? <AdminHelp /> : <Navigate to={authed ? '/stock' : '/login'} replace />
-          } />
-          {/* Cezeri v2: assistant management + observability */}
-          <Route path="admin/assistant/documents" element={
-            authed && role === 'ADMIN' ? <AssistantDocumentsPage /> : <Navigate to={authed ? '/stock' : '/login'} replace />
-          } />
-          <Route path="admin/assistant/dashboard" element={
-            authed && role === 'ADMIN' ? <AssistantDashboardPage /> : <Navigate to={authed ? '/stock' : '/login'} replace />
-          } />
-          <Route path="admin/assistant/logs" element={
-            authed && role === 'ADMIN' ? <AssistantLogsPage /> : <Navigate to={authed ? '/stock' : '/login'} replace />
-          } />
-          <Route path="admin/assistant/settings" element={
-            authed && role === 'ADMIN' ? <AssistantSettingsPage /> : <Navigate to={authed ? '/stock' : '/login'} replace />
-          } />
-          <Route path="admin/assistant/diagnostics" element={
-            authed && role === 'ADMIN' ? <AssistantDiagnosticsPage /> : <Navigate to={authed ? '/stock' : '/login'} replace />
-          } />
-        </Route>
+          }
+        />
+        <Route
+          path="admin/site-settings"
+          element={
+            authed && role === 'ADMIN' ? (
+              <AdminSiteSettings />
+            ) : (
+              <Navigate to={authed ? '/stock' : '/login'} replace />
+            )
+          }
+        />
+        <Route
+          path="admin/customers"
+          element={
+            authed && role === 'ADMIN' ? (
+              <AdminCustomers />
+            ) : (
+              <Navigate to={authed ? '/stock' : '/login'} replace />
+            )
+          }
+        />
+        <Route
+          path="admin/payments"
+          element={
+            authed && role === 'ADMIN' ? (
+              <AdminPayments />
+            ) : (
+              <Navigate to={authed ? '/stock' : '/login'} replace />
+            )
+          }
+        />
+        <Route
+          path="admin/payment-gateways"
+          element={
+            authed && role === 'ADMIN' ? (
+              <AdminPaymentGateways />
+            ) : (
+              <Navigate to={authed ? '/stock' : '/login'} replace />
+            )
+          }
+        />
+        <Route
+          path="admin/coupons"
+          element={
+            authed && role === 'ADMIN' ? (
+              <AdminCoupons />
+            ) : (
+              <Navigate to={authed ? '/stock' : '/login'} replace />
+            )
+          }
+        />
+        <Route
+          path="admin/invoices"
+          element={
+            authed && role === 'ADMIN' ? (
+              <AdminInvoices />
+            ) : (
+              <Navigate to={authed ? '/stock' : '/login'} replace />
+            )
+          }
+        />
+        <Route
+          path="admin/stock-movements"
+          element={
+            authed && role === 'ADMIN' ? (
+              <AdminStockMovements />
+            ) : (
+              <Navigate to={authed ? '/stock' : '/login'} replace />
+            )
+          }
+        />
+        <Route
+          path="admin/cargo-providers"
+          element={
+            authed && role === 'ADMIN' ? (
+              <AdminCargoProviders />
+            ) : (
+              <Navigate to={authed ? '/stock' : '/login'} replace />
+            )
+          }
+        />
+        <Route
+          path="admin/support-tickets"
+          element={
+            authed && role === 'ADMIN' ? (
+              <AdminSupportTickets />
+            ) : (
+              <Navigate to={authed ? '/stock' : '/login'} replace />
+            )
+          }
+        />
+        <Route
+          path="admin/reviews"
+          element={
+            authed && role === 'ADMIN' ? (
+              <AdminReviews />
+            ) : (
+              <Navigate to={authed ? '/stock' : '/login'} replace />
+            )
+          }
+        />
+        <Route
+          path="admin/contact-messages"
+          element={
+            authed && role === 'ADMIN' ? (
+              <AdminContactMessages />
+            ) : (
+              <Navigate to={authed ? '/stock' : '/login'} replace />
+            )
+          }
+        />
+        <Route
+          path="admin/sales-dashboard"
+          element={
+            authed && role === 'ADMIN' ? (
+              <AdminSalesDashboard />
+            ) : (
+              <Navigate to={authed ? '/stock' : '/login'} replace />
+            )
+          }
+        />
+        <Route
+          path="admin/help"
+          element={
+            authed && role === 'ADMIN' ? (
+              <AdminHelp />
+            ) : (
+              <Navigate to={authed ? '/stock' : '/login'} replace />
+            )
+          }
+        />
+        {/* Cezeri v2: assistant management + observability */}
+        <Route
+          path="admin/assistant/documents"
+          element={
+            authed && role === 'ADMIN' ? (
+              <AssistantDocumentsPage />
+            ) : (
+              <Navigate to={authed ? '/stock' : '/login'} replace />
+            )
+          }
+        />
+        <Route
+          path="admin/assistant/dashboard"
+          element={
+            authed && role === 'ADMIN' ? (
+              <AssistantDashboardPage />
+            ) : (
+              <Navigate to={authed ? '/stock' : '/login'} replace />
+            )
+          }
+        />
+        <Route
+          path="admin/assistant/logs"
+          element={
+            authed && role === 'ADMIN' ? (
+              <AssistantLogsPage />
+            ) : (
+              <Navigate to={authed ? '/stock' : '/login'} replace />
+            )
+          }
+        />
+        <Route
+          path="admin/assistant/settings"
+          element={
+            authed && role === 'ADMIN' ? (
+              <AssistantSettingsPage />
+            ) : (
+              <Navigate to={authed ? '/stock' : '/login'} replace />
+            )
+          }
+        />
+        <Route
+          path="admin/assistant/diagnostics"
+          element={
+            authed && role === 'ADMIN' ? (
+              <AssistantDiagnosticsPage />
+            ) : (
+              <Navigate to={authed ? '/stock' : '/login'} replace />
+            )
+          }
+        />
+      </Route>
 
-        {/* Someone hit admin.siteniz.com/store/... — bounce them to store host */}
-        <Route path="/store/*" element={<CrossDomainStoreRedirect />} />
-      </Routes>
+      {/* Someone hit admin.siteniz.com/store/... — bounce them to store host */}
+      <Route path="/store/*" element={<CrossDomainStoreRedirect />} />
+    </Routes>
   );
 }
 

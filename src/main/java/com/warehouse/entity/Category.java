@@ -60,6 +60,14 @@ public class Category {
     @Column(name = "meta_description", length = 500)
     private String metaDescription;
 
+    /** Default warranty (months) for all products in this category unless the product overrides it. */
+    @Column(name = "warranty_months")
+    private Integer warrantyMonths;
+
+    /** Default warranty description for this category, e.g. "24 ay üretici garantisi". */
+    @Column(name = "warranty_text", length = 500)
+    private String warrantyText;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "parent_id")
     @JsonIgnoreProperties({"children", "products", "hibernateLazyInitializer", "handler"})

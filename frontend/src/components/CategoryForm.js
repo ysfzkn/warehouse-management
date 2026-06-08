@@ -5,7 +5,9 @@ const CategoryForm = ({ category, onSuccess, onCancel }) => {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    parentId: ''
+    parentId: '',
+    warrantyMonths: '',
+    warrantyText: '',
   });
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -25,11 +27,13 @@ const CategoryForm = ({ category, onSuccess, onCancel }) => {
       setFormData({
         name: category.name || '',
         description: category.description || '',
-        parentId: category.parentId || ''
+        parentId: category.parentId || '',
+        warrantyMonths: category.warrantyMonths != null ? String(category.warrantyMonths) : '',
+        warrantyText: category.warrantyText || '',
       });
     } else {
       // Leave parentId empty when creating a new category
-      setFormData(prev => ({ ...prev, parentId: '' }));
+      setFormData((prev) => ({ ...prev, parentId: '' }));
     }
   }, [category]);
 
@@ -44,16 +48,16 @@ const CategoryForm = ({ category, onSuccess, onCancel }) => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      [name]: value
+      [name]: value,
     }));
 
     // Clear error when user starts typing
     if (errors[name]) {
-      setErrors(prev => ({
+      setErrors((prev) => ({
         ...prev,
-        [name]: ''
+        [name]: '',
       }));
     }
   };
@@ -83,7 +87,9 @@ const CategoryForm = ({ category, onSuccess, onCancel }) => {
     try {
       const dataToSend = {
         name: formData.name.trim(),
-        description: formData.description.trim()
+        description: formData.description.trim(),
+        warrantyMonths: formData.warrantyMonths ? parseInt(formData.warrantyMonths, 10) : null,
+        warrantyText: formData.warrantyText?.trim() || null,
       };
 
       if (category) {
@@ -170,6 +176,43 @@ const CategoryForm = ({ category, onSuccess, onCancel }) => {
         />
       </div>
 
+      {/* Category-level warranty (applies to all products in this category unless overridden) */}
+      <div className="row">
+        <div className="col-md-4 mb-3">
+          <label htmlFor="warrantyMonths" className="form-label">
+            Garanti Süresi (Ay)
+          </label>
+          <input
+            type="number"
+            min="0"
+            className="form-control"
+            id="warrantyMonths"
+            name="warrantyMonths"
+            value={formData.warrantyMonths}
+            onChange={handleChange}
+            placeholder="ör. 24"
+          />
+        </div>
+        <div className="col-md-8 mb-3">
+          <label htmlFor="warrantyText" className="form-label">
+            Garanti Açıklaması
+          </label>
+          <input
+            type="text"
+            className="form-control"
+            id="warrantyText"
+            name="warrantyText"
+            value={formData.warrantyText}
+            onChange={handleChange}
+            placeholder="ör. 24 ay üretici garantisi"
+            maxLength={500}
+          />
+          <small className="text-muted">
+            Bu kategorideki tüm ürünlere uygulanır (ürün kendi garantisini girmediyse).
+          </small>
+        </div>
+      </div>
+
       {/* Parent Category Selection - Only when editing a subcategory */}
       {category && category.parentId && (
         <div className="mb-3">
@@ -185,7 +228,7 @@ const CategoryForm = ({ category, onSuccess, onCancel }) => {
           >
             <option value="">Ana Kategori (Üst kategori yok)</option>
             {categories
-              .filter(cat => cat.id !== category.id) // Prevent selecting itself as parent
+              .filter((cat) => cat.id !== category.id) // Prevent selecting itself as parent
               .map((cat) => (
                 <option key={cat.id} value={cat.id}>
                   {cat.name}
@@ -197,19 +240,10 @@ const CategoryForm = ({ category, onSuccess, onCancel }) => {
       )}
 
       <div className="d-flex justify-content-end gap-2">
-        <button
-          type="button"
-          className="btn btn-secondary"
-          onClick={onCancel}
-          disabled={loading}
-        >
+        <button type="button" className="btn btn-secondary" onClick={onCancel} disabled={loading}>
           İptal
         </button>
-        <button
-          type="submit"
-          className="btn btn-primary"
-          disabled={loading}
-        >
+        <button type="submit" className="btn btn-primary" disabled={loading}>
           {loading ? (
             <>
               <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
@@ -248,7 +282,7 @@ const SubcategoryModal = ({ parentCategoryId, onSuccess, onSkip }) => {
   };
 
   const handleSubmit = async () => {
-    const validSubcategories = subcategories.filter(sub => sub.name.trim());
+    const validSubcategories = subcategories.filter((sub) => sub.name.trim());
     if (validSubcategories.length === 0) {
       onSkip();
       return;
@@ -257,7 +291,7 @@ const SubcategoryModal = ({ parentCategoryId, onSuccess, onSkip }) => {
     setLoading(true);
     try {
       await axios.post('/api/categories/batch', validSubcategories, {
-        params: { parentId: parentCategoryId }
+        params: { parentId: parentCategoryId },
       });
       onSuccess();
     } catch (error) {
@@ -274,11 +308,7 @@ const SubcategoryModal = ({ parentCategoryId, onSuccess, onSkip }) => {
         <div className="modal-content">
           <div className="modal-header">
             <h5 className="modal-title">Alt Kategoriler Ekle</h5>
-            <button
-              type="button"
-              className="btn-close"
-              onClick={onSkip}
-            ></button>
+            <button type="button" className="btn-close" onClick={onSkip}></button>
           </div>
           <div className="modal-body">
             <p>Bu ana kategoriye alt kategoriler eklemek ister misiniz?</p>
@@ -317,30 +347,16 @@ const SubcategoryModal = ({ parentCategoryId, onSuccess, onSkip }) => {
               </div>
             ))}
 
-            <button
-              type="button"
-              className="btn btn-outline-primary btn-sm mb-3"
-              onClick={addSubcategory}
-            >
+            <button type="button" className="btn btn-outline-primary btn-sm mb-3" onClick={addSubcategory}>
               <i className="fas fa-plus me-1"></i>
               Alt Kategori Ekle
             </button>
           </div>
           <div className="modal-footer">
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={onSkip}
-              disabled={loading}
-            >
+            <button type="button" className="btn btn-secondary" onClick={onSkip} disabled={loading}>
               Atla
             </button>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={handleSubmit}
-              disabled={loading}
-            >
+            <button type="button" className="btn btn-primary" onClick={handleSubmit} disabled={loading}>
               {loading ? (
                 <>
                   <span className="spinner-border spinner-border-sm me-2" role="status"></span>

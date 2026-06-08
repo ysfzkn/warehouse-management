@@ -2,8 +2,10 @@ package com.warehouse.controller.store;
 
 import com.warehouse.dto.PagedResponse;
 import com.warehouse.dto.store.StoreProductDto;
+import com.warehouse.entity.BundleItem;
 import com.warehouse.entity.Product;
 import com.warehouse.entity.ProductImage;
+import com.warehouse.entity.ProductType;
 import com.warehouse.entity.Stock;
 import com.warehouse.repository.ReviewRepository;
 import com.warehouse.service.ProductService;
@@ -217,9 +219,70 @@ public class StoreProductController {
 
     /** Shared DTO builder — stock and review values are passed as parameters. */
     private StoreProductDto buildDto(Product product, int totalAvailable, Double avgRating, long reviewCount, boolean includeSpecs) {
-        String stockStatus = totalAvailable > 0 ? "IN_STOCK" : "OUT_OF_STOCK";
-        if (totalAvailable > 0 && totalAvailable <= 5) {
+        boolean isBundle = product.getProductType() == ProductType.BUNDLE;
+
+        // For a bundle, availability is DERIVED from its members (no stock of its own):
+        // how many complete sets can be assembled = min over members of (memberAvailable / qtyInSet).
+        Integer bundleItemCount = null;
+        java.math.BigDecimal membersOriginalTotal = null;
+        List<StoreProductDto.StoreBundleItem> bundleMemberDtos = null;
+        int effectiveAvailable = totalAvailable;
+        if (isBundle) {
+            List<BundleItem> members = safe(product::getBundleItems);
+            if (members != null && !members.isEmpty()) {
+                bundleItemCount = members.size();
+                int minSets = Integer.MAX_VALUE;
+                java.math.BigDecimal sum = java.math.BigDecimal.ZERO;
+                if (includeSpecs) bundleMemberDtos = new java.util.ArrayList<>();
+                for (BundleItem bi : members) {
+                    Product m = bi.getProduct();
+                    if (m == null) continue;
+                    int qty = bi.getQuantity() != null && bi.getQuantity() > 0 ? bi.getQuantity() : 1;
+                    int memberAvail = memberAvailable(m.getId());
+                    minSets = Math.min(minSets, memberAvail / qty);
+                    java.math.BigDecimal mPrice = effectivePrice(m);
+                    if (mPrice != null) sum = sum.add(mPrice.multiply(java.math.BigDecimal.valueOf(qty)));
+                    if (includeSpecs) {
+                        bundleMemberDtos.add(StoreProductDto.StoreBundleItem.builder()
+                            .productId(m.getId())
+                            .slug(m.getSlug())
+                            .name(m.getName())
+                            .primaryImageUrl(primaryImageUrlFor(m))
+                            .quantity(qty)
+                            .price(m.getPrice())
+                            .salePrice(m.getSalePrice())
+                            .stockStatus(memberAvail > 0 ? "IN_STOCK" : "OUT_OF_STOCK")
+                            .build());
+                    }
+                }
+                effectiveAvailable = (minSets == Integer.MAX_VALUE) ? 0 : minSets;
+                membersOriginalTotal = sum;
+            } else {
+                effectiveAvailable = 0;
+            }
+        }
+
+        String stockStatus = effectiveAvailable > 0 ? "IN_STOCK" : "OUT_OF_STOCK";
+        if (effectiveAvailable > 0 && effectiveAvailable <= 5) {
             stockStatus = "LOW_STOCK";
+        }
+        totalAvailable = effectiveAvailable;
+
+        // Effective warranty: product → category → parent category (first non-null wins).
+        Integer warrantyMonths = product.getWarrantyMonths();
+        String warrantyText = product.getWarrantyText();
+        if (warrantyMonths == null && warrantyText == null) {
+            com.warehouse.entity.Category cat = safe(product::getCategory);
+            if (cat != null && (cat.getWarrantyMonths() != null || cat.getWarrantyText() != null)) {
+                warrantyMonths = cat.getWarrantyMonths();
+                warrantyText = cat.getWarrantyText();
+            } else if (cat != null) {
+                com.warehouse.entity.Category parent = safe(cat::getParent);
+                if (parent != null) {
+                    warrantyMonths = parent.getWarrantyMonths();
+                    warrantyText = parent.getWarrantyText();
+                }
+            }
         }
 
         // Images — convert disk paths to accessible HTTP URLs
@@ -257,6 +320,8 @@ public class StoreProductController {
             .name(product.getName())
             .description(product.getDescription())
             .shortDescription(product.getShortDescription())
+            .warrantyMonths(warrantyMonths)
+            .warrantyText(warrantyText)
             .technicalSpecs(includeSpecs ? product.getTechnicalSpecs() : null)
             .sku(product.getSku())
             .price(product.getPrice())
@@ -283,7 +348,45 @@ public class StoreProductController {
             .primaryImageUrl(primaryImageUrl)
             .averageRating(avgRating)
             .reviewCount(reviewCount)
+            .productType(product.getProductType() != null ? product.getProductType().name() : ProductType.SIMPLE.name())
+            .bundleItemCount(bundleItemCount)
+            .membersOriginalTotal(membersOriginalTotal)
+            .bundleItems(bundleMemberDtos)
             .build();
+    }
+
+    /** Total available units of a member product across all warehouses. */
+    private int memberAvailable(Long productId) {
+        try {
+            return stockService.getStocksByProduct(productId).stream()
+                .mapToInt(Stock::getAvailableQuantity).sum();
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
+    /** Effective (sale-aware) unit price of a product. */
+    private static java.math.BigDecimal effectivePrice(Product p) {
+        java.math.BigDecimal sale = p.getSalePrice();
+        if (sale != null && sale.compareTo(java.math.BigDecimal.ZERO) > 0) return sale;
+        return p.getPrice();
+    }
+
+    /** Thumbnail URL of a product's primary image (or first by sort order). */
+    private String primaryImageUrlFor(Product p) {
+        try {
+            if (p.getImages() == null || p.getImages().isEmpty()) return null;
+            return p.getImages().stream()
+                .filter(ProductImage::isPrimary)
+                .findFirst()
+                .or(() -> p.getImages().stream()
+                    .min(java.util.Comparator.comparingInt(
+                        img -> img.getSortOrder() == null ? Integer.MAX_VALUE : img.getSortOrder())))
+                .map(img -> "/api/admin/products/images/" + img.getId() + "/view?thumbnail=true")
+                .orElse(null);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private <T> T safe(java.util.function.Supplier<T> supplier) {

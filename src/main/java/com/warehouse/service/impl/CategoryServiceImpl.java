@@ -117,6 +117,8 @@ public class CategoryServiceImpl implements CategoryService {
         validateNameUniquenessOnUpdate(category, categoryDetails);
         category.setName(categoryDetails.getName());
         category.setDescription(categoryDetails.getDescription());
+        category.setWarrantyMonths(categoryDetails.getWarrantyMonths());
+        category.setWarrantyText(categoryDetails.getWarrantyText());
         Category saved = categoryRepository.save(category);
         logger.info("Category updated successfully with id: {}", saved.getId());
         return saved;
@@ -295,7 +297,9 @@ public class CategoryServiceImpl implements CategoryService {
                 new ArrayList<>(),
                 new ArrayList<>(),
                 category.getCreatedAt(),
-                category.getUpdatedAt()
+                category.getUpdatedAt(),
+                category.getWarrantyMonths(),
+                category.getWarrantyText()
             );
             categoryMap.put(category.getId(), dto);
         }

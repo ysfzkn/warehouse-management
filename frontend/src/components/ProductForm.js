@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import SearchableSelect from './SearchableSelect';
 import ConfirmModal from './ConfirmModal';
+import BundleMemberPicker from './BundleMemberPicker';
 import './ProductForm.css';
 
 /** Drop empty groups/items from the structured technical specs before saving. */
@@ -69,7 +70,7 @@ function CrawlThumbnail({ url, referer }) {
   return <img src={blobUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />;
 }
 
-const ProductForm = ({ product, onSuccess, onCancel }) => {
+const ProductForm = ({ product, onSuccess, onCancel, setMode = false }) => {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -89,6 +90,8 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
     shippingRate: '',
     vatRate: '20',
     sctRate: '',
+    warrantyMonths: '',
+    warrantyText: '',
     categoryId: '',
     subcategoryId: '',
     isActive: true,
@@ -101,7 +104,9 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
   const imageInputRef = React.useRef(null);
   // Structured technical specs: [{ title, items: [{ label, value }] }]
   const [technicalSpecs, setTechnicalSpecs] = useState([]);
+  const [bundleMembers, setBundleMembers] = useState([]); // set mode: [{productId, name, sku, price, salePrice, quantity}]
   const [dragImageIndex, setDragImageIndex] = useState(null);
+  const [dragOverIndex, setDragOverIndex] = useState(null);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
   const [mainCategories, setMainCategories] = useState([]);
@@ -202,6 +207,8 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
       shippingRate: product.shippingRate || '',
       vatRate: product.vatRate || '',
       sctRate: product.sctRate || '',
+      warrantyMonths: product.warrantyMonths != null ? String(product.warrantyMonths) : '',
+      warrantyText: product.warrantyText || '',
       categoryId: mainCategoryIdNumeric != null ? String(mainCategoryIdNumeric) : '',
       subcategoryId: subcategoryIdNumeric != null ? String(subcategoryIdNumeric) : '',
       isActive: product.isActive !== false,
@@ -222,6 +229,38 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
         .get(`/api/products/${product.id}/images`)
         .then((r) => setProductImages(r.data || []))
         .catch(() => {});
+    }
+    // Set mode: load existing members (detail endpoint returns bundleItems)
+    if (setMode && product.id) {
+      if (Array.isArray(product.bundleItems) && product.bundleItems.length > 0) {
+        setBundleMembers(
+          product.bundleItems.map((b) => ({
+            productId: b.productId,
+            name: b.name,
+            sku: b.sku,
+            price: b.price,
+            salePrice: b.salePrice,
+            quantity: b.quantity || 1,
+          }))
+        );
+      } else {
+        axios
+          .get(`/api/products/${product.id}`)
+          .then((r) => {
+            const items = Array.isArray(r.data?.bundleItems) ? r.data.bundleItems : [];
+            setBundleMembers(
+              items.map((b) => ({
+                productId: b.productId,
+                name: b.name,
+                sku: b.sku,
+                price: b.price,
+                salePrice: b.salePrice,
+                quantity: b.quantity || 1,
+              }))
+            );
+          })
+          .catch(() => {});
+      }
     }
     const resolvedBrandId = product.brand?.id ?? (product.brandId != null ? Number(product.brandId) : null);
     const resolvedColorId = product.color?.id ?? (product.colorId != null ? Number(product.colorId) : null);
@@ -966,6 +1005,11 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
       return;
     }
 
+    if (setMode && bundleMembers.length === 0) {
+      setErrors((prev) => ({ ...prev, general: 'Bir set en az bir üye ürün içermelidir.' }));
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -988,6 +1032,8 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
         shippingRate: formData.shippingRate ? parseFloat(formData.shippingRate) : null,
         vatRate: formData.vatRate ? parseFloat(formData.vatRate) : null,
         sctRate: formData.sctRate ? parseFloat(formData.sctRate) : null,
+        warrantyMonths: formData.warrantyMonths ? parseInt(formData.warrantyMonths, 10) : null,
+        warrantyText: formData.warrantyText?.trim() || null,
         category: { id: parseInt(formData.subcategoryId || formData.categoryId) },
         brand: brandId ? { id: brandId } : null,
         color: colorId ? { id: colorId } : null,
@@ -996,6 +1042,14 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
         metaTitle: formData.metaTitle || null,
         metaDescription: formData.metaDescription || null,
         technicalSpecs: cleanTechnicalSpecs(technicalSpecs),
+        productType: setMode ? 'BUNDLE' : 'SIMPLE',
+        bundleMemberRefs: setMode
+          ? bundleMembers.map((m, i) => ({
+              productId: m.productId,
+              quantity: Math.max(1, m.quantity || 1),
+              sortOrder: i,
+            }))
+          : undefined,
       };
 
       let savedProductId = product?.id;
@@ -1051,6 +1105,14 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
           <div className="alert alert-danger" role="alert">
             {errors.general}
           </div>
+        )}
+
+        {setMode && (
+          <BundleMemberPicker
+            members={bundleMembers}
+            onChange={setBundleMembers}
+            excludeProductId={product?.id}
+          />
         )}
 
         <div className="row">
@@ -1706,6 +1768,53 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
           </div>
         </div>
 
+        {/* Warranty */}
+        <div className="row mb-3">
+          <div className="col-12">
+            <h6 className="text-muted mb-3">
+              <i className="fas fa-shield-alt me-2"></i>
+              Garanti
+            </h6>
+          </div>
+          <div className="col-md-4 col-12">
+            <div className="mb-3">
+              <label className="form-label" htmlFor="warrantyMonths">
+                Garanti Süresi (Ay)
+              </label>
+              <input
+                type="number"
+                min="0"
+                className="form-control"
+                id="warrantyMonths"
+                name="warrantyMonths"
+                value={formData.warrantyMonths}
+                onChange={handleChange}
+                placeholder="ör. 24"
+              />
+            </div>
+          </div>
+          <div className="col-md-8 col-12">
+            <div className="mb-3">
+              <label className="form-label" htmlFor="warrantyText">
+                Garanti Açıklaması
+              </label>
+              <input
+                type="text"
+                className="form-control"
+                id="warrantyText"
+                name="warrantyText"
+                value={formData.warrantyText}
+                onChange={handleChange}
+                placeholder="ör. 24 ay üretici garantisi"
+                maxLength={500}
+              />
+              <small className="text-muted">
+                Boş bırakılırsa kategori garantisi geçerli olur (kategori → üst kategori).
+              </small>
+            </div>
+          </div>
+        </div>
+
         {/* Live Price Calculation Preview */}
         {formData.price && parseFloat(formData.price) > 0 && (
           <div className="alert alert-info border-start border-primary border-4 mb-3">
@@ -2011,13 +2120,52 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
                         <div
                           draggable
                           onDragStart={() => setDragImageIndex(index)}
-                          onDragOver={(e) => e.preventDefault()}
-                          onDrop={() => handleImageDrop(index)}
-                          onDragEnd={() => setDragImageIndex(null)}
-                          style={{ cursor: 'grab' }}
+                          onDragOver={(e) => {
+                            e.preventDefault();
+                            if (dragImageIndex !== null && dragOverIndex !== index) setDragOverIndex(index);
+                          }}
+                          onDragLeave={() => setDragOverIndex((cur) => (cur === index ? null : cur))}
+                          onDrop={() => {
+                            handleImageDrop(index);
+                            setDragOverIndex(null);
+                          }}
+                          onDragEnd={() => {
+                            setDragImageIndex(null);
+                            setDragOverIndex(null);
+                          }}
+                          style={{
+                            cursor: 'grab',
+                            transition: 'box-shadow 0.15s ease, transform 0.15s ease',
+                            ...(dragImageIndex !== null && dragOverIndex === index && dragImageIndex !== index
+                              ? { boxShadow: '0 0 0 3px #2563eb', transform: 'scale(1.03)' }
+                              : {}),
+                          }}
                           title="Sürükleyerek sırala"
                           className={`border rounded overflow-hidden position-relative ${dragImageIndex === index ? 'opacity-50' : ''} ${selectedImageIds.has(img.id) ? 'border-danger border-2' : img.primary ? 'border-primary border-2' : ''}`}
                         >
+                          {/* Drop-here indicator — shows where the dragged photo will land */}
+                          {dragImageIndex !== null && dragOverIndex === index && dragImageIndex !== index && (
+                            <>
+                              <div
+                                style={{
+                                  position: 'absolute',
+                                  left: -6,
+                                  top: 0,
+                                  bottom: 0,
+                                  width: 4,
+                                  background: '#2563eb',
+                                  borderRadius: 4,
+                                  zIndex: 4,
+                                }}
+                              />
+                              <div
+                                className="position-absolute top-50 start-50 translate-middle badge bg-primary"
+                                style={{ zIndex: 4 }}
+                              >
+                                Buraya
+                              </div>
+                            </>
+                          )}
                           <div className="position-absolute top-0 start-0 p-1" style={{ zIndex: 2 }}>
                             <input
                               type="checkbox"

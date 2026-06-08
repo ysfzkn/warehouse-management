@@ -25,11 +25,13 @@ export default function StoreHeader({ cart, settings }) {
   const [searchFocused, setSearchFocused] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [cartBounce, setCartBounce] = useState(false);
   const prevItemCount = useRef(cart.itemCount);
   const userMenuRef = useRef(null);
   const searchRef = useRef(null);
+  const mobileSearchRef = useRef(null);
   const searchTimerRef = useRef(null);
   const navigate = useNavigate();
 
@@ -58,6 +60,21 @@ export default function StoreHeader({ cart, settings }) {
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
+
+  // Mobile menu: lock background scroll + close on Escape (and keep things tidy)
+  useEffect(() => {
+    if (!mobileMenuOpen) return undefined;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e) => {
+      if (e.key === 'Escape') setMobileMenuOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [mobileMenuOpen]);
 
   // Debounced live search
   // Turkish character normalization for search matching
@@ -162,8 +179,19 @@ export default function StoreHeader({ cart, settings }) {
       setSearchTerm('');
       setSearchResults([]);
       setSearchFocused(false);
+      setMobileSearchOpen(false);
     }
   };
+
+  // Shared close — used by both desktop dropdown and the mobile search sheet.
+  const closeSearchOverlays = () => {
+    setSearchFocused(false);
+    setSearchTerm('');
+    setSearchResults([]);
+    setMobileSearchOpen(false);
+  };
+
+  const fmtTRY = (v) => new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(v || 0);
 
   const handleLogout = () => {
     localStorage.removeItem('customer_token');
@@ -599,6 +627,19 @@ export default function StoreHeader({ cart, settings }) {
 
           {/* Actions */}
           <div className="store-header-actions">
+            {/* Mobile search toggle — opens full-width search sheet */}
+            <button
+              className="store-mobile-search-toggle d-md-none"
+              onClick={() => {
+                setMobileMenuOpen(false);
+                setMobileSearchOpen((v) => !v);
+              }}
+              aria-label="Ara"
+              aria-expanded={mobileSearchOpen}
+            >
+              {mobileSearchOpen ? <FiX size={22} /> : <FiSearch size={22} />}
+            </button>
+
             {/* User Menu */}
             <div className="position-relative" ref={userMenuRef}>
               <button
@@ -743,6 +784,113 @@ export default function StoreHeader({ cart, settings }) {
         </div>
       </div>
 
+      {/* Mobile Search Sheet — reuses live search state/results */}
+      {mobileSearchOpen && (
+        <div className="store-mobile-search-sheet d-md-none" ref={mobileSearchRef}>
+          <div className="container">
+            <form onSubmit={handleSearch} role="search" className="store-search-form">
+              <div className="store-search-wrapper">
+                <FiSearch className="store-search-icon" />
+                <input
+                  type="search"
+                  className="store-search-input"
+                  placeholder="Ürün, kategori veya marka ara..."
+                  value={searchTerm}
+                  onChange={(e) => handleSearchInput(e.target.value)}
+                  aria-label="Ürün arama"
+                  autoComplete="off"
+                  // eslint-disable-next-line jsx-a11y/no-autofocus
+                  autoFocus
+                />
+              </div>
+            </form>
+            {searchTerm.trim().length >= 2 && (
+              <div className="store-mobile-search-results">
+                {searchLoading ? (
+                  <div className="p-3 text-center">
+                    <span className="spinner-border spinner-border-sm text-primary" />
+                  </div>
+                ) : searchResults.length === 0 ? (
+                  <div className="p-3 text-center text-muted small">
+                    "{searchTerm}" ile eşleşen sonuç bulunamadı.
+                  </div>
+                ) : (
+                  <>
+                    {searchResults.map((r) => {
+                      if (r.type === 'category') {
+                        return (
+                          <Link
+                            key={`m-cat-${r.id}`}
+                            to={`/kategori/${r.slug}`}
+                            className="store-mobile-search-row"
+                            onClick={closeSearchOverlays}
+                          >
+                            <span className="store-mobile-search-tag tag-cat">Kategori</span>
+                            <span className="flex-grow-1 text-truncate">{r.name}</span>
+                          </Link>
+                        );
+                      }
+                      if (r.type === 'brand') {
+                        return (
+                          <Link
+                            key={`m-brand-${r.name}`}
+                            to={`/kategori/tumu?brand=${r.name}`}
+                            className="store-mobile-search-row"
+                            onClick={closeSearchOverlays}
+                          >
+                            <span className="store-mobile-search-tag tag-brand">Marka</span>
+                            <span className="flex-grow-1 text-truncate">{r.name}</span>
+                          </Link>
+                        );
+                      }
+                      const showSale = r.salePrice && r.salePrice > 0 && r.salePrice < r.price;
+                      return (
+                        <Link
+                          key={`m-prod-${r.id}`}
+                          to={`/urun/${r.slug}`}
+                          className="store-mobile-search-row"
+                          onClick={closeSearchOverlays}
+                        >
+                          {r.image ? (
+                            <img
+                              src={r.image}
+                              alt={r.name || 'Ürün görseli'}
+                              className="store-mobile-search-thumb"
+                            />
+                          ) : (
+                            <span className="store-mobile-search-thumb d-flex align-items-center justify-content-center">
+                              <FiSearch size={14} className="text-muted" />
+                            </span>
+                          )}
+                          <span className="flex-grow-1 min-w-0">
+                            <span className="d-block text-truncate small fw-medium">{r.name}</span>
+                            {r.brand && (
+                              <span className="text-muted" style={{ fontSize: 11 }}>
+                                {r.brand}
+                              </span>
+                            )}
+                          </span>
+                          <span className="fw-bold small text-nowrap text-primary">
+                            {fmtTRY(showSale ? r.salePrice : r.price)}
+                          </span>
+                        </Link>
+                      );
+                    })}
+                    <Link
+                      to={`/kategori/arama?q=${encodeURIComponent(searchTerm)}`}
+                      className="store-mobile-search-all"
+                      onClick={closeSearchOverlays}
+                    >
+                      <FiSearch size={13} className="me-1" />"{searchTerm}" için tümünü gör
+                    </Link>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Category Navigation */}
       <nav className="store-mega-menu" aria-label="Kategori menüsü">
         <div className="container">
@@ -777,6 +925,17 @@ export default function StoreHeader({ cart, settings }) {
         <>
           <div className="store-mobile-overlay" onClick={() => setMobileMenuOpen(false)} />
           <div className="store-mobile-menu">
+            <div className="store-mobile-menu-head">
+              <span className="fw-bold text-truncate">{settings.get('site_name', 'Menü')}</span>
+              <button
+                type="button"
+                className="store-mobile-menu-close"
+                onClick={() => setMobileMenuOpen(false)}
+                aria-label="Menüyü kapat"
+              >
+                <FiX size={22} />
+              </button>
+            </div>
             {isLoggedIn && (
               <div className="p-3 border-bottom" style={{ background: '#f0f7ff' }}>
                 <div className="d-flex align-items-center gap-2">

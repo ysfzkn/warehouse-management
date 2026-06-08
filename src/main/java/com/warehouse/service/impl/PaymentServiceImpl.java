@@ -687,53 +687,117 @@ public class PaymentServiceImpl implements PaymentService {
     private void releaseOrderStock(Order order) {
         List<OrderItem> items = orderItemRepo.findByOrderId(order.getId());
         for (OrderItem item : items) {
-            if (item.getStockId() != null) {
-                stockRepo.findByIdForUpdate(item.getStockId()).ifPresent(stock -> {
-                    int oldReserved = stock.getReservedQuantity();
-                    stock.setReservedQuantity(Math.max(0, oldReserved - item.getQuantity()));
-                    stockRepo.save(stock);
-
-                    StockEvent event = new StockEvent();
-                    event.setStockId(stock.getId());
-                    event.setProductId(item.getProduct() != null ? item.getProduct().getId() : null);
-                    event.setEventType(StockEventType.RELEASED);
-                    event.setOldValue(oldReserved);
-                    event.setNewValue(stock.getReservedQuantity());
-                    event.setSource(StockEventSource.ORDER);
-                    event.setSourceDetail("Sipariş #" + order.getOrderNumber() + " ödeme başarısız — stok serbest (" + item.getQuantity() + " adet)");
-                    event.setOrderNumber(order.getOrderNumber());
-                    stockEventRepo.save(event);
-                });
+            List<Map<String, Object>> members = reservedMembersOf(item);
+            if (members != null) {
+                // Bundle: release each member allocation recorded at checkout.
+                for (Map<String, Object> alloc : members) {
+                    releaseStockUnits(toLong(alloc.get("stockId")), toInt(alloc.get("quantity")),
+                            toLong(alloc.get("productId")), order);
+                }
+            } else if (item.getStockId() != null) {
+                Long pid = item.getProduct() != null ? item.getProduct().getId() : null;
+                releaseStockUnits(item.getStockId(), item.getQuantity(), pid, order);
             }
         }
+    }
+
+    private void releaseStockUnits(Long stockId, int quantity, Long productId, Order order) {
+        if (stockId == null || quantity <= 0) return;
+        stockRepo.findByIdForUpdate(stockId).ifPresent(stock -> {
+            int oldReserved = stock.getReservedQuantity();
+            stock.setReservedQuantity(Math.max(0, oldReserved - quantity));
+            stockRepo.save(stock);
+
+            StockEvent event = new StockEvent();
+            event.setStockId(stock.getId());
+            event.setProductId(productId);
+            event.setEventType(StockEventType.RELEASED);
+            event.setOldValue(oldReserved);
+            event.setNewValue(stock.getReservedQuantity());
+            event.setSource(StockEventSource.ORDER);
+            event.setSourceDetail("Sipariş #" + order.getOrderNumber() + " ödeme başarısız — stok serbest (" + quantity + " adet)");
+            event.setOrderNumber(order.getOrderNumber());
+            stockEventRepo.save(event);
+        });
+    }
+
+    /** Member reservation allocations for a bundle order item (null for simple products). */
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> reservedMembersOf(OrderItem item) {
+        Map<String, Object> snap = item.getProductSnapshot();
+        if (snap != null && Boolean.TRUE.equals(snap.get("isBundle")) && snap.get("reservedMembers") instanceof List<?> l) {
+            return (List<Map<String, Object>>) (List<?>) l;
+        }
+        return null;
+    }
+
+    /** Aggregate the units needed per member product across a bundle's allocations. */
+    private Map<Long, Integer> bundleMemberNeeds(List<Map<String, Object>> members) {
+        Map<Long, Integer> need = new java.util.LinkedHashMap<>();
+        for (Map<String, Object> a : members) {
+            Long pid = toLong(a.get("productId"));
+            if (pid != null) need.merge(pid, toInt(a.get("quantity")), Integer::sum);
+        }
+        return need;
+    }
+
+    private static Long toLong(Object v) {
+        if (v instanceof Number n) return n.longValue();
+        try { return v != null ? Long.parseLong(v.toString().trim()) : null; } catch (NumberFormatException e) { return null; }
+    }
+
+    private static int toInt(Object v) {
+        if (v instanceof Number n) return n.intValue();
+        try { return v != null ? Integer.parseInt(v.toString().trim()) : 0; } catch (NumberFormatException e) { return 0; }
     }
 
     private boolean tryReReserveStock(Order order) {
         try {
             List<OrderItem> items = orderItemRepo.findByOrderId(order.getId());
+            // Availability check (bundles check each member; simple products check themselves)
             for (OrderItem item : items) {
-                List<Stock> stocks = stockRepo.findAvailableByProductForUpdate(item.getProduct().getId());
-                int available = stocks.stream().mapToInt(Stock::getAvailableQuantity).sum();
-                if (available < item.getQuantity()) return false;
+                List<Map<String, Object>> members = reservedMembersOf(item);
+                if (members != null) {
+                    for (Map.Entry<Long, Integer> need : bundleMemberNeeds(members).entrySet()) {
+                        if (sumAvailable(need.getKey()) < need.getValue()) return false;
+                    }
+                } else {
+                    if (sumAvailable(item.getProduct().getId()) < item.getQuantity()) return false;
+                }
             }
             // Re-reserve
             for (OrderItem item : items) {
-                List<Stock> stocks = stockRepo.findAvailableByProductForUpdate(item.getProduct().getId());
-                int remaining = item.getQuantity();
-                for (Stock stock : stocks) {
-                    int avail = stock.getAvailableQuantity();
-                    if (avail <= 0) continue;
-                    int toReserve = Math.min(remaining, avail);
-                    stock.setReservedQuantity(stock.getReservedQuantity() + toReserve);
-                    stockRepo.save(stock);
-                    remaining -= toReserve;
-                    if (remaining <= 0) break;
+                List<Map<String, Object>> members = reservedMembersOf(item);
+                if (members != null) {
+                    for (Map.Entry<Long, Integer> need : bundleMemberNeeds(members).entrySet()) {
+                        reReserveUnits(need.getKey(), need.getValue());
+                    }
+                } else {
+                    reReserveUnits(item.getProduct().getId(), item.getQuantity());
                 }
             }
             return true;
         } catch (Exception e) {
             logger.error("Re-reservation failed: {}", e.getMessage());
             return false;
+        }
+    }
+
+    private int sumAvailable(Long productId) {
+        return stockRepo.findAvailableByProductForUpdate(productId).stream()
+                .mapToInt(Stock::getAvailableQuantity).sum();
+    }
+
+    private void reReserveUnits(Long productId, int needed) {
+        int remaining = needed;
+        for (Stock stock : stockRepo.findAvailableByProductForUpdate(productId)) {
+            int avail = stock.getAvailableQuantity();
+            if (avail <= 0) continue;
+            int toReserve = Math.min(remaining, avail);
+            stock.setReservedQuantity(stock.getReservedQuantity() + toReserve);
+            stockRepo.save(stock);
+            remaining -= toReserve;
+            if (remaining <= 0) break;
         }
     }
 

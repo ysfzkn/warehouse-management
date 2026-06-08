@@ -433,6 +433,42 @@ public class ProductImageCrawlerService {
             }
         } catch (Exception ignored) {}
 
+        // 5) Div/tile "item" rows — a label element + a value element/text, with NO colon
+        //    and NO table. Covers the BSH platform used by Profilo / Siemens / Bosch
+        //    (data-testid="technical-overview-item", feature tiles) and generic modern
+        //    spec/attribute/feature rows that the table/dl/colon steps miss.
+        try {
+            org.jsoup.select.Elements items = doc.select(
+                    "[data-testid*=technical-overview-item], [data-testid*=specification-item],"
+                  + " [data-testid*=spec-item], [data-testid*=feature-tile], [data-testid*=attribute-item],"
+                  + " [class*=spec-row], [class*=specification-row], [class*=attribute-row], [class*=feature-row]");
+            for (var item : items) {
+                if (specs.size() >= MAX) break;
+                String label = null;
+                StringBuilder value = new StringBuilder();
+                for (var child : item.children()) {
+                    String t = child.text().trim();
+                    if (t.isEmpty()) continue;
+                    if (label == null) {
+                        label = t;
+                    } else {
+                        if (value.length() > 0) value.append(' ');
+                        value.append(t);
+                    }
+                }
+                // Single labelled child: the value is the item's own remaining text.
+                if (label != null && value.length() == 0) {
+                    String full = item.text().trim();
+                    if (full.length() > label.length() && full.startsWith(label)) {
+                        value.append(full.substring(label.length()).trim());
+                    }
+                }
+                if (label != null && value.length() > 0) {
+                    putSpecRow(specs, label, value.toString());
+                }
+            }
+        } catch (Exception ignored) {}
+
         return specs;
     }
 

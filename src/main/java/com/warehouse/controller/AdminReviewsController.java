@@ -1,6 +1,8 @@
 package com.warehouse.controller;
 
 import com.warehouse.entity.Review;
+import com.warehouse.entity.ReviewImage;
+import com.warehouse.repository.ReviewImageRepository;
 import com.warehouse.repository.ReviewRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,9 +33,37 @@ public class AdminReviewsController {
     private static final Logger log = LoggerFactory.getLogger(AdminReviewsController.class);
 
     private final ReviewRepository reviewRepo;
+    private final ReviewImageRepository reviewImageRepo;
 
-    public AdminReviewsController(ReviewRepository reviewRepo) {
+    public AdminReviewsController(ReviewRepository reviewRepo, ReviewImageRepository reviewImageRepo) {
         this.reviewRepo = reviewRepo;
+        this.reviewImageRepo = reviewImageRepo;
+    }
+
+    /** Dashboard insight cards: totals, pending count, overall average + star distribution. */
+    @GetMapping("/insights")
+    public ResponseEntity<Map<String, Object>> insights() {
+        long total = reviewRepo.count();
+        long pending = reviewRepo.countByApproved(false);
+        Double avg = reviewRepo.overallAverage();
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("totalReviews", total);
+        body.put("pendingReviews", pending);
+        body.put("approvedReviews", total - pending);
+        body.put("averageRating", avg);
+        return ResponseEntity.ok(body);
+    }
+
+    /** Admin reply to a review (shown publicly under the review). */
+    @PutMapping("/{id}/reply")
+    public ResponseEntity<?> reply(@PathVariable Long id, @RequestBody Map<String, Object> body) {
+        Review r = reviewRepo.findById(id).orElseThrow();
+        Object reply = body.get("reply");
+        String text = reply != null ? reply.toString().trim() : null;
+        r.setAdminReply(text == null || text.isEmpty() ? null : (text.length() > 1000 ? text.substring(0, 1000) : text));
+        r.setAdminReplyAt(text == null || text.isEmpty() ? null : java.time.LocalDateTime.now());
+        reviewRepo.save(r);
+        return ResponseEntity.ok(Map.of("message", "Yanıt kaydedildi"));
     }
 
     @GetMapping
@@ -90,9 +120,15 @@ public class AdminReviewsController {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", r.getId());
         m.put("rating", r.getRating());
+        m.put("title", r.getTitle());
         m.put("comment", r.getComment());
         m.put("approved", r.isApproved());
+        m.put("verifiedPurchase", r.getOrder() != null);
+        m.put("adminReply", r.getAdminReply());
         m.put("createdAt", r.getCreatedAt() != null ? r.getCreatedAt().toString() : null);
+        m.put("images", reviewImageRepo.findByReviewIdOrderBySortOrderAscIdAsc(r.getId()).stream()
+                .map((ReviewImage img) -> "/api/store/reviews/images/" + img.getId() + "/view")
+                .collect(Collectors.toList()));
         if (r.getProduct() != null) {
             m.put("productId", r.getProduct().getId());
             m.put("productName", r.getProduct().getName());

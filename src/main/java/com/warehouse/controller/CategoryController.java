@@ -58,7 +58,9 @@ public class CategoryController {
                 new java.util.ArrayList<>(),
                 new java.util.ArrayList<>(),
                 c.getCreatedAt(),
-                c.getUpdatedAt()
+                c.getUpdatedAt(),
+                c.getWarrantyMonths(),
+                c.getWarrantyText()
             );
             result.add(dto);
         }
@@ -126,6 +128,8 @@ public class CategoryController {
                 dto.setChildren(new java.util.ArrayList<>());
                 dto.setCreatedAt(cat.getCreatedAt());
                 dto.setUpdatedAt(cat.getUpdatedAt());
+                dto.setWarrantyMonths(cat.getWarrantyMonths());
+                dto.setWarrantyText(cat.getWarrantyText());
                 return dto;
             })
             .toList();
@@ -207,6 +211,8 @@ public class CategoryController {
         dto.setProductCount(0L);
         dto.setCreatedAt(c.getCreatedAt());
         dto.setUpdatedAt(c.getUpdatedAt());
+        dto.setWarrantyMonths(c.getWarrantyMonths());
+        dto.setWarrantyText(c.getWarrantyText());
         return dto;
     }
 
@@ -242,6 +248,8 @@ public class CategoryController {
         dto.setSubcategories(childList);
         dto.setCreatedAt(category.getCreatedAt());
         dto.setUpdatedAt(category.getUpdatedAt());
+        dto.setWarrantyMonths(category.getWarrantyMonths());
+        dto.setWarrantyText(category.getWarrantyText());
         return dto;
     }
 }

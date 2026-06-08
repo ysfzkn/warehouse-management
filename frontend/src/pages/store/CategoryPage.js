@@ -24,6 +24,7 @@ import {
   FiCheck,
 } from 'react-icons/fi';
 import { SkeletonProductGrid } from '../../components/store/Skeleton';
+import { hapticSuccess } from '../../utils/haptics';
 
 const SORT_OPTIONS = [
   { value: 'createdAt-desc', label: 'En Yeni' },
@@ -97,8 +98,10 @@ export default function CategoryPage() {
   const [viewMode, setViewMode] = useState('grid');
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [categoryReady, setCategoryReady] = useState(false);
   const prevSlugRef = useRef(null);
+  const sentinelRef = useRef(null);
 
   const searchQuery = searchParams.get('q');
 
@@ -160,7 +163,9 @@ export default function CategoryPage() {
   // Fetch products
   const fetchProducts = useCallback(() => {
     if (!categoryReady) return;
-    setLoading(true);
+    // page 0 = fresh load (skeleton); page > 0 = infinite-scroll append (spinner)
+    if (page === 0) setLoading(true);
+    else setLoadingMore(true);
     const params = { page, size: 24, sortBy, sortDir };
     if (categoryId) params.categoryId = categoryId;
     if (selectedBrands.size > 0) params.brandIds = Array.from(selectedBrands).join(',');
@@ -171,12 +176,16 @@ export default function CategoryPage() {
     axios
       .get('/api/store/products', { params })
       .then((r) => {
-        setProducts(r.data?.content || []);
+        const content = r.data?.content || [];
+        setProducts((prev) => (page === 0 ? content : [...prev, ...content]));
         setTotalPages(r.data?.totalPages || 0);
         setTotalElements(r.data?.totalElements || 0);
       })
       .catch(() => {})
-      .finally(() => setLoading(false));
+      .finally(() => {
+        setLoading(false);
+        setLoadingMore(false);
+      });
   }, [
     page,
     sortBy,
@@ -193,9 +202,26 @@ export default function CategoryPage() {
     fetchProducts();
   }, [fetchProducts]);
 
+  // Infinite scroll — auto-load the next page when the sentinel nears the viewport.
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return undefined;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && !loading && !loadingMore && page < totalPages - 1) {
+          setPage((p) => p + 1);
+        }
+      },
+      { rootMargin: '500px 0px' }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [loading, loadingMore, page, totalPages]);
+
   const handleAddToCart = async (id) => {
     try {
       await cart.addItem(id);
+      hapticSuccess();
       toast.success('Ürün sepete eklendi');
     } catch (e) {
       toast.error(e?.response?.data?.message || 'Sepete eklenemedi');
@@ -622,42 +648,23 @@ export default function CategoryPage() {
             </div>
           )}
 
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="store-pagination">
-              <button
-                disabled={page === 0}
-                onClick={() => {
-                  setPage((p) => p - 1);
-                  window.scrollTo(0, 0);
-                }}
-              >
-                ← Önceki
-              </button>
-              {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
-                const p = totalPages <= 5 ? i : Math.max(0, Math.min(page - 2, totalPages - 5)) + i;
-                return (
-                  <button
-                    key={p}
-                    className={p === page ? 'active' : ''}
-                    onClick={() => {
-                      setPage(p);
-                      window.scrollTo(0, 0);
-                    }}
-                  >
-                    {p + 1}
-                  </button>
-                );
-              })}
-              <button
-                disabled={page >= totalPages - 1}
-                onClick={() => {
-                  setPage((p) => p + 1);
-                  window.scrollTo(0, 0);
-                }}
-              >
-                Sonraki →
-              </button>
+          {/* Infinite scroll — sentinel auto-loads next page; manual button is the fallback */}
+          {!loading && products.length > 0 && (
+            <div className="store-infinite-scroll">
+              {page < totalPages - 1 && (
+                <div ref={sentinelRef} className="store-infinite-sentinel">
+                  {loadingMore ? (
+                    <span className="spinner-border text-primary" role="status" aria-label="Yükleniyor" />
+                  ) : (
+                    <button className="btn btn-outline-primary px-4" onClick={() => setPage((p) => p + 1)}>
+                      Daha Fazla Yükle
+                    </button>
+                  )}
+                </div>
+              )}
+              <p className="text-center text-muted small mb-0">
+                {products.length} / {totalElements} ürün gösteriliyor
+              </p>
             </div>
           )}
         </div>
