@@ -170,6 +170,32 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
                                 @Param("colorId") Long colorId,
                                 Pageable pageable);
 
+    /** Same as {@link #findByFilters} but also filters by product type (SIMPLE/BUNDLE). */
+    @Query("""
+        SELECT p FROM Product p
+        LEFT JOIN p.category c
+        LEFT JOIN c.parent cp
+        LEFT JOIN p.brand b
+        LEFT JOIN p.color col
+        WHERE (:search IS NULL
+               OR LOWER(p.name)  LIKE LOWER(CONCAT('%', CAST(:search AS string), '%'))
+               OR LOWER(p.sku)   LIKE LOWER(CONCAT('%', CAST(:search AS string), '%'))
+               OR LOWER(c.name)  LIKE LOWER(CONCAT('%', CAST(:search AS string), '%'))
+               OR LOWER(cp.name) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%'))
+               OR LOWER(b.name)  LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')))
+          AND (:categoryId IS NULL OR c.id = :categoryId OR cp.id = :categoryId)
+          AND (:brandId IS NULL OR b.id = :brandId)
+          AND (:colorId IS NULL OR col.id = :colorId)
+          AND (:productType IS NULL OR p.productType = :productType)
+    """)
+    @EntityGraph(value = Product.GRAPH_WITH_RELATIONS, type = EntityGraph.EntityGraphType.LOAD)
+    Page<Product> findByFilters(@Param("search") String search,
+                                @Param("categoryId") Long categoryId,
+                                @Param("brandId") Long brandId,
+                                @Param("colorId") Long colorId,
+                                @Param("productType") com.warehouse.entity.ProductType productType,
+                                Pageable pageable);
+
     // E-commerce storefront queries
     @EntityGraph(value = Product.GRAPH_WITH_RELATIONS, type = EntityGraph.EntityGraphType.LOAD)
     Optional<Product> findBySlug(String slug);

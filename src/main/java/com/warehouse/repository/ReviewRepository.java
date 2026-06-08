@@ -11,10 +11,22 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface ReviewRepository extends JpaRepository<Review, Long> {
     Page<Review> findByProductIdAndApprovedTrue(Long productId, Pageable pageable);
+    Page<Review> findByProductIdAndApprovedTrueAndVisibleTrue(Long productId, Pageable pageable);
     Page<Review> findByCustomerId(Long customerId, Pageable pageable);
     java.util.List<Review> findAllByCustomerId(Long customerId);
     Page<Review> findByApproved(boolean approved, Pageable pageable);
     boolean existsByCustomerIdAndProductIdAndOrderId(Long customerId, Long productId, Long orderId);
+
+    boolean existsByCustomerIdAndProductId(Long customerId, Long productId);
+    java.util.Optional<Review> findFirstByCustomerIdAndProductIdOrderByCreatedAtDesc(Long customerId, Long productId);
+    long countByApproved(boolean approved);
+
+    /** Star distribution for a product's approved reviews → rows of [rating, count]. */
+    @Query("SELECT r.rating, COUNT(r) FROM Review r WHERE r.product.id = :productId AND r.approved = true GROUP BY r.rating")
+    java.util.List<Object[]> ratingDistribution(@Param("productId") Long productId);
+
+    @Query("SELECT AVG(r.rating) FROM Review r WHERE r.approved = true")
+    Double overallAverage();
 
     @Query("SELECT AVG(r.rating) FROM Review r WHERE r.product.id = :productId AND r.approved = true")
     Double getAverageRatingByProductId(Long productId);

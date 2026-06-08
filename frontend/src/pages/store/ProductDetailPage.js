@@ -7,6 +7,8 @@ import Breadcrumb from '../../components/store/Breadcrumb';
 import PriceDisplay from '../../components/store/PriceDisplay';
 import StockBadge from '../../components/store/StockBadge';
 import ProductCard from '../../components/store/ProductCard';
+import ProductReviews from '../../components/store/ProductReviews';
+import RatingStars from '../../components/store/RatingStars';
 import SeoHead from '../../components/store/SeoHead';
 import { SkeletonProductDetail } from '../../components/store/Skeleton';
 import {
@@ -21,6 +23,7 @@ import {
   FiMail,
   FiPhone,
   FiMessageCircle,
+  FiChevronDown,
 } from 'react-icons/fi';
 import { useWishlist } from '../../components/store/WishlistContext';
 import { useSiteSettings } from '../../hooks/useSiteSettings';
@@ -32,6 +35,7 @@ import {
   getCanonicalUrl,
 } from '../../utils/seo';
 import { getDefaultPhone, telHref, buildWhatsappOrderUrl } from '../../utils/phones';
+import { hapticSuccess } from '../../utils/haptics';
 
 export default function ProductDetailPage() {
   const { slug } = useParams();
@@ -100,6 +104,16 @@ export default function ProductDetailPage() {
 
   const hasDiscount = !!(product.salePrice && product.salePrice > 0 && product.salePrice < product.price);
   const discountPercent = hasDiscount ? Math.round((1 - product.salePrice / product.price) * 100) : 0;
+  const isBundle = product.productType === 'BUNDLE';
+  const bundleEffectivePrice = product.salePrice && product.salePrice > 0 ? product.salePrice : product.price;
+  const bundleSavings =
+    isBundle && product.membersOriginalTotal ? product.membersOriginalTotal - bundleEffectivePrice : 0;
+  const fmtTRY = (v) =>
+    new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(Number(v) || 0);
+  const warrantyTitle = product.warrantyMonths
+    ? `${product.warrantyMonths} Ay Garanti`
+    : 'Garanti Kapsamında';
+  const hasWarranty = !!(product.warrantyMonths || product.warrantyText);
   const breadcrumbs = [
     ...(product.categorySlug
       ? [{ label: product.categoryName, href: `/kategori/${product.categorySlug}` }]
@@ -200,6 +214,20 @@ export default function ProductDetailPage() {
           {/* Title */}
           <h1 className="h3 fw-bold mt-1 mb-2">{product.name}</h1>
 
+          {/* Rating summary (jumps to reviews tab) */}
+          {product.reviewCount > 0 && (
+            <button
+              type="button"
+              className="btn btn-link p-0 text-decoration-none d-inline-flex align-items-center gap-2 mb-2"
+              onClick={() => setActiveTab('reviews')}
+            >
+              <RatingStars value={product.averageRating || 0} size={16} />
+              <span className="text-muted small">
+                {Number(product.averageRating || 0).toFixed(1)} · {product.reviewCount} değerlendirme
+              </span>
+            </button>
+          )}
+
           {/* SKU + Category */}
           <div className="d-flex gap-3 text-muted small mb-3">
             {product.sku && (
@@ -270,12 +298,81 @@ export default function ProductDetailPage() {
                 kazanıyorsunuz
               </div>
             )}
+            {isBundle && bundleSavings > 0 && (
+              <div className="d-flex align-items-center gap-2 mt-2 flex-wrap" style={{ fontSize: '0.9rem' }}>
+                <span className="text-muted">
+                  Ayrı ayrı: <del>{fmtTRY(product.membersOriginalTotal)}</del>
+                </span>
+                <span className="badge bg-success px-2 py-1">{fmtTRY(bundleSavings)} tasarruf</span>
+              </div>
+            )}
           </div>
 
           {/* Stock */}
           <div className="mb-3">
             <StockBadge status={product.stockStatus} />
           </div>
+
+          {/* Set contents (bundle) — "what's in the box" + value summary */}
+          {isBundle && Array.isArray(product.bundleItems) && product.bundleItems.length > 0 && (
+            <div className="mb-3 rounded border overflow-hidden store-bundle-box">
+              <div className="store-bundle-box-head d-flex align-items-center">
+                <FiPackage className="me-2" size={18} />
+                <strong>Set İçeriği</strong>
+                <span className="badge bg-white text-primary ms-2">{product.bundleItems.length} ürün</span>
+                <span className="ms-auto small d-none d-sm-inline">Hepsi tek pakette</span>
+              </div>
+              <div className="p-2">
+                {product.bundleItems.map((m) => {
+                  const mEff = m.salePrice && m.salePrice > 0 ? m.salePrice : m.price;
+                  return (
+                    <Link
+                      key={m.productId}
+                      to={`/urun/${m.slug}`}
+                      className="d-flex align-items-center gap-3 text-decoration-none text-dark p-2 rounded store-bundle-member"
+                    >
+                      <div className="store-bundle-thumb">
+                        {m.primaryImageUrl ? (
+                          <img src={m.primaryImageUrl} alt={m.name} />
+                        ) : (
+                          <FiPackage size={18} className="text-muted" />
+                        )}
+                      </div>
+                      <div className="flex-grow-1 min-w-0">
+                        <div className="small fw-medium text-truncate">{m.name}</div>
+                        <div className="d-flex align-items-center gap-2">
+                          {mEff != null && (
+                            <span className="text-muted" style={{ fontSize: 12 }}>
+                              {fmtTRY(mEff)}
+                            </span>
+                          )}
+                          {m.stockStatus === 'OUT_OF_STOCK' && (
+                            <span className="badge bg-danger" style={{ fontSize: 9 }}>
+                              Tükendi
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      {m.quantity > 1 && (
+                        <span className="badge bg-light text-dark border flex-shrink-0">×{m.quantity}</span>
+                      )}
+                    </Link>
+                  );
+                })}
+              </div>
+              {bundleSavings > 0 && (
+                <div className="store-bundle-value d-flex justify-content-between align-items-center px-3 py-2">
+                  <span className="small">
+                    Ayrı ayrı: <del>{fmtTRY(product.membersOriginalTotal)}</del>
+                  </span>
+                  <span className="fw-bold text-success">
+                    <FiPackage size={13} className="me-1" />
+                    {fmtTRY(bundleSavings)} kazanç
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Short Description */}
           {product.shortDescription && (
@@ -318,6 +415,7 @@ export default function ProductDetailPage() {
                 onClick={async () => {
                   try {
                     await cart.addItem(product.id, quantity);
+                    hapticSuccess();
                     toast.success(`${product.name} sepete eklendi`);
                   } catch (e) {
                     toast.error(e?.response?.data?.message || 'Sepete eklenemedi');
@@ -358,6 +456,23 @@ export default function ProductDetailPage() {
                   <FiMessageCircle size={18} /> WhatsApp ile Sipariş
                 </a>
               )}
+            </div>
+          )}
+
+          {/* Warranty — trust-building banner (effective: product → category → parent) */}
+          {hasWarranty && (
+            <div className="store-warranty-box d-flex align-items-center gap-3 mb-3 p-3 rounded">
+              <div className="store-warranty-icon">
+                <FiShield size={22} />
+              </div>
+              <div className="flex-grow-1 min-w-0">
+                <div className="fw-bold" style={{ color: '#047857' }}>
+                  {warrantyTitle}
+                </div>
+                <div className="small text-muted">
+                  {product.warrantyText || 'Ürün üretici/ithalatçı garantisi kapsamındadır.'}
+                </div>
+              </div>
             </div>
           )}
 
@@ -422,175 +537,219 @@ export default function ProductDetailPage() {
         </div>
       </div>
 
-      {/* Tabs: Description + Specs + Reviews */}
-      <div className="mt-5">
-        <div className="d-flex gap-1 border-bottom mb-0" style={{ overflowX: 'auto' }}>
-          {[
-            { key: 'description', label: 'Ürün Açıklaması' },
-            ...(product.weight ||
-            product.vatRate ||
-            (Array.isArray(product.technicalSpecs) && product.technicalSpecs.length > 0)
-              ? [{ key: 'specs', label: 'Teknik Özellikler' }]
-              : []),
-            { key: 'shipping', label: 'Kargo & İade' },
-          ].map((tab) => (
-            <button
-              key={tab.key}
-              className="px-4 py-3 border-0 bg-transparent position-relative"
-              style={{
-                fontWeight: activeTab === tab.key ? 600 : 400,
-                color: activeTab === tab.key ? 'var(--store-primary, #2563eb)' : '#64748b',
-                whiteSpace: 'nowrap',
-                fontSize: '0.9rem',
-                transition: 'color 0.2s ease',
-              }}
-              onClick={() => setActiveTab(tab.key)}
-            >
-              {tab.label}
-              {activeTab === tab.key && (
-                <span
-                  style={{
-                    position: 'absolute',
-                    bottom: -1,
-                    left: 16,
-                    right: 16,
-                    height: 3,
-                    background: 'var(--store-primary, #2563eb)',
-                    borderRadius: '3px 3px 0 0',
-                  }}
-                />
-              )}
-            </button>
-          ))}
-        </div>
-        <div
-          className="p-4"
-          style={{
-            background: '#fafbfc',
-            borderRadius: '0 0 12px 12px',
-            border: '1px solid #e2e8f0',
-            borderTop: 'none',
-          }}
-        >
-          {activeTab === 'description' && (
-            <div>
-              {product.description ? (
-                <div className="text-muted" style={{ lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>
-                  {product.description}
-                </div>
-              ) : (
-                <p className="text-muted">Bu ürün için henüz detaylı açıklama eklenmemiştir.</p>
-              )}
-            </div>
-          )}
-          {activeTab === 'specs' && (
-            <div>
-              {/* Structured technical specifications (crawler / admin) */}
-              {Array.isArray(product.technicalSpecs) &&
-                product.technicalSpecs
-                  .filter((g) => g && Array.isArray(g.items) && g.items.some((it) => it && it.value))
-                  .map((group, gi) => (
-                    <div key={gi} className="mb-3 rounded overflow-hidden border">
-                      <div
-                        className="px-3 py-2 fw-semibold"
-                        style={{ background: 'var(--store-primary, #2563eb)', color: '#fff' }}
-                      >
-                        {group.title || 'Özellikler'}
+      {/* Tabs (desktop) + Accordion (mobile) — share one content panel */}
+      {(() => {
+        const hasSpecs =
+          product.weight ||
+          product.vatRate ||
+          (Array.isArray(product.technicalSpecs) && product.technicalSpecs.length > 0);
+        const sections = [
+          { key: 'description', label: 'Ürün Açıklaması' },
+          ...(hasSpecs ? [{ key: 'specs', label: 'Teknik Özellikler' }] : []),
+          { key: 'shipping', label: 'Kargo & İade' },
+          {
+            key: 'reviews',
+            label: `Değerlendirmeler${product.reviewCount ? ` (${product.reviewCount})` : ''}`,
+          },
+        ];
+        // Fall back to the first tab on desktop if the accordion collapsed everything.
+        const desktopKey = sections.some((s) => s.key === activeTab) ? activeTab : 'description';
+        const renderPanel = (key) => (
+          <>
+            {key === 'description' && (
+              <div>
+                {product.description ? (
+                  <div className="text-muted" style={{ lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>
+                    {product.description}
+                  </div>
+                ) : (
+                  <p className="text-muted">Bu ürün için henüz detaylı açıklama eklenmemiştir.</p>
+                )}
+              </div>
+            )}
+            {key === 'specs' && (
+              <div className="store-pdp-specs">
+                {/* Structured technical specifications (crawler / admin) */}
+                {Array.isArray(product.technicalSpecs) &&
+                  product.technicalSpecs
+                    .filter((g) => g && Array.isArray(g.items) && g.items.some((it) => it && it.value))
+                    .map((group, gi) => (
+                      <div key={gi} className="mb-3 rounded overflow-hidden border">
+                        <div
+                          className="px-3 py-2 fw-semibold"
+                          style={{ background: 'var(--store-primary, #2563eb)', color: '#fff' }}
+                        >
+                          {group.title || 'Özellikler'}
+                        </div>
+                        <table className="table table-sm mb-0">
+                          <tbody>
+                            {group.items
+                              .filter((it) => it && it.value)
+                              .map((it, ii) => (
+                                <tr key={ii}>
+                                  <td className="text-muted" style={{ width: '45%' }}>
+                                    {it.label}
+                                  </td>
+                                  <td className="fw-medium">{it.value}</td>
+                                </tr>
+                              ))}
+                          </tbody>
+                        </table>
                       </div>
-                      <table className="table table-sm mb-0">
-                        <tbody>
-                          {group.items
-                            .filter((it) => it && it.value)
-                            .map((it, ii) => (
-                              <tr key={ii}>
-                                <td className="text-muted" style={{ width: '45%' }}>
-                                  {it.label}
-                                </td>
-                                <td className="fw-medium">{it.value}</td>
-                              </tr>
-                            ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  ))}
+                    ))}
 
-              {/* Basic info — always available */}
-              <div className="rounded overflow-hidden border">
-                <div className="px-3 py-2 fw-semibold bg-light">Genel Bilgiler</div>
-                <table className="table table-sm table-striped mb-0">
-                  <tbody>
-                    {product.sku && (
-                      <tr>
-                        <td className="text-muted" style={{ width: '45%' }}>
-                          Stok Kodu
-                        </td>
-                        <td className="fw-medium">{product.sku}</td>
-                      </tr>
+                {/* Basic info — always available */}
+                <div className="rounded overflow-hidden border">
+                  <div className="px-3 py-2 fw-semibold bg-light">Genel Bilgiler</div>
+                  <table className="table table-sm table-striped mb-0">
+                    <tbody>
+                      {product.sku && (
+                        <tr>
+                          <td className="text-muted" style={{ width: '45%' }}>
+                            Stok Kodu
+                          </td>
+                          <td className="fw-medium">{product.sku}</td>
+                        </tr>
+                      )}
+                      {product.brandName && (
+                        <tr>
+                          <td className="text-muted">Marka</td>
+                          <td className="fw-medium">{product.brandName}</td>
+                        </tr>
+                      )}
+                      {product.categoryName && (
+                        <tr>
+                          <td className="text-muted">Kategori</td>
+                          <td className="fw-medium">{product.categoryName}</td>
+                        </tr>
+                      )}
+                      {product.colorName && (
+                        <tr>
+                          <td className="text-muted">Renk</td>
+                          <td className="fw-medium">{product.colorName}</td>
+                        </tr>
+                      )}
+                      {product.weight && (
+                        <tr>
+                          <td className="text-muted">Ağırlık</td>
+                          <td className="fw-medium">{product.weight} kg</td>
+                        </tr>
+                      )}
+                      {product.lengthCm && (
+                        <tr>
+                          <td className="text-muted">Boyutlar (E×G×Y)</td>
+                          <td className="fw-medium">
+                            {product.lengthCm} × {product.widthCm} × {product.heightCm} cm
+                          </td>
+                        </tr>
+                      )}
+                      {product.vatRate && (
+                        <tr>
+                          <td className="text-muted">KDV Oranı</td>
+                          <td className="fw-medium">%{product.vatRate}</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+            {key === 'shipping' && (
+              <div className="text-muted" style={{ lineHeight: 1.8 }}>
+                <p>
+                  <strong>Kargo:</strong> 500₺ ve üzeri siparişlerde ücretsiz kargo. Altında standart kargo
+                  ücreti uygulanır.
+                </p>
+                <p>
+                  <strong>Teslimat Süresi:</strong> Siparişiniz 1-3 iş günü içerisinde kargoya verilir.
+                </p>
+                <p>
+                  <strong>İade:</strong> Teslim aldığınız ürünü 14 gün içerisinde iade edebilirsiniz. Ürün
+                  kullanılmamış ve orijinal ambalajında olmalıdır.
+                </p>
+                <p>
+                  <strong>Değişim:</strong> Değişim talepleriniz için müşteri hizmetleri ile iletişime
+                  geçebilirsiniz.
+                </p>
+              </div>
+            )}
+            {key === 'reviews' && <ProductReviews productId={product.id} />}
+          </>
+        );
+        return (
+          <div className="mt-5">
+            {/* Desktop: yatay sekme şeridi */}
+            <div className="d-none d-md-block">
+              <div className="d-flex gap-1 border-bottom mb-0 store-pdp-tabs" style={{ overflowX: 'auto' }}>
+                {sections.map((tab) => (
+                  <button
+                    key={tab.key}
+                    className="px-4 py-3 border-0 bg-transparent position-relative"
+                    style={{
+                      fontWeight: desktopKey === tab.key ? 600 : 400,
+                      color: desktopKey === tab.key ? 'var(--store-primary, #2563eb)' : '#64748b',
+                      whiteSpace: 'nowrap',
+                      fontSize: '0.9rem',
+                      transition: 'color 0.2s ease',
+                    }}
+                    onClick={() => setActiveTab(tab.key)}
+                  >
+                    {tab.label}
+                    {desktopKey === tab.key && (
+                      <span
+                        style={{
+                          position: 'absolute',
+                          bottom: -1,
+                          left: 16,
+                          right: 16,
+                          height: 3,
+                          background: 'var(--store-primary, #2563eb)',
+                          borderRadius: '3px 3px 0 0',
+                        }}
+                      />
                     )}
-                    {product.brandName && (
-                      <tr>
-                        <td className="text-muted">Marka</td>
-                        <td className="fw-medium">{product.brandName}</td>
-                      </tr>
-                    )}
-                    {product.categoryName && (
-                      <tr>
-                        <td className="text-muted">Kategori</td>
-                        <td className="fw-medium">{product.categoryName}</td>
-                      </tr>
-                    )}
-                    {product.colorName && (
-                      <tr>
-                        <td className="text-muted">Renk</td>
-                        <td className="fw-medium">{product.colorName}</td>
-                      </tr>
-                    )}
-                    {product.weight && (
-                      <tr>
-                        <td className="text-muted">Ağırlık</td>
-                        <td className="fw-medium">{product.weight} kg</td>
-                      </tr>
-                    )}
-                    {product.lengthCm && (
-                      <tr>
-                        <td className="text-muted">Boyutlar (E×G×Y)</td>
-                        <td className="fw-medium">
-                          {product.lengthCm} × {product.widthCm} × {product.heightCm} cm
-                        </td>
-                      </tr>
-                    )}
-                    {product.vatRate && (
-                      <tr>
-                        <td className="text-muted">KDV Oranı</td>
-                        <td className="fw-medium">%{product.vatRate}</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+                  </button>
+                ))}
+              </div>
+              <div
+                className="p-4"
+                style={{
+                  background: '#fafbfc',
+                  borderRadius: '0 0 12px 12px',
+                  border: '1px solid #e2e8f0',
+                  borderTop: 'none',
+                }}
+              >
+                {renderPanel(desktopKey)}
               </div>
             </div>
-          )}
-          {activeTab === 'shipping' && (
-            <div className="text-muted" style={{ lineHeight: 1.8 }}>
-              <p>
-                <strong>Kargo:</strong> 500₺ ve üzeri siparişlerde ücretsiz kargo. Altında standart kargo
-                ücreti uygulanır.
-              </p>
-              <p>
-                <strong>Teslimat Süresi:</strong> Siparişiniz 1-3 iş günü içerisinde kargoya verilir.
-              </p>
-              <p>
-                <strong>İade:</strong> Teslim aldığınız ürünü 14 gün içerisinde iade edebilirsiniz. Ürün
-                kullanılmamış ve orijinal ambalajında olmalıdır.
-              </p>
-              <p>
-                <strong>Değişim:</strong> Beden veya renk değişimi için müşteri hizmetleri ile iletişime
-                geçebilirsiniz.
-              </p>
+
+            {/* Mobil: akordeon */}
+            <div className="d-md-none store-pdp-accordion">
+              {sections.map((s) => {
+                const open = activeTab === s.key;
+                return (
+                  <div key={s.key} className="store-pdp-acc-item">
+                    <button
+                      type="button"
+                      className="store-pdp-acc-header"
+                      aria-expanded={open}
+                      onClick={() => setActiveTab(open ? '' : s.key)}
+                    >
+                      <span>{s.label}</span>
+                      <FiChevronDown
+                        className="store-pdp-acc-caret"
+                        style={{ transform: open ? 'rotate(180deg)' : 'none' }}
+                      />
+                    </button>
+                    {open && <div className="store-pdp-acc-body">{renderPanel(s.key)}</div>}
+                  </div>
+                );
+              })}
             </div>
-          )}
-        </div>
-      </div>
+          </div>
+        );
+      })()}
 
       {/* Related Products */}
       {related.length > 0 && (
@@ -607,6 +766,7 @@ export default function ProductDetailPage() {
                   onAddToCart={async (id) => {
                     try {
                       await cart.addItem(id);
+                      hapticSuccess();
                       toast.success('Ürün sepete eklendi');
                     } catch (e) {
                       toast.error(e?.response?.data?.message || 'Sepete eklenemedi');
@@ -787,6 +947,7 @@ export default function ProductDetailPage() {
             onClick={async () => {
               try {
                 await cart.addItem(product.id, 1);
+                hapticSuccess();
                 toast.success(`${product.name} sepete eklendi`);
               } catch (e) {
                 toast.error(e?.response?.data?.message || 'Sepete eklenemedi');

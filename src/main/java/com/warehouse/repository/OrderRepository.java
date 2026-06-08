@@ -46,6 +46,18 @@ public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecific
     long countByStatus(OrderStatus status);
     long countByCustomerId(Long customerId);
 
+    /** True if the customer has a non-cancelled order containing the product (review eligibility). */
+    @Query("SELECT CASE WHEN COUNT(o) > 0 THEN true ELSE false END FROM Order o JOIN o.items i " +
+           "WHERE o.customer.id = :customerId AND i.product.id = :productId " +
+           "AND o.status <> com.warehouse.enums.OrderStatus.CANCELLED")
+    boolean hasPurchasedProduct(@Param("customerId") Long customerId, @Param("productId") Long productId);
+
+    /** Ids of the customer's non-cancelled orders containing the product, newest first. */
+    @Query("SELECT o.id FROM Order o JOIN o.items i " +
+           "WHERE o.customer.id = :customerId AND i.product.id = :productId " +
+           "AND o.status <> com.warehouse.enums.OrderStatus.CANCELLED ORDER BY o.createdAt DESC")
+    List<Long> eligibleOrderIds(@Param("customerId") Long customerId, @Param("productId") Long productId, Pageable pageable);
+
     @Query("SELECT o FROM Order o WHERE o.status = :status AND o.paymentMethod = :paymentMethod AND o.bankTransferDeadline < :deadline")
     List<Order> findExpiredBankTransferOrders(@Param("status") com.warehouse.enums.OrderStatus status,
                                               @Param("paymentMethod") String paymentMethod,

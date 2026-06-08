@@ -22,6 +22,8 @@ public class CategoryDto {
     private List<CategoryDto> subcategories;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private Integer warrantyMonths;
+    private String warrantyText;
 }
 
 

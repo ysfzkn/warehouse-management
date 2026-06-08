@@ -99,7 +99,8 @@ public class HostValidationFilter extends OncePerRequestFilter {
         if (uri == null) return false;
         return uri.contains("/settings/site/asset/view/")
             || uri.contains("/settings/site/logo/view")
-            || (uri.contains("/products/images/") && uri.endsWith("/view"));
+            || (uri.contains("/products/images/") && uri.endsWith("/view"))
+            || (uri.contains("/reviews/images/") && uri.endsWith("/view"));
     }
 
     private boolean matchesAny(String host, List<String> patterns) {

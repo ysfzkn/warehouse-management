@@ -2,27 +2,40 @@ import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import StockBadge from './StockBadge';
 import PriceDisplay from './PriceDisplay';
-import { FiShoppingCart, FiStar, FiHeart } from 'react-icons/fi';
+import { FiShoppingCart, FiStar, FiHeart, FiPackage } from 'react-icons/fi';
 import { useToast } from './Toast';
 import { useWishlist } from './WishlistContext';
 
 export default function ProductCard({ product, onAddToCart }) {
   const hasDiscount = !!(product.salePrice && product.salePrice > 0 && product.salePrice < product.price);
   const discountPercent = hasDiscount ? Math.round((1 - product.salePrice / product.price) * 100) : 0;
+  const isBundle = product.productType === 'BUNDLE';
+  const bundleEffective = product.salePrice && product.salePrice > 0 ? product.salePrice : product.price;
+  const bundleSavings =
+    isBundle && product.membersOriginalTotal ? product.membersOriginalTotal - bundleEffective : 0;
+  const fmtTRY = (v) =>
+    new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(Number(v) || 0);
   const toast = useToast();
   const navigate = useNavigate();
   const wishlist = useWishlist();
   const wishlisted = wishlist.has(product.id);
 
   const toggleWishlist = async (e) => {
-    e.preventDefault(); e.stopPropagation();
+    e.preventDefault();
+    e.stopPropagation();
     const token = localStorage.getItem('customer_token');
-    if (!token) { toast.warning('Favorilere eklemek için giriş yapın.'); navigate('/giris'); return; }
+    if (!token) {
+      toast.warning('Favorilere eklemek için giriş yapın.');
+      navigate('/giris');
+      return;
+    }
     try {
       const nowWished = await wishlist.toggle(product.id);
       if (nowWished) toast.success('Favorilere eklendi!');
       else toast.info('Favorilerden çıkarıldı.');
-    } catch (err) { toast.error(err?.response?.data?.message || 'İşlem başarısız.'); }
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'İşlem başarısız.');
+    }
   };
 
   return (
@@ -31,18 +44,41 @@ export default function ProductCard({ product, onAddToCart }) {
         <div className="card-img-wrapper">
           {product.primaryImageUrl ? (
             // width/height aspect-ratio hint — prevents CLS; actual render is fixed by container CSS (1:1)
-            <img src={product.primaryImageUrl} alt={product.name} loading="lazy"
-                 width="400" height="400" decoding="async" />
+            <img
+              src={product.primaryImageUrl}
+              alt={product.name}
+              loading="lazy"
+              width="400"
+              height="400"
+              decoding="async"
+            />
           ) : (
-            <div className="card-img-placeholder"><FiShoppingCart size={32} aria-hidden="true" /></div>
+            <div className="card-img-placeholder">
+              <FiShoppingCart size={32} aria-hidden="true" />
+            </div>
           )}
           <div className="card-badges">
-            {product.featured && <span className="card-badge card-badge-featured"><FiStar size={10} className="me-1" />Öne Çıkan</span>}
+            {product.productType === 'BUNDLE' && (
+              <span className="card-badge card-badge-set">
+                <FiPackage size={10} className="me-1" />
+                Set{product.bundleItemCount ? ` · ${product.bundleItemCount} ürün` : ''}
+              </span>
+            )}
+            {product.featured && (
+              <span className="card-badge card-badge-featured">
+                <FiStar size={10} className="me-1" />
+                Öne Çıkan
+              </span>
+            )}
             {product.isNew && <span className="card-badge card-badge-new">Yeni</span>}
             {hasDiscount && <span className="card-badge card-badge-sale">%{discountPercent}</span>}
           </div>
           {/* Wishlist heart */}
-          <button className={`card-wishlist-btn ${wishlisted ? 'active' : ''}`} onClick={toggleWishlist} aria-label="Favorilere ekle">
+          <button
+            className={`card-wishlist-btn ${wishlisted ? 'active' : ''}`}
+            onClick={toggleWishlist}
+            aria-label="Favorilere ekle"
+          >
             <FiHeart size={18} />
           </button>
         </div>
@@ -56,10 +92,21 @@ export default function ProductCard({ product, onAddToCart }) {
           <PriceDisplay price={product.price} salePrice={product.salePrice} />
           <StockBadge status={product.stockStatus} />
         </div>
-        <button className="btn btn-add-cart w-100"
-          onClick={(e) => { e.preventDefault(); onAddToCart && onAddToCart(product.id); }}
+        {isBundle && bundleSavings > 0 && (
+          <div className="card-bundle-saving" title="Ayrı ayrı almaya göre avantaj">
+            <FiPackage size={11} className="me-1" />
+            {fmtTRY(bundleSavings)} avantaj
+          </div>
+        )}
+        <button
+          className="btn btn-add-cart w-100"
+          onClick={(e) => {
+            e.preventDefault();
+            onAddToCart && onAddToCart(product.id);
+          }}
           disabled={product.stockStatus === 'OUT_OF_STOCK'}
-          aria-label={`${product.name} sepete ekle`}>
+          aria-label={`${product.name} sepete ekle`}
+        >
           <FiShoppingCart size={14} />
           <span>{product.stockStatus === 'OUT_OF_STOCK' ? 'Tükendi' : 'Sepete Ekle'}</span>
         </button>

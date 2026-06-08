@@ -165,6 +165,35 @@ public class Product {
     @Column(name = "is_active", nullable = false)
     private boolean isActive = true;
 
+    /** Own warranty in months (null = inherit from category). */
+    @Column(name = "warranty_months")
+    private Integer warrantyMonths;
+
+    /** Own warranty description, e.g. "24 ay üretici garantisi" (null = inherit from category). */
+    @Column(name = "warranty_text", length = 500)
+    private String warrantyText;
+
+    /** SIMPLE (ordinary product) or BUNDLE (a set composed of member products). */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "product_type", nullable = false, length = 20)
+    private ProductType productType = ProductType.SIMPLE;
+
+    /** Member lines when this product is a BUNDLE (empty/null for SIMPLE products). */
+    @OneToMany(mappedBy = "bundle", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @OrderBy("sortOrder ASC")
+    @JsonIgnore
+    private List<BundleItem> bundleItems;
+
+    /**
+     * Write-only input channel for the admin set editor. Each entry is
+     * {@code { "productId": <id>, "quantity": <n>, "sortOrder": <n> }}.
+     * Deserialized from the request and turned into {@link BundleItem} rows by the
+     * service; never persisted directly and not returned to clients (entities are
+     * mapped to DTOs before serialization).
+     */
+    @Transient
+    private List<java.util.Map<String, Object>> bundleMemberRefs;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

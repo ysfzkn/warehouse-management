@@ -1,6 +1,8 @@
 package com.warehouse.controller;
 
 import com.warehouse.entity.Product;
+import com.warehouse.entity.ProductType;
+import com.warehouse.repository.BundleItemRepository;
 import com.warehouse.dto.BulkDeleteResponse;
 import com.warehouse.dto.BulkPriceUpdateRequest;
 import com.warehouse.dto.ProductDto;
@@ -36,18 +38,21 @@ public class ProductController {
     private final ProductImageService productImageService;
     private final PhotoStorageService photoStorageService;
     private final AdminSecurityService adminSecurityService;
+    private final BundleItemRepository bundleItemRepository;
 
     @Autowired
     public ProductController(ProductService productService,
                              StockService stockService,
                              ProductImageService productImageService,
                              PhotoStorageService photoStorageService,
-                             AdminSecurityService adminSecurityService) {
+                             AdminSecurityService adminSecurityService,
+                             BundleItemRepository bundleItemRepository) {
         this.productService = productService;
         this.stockService = stockService;
         this.productImageService = productImageService;
         this.photoStorageService = photoStorageService;
         this.adminSecurityService = adminSecurityService;
+        this.bundleItemRepository = bundleItemRepository;
     }
 
     @GetMapping
@@ -60,14 +65,16 @@ public class ProductController {
             @RequestParam(required = false) String search,
             @RequestParam(required = false) Long categoryId,
             @RequestParam(required = false) Long brandId,
-            @RequestParam(required = false) Long colorId) {
+            @RequestParam(required = false) Long colorId,
+            @RequestParam(required = false) String productType) {
+        ProductType type = parseProductType(productType);
         if (page != null && size != null) {
             // Paginated response
             int safePage = Math.max(0, page);
             int safeSize = Math.max(1, Math.min(size, 250));
             Sort sort = Sort.by(Sort.Direction.fromString(sortDir), sortBy);
             Pageable pageable = PageRequest.of(safePage, safeSize, sort);
-            Page<Product> productPage = productService.getAllProducts(pageable, search, categoryId, brandId, colorId);
+            Page<Product> productPage = productService.getAllProducts(pageable, search, categoryId, brandId, colorId, type);
             List<ProductDto> content = mapProductsWithTotals(productPage.getContent());
             PagedResponse<ProductDto> response = new PagedResponse<>(
                     content,
@@ -81,8 +88,17 @@ public class ProductController {
             return ResponseEntity.ok(response);
         } else {
             // Non-paginated response (backward compatibility)
-            Page<Product> productPage = productService.getAllProducts(Pageable.unpaged(), search, categoryId, brandId, colorId);
+            Page<Product> productPage = productService.getAllProducts(Pageable.unpaged(), search, categoryId, brandId, colorId, type);
             return ResponseEntity.ok(mapProductsWithTotals(productPage.getContent()));
+        }
+    }
+
+    private static ProductType parseProductType(String raw) {
+        if (raw == null || raw.isBlank()) return null;
+        try {
+            return ProductType.valueOf(raw.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            return null;
         }
     }
 
@@ -386,6 +402,8 @@ public class ProductController {
         dto.vatRate = p.getVatRate();
         dto.sctRate = p.getSctRate();
         dto.shortDescription = p.getShortDescription();
+        dto.warrantyMonths = p.getWarrantyMonths();
+        dto.warrantyText = p.getWarrantyText();
         dto.technicalSpecs = p.getTechnicalSpecs();
         dto.salePrice = p.getSalePrice();
         dto.saleStart = p.getSaleStart();
@@ -397,6 +415,44 @@ public class ProductController {
         dto.metaDescription = p.getMetaDescription();
         dto.createdAt = p.getCreatedAt();
         dto.updatedAt = p.getUpdatedAt();
+        dto.productType = p.getProductType() != null ? p.getProductType().name() : ProductType.SIMPLE.name();
+        // For bundles, map members (admin edit form needs them). All admin endpoints run in a
+        // read-only tx and create/update pre-initialize the collection, so lazy access is safe.
+        // Bundles are few, so the per-set load on the Ürün Setleri list is acceptable.
+        if (p.getProductType() == ProductType.BUNDLE) {
+            // Set thumbnail — so the Ürün Setleri list can show the set photo without opening it.
+            try {
+                if (p.getImages() != null && !p.getImages().isEmpty()) {
+                    dto.primaryImageUrl = p.getImages().stream()
+                        .filter(ProductImage::isPrimary)
+                        .findFirst()
+                        .or(() -> p.getImages().stream()
+                            .min(java.util.Comparator.comparingInt(
+                                img -> img.getSortOrder() == null ? Integer.MAX_VALUE : img.getSortOrder())))
+                        .map(img -> "/api/admin/products/images/" + img.getId() + "/view?thumbnail=true")
+                        .orElse(null);
+                }
+            } catch (Exception ignored) {
+                // images not loaded in this context — list/detail paths load them within the tx
+            }
+        }
+        if (p.getProductType() == ProductType.BUNDLE && p.getBundleItems() != null) {
+            dto.bundleItems = p.getBundleItems().stream().map(bi -> {
+                ProductDto.BundleItemDto b = new ProductDto.BundleItemDto();
+                Product m = bi.getProduct();
+                if (m != null) {
+                    b.productId = m.getId();
+                    b.name = m.getName();
+                    b.sku = m.getSku();
+                    b.price = m.getPrice();
+                    b.salePrice = m.getSalePrice();
+                }
+                b.quantity = bi.getQuantity();
+                b.sortOrder = bi.getSortOrder();
+                return b;
+            }).collect(java.util.stream.Collectors.toList());
+            dto.bundleItemCount = dto.bundleItems.size();
+        }
         if (p.getCategory() != null) {
             dto.categoryId = p.getCategory().getId();
             dto.categoryName = p.getCategory().getName();
@@ -442,10 +498,21 @@ public class ProductController {
                 .map(Product::getId)
                 .toList();
         Map<Long, Long> totals = stockService.getTotalQuantitiesByProductIds(ids);
+        // Batch member counts for any bundles on this page (single query, no N+1).
+        Map<Long, Integer> bundleCounts = new java.util.HashMap<>();
+        boolean hasBundle = products.stream().anyMatch(p -> p.getProductType() == ProductType.BUNDLE);
+        if (hasBundle) {
+            for (Object[] row : bundleItemRepository.countByBundleIds(ids)) {
+                bundleCounts.put((Long) row[0], ((Number) row[1]).intValue());
+            }
+        }
         return products.stream()
                 .map(product -> {
                     ProductDto dto = toDto(product);
                     dto.totalQuantity = totals.getOrDefault(product.getId(), 0L);
+                    if (product.getProductType() == ProductType.BUNDLE && dto.bundleItemCount == null) {
+                        dto.bundleItemCount = bundleCounts.getOrDefault(product.getId(), 0);
+                    }
                     return dto;
                 })
                 .toList();

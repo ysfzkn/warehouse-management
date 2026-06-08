@@ -36,69 +36,72 @@ const Navbar = () => {
   }, []);
   const NOTIFICATION_BATCH_SIZE = 10;
 
-  const loadNotifications = useCallback(async ({ page = 0, reset = false, silent = false, signal = null } = {}) => {
-    if (role !== 'ADMIN') return;
-    if (!silent && notifLoadingRef.current && !reset) return;
-    if (silent && notifRefreshingRef.current && !reset) return;
-    if (silent) {
-      notifRefreshingRef.current = true;
-      setNotifRefreshing(true);
-    } else {
-      notifLoadingRef.current = true;
-      setNotifLoading(true);
-    }
-    try {
-      const res = await axios.get('/api/notifications', { 
-        params: { size: NOTIFICATION_BATCH_SIZE, page },
-        signal: signal 
-      });
-      const list = Array.isArray(res.data) ? res.data : [];
-      setNotifications(prev => {
-        if (reset || page === 0) {
-          const next = list;
-          setUnreadCount(next.filter(n => !n.read).length);
-          return next;
-        }
-        const existingIds = new Set(prev.map(item => item.id));
-        const appended = list.filter(item => !existingIds.has(item.id));
-        const next = [...prev, ...appended];
-        setUnreadCount(next.filter(n => !n.read).length);
-        return next;
-      });
-      setNotifHasMore(list.length === NOTIFICATION_BATCH_SIZE);
-      setNotifPage(page);
-    } catch (error) {
-      // Ignore cancellation errors
-      if (error.name === 'CanceledError' || error.message === 'canceled') return;
-      
-      if (reset || page === 0) {
-        setNotifications([]);
-        setUnreadCount(0);
-        setNotifHasMore(false);
-        setNotifPage(0);
-      }
-    } finally {
+  const loadNotifications = useCallback(
+    async ({ page = 0, reset = false, silent = false, signal = null } = {}) => {
+      if (role !== 'ADMIN') return;
+      if (!silent && notifLoadingRef.current && !reset) return;
+      if (silent && notifRefreshingRef.current && !reset) return;
       if (silent) {
-        notifRefreshingRef.current = false;
-        setNotifRefreshing(false);
+        notifRefreshingRef.current = true;
+        setNotifRefreshing(true);
       } else {
-        notifLoadingRef.current = false;
-        setNotifLoading(false);
+        notifLoadingRef.current = true;
+        setNotifLoading(true);
       }
-    }
-  }, [role, NOTIFICATION_BATCH_SIZE]);
+      try {
+        const res = await axios.get('/api/notifications', {
+          params: { size: NOTIFICATION_BATCH_SIZE, page },
+          signal: signal,
+        });
+        const list = Array.isArray(res.data) ? res.data : [];
+        setNotifications((prev) => {
+          if (reset || page === 0) {
+            const next = list;
+            setUnreadCount(next.filter((n) => !n.read).length);
+            return next;
+          }
+          const existingIds = new Set(prev.map((item) => item.id));
+          const appended = list.filter((item) => !existingIds.has(item.id));
+          const next = [...prev, ...appended];
+          setUnreadCount(next.filter((n) => !n.read).length);
+          return next;
+        });
+        setNotifHasMore(list.length === NOTIFICATION_BATCH_SIZE);
+        setNotifPage(page);
+      } catch (error) {
+        // Ignore cancellation errors
+        if (error.name === 'CanceledError' || error.message === 'canceled') return;
+
+        if (reset || page === 0) {
+          setNotifications([]);
+          setUnreadCount(0);
+          setNotifHasMore(false);
+          setNotifPage(0);
+        }
+      } finally {
+        if (silent) {
+          notifRefreshingRef.current = false;
+          setNotifRefreshing(false);
+        } else {
+          notifLoadingRef.current = false;
+          setNotifLoading(false);
+        }
+      }
+    },
+    [role, NOTIFICATION_BATCH_SIZE]
+  );
 
   useEffect(() => {
     let ignore = false;
     const abortController = new AbortController();
-    
+
     const hydrate = async () => {
       try {
         if (role === 'ADMIN') {
-          await loadNotifications({ 
-            page: 0, 
-            reset: true, 
-            signal: abortController.signal 
+          await loadNotifications({
+            page: 0,
+            reset: true,
+            signal: abortController.signal,
           });
           if (ignore) return;
         } else if (!ignore) {
@@ -114,9 +117,9 @@ const Navbar = () => {
       // Initial value will come from SSE 'snapshot' event shortly after mount
       // This prevents duplicate /api/dashboard/stats requests when Dashboard page also loads
     };
-    
+
     hydrate();
-    
+
     return () => {
       ignore = true;
       abortController.abort();
@@ -147,7 +150,7 @@ const Navbar = () => {
         const nextUnread = typeof data.unread === 'number' ? data.unread : null;
         const nextLow = typeof data.lowStock === 'number' ? data.lowStock : null;
         if (nextUnread != null) {
-          setUnreadCount(prev => {
+          setUnreadCount((prev) => {
             if (nextUnread !== prev) {
               // SSE notification update - fire and forget (no signal needed)
               loadNotifications({ page: 0, reset: true, silent: true }).catch(() => {});
@@ -165,13 +168,17 @@ const Navbar = () => {
     es.onerror = () => {
       if (closed) return;
       closed = true;
-      try { es.close(); } catch {}
+      try {
+        es.close();
+      } catch {}
       sseRef.current = null;
       // Do not auto-logout on SSE errors to avoid interrupting active sessions
     };
     return () => {
       closed = true;
-      try { es.close(); } catch {}
+      try {
+        es.close();
+      } catch {}
       sseRef.current = null;
     };
   }, [role, loadNotifications, isJwtExpired, handleLogout]);
@@ -184,7 +191,7 @@ const Navbar = () => {
     background: 'linear-gradient(135deg, #1e3c72 0%, #2a5298 50%, #1e3c72 100%)',
     boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
     borderBottom: '2px solid rgba(255,255,255,0.1)',
-    padding: '0.5rem 0'
+    padding: '0.5rem 0',
   };
 
   const brandStyle = {
@@ -193,7 +200,7 @@ const Navbar = () => {
     padding: '0.5rem 1rem',
     borderRadius: '8px',
     transition: 'all 0.3s ease',
-    background: 'rgba(255,255,255,0.05)'
+    background: 'rgba(255,255,255,0.05)',
   };
 
   const navLinkStyle = (path) => ({
@@ -205,7 +212,7 @@ const Navbar = () => {
     color: 'white',
     fontWeight: isActive(path) ? '600' : '400',
     transform: isActive(path) ? 'translateY(-2px)' : 'none',
-    boxShadow: isActive(path) ? '0 4px 12px rgba(0,0,0,0.2)' : 'none'
+    boxShadow: isActive(path) ? '0 4px 12px rgba(0,0,0,0.2)' : 'none',
   });
 
   const userBadgeStyle = {
@@ -217,7 +224,7 @@ const Navbar = () => {
     cursor: 'pointer',
     transition: 'all 0.3s ease',
     minWidth: '52px',
-    minHeight: '48px'
+    minHeight: '48px',
   };
 
   const formatDateTime = useCallback((value) => {
@@ -234,7 +241,7 @@ const Navbar = () => {
     const rect = userBadgeRef.current.getBoundingClientRect();
     setUserDropdownCoords({
       top: rect.bottom + 12 + window.scrollY,
-      right: Math.max(12, window.innerWidth - rect.right - 12)
+      right: Math.max(12, window.innerWidth - rect.right - 12),
     });
   }, []);
 
@@ -254,10 +261,7 @@ const Navbar = () => {
     if (!showNotif) return null;
     return createPortal(
       <>
-        <div
-          className="notification-backdrop"
-          onClick={() => setShowNotif(false)}
-        />
+        <div className="notification-backdrop" onClick={() => setShowNotif(false)} />
         <div className="notification-panel" role="dialog" aria-label="Bildirimler">
           <div className="notification-panel-header">
             <div>
@@ -277,48 +281,78 @@ const Navbar = () => {
             </button>
           </div>
           <div className="notification-list">
-            {notifications.length === 0 && (
-              <div className="p-3 text-muted">Bildirim yok.</div>
-            )}
-            {notifications.map(n => (
-              <div key={n.id} className="dropdown-item-custom" style={{
-                alignItems: 'flex-start',
-                padding: '0.75rem',
-                flexWrap: 'wrap'
-              }}>
-                <div className="me-2 mt-1 flex-shrink-0" style={{color: n.read ? '#9ca3af' : '#10b981'}}>
-                  <i className={`fas ${n.read ? 'fa-circle' : 'fa-dot-circle'}`} style={{fontSize: '0.9rem'}}></i>
+            {notifications.length === 0 && <div className="p-3 text-muted">Bildirim yok.</div>}
+            {notifications.map((n) => (
+              <div
+                key={n.id}
+                className="dropdown-item-custom"
+                style={{
+                  alignItems: 'flex-start',
+                  padding: '0.75rem',
+                  flexWrap: 'wrap',
+                }}
+              >
+                <div className="me-2 mt-1 flex-shrink-0" style={{ color: n.read ? '#9ca3af' : '#10b981' }}>
+                  <i
+                    className={`fas ${n.read ? 'fa-circle' : 'fa-dot-circle'}`}
+                    style={{ fontSize: '0.9rem' }}
+                  ></i>
                 </div>
-                <div className="flex-grow-1" style={{minWidth: 0}}>
-                  <div className="fw-semibold" style={{fontSize: '0.95rem', lineHeight: '1.3'}}>{n.title}</div>
-                  <div className="text-muted" style={{fontSize: '0.85rem', lineHeight: '1.4', wordBreak: 'break-word'}}>{n.message}</div>
+                <div className="flex-grow-1" style={{ minWidth: 0 }}>
+                  <div className="fw-semibold" style={{ fontSize: '0.95rem', lineHeight: '1.3' }}>
+                    {n.title}
+                  </div>
+                  <div
+                    className="text-muted"
+                    style={{ fontSize: '0.85rem', lineHeight: '1.4', wordBreak: 'break-word' }}
+                  >
+                    {n.message}
+                  </div>
                   <div className="text-muted small mt-1 d-flex flex-wrap align-items-center gap-2">
-                    <span><i className="far fa-clock me-1"></i>{formatDateTime(n.createdAt)}</span>
+                    <span>
+                      <i className="far fa-clock me-1"></i>
+                      {formatDateTime(n.createdAt)}
+                    </span>
                     {n.actor && <span className="badge bg-primary">{n.actor}</span>}
                     {n.warehouseName && (
-                      <span className="badge bg-light text-dark"><i className="fas fa-warehouse me-1"></i>{n.warehouseName}</span>
+                      <span className="badge bg-light text-dark">
+                        <i className="fas fa-warehouse me-1"></i>
+                        {n.warehouseName}
+                      </span>
                     )}
                     {n.sourceWarehouseName && (
-                      <span className="badge bg-light text-dark"><i className="fas fa-arrow-right me-1"></i>{n.sourceWarehouseName}</span>
+                      <span className="badge bg-light text-dark">
+                        <i className="fas fa-arrow-right me-1"></i>
+                        {n.sourceWarehouseName}
+                      </span>
                     )}
                     {n.destinationWarehouseName && (
-                      <span className="badge bg-light text-dark"><i className="fas fa-arrow-right me-1"></i>{n.destinationWarehouseName}</span>
+                      <span className="badge bg-light text-dark">
+                        <i className="fas fa-arrow-right me-1"></i>
+                        {n.destinationWarehouseName}
+                      </span>
                     )}
                     {n.productSku && <span className="badge bg-secondary">SKU: {n.productSku}</span>}
-                    {typeof n.quantity === 'number' && <span className="badge bg-info text-dark">Adet: {n.quantity}</span>}
+                    {typeof n.quantity === 'number' && (
+                      <span className="badge bg-info text-dark">Adet: {n.quantity}</span>
+                    )}
                   </div>
                 </div>
-                <div className="d-flex gap-1 w-100 mt-2" style={{flexWrap: 'wrap'}}>
+                <div className="d-flex gap-1 w-100 mt-2" style={{ flexWrap: 'wrap' }}>
                   {n.entityType && n.entityId && (
                     <button
                       className="btn btn-sm flex-fill btn-primary"
-                      style={{minHeight: '38px'}}
+                      style={{ minHeight: '38px' }}
                       onClick={async () => {
                         const title = (n.title || '').toLowerCase();
                         const isTransfer = n.entityType === 'StockTransfer' || title.includes('transfer');
                         const isStockRequest = n.entityType === 'StockRequest';
-                        const isTransferApprovalRequest = title.includes('onay') || title.includes('approval') || title.includes('talep') || title.includes('sil');
-                        
+                        const isTransferApprovalRequest =
+                          title.includes('onay') ||
+                          title.includes('approval') ||
+                          title.includes('talep') ||
+                          title.includes('sil');
+
                         if (isStockRequest) {
                           if (location.pathname === '/stock') {
                             try {
@@ -330,7 +364,9 @@ const Navbar = () => {
                         } else if (isTransfer && isTransferApprovalRequest) {
                           if (location.pathname === '/stock') {
                             try {
-                              window.dispatchEvent(new CustomEvent('open-stock-approval', { detail: { tab: 'transfer' } }));
+                              window.dispatchEvent(
+                                new CustomEvent('open-stock-approval', { detail: { tab: 'transfer' } })
+                              );
                             } catch {}
                           } else {
                             navigate('/stock?openApproval=true&tab=transfer');
@@ -338,7 +374,11 @@ const Navbar = () => {
                         } else if (isTransfer) {
                           if (location.pathname === '/stock') {
                             try {
-                              window.dispatchEvent(new CustomEvent('open-audit', { detail: { entityType: 'StockTransfer', entityId: Number(n.entityId) } }));
+                              window.dispatchEvent(
+                                new CustomEvent('open-audit', {
+                                  detail: { entityType: 'StockTransfer', entityId: Number(n.entityId) },
+                                })
+                              );
                             } catch {}
                           } else {
                             const params = new URLSearchParams();
@@ -348,7 +388,11 @@ const Navbar = () => {
                         } else {
                           if (location.pathname === '/stock') {
                             try {
-                              window.dispatchEvent(new CustomEvent('open-audit', { detail: { entityType: 'Stock', entityId: Number(n.entityId) } }));
+                              window.dispatchEvent(
+                                new CustomEvent('open-audit', {
+                                  detail: { entityType: 'Stock', entityId: Number(n.entityId) },
+                                })
+                              );
                             } catch {}
                           } else {
                             const params = new URLSearchParams();
@@ -357,9 +401,13 @@ const Navbar = () => {
                           }
                         }
                         setShowNotif(false);
-                        try { await axios.post(`/api/notifications/${n.id}/read`); } catch {}
-                        setNotifications(prev => prev.map(x => x.id === n.id ? {...x, read: true} : x));
-                        setUnreadCount(c => Math.max(0, c - 1));
+                        try {
+                          await axios.post(`/api/notifications/${n.id}/read`);
+                        } catch {}
+                        setNotifications((prev) =>
+                          prev.map((x) => (x.id === n.id ? { ...x, read: true } : x))
+                        );
+                        setUnreadCount((c) => Math.max(0, c - 1));
                       }}
                     >
                       Görüntüle
@@ -368,12 +416,14 @@ const Navbar = () => {
                   {!n.read && (
                     <button
                       className="btn btn-sm flex-fill btn-outline-primary"
-                      style={{minHeight: '38px'}}
+                      style={{ minHeight: '38px' }}
                       onClick={async () => {
                         try {
                           await axios.post(`/api/notifications/${n.id}/read`);
-                          setNotifications(prev => prev.map(x => x.id === n.id ? {...x, read: true} : x));
-                          setUnreadCount(c => Math.max(0, c - 1));
+                          setNotifications((prev) =>
+                            prev.map((x) => (x.id === n.id ? { ...x, read: true } : x))
+                          );
+                          setUnreadCount((c) => Math.max(0, c - 1));
                         } catch (e) {}
                       }}
                     >
@@ -385,11 +435,7 @@ const Navbar = () => {
             ))}
           </div>
           <div className="notification-footer border-top p-3">
-            {notifLoading && (
-              <div className="text-center text-muted small">
-                Yükleniyor...
-              </div>
-            )}
+            {notifLoading && <div className="text-center text-muted small">Yükleniyor...</div>}
             {!notifLoading && notifHasMore && (
               <button
                 className="btn btn-outline-secondary w-100"
@@ -399,9 +445,7 @@ const Navbar = () => {
               </button>
             )}
             {!notifLoading && !notifHasMore && notifications.length > 0 && (
-              <small className="text-muted d-block text-center">
-                Tüm bildirimler yüklendi
-              </small>
+              <small className="text-muted d-block text-center">Tüm bildirimler yüklendi</small>
             )}
           </div>
         </div>
@@ -427,7 +471,7 @@ const Navbar = () => {
             position: 'fixed',
             top: userDropdownCoords.top ?? fallbackTop,
             right: userDropdownCoords.right ?? fallbackRight,
-            left: 'auto'
+            left: 'auto',
           }}
         >
           <div className="user-dropdown-header">
@@ -710,17 +754,20 @@ const Navbar = () => {
           }
         }
       `}</style>
-      
+
       <nav className="navbar navbar-expand-xl navbar-dark" style={navbarStyle}>
         <div className="container-fluid">
-          <Link 
-            className="navbar-brand navbar-brand-custom d-flex align-items-center text-white" 
-            to="/" 
+          <Link
+            className="navbar-brand navbar-brand-custom d-flex align-items-center text-white"
+            to="/"
             style={brandStyle}
           >
             <img
               src="/api/store/settings/logo"
-              onError={(e)=>{e.currentTarget.onerror=null; e.currentTarget.src='/company-logo.png';}}
+              onError={(e) => {
+                e.currentTarget.onerror = null;
+                e.currentTarget.src = '/company-logo.png';
+              }}
               alt="Logo"
               style={{ height: 32, marginRight: '0.75rem' }}
             />
@@ -736,7 +783,7 @@ const Navbar = () => {
             aria-controls="navbarNav"
             aria-expanded="false"
             aria-label="Toggle navigation"
-            style={{background: 'rgba(255,255,255,0.1)'}}
+            style={{ background: 'rgba(255,255,255,0.1)' }}
           >
             <span className="navbar-toggler-icon"></span>
           </button>
@@ -745,154 +792,356 @@ const Navbar = () => {
             <ul className="navbar-nav me-auto mb-2 mb-lg-0">
               {role === 'ADMIN' && (
                 <li className="nav-item">
-                  <Link 
-                    className="nav-link nav-link-custom text-white" 
-                    to="/" 
-                    style={navLinkStyle('/')}
-                  >
+                  <Link className="nav-link nav-link-custom text-white" to="/" style={navLinkStyle('/')}>
                     <i className="fas fa-chart-line me-2"></i>
                     Panel
                   </Link>
                 </li>
               )}
-              
+
               {role === 'ADMIN' && (
-              <li className="nav-item dropdown">
-                <button 
-                  className="nav-link nav-link-custom dropdown-toggle text-white border-0 bg-transparent w-100 text-start" 
-                  type="button"
-                  data-bs-toggle="dropdown" 
-                  style={{
-                    ...navLinkStyle(null),
-                    background: ['/products', '/categories', '/admin-settings'].includes(location.pathname) 
-                      ? 'rgba(255,255,255,0.2)' 
-                      : 'transparent'
-                  }}
-                >
-                  <i className="fas fa-warehouse me-2"></i>
-                  Envanter
-                </button>
-                <ul className="dropdown-menu border-0 shadow-lg" style={{borderRadius: '12px', marginTop: '0.5rem'}}>
-                  <li>
-                    <Link className="dropdown-item" to="/products">
-                      <i className="fas fa-box me-2 text-success"></i>
-                      Ürünler
-                    </Link>
-                  </li>
-                  <li>
-                    <Link className="dropdown-item" to="/categories">
-                      <i className="fas fa-tags me-2 text-warning"></i>
-                      Kategoriler
-                    </Link>
-                  </li>
-                  <li><hr className="dropdown-divider" /></li>
-                  <li>
-                    <Link className="dropdown-item" to="/admin/brands">
-                      <i className="fas fa-industry me-2 text-primary"></i>
-                      Markalar
-                    </Link>
-                  </li>
-                  <li>
-                    <Link className="dropdown-item" to="/admin/colors">
-                      <i className="fas fa-palette me-2 text-info"></i>
-                      Renkler
-                    </Link>
-                  </li>
-                  <li><hr className="dropdown-divider" /></li>
-                  <li>
-                    <Link className="dropdown-item" to="/stock-imports">
-                      <i className="fas fa-file-excel me-2 text-success"></i>
-                      Excel Stok Aktarım Geçmişi
-                    </Link>
-                  </li>
-                </ul>
-              </li>
+                <li className="nav-item dropdown">
+                  <button
+                    className="nav-link nav-link-custom dropdown-toggle text-white border-0 bg-transparent w-100 text-start"
+                    type="button"
+                    data-bs-toggle="dropdown"
+                    style={{
+                      ...navLinkStyle(null),
+                      background: [
+                        '/products',
+                        '/admin/product-sets',
+                        '/categories',
+                        '/admin-settings',
+                      ].includes(location.pathname)
+                        ? 'rgba(255,255,255,0.2)'
+                        : 'transparent',
+                    }}
+                  >
+                    <i className="fas fa-warehouse me-2"></i>
+                    Envanter
+                  </button>
+                  <ul
+                    className="dropdown-menu border-0 shadow-lg"
+                    style={{ borderRadius: '12px', marginTop: '0.5rem' }}
+                  >
+                    <li>
+                      <Link className="dropdown-item" to="/products">
+                        <i className="fas fa-box me-2 text-success"></i>
+                        Ürünler
+                      </Link>
+                    </li>
+                    <li>
+                      <Link className="dropdown-item" to="/admin/product-sets">
+                        <i className="fas fa-layer-group me-2 text-info"></i>
+                        Ürün Setleri
+                      </Link>
+                    </li>
+                    <li>
+                      <Link className="dropdown-item" to="/categories">
+                        <i className="fas fa-tags me-2 text-warning"></i>
+                        Kategoriler
+                      </Link>
+                    </li>
+                    <li>
+                      <hr className="dropdown-divider" />
+                    </li>
+                    <li>
+                      <Link className="dropdown-item" to="/admin/brands">
+                        <i className="fas fa-industry me-2 text-primary"></i>
+                        Markalar
+                      </Link>
+                    </li>
+                    <li>
+                      <Link className="dropdown-item" to="/admin/colors">
+                        <i className="fas fa-palette me-2 text-info"></i>
+                        Renkler
+                      </Link>
+                    </li>
+                    <li>
+                      <hr className="dropdown-divider" />
+                    </li>
+                    <li>
+                      <Link className="dropdown-item" to="/stock-imports">
+                        <i className="fas fa-file-excel me-2 text-success"></i>
+                        Excel Stok Aktarım Geçmişi
+                      </Link>
+                    </li>
+                  </ul>
+                </li>
               )}
-              
+
               {role === 'ADMIN' && (
-              <li className="nav-item">
-                <Link 
-                  className="nav-link nav-link-custom text-white" 
-                  to="/warehouses" 
-                  style={navLinkStyle('/warehouses')}
-                >
-                  <i className="fas fa-building me-2"></i>
-                  Depolar
-                </Link>
-              </li>
+                <li className="nav-item">
+                  <Link
+                    className="nav-link nav-link-custom text-white"
+                    to="/warehouses"
+                    style={navLinkStyle('/warehouses')}
+                  >
+                    <i className="fas fa-building me-2"></i>
+                    Depolar
+                  </Link>
+                </li>
               )}
 
               <li className="nav-item">
-                <Link 
-                  className="nav-link nav-link-custom text-white position-relative d-inline-flex align-items-center" 
-                  to="/stock" 
+                <Link
+                  className="nav-link nav-link-custom text-white position-relative d-inline-flex align-items-center"
+                  to="/stock"
                   style={navLinkStyle('/stock')}
                 >
                   <i className="fas fa-cubes me-2"></i>
                   <span>Stok Yönetimi</span>
-                  {lowStockCount > 0 && (
-                    <span className="notification-badge">{lowStockCount}</span>
-                  )}
+                  {lowStockCount > 0 && <span className="notification-badge">{lowStockCount}</span>}
                 </Link>
               </li>
-              
+
               {/* ── E-COMMERCE DROPDOWN ── */}
               {role === 'ADMIN' && (
-              <li className="nav-item dropdown">
-                <button className="nav-link nav-link-custom dropdown-toggle text-white border-0 bg-transparent w-100 text-start" type="button" data-bs-toggle="dropdown"
-                  style={{ ...navLinkStyle(null), background: ['/admin/sales-dashboard','/admin/orders','/admin/customers','/admin/payments','/admin/invoices','/admin/support-tickets','/admin/contact-messages','/admin/stock-movements'].some(p => location.pathname.startsWith(p)) ? 'rgba(255,255,255,0.2)' : 'transparent' }}>
-                  <i className="fas fa-store me-2"></i>E-Ticaret
-                </button>
-                <ul className="dropdown-menu border-0 shadow-lg" style={{borderRadius: '12px', marginTop: '0.5rem'}}>
-                  <li><small className="dropdown-header text-uppercase fw-bold" style={{fontSize:10,letterSpacing:'0.05em'}}>Satış</small></li>
-                  <li><Link className="dropdown-item" to="/admin/sales-dashboard"><i className="fas fa-chart-line me-2 text-primary"></i>Satış Dashboard</Link></li>
-                  <li><Link className="dropdown-item" to="/admin/orders"><i className="fas fa-shopping-cart me-2 text-success"></i>Siparişler</Link></li>
-                  <li><Link className="dropdown-item" to="/admin/payments"><i className="fas fa-credit-card me-2 text-danger"></i>Ödemeler</Link></li>
-                  <li><Link className="dropdown-item" to="/admin/invoices"><i className="fas fa-file-invoice me-2 text-info"></i>E-Fatura</Link></li>
-                  <li><hr className="dropdown-divider" /></li>
-                  <li><small className="dropdown-header text-uppercase fw-bold" style={{fontSize:10,letterSpacing:'0.05em'}}>Müşteri</small></li>
-                  <li><Link className="dropdown-item" to="/admin/customers"><i className="fas fa-users me-2 text-warning"></i>Müşteriler</Link></li>
-                  <li><Link className="dropdown-item" to="/admin/support-tickets"><i className="fas fa-headset me-2 text-info"></i>Destek Talepleri</Link></li>
-                  <li><Link className="dropdown-item" to="/admin/contact-messages"><i className="fas fa-envelope me-2 text-primary"></i>İletişim Mesajları</Link></li>
-                  <li><hr className="dropdown-divider" /></li>
-                  <li><small className="dropdown-header text-uppercase fw-bold" style={{fontSize:10,letterSpacing:'0.05em'}}>Operasyon</small></li>
-                  <li><Link className="dropdown-item" to="/admin/stock-movements"><i className="fas fa-exchange-alt me-2 text-primary"></i>Stok Hareketleri</Link></li>
-                  <li><Link className="dropdown-item" to="/admin/coupons"><i className="fas fa-ticket-alt me-2 text-success"></i>Kuponlar</Link></li>
-                </ul>
-              </li>
+                <li className="nav-item dropdown">
+                  <button
+                    className="nav-link nav-link-custom dropdown-toggle text-white border-0 bg-transparent w-100 text-start"
+                    type="button"
+                    data-bs-toggle="dropdown"
+                    style={{
+                      ...navLinkStyle(null),
+                      background: [
+                        '/admin/sales-dashboard',
+                        '/admin/orders',
+                        '/admin/customers',
+                        '/admin/payments',
+                        '/admin/invoices',
+                        '/admin/support-tickets',
+                        '/admin/contact-messages',
+                        '/admin/stock-movements',
+                      ].some((p) => location.pathname.startsWith(p))
+                        ? 'rgba(255,255,255,0.2)'
+                        : 'transparent',
+                    }}
+                  >
+                    <i className="fas fa-store me-2"></i>E-Ticaret
+                  </button>
+                  <ul
+                    className="dropdown-menu border-0 shadow-lg"
+                    style={{ borderRadius: '12px', marginTop: '0.5rem' }}
+                  >
+                    <li>
+                      <small
+                        className="dropdown-header text-uppercase fw-bold"
+                        style={{ fontSize: 10, letterSpacing: '0.05em' }}
+                      >
+                        Satış
+                      </small>
+                    </li>
+                    <li>
+                      <Link className="dropdown-item" to="/admin/sales-dashboard">
+                        <i className="fas fa-chart-line me-2 text-primary"></i>Satış Dashboard
+                      </Link>
+                    </li>
+                    <li>
+                      <Link className="dropdown-item" to="/admin/orders">
+                        <i className="fas fa-shopping-cart me-2 text-success"></i>Siparişler
+                      </Link>
+                    </li>
+                    <li>
+                      <Link className="dropdown-item" to="/admin/payments">
+                        <i className="fas fa-credit-card me-2 text-danger"></i>Ödemeler
+                      </Link>
+                    </li>
+                    <li>
+                      <Link className="dropdown-item" to="/admin/invoices">
+                        <i className="fas fa-file-invoice me-2 text-info"></i>E-Fatura
+                      </Link>
+                    </li>
+                    <li>
+                      <hr className="dropdown-divider" />
+                    </li>
+                    <li>
+                      <small
+                        className="dropdown-header text-uppercase fw-bold"
+                        style={{ fontSize: 10, letterSpacing: '0.05em' }}
+                      >
+                        Müşteri
+                      </small>
+                    </li>
+                    <li>
+                      <Link className="dropdown-item" to="/admin/customers">
+                        <i className="fas fa-users me-2 text-warning"></i>Müşteriler
+                      </Link>
+                    </li>
+                    <li>
+                      <Link className="dropdown-item" to="/admin/support-tickets">
+                        <i className="fas fa-headset me-2 text-info"></i>Destek Talepleri
+                      </Link>
+                    </li>
+                    <li>
+                      <Link className="dropdown-item" to="/admin/contact-messages">
+                        <i className="fas fa-envelope me-2 text-primary"></i>İletişim Mesajları
+                      </Link>
+                    </li>
+                    <li>
+                      <hr className="dropdown-divider" />
+                    </li>
+                    <li>
+                      <small
+                        className="dropdown-header text-uppercase fw-bold"
+                        style={{ fontSize: 10, letterSpacing: '0.05em' }}
+                      >
+                        Operasyon
+                      </small>
+                    </li>
+                    <li>
+                      <Link className="dropdown-item" to="/admin/stock-movements">
+                        <i className="fas fa-exchange-alt me-2 text-primary"></i>Stok Hareketleri
+                      </Link>
+                    </li>
+                    <li>
+                      <Link className="dropdown-item" to="/admin/coupons">
+                        <i className="fas fa-ticket-alt me-2 text-success"></i>Kuponlar
+                      </Link>
+                    </li>
+                  </ul>
+                </li>
               )}
 
               {/* ── SETTINGS DROPDOWN ── */}
               {role === 'ADMIN' && (
-              <li className="nav-item dropdown">
-                <button className="nav-link nav-link-custom dropdown-toggle text-white border-0 bg-transparent w-100 text-start" type="button" data-bs-toggle="dropdown"
-                  style={{ ...navLinkStyle(null), background: ['/admin/payment-gateways','/admin/cargo-providers','/admin/cms','/admin/site-settings','/admin-settings','/desi','/admin/notifications'].some(p => location.pathname.startsWith(p)) ? 'rgba(255,255,255,0.2)' : 'transparent' }}>
-                  <i className="fas fa-cog me-2"></i>Ayarlar
-                </button>
-                <ul className="dropdown-menu border-0 shadow-lg" style={{borderRadius: '12px', marginTop: '0.5rem'}}>
-                  <li><small className="dropdown-header text-uppercase fw-bold" style={{fontSize:10,letterSpacing:'0.05em'}}>Ödeme & Kargo</small></li>
-                  <li><Link className="dropdown-item" to="/admin/payment-gateways"><i className="fas fa-credit-card me-2" style={{color:'#6f42c1'}}></i>Ödeme Ayarları</Link></li>
-                  <li><Link className="dropdown-item" to="/admin/cargo-providers"><i className="fas fa-truck me-2 text-primary"></i>Kargo Ayarları</Link></li>
-                  <li><hr className="dropdown-divider" /></li>
-                  <li><small className="dropdown-header text-uppercase fw-bold" style={{fontSize:10,letterSpacing:'0.05em'}}>İçerik & Görünüm</small></li>
-                  <li><Link className="dropdown-item" to="/admin/cms"><i className="fas fa-file-alt me-2 text-info"></i>İçerik Yönetimi</Link></li>
-                  <li><Link className="dropdown-item" to="/admin/site-settings"><i className="fas fa-globe me-2 text-primary"></i>Site Ayarları</Link></li>
-                  <li><hr className="dropdown-divider" /></li>
-                  <li><small className="dropdown-header text-uppercase fw-bold" style={{fontSize:10,letterSpacing:'0.05em'}}>Sistem</small></li>
-                  <li><Link className="dropdown-item" to="/desi"><i className="fas fa-calculator me-2 text-info"></i>Desi Hesaplama</Link></li>
-                  <li><Link className="dropdown-item" to="/admin/notifications"><i className="fas fa-bell me-2 text-warning"></i>Bildirimler</Link></li>
-                  <li><Link className="dropdown-item" to="/admin-settings"><i className="fas fa-tools me-2 text-danger"></i>Yönetici Ayarları</Link></li>
-                  <li><hr className="dropdown-divider" /></li>
-                  <li><small className="dropdown-header text-uppercase fw-bold" style={{fontSize:10,letterSpacing:'0.05em'}}>Cezeri Asistan</small></li>
-                  <li><Link className="dropdown-item" to="/admin/assistant/dashboard"><i className="fas fa-chart-pie me-2 text-info"></i>Asistan Dashboard</Link></li>
-                  <li><Link className="dropdown-item" to="/admin/assistant/documents"><i className="fas fa-file-upload me-2 text-success"></i>Doküman Yönetimi</Link></li>
-                  <li><Link className="dropdown-item" to="/admin/assistant/logs"><i className="fas fa-comments me-2 text-warning"></i>Sohbet Logları</Link></li>
-                  <li><Link className="dropdown-item" to="/admin/assistant/settings"><i className="fas fa-cog me-2 text-danger"></i>AI Ayarları</Link></li>
-                  <li><Link className="dropdown-item" to="/admin/assistant/diagnostics"><i className="fas fa-microscope me-2 text-info"></i>RAG Tanılama</Link></li>
-                  <li><hr className="dropdown-divider" /></li>
-                  <li><Link className="dropdown-item" to="/admin/help"><i className="fas fa-question-circle me-2 text-primary"></i>Yardım & Kılavuz</Link></li>
-                </ul>
-              </li>
+                <li className="nav-item dropdown">
+                  <button
+                    className="nav-link nav-link-custom dropdown-toggle text-white border-0 bg-transparent w-100 text-start"
+                    type="button"
+                    data-bs-toggle="dropdown"
+                    style={{
+                      ...navLinkStyle(null),
+                      background: [
+                        '/admin/payment-gateways',
+                        '/admin/cargo-providers',
+                        '/admin/cms',
+                        '/admin/site-settings',
+                        '/admin-settings',
+                        '/desi',
+                        '/admin/notifications',
+                      ].some((p) => location.pathname.startsWith(p))
+                        ? 'rgba(255,255,255,0.2)'
+                        : 'transparent',
+                    }}
+                  >
+                    <i className="fas fa-cog me-2"></i>Ayarlar
+                  </button>
+                  <ul
+                    className="dropdown-menu border-0 shadow-lg"
+                    style={{ borderRadius: '12px', marginTop: '0.5rem' }}
+                  >
+                    <li>
+                      <small
+                        className="dropdown-header text-uppercase fw-bold"
+                        style={{ fontSize: 10, letterSpacing: '0.05em' }}
+                      >
+                        Ödeme & Kargo
+                      </small>
+                    </li>
+                    <li>
+                      <Link className="dropdown-item" to="/admin/payment-gateways">
+                        <i className="fas fa-credit-card me-2" style={{ color: '#6f42c1' }}></i>Ödeme Ayarları
+                      </Link>
+                    </li>
+                    <li>
+                      <Link className="dropdown-item" to="/admin/cargo-providers">
+                        <i className="fas fa-truck me-2 text-primary"></i>Kargo Ayarları
+                      </Link>
+                    </li>
+                    <li>
+                      <hr className="dropdown-divider" />
+                    </li>
+                    <li>
+                      <small
+                        className="dropdown-header text-uppercase fw-bold"
+                        style={{ fontSize: 10, letterSpacing: '0.05em' }}
+                      >
+                        İçerik & Görünüm
+                      </small>
+                    </li>
+                    <li>
+                      <Link className="dropdown-item" to="/admin/cms">
+                        <i className="fas fa-file-alt me-2 text-info"></i>İçerik Yönetimi
+                      </Link>
+                    </li>
+                    <li>
+                      <Link className="dropdown-item" to="/admin/site-settings">
+                        <i className="fas fa-globe me-2 text-primary"></i>Site Ayarları
+                      </Link>
+                    </li>
+                    <li>
+                      <hr className="dropdown-divider" />
+                    </li>
+                    <li>
+                      <small
+                        className="dropdown-header text-uppercase fw-bold"
+                        style={{ fontSize: 10, letterSpacing: '0.05em' }}
+                      >
+                        Sistem
+                      </small>
+                    </li>
+                    <li>
+                      <Link className="dropdown-item" to="/desi">
+                        <i className="fas fa-calculator me-2 text-info"></i>Desi Hesaplama
+                      </Link>
+                    </li>
+                    <li>
+                      <Link className="dropdown-item" to="/admin/notifications">
+                        <i className="fas fa-bell me-2 text-warning"></i>Bildirimler
+                      </Link>
+                    </li>
+                    <li>
+                      <Link className="dropdown-item" to="/admin-settings">
+                        <i className="fas fa-tools me-2 text-danger"></i>Yönetici Ayarları
+                      </Link>
+                    </li>
+                    <li>
+                      <hr className="dropdown-divider" />
+                    </li>
+                    <li>
+                      <small
+                        className="dropdown-header text-uppercase fw-bold"
+                        style={{ fontSize: 10, letterSpacing: '0.05em' }}
+                      >
+                        Cezeri Asistan
+                      </small>
+                    </li>
+                    <li>
+                      <Link className="dropdown-item" to="/admin/assistant/dashboard">
+                        <i className="fas fa-chart-pie me-2 text-info"></i>Asistan Dashboard
+                      </Link>
+                    </li>
+                    <li>
+                      <Link className="dropdown-item" to="/admin/assistant/documents">
+                        <i className="fas fa-file-upload me-2 text-success"></i>Doküman Yönetimi
+                      </Link>
+                    </li>
+                    <li>
+                      <Link className="dropdown-item" to="/admin/assistant/logs">
+                        <i className="fas fa-comments me-2 text-warning"></i>Sohbet Logları
+                      </Link>
+                    </li>
+                    <li>
+                      <Link className="dropdown-item" to="/admin/assistant/settings">
+                        <i className="fas fa-cog me-2 text-danger"></i>AI Ayarları
+                      </Link>
+                    </li>
+                    <li>
+                      <Link className="dropdown-item" to="/admin/assistant/diagnostics">
+                        <i className="fas fa-microscope me-2 text-info"></i>RAG Tanılama
+                      </Link>
+                    </li>
+                    <li>
+                      <hr className="dropdown-divider" />
+                    </li>
+                    <li>
+                      <Link className="dropdown-item" to="/admin/help">
+                        <i className="fas fa-question-circle me-2 text-primary"></i>Yardım & Kılavuz
+                      </Link>
+                    </li>
+                  </ul>
+                </li>
               )}
             </ul>
 
@@ -902,31 +1151,33 @@ const Navbar = () => {
                   <button
                     className="btn btn-link text-white position-relative"
                     onClick={() => setShowNotif(!showNotif)}
-                    style={{textDecoration: 'none'}}
+                    style={{ textDecoration: 'none' }}
                   >
                     <i className="fas fa-bell fa-lg"></i>
                     {unreadCount > 0 && (
-                      <span className="notification-badge" style={{right: -4}}>{unreadCount}</span>
+                      <span className="notification-badge" style={{ right: -4 }}>
+                        {unreadCount}
+                      </span>
                     )}
                   </button>
                 </div>
               )}
-              <div 
-              className="text-white d-flex align-items-center"
+              <div
+                className="text-white d-flex align-items-center"
                 style={userBadgeStyle}
                 ref={userBadgeRef}
-              onClick={() => setShowUserDropdown(!showUserDropdown)}
-              aria-haspopup="true"
-              aria-expanded={showUserDropdown}
+                onClick={() => setShowUserDropdown(!showUserDropdown)}
+                aria-haspopup="true"
+                aria-expanded={showUserDropdown}
               >
-                <div 
-                  className="rounded-circle d-flex align-items-center justify-content-center me-2" 
+                <div
+                  className="rounded-circle d-flex align-items-center justify-content-center me-2"
                   style={{
-                    width: '32px', 
-                    height: '32px', 
+                    width: '32px',
+                    height: '32px',
                     background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                     fontWeight: 'bold',
-                    fontSize: '0.9rem'
+                    fontSize: '0.9rem',
                   }}
                 >
                   {(localStorage.getItem('auth_user') || 'A').charAt(0).toUpperCase()}
@@ -936,7 +1187,6 @@ const Navbar = () => {
                 </span>
                 <i className={`fas fa-chevron-${showUserDropdown ? 'up' : 'down'} small`}></i>
               </div>
-              
             </div>
           </div>
         </div>
@@ -944,7 +1194,6 @@ const Navbar = () => {
 
       {renderNotificationPortal()}
       {renderUserDropdownPortal()}
-
     </>
   );
 };

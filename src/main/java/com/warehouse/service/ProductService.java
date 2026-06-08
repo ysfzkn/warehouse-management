@@ -20,6 +20,9 @@ public interface ProductService {
 
     Page<Product> getAllProducts(Pageable pageable, String search, Long categoryId, Long brandId, Long colorId);
 
+    Page<Product> getAllProducts(Pageable pageable, String search, Long categoryId, Long brandId, Long colorId,
+                                 com.warehouse.entity.ProductType productType);
+
     List<Product> getAllActiveProducts();
 
     Page<Product> getAllActiveProducts(Pageable pageable);

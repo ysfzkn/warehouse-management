@@ -314,51 +314,42 @@ public class CheckoutServiceImpl implements CheckoutService {
             subtotal = subtotal.add(lineTotal);
             vatTotal = vatTotal.add(vat);
 
-            // Pessimistic lock stock reservation (SELECT FOR UPDATE)
-            List<Stock> availableStocks = stockRepository.findAvailableByProductForUpdate(p.getId());
-            int remaining = ci.getQuantity();
-            Long reservedWarehouseId = null;
-            Long reservedStockId = null;
-            for (Stock stock : availableStocks) {
-                int avail = stock.getAvailableQuantity();
-                if (avail <= 0) continue;
-                int toReserve = Math.min(remaining, avail);
-                int oldReserved = stock.getReservedQuantity();
-                stock.setReservedQuantity(oldReserved + toReserve);
-                stockRepository.save(stock);
-
-                // Log stock reservation event
-                StockEvent event = new StockEvent();
-                event.setStockId(stock.getId());
-                event.setProductId(p.getId());
-                event.setEventType(StockEventType.RESERVED);
-                event.setOldValue(oldReserved);
-                event.setNewValue(stock.getReservedQuantity());
-                event.setSource(StockEventSource.ORDER);
-                event.setSourceDetail("Sipariş #" + orderNumber + " rezervasyonu (" + toReserve + " adet)");
-                event.setOrderNumber(orderNumber);
-                stockEventRepository.save(event);
-
-                remaining -= toReserve;
-                reservedWarehouseId = stock.getWarehouse().getId();
-                reservedStockId = stock.getId();
-                if (remaining <= 0) break;
-            }
-            if (remaining > 0) {
-                throw new WarehouseManagementException(ErrorCode.STOCK_RESERVATION_FAILED,
-                    p.getName() + " için yeterli stok bulunamadı.");
-            }
-
             OrderItem oi = new OrderItem();
             oi.setProduct(p);
-            oi.setProductSnapshot(Map.of("name", p.getName(), "sku", p.getSku(), "price", price.toString()));
             oi.setQuantity(ci.getQuantity());
             oi.setUnitPrice(price);
             oi.setVatRate(p.getVatRate() != null ? p.getVatRate() : BigDecimal.ZERO);
             oi.setSctRate(p.getSctRate() != null ? p.getSctRate() : BigDecimal.ZERO);
             oi.setLineTotal(lineTotal);
-            oi.setWarehouseId(reservedWarehouseId);
-            oi.setStockId(reservedStockId);
+
+            if (p.getProductType() == ProductType.BUNDLE) {
+                // A set has no stock of its own — reserve EACH member's stock.
+                List<BundleItem> members = p.getBundleItems();
+                if (members == null || members.isEmpty()) {
+                    throw new WarehouseManagementException(ErrorCode.STOCK_RESERVATION_FAILED, p.getName() + " seti boş.");
+                }
+                List<Map<String, Object>> reservedMembers = new ArrayList<>();
+                for (BundleItem bi : members) {
+                    Product m = bi.getProduct();
+                    int memberNeed = (bi.getQuantity() != null && bi.getQuantity() > 0 ? bi.getQuantity() : 1) * ci.getQuantity();
+                    reservedMembers.addAll(reserveStockFor(m.getId(), m.getName(), memberNeed, orderNumber));
+                }
+                Map<String, Object> snap = new LinkedHashMap<>();
+                snap.put("name", p.getName());
+                snap.put("sku", p.getSku());
+                snap.put("price", price.toString());
+                snap.put("isBundle", true);
+                snap.put("reservedMembers", reservedMembers); // for release/re-reserve on cancel
+                oi.setProductSnapshot(snap);
+                oi.setWarehouseId(null);
+                oi.setStockId(null);
+            } else {
+                List<Map<String, Object>> allocs = reserveStockFor(p.getId(), p.getName(), ci.getQuantity(), orderNumber);
+                Map<String, Object> last = allocs.get(allocs.size() - 1);
+                oi.setWarehouseId(((Number) last.get("warehouseId")).longValue());
+                oi.setStockId(((Number) last.get("stockId")).longValue());
+                oi.setProductSnapshot(Map.of("name", p.getName(), "sku", p.getSku(), "price", price.toString()));
+            }
             orderItems.add(oi);
         }
 
@@ -461,6 +452,52 @@ public class CheckoutServiceImpl implements CheckoutService {
             .grandTotal(order.getGrandTotal())
             .status(order.getStatus().name())
             .build();
+    }
+
+    /**
+     * Pessimistically reserves {@code needed} units of a product across its warehouse stocks
+     * (SELECT FOR UPDATE), logging a RESERVED stock event per allocation. Returns the list of
+     * allocations ({@code {productId, stockId, warehouseId, quantity}}) so a bundle can record
+     * exactly what it reserved (for release/re-reserve on cancel). Throws if stock is insufficient.
+     */
+    private List<Map<String, Object>> reserveStockFor(Long productId, String productName, int needed, String orderNumber) {
+        List<Stock> availableStocks = stockRepository.findAvailableByProductForUpdate(productId);
+        int remaining = needed;
+        List<Map<String, Object>> allocations = new ArrayList<>();
+        for (Stock stock : availableStocks) {
+            int avail = stock.getAvailableQuantity();
+            if (avail <= 0) continue;
+            int toReserve = Math.min(remaining, avail);
+            int oldReserved = stock.getReservedQuantity();
+            stock.setReservedQuantity(oldReserved + toReserve);
+            stockRepository.save(stock);
+
+            StockEvent event = new StockEvent();
+            event.setStockId(stock.getId());
+            event.setProductId(productId);
+            event.setEventType(StockEventType.RESERVED);
+            event.setOldValue(oldReserved);
+            event.setNewValue(stock.getReservedQuantity());
+            event.setSource(StockEventSource.ORDER);
+            event.setSourceDetail("Sipariş #" + orderNumber + " rezervasyonu (" + toReserve + " adet)");
+            event.setOrderNumber(orderNumber);
+            stockEventRepository.save(event);
+
+            Map<String, Object> alloc = new LinkedHashMap<>();
+            alloc.put("productId", productId);
+            alloc.put("stockId", stock.getId());
+            alloc.put("warehouseId", stock.getWarehouse().getId());
+            alloc.put("quantity", toReserve);
+            allocations.add(alloc);
+
+            remaining -= toReserve;
+            if (remaining <= 0) break;
+        }
+        if (remaining > 0) {
+            throw new WarehouseManagementException(ErrorCode.STOCK_RESERVATION_FAILED,
+                productName + " için yeterli stok bulunamadı.");
+        }
+        return allocations;
     }
 
     /**

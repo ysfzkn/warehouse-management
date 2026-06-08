@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { FiChevronLeft, FiChevronRight, FiZoomIn } from 'react-icons/fi';
+import { FiChevronLeft, FiChevronRight, FiZoomIn, FiX } from 'react-icons/fi';
 
 export default function ProductGallery({ images, productName }) {
   const [activeIndex, setActiveIndex] = useState(0);
@@ -8,6 +8,14 @@ export default function ProductGallery({ images, productName }) {
   const [zoomPos, setZoomPos] = useState({ x: 50, y: 50 });
   const touchRef = useRef({ startX: 0, startY: 0 });
   const galleryRef = useRef(null);
+
+  // Fullscreen lightbox with pinch / double-tap zoom (mobile-first, works on desktop too)
+  const [lightbox, setLightbox] = useState(false);
+  const [lbScale, setLbScale] = useState(1);
+  const [lbTrans, setLbTrans] = useState({ x: 0, y: 0 });
+  const pinchRef = useRef({ startDist: 0, startScale: 1, lastX: 0, lastY: 0, startX: 0, startY: 0 });
+  const lastTapRef = useRef(0);
+  const LB_MAX = 4;
 
   const sorted = images && images.length > 0 ? [...images].sort((a, b) => a.sortOrder - b.sortOrder) : [];
 
@@ -61,6 +69,96 @@ export default function ProductGallery({ images, productName }) {
     const x = ((e.clientX - rect.left) / rect.width) * 100;
     const y = ((e.clientY - rect.top) / rect.height) * 100;
     setZoomPos({ x, y });
+  };
+
+  // ----- Lightbox (pinch / double-tap zoom) -----
+  const resetLb = () => {
+    setLbScale(1);
+    setLbTrans({ x: 0, y: 0 });
+  };
+  const closeLightbox = () => {
+    setLightbox(false);
+    resetLb();
+  };
+  const lbPrev = () => {
+    goPrev();
+    resetLb();
+  };
+  const lbNext = () => {
+    goNext();
+    resetLb();
+  };
+
+  // Lock background scroll while the lightbox is open
+  useEffect(() => {
+    if (!lightbox) return undefined;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [lightbox]);
+
+  const lbTouchStart = (e) => {
+    if (e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      pinchRef.current.startDist = Math.hypot(dx, dy);
+      pinchRef.current.startScale = lbScale;
+    } else if (e.touches.length === 1) {
+      const t = e.touches[0];
+      pinchRef.current.lastX = t.clientX;
+      pinchRef.current.lastY = t.clientY;
+      pinchRef.current.startX = t.clientX;
+      pinchRef.current.startY = t.clientY;
+    }
+  };
+  const lbTouchMove = (e) => {
+    if (e.touches.length === 2 && pinchRef.current.startDist > 0) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const dist = Math.hypot(dx, dy);
+      const next = Math.min(
+        LB_MAX,
+        Math.max(1, pinchRef.current.startScale * (dist / pinchRef.current.startDist))
+      );
+      setLbScale(next);
+      if (next === 1) setLbTrans({ x: 0, y: 0 });
+    } else if (e.touches.length === 1 && lbScale > 1) {
+      const t = e.touches[0];
+      const tx = t.clientX - pinchRef.current.lastX;
+      const ty = t.clientY - pinchRef.current.lastY;
+      pinchRef.current.lastX = t.clientX;
+      pinchRef.current.lastY = t.clientY;
+      setLbTrans((p) => ({ x: p.x + tx, y: p.y + ty }));
+    }
+  };
+  const lbTouchEnd = (e) => {
+    if (e.touches.length === 0 && e.changedTouches.length === 1) {
+      const c = e.changedTouches[0];
+      const moved =
+        Math.abs(c.clientX - pinchRef.current.startX) + Math.abs(c.clientY - pinchRef.current.startY);
+      if (moved < 10) {
+        const now = Date.now();
+        if (now - lastTapRef.current < 300) {
+          // double-tap toggles 1x / 2x
+          if (lbScale > 1) resetLb();
+          else setLbScale(2);
+          lastTapRef.current = 0;
+        } else {
+          lastTapRef.current = now;
+        }
+      } else if (lbScale === 1) {
+        // horizontal swipe changes image when not zoomed
+        const dx = c.clientX - pinchRef.current.startX;
+        const dy = c.clientY - pinchRef.current.startY;
+        if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 40) {
+          if (dx > 0) lbPrev();
+          else lbNext();
+        }
+      }
+    }
+    pinchRef.current.startDist = 0;
   };
 
   if (sorted.length === 0) {
@@ -149,6 +247,18 @@ export default function ProductGallery({ images, productName }) {
             {activeIndex + 1} / {sorted.length}
           </div>
         )}
+
+        {/* Fullscreen / pinch-zoom button */}
+        <button
+          className="store-gallery-zoom-btn"
+          onClick={(e) => {
+            e.stopPropagation();
+            setLightbox(true);
+          }}
+          aria-label="Büyüt"
+        >
+          <FiZoomIn size={18} />
+        </button>
       </div>
 
       {/* Thumbnails */}
@@ -170,6 +280,66 @@ export default function ProductGallery({ images, productName }) {
               />
             </button>
           ))}
+        </div>
+      )}
+
+      {/* Fullscreen lightbox — pinch / double-tap zoom, swipe to change image */}
+      {lightbox && (
+        <div className="store-gallery-lightbox" onClick={closeLightbox} role="dialog" aria-modal="true">
+          <button
+            className="store-gallery-lb-close"
+            onClick={(e) => {
+              e.stopPropagation();
+              closeLightbox();
+            }}
+            aria-label="Kapat"
+          >
+            <FiX size={26} />
+          </button>
+          <img
+            src={mainImage.url || mainImage.thumbnailUrl}
+            alt={productName ? `${productName} - büyük görsel` : 'Ürün görseli'}
+            className="store-gallery-lb-img"
+            draggable={false}
+            onClick={(e) => e.stopPropagation()}
+            onTouchStart={lbTouchStart}
+            onTouchMove={lbTouchMove}
+            onTouchEnd={lbTouchEnd}
+            style={{
+              transform: `translate(${lbTrans.x}px, ${lbTrans.y}px) scale(${lbScale})`,
+              transition: pinchRef.current.startDist ? 'none' : 'transform 0.2s ease',
+              touchAction: 'none',
+              cursor: lbScale > 1 ? 'grab' : 'auto',
+            }}
+          />
+          {sorted.length > 1 && lbScale === 1 && (
+            <>
+              <button
+                className="store-gallery-arrow store-gallery-arrow-left"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  lbPrev();
+                }}
+                aria-label="Önceki görsel"
+              >
+                <FiChevronLeft size={24} />
+              </button>
+              <button
+                className="store-gallery-arrow store-gallery-arrow-right"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  lbNext();
+                }}
+                aria-label="Sonraki görsel"
+              >
+                <FiChevronRight size={24} />
+              </button>
+            </>
+          )}
+          <div className="store-gallery-lb-hint">
+            {sorted.length > 1 ? `${activeIndex + 1} / ${sorted.length} · ` : ''}
+            Yakınlaştırmak için çift dokun veya parmaklarınızı kullan
+          </div>
         </div>
       )}
     </div>

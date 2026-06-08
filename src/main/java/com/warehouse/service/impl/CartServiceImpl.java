@@ -233,10 +233,15 @@ public class CartServiceImpl implements CartService {
     private CartItemDto toCartItemDto(CartItem item) {
         Product product = item.getProduct();
         int available = 0;
-        try {
-            List<Stock> stocks = stockService.getStocksByProduct(product.getId());
-            available = stocks.stream().mapToInt(Stock::getAvailableQuantity).sum();
-        } catch (Exception ignored) {}
+        if (product.getProductType() == ProductType.BUNDLE) {
+            // A set has no stock of its own — derive how many complete sets are assemblable.
+            available = bundleAvailableSets(product);
+        } else {
+            try {
+                List<Stock> stocks = stockService.getStocksByProduct(product.getId());
+                available = stocks.stream().mapToInt(Stock::getAvailableQuantity).sum();
+            } catch (Exception ignored) {}
+        }
 
         BigDecimal unitPrice = product.getPrice() != null ? product.getPrice() : BigDecimal.ZERO;
         BigDecimal salePrice = product.getSalePrice();
@@ -267,5 +272,24 @@ public class CartServiceImpl implements CartService {
             .availableStock(available)
             .stockStatus(available > 0 ? "IN_STOCK" : "OUT_OF_STOCK")
             .build();
+    }
+
+    /** How many complete sets can be assembled from current member stock. */
+    private int bundleAvailableSets(Product bundle) {
+        List<BundleItem> members = bundle.getBundleItems();
+        if (members == null || members.isEmpty()) return 0;
+        int minSets = Integer.MAX_VALUE;
+        for (BundleItem bi : members) {
+            Product m = bi.getProduct();
+            if (m == null) continue;
+            int qty = bi.getQuantity() != null && bi.getQuantity() > 0 ? bi.getQuantity() : 1;
+            int memberAvail = 0;
+            try {
+                memberAvail = stockService.getStocksByProduct(m.getId()).stream()
+                    .mapToInt(Stock::getAvailableQuantity).sum();
+            } catch (Exception ignored) {}
+            minSets = Math.min(minSets, memberAvail / qty);
+        }
+        return minSets == Integer.MAX_VALUE ? 0 : minSets;
     }
 }

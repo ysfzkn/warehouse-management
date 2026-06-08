@@ -14,6 +14,9 @@ public class StoreProductDto {
     private String name;
     private String description;
     private String shortDescription;
+    // Effective warranty (product value, else category, else parent category)
+    private Integer warrantyMonths;
+    private String warrantyText;
     private List<java.util.Map<String, Object>> technicalSpecs;
     private String sku;
     private BigDecimal price;
@@ -49,6 +52,25 @@ public class StoreProductDto {
     // Reviews
     private Double averageRating;
     private long reviewCount;
+
+    // Product set (bundle)
+    private String productType; // "SIMPLE" | "BUNDLE"
+    private Integer bundleItemCount;
+    private BigDecimal membersOriginalTotal; // sum of members' current prices × qty (for "save X" display)
+    private List<StoreBundleItem> bundleItems; // members (detail only)
+
+    @Data
+    @Builder
+    public static class StoreBundleItem {
+        private Long productId;
+        private String slug;
+        private String name;
+        private String primaryImageUrl;
+        private Integer quantity;
+        private BigDecimal price;
+        private BigDecimal salePrice;
+        private String stockStatus;
+    }
 
     @Data
     @Builder
