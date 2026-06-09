@@ -388,16 +388,22 @@
   padding: 10px 16px 10px 40px;
   border: 2px solid var(--color-gray-200);
   font-size: var(--text-sm);
+  color: var(--color-gray-900, #111827);
   transition:
     border-color var(--transition-fast),
     box-shadow var(--transition-fast);
   background: var(--color-gray-50);
+}
+.store-search-input::placeholder {
+  color: var(--color-gray-400, #9ca3af);
+  opacity: 1;
 }
 .store-search-input:focus {
   border-color: var(--store-primary, #2563eb);
   outline: none;
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
   background: #fff;
+  color: var(--color-gray-900, #111827);
 }
 
 /* Header Actions */
