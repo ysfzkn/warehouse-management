@@ -165,11 +165,14 @@ public class CategoryController {
     }
 
     @PostMapping
-    public ResponseEntity<Category> createCategory(@Valid @RequestBody Category category) {
+    @org.springframework.transaction.annotation.Transactional
+    public ResponseEntity<CategoryDto> createCategory(@Valid @RequestBody Category category) {
         // Ensure this is always a main category (no parent)
         category.setParent(null);
         Category createdCategory = categoryService.createCategory(category);
-        return ResponseEntity.status(HttpStatus.CREATED).body(createdCategory);
+        // Return a DTO (not the entity) — with open-in-view=false the entity's lazy
+        // children/parent would throw LazyInitializationException during serialization.
+        return ResponseEntity.status(HttpStatus.CREATED).body(toDtoShallow(createdCategory));
     }
 
     @PostMapping("/batch")
@@ -179,15 +182,18 @@ public class CategoryController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Category> updateCategory(@PathVariable Long id, @Valid @RequestBody Category category) {
+    @org.springframework.transaction.annotation.Transactional
+    public ResponseEntity<CategoryDto> updateCategory(@PathVariable Long id, @Valid @RequestBody Category category) {
         Category updatedCategory = categoryService.updateCategory(id, category);
-        return ResponseEntity.ok(updatedCategory);
+        // DTO (not entity) — avoids LazyInitializationException on lazy children (open-in-view=false).
+        return ResponseEntity.ok(toDtoShallow(updatedCategory));
     }
 
     @PutMapping("/{id}/parent")
-    public ResponseEntity<Category> updateCategoryParent(@PathVariable Long id, @RequestParam(required = false) Long parentId) {
+    @org.springframework.transaction.annotation.Transactional
+    public ResponseEntity<CategoryDto> updateCategoryParent(@PathVariable Long id, @RequestParam(required = false) Long parentId) {
         Category updatedCategory = categoryService.updateCategoryParent(id, parentId);
-        return ResponseEntity.ok(updatedCategory);
+        return ResponseEntity.ok(toDtoShallow(updatedCategory));
     }
 
     @DeleteMapping("/{id}")
