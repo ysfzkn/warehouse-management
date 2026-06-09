@@ -206,7 +206,11 @@ export default function ProductSetForm({ product, onSuccess, onCancel }) {
 
     setLoading(true);
     try {
-      const finalSku = (sku.trim() || `SET-${Date.now().toString(36).toUpperCase()}`).toUpperCase();
+      // Keep a valid existing SKU; if missing or out of the 3..50 range auto-generate one,
+      // so the set always satisfies the backend's @Size(3..50) rule.
+      const trimmedSku = (sku || '').trim();
+      const validSku = trimmedSku.length >= 3 && trimmedSku.length <= 50;
+      const finalSku = (validSku ? trimmedSku : `SET-${Date.now().toString(36)}`).toUpperCase();
       const data = {
         name: name.trim(),
         sku: finalSku,
