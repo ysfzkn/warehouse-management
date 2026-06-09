@@ -110,11 +110,12 @@ const CategoryForm = ({ category, onSuccess, onCancel }) => {
       }
     } catch (error) {
       console.error('Error saving category:', error);
-      if (error.response?.data) {
-        setErrors({ general: error.response.data });
-      } else {
-        setErrors({ general: 'Kategori kaydedilirken hata oluştu' });
-      }
+      const data = error.response?.data;
+      const msg =
+        typeof data === 'string'
+          ? data
+          : data?.message || data?.error || 'Kategori kaydedilirken hata oluştu';
+      setErrors({ general: msg });
     } finally {
       setLoading(false);
     }
