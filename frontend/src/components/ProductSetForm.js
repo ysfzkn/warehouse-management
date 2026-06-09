@@ -64,6 +64,8 @@ export default function ProductSetForm({ product, onSuccess, onCancel }) {
   const [savedId, setSavedId] = useState(product?.id || null);
   const [images, setImages] = useState([]);
   const [uploading, setUploading] = useState(false);
+  const [dragIndex, setDragIndex] = useState(null);
+  const [dragOverIndex, setDragOverIndex] = useState(null);
 
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
@@ -290,6 +292,34 @@ export default function ProductSetForm({ product, onSuccess, onCancel }) {
     } catch {
       showFlash('Görsel silinemedi.', 'danger');
     }
+  };
+
+  // ---- Drag-and-drop image ordering ----
+  const persistImageOrder = async (ordered) => {
+    setImages(ordered);
+    if (!editId) return;
+    try {
+      await axios.put(
+        `/api/products/${editId}/images/reorder`,
+        ordered.map((i) => i.id)
+      );
+    } catch {
+      showFlash('Sıralama kaydedilemedi, lütfen tekrar deneyin.', 'danger');
+      loadImages(editId);
+    }
+  };
+
+  const handleImageDrop = (targetIndex) => {
+    if (dragIndex === null || dragIndex === targetIndex) {
+      setDragIndex(null);
+      return;
+    }
+    const sorted = [...images].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+    const [moved] = sorted.splice(dragIndex, 1);
+    sorted.splice(targetIndex, 0, moved);
+    const reindexed = sorted.map((img, i) => ({ ...img, sortOrder: i }));
+    setDragIndex(null);
+    persistImageOrder(reindexed);
   };
 
   return (
@@ -534,51 +564,83 @@ export default function ProductSetForm({ product, onSuccess, onCancel }) {
                   Yükleniyor...
                 </div>
               )}
+              {images.length > 1 && (
+                <p className="text-muted small mb-2">
+                  <i className="fas fa-arrows-alt me-1" />
+                  Sıralamak için görselleri sürükleyip bırakın.
+                </p>
+              )}
               <div className="d-flex flex-wrap gap-2">
-                {images.map((img) => (
-                  <div
-                    key={img.id}
-                    className="position-relative border rounded"
-                    style={{ width: 90, height: 90, overflow: 'hidden' }}
-                  >
-                    <img
-                      src={`/api/admin/products/images/${img.id}/view?thumbnail=true`}
-                      alt=""
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    />
-                    {img.primary && (
-                      <span
-                        className="badge bg-success position-absolute top-0 start-0"
-                        style={{ fontSize: 8 }}
-                      >
-                        Birincil
-                      </span>
-                    )}
+                {[...images]
+                  .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+                  .map((img, index) => (
                     <div
-                      className="position-absolute bottom-0 start-0 end-0 d-flex justify-content-between"
-                      style={{ background: 'rgba(0,0,0,0.55)' }}
+                      key={img.id}
+                      draggable
+                      onDragStart={() => setDragIndex(index)}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        if (dragIndex !== null && dragOverIndex !== index) setDragOverIndex(index);
+                      }}
+                      onDragLeave={() => setDragOverIndex((cur) => (cur === index ? null : cur))}
+                      onDrop={() => {
+                        handleImageDrop(index);
+                        setDragOverIndex(null);
+                      }}
+                      onDragEnd={() => {
+                        setDragIndex(null);
+                        setDragOverIndex(null);
+                      }}
+                      className={`position-relative border rounded ${dragIndex === index ? 'opacity-50' : ''}`}
+                      style={{
+                        width: 90,
+                        height: 90,
+                        overflow: 'hidden',
+                        cursor: 'grab',
+                        ...(dragIndex !== null && dragOverIndex === index && dragIndex !== index
+                          ? { outline: '2px dashed var(--store-primary, #2563eb)', outlineOffset: 2 }
+                          : {}),
+                      }}
                     >
-                      {!img.primary && (
+                      <img
+                        src={`/api/admin/products/images/${img.id}/view?thumbnail=true`}
+                        alt=""
+                        draggable={false}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      />
+                      {img.primary && (
+                        <span
+                          className="badge bg-success position-absolute top-0 start-0"
+                          style={{ fontSize: 8 }}
+                        >
+                          Birincil
+                        </span>
+                      )}
+                      <div
+                        className="position-absolute bottom-0 start-0 end-0 d-flex justify-content-between"
+                        style={{ background: 'rgba(0,0,0,0.55)' }}
+                      >
+                        {!img.primary && (
+                          <button
+                            type="button"
+                            className="btn btn-sm text-white p-0 px-1"
+                            title="Birincil yap"
+                            onClick={() => setPrimary(img.id)}
+                          >
+                            <i className="fas fa-star" style={{ fontSize: 11 }} />
+                          </button>
+                        )}
                         <button
                           type="button"
-                          className="btn btn-sm text-white p-0 px-1"
-                          title="Birincil yap"
-                          onClick={() => setPrimary(img.id)}
+                          className="btn btn-sm text-white p-0 px-1 ms-auto"
+                          title="Sil"
+                          onClick={() => deleteImage(img.id)}
                         >
-                          <i className="fas fa-star" style={{ fontSize: 11 }} />
+                          <i className="fas fa-trash" style={{ fontSize: 11 }} />
                         </button>
-                      )}
-                      <button
-                        type="button"
-                        className="btn btn-sm text-white p-0 px-1 ms-auto"
-                        title="Sil"
-                        onClick={() => deleteImage(img.id)}
-                      >
-                        <i className="fas fa-trash" style={{ fontSize: 11 }} />
-                      </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
               </div>
             </>
           )}
