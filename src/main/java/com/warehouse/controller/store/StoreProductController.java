@@ -25,6 +25,9 @@ import java.util.stream.Collectors;
 @RequestMapping("/api/store/products")
 public class StoreProductController {
 
+    /** Default warranty shown on every product when no product/category value is set. */
+    private static final int DEFAULT_WARRANTY_MONTHS = 24;
+
     private final ProductService productService;
     private final StockService stockService;
     private final ReviewRepository reviewRepository;
@@ -283,6 +286,11 @@ public class StoreProductController {
                     warrantyText = parent.getWarrantyText();
                 }
             }
+        }
+        // Site-wide default: every product shows at least this warranty unless a
+        // product/category value overrides it.
+        if (warrantyMonths == null && (warrantyText == null || warrantyText.isBlank())) {
+            warrantyMonths = DEFAULT_WARRANTY_MONTHS;
         }
 
         // Images — convert disk paths to accessible HTTP URLs
