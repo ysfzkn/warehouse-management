@@ -48,6 +48,8 @@ public class StoreProductDto {
     // Images
     private List<ImageDto> images;
     private String primaryImageUrl;
+    // Triple image set (product sets) — up to 3 dedicated slot images shown as a 3-column block
+    private List<ImageDto> setImages;
 
     // Reviews
     private Double averageRating;
@@ -82,5 +84,6 @@ public class StoreProductDto {
         private Integer height;
         private int sortOrder;
         private boolean primary;
+        private Integer slot;
     }
 }

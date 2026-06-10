@@ -293,14 +293,16 @@ public class StoreProductController {
             warrantyMonths = DEFAULT_WARRANTY_MONTHS;
         }
 
-        // Images — convert disk paths to accessible HTTP URLs
+        // Images — convert disk paths to accessible HTTP URLs.
+        // Gallery images (slot == null) feed the normal gallery + primary image; the
+        // three dedicated slot images (slot 1/2/3) feed the "triple image set" block.
         List<StoreProductDto.ImageDto> imageDtos = List.of();
+        List<StoreProductDto.ImageDto> setImageDtos = List.of();
         String primaryImageUrl = null;
         if (product.getImages() != null) {
             try {
-                imageDtos = product.getImages().stream()
-                    .sorted((a, b) -> Integer.compare(a.getSortOrder(), b.getSortOrder()))
-                    .map(img -> StoreProductDto.ImageDto.builder()
+                java.util.function.Function<ProductImage, StoreProductDto.ImageDto> toDto = img ->
+                    StoreProductDto.ImageDto.builder()
                         .id(img.getId())
                         .url("/api/admin/products/images/" + img.getId() + "/view")
                         .thumbnailUrl("/api/admin/products/images/" + img.getId() + "/view?thumbnail=true")
@@ -308,12 +310,24 @@ public class StoreProductController {
                         .height(img.getHeight())
                         .sortOrder(img.getSortOrder())
                         .primary(img.isPrimary())
-                        .build())
+                        .slot(img.getSlot())
+                        .build();
+                imageDtos = product.getImages().stream()
+                    .filter(img -> img.getSlot() == null)
+                    .sorted((a, b) -> Integer.compare(a.getSortOrder(), b.getSortOrder()))
+                    .map(toDto)
+                    .collect(Collectors.toList());
+                setImageDtos = product.getImages().stream()
+                    .filter(img -> img.getSlot() != null)
+                    .sorted(java.util.Comparator.comparingInt(ProductImage::getSlot))
+                    .map(toDto)
                     .collect(Collectors.toList());
                 primaryImageUrl = product.getImages().stream()
+                    .filter(img -> img.getSlot() == null)
                     .filter(ProductImage::isPrimary)
                     .findFirst()
                     .or(() -> product.getImages().stream()
+                        .filter(img -> img.getSlot() == null)
                         .min(java.util.Comparator.comparingInt(
                             img -> img.getSortOrder() == null ? Integer.MAX_VALUE : img.getSortOrder())))
                     .map(img -> "/api/admin/products/images/" + img.getId() + "/view?thumbnail=true")
@@ -353,6 +367,7 @@ public class StoreProductController {
             .stockStatus(stockStatus)
             .availableQuantity(totalAvailable)
             .images(imageDtos)
+            .setImages(setImageDtos)
             .primaryImageUrl(primaryImageUrl)
             .averageRating(avgRating)
             .reviewCount(reviewCount)

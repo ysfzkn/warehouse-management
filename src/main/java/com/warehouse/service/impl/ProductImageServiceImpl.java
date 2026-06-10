@@ -42,14 +42,29 @@ public class ProductImageServiceImpl implements ProductImageService {
                                           String contentType,
                                           InputStream inputStream,
                                           boolean primary) {
+        return addImageToProduct(productId, originalFileName, contentType, inputStream, primary, null);
+    }
+
+    @Override
+    public ProductImage addImageToProduct(Long productId,
+                                          String originalFileName,
+                                          String contentType,
+                                          InputStream inputStream,
+                                          boolean primary,
+                                          Integer slot) {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new WarehouseManagementException(ErrorCode.PRODUCT_NOT_FOUND));
 
-        List<ProductImage> existing = imageRepository.findByProductOrderBySortOrderAscIdAsc(product);
-        int nextSortOrder = existing.stream()
-                .map(ProductImage::getSortOrder)
-                .max(Integer::compareTo)
-                .orElse(-1) + 1;
+        if (slot != null && (slot < 1 || slot > 3)) {
+            throw new WarehouseManagementException(ErrorCode.INVALID_VALUE);
+        }
+
+        List<ProductImage> all = imageRepository.findByProductOrderBySortOrderAscIdAsc(product);
+        // Gallery ordering/primary logic considers only non-slot images so the
+        // triple-set slots never affect the main gallery.
+        List<ProductImage> gallery = all.stream()
+                .filter(img -> img.getSlot() == null)
+                .collect(java.util.stream.Collectors.toList());
 
         PhotoStorageService.StoredPhoto stored = photoStorageService.storeProductImage(
                 product.getId(),
@@ -67,11 +82,30 @@ public class ProductImageServiceImpl implements ProductImageService {
         image.setSizeBytes(stored.sizeBytes());
         image.setWidth(stored.width());
         image.setHeight(stored.height());
+
+        if (slot != null) {
+            // Triple-set slot: replace any existing image in this slot, never touch
+            // the gallery's primary/order.
+            all.stream()
+                    .filter(img -> slot.equals(img.getSlot()))
+                    .forEach(existingSlot -> deleteImage(existingSlot.getId()));
+            image.setSlot(slot);
+            image.setSortOrder(slot);
+            image.setPrimary(false);
+            ProductImage savedSlot = imageRepository.save(image);
+            logger.info("Product set slot {} image stored for product {} with id {}", slot, productId, savedSlot.getId());
+            return savedSlot;
+        }
+
+        int nextSortOrder = gallery.stream()
+                .map(ProductImage::getSortOrder)
+                .max(Integer::compareTo)
+                .orElse(-1) + 1;
         image.setSortOrder(nextSortOrder);
 
-        if (primary || existing.isEmpty()) {
+        if (primary || gallery.isEmpty()) {
             // Unset previous primary if needed
-            existing.stream()
+            gallery.stream()
                     .filter(ProductImage::isPrimary)
                     .forEach(img -> img.setPrimary(false));
             image.setPrimary(true);
@@ -79,7 +113,7 @@ public class ProductImageServiceImpl implements ProductImageService {
             image.setPrimary(false);
         }
 
-        existing.forEach(imageRepository::save);
+        gallery.forEach(imageRepository::save);
         ProductImage saved = imageRepository.save(image);
         logger.info("Product image stored for product {} with id {}", productId, saved.getId());
         return saved;
