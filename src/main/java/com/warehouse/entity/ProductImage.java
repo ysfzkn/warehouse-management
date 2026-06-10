@@ -55,6 +55,15 @@ public class ProductImage {
     @Column(name = "sort_order", nullable = false)
     private Integer sortOrder = 0;
 
+    /**
+     * Triple-image-set slot for product sets. {@code null} = normal gallery image;
+     * {@code 1}, {@code 2}, {@code 3} = one of the three dedicated set slots shown
+     * as a 3-column block on the storefront. Slot images are excluded from the
+     * normal gallery's ordering and primary-image logic.
+     */
+    @Column(name = "slot")
+    private Integer slot;
+
     @Column(name = "is_primary", nullable = false)
     private boolean primary = false;
 

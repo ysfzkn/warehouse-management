@@ -196,6 +196,33 @@ export default function ProductDetailPage() {
               </div>
             )}
           </div>
+
+          {/* Triple image set — 3 featured set images side-by-side */}
+          {Array.isArray(product.setImages) && product.setImages.length > 0 && (
+            <div className="mt-3">
+              <h6 className="fw-bold mb-2">Set İçeriği</h6>
+              <div className="row g-2">
+                {product.setImages.map((img) => (
+                  <div key={img.id} className="col-4">
+                    <a
+                      href={img.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="d-block border rounded overflow-hidden"
+                      style={{ aspectRatio: '1 / 1' }}
+                    >
+                      <img
+                        src={img.thumbnailUrl || img.url}
+                        alt={`${product.name} set görseli`}
+                        loading="lazy"
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      />
+                    </a>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Product Info */}

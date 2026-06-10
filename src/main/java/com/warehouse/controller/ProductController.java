@@ -192,6 +192,7 @@ public class ProductController {
             dto.put("relativePath", img.getRelativePath());
             dto.put("thumbnailPath", img.getThumbnailPath());
             dto.put("sortOrder", img.getSortOrder());
+            dto.put("slot", img.getSlot());
             dto.put("primary", img.isPrimary());
             dto.put("contentType", img.getContentType());
             dto.put("sizeBytes", img.getSizeBytes());
@@ -205,7 +206,8 @@ public class ProductController {
     @PostMapping("/{id}/images")
     public ResponseEntity<Map<String, Object>> uploadProductImage(@PathVariable Long id,
                                                            @RequestParam("file") MultipartFile file,
-                                                           @RequestParam(name = "primary", defaultValue = "false") boolean primary) {
+                                                           @RequestParam(name = "primary", defaultValue = "false") boolean primary,
+                                                           @RequestParam(name = "slot", required = false) Integer slot) {
         if (file.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("message", "Dosya boş."));
         }
@@ -218,13 +220,15 @@ public class ProductController {
                     file.getOriginalFilename(),
                     file.getContentType(),
                     file.getInputStream(),
-                    primary
+                    primary,
+                    slot
             );
             // Return simple DTO to avoid LazyInitializationException on product.category
             Map<String, Object> dto = new java.util.LinkedHashMap<>();
             dto.put("id", image.getId());
             dto.put("fileName", image.getFileName());
             dto.put("sortOrder", image.getSortOrder());
+            dto.put("slot", image.getSlot());
             dto.put("primary", image.isPrimary());
             dto.put("contentType", image.getContentType());
             dto.put("sizeBytes", image.getSizeBytes());

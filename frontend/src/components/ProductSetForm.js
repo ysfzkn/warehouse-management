@@ -258,15 +258,37 @@ export default function ProductSetForm({ product, onSuccess, onCancel }) {
     if (files.length === 0 || !editId) return;
     setUploading(true);
     try {
+      const galleryCount = images.filter((img) => !img.slot).length;
       for (let i = 0; i < files.length; i += 1) {
         const fd = new FormData();
         fd.append('file', files[i]);
-        if (images.length === 0 && i === 0) fd.append('primary', 'true');
+        if (galleryCount === 0 && i === 0) fd.append('primary', 'true');
         // eslint-disable-next-line no-await-in-loop
         await axios.post(`/api/products/${editId}/images`, fd, {
           headers: { 'Content-Type': 'multipart/form-data' },
         });
       }
+      loadImages(editId);
+    } catch {
+      showFlash('Görsel yüklenemedi.', 'danger');
+    } finally {
+      setUploading(false);
+      e.target.value = '';
+    }
+  };
+
+  // Upload a single image into a fixed triple-set slot (1, 2 or 3). The backend
+  // replaces any existing image already in that slot.
+  const handleSlotUpload = async (e, slot) => {
+    const file = (e.target.files || [])[0];
+    if (!file || !editId) return;
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      await axios.post(`/api/products/${editId}/images?slot=${slot}`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
       loadImages(editId);
     } catch {
       showFlash('Görsel yüklenemedi.', 'danger');
@@ -294,14 +316,15 @@ export default function ProductSetForm({ product, onSuccess, onCancel }) {
     }
   };
 
-  // ---- Drag-and-drop image ordering ----
-  const persistImageOrder = async (ordered) => {
-    setImages(ordered);
+  // ---- Drag-and-drop image ordering (gallery images only; slot images are fixed) ----
+  const persistImageOrder = async (orderedGallery) => {
+    const slotImgs = images.filter((i) => i.slot);
+    setImages([...orderedGallery, ...slotImgs]);
     if (!editId) return;
     try {
       await axios.put(
         `/api/products/${editId}/images/reorder`,
-        ordered.map((i) => i.id)
+        orderedGallery.map((i) => i.id)
       );
     } catch {
       showFlash('Sıralama kaydedilemedi, lütfen tekrar deneyin.', 'danger');
@@ -314,7 +337,7 @@ export default function ProductSetForm({ product, onSuccess, onCancel }) {
       setDragIndex(null);
       return;
     }
-    const sorted = [...images].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+    const sorted = images.filter((i) => !i.slot).sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
     const [moved] = sorted.splice(dragIndex, 1);
     sorted.splice(targetIndex, 0, moved);
     const reindexed = sorted.map((img, i) => ({ ...img, sortOrder: i }));
@@ -564,14 +587,15 @@ export default function ProductSetForm({ product, onSuccess, onCancel }) {
                   Yükleniyor...
                 </div>
               )}
-              {images.length > 1 && (
+              {images.filter((i) => !i.slot).length > 1 && (
                 <p className="text-muted small mb-2">
                   <i className="fas fa-arrows-alt me-1" />
                   Sıralamak için görselleri sürükleyip bırakın.
                 </p>
               )}
               <div className="d-flex flex-wrap gap-2">
-                {[...images]
+                {images
+                  .filter((i) => !i.slot)
                   .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
                   .map((img, index) => (
                     <div
@@ -646,6 +670,74 @@ export default function ProductSetForm({ product, onSuccess, onCancel }) {
           )}
         </div>
       </div>
+
+      {/* Triple image set — 3 fixed slots shown side-by-side on the storefront */}
+      {editId && (
+        <div className="card border-0 shadow-sm mb-3" style={{ borderRadius: 12 }}>
+          <div className="card-body">
+            <h6 className="fw-bold mb-1">
+              <i className="fas fa-th-large me-2 text-primary" />
+              3'lü Resim Seti
+            </h6>
+            <p className="text-muted small mb-3">
+              Set vitrininde yan yana gösterilecek 3 öne çıkan görsel. Normal galeriden ayrıdır.
+            </p>
+            <div className="row g-2">
+              {[1, 2, 3].map((slot) => {
+                const slotImg = images.find((i) => i.slot === slot);
+                return (
+                  <div key={slot} className="col-4">
+                    <div
+                      className="position-relative border rounded d-flex align-items-center justify-content-center"
+                      style={{ aspectRatio: '1 / 1', overflow: 'hidden', background: '#f8f9fa' }}
+                    >
+                      {slotImg ? (
+                        <>
+                          <img
+                            src={`/api/admin/products/images/${slotImg.id}/view?thumbnail=true`}
+                            alt={`Slot ${slot}`}
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                          />
+                          <span
+                            className="badge bg-dark position-absolute top-0 start-0 m-1"
+                            style={{ fontSize: 9 }}
+                          >
+                            {slot}
+                          </span>
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-danger position-absolute top-0 end-0 m-1 p-0 px-1"
+                            title="Sil"
+                            onClick={() => deleteImage(slotImg.id)}
+                            disabled={uploading}
+                          >
+                            <i className="fas fa-trash" style={{ fontSize: 10 }} />
+                          </button>
+                        </>
+                      ) : (
+                        <label
+                          className="text-center text-muted small m-0 w-100 h-100 d-flex flex-column align-items-center justify-content-center"
+                          style={{ cursor: uploading ? 'not-allowed' : 'pointer' }}
+                        >
+                          <i className="fas fa-plus mb-1" />
+                          Slot {slot}
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="d-none"
+                            onChange={(e) => handleSlotUpload(e, slot)}
+                            disabled={uploading}
+                          />
+                        </label>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Advanced (hidden by default) */}
       <button
