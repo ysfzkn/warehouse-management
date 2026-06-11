@@ -64,5 +64,8 @@ public interface ProductService {
 
     Page<Product> getAllActiveProducts(Pageable pageable, String search, Long categoryId, Long brandId, Long colorId);
 
+    Page<Product> getAllActiveProducts(Pageable pageable, String search, Long categoryId, Long brandId, Long colorId,
+                                       com.warehouse.entity.ProductType productType);
+
     Page<Product> getAllActiveProductsMultiFilter(Pageable pageable, String search, Long categoryId, List<Long> brandIds, List<Long> colorIds);
 }

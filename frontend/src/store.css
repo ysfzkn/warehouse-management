@@ -1000,9 +1000,23 @@
   box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
 }
 .card-badge-set {
-  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  background: linear-gradient(135deg, #7c3aed, #4f46e5);
   color: #fff;
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  box-shadow: 0 3px 10px rgba(99, 102, 241, 0.45);
+}
+
+/* Highlight the whole card when it's a set, so sets visibly stand apart from
+   normal category products in any grid. */
+.store-product-card:has(.card-badge-set) {
+  border: 1.5px solid rgba(124, 58, 237, 0.35);
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.12);
+}
+
+/* Homepage "Öne Çıkan Setler" section subtle tint */
+.store-section-sets {
+  background: linear-gradient(180deg, rgba(99, 102, 241, 0.06), rgba(99, 102, 241, 0));
 }
 .card-bundle-saving {
   display: inline-flex;
@@ -1169,6 +1183,14 @@
 }
 .store-bundle-member:hover {
   background: #eef2ff !important;
+}
+/* Gift member highlight — make the free gift visually pop in the set contents */
+.store-bundle-member-gift {
+  background: linear-gradient(90deg, rgba(22, 163, 74, 0.1), rgba(22, 163, 74, 0));
+  border: 1px dashed rgba(22, 163, 74, 0.5);
+}
+.store-bundle-member-gift:hover {
+  background: rgba(22, 163, 74, 0.16) !important;
 }
 .store-bundle-box {
   border-color: #e0e7ff !important;

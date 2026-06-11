@@ -60,8 +60,8 @@ export default function ProductCard({ product, onAddToCart }) {
           <div className="card-badges">
             {product.productType === 'BUNDLE' && (
               <span className="card-badge card-badge-set">
-                <FiPackage size={10} className="me-1" />
-                Set{product.bundleItemCount ? ` · ${product.bundleItemCount} ürün` : ''}
+                <FiPackage size={11} className="me-1" />
+                {product.bundleItemCount ? `${product.bundleItemCount} Ürün Bir Arada` : 'SET'}
               </span>
             )}
             {product.featured && (

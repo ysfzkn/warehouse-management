@@ -453,6 +453,7 @@ public class ProductController {
                 }
                 b.quantity = bi.getQuantity();
                 b.sortOrder = bi.getSortOrder();
+                b.isGift = bi.isGift();
                 return b;
             }).collect(java.util.stream.Collectors.toList());
             dto.bundleItemCount = dto.bundleItems.size();

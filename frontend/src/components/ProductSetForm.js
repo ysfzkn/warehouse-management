@@ -34,6 +34,7 @@ const mapMember = (b) => ({
   price: b.price,
   salePrice: b.salePrice,
   quantity: b.quantity || 1,
+  isGift: !!b.isGift,
 });
 
 /** Accept either a plain array or a paginated { content: [...] } response. */
@@ -191,7 +192,8 @@ export default function ProductSetForm({ product, onSuccess, onCancel }) {
 
   // Set base price is ALWAYS the sum of member prices (auto, read-only). The admin only
   // optionally enters a discounted (campaign) price.
-  const membersTotal = members.reduce((sum, m) => sum + effective(m) * (m.quantity || 1), 0);
+  // Gift members are free → excluded from the set's price total.
+  const membersTotal = members.reduce((sum, m) => sum + (m.isGift ? 0 : effective(m) * (m.quantity || 1)), 0);
   const hasSale = salePrice !== '' && Number(salePrice) > 0;
   const savings = hasSale && membersTotal > 0 ? membersTotal - Number(salePrice) : 0;
 
@@ -230,6 +232,7 @@ export default function ProductSetForm({ product, onSuccess, onCancel }) {
           productId: m.productId,
           quantity: Math.max(1, m.quantity || 1),
           sortOrder: i,
+          isGift: !!m.isGift,
         })),
       };
 
@@ -277,18 +280,23 @@ export default function ProductSetForm({ product, onSuccess, onCancel }) {
     }
   };
 
-  // Upload a single image into a fixed triple-set slot (1, 2 or 3). The backend
-  // replaces any existing image already in that slot.
-  const handleSlotUpload = async (e, slot) => {
-    const file = (e.target.files || [])[0];
-    if (!file || !editId) return;
+  // Add one or more showcase ("set vitrin") images. Each file is uploaded into the
+  // next free slot number, so a set can have any number of showcase images.
+  const handleAddShowcaseImages = async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0 || !editId) return;
     setUploading(true);
     try {
-      const fd = new FormData();
-      fd.append('file', file);
-      await axios.post(`/api/products/${editId}/images?slot=${slot}`, fd, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      let nextSlot = images.filter((i) => i.slot).reduce((max, i) => Math.max(max, i.slot), 0) + 1;
+      for (let i = 0; i < files.length; i += 1) {
+        const fd = new FormData();
+        fd.append('file', files[i]);
+        // eslint-disable-next-line no-await-in-loop
+        await axios.post(`/api/products/${editId}/images?slot=${nextSlot}`, fd, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        nextSlot += 1;
+      }
       loadImages(editId);
     } catch {
       showFlash('Görsel yüklenemedi.', 'danger');
@@ -671,69 +679,78 @@ export default function ProductSetForm({ product, onSuccess, onCancel }) {
         </div>
       </div>
 
-      {/* Triple image set — 3 fixed slots shown side-by-side on the storefront */}
+      {/* Set showcase images — any number of featured images shown on the storefront */}
       {editId && (
         <div className="card border-0 shadow-sm mb-3" style={{ borderRadius: 12 }}>
           <div className="card-body">
             <h6 className="fw-bold mb-1">
               <i className="fas fa-th-large me-2 text-primary" />
-              3'lü Resim Seti
+              Set Vitrin Görselleri
             </h6>
             <p className="text-muted small mb-3">
-              Set vitrininde yan yana gösterilecek 3 öne çıkan görsel. Normal galeriden ayrıdır.
+              Set sayfasında öne çıkan görseller. İstediğin kadar ekleyebilirsin; normal galeriden ayrıdır.
             </p>
             <div className="row g-2">
-              {[1, 2, 3].map((slot) => {
-                const slotImg = images.find((i) => i.slot === slot);
-                return (
-                  <div key={slot} className="col-4">
+              {images
+                .filter((i) => i.slot)
+                .sort((a, b) => a.slot - b.slot)
+                .map((slotImg, idx) => (
+                  <div key={slotImg.id} className="col-4 col-md-3">
                     <div
                       className="position-relative border rounded d-flex align-items-center justify-content-center"
                       style={{ aspectRatio: '1 / 1', overflow: 'hidden', background: '#f8f9fa' }}
                     >
-                      {slotImg ? (
-                        <>
-                          <img
-                            src={`/api/admin/products/images/${slotImg.id}/view?thumbnail=true`}
-                            alt={`Slot ${slot}`}
-                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                          />
-                          <span
-                            className="badge bg-dark position-absolute top-0 start-0 m-1"
-                            style={{ fontSize: 9 }}
-                          >
-                            {slot}
-                          </span>
-                          <button
-                            type="button"
-                            className="btn btn-sm btn-danger position-absolute top-0 end-0 m-1 p-0 px-1"
-                            title="Sil"
-                            onClick={() => deleteImage(slotImg.id)}
-                            disabled={uploading}
-                          >
-                            <i className="fas fa-trash" style={{ fontSize: 10 }} />
-                          </button>
-                        </>
-                      ) : (
-                        <label
-                          className="text-center text-muted small m-0 w-100 h-100 d-flex flex-column align-items-center justify-content-center"
-                          style={{ cursor: uploading ? 'not-allowed' : 'pointer' }}
-                        >
-                          <i className="fas fa-plus mb-1" />
-                          Slot {slot}
-                          <input
-                            type="file"
-                            accept="image/*"
-                            className="d-none"
-                            onChange={(e) => handleSlotUpload(e, slot)}
-                            disabled={uploading}
-                          />
-                        </label>
-                      )}
+                      <img
+                        src={`/api/admin/products/images/${slotImg.id}/view?thumbnail=true`}
+                        alt={`Vitrin ${idx + 1}`}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      />
+                      <span
+                        className="badge bg-dark position-absolute top-0 start-0 m-1"
+                        style={{ fontSize: 9 }}
+                      >
+                        {idx + 1}
+                      </span>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-danger position-absolute top-0 end-0 m-1 p-0 px-1"
+                        title="Sil"
+                        onClick={() => deleteImage(slotImg.id)}
+                        disabled={uploading}
+                      >
+                        <i className="fas fa-trash" style={{ fontSize: 10 }} />
+                      </button>
                     </div>
                   </div>
-                );
-              })}
+                ))}
+              {/* Add tile */}
+              <div className="col-4 col-md-3">
+                <label
+                  className="position-relative border rounded border-2 border-dashed d-flex flex-column align-items-center justify-content-center text-center text-muted small m-0 w-100"
+                  style={{
+                    aspectRatio: '1 / 1',
+                    cursor: uploading ? 'not-allowed' : 'pointer',
+                    background: '#fff',
+                  }}
+                >
+                  {uploading ? (
+                    <span className="spinner-border spinner-border-sm" />
+                  ) : (
+                    <>
+                      <i className="fas fa-plus mb-1" />
+                      Görsel Ekle
+                    </>
+                  )}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="d-none"
+                    onChange={handleAddShowcaseImages}
+                    disabled={uploading}
+                  />
+                </label>
+              </div>
             </div>
           </div>
         </div>

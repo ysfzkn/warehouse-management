@@ -72,6 +72,7 @@ public class StoreProductDto {
         private BigDecimal price;
         private BigDecimal salePrice;
         private String stockStatus;
+        private boolean gift;
     }
 
     @Data

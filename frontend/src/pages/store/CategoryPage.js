@@ -104,6 +104,7 @@ export default function CategoryPage() {
   const sentinelRef = useRef(null);
 
   const searchQuery = searchParams.get('q');
+  const productTypeFilter = searchParams.get('productType');
 
   // Load category by slug
   useEffect(() => {
@@ -173,6 +174,7 @@ export default function CategoryPage() {
     if (priceApplied.min) params.minPrice = priceApplied.min;
     if (priceApplied.max) params.maxPrice = priceApplied.max;
     if (searchQuery) params.search = searchQuery;
+    if (productTypeFilter) params.productType = productTypeFilter;
     axios
       .get('/api/store/products', { params })
       .then((r) => {
@@ -195,6 +197,7 @@ export default function CategoryPage() {
     selectedColors,
     priceApplied,
     searchQuery,
+    productTypeFilter,
     categoryReady,
   ]);
 

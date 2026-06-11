@@ -13,7 +13,7 @@ import {
   buildHomeLocalKeywords,
   getLocalCity,
 } from '../../utils/seo';
-import { FiShoppingBag, FiArrowRight, FiStar, FiZap, FiTrendingUp } from 'react-icons/fi';
+import { FiShoppingBag, FiArrowRight, FiStar, FiZap, FiTrendingUp, FiPackage } from 'react-icons/fi';
 
 export default function HomePage() {
   const { cart } = useOutletContext();
@@ -22,6 +22,7 @@ export default function HomePage() {
   const [featured, setFeatured] = useState([]);
   const [newProducts, setNewProducts] = useState([]);
   const [saleProducts, setSaleProducts] = useState([]);
+  const [sets, setSets] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -34,8 +35,11 @@ export default function HomePage() {
         .get('/api/store/products?size=8&sortBy=createdAt&sortDir=desc')
         .catch(() => ({ data: { content: [] } })),
       axios.get('/api/store/categories/tree').catch(() => ({ data: [] })),
+      axios
+        .get('/api/store/products?size=8&productType=BUNDLE&sortBy=createdAt&sortDir=desc')
+        .catch(() => ({ data: { content: [] } })),
     ])
-      .then(([featuredRes, newRes, catRes]) => {
+      .then(([featuredRes, newRes, catRes, setsRes]) => {
         const allFeatured = featuredRes.data?.content || [];
         const allNew = newRes.data?.content || [];
         setFeatured(allFeatured.filter((p) => p.featured));
@@ -48,6 +52,7 @@ export default function HomePage() {
         if (allFeatured.filter((p) => p.featured).length === 0) setFeatured(allFeatured.slice(0, 8));
         if (allNew.filter((p) => p.isNew).length === 0) setNewProducts(allNew.slice(0, 8));
         setCategories(catRes.data || []);
+        setSets(setsRes.data?.content || []);
       })
       .finally(() => setLoading(false));
   }, []);
@@ -61,7 +66,8 @@ export default function HomePage() {
     }
   };
 
-  const hasContent = featured.length > 0 || newProducts.length > 0 || categories.length > 0;
+  const hasContent =
+    featured.length > 0 || newProducts.length > 0 || categories.length > 0 || sets.length > 0;
 
   const ProductSection = ({ title, icon, products, linkTo, linkLabel, bgClass }) => (
     <section className={`store-section ${bgClass || ''}`}>
@@ -146,6 +152,18 @@ export default function HomePage() {
             </div>
           </div>
         </section>
+      )}
+
+      {/* Product Sets (bundles) — distinguished from normal categories */}
+      {sets.length > 0 && (
+        <ProductSection
+          title="Öne Çıkan Setler"
+          icon={<FiPackage className="text-primary me-2" />}
+          products={sets}
+          linkTo="/kategori/tumu?productType=BUNDLE"
+          linkLabel="Tüm Setler"
+          bgClass="store-section-sets"
+        />
       )}
 
       {/* Sale Products */}

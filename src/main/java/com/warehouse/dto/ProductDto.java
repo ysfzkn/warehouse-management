@@ -61,6 +61,7 @@ public class ProductDto {
         public Integer sortOrder;
         public BigDecimal price;
         public BigDecimal salePrice;
+        public boolean isGift;
     }
 
     public static class CategoryInfo {

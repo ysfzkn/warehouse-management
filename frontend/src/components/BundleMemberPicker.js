@@ -73,6 +73,9 @@ const BundleMemberPicker = ({ members = [], onChange, excludeProductId }) => {
   const setQty = (productId, qty) =>
     onChange(members.map((m) => (m.productId === productId ? { ...m, quantity: Math.max(1, qty) } : m)));
 
+  const toggleGift = (productId) =>
+    onChange(members.map((m) => (m.productId === productId ? { ...m, isGift: !m.isGift } : m)));
+
   const move = (index, dir) => {
     const next = [...members];
     const target = index + dir;
@@ -81,7 +84,7 @@ const BundleMemberPicker = ({ members = [], onChange, excludeProductId }) => {
     onChange(next);
   };
 
-  const membersTotal = members.reduce((sum, m) => sum + effective(m) * (m.quantity || 1), 0);
+  const membersTotal = members.reduce((sum, m) => sum + (m.isGift ? 0 : effective(m) * (m.quantity || 1)), 0);
 
   return (
     <div className="card border-0 shadow-sm mb-3" style={{ borderRadius: 12 }}>
@@ -178,11 +181,27 @@ const BundleMemberPicker = ({ members = [], onChange, excludeProductId }) => {
                     </button>
                   </div>
                   <div className="flex-grow-1 min-w-0">
-                    <div className="fw-medium text-truncate">{m.name}</div>
+                    <div className="fw-medium text-truncate">
+                      {m.name}
+                      {m.isGift && (
+                        <span className="badge bg-success ms-2" style={{ fontSize: 10 }}>
+                          <i className="fas fa-gift me-1" />
+                          Hediye
+                        </span>
+                      )}
+                    </div>
                     <small className="text-muted">
-                      SKU: {m.sku} · {fmt(effective(m))}
+                      SKU: {m.sku} · {m.isGift ? 'Ücretsiz' : fmt(effective(m))}
                     </small>
                   </div>
+                  <button
+                    type="button"
+                    className={`btn btn-sm ${m.isGift ? 'btn-success' : 'btn-outline-success'}`}
+                    onClick={() => toggleGift(m.productId)}
+                    title={m.isGift ? 'Hediye işaretini kaldır' : 'Hediye olarak işaretle'}
+                  >
+                    <i className="fas fa-gift" />
+                  </button>
                   <div className="d-flex align-items-center gap-1">
                     <label className="small text-muted mb-0 me-1">Adet</label>
                     <input
