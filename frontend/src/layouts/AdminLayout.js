@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Outlet, Navigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import { AdminToastProvider } from '../components/AdminToast';
 import AssistantWidget from '../components/AssistantWidget';
 import { useAssistantFlags } from '../hooks/useAssistantFlags';
 import { useSessionGuard } from '../hooks/useSessionGuard';
+import { useSiteSettings } from '../hooks/useSiteSettings';
 import SessionWarningModal from '../components/SessionWarningModal';
 
 /**
@@ -38,6 +39,25 @@ const wmsAssistantConfig = {
 export default function AdminLayout() {
   const token = localStorage.getItem('auth_token');
   const { flags } = useAssistantFlags();
+  const siteSettings = useSiteSettings();
+
+  // Dynamic browser-tab icon + title from site settings. Prefer a dedicated
+  // favicon; if none was uploaded, fall back to the brand logo so the tab icon
+  // automatically matches the admin-uploaded logo.
+  const faviconUrl = siteSettings.get('site_favicon_url', '') || siteSettings.get('site_logo_url', '');
+  const siteName = siteSettings.get('site_name', '');
+  useEffect(() => {
+    if (faviconUrl) {
+      document.querySelectorAll("link[rel*='icon']").forEach((el) => el.remove());
+      const link = document.createElement('link');
+      link.rel = 'icon';
+      link.href = faviconUrl + (faviconUrl.includes('?') ? '&' : '?') + 'v=' + Date.now();
+      document.head.appendChild(link);
+    }
+    if (siteName) {
+      document.title = siteName;
+    }
+  }, [faviconUrl, siteName]);
 
   // Session guard — warn 2 min before JWT expiry, idle logout after 30 min inactivity
   const { warningOpen, secondsLeft, dismiss, logoutNow } = useSessionGuard({

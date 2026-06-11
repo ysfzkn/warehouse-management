@@ -680,7 +680,11 @@ export default function AdminSiteSettings() {
       const settingKey = isLogo ? 'site_logo_url' : 'site_favicon_url';
       setSettings((s) => ({ ...s, [settingKey]: newUrl }));
       setOriginalSettings((s) => ({ ...s, [settingKey]: newUrl }));
-      if (!isLogo && newUrl) {
+      // Live-update the browser tab icon. A dedicated favicon always wins; when a
+      // logo is uploaded and no separate favicon exists, use the logo so the tab
+      // icon automatically matches the brand logo.
+      const shouldUpdateFavicon = !isLogo || !(settings.site_favicon_url || '').trim();
+      if (shouldUpdateFavicon && newUrl) {
         document.querySelectorAll("link[rel*='icon']").forEach((el) => el.remove());
         const link = document.createElement('link');
         link.rel = 'icon';

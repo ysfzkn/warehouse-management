@@ -72,9 +72,11 @@ export default function StoreLayout() {
     );
   }, [assistantFlags]);
 
-  // Dynamic favicon and title from site settings
+  // Dynamic favicon and title from site settings.
+  // Prefer a dedicated favicon; if none was uploaded, fall back to the brand
+  // logo so the tab icon automatically matches the admin-uploaded logo.
   useEffect(() => {
-    const faviconUrl = siteSettings.get('site_favicon_url', '');
+    const faviconUrl = siteSettings.get('site_favicon_url', '') || siteSettings.get('site_logo_url', '');
     if (faviconUrl) {
       // Remove ALL existing favicon links to prevent conflicts
       document.querySelectorAll("link[rel*='icon']").forEach((el) => el.remove());

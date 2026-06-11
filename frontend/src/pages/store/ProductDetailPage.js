@@ -24,6 +24,7 @@ import {
   FiPhone,
   FiMessageCircle,
   FiChevronDown,
+  FiGift,
 } from 'react-icons/fi';
 import { useWishlist } from '../../components/store/WishlistContext';
 import { useSiteSettings } from '../../hooks/useSiteSettings';
@@ -197,13 +198,13 @@ export default function ProductDetailPage() {
             )}
           </div>
 
-          {/* Triple image set — 3 featured set images side-by-side */}
+          {/* Set showcase images — any number of featured images in a responsive grid */}
           {Array.isArray(product.setImages) && product.setImages.length > 0 && (
             <div className="mt-3">
               <h6 className="fw-bold mb-2">Set İçeriği</h6>
               <div className="row g-2">
                 {product.setImages.map((img) => (
-                  <div key={img.id} className="col-4">
+                  <div key={img.id} className="col-6 col-md-4">
                     <a
                       href={img.url}
                       target="_blank"
@@ -356,7 +357,7 @@ export default function ProductDetailPage() {
                     <Link
                       key={m.productId}
                       to={`/urun/${m.slug}`}
-                      className="d-flex align-items-center gap-3 text-decoration-none text-dark p-2 rounded store-bundle-member"
+                      className={`d-flex align-items-center gap-3 text-decoration-none text-dark p-2 rounded store-bundle-member ${m.gift ? 'store-bundle-member-gift' : ''}`}
                     >
                       <div className="store-bundle-thumb">
                         {m.primaryImageUrl ? (
@@ -366,12 +367,26 @@ export default function ProductDetailPage() {
                         )}
                       </div>
                       <div className="flex-grow-1 min-w-0">
-                        <div className="small fw-medium text-truncate">{m.name}</div>
-                        <div className="d-flex align-items-center gap-2">
-                          {mEff != null && (
-                            <span className="text-muted" style={{ fontSize: 12 }}>
-                              {fmtTRY(mEff)}
+                        <div className="small fw-medium text-truncate">
+                          {m.name}
+                          {m.gift && (
+                            <span className="badge bg-success ms-2" style={{ fontSize: 9 }}>
+                              <FiGift size={9} className="me-1" />
+                              Hediye
                             </span>
+                          )}
+                        </div>
+                        <div className="d-flex align-items-center gap-2">
+                          {m.gift ? (
+                            <span className="fw-bold text-success" style={{ fontSize: 12 }}>
+                              Ücretsiz
+                            </span>
+                          ) : (
+                            mEff != null && (
+                              <span className="text-muted" style={{ fontSize: 12 }}>
+                                {fmtTRY(mEff)}
+                              </span>
+                            )
                           )}
                           {m.stockStatus === 'OUT_OF_STOCK' && (
                             <span className="badge bg-danger" style={{ fontSize: 9 }}>

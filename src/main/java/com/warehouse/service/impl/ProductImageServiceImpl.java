@@ -55,7 +55,7 @@ public class ProductImageServiceImpl implements ProductImageService {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new WarehouseManagementException(ErrorCode.PRODUCT_NOT_FOUND));
 
-        if (slot != null && (slot < 1 || slot > 3)) {
+        if (slot != null && (slot < 1 || slot > 50)) {
             throw new WarehouseManagementException(ErrorCode.INVALID_VALUE);
         }
 

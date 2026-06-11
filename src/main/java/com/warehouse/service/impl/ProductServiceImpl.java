@@ -263,11 +263,13 @@ public class ProductServiceImpl implements ProductService {
             }
             if (!desiredIds.add(memberId)) continue; // de-duplicate
             int qty = Math.max(1, toIntOrDefault(ref.get("quantity"), 1));
+            boolean gift = toBool(ref.get("isGift"));
 
             BundleItem existing = existingByProduct.get(memberId);
             if (existing != null) {
                 existing.setQuantity(qty);
                 existing.setSortOrder(order++);
+                existing.setGift(gift);
             } else {
                 Product member = productRepository.findById(memberId)
                         .orElseThrow(() -> new WarehouseManagementException(ErrorCode.PRODUCT_NOT_FOUND, BusinessMessages.ID_PREFIX + memberId));
@@ -280,6 +282,7 @@ public class ProductServiceImpl implements ProductService {
                 created.setProduct(member);
                 created.setQuantity(qty);
                 created.setSortOrder(order++);
+                created.setGift(gift);
                 current.add(created);
             }
         }
@@ -326,6 +329,12 @@ public class ProductServiceImpl implements ProductService {
         } catch (NumberFormatException e) {
             return def;
         }
+    }
+
+    private static boolean toBool(Object v) {
+        if (v == null) return false;
+        if (v instanceof Boolean b) return b;
+        return "true".equalsIgnoreCase(v.toString().trim()) || "1".equals(v.toString().trim());
     }
 
     @Override
@@ -620,7 +629,14 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional(readOnly = true)
     public Page<Product> getAllActiveProducts(Pageable pageable, String search, Long categoryId, Long brandId, Long colorId) {
-        return productRepository.findActiveByFilters(search, categoryId, brandId, colorId, pageable);
+        return productRepository.findActiveByFilters(search, categoryId, brandId, colorId, null, pageable);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<Product> getAllActiveProducts(Pageable pageable, String search, Long categoryId, Long brandId, Long colorId,
+                                              ProductType productType) {
+        return productRepository.findActiveByFilters(search, categoryId, brandId, colorId, productType, pageable);
     }
 
     @Override

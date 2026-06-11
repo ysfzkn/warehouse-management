@@ -224,12 +224,14 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
           AND (:categoryId IS NULL OR c.id = :categoryId OR cp.id = :categoryId)
           AND (:brandId IS NULL OR b.id = :brandId)
           AND (:colorId IS NULL OR col.id = :colorId)
+          AND (:productType IS NULL OR p.productType = :productType)
     """)
     @EntityGraph(value = Product.GRAPH_WITH_RELATIONS, type = EntityGraph.EntityGraphType.LOAD)
     Page<Product> findActiveByFilters(@Param("search") String search,
                                       @Param("categoryId") Long categoryId,
                                       @Param("brandId") Long brandId,
                                       @Param("colorId") Long colorId,
+                                      @Param("productType") com.warehouse.entity.ProductType productType,
                                       Pageable pageable);
 
     @Query("""

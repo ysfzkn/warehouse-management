@@ -62,6 +62,14 @@ public class BundleItem {
     @Column(name = "sort_order", nullable = false)
     private Integer sortOrder = 0;
 
+    /**
+     * When true this member is a gift: it still ships with the set (consuming real
+     * stock) but is excluded from the set's price total and shown with a "Hediye"
+     * badge on the storefront.
+     */
+    @Column(name = "is_gift", nullable = false)
+    private boolean gift = false;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

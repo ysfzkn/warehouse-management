@@ -99,10 +99,21 @@ public class StoreProductController {
             @RequestParam(required = false) java.math.BigDecimal minPrice,
             @RequestParam(required = false) java.math.BigDecimal maxPrice,
             @RequestParam(defaultValue = "createdAt") String sortBy,
-            @RequestParam(defaultValue = "desc") String sortDir) {
+            @RequestParam(defaultValue = "desc") String sortDir,
+            @RequestParam(required = false) String productType) {
 
         Sort sort = sortDir.equalsIgnoreCase("asc") ? Sort.by(sortBy).ascending() : Sort.by(sortBy).descending();
         Pageable pageable = PageRequest.of(page, size, sort);
+
+        // Optional product-type filter (e.g. ?productType=BUNDLE for sets only)
+        ProductType typeFilter = null;
+        if (productType != null && !productType.isBlank()) {
+            try {
+                typeFilter = ProductType.valueOf(productType.trim().toUpperCase());
+            } catch (IllegalArgumentException ignored) {
+                // unknown value → no type filter
+            }
+        }
 
         // Support multi-select: brandIds/colorIds take precedence over single brandId/colorId
         java.util.List<Long> effectiveBrandIds = brandIds != null && !brandIds.isEmpty() ? brandIds : (brandId != null ? java.util.List.of(brandId) : null);
@@ -112,7 +123,7 @@ public class StoreProductController {
         if (effectiveBrandIds != null || effectiveColorIds != null) {
             productPage = productService.getAllActiveProductsMultiFilter(pageable, search, categoryId, effectiveBrandIds, effectiveColorIds);
         } else {
-            productPage = productService.getAllActiveProducts(pageable, search, categoryId, null, null);
+            productPage = productService.getAllActiveProducts(pageable, search, categoryId, null, null, typeFilter);
         }
 
         // Apply price filter in-memory (simpler than complex JPA spec for now)
@@ -243,8 +254,12 @@ public class StoreProductController {
                     int qty = bi.getQuantity() != null && bi.getQuantity() > 0 ? bi.getQuantity() : 1;
                     int memberAvail = memberAvailable(m.getId());
                     minSets = Math.min(minSets, memberAvail / qty);
-                    java.math.BigDecimal mPrice = effectivePrice(m);
-                    if (mPrice != null) sum = sum.add(mPrice.multiply(java.math.BigDecimal.valueOf(qty)));
+                    // Gift members ship with the set (so they count toward availability)
+                    // but are free → excluded from the members' price total.
+                    if (!bi.isGift()) {
+                        java.math.BigDecimal mPrice = effectivePrice(m);
+                        if (mPrice != null) sum = sum.add(mPrice.multiply(java.math.BigDecimal.valueOf(qty)));
+                    }
                     if (includeSpecs) {
                         bundleMemberDtos.add(StoreProductDto.StoreBundleItem.builder()
                             .productId(m.getId())
@@ -255,6 +270,7 @@ public class StoreProductController {
                             .price(m.getPrice())
                             .salePrice(m.getSalePrice())
                             .stockStatus(memberAvail > 0 ? "IN_STOCK" : "OUT_OF_STOCK")
+                            .gift(bi.isGift())
                             .build());
                     }
                 }
