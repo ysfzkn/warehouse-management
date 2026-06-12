@@ -10,11 +10,14 @@ import com.warehouse.entity.Brand;
 import com.warehouse.entity.Color;
 import com.warehouse.exception.ErrorCode;
 import com.warehouse.exception.WarehouseManagementException;
+import com.warehouse.entity.VariantGroup;
+import com.warehouse.dto.ProductDto;
 import com.warehouse.repository.ProductRepository;
 import com.warehouse.repository.CategoryRepository;
 import com.warehouse.repository.BrandRepository;
 import com.warehouse.repository.ColorRepository;
 import com.warehouse.repository.StockTransferRepository;
+import com.warehouse.repository.VariantGroupRepository;
 import com.warehouse.service.ProductService;
 import com.warehouse.util.EntityValidator;
 import com.warehouse.constants.BusinessMessages;
@@ -52,6 +55,7 @@ public class ProductServiceImpl implements ProductService {
     private final BrandRepository brandRepository;
     private final ColorRepository colorRepository;
     private final StockTransferRepository stockTransferRepository;
+    private final VariantGroupRepository variantGroupRepository;
     private final ApplicationEventPublisher eventPublisher;
 
     public ProductServiceImpl(ProductRepository productRepository,
@@ -59,12 +63,14 @@ public class ProductServiceImpl implements ProductService {
                              BrandRepository brandRepository,
                              ColorRepository colorRepository,
                              StockTransferRepository stockTransferRepository,
+                             VariantGroupRepository variantGroupRepository,
                              ApplicationEventPublisher eventPublisher) {
         this.productRepository = productRepository;
         this.categoryRepository = categoryRepository;
         this.brandRepository = brandRepository;
         this.colorRepository = colorRepository;
         this.stockTransferRepository = stockTransferRepository;
+        this.variantGroupRepository = variantGroupRepository;
         this.eventPublisher = eventPublisher;
     }
 
@@ -192,7 +198,9 @@ public class ProductServiceImpl implements ProductService {
                 ? product.getSlug()
                 : (product.getName() != null ? product.getName() : product.getSku());
         product.setSlug(safeSlug(slugBase, product.getSku()));
+        validateSlugUniqueness(product.getSlug(), null);
         applyBundleMembers(product, product.getProductType(), product.getBundleMemberRefs());
+        applyVariantGroup(product, product.getVariantSiblingIds());
 
         Product saved = productRepository.save(product);
         logger.info("Product created successfully with id: {}", saved.getId());
@@ -213,6 +221,7 @@ public class ProductServiceImpl implements ProductService {
         validateSkuUniquenessOnUpdate(product, productDetails);
         updateProductFields(product, productDetails);
         applyBundleMembers(product, productDetails.getProductType(), productDetails.getBundleMemberRefs());
+        applyVariantGroup(product, productDetails.getVariantSiblingIds());
 
         Product saved = productRepository.save(product);
         logger.info("Product updated successfully with id: {}", saved.getId());
@@ -337,6 +346,134 @@ public class ProductServiceImpl implements ProductService {
         return "true".equalsIgnoreCase(v.toString().trim()) || "1".equals(v.toString().trim());
     }
 
+    /**
+     * Reconciles this product's color-variant group from the admin form's sibling picker.
+     * After the call, the product's variant group is exactly {@code {product} ∪ siblingIds}:
+     * a shared group id is reused if one already exists among the members (else a new group is
+     * minted), every member is pointed at it, and any product that used to be in the product's
+     * previous group but is no longer selected leaves it. Groups left with fewer than two
+     * members are emptied (a lone color is not a variant). Symmetric: editing either side of a
+     * pair keeps both linked. The product itself is saved by the caller; siblings and dropped
+     * members are saved here.
+     */
+    private void applyVariantGroup(Product product, List<Long> siblingIds) {
+        Set<Long> requested = new java.util.LinkedHashSet<>();
+        if (siblingIds != null) {
+            for (Long sid : siblingIds) {
+                if (sid == null) continue;
+                if (product.getId() != null && sid.equals(product.getId())) continue; // can't be its own variant
+                requested.add(sid);
+            }
+        }
+
+        Long previousGroupId = product.getVariantGroupId();
+        Set<Long> groupsToCollapse = new java.util.LinkedHashSet<>();
+        if (previousGroupId != null) groupsToCollapse.add(previousGroupId);
+
+        // No siblings selected → the product leaves any group it was in.
+        if (requested.isEmpty()) {
+            product.setVariantGroupId(null);
+            collapseSmallGroups(groupsToCollapse, null);
+            return;
+        }
+
+        List<Product> siblings = productRepository.findAllById(requested);
+        if (siblings.size() != requested.size()) {
+            throw new WarehouseManagementException(ErrorCode.PRODUCT_NOT_FOUND,
+                    "Renk varyantı olarak seçilen bazı ürünler bulunamadı.");
+        }
+
+        // Target group: reuse the product's group, else a sibling's, else mint a fresh one.
+        Long groupId = previousGroupId;
+        if (groupId == null) {
+            for (Product s : siblings) {
+                if (s.getVariantGroupId() != null) { groupId = s.getVariantGroupId(); break; }
+            }
+        }
+        if (groupId == null) {
+            groupId = variantGroupRepository.save(new VariantGroup()).getId();
+        }
+
+        // Final membership = product + selected siblings.
+        Set<Long> desired = new HashSet<>(requested);
+        if (product.getId() != null) desired.add(product.getId());
+
+        List<Product> toSave = new ArrayList<>();
+
+        // Anyone in the product's previous group who is no longer selected leaves the group.
+        if (previousGroupId != null) {
+            for (Product m : productRepository.findByVariantGroupId(previousGroupId)) {
+                if (m.getId().equals(product.getId())) continue; // handled via product itself
+                if (!desired.contains(m.getId())) {
+                    m.setVariantGroupId(null);
+                    toSave.add(m);
+                }
+            }
+        }
+
+        // Pull each selected sibling into the target group (remember its old group to tidy up).
+        for (Product s : siblings) {
+            if (s.getVariantGroupId() != null && !s.getVariantGroupId().equals(groupId)) {
+                groupsToCollapse.add(s.getVariantGroupId());
+            }
+            s.setVariantGroupId(groupId);
+            toSave.add(s);
+        }
+        product.setVariantGroupId(groupId);
+
+        if (!toSave.isEmpty()) productRepository.saveAll(toSave);
+
+        groupsToCollapse.remove(groupId);
+        collapseSmallGroups(groupsToCollapse, null);
+    }
+
+    /**
+     * Empties any of the given groups that have fewer than two members (a single-color group is
+     * meaningless). Members are matched on their in-memory variant group id so the not-yet-flushed
+     * product that just left is not miscounted.
+     */
+    private void collapseSmallGroups(Set<Long> groupIds, Long ignore) {
+        for (Long gid : groupIds) {
+            if (gid == null || gid.equals(ignore)) continue;
+            List<Product> members = productRepository.findByVariantGroupId(gid).stream()
+                    .filter(m -> gid.equals(m.getVariantGroupId()))
+                    .collect(java.util.stream.Collectors.toList());
+            if (members.size() < 2) {
+                members.forEach(m -> m.setVariantGroupId(null));
+                if (!members.isEmpty()) productRepository.saveAll(members);
+            }
+        }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ProductDto.VariantSiblingDto> getVariantSiblings(Long variantGroupId, Long excludeProductId) {
+        if (variantGroupId == null) return List.of();
+        return productRepository.findByVariantGroupId(variantGroupId).stream()
+                .filter(p -> excludeProductId == null || !p.getId().equals(excludeProductId))
+                .sorted(java.util.Comparator.comparing(Product::getId))
+                .map(p -> {
+                    ProductDto.VariantSiblingDto d = new ProductDto.VariantSiblingDto();
+                    d.id = p.getId();
+                    d.name = p.getName();
+                    d.sku = p.getSku();
+                    d.active = p.isActive();
+                    if (p.getColor() != null) {
+                        d.colorName = p.getColor().getName();
+                        d.colorHexCode = p.getColor().getHexCode();
+                    }
+                    return d;
+                })
+                .collect(java.util.stream.Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Product> getActiveVariantSiblings(Long variantGroupId) {
+        if (variantGroupId == null) return List.of();
+        return productRepository.findByVariantGroupIdAndIsActiveTrueOrderByIdAsc(variantGroupId);
+    }
+
     @Override
     public void deleteProduct(Long id) {
         logger.info("Deleting product with id: {}", id);
@@ -357,7 +494,10 @@ public class ProductServiceImpl implements ProductService {
             );
         }
 
+        Long variantGroupId = product.getVariantGroupId();
         productRepository.delete(product);
+        // FK is ON DELETE SET NULL, so the group survives — empty it if only one color is left.
+        if (variantGroupId != null) collapseSmallGroups(java.util.Set.of(variantGroupId), null);
         logger.info("Product deleted successfully with id: {}", id);
         eventPublisher.publishEvent(ProductIndexEvent.delete(id));
     }
@@ -402,7 +542,9 @@ public class ProductServiceImpl implements ProductService {
                     continue;
                 }
                 
+                Long variantGroupId = product.getVariantGroupId();
                 productRepository.delete(product);
+                if (variantGroupId != null) collapseSmallGroups(java.util.Set.of(variantGroupId), null);
                 successCount++;
                 eventPublisher.publishEvent(ProductIndexEvent.delete(id));
                 logger.debug("Product deleted successfully with id: {}", id);
@@ -652,6 +794,23 @@ public class ProductServiceImpl implements ProductService {
         }
     }
 
+    /**
+     * The products.slug column has a unique index; the slug is derived from the
+     * product name, so a duplicate slug means "a product/set with this name already
+     * exists". Caught here proactively so the admin gets a clear Turkish message
+     * instead of a raw data-integrity error.
+     */
+    private void validateSlugUniqueness(String slug, Long ownId) {
+        productRepository.findBySlug(slug)
+                .filter(existing -> ownId == null || !existing.getId().equals(ownId))
+                .ifPresent(existing -> {
+                    logger.warn("Slug already exists: {} (product id {})", slug, existing.getId());
+                    throw new WarehouseManagementException(ErrorCode.PRODUCT_NAME_ALREADY_EXISTS,
+                            ErrorCode.PRODUCT_NAME_ALREADY_EXISTS.getMessage()
+                                    + " (Mevcut kayıt: \"" + existing.getName() + "\")");
+                });
+    }
+
     private void validateSkuUniquenessOnUpdate(Product product, Product productDetails) {
         if (!product.getSku().equals(productDetails.getSku()) &&
             productRepository.existsBySku(productDetails.getSku())) {
@@ -749,9 +908,20 @@ public class ProductServiceImpl implements ProductService {
         product.setVatRate(productDetails.getVatRate());
         product.setSctRate(productDetails.getSctRate());
         product.setActive(productDetails.isActive());
-        if (productDetails.getSlug() != null) product.setSlug(safeSlug(productDetails.getSlug(), product.getSku()));
+        if (productDetails.getSlug() != null) {
+            String newSlug = safeSlug(productDetails.getSlug(), product.getSku());
+            validateSlugUniqueness(newSlug, product.getId());
+            product.setSlug(newSlug);
+        }
         if (productDetails.getMetaTitle() != null) product.setMetaTitle(productDetails.getMetaTitle());
         if (productDetails.getMetaDescription() != null) product.setMetaDescription(productDetails.getMetaDescription());
+        // Null-guarded: ProductForm always sends these (empty list/blank = clear),
+        // while leaner payloads (e.g. the set editor) omit them — omitting must not
+        // wipe existing values. Without these lines crawled specs were silently
+        // dropped on every product update.
+        if (productDetails.getTechnicalSpecs() != null) product.setTechnicalSpecs(productDetails.getTechnicalSpecs());
+        if (productDetails.getWarrantyMonths() != null) product.setWarrantyMonths(productDetails.getWarrantyMonths());
+        if (productDetails.getWarrantyText() != null) product.setWarrantyText(productDetails.getWarrantyText());
     }
 
     private void updateProductStatus(Long id, boolean isActive) {

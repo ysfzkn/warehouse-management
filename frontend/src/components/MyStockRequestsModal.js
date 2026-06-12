@@ -1,18 +1,19 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import axios from 'axios';
 import NotesModal from './NotesModal';
+import confirmDialog from '../utils/confirmDialog';
 
 const statusConfig = {
   PENDING: { label: 'Beklemede', className: 'warning', icon: 'fa-clock' },
   APPROVED: { label: 'Onaylandı', className: 'success', icon: 'fa-check' },
-  REJECTED: { label: 'Reddedildi', className: 'danger', icon: 'fa-times' }
+  REJECTED: { label: 'Reddedildi', className: 'danger', icon: 'fa-times' },
 };
 
 const filterOptions = [
   { key: 'PENDING', label: 'Beklemede', variant: 'warning' },
   { key: 'APPROVED', label: 'Onaylanan', variant: 'success' },
   { key: 'REJECTED', label: 'Reddedilen', variant: 'danger' },
-  { key: 'ALL', label: 'Tümü', variant: 'secondary' }
+  { key: 'ALL', label: 'Tümü', variant: 'secondary' },
 ];
 
 const formatDate = (value) => {
@@ -23,7 +24,7 @@ const formatDate = (value) => {
     month: '2-digit',
     day: '2-digit',
     hour: '2-digit',
-    minute: '2-digit'
+    minute: '2-digit',
   });
 };
 
@@ -71,9 +72,12 @@ const MyStockRequestsModal = ({ onClose }) => {
   }, [fetchRequests, fetchTransferRequests]);
 
   const handleDelete = async (requestId) => {
-    if (!window.confirm(`#${requestId} numaralı talebi silmek istediğinize emin misiniz?`)) {
-      return;
-    }
+    const ok = await confirmDialog({
+      title: 'Talep Silinsin mi?',
+      message: `#${requestId} numaralı talep kalıcı olarak silinecek.`,
+      confirmText: 'Evet, Sil',
+    });
+    if (!ok) return;
     try {
       setDeletingId(requestId);
       await axios.delete(`/api/stock-requests/${requestId}`);
@@ -85,35 +89,41 @@ const MyStockRequestsModal = ({ onClose }) => {
     }
   };
 
-  const stats = useMemo(() => ({
-    pending: allRequests.filter(r => r.status === 'PENDING').length,
-    approved: allRequests.filter(r => r.status === 'APPROVED').length,
-    rejected: allRequests.filter(r => r.status === 'REJECTED').length
-  }), [allRequests]);
+  const stats = useMemo(
+    () => ({
+      pending: allRequests.filter((r) => r.status === 'PENDING').length,
+      approved: allRequests.filter((r) => r.status === 'APPROVED').length,
+      rejected: allRequests.filter((r) => r.status === 'REJECTED').length,
+    }),
+    [allRequests]
+  );
 
-  const transferStats = useMemo(() => ({
-    pending: transferRequests.filter(r => r.approvalStatus === 'PENDING').length,
-    approved: transferRequests.filter(r => r.approvalStatus === 'APPROVED').length,
-    rejected: transferRequests.filter(r => r.approvalStatus === 'REJECTED').length
-  }), [transferRequests]);
+  const transferStats = useMemo(
+    () => ({
+      pending: transferRequests.filter((r) => r.approvalStatus === 'PENDING').length,
+      approved: transferRequests.filter((r) => r.approvalStatus === 'APPROVED').length,
+      rejected: transferRequests.filter((r) => r.approvalStatus === 'REJECTED').length,
+    }),
+    [transferRequests]
+  );
 
   const requests = useMemo(() => {
     if (filter === 'ALL') {
       return allRequests;
     }
-    return allRequests.filter(r => r.status === filter);
+    return allRequests.filter((r) => r.status === filter);
   }, [allRequests, filter]);
 
   const filteredTransferRequests = useMemo(() => {
     if (transferFilter === 'ALL') {
       return transferRequests;
     }
-    return transferRequests.filter(r => r.approvalStatus === transferFilter);
+    return transferRequests.filter((r) => r.approvalStatus === transferFilter);
   }, [transferRequests, transferFilter]);
 
   const getTransferItemsDescription = (transfer) => {
     if (transfer.items && transfer.items.length > 0) {
-      return transfer.items.map(item => `${item.quantity} x ${item.product?.name || 'Ürün'}`).join(', ');
+      return transfer.items.map((item) => `${item.quantity} x ${item.product?.name || 'Ürün'}`).join(', ');
     }
     if (transfer.product) {
       return `${transfer.quantity || 0} x ${transfer.product.name || 'Ürün'}`;
@@ -255,7 +265,7 @@ const MyStockRequestsModal = ({ onClose }) => {
 
                   <div className="p-3 border-bottom bg-white">
                     <div className="btn-group flex-wrap w-100" role="group">
-                      {filterOptions.map(option => (
+                      {filterOptions.map((option) => (
                         <React.Fragment key={option.key}>
                           <input
                             type="radio"
@@ -266,7 +276,10 @@ const MyStockRequestsModal = ({ onClose }) => {
                             checked={filter === option.key}
                             onChange={(e) => setFilter(e.target.value)}
                           />
-                          <label className={`btn btn-outline-${option.variant}`} htmlFor={`my-req-${option.key}`}>
+                          <label
+                            className={`btn btn-outline-${option.variant}`}
+                            htmlFor={`my-req-${option.key}`}
+                          >
                             {option.label}
                           </label>
                         </React.Fragment>
@@ -290,7 +303,9 @@ const MyStockRequestsModal = ({ onClose }) => {
                       <div className="text-center py-5">
                         <i className="fas fa-inbox fa-3x text-muted mb-3"></i>
                         <p className="text-muted mb-0">
-                          {filter === 'PENDING' ? 'Bekleyen talebiniz bulunmuyor' : 'Bu filtrede kayıt bulunamadı'}
+                          {filter === 'PENDING'
+                            ? 'Bekleyen talebiniz bulunmuyor'
+                            : 'Bu filtrede kayıt bulunamadı'}
                         </p>
                       </div>
                     ) : (
@@ -306,11 +321,13 @@ const MyStockRequestsModal = ({ onClose }) => {
                                 <th className="text-center">Miktar</th>
                                 <th className="text-center">Durum</th>
                                 <th style={{ width: '160px' }}>Tarih</th>
-                                <th className="text-center" style={{ width: '160px' }}>İşlemler</th>
+                                <th className="text-center" style={{ width: '160px' }}>
+                                  İşlemler
+                                </th>
                               </tr>
                             </thead>
                             <tbody>
-                              {requests.map(request => {
+                              {requests.map((request) => {
                                 const status = statusConfig[request.status] || statusConfig.PENDING;
                                 const canDelete = request.status === 'PENDING';
                                 return (
@@ -324,8 +341,12 @@ const MyStockRequestsModal = ({ onClose }) => {
                                     </td>
                                     <td>{request.warehouseName}</td>
                                     <td className="text-center">
-                                      <span className={`badge ${request.type === 'ADD' ? 'bg-success' : 'bg-danger'}`}>
-                                        <i className={`fas fa-${request.type === 'ADD' ? 'plus' : 'minus'} me-1`}></i>
+                                      <span
+                                        className={`badge ${request.type === 'ADD' ? 'bg-success' : 'bg-danger'}`}
+                                      >
+                                        <i
+                                          className={`fas fa-${request.type === 'ADD' ? 'plus' : 'minus'} me-1`}
+                                        ></i>
                                         {request.type === 'ADD' ? 'Ekleme' : 'Çıkarma'}
                                       </span>
                                     </td>
@@ -339,7 +360,9 @@ const MyStockRequestsModal = ({ onClose }) => {
                                       </span>
                                     </td>
                                     <td>
-                                      <small className="text-muted d-block">{formatDate(request.requestedAt)}</small>
+                                      <small className="text-muted d-block">
+                                        {formatDate(request.requestedAt)}
+                                      </small>
                                       {request.reviewedAt && (
                                         <small className="text-muted d-block">
                                           Güncelleme: {formatDate(request.reviewedAt)}
@@ -352,12 +375,14 @@ const MyStockRequestsModal = ({ onClose }) => {
                                           <button
                                             className="btn btn-sm btn-outline-secondary"
                                             title="Notları Gör"
-                                            onClick={() => setNotesModal({
-                                              show: true,
-                                              title: 'Talep Notları',
-                                              notes: request.notes,
-                                              requestId: request.id
-                                            })}
+                                            onClick={() =>
+                                              setNotesModal({
+                                                show: true,
+                                                title: 'Talep Notları',
+                                                notes: request.notes,
+                                                requestId: request.id,
+                                              })
+                                            }
                                           >
                                             <i className="fas fa-sticky-note"></i>
                                           </button>
@@ -366,12 +391,14 @@ const MyStockRequestsModal = ({ onClose }) => {
                                           <button
                                             className="btn btn-sm btn-outline-danger"
                                             title="Ret Nedenini Gör"
-                                            onClick={() => setNotesModal({
-                                              show: true,
-                                              title: 'Reddetme Nedeni',
-                                              notes: request.rejectionReason,
-                                              requestId: request.id
-                                            })}
+                                            onClick={() =>
+                                              setNotesModal({
+                                                show: true,
+                                                title: 'Reddetme Nedeni',
+                                                notes: request.rejectionReason,
+                                                requestId: request.id,
+                                              })
+                                            }
                                           >
                                             <i className="fas fa-comment-slash"></i>
                                           </button>
@@ -402,7 +429,7 @@ const MyStockRequestsModal = ({ onClose }) => {
                           </table>
                         </div>
                         <div className="d-md-none px-3 pb-3 my-requests-mobile-list">
-                          {requests.map(request => {
+                          {requests.map((request) => {
                             const status = statusConfig[request.status] || statusConfig.PENDING;
                             const canDelete = request.status === 'PENDING';
                             return (
@@ -449,8 +476,12 @@ const MyStockRequestsModal = ({ onClose }) => {
                                       <i className="fas fa-hashtag me-1"></i>
                                       {request.quantity}
                                     </span>
-                                    <span className={`badge ${request.type === 'ADD' ? 'bg-success' : 'bg-danger'}`}>
-                                      <i className={`fas fa-${request.type === 'ADD' ? 'plus' : 'minus'} me-1`}></i>
+                                    <span
+                                      className={`badge ${request.type === 'ADD' ? 'bg-success' : 'bg-danger'}`}
+                                    >
+                                      <i
+                                        className={`fas fa-${request.type === 'ADD' ? 'plus' : 'minus'} me-1`}
+                                      ></i>
                                       {request.type === 'ADD' ? 'Ekleme' : 'Çıkarma'}
                                     </span>
                                   </div>
@@ -463,7 +494,7 @@ const MyStockRequestsModal = ({ onClose }) => {
                                             show: true,
                                             title: 'Talep Notları',
                                             notes: request.notes,
-                                            requestId: request.id
+                                            requestId: request.id,
                                           })
                                         }
                                       >
@@ -479,7 +510,7 @@ const MyStockRequestsModal = ({ onClose }) => {
                                             show: true,
                                             title: 'Reddetme Nedeni',
                                             notes: request.rejectionReason,
-                                            requestId: request.id
+                                            requestId: request.id,
                                           })
                                         }
                                       >
@@ -547,7 +578,7 @@ const MyStockRequestsModal = ({ onClose }) => {
 
                   <div className="p-3 border-bottom bg-white">
                     <div className="btn-group flex-wrap w-100" role="group">
-                      {filterOptions.map(option => (
+                      {filterOptions.map((option) => (
                         <React.Fragment key={option.key}>
                           <input
                             type="radio"
@@ -558,7 +589,10 @@ const MyStockRequestsModal = ({ onClose }) => {
                             checked={transferFilter === option.key}
                             onChange={(e) => setTransferFilter(e.target.value)}
                           />
-                          <label className={`btn btn-outline-${option.variant}`} htmlFor={`transfer-req-${option.key}`}>
+                          <label
+                            className={`btn btn-outline-${option.variant}`}
+                            htmlFor={`transfer-req-${option.key}`}
+                          >
                             {option.label}
                           </label>
                         </React.Fragment>
@@ -577,7 +611,9 @@ const MyStockRequestsModal = ({ onClose }) => {
                       <div className="text-center py-5">
                         <i className="fas fa-inbox fa-3x text-muted mb-3"></i>
                         <p className="text-muted mb-0">
-                          {transferFilter === 'PENDING' ? 'Bekleyen transfer talebiniz bulunmuyor' : 'Bu filtrede kayıt bulunamadı'}
+                          {transferFilter === 'PENDING'
+                            ? 'Bekleyen transfer talebiniz bulunmuyor'
+                            : 'Bu filtrede kayıt bulunamadı'}
                         </p>
                       </div>
                     ) : (
@@ -592,46 +628,63 @@ const MyStockRequestsModal = ({ onClose }) => {
                                 <th className="text-center">Tip</th>
                                 <th className="text-center">Durum</th>
                                 <th style={{ width: '160px' }}>Tarih</th>
-                                <th className="text-center" style={{ width: '160px' }}>İşlemler</th>
+                                <th className="text-center" style={{ width: '160px' }}>
+                                  İşlemler
+                                </th>
                               </tr>
                             </thead>
                             <tbody>
-                              {filteredTransferRequests.map(transfer => {
+                              {filteredTransferRequests.map((transfer) => {
                                 const status = statusConfig[transfer.approvalStatus] || statusConfig.PENDING;
                                 const noteUpper = (transfer.approvalNote || '').toUpperCase();
-                                const isDeleteRequest = !!transfer.deleteRequest || noteUpper === 'DELETE_REQUEST' || noteUpper === 'SILME_TALEBI';
-                                const sanitizedNote = (noteUpper === 'START_REQUEST' || noteUpper === 'DELETE_REQUEST' || noteUpper === 'SILME_TALEBI')
-                                  ? ''
-                                  : transfer.approvalNote;
+                                const isDeleteRequest =
+                                  !!transfer.deleteRequest ||
+                                  noteUpper === 'DELETE_REQUEST' ||
+                                  noteUpper === 'SILME_TALEBI';
+                                const sanitizedNote =
+                                  noteUpper === 'START_REQUEST' ||
+                                  noteUpper === 'DELETE_REQUEST' ||
+                                  noteUpper === 'SILME_TALEBI'
+                                    ? ''
+                                    : transfer.approvalNote;
                                 const sourceName = transfer.sourceWarehouse?.name || 'Bilinmiyor';
                                 const destName =
                                   transfer.transferType === 'CUSTOMER_DELIVERY'
-                                    ? (transfer.customerFullName || 'Müşteri')
-                                    : (transfer.destinationWarehouse?.name || 'Bilinmiyor');
+                                    ? transfer.customerFullName || 'Müşteri'
+                                    : transfer.destinationWarehouse?.name || 'Bilinmiyor';
                                 return (
                                   <tr key={transfer.id}>
                                     <td>
                                       <span className="badge bg-dark">#{transfer.id}</span>
                                     </td>
                                     <td>
-                                      <div className="fw-bold">{sourceName} → {destName}</div>
-                                      {transfer.transferType === 'CUSTOMER_DELIVERY' && transfer.customerPhone && (
-                                        <small className="text-muted">{transfer.customerPhone}</small>
-                                      )}
+                                      <div className="fw-bold">
+                                        {sourceName} → {destName}
+                                      </div>
+                                      {transfer.transferType === 'CUSTOMER_DELIVERY' &&
+                                        transfer.customerPhone && (
+                                          <small className="text-muted">{transfer.customerPhone}</small>
+                                        )}
                                     </td>
                                     <td>
                                       <small>{getTransferItemsDescription(transfer)}</small>
                                     </td>
                                     <td className="text-center">
-                                      <span className={`badge ${transfer.transferType === 'CUSTOMER_DELIVERY' ? 'bg-info' : 'bg-primary'}`}>
-                                        {transfer.transferType === 'CUSTOMER_DELIVERY' ? 'Müşteri Sevkiyatı' : 'Depo Transferi'}
+                                      <span
+                                        className={`badge ${transfer.transferType === 'CUSTOMER_DELIVERY' ? 'bg-info' : 'bg-primary'}`}
+                                      >
+                                        {transfer.transferType === 'CUSTOMER_DELIVERY'
+                                          ? 'Müşteri Sevkiyatı'
+                                          : 'Depo Transferi'}
                                       </span>
                                     </td>
                                     <td className="text-center">
                                       <div className="d-flex flex-column align-items-center gap-1">
                                         <span className={`badge bg-${status.className}`}>
                                           <i className={`fas ${status.icon} me-1`}></i>
-                                          {isDeleteRequest && status.label === 'Beklemede' ? 'Silme Onayı Bekliyor' : status.label}
+                                          {isDeleteRequest && status.label === 'Beklemede'
+                                            ? 'Silme Onayı Bekliyor'
+                                            : status.label}
                                         </span>
                                         {isDeleteRequest && status.label !== 'Beklemede' && (
                                           <span className="badge bg-dark">
@@ -642,7 +695,9 @@ const MyStockRequestsModal = ({ onClose }) => {
                                       </div>
                                     </td>
                                     <td>
-                                      <small className="text-muted d-block">{formatDate(transfer.transferDate)}</small>
+                                      <small className="text-muted d-block">
+                                        {formatDate(transfer.transferDate)}
+                                      </small>
                                       {transfer.approvalDecisionAt && (
                                         <small className="text-muted d-block">
                                           Karar: {formatDate(transfer.approvalDecisionAt)}
@@ -655,12 +710,17 @@ const MyStockRequestsModal = ({ onClose }) => {
                                           <button
                                             className="btn btn-sm btn-outline-secondary"
                                             title="Notları Gör"
-                                            onClick={() => setNotesModal({
-                                              show: true,
-                                              title: transfer.approvalStatus === 'REJECTED' ? 'Reddetme Nedeni' : 'Onay Notu',
-                                              notes: sanitizedNote,
-                                              requestId: transfer.id
-                                            })}
+                                            onClick={() =>
+                                              setNotesModal({
+                                                show: true,
+                                                title:
+                                                  transfer.approvalStatus === 'REJECTED'
+                                                    ? 'Reddetme Nedeni'
+                                                    : 'Onay Notu',
+                                                notes: sanitizedNote,
+                                                requestId: transfer.id,
+                                              })
+                                            }
                                           >
                                             <i className="fas fa-sticky-note"></i>
                                           </button>
@@ -683,18 +743,24 @@ const MyStockRequestsModal = ({ onClose }) => {
                           </table>
                         </div>
                         <div className="d-md-none px-3 pb-3 my-requests-mobile-list">
-                          {filteredTransferRequests.map(transfer => {
+                          {filteredTransferRequests.map((transfer) => {
                             const status = statusConfig[transfer.approvalStatus] || statusConfig.PENDING;
                             const noteUpper = (transfer.approvalNote || '').toUpperCase();
-                            const isDeleteRequest = !!transfer.deleteRequest || noteUpper === 'DELETE_REQUEST' || noteUpper === 'SILME_TALEBI';
-                            const sanitizedNote = (noteUpper === 'START_REQUEST' || noteUpper === 'DELETE_REQUEST' || noteUpper === 'SILME_TALEBI')
-                              ? ''
-                              : transfer.approvalNote;
+                            const isDeleteRequest =
+                              !!transfer.deleteRequest ||
+                              noteUpper === 'DELETE_REQUEST' ||
+                              noteUpper === 'SILME_TALEBI';
+                            const sanitizedNote =
+                              noteUpper === 'START_REQUEST' ||
+                              noteUpper === 'DELETE_REQUEST' ||
+                              noteUpper === 'SILME_TALEBI'
+                                ? ''
+                                : transfer.approvalNote;
                             const sourceName = transfer.sourceWarehouse?.name || 'Bilinmiyor';
                             const destName =
                               transfer.transferType === 'CUSTOMER_DELIVERY'
-                                ? (transfer.customerFullName || 'Müşteri')
-                                : (transfer.destinationWarehouse?.name || 'Bilinmiyor');
+                                ? transfer.customerFullName || 'Müşteri'
+                                : transfer.destinationWarehouse?.name || 'Bilinmiyor';
                             return (
                               <div key={transfer.id} className="my-requests-card card border-0">
                                 <div className="card-body">
@@ -702,12 +768,16 @@ const MyStockRequestsModal = ({ onClose }) => {
                                     <div>
                                       <div className="my-requests-card__title">Transfer #{transfer.id}</div>
                                       <small className="my-requests-card__meta">
-                                        {transfer.transferType === 'CUSTOMER_DELIVERY' ? 'Müşteri Sevkiyatı' : 'Depo Transferi'}
+                                        {transfer.transferType === 'CUSTOMER_DELIVERY'
+                                          ? 'Müşteri Sevkiyatı'
+                                          : 'Depo Transferi'}
                                       </small>
                                     </div>
                                     <span className={`my-requests-pill badge bg-${status.className}`}>
                                       <i className={`fas ${status.icon} me-1`}></i>
-                                      {isDeleteRequest && status.label === 'Beklemede' ? 'Silme Onayı Bekliyor' : status.label}
+                                      {isDeleteRequest && status.label === 'Beklemede'
+                                        ? 'Silme Onayı Bekliyor'
+                                        : status.label}
                                     </span>
                                     {isDeleteRequest && (
                                       <span className="my-requests-pill badge bg-dark ms-2">
@@ -721,12 +791,13 @@ const MyStockRequestsModal = ({ onClose }) => {
                                       <i className="fas fa-route text-primary"></i>
                                       {sourceName} → {destName}
                                     </div>
-                                    {transfer.transferType === 'CUSTOMER_DELIVERY' && transfer.customerPhone && (
-                                      <div className="my-requests-card__meta-row">
-                                        <i className="fas fa-phone"></i>
-                                        {transfer.customerPhone}
-                                      </div>
-                                    )}
+                                    {transfer.transferType === 'CUSTOMER_DELIVERY' &&
+                                      transfer.customerPhone && (
+                                        <div className="my-requests-card__meta-row">
+                                          <i className="fas fa-phone"></i>
+                                          {transfer.customerPhone}
+                                        </div>
+                                      )}
                                     <div className="my-requests-card__meta-row">
                                       <i className="fas fa-box"></i>
                                       {getTransferItemsDescription(transfer)}
@@ -755,9 +826,12 @@ const MyStockRequestsModal = ({ onClose }) => {
                                         onClick={() =>
                                           setNotesModal({
                                             show: true,
-                                            title: transfer.approvalStatus === 'REJECTED' ? 'Reddetme Nedeni' : 'Onay Notu',
+                                            title:
+                                              transfer.approvalStatus === 'REJECTED'
+                                                ? 'Reddetme Nedeni'
+                                                : 'Onay Notu',
                                             notes: sanitizedNote,
-                                            requestId: transfer.id
+                                            requestId: transfer.id,
                                           })
                                         }
                                       >
@@ -765,7 +839,9 @@ const MyStockRequestsModal = ({ onClose }) => {
                                         Notu Gör
                                       </button>
                                     ) : (
-                                      <span className="text-muted small">{isDeleteRequest ? 'Silme talebi, ek not yok' : 'Not bulunmuyor'}</span>
+                                      <span className="text-muted small">
+                                        {isDeleteRequest ? 'Silme talebi, ek not yok' : 'Not bulunmuyor'}
+                                      </span>
                                     )}
                                   </div>
                                 </div>

@@ -67,6 +67,20 @@ public class ProductImage {
     @Column(name = "is_primary", nullable = false)
     private boolean primary = false;
 
+    /**
+     * AI cover pipeline role. {@code null} = normal image;
+     * {@code "COVER_INPUT"} = per-member input photo selected for AI cover
+     * generation — must be excluded from the gallery, the storefront and all
+     * primary-image resolution; {@code "AI_COVER"} = the AI-generated cover,
+     * which behaves as a normal gallery image (marker is admin-UI only).
+     */
+    @Column(name = "ai_role", length = 20)
+    private String aiRole;
+
+    /** For COVER_INPUT rows: the bundle member product this input photo represents. */
+    @Column(name = "member_product_id")
+    private Long memberProductId;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

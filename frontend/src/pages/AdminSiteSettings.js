@@ -3,6 +3,7 @@ import axios from 'axios';
 import useSecurityCodePrompt from '../components/useSecurityCodePrompt';
 import { useAdminToast } from '../components/AdminToast';
 import { parsePhoneDirectoryEditable, PHONE_TYPES } from '../utils/phones';
+import confirmDialog from '../utils/confirmDialog';
 
 // ─────────────────────────────────────────────────────────────
 // Setting groups organized into sections
@@ -634,8 +635,15 @@ export default function AdminSiteSettings() {
     [settings]
   );
 
-  const handleDiscard = () => {
-    if (!window.confirm('Kaydedilmemiş değişiklikler silinecek. Emin misiniz?')) return;
+  const handleDiscard = async () => {
+    const ok = await confirmDialog({
+      title: 'Değişiklikler Geri Alınsın mı?',
+      message: 'Kaydedilmemiş tüm değişiklikler silinecek.',
+      confirmText: 'Evet, Geri Al',
+      variant: 'warning',
+      icon: 'fa-undo',
+    });
+    if (!ok) return;
     setSettings(originalSettings);
     toast.info('Değişiklikler geri alındı.');
   };

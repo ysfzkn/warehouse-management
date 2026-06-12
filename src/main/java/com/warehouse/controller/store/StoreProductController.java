@@ -329,7 +329,7 @@ public class StoreProductController {
                         .slot(img.getSlot())
                         .build();
                 imageDtos = product.getImages().stream()
-                    .filter(img -> img.getSlot() == null)
+                    .filter(com.warehouse.util.ProductImageUtil::isGalleryImage)
                     .sorted((a, b) -> Integer.compare(a.getSortOrder(), b.getSortOrder()))
                     .map(toDto)
                     .collect(Collectors.toList());
@@ -338,17 +338,32 @@ public class StoreProductController {
                     .sorted(java.util.Comparator.comparingInt(ProductImage::getSlot))
                     .map(toDto)
                     .collect(Collectors.toList());
-                primaryImageUrl = product.getImages().stream()
-                    .filter(img -> img.getSlot() == null)
-                    .filter(ProductImage::isPrimary)
-                    .findFirst()
-                    .or(() -> product.getImages().stream()
-                        .filter(img -> img.getSlot() == null)
-                        .min(java.util.Comparator.comparingInt(
-                            img -> img.getSortOrder() == null ? Integer.MAX_VALUE : img.getSortOrder())))
+                primaryImageUrl = com.warehouse.util.ProductImageUtil.displayCover(product.getImages())
                     .map(img -> "/api/admin/products/images/" + img.getId() + "/view?thumbnail=true")
                     .orElse(null);
             } catch (Exception ignored) {}
+        }
+
+        // Color variants — detail view only: the same product in other colors, as a swatch row.
+        // Includes the current product so the frontend can render and highlight it.
+        List<StoreProductDto.ColorVariantDto> colorVariants = null;
+        if (includeSpecs && product.getVariantGroupId() != null) {
+            List<Product> members = productService.getActiveVariantSiblings(product.getVariantGroupId());
+            if (members != null && members.size() > 1) {
+                List<Long> memberIds = members.stream().map(Product::getId).collect(Collectors.toList());
+                Map<Long, Integer> memberStock = batchStockAvailability(memberIds);
+                colorVariants = members.stream()
+                    .map(m -> StoreProductDto.ColorVariantDto.builder()
+                        .productId(m.getId())
+                        .slug(m.getSlug())
+                        .colorName(safe(() -> m.getColor() != null ? m.getColor().getName() : null))
+                        .colorHexCode(safe(() -> m.getColor() != null ? m.getColor().getHexCode() : null))
+                        .primaryImageUrl(primaryImageUrlFor(m))
+                        .inStock(memberStock.getOrDefault(m.getId(), 0) > 0)
+                        .current(m.getId().equals(product.getId()))
+                        .build())
+                    .collect(Collectors.toList());
+            }
         }
 
         // Reviews — avgRating + reviewCount came in as parameters (batch or single)
@@ -380,6 +395,8 @@ public class StoreProductController {
             .brandName(safe(() -> product.getBrand() != null ? product.getBrand().getName() : null))
             .brandSlug(safe(() -> product.getBrand() != null ? product.getBrand().getSlug() : null))
             .colorName(safe(() -> product.getColor() != null ? product.getColor().getName() : null))
+            .colorHexCode(safe(() -> product.getColor() != null ? product.getColor().getHexCode() : null))
+            .colorVariants(colorVariants)
             .stockStatus(stockStatus)
             .availableQuantity(totalAvailable)
             .images(imageDtos)
@@ -414,13 +431,7 @@ public class StoreProductController {
     /** Thumbnail URL of a product's primary image (or first by sort order). */
     private String primaryImageUrlFor(Product p) {
         try {
-            if (p.getImages() == null || p.getImages().isEmpty()) return null;
-            return p.getImages().stream()
-                .filter(ProductImage::isPrimary)
-                .findFirst()
-                .or(() -> p.getImages().stream()
-                    .min(java.util.Comparator.comparingInt(
-                        img -> img.getSortOrder() == null ? Integer.MAX_VALUE : img.getSortOrder())))
+            return com.warehouse.util.ProductImageUtil.displayCover(p.getImages())
                 .map(img -> "/api/admin/products/images/" + img.getId() + "/view?thumbnail=true")
                 .orElse(null);
         } catch (Exception e) {

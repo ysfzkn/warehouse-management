@@ -126,12 +126,7 @@ public class GlobalExceptionHandler {
                 ? ex.getMostSpecificCause().getMessage()
                 : ex.getMessage();
 
-        String userMessage = "Veri bütünlüğü hatası oluştu. Lütfen bağlı kayıtları kontrol edin.";
-
-        if (detailedMessage != null && detailedMessage.contains("fk_transfer_items_product")) {
-            userMessage = "Bu ürün geçmiş stok transferlerinde kullanıldığı için silinemez. " +
-                    "İlgili stok transfer kayıtları silinmeden ürün silinemez.";
-        }
+        String userMessage = mapIntegrityViolation(detailedMessage);
 
         ErrorResponse errorResponse = new ErrorResponse(
                 "DB_CONSTRAINT_VIOLATION",
@@ -145,6 +140,45 @@ public class GlobalExceptionHandler {
                 request.getRequestURI(), userMessage, detailedMessage, ex);
 
         return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
+    }
+
+    /**
+     * Maps known DB constraint names to actionable Turkish messages. This is the
+     * safety net — services should catch these cases proactively (e.g.
+     * validateSkuUniqueness / validateSlugUniqueness), but anything that slips
+     * through still reaches the admin as a meaningful sentence instead of
+     * "veri bütünlüğü hatası".
+     */
+    private static String mapIntegrityViolation(String detail) {
+        if (detail != null) {
+            String d = detail.toLowerCase();
+            if (d.contains("idx_products_slug")) {
+                return "Bu isimde bir ürün veya set zaten mevcut. Lütfen farklı bir ad seçin.";
+            }
+            if (d.contains("products_sku") || (d.contains("products") && d.contains("sku"))) {
+                return "Bu stok kodu (SKU) zaten başka bir üründe kullanılıyor. Lütfen farklı bir SKU girin.";
+            }
+            if (d.contains("uq_bundle_items")) {
+                return "Aynı ürün sete birden fazla kez eklenemez.";
+            }
+            if (d.contains("fk_bundle_items_product") || d.contains("bundle_items")) {
+                return "Bu ürün bir veya daha fazla sette kullanıldığı için silinemez. Önce ilgili setlerden çıkarın.";
+            }
+            if (d.contains("fk_transfer_items_product")) {
+                return "Bu ürün geçmiş stok transferlerinde kullanıldığı için silinemez. "
+                        + "İlgili stok transfer kayıtları silinmeden ürün silinemez.";
+            }
+            if (d.contains("categories") && (d.contains("name") || d.contains("uq") || d.contains("unique"))) {
+                return "Bu isimde bir kategori zaten mevcut. Lütfen farklı bir ad seçin.";
+            }
+            if (d.contains("violates foreign key") || d.contains("foreign key constraint")) {
+                return "Bu kayıt başka kayıtlarla ilişkili olduğu için işlem yapılamadı. Önce bağlı kayıtları kaldırın.";
+            }
+            if (d.contains("duplicate key") || d.contains("unique constraint") || d.contains("unique index")) {
+                return "Aynı bilgilere sahip bir kayıt zaten mevcut. Lütfen girdiğiniz değerleri kontrol edin.";
+            }
+        }
+        return "Veri bütünlüğü hatası oluştu. Lütfen bağlı kayıtları kontrol edin.";
     }
 
     @ExceptionHandler(ObjectOptimisticLockingFailureException.class)

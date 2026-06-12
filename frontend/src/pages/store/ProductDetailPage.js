@@ -8,6 +8,7 @@ import PriceDisplay from '../../components/store/PriceDisplay';
 import StockBadge from '../../components/store/StockBadge';
 import ProductCard from '../../components/store/ProductCard';
 import ProductReviews from '../../components/store/ProductReviews';
+import ProductColorVariants from '../../components/store/ProductColorVariants';
 import RatingStars from '../../components/store/RatingStars';
 import SeoHead from '../../components/store/SeoHead';
 import { SkeletonProductDetail } from '../../components/store/Skeleton';
@@ -198,10 +199,12 @@ export default function ProductDetailPage() {
             )}
           </div>
 
-          {/* Set showcase images — any number of featured images in a responsive grid */}
+          {/* Set showcase images — admin-uploaded featured visuals, NOT the member list.
+              The actual member list ("Set İçeriği", incl. gift members) is the bundle box
+              next to the price; this section was previously mislabeled "Set İçeriği". */}
           {Array.isArray(product.setImages) && product.setImages.length > 0 && (
             <div className="mt-3">
-              <h6 className="fw-bold mb-2">Set İçeriği</h6>
+              <h6 className="fw-bold mb-2">Set Görselleri</h6>
               <div className="row g-2">
                 {product.setImages.map((img) => (
                   <div key={img.id} className="col-6 col-md-4">
@@ -542,6 +545,9 @@ export default function ProductDetailPage() {
               </div>
             ))}
           </div>
+
+          {/* Color variants — the same product in other colors */}
+          <ProductColorVariants variants={product.colorVariants} />
 
           {/* Quick Specs */}
           {(product.weight || product.lengthCm || product.colorName || product.brandName) && (

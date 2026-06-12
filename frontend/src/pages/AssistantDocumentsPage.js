@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import axios from 'axios';
+import confirmDialog from '../utils/confirmDialog';
 
 /**
  * Admin page for uploading and managing Cezeri reference documents
@@ -16,9 +17,9 @@ export default function AssistantDocumentsPage() {
   const [error, setError] = useState(null);
 
   // Multi-phase progress: upload bytes → backend indexing → done
-  const [uploadPct, setUploadPct] = useState(0);            // 0-100 during HTTP upload
-  const [phase, setPhase] = useState('idle');               // idle | uploading | indexing | done | failed
-  const [phaseDoc, setPhaseDoc] = useState(null);           // last doc object from polling
+  const [uploadPct, setUploadPct] = useState(0); // 0-100 during HTTP upload
+  const [phase, setPhase] = useState('idle'); // idle | uploading | indexing | done | failed
+  const [phaseDoc, setPhaseDoc] = useState(null); // last doc object from polling
 
   const token = () => localStorage.getItem('auth_token');
   const authHeader = () => ({ headers: { Authorization: `Bearer ${token()}` } });
@@ -34,9 +35,12 @@ export default function AssistantDocumentsPage() {
     } finally {
       setLoading(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => { loadDocs(); }, [loadDocs]);
+  useEffect(() => {
+    loadDocs();
+  }, [loadDocs]);
 
   const onUpload = async (e) => {
     e.preventDefault();
@@ -83,7 +87,11 @@ export default function AssistantDocumentsPage() {
     } finally {
       setUploading(false);
       // Keep the final progress visible for a moment; auto-clear after 4s.
-      setTimeout(() => { setPhase('idle'); setUploadPct(0); setPhaseDoc(null); }, 4000);
+      setTimeout(() => {
+        setPhase('idle');
+        setUploadPct(0);
+        setPhaseDoc(null);
+      }, 4000);
     }
   };
 
@@ -95,18 +103,23 @@ export default function AssistantDocumentsPage() {
       try {
         const resp = await axios.get('/api/admin/assistant/documents?size=100', authHeader());
         const list = Array.isArray(resp.data) ? resp.data : [];
-        const target = list.find(d => d.id === docId);
+        const target = list.find((d) => d.id === docId);
         if (target) {
           setPhaseDoc(target);
-          if (target.status === 'READY') { setPhase('done'); return; }
+          if (target.status === 'READY') {
+            setPhase('done');
+            return;
+          }
           if (target.status === 'FAILED') {
             setPhase('failed');
             setError('İndeksleme başarısız: ' + (target.errorMessage || 'bilinmeyen hata'));
             return;
           }
         }
-      } catch { /* ignore transient errors during polling */ }
-      await new Promise(r => setTimeout(r, 1500));
+      } catch {
+        /* ignore transient errors during polling */
+      }
+      await new Promise((r) => setTimeout(r, 1500));
     }
     // Timed out — still show progress, list will refresh
     setPhase('done');
@@ -122,7 +135,12 @@ export default function AssistantDocumentsPage() {
   };
 
   const onDelete = async (id) => {
-    if (!window.confirm('Dokümanı silmek istediğinize emin misiniz?')) return;
+    const ok = await confirmDialog({
+      title: 'Doküman Silinsin mi?',
+      message: 'Doküman ve indekslenmiş içeriği kalıcı olarak silinecek.',
+      confirmText: 'Evet, Sil',
+    });
+    if (!ok) return;
     try {
       await axios.delete(`/api/admin/assistant/documents/${id}`, authHeader());
       await loadDocs();
@@ -145,14 +163,18 @@ export default function AssistantDocumentsPage() {
       FAILED: 'Başarısız',
     };
     return (
-      <span style={{
-        background: colors[status] || '#64748b',
-        color: 'white',
-        padding: '2px 10px',
-        borderRadius: 12,
-        fontSize: 12,
-        fontWeight: 600,
-      }}>{labels[status] || status}</span>
+      <span
+        style={{
+          background: colors[status] || '#64748b',
+          color: 'white',
+          padding: '2px 10px',
+          borderRadius: 12,
+          fontSize: 12,
+          fontWeight: 600,
+        }}
+      >
+        {labels[status] || status}
+      </span>
     );
   };
 
@@ -160,8 +182,8 @@ export default function AssistantDocumentsPage() {
     <div className="container-fluid">
       <h2 className="mb-3">Asistan Dokümanları</h2>
       <p className="text-muted">
-        Mağaza politikaları, SSS, kullanım kılavuzları gibi dokümanları buradan yükleyin.
-        Yüklenen dosyalar Cezeri asistanı tarafından müşteri sorularında kaynak olarak kullanılır.
+        Mağaza politikaları, SSS, kullanım kılavuzları gibi dokümanları buradan yükleyin. Yüklenen dosyalar
+        Cezeri asistanı tarafından müşteri sorularında kaynak olarak kullanılır.
       </p>
 
       <div className="card mb-4">
@@ -243,11 +265,18 @@ export default function AssistantDocumentsPage() {
               <tbody>
                 {docs.map((d) => (
                   <tr key={d.id}>
-                    <td><strong>{d.title}</strong><br /><small className="text-muted">{d.fileName}</small></td>
+                    <td>
+                      <strong>{d.title}</strong>
+                      <br />
+                      <small className="text-muted">{d.fileName}</small>
+                    </td>
                     <td>{d.scope}</td>
-                    <td>{statusBadge(d.status)}{d.errorMessage && (
-                      <div style={{ fontSize: 11, color: '#ef4444', marginTop: 4 }}>{d.errorMessage}</div>
-                    )}</td>
+                    <td>
+                      {statusBadge(d.status)}
+                      {d.errorMessage && (
+                        <div style={{ fontSize: 11, color: '#ef4444', marginTop: 4 }}>{d.errorMessage}</div>
+                      )}
+                    </td>
                     <td>{d.chunkCount}</td>
                     <td>{Math.round(d.sizeBytes / 1024)} KB</td>
                     <td>{d.uploadedBy || '-'}</td>
@@ -297,9 +326,7 @@ function UploadProgress({ phase, uploadPct, doc }) {
       animated: true,
     },
     done: {
-      label: doc
-        ? `Tamamlandı — ${doc.chunkCount || 0} chunk oluşturuldu ve embed edildi.`
-        : 'Tamamlandı.',
+      label: doc ? `Tamamlandı — ${doc.chunkCount || 0} chunk oluşturuldu ve embed edildi.` : 'Tamamlandı.',
       pct: 100,
       color: 'bg-success',
       striped: false,
@@ -318,25 +345,48 @@ function UploadProgress({ phase, uploadPct, doc }) {
     <div>
       <div className="d-flex justify-content-between align-items-center mb-1">
         <small className="text-muted">
-          {phase === 'uploading' && <><i className="fas fa-upload me-1"></i></>}
-          {phase === 'indexing' && <><i className="fas fa-cog fa-spin me-1"></i></>}
-          {phase === 'done'     && <><i className="fas fa-check-circle text-success me-1"></i></>}
-          {phase === 'failed'   && <><i className="fas fa-times-circle text-danger me-1"></i></>}
+          {phase === 'uploading' && (
+            <>
+              <i className="fas fa-upload me-1"></i>
+            </>
+          )}
+          {phase === 'indexing' && (
+            <>
+              <i className="fas fa-cog fa-spin me-1"></i>
+            </>
+          )}
+          {phase === 'done' && (
+            <>
+              <i className="fas fa-check-circle text-success me-1"></i>
+            </>
+          )}
+          {phase === 'failed' && (
+            <>
+              <i className="fas fa-times-circle text-danger me-1"></i>
+            </>
+          )}
           {cfg.label}
         </small>
-        {phase === 'uploading' && <small className="text-muted"><strong>{uploadPct}%</strong></small>}
+        {phase === 'uploading' && (
+          <small className="text-muted">
+            <strong>{uploadPct}%</strong>
+          </small>
+        )}
       </div>
       <div className="progress" style={{ height: 10 }}>
         <div
           className={`progress-bar ${cfg.color}${cfg.striped ? ' progress-bar-striped' : ''}${cfg.animated ? ' progress-bar-animated' : ''}`}
           role="progressbar"
           style={{ width: `${cfg.pct}%`, transition: 'width .25s ease' }}
-          aria-valuenow={cfg.pct} aria-valuemin="0" aria-valuemax="100"
+          aria-valuenow={cfg.pct}
+          aria-valuemin="0"
+          aria-valuemax="100"
         ></div>
       </div>
       {phase === 'indexing' && (
         <small className="text-muted d-block mt-1">
-          Büyük dokümanlarda 10-60 saniye sürebilir. Bu pencereyi kapatmanız güvenli — işlem arka planda devam eder.
+          Büyük dokümanlarda 10-60 saniye sürebilir. Bu pencereyi kapatmanız güvenli — işlem arka planda devam
+          eder.
         </small>
       )}
     </div>

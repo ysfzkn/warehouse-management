@@ -93,9 +93,11 @@ public class StoreOrderController {
                             // Product image
                             String imageUrl = null;
                             try {
-                                if (item.getProduct() != null && item.getProduct().getImages() != null && !item.getProduct().getImages().isEmpty()) {
-                                    var img = item.getProduct().getImages().stream().filter(i -> i.isPrimary()).findFirst().orElse(item.getProduct().getImages().get(0));
-                                    imageUrl = "/api/admin/products/images/" + img.getId() + "/view?thumbnail=true";
+                                if (item.getProduct() != null) {
+                                    var img = com.warehouse.util.ProductImageUtil.displayCover(item.getProduct().getImages()).orElse(null);
+                                    if (img != null) {
+                                        imageUrl = "/api/admin/products/images/" + img.getId() + "/view?thumbnail=true";
+                                    }
                                 }
                             } catch (Exception ignored2) {}
                             it.put("imageUrl", imageUrl);

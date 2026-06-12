@@ -16,7 +16,8 @@ public enum ErrorCode {
     TRANSFER_NOT_FOUND("TRANSFER_001", "Transfer kaydı bulunamadı", HttpStatus.NOT_FOUND),
     
     // Duplicate Record (409)
-    PRODUCT_SKU_ALREADY_EXISTS("PRODUCT_002", "Bu SKU'ya sahip ürün zaten mevcut", HttpStatus.CONFLICT),
+    PRODUCT_SKU_ALREADY_EXISTS("PRODUCT_002", "Bu stok kodu (SKU) zaten başka bir üründe kullanılıyor. Lütfen farklı bir SKU girin.", HttpStatus.CONFLICT),
+    PRODUCT_NAME_ALREADY_EXISTS("PRODUCT_003", "Bu isimde bir ürün veya set zaten mevcut. Lütfen farklı bir ad seçin.", HttpStatus.CONFLICT),
     CATEGORY_NAME_ALREADY_EXISTS("CATEGORY_002", "Bu isimde kategori zaten mevcut", HttpStatus.CONFLICT),
     WAREHOUSE_NAME_ALREADY_EXISTS("WAREHOUSE_002", "Bu isimde depo zaten mevcut", HttpStatus.CONFLICT),
     BRAND_NAME_ALREADY_EXISTS("BRAND_002", "Bu isimde marka zaten mevcut", HttpStatus.CONFLICT),
@@ -93,6 +94,16 @@ public enum ErrorCode {
     INVOICE_ALREADY_CANCELLED("INV_003", "Fatura zaten iptal edilmiş", HttpStatus.BAD_REQUEST),
     INVOICE_PDF_NOT_AVAILABLE("INV_004", "Fatura PDF'i henüz mevcut değil", HttpStatus.BAD_REQUEST),
     INVOICE_CREATION_FAILED("INV_005", "Fatura oluşturma başarısız", HttpStatus.BAD_REQUEST),
+
+    // AI set cover generation (400/502/504)
+    AI_COVER_NOT_A_BUNDLE("AICOVER_001", "Bu işlem yalnızca ürün setleri için kullanılabilir", HttpStatus.BAD_REQUEST),
+    AI_COVER_NOT_A_MEMBER("AICOVER_002", "Seçilen ürün bu setin üyesi değil", HttpStatus.BAD_REQUEST),
+    AI_COVER_IMAGE_NOT_OWNED("AICOVER_003", "Seçilen görsel bu üye ürüne ait değil", HttpStatus.BAD_REQUEST),
+    AI_COVER_INPUT_MISSING("AICOVER_004", "Her set üyesi için bir giriş fotoğrafı seçilmelidir", HttpStatus.BAD_REQUEST),
+    AI_COVER_API_KEY_MISSING("AICOVER_005", "Görsel üretimi için API anahtarı yapılandırılmamış. Asistan ayarlarından OpenAI API anahtarını girin.", HttpStatus.BAD_REQUEST),
+    AI_COVER_GENERATION_FAILED("AICOVER_006", "Yapay zeka kapak fotoğrafı oluşturulamadı", HttpStatus.BAD_GATEWAY),
+    AI_COVER_GENERATION_TIMEOUT("AICOVER_007", "Yapay zeka kapak fotoğrafı üretimi zaman aşımına uğradı. Lütfen tekrar deneyin.", HttpStatus.GATEWAY_TIMEOUT),
+    AI_COVER_UNSUPPORTED_FORMAT("AICOVER_008", "Seçilen fotoğrafın formatı desteklenmiyor (ör. AVIF/HEIC). Lütfen JPEG, PNG veya WebP formatında bir fotoğraf seçin veya yükleyin.", HttpStatus.BAD_REQUEST),
 
     // General (500)
     INTERNAL_SERVER_ERROR("SYSTEM_001", "Beklenmeyen bir hata oluştu", HttpStatus.INTERNAL_SERVER_ERROR);

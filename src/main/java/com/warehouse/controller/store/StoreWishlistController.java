@@ -50,9 +50,8 @@ public class StoreWishlistController {
             // Primary image
             String imageUrl = null;
             try {
-                var imgs = w.getProduct().getImages();
-                if (imgs != null && !imgs.isEmpty()) {
-                    var primary = imgs.stream().filter(i -> i.isPrimary()).findFirst().orElse(imgs.get(0));
+                var primary = com.warehouse.util.ProductImageUtil.displayCover(w.getProduct().getImages()).orElse(null);
+                if (primary != null) {
                     imageUrl = "/api/admin/products/images/" + primary.getId() + "/view?thumbnail=true";
                 }
             } catch (Exception ignored) {}

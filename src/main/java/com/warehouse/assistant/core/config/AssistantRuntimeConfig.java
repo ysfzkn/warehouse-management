@@ -123,6 +123,26 @@ public class AssistantRuntimeConfig {
         return getString("assistant.chat.model", defaults.getChat().getModel());
     }
 
+    // ── Image generation connection (OpenAI Images API — AI set cover) ──
+    public String getImageApiKey() {
+        return getString("assistant.image.api-key", defaults.getImage().getApiKey());
+    }
+    public String getImageEndpoint() {
+        return getString("assistant.image.endpoint", defaults.getImage().getEndpoint());
+    }
+    public String getImageModel() {
+        return getString("assistant.image.model", defaults.getImage().getModel());
+    }
+    public String getImageQuality() {
+        return getString("assistant.image.quality", defaults.getImage().getQuality());
+    }
+    public String getImageSize() {
+        return getString("assistant.image.size", defaults.getImage().getSize());
+    }
+    public String getImagePrompt() {
+        return getString("assistant.image.prompt", defaults.getImage().getPrompt());
+    }
+
     private String normalizeProvider(String v) {
         if (v == null) return "AZURE";
         String up = v.trim().toUpperCase();
@@ -171,6 +191,13 @@ public class AssistantRuntimeConfig {
         m.put("chat.endpoint", getChatEndpoint());
         m.put("chat.apiKey", maskSecret(getChatApiKey()));
         m.put("chat.model", getChatModel());
+        // Image generation connection
+        m.put("image.apiKey", maskSecret(getImageApiKey()));
+        m.put("image.endpoint", getImageEndpoint());
+        m.put("image.model", getImageModel());
+        m.put("image.quality", getImageQuality());
+        m.put("image.size", getImageSize());
+        m.put("image.prompt", getImagePrompt());
         return m;
     }
 
@@ -216,6 +243,16 @@ public class AssistantRuntimeConfig {
             patch.put("assistant.chat.api-key", String.valueOf(chatKey));
         }
         putIfPresent(values, patch, "chat.model", "assistant.chat.model");
+        // Image generation connection
+        Object imageKey = values.get("image.apiKey");
+        if (imageKey != null && !String.valueOf(imageKey).contains("****")) {
+            patch.put("assistant.image.api-key", String.valueOf(imageKey));
+        }
+        putIfPresent(values, patch, "image.endpoint", "assistant.image.endpoint");
+        putIfPresent(values, patch, "image.model", "assistant.image.model");
+        putIfPresent(values, patch, "image.quality", "assistant.image.quality");
+        putIfPresent(values, patch, "image.size", "assistant.image.size");
+        putIfPresent(values, patch, "image.prompt", "assistant.image.prompt");
         if (!patch.isEmpty()) {
             siteSettings.updateSettings(patch, updatedBy);
         }

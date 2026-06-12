@@ -83,7 +83,9 @@ public class ProductImageCrawlerService {
             "kaercher.com",
             "kumtel.com",
             "tefal.com.tr",         "tefal.com",
-            "braunshop.com.tr"
+            "braunshop.com.tr",
+            "philips.com.tr",       "philips.com",
+            "rotaclimate.com"
             // Removed (not needed): arcelik, beko, vestel, samsung.
             // NOTE: altus.com.tr does TLS fingerprinting with Akamai Bot Manager;
             // it cannot be bypassed with server-side HTTP clients (Jsoup/HttpURLConnection).
@@ -140,16 +142,28 @@ public class ProductImageCrawlerService {
             // Description + shortDescription + specs + brand
             String description = extractDescription(doc);
             String shortDescription = extractShortDescription(doc, description);
-            java.util.Map<String, String> specs = extractSpecs(doc);
+            // Grouped specs first (sections preserved, e.g. BSH "Genel özellikler" /
+            // "Boyutlar" / "Soğutucu bölümü"); the flat map is derived from them so
+            // both shapes stay consistent. Flat extraction remains the fallback.
+            List<SpecGroup> specGroups = extractSpecGroups(doc);
+            java.util.Map<String, String> specs;
+            if (!specGroups.isEmpty()) {
+                specs = new java.util.LinkedHashMap<>();
+                for (SpecGroup g : specGroups) {
+                    for (SpecItem it : g.items()) specs.putIfAbsent(it.label(), it.value());
+                }
+            } else {
+                specs = extractSpecs(doc);
+            }
             String brand = extractBrand(doc);
 
             long ms = System.currentTimeMillis() - t0;
-            log.info("[Crawler] preview {} → {} images, desc={} chars, specs={} ({}ms)",
+            log.info("[Crawler] preview {} → {} images, desc={} chars, specs={} in {} groups ({}ms)",
                     pageUrl, images.size(),
                     description != null ? description.length() : 0,
-                    specs.size(), ms);
+                    specs.size(), specGroups.size(), ms);
             return new CrawlPreview(pageUrl, title.trim(), images,
-                    description, shortDescription, specs, brand, null);
+                    description, shortDescription, specs, specGroups, brand, null);
         } catch (org.jsoup.HttpStatusException e) {
             throw new CrawlException("Sayfa erişilemez (" + e.getStatusCode() + ")", e);
         } catch (java.net.SocketTimeoutException e) {
@@ -502,6 +516,353 @@ public class ProductImageCrawlerService {
         // numeric specs like "350" (no currency marker).
         if (v.matches("(?i)^\\s*[₺$€]?\\s*\\d[\\d.,]*\\s*(tl|try|usd|eur|₺|\\$|€)\\s*$")) return false;
         return true;
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    //  Grouped technical specs (sections preserved)
+    // ─────────────────────────────────────────────────────────────
+
+    private static final int MAX_SPEC_GROUPS = 15;
+    private static final int MAX_ITEMS_PER_GROUP = 80;
+    private static final int MAX_TOTAL_SPEC_ITEMS = 300;
+
+    private static final com.fasterxml.jackson.databind.ObjectMapper SPEC_JSON =
+            new com.fasterxml.jackson.databind.ObjectMapper();
+
+    /**
+     * Extracts technical specifications WITH their section grouping, matching the
+     * product's structured technicalSpecs shape ({@code [{title, items:[{label,value}]}]}).
+     *
+     * <p>Strategy order:</p>
+     * <ol>
+     *   <li>BSH platform (Profilo / Bosch / Siemens) — the full spec list ("Genel
+     *       özellikler", "Boyutlar", "Soğutucu bölümü", …) is embedded in the Next.js
+     *       App Router flight payload ({@code self.__next_f.push}) as escaped JSON.</li>
+     *   <li>Generic: each accepted key/value table becomes a group titled by its
+     *       caption or the nearest preceding heading.</li>
+     * </ol>
+     * Returns an empty list when neither strategy yields results (the flat
+     * {@link #extractSpecs} map remains the fallback).
+     */
+    List<SpecGroup> extractSpecGroups(Document doc) {
+        try {
+            List<SpecGroup> bsh = parseBshSpecGroups(collectFlightPayload(doc));
+            if (!bsh.isEmpty()) return bsh;
+        } catch (Exception e) {
+            log.debug("[Crawler] BSH spec-group parse failed: {}", e.getMessage());
+        }
+        try {
+            List<SpecGroup> tables = extractTableSpecGroups(doc);
+            if (!tables.isEmpty()) return tables;
+        } catch (Exception e) {
+            log.debug("[Crawler] table spec-group parse failed: {}", e.getMessage());
+        }
+        try {
+            // <dl> definition lists with per-section headings (e.g. Philips:
+            // "Menşei" / "Teknik Özellikler" / "Aksesuarlar" titles above each list).
+            return extractDlSpecGroups(doc);
+        } catch (Exception e) {
+            log.debug("[Crawler] dl spec-group parse failed: {}", e.getMessage());
+            return List.of();
+        }
+    }
+
+    /**
+     * Concatenates the contents of all {@code self.__next_f.push([n,"..."])} chunks in
+     * document order and unescapes them once, reconstructing the streamed flight text.
+     * Chunk boundaries can split JSON mid-token, so concatenation must happen on the
+     * still-escaped payloads BEFORE unescaping.
+     *
+     * <p>Hand-rolled scanner on purpose: a regex with an escaped-string alternation
+     * recurses per character in Java's engine and overflows the stack on real BSH
+     * payloads (hundreds of KB in a single script tag).</p>
+     */
+    String collectFlightPayload(Document doc) {
+        final String PUSH = "self.__next_f.push([";
+        StringBuilder escaped = new StringBuilder();
+        for (Element s : doc.select("script")) {
+            String data = s.data();
+            if (data == null || !data.contains("self.__next_f")) continue;
+            int idx = 0;
+            while ((idx = data.indexOf(PUSH, idx)) >= 0) {
+                int p = idx + PUSH.length();
+                while (p < data.length() && Character.isDigit(data.charAt(p))) p++;
+                if (p + 1 < data.length() && data.charAt(p) == ',' && data.charAt(p + 1) == '"') {
+                    int i = p + 2;
+                    int start = i;
+                    while (i < data.length()) {
+                        char c = data.charAt(i);
+                        if (c == '\\') { i += 2; continue; }   // skip escaped char
+                        if (c == '"') break;                    // unescaped close quote
+                        i++;
+                    }
+                    if (i > data.length()) i = data.length();
+                    escaped.append(data, start, Math.min(i, data.length()));
+                    idx = Math.min(i + 1, data.length());
+                } else {
+                    idx = p; // push([0]) etc. — no string payload
+                }
+            }
+        }
+        if (escaped.length() == 0) return "";
+        return unescapeJsString(escaped.toString());
+    }
+
+    /**
+     * Finds the BSH spec-group array in the (unescaped) flight text and maps it to
+     * {@link SpecGroup}s. The outer group array is recognizable as
+     * {@code "specifications":[{"name":"<plain string>"} — inner per-group item arrays
+     * start with {@code [{"key":"…"}} instead, so the marker cannot match them.
+     */
+    List<SpecGroup> parseBshSpecGroups(String flightText) {
+        if (flightText == null || flightText.isEmpty()) return List.of();
+        String marker = "\"specifications\":[{\"name\":\"";
+        int from = 0;
+        while ((from = flightText.indexOf(marker, from)) >= 0) {
+            int arrayStart = flightText.indexOf('[', from);
+            String jsonArray = extractBalancedArray(flightText, arrayStart);
+            if (jsonArray != null) {
+                List<SpecGroup> groups = mapBshGroups(jsonArray);
+                if (!groups.isEmpty()) return groups;
+            }
+            from += marker.length();
+        }
+        return List.of();
+    }
+
+    /** Parses the extracted JSON array and maps BSH group/spec objects to SpecGroups. */
+    private List<SpecGroup> mapBshGroups(String jsonArray) {
+        com.fasterxml.jackson.databind.JsonNode root;
+        try {
+            root = SPEC_JSON.readTree(jsonArray);
+        } catch (Exception e) {
+            return List.of();
+        }
+        if (root == null || !root.isArray()) return List.of();
+
+        List<SpecGroup> groups = new ArrayList<>();
+        int total = 0;
+        for (com.fasterxml.jackson.databind.JsonNode g : root) {
+            if (groups.size() >= MAX_SPEC_GROUPS || total >= MAX_TOTAL_SPEC_ITEMS) break;
+            String title = g.path("name").isTextual() ? g.path("name").asText().trim() : null;
+            com.fasterxml.jackson.databind.JsonNode specsNode = g.path("specifications");
+            if (title == null || title.isEmpty() || title.length() > 80 || !specsNode.isArray()) continue;
+
+            List<SpecItem> items = new ArrayList<>();
+            for (com.fasterxml.jackson.databind.JsonNode spec : specsNode) {
+                if (items.size() >= MAX_ITEMS_PER_GROUP || total + items.size() >= MAX_TOTAL_SPEC_ITEMS) break;
+                String label = textOf(spec.path("name"));
+                String value = textOf(spec.path("value"));
+                if (label == null || value == null) continue;
+                value = resolveTranslatedValue(value, spec.path("requiresValueTranslation").asBoolean(false));
+                if (value == null) continue;
+                String unit = spec.path("unit").isTextual() ? spec.path("unit").asText().trim() : "";
+                if (!unit.isEmpty()) value = value + " " + unit;
+                label = cleanSpecLabel(label);
+                if (looksLikeSpec(label, value)) items.add(new SpecItem(label, value.trim()));
+            }
+            if (!items.isEmpty()) {
+                groups.add(new SpecGroup(title, items));
+                total += items.size();
+            }
+        }
+        return groups;
+    }
+
+    /** BSH text node: either {"footnoteDataArray":[],"text":"…"} or a plain string. */
+    private static String textOf(com.fasterxml.jackson.databind.JsonNode node) {
+        if (node == null || node.isMissingNode() || node.isNull()) return null;
+        String t = node.isTextual() ? node.asText() : node.path("text").asText(null);
+        if (t == null) return null;
+        t = t.trim();
+        return t.isEmpty() ? null : t;
+    }
+
+    /**
+     * Dotted i18n keys like "an.yes" or "an.someFeatureKey". Must start with a
+     * lowercase letter so dotted numerics ("1.5") are never mistaken for keys.
+     */
+    private static final Pattern TRANSLATION_KEY =
+            Pattern.compile("^[a-z][a-zA-Z0-9_]*(\\.[a-zA-Z0-9_]+)+$");
+
+    /**
+     * Resolves i18n-key values ({@code requiresValueTranslation:true}) to Turkish.
+     * Returns null when the value would remain a raw key (e.g. "an.someFeature") —
+     * raw keys must never reach the storefront.
+     */
+    private static String resolveTranslatedValue(String value, boolean requiresTranslation) {
+        String v = value.trim();
+        if (requiresTranslation) {
+            String last = v.substring(v.lastIndexOf('.') + 1).toLowerCase(Locale.ROOT);
+            switch (last) {
+                case "yes", "true": return "Evet";
+                case "no", "false": return "Hayır";
+                default: break;
+            }
+        }
+        return TRANSLATION_KEY.matcher(v).matches() ? null : v;
+    }
+
+    /**
+     * Generic grouped fallback: every accepted 2-cell key/value table becomes one
+     * group, titled by its {@code <caption>} or the nearest preceding heading.
+     */
+    private List<SpecGroup> extractTableSpecGroups(Document doc) {
+        List<SpecGroup> groups = new ArrayList<>();
+        int total = 0;
+        for (Element table : doc.select("table")) {
+            if (groups.size() >= MAX_SPEC_GROUPS || total >= MAX_TOTAL_SPEC_ITEMS) break;
+            List<SpecItem> items = new ArrayList<>();
+            Set<String> seen = new LinkedHashSet<>();
+            for (Element row : table.select("tr")) {
+                if (items.size() >= MAX_ITEMS_PER_GROUP) break;
+                var cells = row.select("th, td");
+                if (cells.size() != 2) continue;
+                String k = cleanSpecLabel(cells.get(0).text());
+                String v = cells.get(1).text().trim();
+                if (looksLikeSpec(k, v) && seen.add(k.toLowerCase(Locale.ROOT))) {
+                    items.add(new SpecItem(k, v));
+                }
+            }
+            // Same acceptance bar as the flat extractor: layout/price tables are skipped.
+            if (items.size() < 2) continue;
+            groups.add(new SpecGroup(tableGroupTitle(table), items));
+            total += items.size();
+        }
+        return groups;
+    }
+
+    /**
+     * Generic grouped fallback for definition lists: every {@code <dl>} with
+     * spec-like dt/dd rows becomes a group, titled by the nearest preceding
+     * heading. Consecutive lists resolving to the same title are merged. A single
+     * stray row is not enough — at least 2 rows in total are required, matching
+     * the table extractor's noise bar.
+     */
+    private List<SpecGroup> extractDlSpecGroups(Document doc) {
+        List<SpecGroup> groups = new ArrayList<>();
+        int total = 0;
+        for (Element dl : doc.select("dl")) {
+            if (groups.size() >= MAX_SPEC_GROUPS || total >= MAX_TOTAL_SPEC_ITEMS) break;
+            var dts = dl.select("dt");
+            var dds = dl.select("dd");
+            int n = Math.min(dts.size(), dds.size());
+            List<SpecItem> items = new ArrayList<>();
+            Set<String> seen = new LinkedHashSet<>();
+            for (int i = 0; i < n && items.size() < MAX_ITEMS_PER_GROUP; i++) {
+                String k = cleanSpecLabel(dts.get(i).text());
+                String v = dds.get(i).text().trim();
+                if (looksLikeSpec(k, v) && seen.add(k.toLowerCase(Locale.ROOT))) {
+                    items.add(new SpecItem(k, v));
+                }
+            }
+            if (items.isEmpty()) continue;
+            String title = nearestHeadingTitle(dl);
+            SpecGroup last = groups.isEmpty() ? null : groups.get(groups.size() - 1);
+            if (last != null && last.title().equals(title)) {
+                List<SpecItem> merged = new ArrayList<>(last.items());
+                merged.addAll(items);
+                groups.set(groups.size() - 1, new SpecGroup(title, merged));
+            } else {
+                groups.add(new SpecGroup(title, items));
+            }
+            total += items.size();
+        }
+        return total >= 2 ? groups : List.of();
+    }
+
+    /** Group title for a spec table: caption → nearest preceding heading → default. */
+    private static String tableGroupTitle(Element table) {
+        Element caption = table.selectFirst("caption");
+        if (caption != null) {
+            String t = caption.text().trim();
+            if (!t.isEmpty() && t.length() <= 60) return t;
+        }
+        return nearestHeadingTitle(table);
+    }
+
+    /**
+     * Nearest preceding heading for a spec container: walks previous siblings,
+     * climbing up to 3 ancestor levels. Besides h2-h5, class-based titles are
+     * accepted (e.g. Philips "p-s08__spec-title" paragraphs).
+     */
+    private static String nearestHeadingTitle(Element el) {
+        final String SEL = "h2, h3, h4, h5, [class*=spec-title], [class*=section-title], [class*=group-title]";
+        Element scope = el;
+        for (int depth = 0; depth < 3 && scope != null; depth++) {
+            for (Element prev = scope.previousElementSibling(); prev != null; prev = prev.previousElementSibling()) {
+                Element h = prev.is(SEL) ? prev : prev.selectFirst(SEL);
+                if (h != null) {
+                    String t = h.text().trim();
+                    if (!t.isEmpty() && t.length() <= 60) return t;
+                }
+            }
+            scope = scope.parent();
+        }
+        return "Teknik Özellikler";
+    }
+
+    /**
+     * Unescapes a JS string literal body ({@code \" \\ \/ \n \r \t \b \f \ uXXXX}).
+     * Unknown escapes keep the escaped character as-is.
+     */
+    static String unescapeJsString(String s) {
+        StringBuilder out = new StringBuilder(s.length());
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c != '\\' || i + 1 >= s.length()) {
+                out.append(c);
+                continue;
+            }
+            char n = s.charAt(++i);
+            switch (n) {
+                case 'n' -> out.append('\n');
+                case 'r' -> out.append('\r');
+                case 't' -> out.append('\t');
+                case 'b' -> out.append('\b');
+                case 'f' -> out.append('\f');
+                case 'u' -> {
+                    if (i + 4 < s.length()) {
+                        try {
+                            out.append((char) Integer.parseInt(s.substring(i + 1, i + 5), 16));
+                            i += 4;
+                        } catch (NumberFormatException e) {
+                            out.append(n);
+                        }
+                    } else {
+                        out.append(n);
+                    }
+                }
+                default -> out.append(n); // \" \\ \/ and anything else → the char itself
+            }
+        }
+        return out.toString();
+    }
+
+    /**
+     * Extracts a balanced JSON array starting at {@code start} ('['), respecting
+     * string literals and their escapes. Returns null when unbalanced/oversized.
+     */
+    static String extractBalancedArray(String text, int start) {
+        if (start < 0 || start >= text.length() || text.charAt(start) != '[') return null;
+        final int cap = Math.min(text.length(), start + 800_000); // sanity bound
+        int depth = 0;
+        boolean inString = false;
+        for (int i = start; i < cap; i++) {
+            char c = text.charAt(i);
+            if (inString) {
+                if (c == '\\') i++;          // skip escaped char inside string
+                else if (c == '"') inString = false;
+            } else if (c == '"') {
+                inString = true;
+            } else if (c == '[') {
+                depth++;
+            } else if (c == ']') {
+                depth--;
+                if (depth == 0) return text.substring(start, i + 1);
+            }
+        }
+        return null;
     }
 
     /** Brand name extraction (schema.org brand or meta). */
@@ -895,7 +1256,10 @@ public class ProductImageCrawlerService {
      * @param images        candidate image URLs
      * @param description   long description (may be HTML; plain text preferred)
      * @param shortDescription short description (1-2 sentences, from the meta description)
-     * @param specs         technical specifications (key→value pairs)
+     * @param specs         technical specifications, flattened (key→value pairs)
+     * @param specGroups    technical specifications preserving the page's section
+     *                      grouping ("Genel özellikler", "Boyutlar", …) — matches the
+     *                      product's structured technicalSpecs shape
      * @param brand         brand name (from schema.org/brand)
      * @param error         error message (if any)
      */
@@ -906,14 +1270,21 @@ public class ProductImageCrawlerService {
             String description,
             String shortDescription,
             java.util.Map<String, String> specs,
+            List<SpecGroup> specGroups,
             String brand,
             String error) {
 
         /** Legacy 4-arg constructor — for backward compatibility. */
         public CrawlPreview(String url, String title, List<String> images, String error) {
-            this(url, title, images, null, null, java.util.Map.of(), null, error);
+            this(url, title, images, null, null, java.util.Map.of(), List.of(), null, error);
         }
     }
+
+    /** One spec section as it appears on the source page (e.g. "Soğutucu bölümü"). */
+    public record SpecGroup(String title, List<SpecItem> items) {}
+
+    /** One label/value row inside a spec section. */
+    public record SpecItem(String label, String value) {}
     public record ImportResult(int success, int total, List<String> errors) {
         public boolean isOk() { return success > 0 && errors.isEmpty(); }
     }

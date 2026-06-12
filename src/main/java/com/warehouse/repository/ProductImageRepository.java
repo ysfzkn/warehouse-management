@@ -11,6 +11,10 @@ import java.util.List;
 public interface ProductImageRepository extends JpaRepository<ProductImage, Long> {
 
     List<ProductImage> findByProductOrderBySortOrderAscIdAsc(Product product);
+
+    List<ProductImage> findByProductAndAiRole(Product product, String aiRole);
+
+    List<ProductImage> findByProductAndAiRoleAndMemberProductId(Product product, String aiRole, Long memberProductId);
 }
 
 

@@ -8,6 +8,7 @@ import com.warehouse.repository.ProductImageRepository;
 import com.warehouse.repository.ProductRepository;
 import com.warehouse.service.PhotoStorageService;
 import com.warehouse.service.ProductImageService;
+import com.warehouse.util.ProductImageUtil;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -60,10 +61,10 @@ public class ProductImageServiceImpl implements ProductImageService {
         }
 
         List<ProductImage> all = imageRepository.findByProductOrderBySortOrderAscIdAsc(product);
-        // Gallery ordering/primary logic considers only non-slot images so the
-        // triple-set slots never affect the main gallery.
+        // Gallery ordering/primary logic considers only gallery images so the
+        // set slots and hidden AI cover inputs never affect the main gallery.
         List<ProductImage> gallery = all.stream()
-                .filter(img -> img.getSlot() == null)
+                .filter(ProductImageUtil::isGalleryImage)
                 .collect(java.util.stream.Collectors.toList());
 
         PhotoStorageService.StoredPhoto stored = photoStorageService.storeProductImage(
@@ -128,10 +129,13 @@ public class ProductImageServiceImpl implements ProductImageService {
         photoStorageService.deletePhotoFiles(image.getRelativePath(), image.getThumbnailPath());
         imageRepository.delete(image);
 
-        // If we removed the primary image, promote the next one (by sort order) so
-        // the product never ends up without a primary → broken first image on store.
+        // If we removed the primary image, promote the next gallery image (by sort
+        // order) so the product never ends up without a primary → broken first image
+        // on store. Slot and AI cover-input rows must never become primary.
         if (wasPrimary && product != null) {
-            List<ProductImage> remaining = imageRepository.findByProductOrderBySortOrderAscIdAsc(product);
+            List<ProductImage> remaining = imageRepository.findByProductOrderBySortOrderAscIdAsc(product).stream()
+                    .filter(ProductImageUtil::isGalleryImage)
+                    .toList();
             if (!remaining.isEmpty() && remaining.stream().noneMatch(ProductImage::isPrimary)) {
                 remaining.get(0).setPrimary(true);
                 imageRepository.save(remaining.get(0));
@@ -143,6 +147,10 @@ public class ProductImageServiceImpl implements ProductImageService {
     public void setPrimaryImage(Long imageId) {
         ProductImage image = imageRepository.findById(imageId)
                 .orElseThrow(() -> new WarehouseManagementException(ErrorCode.PRODUCT_NOT_FOUND));
+        // Slot and AI cover-input rows are not part of the gallery and can't be primary.
+        if (!ProductImageUtil.isGalleryImage(image)) {
+            throw new WarehouseManagementException(ErrorCode.INVALID_VALUE);
+        }
         // Get all images for the same product and update primary flags
         List<ProductImage> allImages = imageRepository.findByProductOrderBySortOrderAscIdAsc(image.getProduct());
         for (ProductImage img : allImages) {
@@ -165,8 +173,11 @@ public class ProductImageServiceImpl implements ProductImageService {
             ProductImage img = byId.remove(id);
             if (img != null) img.setSortOrder(order++);
         }
-        // Any images not included in the payload keep a stable order at the end.
-        for (ProductImage img : byId.values()) img.setSortOrder(order++);
+        // Any gallery images not included in the payload keep a stable order at the
+        // end. Slot and AI cover-input rows keep their own sortOrder untouched.
+        for (ProductImage img : byId.values()) {
+            if (ProductImageUtil.isGalleryImage(img)) img.setSortOrder(order++);
+        }
 
         imageRepository.saveAll(images);
     }

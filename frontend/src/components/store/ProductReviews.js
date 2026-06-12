@@ -4,6 +4,7 @@ import axios from 'axios';
 import { FiCheckCircle, FiCamera, FiX, FiEdit2, FiTrash2 } from 'react-icons/fi';
 import RatingStars from './RatingStars';
 import { useToast } from './Toast';
+import confirmDialog from '../../utils/confirmDialog';
 
 const fmtDate = (s) => {
   if (!s) return '';
@@ -143,8 +144,12 @@ export default function ProductReviews({ productId }) {
   const deleteMyReview = async () => {
     const r = elig?.myReview;
     if (!r) return;
-    // eslint-disable-next-line no-alert
-    if (!window.confirm('Yorumunuzu silmek istediğinize emin misiniz?')) return;
+    const ok = await confirmDialog({
+      title: 'Yorum Silinsin mi?',
+      message: 'Yorumunuz kalıcı olarak silinecek.',
+      confirmText: 'Evet, Sil',
+    });
+    if (!ok) return;
     try {
       await axios.delete(`/api/store/reviews/${r.id}`);
       toast.info('Yorumunuz silindi.');

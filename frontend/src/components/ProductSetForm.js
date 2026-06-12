@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import BundleMemberPicker from './BundleMemberPicker';
+import confirmDialog from '../utils/confirmDialog';
 
 /**
  * Focused editor for a product set (bundle).
@@ -40,6 +41,28 @@ const mapMember = (b) => ({
 /** Accept either a plain array or a paginated { content: [...] } response. */
 const pickList = (data) => (Array.isArray(data?.content) ? data.content : Array.isArray(data) ? data : []);
 
+/**
+ * Gallery image = displayable: not a showcase slot, not a hidden per-member
+ * AI cover input (aiRole COVER_INPUT). The AI-generated cover (AI_COVER) IS a
+ * normal gallery image.
+ */
+const isGallery = (img) => !img.slot && img.aiRole !== 'COVER_INPUT';
+
+/**
+ * Extracts the most meaningful Turkish message from an API error response:
+ * field-level validation errors first, then the backend's domain message,
+ * then the caller's fallback.
+ */
+const apiErrorMessage = (e, fallback) => {
+  const data = e?.response?.data;
+  if (data?.fieldErrors && Object.keys(data.fieldErrors).length > 0) {
+    return Object.values(data.fieldErrors).join(' • ');
+  }
+  if (data?.message) return data.message;
+  if (e?.code === 'ECONNABORTED') return 'İstek zaman aşımına uğradı. Lütfen tekrar deneyin.';
+  return fallback;
+};
+
 export default function ProductSetForm({ product, onSuccess, onCancel }) {
   const [name, setName] = useState('');
   const [sku, setSku] = useState('');
@@ -68,16 +91,28 @@ export default function ProductSetForm({ product, onSuccess, onCancel }) {
   const [dragIndex, setDragIndex] = useState(null);
   const [dragOverIndex, setDragOverIndex] = useState(null);
 
+  // AI cover: per-member input selection + generation state
+  const [coverBusy, setCoverBusy] = useState(null); // memberProductId | 'fill' | null
+  const [generating, setGenerating] = useState(false);
+  const [pickingFor, setPickingFor] = useState(null); // memberProductId of the open picker
+  const [pickerImages, setPickerImages] = useState([]);
+  const [pickerLoading, setPickerLoading] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
   const [flash, setFlash] = useState(null);
 
   const editId = product?.id || savedId;
 
+  // Toast notification: top-right, auto-dismissing; errors stay visible longer.
+  const flashTimer = useRef(null);
   const showFlash = (message, variant = 'success') => {
     setFlash({ message, variant });
-    setTimeout(() => setFlash(null), 3000);
+    if (flashTimer.current) clearTimeout(flashTimer.current);
+    const duration = variant === 'success' ? 3500 : variant === 'warning' ? 6500 : 8000;
+    flashTimer.current = setTimeout(() => setFlash(null), duration);
   };
+  useEffect(() => () => flashTimer.current && clearTimeout(flashTimer.current), []);
 
   // ---- Load categories ----
   const fetchMainCategories = useCallback(() => {
@@ -119,8 +154,14 @@ export default function ProductSetForm({ product, onSuccess, onCancel }) {
   const createCategory = async () => {
     const nm = newCatName.trim();
     if (!nm) return;
-    // eslint-disable-next-line no-alert
-    if (!window.confirm(`"${nm}" adında yeni bir kategori oluşturulsun mu?`)) return;
+    const ok = await confirmDialog({
+      title: 'Yeni Kategori',
+      message: `"${nm}" adında yeni bir kategori oluşturulsun mu?`,
+      confirmText: 'Oluştur',
+      variant: 'primary',
+      icon: 'fa-folder-plus',
+    });
+    if (!ok) return;
     try {
       const r = await axios.post('/api/categories', { name: nm, description: null });
       await fetchMainCategories();
@@ -206,7 +247,10 @@ export default function ProductSetForm({ product, onSuccess, onCancel }) {
     if (hasSale && Number(salePrice) >= membersTotal)
       errs.salePrice = 'İndirimli fiyat, set fiyatından düşük olmalıdır.';
     setErrors(errs);
-    if (Object.keys(errs).length > 0) return;
+    if (Object.keys(errs).length > 0) {
+      showFlash(Object.values(errs).join(' • '), 'danger');
+      return;
+    }
 
     setLoading(true);
     try {
@@ -249,7 +293,7 @@ export default function ProductSetForm({ product, onSuccess, onCancel }) {
         loadImages(newId);
       }
     } catch (e) {
-      setErrors({ general: e?.response?.data?.message || 'Set kaydedilemedi.' });
+      showFlash(apiErrorMessage(e, 'Set kaydedilemedi. Lütfen tekrar deneyin.'), 'danger');
     } finally {
       setLoading(false);
     }
@@ -261,7 +305,7 @@ export default function ProductSetForm({ product, onSuccess, onCancel }) {
     if (files.length === 0 || !editId) return;
     setUploading(true);
     try {
-      const galleryCount = images.filter((img) => !img.slot).length;
+      const galleryCount = images.filter(isGallery).length;
       for (let i = 0; i < files.length; i += 1) {
         const fd = new FormData();
         fd.append('file', files[i]);
@@ -306,6 +350,122 @@ export default function ProductSetForm({ product, onSuccess, onCancel }) {
     }
   };
 
+  // ---- AI cover: per-member input photos + generation ----
+  const coverInputs = images.filter((i) => i.aiRole === 'COVER_INPUT');
+  const coverInputFor = (memberProductId) =>
+    coverInputs.find((i) => i.memberProductId === memberProductId) || null;
+  const allInputsSelected = members.length > 0 && members.every((m) => coverInputFor(m.productId));
+  const existingAiCover = images.find((i) => i.aiRole === 'AI_COVER') || null;
+
+  const coverError = (e, fallback) => showFlash(apiErrorMessage(e, fallback), 'danger');
+
+  const uploadCoverInput = async (memberProductId, file) => {
+    if (!file || !editId) return;
+    setCoverBusy(memberProductId);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      await axios.put(`/api/products/${editId}/cover-inputs/${memberProductId}`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      loadImages(editId);
+    } catch (e) {
+      coverError(e, 'Fotoğraf yüklenemedi. Üye listesini değiştirdiyseniz önce seti kaydedin.');
+    } finally {
+      setCoverBusy(null);
+    }
+  };
+
+  const openPicker = async (memberProductId) => {
+    setPickingFor(memberProductId);
+    setPickerLoading(true);
+    setPickerImages([]);
+    try {
+      const r = await axios.get(`/api/products/${memberProductId}/images`);
+      setPickerImages((r.data || []).filter((i) => !i.slot && !i.aiRole));
+    } catch {
+      setPickerImages([]);
+    } finally {
+      setPickerLoading(false);
+    }
+  };
+
+  const pickCoverInput = async (imageId) => {
+    if (!pickingFor || !editId) return;
+    setCoverBusy(pickingFor);
+    try {
+      await axios.put(`/api/products/${editId}/cover-inputs/${pickingFor}/from-image/${imageId}`);
+      loadImages(editId);
+      setPickingFor(null);
+    } catch (e) {
+      coverError(e, 'Fotoğraf seçilemedi.');
+    } finally {
+      setCoverBusy(null);
+    }
+  };
+
+  const removeCoverInput = async (memberProductId) => {
+    setCoverBusy(memberProductId);
+    try {
+      await axios.delete(`/api/products/${editId}/cover-inputs/${memberProductId}`);
+      loadImages(editId);
+    } catch (e) {
+      coverError(e, 'Fotoğraf kaldırılamadı.');
+    } finally {
+      setCoverBusy(null);
+    }
+  };
+
+  const fillCoverInputsFromPrimaries = async () => {
+    setCoverBusy('fill');
+    try {
+      const r = await axios.post(`/api/products/${editId}/cover-inputs/fill-from-primaries`);
+      loadImages(editId);
+      const missing = r.data?.missingMemberIds || [];
+      if (missing.length > 0) {
+        const names = members
+          .filter((m) => missing.includes(m.productId))
+          .map((m) => m.name)
+          .join(', ');
+        showFlash(
+          `Fotoğrafı olmayan veya formatı desteklenmeyen (AVIF) üyeler atlandı: ${names}. Bu üyeler için elle JPEG/PNG seçin.`,
+          'warning'
+        );
+      } else {
+        showFlash('Tüm üyelerin fotoğrafları dolduruldu.');
+      }
+    } catch (e) {
+      coverError(e, 'Fotoğraflar doldurulamadı. Üye listesini değiştirdiyseniz önce seti kaydedin.');
+    } finally {
+      setCoverBusy(null);
+    }
+  };
+
+  const generateAiCover = async () => {
+    if (!editId || generating) return;
+    if (existingAiCover) {
+      const ok = await confirmDialog({
+        title: 'Kapak Yeniden Oluşturulsun mu?',
+        message:
+          'Mevcut yapay zeka kapak fotoğrafı silinecek ve yenisi oluşturulacak. Üretim 1-2 dakika sürebilir.',
+        confirmText: 'Evet, Oluştur',
+        variant: 'primary',
+        icon: 'fa-magic',
+      });
+      if (!ok) return;
+    }
+    setGenerating(true);
+    try {
+      await axios.post(`/api/products/${editId}/generate-cover`, null, { timeout: 180000 });
+      loadImages(editId);
+      showFlash('Yapay zeka kapak fotoğrafı oluşturuldu ve birincil görsel olarak ayarlandı. 🎉');
+    } catch (e) {
+      coverError(e, 'Kapak fotoğrafı oluşturulamadı. Lütfen tekrar deneyin.');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   const setPrimary = async (imageId) => {
     try {
       await axios.put(`/api/products/images/${imageId}/set-primary`);
@@ -324,10 +484,10 @@ export default function ProductSetForm({ product, onSuccess, onCancel }) {
     }
   };
 
-  // ---- Drag-and-drop image ordering (gallery images only; slot images are fixed) ----
+  // ---- Drag-and-drop image ordering (gallery images only; slot + AI input images are fixed) ----
   const persistImageOrder = async (orderedGallery) => {
-    const slotImgs = images.filter((i) => i.slot);
-    setImages([...orderedGallery, ...slotImgs]);
+    const fixedImgs = images.filter((i) => !isGallery(i));
+    setImages([...orderedGallery, ...fixedImgs]);
     if (!editId) return;
     try {
       await axios.put(
@@ -345,7 +505,7 @@ export default function ProductSetForm({ product, onSuccess, onCancel }) {
       setDragIndex(null);
       return;
     }
-    const sorted = images.filter((i) => !i.slot).sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+    const sorted = images.filter(isGallery).sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
     const [moved] = sorted.splice(dragIndex, 1);
     sorted.splice(targetIndex, 0, moved);
     const reindexed = sorted.map((img, i) => ({ ...img, sortOrder: i }));
@@ -355,7 +515,46 @@ export default function ProductSetForm({ product, onSuccess, onCancel }) {
 
   return (
     <div>
-      {errors.general && <div className="alert alert-danger">{errors.general}</div>}
+      {/* Toast notification — fixed top-right; all success/warning/error feedback lands here */}
+      {flash && (
+        <div
+          className="position-fixed"
+          style={{ zIndex: 2060, top: 76, right: 16, maxWidth: 420, minWidth: 280 }}
+        >
+          <div
+            className={`toast show border-0 shadow-lg ${
+              flash.variant === 'success'
+                ? 'bg-success text-white'
+                : flash.variant === 'warning'
+                  ? 'bg-warning'
+                  : 'bg-danger text-white'
+            }`}
+            role="alert"
+            style={{ borderRadius: 10 }}
+          >
+            <div className="d-flex align-items-start">
+              <div className="toast-body fw-semibold" style={{ fontSize: 13 }}>
+                <i
+                  className={`fas ${
+                    flash.variant === 'success'
+                      ? 'fa-check-circle'
+                      : flash.variant === 'warning'
+                        ? 'fa-exclamation-triangle'
+                        : 'fa-times-circle'
+                  } me-2`}
+                />
+                {flash.message}
+              </div>
+              <button
+                type="button"
+                className={`btn-close ${flash.variant !== 'warning' ? 'btn-close-white' : ''} me-2 mt-2 flex-shrink-0`}
+                aria-label="Kapat"
+                onClick={() => setFlash(null)}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Set name + presets */}
       <div className="mb-3">
@@ -595,7 +794,7 @@ export default function ProductSetForm({ product, onSuccess, onCancel }) {
                   Yükleniyor...
                 </div>
               )}
-              {images.filter((i) => !i.slot).length > 1 && (
+              {images.filter(isGallery).length > 1 && (
                 <p className="text-muted small mb-2">
                   <i className="fas fa-arrows-alt me-1" />
                   Sıralamak için görselleri sürükleyip bırakın.
@@ -603,7 +802,7 @@ export default function ProductSetForm({ product, onSuccess, onCancel }) {
               )}
               <div className="d-flex flex-wrap gap-2">
                 {images
-                  .filter((i) => !i.slot)
+                  .filter(isGallery)
                   .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
                   .map((img, index) => (
                     <div
@@ -646,6 +845,16 @@ export default function ProductSetForm({ product, onSuccess, onCancel }) {
                           style={{ fontSize: 8 }}
                         >
                           Birincil
+                        </span>
+                      )}
+                      {img.aiRole === 'AI_COVER' && (
+                        <span
+                          className="badge position-absolute top-0 end-0"
+                          style={{ fontSize: 8, background: '#7c3aed' }}
+                          title="Yapay Zeka ile üretilen kapak fotoğrafı"
+                        >
+                          <i className="fas fa-magic me-1" style={{ fontSize: 7 }} />
+                          YZ Kapak
                         </span>
                       )}
                       <div
@@ -756,6 +965,225 @@ export default function ProductSetForm({ product, onSuccess, onCancel }) {
         </div>
       )}
 
+      {/* AI cover photo — one input photo per member, combined by OpenAI into the set's primary image */}
+      {editId && members.length > 0 && (
+        <div
+          className="card border-0 shadow-sm mb-3"
+          style={{ borderRadius: 12, border: '1px solid #ede9fe' }}
+        >
+          <div className="card-body">
+            <div className="d-flex justify-content-between align-items-start flex-wrap gap-2">
+              <div>
+                <h6 className="fw-bold mb-1" style={{ color: '#7c3aed' }}>
+                  <i className="fas fa-magic me-2" />
+                  Yapay Zeka Kapak Fotoğrafı
+                </h6>
+                <p className="text-muted small mb-0">
+                  Her üye ürün için bir fotoğraf seçin; yapay zeka bunları tek bir profesyonel kapak
+                  fotoğrafında birleştirir ve birincil set görseli yapar.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="btn btn-sm btn-outline-secondary"
+                onClick={fillCoverInputsFromPrimaries}
+                disabled={coverBusy !== null || generating}
+                title="Her üyenin birincil fotoğrafını otomatik seç"
+              >
+                {coverBusy === 'fill' ? (
+                  <span className="spinner-border spinner-border-sm me-1" />
+                ) : (
+                  <i className="fas fa-bolt me-1" />
+                )}
+                Tümünü Birincil Fotoğraflardan Doldur
+              </button>
+            </div>
+
+            {/* One tile per member */}
+            <div className="row g-2 mt-2">
+              {members.map((m) => {
+                const input = coverInputFor(m.productId);
+                const busy = coverBusy === m.productId;
+                return (
+                  <div key={m.productId} className="col-6 col-md-3">
+                    <div
+                      className={`position-relative border rounded d-flex align-items-center justify-content-center ${
+                        input ? '' : 'border-2 border-dashed'
+                      }`}
+                      style={{
+                        aspectRatio: '1 / 1',
+                        overflow: 'hidden',
+                        background: input ? '#f8f9fa' : '#fff',
+                      }}
+                    >
+                      {busy ? (
+                        <span className="spinner-border spinner-border-sm text-muted" />
+                      ) : input ? (
+                        <>
+                          <img
+                            src={`/api/admin/products/images/${input.id}/view?thumbnail=true`}
+                            alt={m.name}
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                          />
+                          <span
+                            className="badge bg-success position-absolute top-0 start-0 m-1"
+                            style={{ fontSize: 8 }}
+                          >
+                            <i className="fas fa-check" style={{ fontSize: 7 }} />
+                          </span>
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-danger position-absolute top-0 end-0 m-1 p-0 px-1"
+                            title="Kaldır"
+                            onClick={() => removeCoverInput(m.productId)}
+                            disabled={coverBusy !== null || generating}
+                          >
+                            <i className="fas fa-times" style={{ fontSize: 10 }} />
+                          </button>
+                        </>
+                      ) : (
+                        <div className="text-center text-muted small px-1">
+                          <i className="fas fa-image d-block mb-1" style={{ fontSize: 18, opacity: 0.4 }} />
+                          Fotoğraf seçilmedi
+                        </div>
+                      )}
+                    </div>
+                    <div
+                      className="small text-truncate mt-1 fw-semibold"
+                      title={m.name}
+                      style={{ fontSize: 11 }}
+                    >
+                      {m.name}
+                    </div>
+                    <div className="d-flex gap-1">
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-outline-secondary flex-fill p-0 py-1"
+                        style={{ fontSize: 10 }}
+                        title="Ürünün kendi fotoğraflarından seç"
+                        onClick={() => openPicker(m.productId)}
+                        disabled={coverBusy !== null || generating}
+                      >
+                        <i className="fas fa-images me-1" />
+                        Üründen Seç
+                      </button>
+                      <label
+                        className="btn btn-sm btn-outline-secondary flex-fill p-0 py-1 m-0"
+                        style={{
+                          fontSize: 10,
+                          cursor: coverBusy !== null || generating ? 'not-allowed' : 'pointer',
+                        }}
+                        title="Bilgisayardan yükle"
+                      >
+                        <i className="fas fa-upload me-1" />
+                        Yükle
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="d-none"
+                          disabled={coverBusy !== null || generating}
+                          onChange={(e) => {
+                            uploadCoverInput(m.productId, e.target.files?.[0]);
+                            e.target.value = '';
+                          }}
+                        />
+                      </label>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Inline picker: member product's own photos */}
+            {pickingFor !== null && (
+              <div className="border rounded p-2 mt-3" style={{ background: '#faf5ff' }}>
+                <div className="d-flex justify-content-between align-items-center mb-2">
+                  <strong className="small">
+                    <i className="fas fa-images me-1" />
+                    {members.find((m) => m.productId === pickingFor)?.name} — fotoğraf seçin
+                  </strong>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline-secondary py-0"
+                    onClick={() => setPickingFor(null)}
+                  >
+                    Kapat
+                  </button>
+                </div>
+                {pickerLoading ? (
+                  <div className="text-muted small">
+                    <span className="spinner-border spinner-border-sm me-2" />
+                    Fotoğraflar yükleniyor...
+                  </div>
+                ) : pickerImages.length === 0 ? (
+                  <div className="text-muted small">
+                    Bu ürünün fotoğrafı yok. &quot;Yükle&quot; ile bilgisayardan ekleyebilirsiniz.
+                  </div>
+                ) : (
+                  <div className="d-flex flex-wrap gap-2">
+                    {pickerImages.map((pi) => (
+                      <button
+                        key={pi.id}
+                        type="button"
+                        className="border rounded p-0 bg-transparent"
+                        style={{ width: 72, height: 72, overflow: 'hidden', cursor: 'pointer' }}
+                        title={pi.primary ? 'Birincil fotoğraf' : 'Seç'}
+                        onClick={() => pickCoverInput(pi.id)}
+                        disabled={coverBusy !== null}
+                      >
+                        <img
+                          src={`/api/admin/products/images/${pi.id}/view?thumbnail=true`}
+                          alt=""
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        />
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Generate */}
+            <div className="d-flex align-items-center flex-wrap gap-2 mt-3">
+              <button
+                type="button"
+                className="btn text-white"
+                style={{
+                  background: 'linear-gradient(135deg, #7c3aed, #a855f7)',
+                  opacity: !allInputsSelected || generating || coverBusy !== null ? 0.6 : 1,
+                }}
+                onClick={generateAiCover}
+                disabled={!allInputsSelected || generating || coverBusy !== null}
+              >
+                {generating ? (
+                  <>
+                    <span className="spinner-border spinner-border-sm me-2" />
+                    Oluşturuluyor... (1-2 dakika sürebilir)
+                  </>
+                ) : (
+                  <>
+                    <i className="fas fa-magic me-2" />
+                    Yapay Zeka ile Kapak Fotoğrafı Oluştur
+                  </>
+                )}
+              </button>
+              {!allInputsSelected && (
+                <span className="text-muted small">
+                  <i className="fas fa-info-circle me-1" />
+                  Tüm üyeler için fotoğraf seçildiğinde aktif olur.
+                </span>
+              )}
+              {existingAiCover && !generating && (
+                <span className="badge" style={{ background: '#7c3aed' }}>
+                  <i className="fas fa-check me-1" />
+                  Mevcut YZ kapak galeride — yeniden oluşturursanız eskisi silinir
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Advanced (hidden by default) */}
       <button
         type="button"
@@ -830,8 +1258,6 @@ export default function ProductSetForm({ product, onSuccess, onCancel }) {
           </div>
         </div>
       )}
-
-      {flash && <div className={`alert alert-${flash.variant} py-2`}>{flash.message}</div>}
 
       {/* Actions */}
       <div className="d-flex justify-content-end gap-2">

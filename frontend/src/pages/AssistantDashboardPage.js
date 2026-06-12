@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import useSecurityCodePrompt from '../components/useSecurityCodePrompt';
+import confirmDialog from '../utils/confirmDialog';
 
 /**
  * Admin dashboard for the Cezeri assistant platform. Shows per-profile
@@ -48,10 +49,12 @@ export default function AssistantDashboardPage() {
   const toggleFlag = async (key) => {
     const willEnable = !flags[key];
     const label = key === 'storeEnabled' ? 'Store Chatbot' : 'WMS Asistanı';
-    console.log(`[AssistantFlags] toggleFlag called — key=${key}, current=${flags[key]}, willBe=${willEnable}`);
+    console.log(
+      `[AssistantFlags] toggleFlag called — key=${key}, current=${flags[key]}, willBe=${willEnable}`
+    );
 
     const code = await askCode({
-      description: `${label} için durumu "${willEnable ? 'AÇIK' : 'KAPALI'}" olarak değiştirmek istiyor musunuz? Güvenlik şifresini girin.`
+      description: `${label} için durumu "${willEnable ? 'AÇIK' : 'KAPALI'}" olarak değiştirmek istiyor musunuz? Güvenlik şifresini girin.`,
     });
     if (!code) {
       console.log('[AssistantFlags] toggle cancelled by user (no security code)');
@@ -66,7 +69,7 @@ export default function AssistantDashboardPage() {
         headers: {
           ...authHeader().headers,
           'X-ADMIN-SECURITY-CODE': code,
-        }
+        },
       });
       console.log('[AssistantFlags] POST response:', resp.data);
       if (resp.data) {
@@ -92,23 +95,43 @@ export default function AssistantDashboardPage() {
   };
 
   const initRag = async () => {
-    if (!window.confirm('pgvector şemasını oluşturmayı denemek istiyor musunuz? (Sunucuda pgvector eklentisi yüklü olmalı.)')) return;
+    const ok = await confirmDialog({
+      title: 'RAG Şeması Oluşturulsun mu?',
+      message:
+        'pgvector şeması oluşturulmayı denenecek. Sunucuda pgvector eklentisinin yüklü olması gerekir.',
+      confirmText: 'Evet, Dene',
+      variant: 'primary',
+      icon: 'fa-database',
+    });
+    if (!ok) return;
     setInitRagLoading(true);
     try {
       const resp = await axios.post('/api/admin/assistant/rag/init', {}, authHeader());
       setInitRagResult(resp.data);
       if (resp.data?.ragNowAvailable) setRagAvailable(true);
     } catch (e) {
-      setInitRagResult({ message: 'RAG şema başlatma başarısız: ' + (e?.response?.data?.message || e.message) });
+      setInitRagResult({
+        message: 'RAG şema başlatma başarısız: ' + (e?.response?.data?.message || e.message),
+      });
     } finally {
       setInitRagLoading(false);
     }
   };
 
-  useEffect(() => { load(); }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    load();
+  }, []);
 
   const onReindexProducts = async () => {
-    if (!window.confirm('Tüm ürünler için embedding yeniden hesaplansın mı? Bu işlem birkaç dakika sürebilir.')) return;
+    const ok = await confirmDialog({
+      title: 'Yeniden İndekslensin mi?',
+      message: 'Tüm ürünler için embedding yeniden hesaplanacak. Bu işlem birkaç dakika sürebilir.',
+      confirmText: 'Evet, Başlat',
+      variant: 'primary',
+      icon: 'fa-sync',
+    });
+    if (!ok) return;
     setReindexing(true);
     try {
       const resp = await axios.post('/api/admin/assistant/products/reindex', {}, authHeader());
@@ -125,23 +148,31 @@ export default function AssistantDashboardPage() {
     return (
       <div className="col-md-6 mb-3" key={profileKey}>
         <div className="card">
-          <div className="card-header"><strong>{label}</strong></div>
+          <div className="card-header">
+            <strong>{label}</strong>
+          </div>
           <div className="card-body">
             <table className="table table-sm mb-0">
               <tbody>
                 <tr>
                   <td>Bugün</td>
-                  <td className="text-end"><strong>{stats.today}</strong> sohbet</td>
+                  <td className="text-end">
+                    <strong>{stats.today}</strong> sohbet
+                  </td>
                   <td className="text-end text-muted">${formatCost(stats.costToday)}</td>
                 </tr>
                 <tr>
                   <td>Son 7 gün</td>
-                  <td className="text-end"><strong>{stats.last7Days}</strong> sohbet</td>
+                  <td className="text-end">
+                    <strong>{stats.last7Days}</strong> sohbet
+                  </td>
                   <td className="text-end text-muted">${formatCost(stats.costLast7Days)}</td>
                 </tr>
                 <tr>
                   <td>Son 30 gün</td>
-                  <td className="text-end"><strong>{stats.last30Days}</strong> sohbet</td>
+                  <td className="text-end">
+                    <strong>{stats.last30Days}</strong> sohbet
+                  </td>
                   <td className="text-end text-muted">${formatCost(stats.costLast30Days)}</td>
                 </tr>
               </tbody>
@@ -171,22 +202,27 @@ export default function AssistantDashboardPage() {
       {error && <div className="alert alert-danger">{error}</div>}
 
       <div className="card mb-4">
-        <div className="card-header"><strong>Asistan Görünürlük Kontrolü</strong></div>
+        <div className="card-header">
+          <strong>Asistan Görünürlük Kontrolü</strong>
+        </div>
         <div className="card-body">
           <p className="text-muted mb-3" style={{ fontSize: 14 }}>
-            Asistan widget'ını tek tıkla devre dışı bırakın veya tekrar açın. Değişiklik
-            anında tüm kullanıcılarda etkili olur ve ilgili backend endpoint'ini de
-            bloklar (defense-in-depth).
+            Asistan widget'ını tek tıkla devre dışı bırakın veya tekrar açın. Değişiklik anında tüm
+            kullanıcılarda etkili olur ve ilgili backend endpoint'ini de bloklar (defense-in-depth).
           </p>
 
-          <div className="d-flex align-items-center justify-content-between mb-3 p-3" style={{ background: '#f8fafc', borderRadius: 8 }}>
+          <div
+            className="d-flex align-items-center justify-content-between mb-3 p-3"
+            style={{ background: '#f8fafc', borderRadius: 8 }}
+          >
             <div>
               <div style={{ fontWeight: 600 }}>WMS (Admin / Depo) Asistanı</div>
               <div className="text-muted" style={{ fontSize: 13 }}>
                 Warehouse users için. Stok sorgulama, ürün arama, transfer logları, audit kayıtları.
               </div>
               <div className="mt-1" style={{ fontSize: 12 }}>
-                Durum: <span style={{ fontWeight: 600, color: flags.wmsEnabled ? '#10b981' : '#ef4444' }}>
+                Durum:{' '}
+                <span style={{ fontWeight: 600, color: flags.wmsEnabled ? '#10b981' : '#ef4444' }}>
                   {flags.wmsEnabled ? 'AKTİF' : 'KAPALI'}
                 </span>
               </div>
@@ -204,14 +240,18 @@ export default function AssistantDashboardPage() {
             </div>
           </div>
 
-          <div className="d-flex align-items-center justify-content-between p-3" style={{ background: '#f8fafc', borderRadius: 8 }}>
+          <div
+            className="d-flex align-items-center justify-content-between p-3"
+            style={{ background: '#f8fafc', borderRadius: 8 }}
+          >
             <div>
               <div style={{ fontWeight: 600 }}>Store (E-Ticaret) Asistanı</div>
               <div className="text-muted" style={{ fontSize: 13 }}>
                 Müşteri tarafı. Ürün arama, karşılaştırma, sipariş takibi, SSS.
               </div>
               <div className="mt-1" style={{ fontSize: 12 }}>
-                Durum: <span style={{ fontWeight: 600, color: flags.storeEnabled ? '#10b981' : '#ef4444' }}>
+                Durum:{' '}
+                <span style={{ fontWeight: 600, color: flags.storeEnabled ? '#10b981' : '#ef4444' }}>
                   {flags.storeEnabled ? 'AKTİF' : 'KAPALI'}
                 </span>
               </div>
@@ -234,9 +274,8 @@ export default function AssistantDashboardPage() {
       {ragAvailable === false && (
         <div className="alert alert-warning d-flex justify-content-between align-items-center">
           <div>
-            <strong>⚠️ RAG (pgvector) devre dışı.</strong>{' '}
-            Ürün anlamsal arama ve SSS doküman araması şu an kullanılamıyor.
-            Docker Postgres imajını <code>pgvector/pgvector:pg15</code> olarak güncelleyip
+            <strong>⚠️ RAG (pgvector) devre dışı.</strong> Ürün anlamsal arama ve SSS doküman araması şu an
+            kullanılamıyor. Docker Postgres imajını <code>pgvector/pgvector:pg15</code> olarak güncelleyip
             servisi yeniden başlatın, sonra aşağıdaki butonla şemayı kurun.
           </div>
           <button className="btn btn-warning ms-3" onClick={initRag} disabled={initRagLoading}>
@@ -245,9 +284,7 @@ export default function AssistantDashboardPage() {
         </div>
       )}
       {ragAvailable === true && (
-        <div className="alert alert-success py-2">
-          ✅ RAG etkin — pgvector ve vektör tabloları hazır.
-        </div>
+        <div className="alert alert-success py-2">✅ RAG etkin — pgvector ve vektör tabloları hazır.</div>
       )}
       {initRagResult && (
         <div className={`alert ${initRagResult.ragNowAvailable ? 'alert-success' : 'alert-info'}`}>
@@ -268,9 +305,14 @@ export default function AssistantDashboardPage() {
         <div className="card-header">Notlar</div>
         <div className="card-body">
           <ul className="mb-0">
-            <li>Maliyet tahminleri Azure OpenAI fiyat tablosuna göre hesaplanır. Gerçek fatura için Azure portalını kontrol edin.</li>
+            <li>
+              Maliyet tahminleri Azure OpenAI fiyat tablosuna göre hesaplanır. Gerçek fatura için Azure
+              portalını kontrol edin.
+            </li>
             <li>Ürün embedding backfill idempotenttir; içeriği değişmeyen ürünler atlanır.</li>
-            <li>Sohbet detaylarını görmek için <strong>Loglar</strong> sayfasını kullanın.</li>
+            <li>
+              Sohbet detaylarını görmek için <strong>Loglar</strong> sayfasını kullanın.
+            </li>
           </ul>
         </div>
       </div>
