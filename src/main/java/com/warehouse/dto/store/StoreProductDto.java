@@ -61,6 +61,22 @@ public class StoreProductDto {
     private BigDecimal membersOriginalTotal; // sum of members' current prices × qty (for "save X" display)
     private List<StoreBundleItem> bundleItems; // members (detail only)
 
+    // Color variants — the same product available in other colors (detail only).
+    // Includes the current product (current=true) so the storefront can render the full swatch row.
+    private List<ColorVariantDto> colorVariants;
+
+    @Data
+    @Builder
+    public static class ColorVariantDto {
+        private Long productId;
+        private String slug;
+        private String colorName;
+        private String colorHexCode;
+        private String primaryImageUrl;
+        private boolean inStock;
+        private boolean current; // this is the product being viewed
+    }
+
     @Data
     @Builder
     public static class StoreBundleItem {

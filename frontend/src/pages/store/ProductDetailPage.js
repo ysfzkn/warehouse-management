@@ -559,7 +559,8 @@ export default function ProductDetailPage() {
                     <span className="fw-semibold">{product.brandName}</span>
                   </div>
                 )}
-                {product.colorName && (
+                {/* Show colour here only when the swatch row above isn't already showing it. */}
+                {product.colorName && !(product.colorVariants && product.colorVariants.length > 1) && (
                   <div className="d-flex align-items-center gap-2 small">
                     <span className="text-muted">Renk:</span>
                     <span className="fw-semibold">{product.colorName}</span>

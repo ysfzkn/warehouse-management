@@ -43,6 +43,12 @@ public interface ProductService {
 
     List<Product> filterProductsByBrandAndColor(Long brandId, Long colorId);
 
+    /** Color variants linked to a group, excluding the given product (for the admin edit form). */
+    List<com.warehouse.dto.ProductDto.VariantSiblingDto> getVariantSiblings(Long variantGroupId, Long excludeProductId);
+
+    /** Active products in a color-variant group (for the storefront swatch row). */
+    List<Product> getActiveVariantSiblings(Long variantGroupId);
+
     Product createProduct(Product product);
 
     Product updateProduct(Long id, Product productDetails);

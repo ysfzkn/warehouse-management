@@ -196,6 +196,15 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
                                 @Param("productType") com.warehouse.entity.ProductType productType,
                                 Pageable pageable);
 
+    // Color variants — products sharing a variant_group_id are the same product in
+    // different colors. Storefront wants only the active members (with relations for
+    // color/image rendering); the admin reconcile path wants every member regardless
+    // of active flag.
+    @EntityGraph(value = Product.GRAPH_WITH_RELATIONS, type = EntityGraph.EntityGraphType.LOAD)
+    List<Product> findByVariantGroupIdAndIsActiveTrueOrderByIdAsc(Long variantGroupId);
+
+    List<Product> findByVariantGroupId(Long variantGroupId);
+
     // E-commerce storefront queries
     @EntityGraph(value = Product.GRAPH_WITH_RELATIONS, type = EntityGraph.EntityGraphType.LOAD)
     Optional<Product> findBySlug(String slug);
