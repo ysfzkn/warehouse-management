@@ -49,6 +49,9 @@ public interface ProductService {
     /** Active products in a color-variant group (for the storefront swatch row). */
     List<Product> getActiveVariantSiblings(Long variantGroupId);
 
+    /** Batch version: active members of several variant groups at once (product-card swatches). */
+    List<Product> getActiveVariantSiblingsByGroups(java.util.Collection<Long> variantGroupIds);
+
     Product createProduct(Product product);
 
     Product updateProduct(Long id, Product productDetails);

@@ -80,6 +80,10 @@ public class Notification {
     @Column(name = "note", length = 500)
     private String note;
 
+    /** Workspace domain: "WMS" (warehouse) or "ECOM" (e-commerce). Drives the admin workspace filter. */
+    @Column(name = "domain", nullable = false, length = 10)
+    private String domain = "WMS";
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 

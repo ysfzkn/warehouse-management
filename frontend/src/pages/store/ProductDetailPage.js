@@ -6,7 +6,7 @@ import ProductGallery from '../../components/store/ProductGallery';
 import Breadcrumb from '../../components/store/Breadcrumb';
 import PriceDisplay from '../../components/store/PriceDisplay';
 import StockBadge from '../../components/store/StockBadge';
-import ProductCard from '../../components/store/ProductCard';
+import ProductRail from '../../components/store/ProductRail';
 import ProductReviews from '../../components/store/ProductReviews';
 import ProductColorVariants from '../../components/store/ProductColorVariants';
 import RatingStars from '../../components/store/RatingStars';
@@ -19,7 +19,7 @@ import {
   FiShield,
   FiRefreshCw,
   FiPackage,
-  FiStar,
+  FiClock,
   FiBell,
   FiMail,
   FiPhone,
@@ -38,6 +38,7 @@ import {
 } from '../../utils/seo';
 import { getDefaultPhone, telHref, buildWhatsappOrderUrl } from '../../utils/phones';
 import { hapticSuccess } from '../../utils/haptics';
+import { recordRecentlyViewed, getRecentlyViewedIdsExcluding } from '../../utils/recentlyViewed';
 
 export default function ProductDetailPage() {
   const { slug } = useParams();
@@ -47,7 +48,8 @@ export default function ProductDetailPage() {
   const { settings } = useSiteSettings();
   const [product, setProduct] = useState(null);
   const [quantity, setQuantity] = useState(1);
-  const [related, setRelated] = useState([]);
+  const [alsoBought, setAlsoBought] = useState([]);
+  const [recentlyViewed, setRecentlyViewed] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('description');
 
@@ -66,17 +68,44 @@ export default function ProductDetailPage() {
     axios
       .get(`/api/store/products/${slug}`)
       .then((r) => {
-        setProduct(r.data);
-        if (r.data?.categorySlug) {
+        const prod = r.data;
+        setProduct(prod);
+        if (prod?.id) {
+          // Popularity signal + recently-viewed history (both fire-and-forget).
+          axios.post(`/api/store/products/${prod.id}/track-view`).catch(() => {});
+          recordRecentlyViewed(prod.id);
+
+          // "Customers also bought" — co-purchase recommendations (category fallback server-side).
           axios
-            .get(`/api/store/products?size=8&categoryId=${r.data.id ? '' : ''}&sortBy=viewCount&sortDir=desc`)
-            .then((rel) => setRelated((rel.data?.content || []).filter((p) => p.slug !== slug).slice(0, 4)))
-            .catch(() => {});
+            .get(`/api/store/products/${prod.id}/also-bought?limit=8`)
+            .then((rel) => setAlsoBought((rel.data || []).filter((p) => p.id !== prod.id).slice(0, 8)))
+            .catch(() => setAlsoBought([]));
+
+          // "Recently viewed" — hydrate the browser's history, excluding this product.
+          const recentIds = getRecentlyViewedIdsExcluding(prod.id).slice(0, 8);
+          if (recentIds.length > 0) {
+            axios
+              .post('/api/store/products/by-ids', recentIds)
+              .then((res) => setRecentlyViewed(res.data || []))
+              .catch(() => setRecentlyViewed([]));
+          } else {
+            setRecentlyViewed([]);
+          }
         }
       })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [slug]);
+
+  const addToCart = async (id) => {
+    try {
+      await cart.addItem(id);
+      hapticSuccess();
+      toast.success('Ürün sepete eklendi');
+    } catch (e) {
+      toast.error(e?.response?.data?.message || 'Sepete eklenemedi');
+    }
+  };
 
   const toggleWishlist = async () => {
     const token = localStorage.getItem('customer_token');
@@ -800,33 +829,21 @@ export default function ProductDetailPage() {
         );
       })()}
 
-      {/* Related Products */}
-      {related.length > 0 && (
-        <section className="my-5">
-          <h5 className="fw-bold mb-3">
-            <FiStar className="text-warning me-2" />
-            Benzer Ürünler
-          </h5>
-          <div className="row g-3">
-            {related.map((p) => (
-              <div key={p.id} className="col-6 col-md-3">
-                <ProductCard
-                  product={p}
-                  onAddToCart={async (id) => {
-                    try {
-                      await cart.addItem(id);
-                      hapticSuccess();
-                      toast.success('Ürün sepete eklendi');
-                    } catch (e) {
-                      toast.error(e?.response?.data?.message || 'Sepete eklenemedi');
-                    }
-                  }}
-                />
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
+      {/* Customers also bought — co-purchase recommendations */}
+      <ProductRail
+        title="Birlikte Alınanlar"
+        icon={<FiShoppingCart className="text-primary me-2" />}
+        products={alsoBought}
+        onAddToCart={addToCart}
+      />
+
+      {/* Recently viewed — from the visitor's own browsing history */}
+      <ProductRail
+        title="Son Gezdikleriniz"
+        icon={<FiClock className="text-secondary me-2" />}
+        products={recentlyViewed}
+        onAddToCart={addToCart}
+      />
 
       {/* Back-in-stock notification modal */}
       {notifyModalOpen && (

@@ -2,12 +2,15 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { useWorkspace, domainForPath } from './WorkspaceContext';
 
 const Navbar = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { workspace, setWorkspace, isWms, isEcom, locked } = useWorkspace();
   const [lowStockCount, setLowStockCount] = useState(0);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const [unreadCount, setUnreadCount] = useState(0); // active workspace unread
+  const [otherUnread, setOtherUnread] = useState(0); // the other workspace's unread
   const [notifications, setNotifications] = useState([]);
   const [showNotif, setShowNotif] = useState(false);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
@@ -21,6 +24,13 @@ const Navbar = () => {
   const notifLoadingRef = useRef(false);
   const notifRefreshingRef = useRef(false);
   const sseRef = useRef(null);
+  // Live, closure-free access to the current workspace + last per-domain counts,
+  // so the SSE handler and the notification loader don't need to re-subscribe.
+  const workspaceRef = useRef(workspace);
+  const countsRef = useRef({ WMS: 0, ECOM: 0 });
+  // Per-domain unread for the switcher badges (active = unreadCount, other = otherUnread).
+  const wmsUnread = isWms ? unreadCount : otherUnread;
+  const ecomUnread = isEcom ? unreadCount : otherUnread;
 
   const isJwtExpired = useCallback((token) => {
     try {
@@ -50,7 +60,7 @@ const Navbar = () => {
       }
       try {
         const res = await axios.get('/api/notifications', {
-          params: { size: NOTIFICATION_BATCH_SIZE, page },
+          params: { size: NOTIFICATION_BATCH_SIZE, page, domain: workspaceRef.current },
           signal: signal,
         });
         const list = Array.isArray(res.data) ? res.data : [];
@@ -126,6 +136,37 @@ const Navbar = () => {
     };
   }, [role, loadNotifications]);
 
+  // When the workspace changes, reload the notification feed for that domain and
+  // reflect the cached per-domain unread counts immediately.
+  useEffect(() => {
+    workspaceRef.current = workspace;
+    if (role === 'ADMIN') {
+      setUnreadCount(countsRef.current[workspace] || 0);
+      setOtherUnread(countsRef.current[workspace === 'WMS' ? 'ECOM' : 'WMS'] || 0);
+      loadNotifications({ page: 0, reset: true, silent: true }).catch(() => {});
+    }
+  }, [workspace, role, loadNotifications]);
+
+  // Auto-switch the workspace to match the page being viewed (e.g. opening an
+  // order from a deep link puts you in the E-Ticaret workspace). Shared pages
+  // (settings, assistant, catalog) leave the current workspace untouched.
+  useEffect(() => {
+    if (locked) return;
+    const d = domainForPath(location.pathname);
+    if (d && d !== workspace) setWorkspace(d);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname]);
+
+  // Explicit workspace switch from the top-bar toggle — jump to that workspace's home.
+  const switchWorkspace = useCallback(
+    (ws) => {
+      if (ws === workspace) return;
+      setWorkspace(ws);
+      navigate(ws === 'WMS' ? '/' : '/admin/sales-dashboard');
+    },
+    [workspace, setWorkspace, navigate]
+  );
+
   const handleLogout = useCallback(() => {
     localStorage.removeItem('auth_token');
     localStorage.removeItem('auth_user');
@@ -147,15 +188,29 @@ const Navbar = () => {
     const onMessage = async (ev) => {
       try {
         const data = typeof ev.data === 'string' ? JSON.parse(ev.data) : ev.data;
-        const nextUnread = typeof data.unread === 'number' ? data.unread : null;
         const nextLow = typeof data.lowStock === 'number' ? data.lowStock : null;
-        if (nextUnread != null) {
+        const wms = typeof data.unreadWms === 'number' ? data.unreadWms : null;
+        const ecom = typeof data.unreadEcom === 'number' ? data.unreadEcom : null;
+        if (wms != null || ecom != null) {
+          // Per-domain counts (new payload): track both, badge shows the active one.
+          countsRef.current = {
+            WMS: wms != null ? wms : countsRef.current.WMS,
+            ECOM: ecom != null ? ecom : countsRef.current.ECOM,
+          };
+          const ws = workspaceRef.current;
+          const active = countsRef.current[ws] || 0;
+          const other = countsRef.current[ws === 'WMS' ? 'ECOM' : 'WMS'] || 0;
+          setOtherUnread(other);
           setUnreadCount((prev) => {
-            if (nextUnread !== prev) {
-              // SSE notification update - fire and forget (no signal needed)
+            if (active !== prev) loadNotifications({ page: 0, reset: true, silent: true }).catch(() => {});
+            return active;
+          });
+        } else if (typeof data.unread === 'number') {
+          // Fallback for the old single-count payload.
+          setUnreadCount((prev) => {
+            if (data.unread !== prev)
               loadNotifications({ page: 0, reset: true, silent: true }).catch(() => {});
-            }
-            return nextUnread;
+            return data.unread;
           });
         }
         if (nextLow != null) {
@@ -204,15 +259,17 @@ const Navbar = () => {
   };
 
   const navLinkStyle = (path) => ({
-    padding: '0.6rem 1.2rem',
-    margin: '0 0.2rem',
-    borderRadius: '8px',
-    transition: 'all 0.3s ease',
-    background: isActive(path) ? 'rgba(255,255,255,0.2)' : 'transparent',
+    padding: '0.5rem 0.9rem',
+    margin: '0 0.1rem',
+    borderRadius: '10px',
+    transition: 'background 0.15s ease, color 0.15s ease',
+    background: isActive(path) ? 'rgba(255,255,255,0.18)' : 'transparent',
     color: 'white',
-    fontWeight: isActive(path) ? '600' : '400',
-    transform: isActive(path) ? 'translateY(-2px)' : 'none',
-    boxShadow: isActive(path) ? '0 4px 12px rgba(0,0,0,0.2)' : 'none',
+    fontWeight: isActive(path) ? '600' : '500',
+    display: 'inline-flex',
+    alignItems: 'center',
+    whiteSpace: 'nowrap',
+    lineHeight: 1.2,
   });
 
   const userBadgeStyle = {
@@ -508,8 +565,15 @@ const Navbar = () => {
       <style>{`
         .nav-link-custom:hover {
           background: rgba(255,255,255,0.15) !important;
-          transform: translateY(-2px) !important;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.2) !important;
+        }
+        /* Desktop: keep all nav items on one centered baseline, no wrapping. */
+        @media (min-width: 1200px) {
+          .navbar-nav { align-items: center; }
+          .navbar .nav-link-custom {
+            white-space: nowrap;
+            display: inline-flex;
+            align-items: center;
+          }
         }
         
         .navbar-brand-custom:hover {
@@ -771,9 +835,69 @@ const Navbar = () => {
               alt="Logo"
               style={{ height: 32, marginRight: '0.75rem' }}
             />
-            <span className="d-none d-xl-inline">Depo Yönetim Sistemi</span>
-            <span className="d-xl-none">DYS</span>
+            <span className="d-none d-xl-inline">
+              {role === 'ADMIN' && isEcom ? 'E-Ticaret Yönetimi' : 'Depo Yönetim Sistemi'}
+            </span>
+            <span className="d-xl-none">{role === 'ADMIN' && isEcom ? 'ETY' : 'DYS'}</span>
           </Link>
+
+          {/* ── Workspace switcher (Depo ⇄ E-Ticaret) — compact segmented pill ── */}
+          {role === 'ADMIN' && !locked && (
+            <div
+              className="d-inline-flex align-items-center ms-2 ms-xl-3 p-1"
+              role="group"
+              aria-label="Çalışma alanı"
+              style={{ background: 'rgba(255,255,255,0.14)', borderRadius: 999, gap: 2 }}
+            >
+              {[
+                {
+                  key: 'WMS',
+                  label: 'Depo',
+                  icon: 'fa-warehouse',
+                  active: isWms,
+                  badge: !isWms ? wmsUnread : 0,
+                },
+                {
+                  key: 'ECOM',
+                  label: 'E-Ticaret',
+                  icon: 'fa-store',
+                  active: isEcom,
+                  badge: !isEcom ? ecomUnread : 0,
+                },
+              ].map((w) => (
+                <button
+                  key={w.key}
+                  type="button"
+                  onClick={() => switchWorkspace(w.key)}
+                  title={w.key === 'WMS' ? 'Depo Yönetimi' : 'E-Ticaret Yönetimi'}
+                  className="btn btn-sm border-0 position-relative d-inline-flex align-items-center"
+                  style={{
+                    borderRadius: 999,
+                    padding: '5px 14px',
+                    whiteSpace: 'nowrap',
+                    fontWeight: 600,
+                    fontSize: 13,
+                    lineHeight: 1.2,
+                    transition: 'background 0.15s, color 0.15s',
+                    background: w.active ? '#fff' : 'transparent',
+                    color: w.active ? '#1e3a8a' : 'rgba(255,255,255,0.85)',
+                    boxShadow: w.active ? '0 1px 4px rgba(0,0,0,0.18)' : 'none',
+                  }}
+                >
+                  <i className={`fas ${w.icon} me-2`} style={{ fontSize: 12 }} />
+                  {w.label}
+                  {w.badge > 0 && (
+                    <span
+                      className="badge rounded-pill bg-danger"
+                      style={{ fontSize: 9, marginLeft: 6, padding: '2px 5px' }}
+                    >
+                      {w.badge}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
 
           <button
             className="navbar-toggler border-0"
@@ -789,8 +913,8 @@ const Navbar = () => {
           </button>
 
           <div className="collapse navbar-collapse" id="navbarNav">
-            <ul className="navbar-nav me-auto mb-2 mb-lg-0">
-              {role === 'ADMIN' && (
+            <ul className="navbar-nav me-auto mb-2 mb-lg-0 ms-xl-4">
+              {role === 'ADMIN' && isWms && (
                 <li className="nav-item">
                   <Link className="nav-link nav-link-custom text-white" to="/" style={navLinkStyle('/')}>
                     <i className="fas fa-chart-line me-2"></i>
@@ -870,7 +994,7 @@ const Navbar = () => {
                 </li>
               )}
 
-              {role === 'ADMIN' && (
+              {role === 'ADMIN' && isWms && (
                 <li className="nav-item">
                   <Link
                     className="nav-link nav-link-custom text-white"
@@ -883,20 +1007,22 @@ const Navbar = () => {
                 </li>
               )}
 
-              <li className="nav-item">
-                <Link
-                  className="nav-link nav-link-custom text-white position-relative d-inline-flex align-items-center"
-                  to="/stock"
-                  style={navLinkStyle('/stock')}
-                >
-                  <i className="fas fa-cubes me-2"></i>
-                  <span>Stok Yönetimi</span>
-                  {lowStockCount > 0 && <span className="notification-badge">{lowStockCount}</span>}
-                </Link>
-              </li>
+              {(role !== 'ADMIN' || isWms) && (
+                <li className="nav-item">
+                  <Link
+                    className="nav-link nav-link-custom text-white position-relative d-inline-flex align-items-center"
+                    to="/stock"
+                    style={navLinkStyle('/stock')}
+                  >
+                    <i className="fas fa-cubes me-2"></i>
+                    <span>Stok Yönetimi</span>
+                    {lowStockCount > 0 && <span className="notification-badge">{lowStockCount}</span>}
+                  </Link>
+                </li>
+              )}
 
               {/* ── E-COMMERCE DROPDOWN ── */}
-              {role === 'ADMIN' && (
+              {role === 'ADMIN' && isEcom && (
                 <li className="nav-item dropdown">
                   <button
                     className="nav-link nav-link-custom dropdown-toggle text-white border-0 bg-transparent w-100 text-start"
@@ -907,6 +1033,7 @@ const Navbar = () => {
                       background: [
                         '/admin/sales-dashboard',
                         '/admin/orders',
+                        '/admin/returns',
                         '/admin/customers',
                         '/admin/payments',
                         '/admin/invoices',
@@ -940,6 +1067,11 @@ const Navbar = () => {
                     <li>
                       <Link className="dropdown-item" to="/admin/orders">
                         <i className="fas fa-shopping-cart me-2 text-success"></i>Siparişler
+                      </Link>
+                    </li>
+                    <li>
+                      <Link className="dropdown-item" to="/admin/returns">
+                        <i className="fas fa-undo me-2 text-warning"></i>İadeler
                       </Link>
                     </li>
                     <li>

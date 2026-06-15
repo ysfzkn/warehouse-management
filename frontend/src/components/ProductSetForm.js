@@ -97,6 +97,7 @@ export default function ProductSetForm({ product, onSuccess, onCancel }) {
   const [pickingFor, setPickingFor] = useState(null); // memberProductId of the open picker
   const [pickerImages, setPickerImages] = useState([]);
   const [pickerLoading, setPickerLoading] = useState(false);
+  const [lightboxId, setLightboxId] = useState(null); // image id shown full-size in the lightbox
 
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
@@ -113,6 +114,16 @@ export default function ProductSetForm({ product, onSuccess, onCancel }) {
     flashTimer.current = setTimeout(() => setFlash(null), duration);
   };
   useEffect(() => () => flashTimer.current && clearTimeout(flashTimer.current), []);
+
+  // Close the image lightbox with Esc.
+  useEffect(() => {
+    if (!lightboxId) return undefined;
+    const onKey = (e) => {
+      if (e.key === 'Escape') setLightboxId(null);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [lightboxId]);
 
   // ---- Load categories ----
   const fetchMainCategories = useCallback(() => {
@@ -515,6 +526,50 @@ export default function ProductSetForm({ product, onSuccess, onCancel }) {
 
   return (
     <div>
+      {/* Lightbox — full-size preview of a gallery image (incl. the AI cover) */}
+      {lightboxId && (
+        <div
+          onClick={() => setLightboxId(null)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 3000,
+            background: 'rgba(0,0,0,0.85)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 24,
+            cursor: 'zoom-out',
+          }}
+        >
+          <button
+            type="button"
+            className="btn btn-light position-absolute"
+            style={{ top: 16, right: 16, borderRadius: '50%', width: 40, height: 40 }}
+            title="Kapat (Esc)"
+            onClick={(e) => {
+              e.stopPropagation();
+              setLightboxId(null);
+            }}
+          >
+            <i className="fas fa-times" />
+          </button>
+          <img
+            src={`/api/admin/products/images/${lightboxId}/view`}
+            alt="Önizleme"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: '100%',
+              maxHeight: '100%',
+              objectFit: 'contain',
+              borderRadius: 8,
+              boxShadow: '0 10px 40px rgba(0,0,0,0.5)',
+              cursor: 'default',
+            }}
+          />
+        </div>
+      )}
+
       {/* Toast notification — fixed top-right; all success/warning/error feedback lands here */}
       {flash && (
         <div
@@ -837,7 +892,9 @@ export default function ProductSetForm({ product, onSuccess, onCancel }) {
                         src={`/api/admin/products/images/${img.id}/view?thumbnail=true`}
                         alt=""
                         draggable={false}
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        onClick={() => setLightboxId(img.id)}
+                        title="Büyütmek için tıklayın"
+                        style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'zoom-in' }}
                       />
                       {img.primary && (
                         <span
@@ -874,6 +931,14 @@ export default function ProductSetForm({ product, onSuccess, onCancel }) {
                         <button
                           type="button"
                           className="btn btn-sm text-white p-0 px-1 ms-auto"
+                          title="Büyüt"
+                          onClick={() => setLightboxId(img.id)}
+                        >
+                          <i className="fas fa-search-plus" style={{ fontSize: 11 }} />
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-sm text-white p-0 px-1"
                           title="Sil"
                           onClick={() => deleteImage(img.id)}
                         >

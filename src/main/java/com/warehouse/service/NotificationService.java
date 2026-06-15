@@ -33,4 +33,7 @@ public interface NotificationService {
      * Returns the total number of unread notifications.
      */
     long unreadCount();
+
+    /** Unread count for a single workspace domain (WMS / ECOM); null/blank = all. */
+    long unreadCount(String domain);
 }

@@ -10,6 +10,7 @@ import java.time.LocalDateTime;
 public class NotificationFilter {
     private Long warehouseId;
     private String entityType;
+    private String domain;
     private String search;
     private LocalDateTime startDate;
     private LocalDateTime endDate;

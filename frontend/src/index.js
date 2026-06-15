@@ -6,6 +6,10 @@ import ErrorBoundary from './components/ErrorBoundary';
 import { BrowserRouter } from 'react-router-dom';
 import { HelmetProvider } from 'react-helmet-async';
 import axios from 'axios';
+import { initObservability, captureError } from './utils/observability';
+
+// Initialize error tracking before anything renders (inert without a DSN).
+initObservability();
 
 // Rewrite legacy /api/* paths to /api/admin/* (matches nginx rewrite rule).
 // Excluded:
@@ -16,19 +20,22 @@ import axios from 'axios';
 //                          admin and store layouts — rewriting to /api/admin would
 //                          require admin auth and fail 403 in the store tab.
 axios.interceptors.request.use((config) => {
-  if (config.url && config.url.startsWith('/api/') &&
-      !config.url.startsWith('/api/admin/') &&
-      !config.url.startsWith('/api/store/') &&
-      !config.url.startsWith('/api/info') &&
-      !config.url.startsWith('/api/cezeri/') &&
-      !config.url.startsWith('/api/assistant/')) {
+  if (
+    config.url &&
+    config.url.startsWith('/api/') &&
+    !config.url.startsWith('/api/admin/') &&
+    !config.url.startsWith('/api/store/') &&
+    !config.url.startsWith('/api/info') &&
+    !config.url.startsWith('/api/cezeri/') &&
+    !config.url.startsWith('/api/assistant/')
+  ) {
     config.url = config.url.replace('/api/', '/api/admin/');
   }
   // attach Bearer auth header — admin or customer token based on request path
   const isStoreApi = config.url && config.url.startsWith('/api/store/');
   const token = isStoreApi
-    ? (localStorage.getItem('customer_token') || localStorage.getItem('auth_token'))
-    : (localStorage.getItem('auth_token') || localStorage.getItem('customer_token'));
+    ? localStorage.getItem('customer_token') || localStorage.getItem('auth_token')
+    : localStorage.getItem('auth_token') || localStorage.getItem('customer_token');
   if (token) {
     config.headers = config.headers || {};
     config.headers['Authorization'] = `Bearer ${token}`;
@@ -47,15 +54,26 @@ axios.interceptors.response.use(
       const isAuthEndpoint = reqUrl.includes('/auth/');
       const isNotifications = reqUrl.includes('/api/notifications');
       const errCode = error?.response?.data?.code || error?.response?.data?.errorCode;
-      const isAdminSecurityError = ['AUTH_002','AUTH_003','AUTH_004','AUTH_005','AUTH_006','AUTH_007'].includes(errCode);
+      const isAdminSecurityError = [
+        'AUTH_002',
+        'AUTH_003',
+        'AUTH_004',
+        'AUTH_005',
+        'AUTH_006',
+        'AUTH_007',
+      ].includes(errCode);
 
       // --- Session check: ONLY 401 (Unauthorized) + token present = a genuine session expiry ---
       // 403 (Forbidden) = insufficient permissions, session may still be active — DO NOT show modal
       const hasAdminToken = !!localStorage.getItem('auth_token');
       const hasCustomerToken = !!localStorage.getItem('customer_token');
       const isStoreRequest = reqUrl.includes('/api/store/');
-      const isRealSessionExpiry = status === 401 && (hasAdminToken || hasCustomerToken)
-          && !isAuthEndpoint && !isNotifications && !isAdminSecurityError;
+      const isRealSessionExpiry =
+        status === 401 &&
+        (hasAdminToken || hasCustomerToken) &&
+        !isAuthEndpoint &&
+        !isNotifications &&
+        !isAdminSecurityError;
 
       if (isRealSessionExpiry) {
         if (!window.__sessionExpiredHandling) {
@@ -70,7 +88,9 @@ axios.interceptors.response.use(
           // First clean up any old/orphan instance
           const existing = document.getElementById(modalId);
           if (existing) {
-            try { existing.remove(); } catch {}
+            try {
+              existing.remove();
+            } catch {}
           }
 
           const wrapper = document.createElement('div');
@@ -141,7 +161,7 @@ axios.interceptors.response.use(
           // Failsafe: if still open after 60 seconds, force navigation to the login page
           setTimeout(() => {
             if (document.getElementById(modalId)) {
-              console.warn('[session-expired] Modal 60 saniyedir açık, otomatik login\'e yönlendiriliyor');
+              console.warn("[session-expired] Modal 60 saniyedir açık, otomatik login'e yönlendiriliyor");
               onOk();
             }
           }, 60000);
@@ -190,7 +210,10 @@ axios.interceptors.response.use(
             if (nums) return `Rezerve miktardan fazla bırakılamaz. Rezerve: ${nums[1]}, İstenen: ${nums[2]}`;
             return 'Rezerve miktardan fazla bırakılamaz';
           })
-          .replace(/Stock already exists for this product in the selected warehouse/gi, 'Seçili depoda bu ürün için stok zaten mevcut')
+          .replace(
+            /Stock already exists for this product in the selected warehouse/gi,
+            'Seçili depoda bu ürün için stok zaten mevcut'
+          )
           .replace(/Product is required/gi, 'Ürün zorunludur')
           .replace(/Warehouse is required/gi, 'Depo zorunludur');
       }
@@ -202,12 +225,12 @@ axios.interceptors.response.use(
         // errorCode, details, etc. are preserved
         res.data = {
           ...data,
-          message: finalMessage
+          message: finalMessage,
         };
       } else {
         // If backend sent a plain string, at least wrap it in an object
         res.data = {
-          message: finalMessage
+          message: finalMessage,
         };
       }
     } else if (error && error.message === 'Network Error') {
@@ -215,6 +238,21 @@ axios.interceptors.response.use(
       error.message = 'Ağ hatası: Sunucuya ulaşılamıyor';
       // If desired:
       // error.response = { data: { message: error.message } };
+    }
+
+    // Report unexpected server errors (5xx) to error tracking — client/validation
+    // errors (4xx) are expected and excluded to keep the signal clean.
+    try {
+      const status = error?.response?.status;
+      if (status >= 500) {
+        captureError(error, {
+          url: error?.config?.url,
+          method: error?.config?.method,
+          status,
+        });
+      }
+    } catch {
+      /* never let telemetry break error handling */
     }
 
     return Promise.reject(error);
@@ -237,15 +275,17 @@ root.render(
 // ── Service Worker (PWA) — production only, store domain only ──
 // Can be disabled with REACT_APP_DISABLE_SW=true.
 // SW is not loaded on admin/WMS hosts (real-time data required).
-if ('serviceWorker' in navigator
-    && process.env.NODE_ENV === 'production'
-    && process.env.REACT_APP_DISABLE_SW !== 'true') {
+if (
+  'serviceWorker' in navigator &&
+  process.env.NODE_ENV === 'production' &&
+  process.env.REACT_APP_DISABLE_SW !== 'true'
+) {
   const host = window.location.hostname || '';
-  const adminPrefixes = (process.env.REACT_APP_ADMIN_HOSTS || 'admin,wms').split(',').map(s => s.trim());
-  const isAdmin = adminPrefixes.some(p => host.startsWith(p + '.'));
+  const adminPrefixes = (process.env.REACT_APP_ADMIN_HOSTS || 'admin,wms').split(',').map((s) => s.trim());
+  const isAdmin = adminPrefixes.some((p) => host.startsWith(p + '.'));
   if (!isAdmin) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/service-worker.js').catch(err => {
+      navigator.serviceWorker.register('/service-worker.js').catch((err) => {
         // eslint-disable-next-line no-console
         console.warn('Service worker registration failed:', err);
       });

@@ -60,6 +60,8 @@ public final class ApiPaths {
     public static final String STORE_GUEST_CHECKOUT = API_STORE_BASE + "/checkout/guest-checkout";
     public static final String STORE_PUBLIC_ORDER_TRACK = API_STORE_BASE + "/public/orders/track";
     public static final String STORE_PRODUCT_NOTIFY_ME = API_STORE_BASE + "/products/*/notify-me";
+    public static final String STORE_PRODUCT_TRACK_VIEW = API_STORE_BASE + "/products/*/track-view";
+    public static final String STORE_PRODUCTS_BY_IDS = API_STORE_BASE + "/products/by-ids";
     public static final String STORE_NEWSLETTER = API_STORE_BASE + "/newsletter/**";
     public static final String STORE_ASSISTANT = API_STORE_BASE + "/assistant/**";
     public static final String STORE_ANY = API_STORE_BASE + "/**";

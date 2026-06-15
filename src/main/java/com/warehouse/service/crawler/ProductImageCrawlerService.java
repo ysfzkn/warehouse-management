@@ -75,7 +75,7 @@ public class ProductImageCrawlerService {
             "bosch-home.com",       "bosch-home.com.tr",
             "lg.com",               "lg.com.tr",
             "miele.com",            "miele.com.tr",
-            "haier.com",            "haier.com.tr",
+            // haier.com.tr removed: the domain now serves an unrelated site.
             "fakir.com.tr",         "fakir.com",
             // Merchant's active supplier brands:
             "simfer.com.tr",        "simfer.com",
@@ -560,9 +560,18 @@ public class ProductImageCrawlerService {
         try {
             // <dl> definition lists with per-section headings (e.g. Philips:
             // "Menşei" / "Teknik Özellikler" / "Aksesuarlar" titles above each list).
-            return extractDlSpecGroups(doc);
+            List<SpecGroup> dls = extractDlSpecGroups(doc);
+            if (!dls.isEmpty()) return dls;
         } catch (Exception e) {
             log.debug("[Crawler] dl spec-group parse failed: {}", e.getMessage());
+        }
+        try {
+            // <ol>/<ul> lists whose items carry an emphasized label followed by the
+            // value (e.g. Miele: <li><em>Maks. Watt gücü<br></em>890</li>), grouped
+            // by the preceding bolded paragraph or heading ("Teknik veriler").
+            return extractLabeledListSpecGroups(doc);
+        } catch (Exception e) {
+            log.debug("[Crawler] labeled-list spec-group parse failed: {}", e.getMessage());
             return List.of();
         }
     }
@@ -709,6 +718,7 @@ public class ProductImageCrawlerService {
      */
     private List<SpecGroup> extractTableSpecGroups(Document doc) {
         List<SpecGroup> groups = new ArrayList<>();
+        Set<String> signatures = new LinkedHashSet<>(); // mobile+desktop markup repeats the same table
         int total = 0;
         for (Element table : doc.select("table")) {
             if (groups.size() >= MAX_SPEC_GROUPS || total >= MAX_TOTAL_SPEC_ITEMS) break;
@@ -726,7 +736,10 @@ public class ProductImageCrawlerService {
             }
             // Same acceptance bar as the flat extractor: layout/price tables are skipped.
             if (items.size() < 2) continue;
-            groups.add(new SpecGroup(tableGroupTitle(table), items));
+            String title = tableGroupTitle(table);
+            String signature = title + "|" + items;
+            if (!signatures.add(signature)) continue;
+            groups.add(new SpecGroup(title, items));
             total += items.size();
         }
         return groups;
@@ -769,6 +782,73 @@ public class ProductImageCrawlerService {
             total += items.size();
         }
         return total >= 2 ? groups : List.of();
+    }
+
+    /**
+     * Grouped fallback for label-emphasized list items: {@code <li><em>Label</em>Value</li>}
+     * (Miele product descriptions use exactly this, with a {@code <p><strong>Title</strong></p>}
+     * paragraph before each list). Items without a value (label-only bullets) are skipped.
+     */
+    private List<SpecGroup> extractLabeledListSpecGroups(Document doc) {
+        List<SpecGroup> groups = new ArrayList<>();
+        Set<String> signatures = new LinkedHashSet<>();
+        int total = 0;
+        for (Element list : doc.select("ol, ul")) {
+            if (groups.size() >= MAX_SPEC_GROUPS || total >= MAX_TOTAL_SPEC_ITEMS) break;
+            List<SpecItem> items = new ArrayList<>();
+            Set<String> seen = new LinkedHashSet<>();
+            for (Element li : list.children()) {
+                if (!li.is("li") || items.size() >= MAX_ITEMS_PER_GROUP) continue;
+                Element lab = li.children().isEmpty() ? null : li.child(0);
+                if (lab == null || !lab.is("em, strong, b")) continue;
+                String label = cleanSpecLabel(lab.text());
+                String full = li.text().trim();
+                String value = full.length() > label.length() && full.startsWith(label)
+                        ? full.substring(label.length()).trim()
+                        : li.ownText().trim();
+                if (value.isEmpty()) continue; // label-only bullet
+                if (looksLikeSpec(label, value) && seen.add(label.toLowerCase(Locale.ROOT))) {
+                    items.add(new SpecItem(label, value));
+                }
+            }
+            if (items.isEmpty()) continue;
+            String title = boldedParagraphTitle(list);
+            String signature = title + "|" + items;
+            if (!signatures.add(signature)) continue;
+            SpecGroup last = groups.isEmpty() ? null : groups.get(groups.size() - 1);
+            if (last != null && last.title().equals(title)) {
+                List<SpecItem> merged = new ArrayList<>(last.items());
+                merged.addAll(items);
+                groups.set(groups.size() - 1, new SpecGroup(title, merged));
+            } else {
+                groups.add(new SpecGroup(title, items));
+            }
+            total += items.size();
+        }
+        return total >= 2 ? groups : List.of();
+    }
+
+    /**
+     * Title for a labeled list: an immediately preceding paragraph that is just a
+     * bolded phrase (Miele: {@code <p><strong>Teknik veriler</strong>&nbsp;</p>}),
+     * else the generic nearest-heading lookup.
+     */
+    private static String boldedParagraphTitle(Element list) {
+        Element prev = list.previousElementSibling();
+        if (prev != null && prev.is("p, div")) {
+            Element bold = prev.selectFirst("strong, b");
+            if (bold != null) {
+                String boldText = bold.text().trim();
+                String prevText = prev.text().trim();
+                // The paragraph must be essentially just the bold phrase (a title),
+                // not body copy that merely contains bold words.
+                if (!boldText.isEmpty() && boldText.length() <= 60
+                        && prevText.length() <= boldText.length() + 5) {
+                    return boldText;
+                }
+            }
+        }
+        return nearestHeadingTitle(list);
     }
 
     /** Group title for a spec table: caption → nearest preceding heading → default. */

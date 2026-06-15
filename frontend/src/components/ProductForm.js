@@ -789,8 +789,6 @@ const ProductForm = ({ product, onSuccess, onCancel, setMode = false }) => {
     'lg.com.tr',
     'miele.com',
     'miele.com.tr',
-    'haier.com',
-    'haier.com.tr',
     'fakir.com.tr',
     'fakir.com',
     'simfer.com.tr',

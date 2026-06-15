@@ -88,6 +88,60 @@ export default function ProductCard({ product, onAddToCart }) {
         <Link to={`/urun/${product.slug}`} className="text-decoration-none">
           <p className="product-name">{product.name}</p>
         </Link>
+        {Array.isArray(product.colorVariants) && product.colorVariants.length > 1 && (
+          <div
+            className="card-color-variants d-flex align-items-center flex-wrap"
+            style={{ gap: 6, margin: '4px 0 8px' }}
+          >
+            {product.colorVariants.slice(0, 5).map((v) => {
+              const isCurrent = v.productId === product.id;
+              const dot = (
+                <span
+                  style={{
+                    display: 'inline-block',
+                    width: 16,
+                    height: 16,
+                    borderRadius: '50%',
+                    backgroundColor: v.colorHexCode || '#e2e8f0',
+                    boxShadow: isCurrent
+                      ? '0 0 0 1.5px var(--store-primary, #2563eb)'
+                      : '0 0 0 1px rgba(0,0,0,0.18)',
+                    opacity: v.inStock ? 1 : 0.4,
+                  }}
+                />
+              );
+              const title = `${v.colorName || 'Renk'}${v.inStock ? '' : ' — Tükendi'}`;
+              if (isCurrent) {
+                return (
+                  <span key={v.productId} title={title} style={{ padding: 2, lineHeight: 0 }}>
+                    {dot}
+                  </span>
+                );
+              }
+              return (
+                <button
+                  key={v.productId}
+                  type="button"
+                  title={title}
+                  aria-label={title}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    navigate(`/urun/${v.slug}`);
+                  }}
+                  style={{ border: 'none', background: 'none', padding: 2, lineHeight: 0, cursor: 'pointer' }}
+                >
+                  {dot}
+                </button>
+              );
+            })}
+            {product.colorVariants.length > 5 && (
+              <span className="text-muted" style={{ fontSize: 11 }}>
+                +{product.colorVariants.length - 5}
+              </span>
+            )}
+          </div>
+        )}
         <div className="card-price-area">
           <PriceDisplay price={product.price} salePrice={product.salePrice} />
           <StockBadge status={product.stockStatus} />

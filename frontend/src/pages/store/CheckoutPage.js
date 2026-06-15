@@ -860,9 +860,10 @@ export default function CheckoutPage() {
                 </div>
               </div>
               {/* Legal contracts — shown via inline modal (Consumer Protection Law no. 6502) */}
-              <div className="form-check mb-2">
+              <div className="form-check mb-2 d-flex align-items-center gap-2">
                 <input
-                  className="form-check-input"
+                  className="form-check-input m-0 flex-shrink-0"
+                  style={{ width: 22, height: 22, cursor: 'pointer' }}
                   type="checkbox"
                   id="preliminaryInfo"
                   checked={preliminaryInfoAccepted}
@@ -890,9 +891,10 @@ export default function CheckoutPage() {
                   'nu okudum ve kabul ediyorum.
                 </label>
               </div>
-              <div className="form-check mb-3">
+              <div className="form-check mb-3 d-flex align-items-center gap-2">
                 <input
-                  className="form-check-input"
+                  className="form-check-input m-0 flex-shrink-0"
+                  style={{ width: 22, height: 22, cursor: 'pointer' }}
                   type="checkbox"
                   id="contract"
                   checked={contractAccepted}
@@ -931,14 +933,34 @@ export default function CheckoutPage() {
                   Site test modunda — sipariş alımı geçici olarak kapalıdır.
                 </div>
               )}
-              <div className="d-flex gap-2">
-                <button className="btn btn-outline-secondary" onClick={prev}>
+              <div className="d-flex gap-2 flex-column flex-sm-row">
+                <button
+                  className="btn btn-outline-secondary order-2 order-sm-1 px-4"
+                  onClick={prev}
+                  style={{ borderRadius: 14, fontWeight: 600, minHeight: 56 }}
+                >
+                  <i className="fas fa-arrow-left me-2" />
                   Geri
                 </button>
                 <button
-                  className="btn btn-primary btn-lg flex-grow-1"
+                  className="btn btn-primary flex-grow-1 order-1 order-sm-2"
                   onClick={handlePlaceOrder}
                   disabled={loading || !contractAccepted || !preliminaryInfoAccepted || !purchasingEnabled}
+                  style={{
+                    borderRadius: 14,
+                    minHeight: 56,
+                    fontSize: '1.05rem',
+                    fontWeight: 700,
+                    background:
+                      loading || !contractAccepted || !preliminaryInfoAccepted || !purchasingEnabled
+                        ? undefined
+                        : 'linear-gradient(135deg, #2563eb, #1d4ed8)',
+                    border: 'none',
+                    boxShadow:
+                      loading || !contractAccepted || !preliminaryInfoAccepted || !purchasingEnabled
+                        ? 'none'
+                        : '0 8px 20px rgba(37,99,235,0.35)',
+                  }}
                 >
                   {loading ? (
                     <>

@@ -475,6 +475,13 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public List<Product> getActiveVariantSiblingsByGroups(java.util.Collection<Long> variantGroupIds) {
+        if (variantGroupIds == null || variantGroupIds.isEmpty()) return List.of();
+        return productRepository.findByVariantGroupIdInAndIsActiveTrue(variantGroupIds);
+    }
+
+    @Override
     public void deleteProduct(Long id) {
         logger.info("Deleting product with id: {}", id);
         Product product = getProductByIdOrThrow(id);

@@ -357,6 +357,36 @@ public class EmailServiceImpl implements EmailService {
         sendHtml(toEmail, subject, html);
     }
 
+    @Override
+    @Async
+    public void sendReturnStatusUpdate(String toEmail, String firstName, String returnNumber,
+                                       String orderNumber, String statusLabel, String message) {
+        if (!enabled) {
+            log.info("Email disabled — return status for {}: {} ({})", toEmail, returnNumber, statusLabel);
+            return;
+        }
+        String subject = "İade Talebiniz — " + returnNumber;
+        String orderLine = (orderNumber != null && !orderNumber.isBlank())
+                ? "<p style=\"color:#64748b;font-size:13px;\">İlgili sipariş: <strong>" + escape(orderNumber) + "</strong></p>"
+                : "";
+        String html = buildHeader("İade Talebi Güncellemesi")
+                + """
+                    <p style="color:#334155;font-size:15px;">Merhaba <strong>%s</strong>,</p>
+                    <div style="text-align:center;margin:24px 0;">
+                        <div style="display:inline-block;background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#fff;padding:12px 28px;border-radius:8px;font-weight:600;font-size:16px;">
+                            %s
+                        </div>
+                    </div>
+                    <p style="color:#475569;font-size:14px;line-height:1.6;">%s</p>
+                    <p style="color:#64748b;font-size:13px;">İade talebi numaranız: <strong>%s</strong></p>
+                    %s
+                    <p style="color:#475569;font-size:14px;">İade sürecinizi hesabınızdan takip edebilirsiniz.</p>
+                """.formatted(escape(firstName), escape(statusLabel), escape(message), escape(returnNumber), orderLine)
+                + buildFooter();
+
+        sendHtml(toEmail, subject, html);
+    }
+
     // ─────────────────────────────────────────────────────────────
     //  E-Invoice notifications
     // ─────────────────────────────────────────────────────────────

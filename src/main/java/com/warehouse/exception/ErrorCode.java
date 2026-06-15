@@ -88,6 +88,13 @@ public enum ErrorCode {
     // Order (404)
     ORDER_NOT_FOUND("ORDER_001", "Sipariş bulunamadı", HttpStatus.NOT_FOUND),
 
+    // Returns / RMA (400/404)
+    RETURN_NOT_FOUND("RETURN_001", "İade talebi bulunamadı", HttpStatus.NOT_FOUND),
+    RETURN_NOT_ALLOWED_FOR_STATUS("RETURN_002", "Bu sipariş için iade talebi oluşturulamaz. Yalnızca kargoya verilmiş veya teslim edilmiş siparişler iade edilebilir.", HttpStatus.BAD_REQUEST),
+    RETURN_ALREADY_EXISTS("RETURN_003", "Bu sipariş için zaten açık bir iade talebi mevcut.", HttpStatus.CONFLICT),
+    RETURN_INVALID_TRANSITION("RETURN_004", "İade talebi bu durumdayken bu işlem yapılamaz.", HttpStatus.BAD_REQUEST),
+    RETURN_NO_ITEMS("RETURN_005", "İade için en az bir ürün seçilmelidir.", HttpStatus.BAD_REQUEST),
+
     // Invoice / E-Fatura (400/404)
     INVOICE_NOT_FOUND("INV_001", "Fatura bulunamadı", HttpStatus.NOT_FOUND),
     INVOICE_CANNOT_REGENERATE("INV_002", "Sadece DRAFT veya ERROR durumundaki faturalar yeniden oluşturulabilir", HttpStatus.BAD_REQUEST),
