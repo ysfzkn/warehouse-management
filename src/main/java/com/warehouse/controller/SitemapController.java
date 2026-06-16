@@ -43,6 +43,14 @@ public class SitemapController {
         xml.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
         xml.append("<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n");
 
+        // Homepage — highest priority. This is the page that ranks for the brand
+        // and local "{city} {brand}" queries, so it must be in the sitemap.
+        xml.append("  <url>\n");
+        xml.append("    <loc>").append(escapeXml(baseUrl)).append("/</loc>\n");
+        xml.append("    <changefreq>daily</changefreq>\n");
+        xml.append("    <priority>1.0</priority>\n");
+        xml.append("  </url>\n");
+
         // Active products
         List<Product> products = productRepository.findAllActive();
         for (Product product : products) {
