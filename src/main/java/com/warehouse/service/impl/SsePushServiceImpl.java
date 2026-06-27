@@ -80,19 +80,21 @@ public class SsePushServiceImpl implements SsePushService {
     private String buildSnapshotJson() {
         try {
             int unread = (int) notificationRepository.countByReadFalse();
+            int unreadWms = (int) notificationRepository.countByReadFalseAndDomain("WMS");
+            int unreadEcom = (int) notificationRepository.countByReadFalseAndDomain("ECOM");
             long lowStock = stockService.countLowStockItems();
-            return objectMapper.writeValueAsString(new Snapshot(unread, lowStock));
+            return objectMapper.writeValueAsString(new Snapshot(unread, unreadWms, unreadEcom, lowStock));
         } catch (Exception e) {
             logger.warn("Failed to build snapshot, sending empty counts", e);
             try {
-                return objectMapper.writeValueAsString(new Snapshot(0, 0));
+                return objectMapper.writeValueAsString(new Snapshot(0, 0, 0, 0));
             } catch (Exception ignored) {
-                return "{\"unread\":0,\"lowStock\":0}";
+                return "{\"unread\":0,\"unreadWms\":0,\"unreadEcom\":0,\"lowStock\":0}";
             }
         }
     }
 
-    private record Snapshot(int unread, long lowStock) {}
+    private record Snapshot(int unread, int unreadWms, int unreadEcom, long lowStock) {}
 }
 
 

@@ -60,8 +60,10 @@ public class NotificationServiceImpl implements NotificationService {
             notification.setProductSku(request.getProductSku());
             notification.setQuantity(request.getQuantity());
             notification.setNote(request.getNote());
+            notification.setDomain(deriveDomain(request.getEntityType()));
         } else {
             notification.setActor(CurrentUser.usernameOrSystem());
+            notification.setDomain("WMS");
         }
         Notification saved = notificationRepository.save(notification);
         logger.debug("Notification created with id: {}", saved.getId());
@@ -147,6 +149,23 @@ public class NotificationServiceImpl implements NotificationService {
     @Cacheable(value = "counts", key = "'unread'", unless = "#result == null")
     public long unreadCount() {
         return notificationRepository.countByReadFalse();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public long unreadCount(String domain) {
+        if (domain == null || domain.isBlank()) return notificationRepository.countByReadFalse();
+        return notificationRepository.countByReadFalseAndDomain(domain.toUpperCase());
+    }
+
+    /** E-commerce entity types fall in the ECOM workspace; everything else is WMS. */
+    private static final java.util.Set<String> ECOM_ENTITY_TYPES = java.util.Set.of(
+            "RETURN_REQUEST", "ORDER", "PAYMENT", "COUPON", "CUSTOMER",
+            "REVIEW", "SUPPORT_TICKET", "CONTACT_MESSAGE");
+
+    static String deriveDomain(String entityType) {
+        if (entityType == null) return "WMS";
+        return ECOM_ENTITY_TYPES.contains(entityType.toUpperCase()) ? "ECOM" : "WMS";
     }
 }
 

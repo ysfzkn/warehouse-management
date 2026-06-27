@@ -251,8 +251,8 @@ public class CartServiceImpl implements CartService {
         String imageUrl = null;
         try {
             var images = productImageRepository.findByProductOrderBySortOrderAscIdAsc(product);
-            if (images != null && !images.isEmpty()) {
-                var img = images.stream().filter(ProductImage::isPrimary).findFirst().orElse(images.get(0));
+            var img = com.warehouse.util.ProductImageUtil.displayCover(images).orElse(null);
+            if (img != null) {
                 imageUrl = "/api/admin/products/images/" + img.getId() + "/view?thumbnail=true";
             }
         } catch (Exception ignored) {}

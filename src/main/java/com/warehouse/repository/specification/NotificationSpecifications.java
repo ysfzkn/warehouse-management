@@ -35,6 +35,10 @@ public final class NotificationSpecifications {
                 predicates.add(cb.equal(cb.lower(root.get("entityType")), filter.getEntityType().toLowerCase()));
             }
 
+            if (StringUtils.hasText(filter.getDomain())) {
+                predicates.add(cb.equal(cb.upper(root.get("domain")), filter.getDomain().toUpperCase()));
+            }
+
             if (filter.getStartDate() != null) {
                 predicates.add(cb.greaterThanOrEqualTo(root.get("createdAt"), filter.getStartDate()));
             }

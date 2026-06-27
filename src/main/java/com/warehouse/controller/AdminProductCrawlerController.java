@@ -65,6 +65,9 @@ public class AdminProductCrawlerController {
             body.put("description", p.description());
             body.put("shortDescription", p.shortDescription());
             body.put("specs", p.specs());
+            // Grouped specs ({title, items:[{label,value}]}) — the admin form prefers
+            // these so the page's sections (Genel özellikler, Boyutlar…) are preserved.
+            body.put("specGroups", p.specGroups());
             body.put("brand", p.brand());
             return ResponseEntity.ok(body);
         } catch (CrawlException e) {

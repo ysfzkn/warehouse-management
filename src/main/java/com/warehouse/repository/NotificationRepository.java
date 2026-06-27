@@ -22,6 +22,9 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
      * Returns the total number of unread notifications.
      */
     long countByReadFalse();
+
+    /** Unread count for a single workspace domain (WMS / ECOM). */
+    long countByReadFalseAndDomain(String domain);
 }
 
 

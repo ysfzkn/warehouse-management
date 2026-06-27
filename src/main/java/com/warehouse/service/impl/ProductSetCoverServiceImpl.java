@@ -1,0 +1,370 @@
+package com.warehouse.service.impl;
+
+import com.warehouse.assistant.core.config.AssistantRuntimeConfig;
+import com.warehouse.assistant.core.image.OpenAiImageEditClient;
+import com.warehouse.entity.BundleItem;
+import com.warehouse.entity.Product;
+import com.warehouse.entity.ProductImage;
+import com.warehouse.entity.ProductType;
+import com.warehouse.exception.ErrorCode;
+import com.warehouse.exception.WarehouseManagementException;
+import com.warehouse.repository.BundleItemRepository;
+import com.warehouse.repository.ProductImageRepository;
+import com.warehouse.repository.ProductRepository;
+import com.warehouse.service.PhotoStorageService;
+import com.warehouse.service.ProductImageService;
+import com.warehouse.service.ProductSetCoverService;
+import com.warehouse.util.ProductImageUtil;
+import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
+
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.UncheckedIOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+
+@Service
+@RequiredArgsConstructor
+public class ProductSetCoverServiceImpl implements ProductSetCoverService {
+
+    private static final Logger logger = LoggerFactory.getLogger(ProductSetCoverServiceImpl.class);
+
+    private static final String ROLE_COVER_INPUT = ProductImageUtil.ROLE_COVER_INPUT;
+    private static final String ROLE_AI_COVER = ProductImageUtil.ROLE_AI_COVER;
+
+    /**
+     * Default combine prompt. Overridable at runtime via the admin setting
+     * {@code assistant.image.prompt}. English on purpose — image models follow
+     * English instructions far more reliably. Structured as hard rules because
+     * the failure mode is the model "redrawing" products and inventing text;
+     * pair with {@code gpt-image-1} + {@code input_fidelity=high} for the best
+     * logo/text preservation.
+     */
+    static final String DEFAULT_PROMPT =
+            "Combine the products from the attached reference photos into ONE professional e-commerce "
+            + "catalog photograph.\n\n"
+            + "ABSOLUTE FIDELITY RULES — every product must remain EXACTLY as photographed:\n"
+            + "- Reproduce each product exactly once, faithful to its reference photo: identical shape, "
+            + "proportions, colors, materials, surface finish, buttons, knobs, handles, displays and "
+            + "screen content.\n"
+            + "- All printed text, logos, brand names, labels and markings must be copied letter-for-letter "
+            + "exactly as they appear in the reference photos. Never invent, replace, translate, redraw or "
+            + "\"improve\" any text or logo. If text is too small to read in the reference, keep it as the "
+            + "same small indistinct marks — do not sharpen it into new letters or words.\n"
+            + "- Do not redesign, recolor, restyle, clean up or modify any product in any way.\n\n"
+            + "ADDITIONS ARE FORBIDDEN: no new text, captions, badges, stickers, energy labels, price tags, "
+            + "watermarks, logos, props, decorations, plants, food, people, hands, or reflections of objects "
+            + "that are not in the reference photos.\n\n"
+            + "COMPOSITION: place all products side by side in a single row at plausible relative real-world "
+            + "sizes, each product fully visible, none cropped, none overlapping another. Centered, with "
+            + "comfortable empty margins around the group.\n\n"
+            + "SCENE: seamless neutral white-to-light-gray professional studio background, soft even diffused "
+            + "lighting, subtle natural contact shadows under each product.\n\n"
+            + "STYLE: photorealistic, sharp focus, high detail. The result must look like the original product "
+            + "photos professionally arranged together in one studio shot — NOT like newly drawn or "
+            + "reimagined products.";
+
+    private final ProductRepository productRepository;
+    private final ProductImageRepository imageRepository;
+    private final BundleItemRepository bundleItemRepository;
+    private final ProductImageService productImageService;
+    private final PhotoStorageService photoStorageService;
+    private final OpenAiImageEditClient imageEditClient;
+    private final AssistantRuntimeConfig runtimeConfig;
+    private final TransactionTemplate transactionTemplate;
+
+    // ─────────────────────────── cover inputs ───────────────────────────
+
+    @Override
+    @Transactional
+    public ProductImage setCoverInput(Long setId, Long memberProductId,
+                                      String originalFileName, String contentType, InputStream inputStream) {
+        Product set = loadBundleOrThrow(setId);
+        requireMember(setId, memberProductId);
+        byte[] bytes = readAll(inputStream);
+        return storeCoverInput(set, memberProductId, originalFileName, contentType, bytes);
+    }
+
+    @Override
+    @Transactional
+    public ProductImage setCoverInputFromImage(Long setId, Long memberProductId, Long imageId) {
+        Product set = loadBundleOrThrow(setId);
+        requireMember(setId, memberProductId);
+        ProductImage source = productImageService.getImageOrThrow(imageId);
+        if (!Objects.equals(source.getProduct().getId(), memberProductId)) {
+            throw new WarehouseManagementException(ErrorCode.AI_COVER_IMAGE_NOT_OWNED);
+        }
+        // Copy bytes so the input survives even if the source product image is deleted.
+        byte[] bytes;
+        try (InputStream in = photoStorageService.openPhotoStream(source.getRelativePath())) {
+            bytes = in.readAllBytes();
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+        return storeCoverInput(set, memberProductId, source.getFileName(), source.getContentType(), bytes);
+    }
+
+    @Override
+    @Transactional
+    public void deleteCoverInput(Long setId, Long memberProductId) {
+        Product set = loadBundleOrThrow(setId);
+        imageRepository.findByProductAndAiRoleAndMemberProductId(set, ROLE_COVER_INPUT, memberProductId)
+                .forEach(img -> productImageService.deleteImage(img.getId()));
+    }
+
+    @Override
+    @Transactional
+    public FillResult fillCoverInputsFromPrimaries(Long setId) {
+        Product set = loadBundleOrThrow(setId);
+        List<BundleItem> members = bundleItemRepository.findByBundleIdOrderBySortOrderAsc(setId);
+        int filled = 0;
+        List<Long> missing = new ArrayList<>();
+        for (BundleItem member : members) {
+            Long memberId = member.getProduct().getId();
+            ProductImage best = ProductImageUtil
+                    .displayCover(imageRepository.findByProductOrderBySortOrderAscIdAsc(member.getProduct()))
+                    .orElse(null);
+            if (best == null) {
+                missing.add(memberId);
+                continue;
+            }
+            byte[] bytes;
+            try (InputStream in = photoStorageService.openPhotoStream(best.getRelativePath())) {
+                bytes = in.readAllBytes();
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+            try {
+                storeCoverInput(set, memberId, best.getFileName(), best.getContentType(), bytes);
+                filled++;
+            } catch (WarehouseManagementException e) {
+                if (e.getErrorCode() == ErrorCode.AI_COVER_UNSUPPORTED_FORMAT) {
+                    // Primary photo is in a format OpenAI can't use (e.g. AVIF) —
+                    // report instead of failing the whole bulk fill.
+                    missing.add(memberId);
+                } else {
+                    throw e;
+                }
+            }
+        }
+        return new FillResult(filled, missing);
+    }
+
+    // ─────────────────────────── generation ───────────────────────────
+
+    /** Read-phase output: everything needed for the HTTP call, detached from the session. */
+    private record Prepared(List<OpenAiImageEditClient.ImageInput> inputs, String prompt) {}
+
+    @Override
+    public ProductImage generateCover(Long setId) {
+        // Phase 1 (tx): validate and read all input bytes.
+        Prepared prepared = transactionTemplate.execute(status -> prepareGeneration(setId));
+
+        // Phase 2 (NO tx): the OpenAI call can take up to ~2 minutes — never hold
+        // a database transaction/connection across it.
+        byte[] png = imageEditClient.generateCover(prepared.inputs(), prepared.prompt());
+
+        // Phase 3 (tx): replace the previous AI cover and save the new primary.
+        return transactionTemplate.execute(status -> persistGeneratedCover(setId, png));
+    }
+
+    private Prepared prepareGeneration(Long setId) {
+        Product set = loadBundleOrThrow(setId);
+        if (!imageEditClient.isConfigured()) {
+            throw new WarehouseManagementException(ErrorCode.AI_COVER_API_KEY_MISSING);
+        }
+        List<BundleItem> members = bundleItemRepository.findByBundleIdOrderBySortOrderAsc(setId);
+        if (members.isEmpty()) {
+            throw new WarehouseManagementException(ErrorCode.AI_COVER_INPUT_MISSING);
+        }
+
+        List<ProductImage> inputs = imageRepository.findByProductAndAiRole(set, ROLE_COVER_INPUT);
+        List<String> missingNames = new ArrayList<>();
+        List<OpenAiImageEditClient.ImageInput> payload = new ArrayList<>();
+        for (BundleItem member : members) {
+            Long memberId = member.getProduct().getId();
+            ProductImage input = inputs.stream()
+                    .filter(img -> Objects.equals(img.getMemberProductId(), memberId))
+                    .findFirst()
+                    .orElse(null);
+            if (input == null) {
+                missingNames.add(member.getProduct().getName());
+                continue;
+            }
+            byte[] bytes;
+            try (InputStream in = photoStorageService.openPhotoStream(input.getRelativePath())) {
+                bytes = in.readAllBytes();
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+            // Defensive re-check for inputs stored before format normalization existed.
+            try {
+                AiSafeImage safe = normalizeForAi(bytes, input.getFileName());
+                payload.add(new OpenAiImageEditClient.ImageInput(
+                        safe.bytes(), safe.contentType(), safe.fileName()));
+            } catch (WarehouseManagementException e) {
+                if (e.getErrorCode() == ErrorCode.AI_COVER_UNSUPPORTED_FORMAT) {
+                    throw new WarehouseManagementException(ErrorCode.AI_COVER_UNSUPPORTED_FORMAT,
+                            ErrorCode.AI_COVER_UNSUPPORTED_FORMAT.getMessage()
+                                    + " (Üye: " + member.getProduct().getName() + ")");
+                }
+                throw e;
+            }
+        }
+        if (!missingNames.isEmpty()) {
+            throw new WarehouseManagementException(ErrorCode.AI_COVER_INPUT_MISSING,
+                    ErrorCode.AI_COVER_INPUT_MISSING.getMessage()
+                            + " Eksik: " + String.join(", ", missingNames));
+        }
+
+        String customPrompt = runtimeConfig.getImagePrompt();
+        String prompt = (customPrompt != null && !customPrompt.isBlank()) ? customPrompt : DEFAULT_PROMPT;
+        return new Prepared(payload, prompt);
+    }
+
+    private ProductImage persistGeneratedCover(Long setId, byte[] png) {
+        Product set = loadBundleOrThrow(setId);
+        // Drop the previous AI cover (rows + files) before saving the new one.
+        imageRepository.findByProductAndAiRole(set, ROLE_AI_COVER)
+                .forEach(img -> productImageService.deleteImage(img.getId()));
+
+        ProductImage saved = productImageService.addImageToProduct(
+                setId,
+                "ai-cover-" + setId + ".png",
+                "image/png",
+                new ByteArrayInputStream(png),
+                true,
+                null);
+        saved.setAiRole(ROLE_AI_COVER);
+        ProductImage result = imageRepository.save(saved);
+        logger.info("AI set cover saved for set {} as image {} (primary)", setId, result.getId());
+        return result;
+    }
+
+    // ─────────────────────────── helpers ───────────────────────────
+
+    private Product loadBundleOrThrow(Long setId) {
+        Product set = productRepository.findById(setId)
+                .orElseThrow(() -> new WarehouseManagementException(ErrorCode.PRODUCT_NOT_FOUND));
+        if (set.getProductType() != ProductType.BUNDLE) {
+            throw new WarehouseManagementException(ErrorCode.AI_COVER_NOT_A_BUNDLE);
+        }
+        return set;
+    }
+
+    private void requireMember(Long setId, Long memberProductId) {
+        boolean isMember = bundleItemRepository.findByBundleIdOrderBySortOrderAsc(setId).stream()
+                .anyMatch(bi -> Objects.equals(bi.getProduct().getId(), memberProductId));
+        if (!isMember) {
+            throw new WarehouseManagementException(ErrorCode.AI_COVER_NOT_A_MEMBER);
+        }
+    }
+
+    /**
+     * Stores the bytes as the member's COVER_INPUT image, replacing any previous
+     * one. Built directly (not via {@code addImageToProduct}) so the gallery's
+     * primary/ordering logic is never touched.
+     */
+    private ProductImage storeCoverInput(Product set, Long memberProductId,
+                                         String fileName, String contentType, byte[] bytes) {
+        // Reject/convert formats the OpenAI Images API can't ingest (only JPEG, PNG
+        // and WebP are accepted) right at selection time, so the admin gets a clear
+        // error now instead of a failed generation later. Crawled images are often
+        // AVIF stored raw under a .jpg name, so sniff the actual bytes.
+        AiSafeImage safe = normalizeForAi(bytes, fileName);
+
+        imageRepository.findByProductAndAiRoleAndMemberProductId(set, ROLE_COVER_INPUT, memberProductId)
+                .forEach(old -> productImageService.deleteImage(old.getId()));
+
+        PhotoStorageService.StoredPhoto stored = photoStorageService.storeProductImage(
+                set.getId(), safe.fileName(), safe.contentType(), new ByteArrayInputStream(safe.bytes()));
+
+        ProductImage image = new ProductImage();
+        image.setProduct(set);
+        image.setFileName(stored.fileName());
+        image.setRelativePath(stored.relativePath());
+        image.setThumbnailPath(stored.thumbnailPath());
+        image.setContentType(stored.contentType());
+        image.setSizeBytes(stored.sizeBytes());
+        image.setWidth(stored.width());
+        image.setHeight(stored.height());
+        image.setSortOrder(0);
+        image.setPrimary(false);
+        image.setAiRole(ROLE_COVER_INPUT);
+        image.setMemberProductId(memberProductId);
+        ProductImage saved = imageRepository.save(image);
+        logger.info("AI cover input stored for set {} member {} as image {}",
+                set.getId(), memberProductId, saved.getId());
+        return saved;
+    }
+
+    private byte[] readAll(InputStream in) {
+        try {
+            return in.readAllBytes();
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    // ───────────── OpenAI-safe image normalization ─────────────
+
+    /** Bytes guaranteed to be in a format the OpenAI Images API accepts. */
+    private record AiSafeImage(byte[] bytes, String contentType, String fileName) {}
+
+    /**
+     * Ensures the bytes are JPEG, PNG or WebP (the only formats the OpenAI edits
+     * endpoint accepts). The declared content type / extension is ignored — stored
+     * files can be raw AVIF under a {@code .jpg} name (web-crawled images) and
+     * OpenAI sniffs the real content. Decodable other formats (GIF, BMP, ...) are
+     * re-encoded to PNG; undecodable ones (AVIF/HEIC) are rejected.
+     */
+    private AiSafeImage normalizeForAi(byte[] bytes, String fileName) {
+        String base = stripExtension(fileName);
+        switch (sniffImageFormat(bytes)) {
+            case "jpeg":
+                return new AiSafeImage(bytes, "image/jpeg", base + ".jpg");
+            case "png":
+                return new AiSafeImage(bytes, "image/png", base + ".png");
+            case "webp":
+                return new AiSafeImage(bytes, "image/webp", base + ".webp");
+            default:
+                try {
+                    BufferedImage img = ImageIO.read(new ByteArrayInputStream(bytes));
+                    if (img != null) {
+                        ByteArrayOutputStream out = new ByteArrayOutputStream();
+                        ImageIO.write(img, "png", out);
+                        return new AiSafeImage(out.toByteArray(), "image/png", base + ".png");
+                    }
+                } catch (IOException ignored) {
+                    // fall through to the unsupported-format error
+                }
+                throw new WarehouseManagementException(ErrorCode.AI_COVER_UNSUPPORTED_FORMAT);
+        }
+    }
+
+    /** Detects the actual image format from magic bytes. */
+    private static String sniffImageFormat(byte[] b) {
+        if (b == null || b.length < 12) return "unknown";
+        if ((b[0] & 0xFF) == 0xFF && (b[1] & 0xFF) == 0xD8 && (b[2] & 0xFF) == 0xFF) return "jpeg";
+        if ((b[0] & 0xFF) == 0x89 && b[1] == 'P' && b[2] == 'N' && b[3] == 'G') return "png";
+        if (b[0] == 'R' && b[1] == 'I' && b[2] == 'F' && b[3] == 'F'
+                && b[8] == 'W' && b[9] == 'E' && b[10] == 'B' && b[11] == 'P') return "webp";
+        return "unknown";
+    }
+
+    private static String stripExtension(String fileName) {
+        if (fileName == null || fileName.isBlank()) return "cover-input";
+        int dot = fileName.lastIndexOf('.');
+        return dot > 0 ? fileName.substring(0, dot) : fileName;
+    }
+}

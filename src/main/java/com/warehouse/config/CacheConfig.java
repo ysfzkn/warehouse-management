@@ -35,7 +35,8 @@ public class CacheConfig {
             "productDetail",       // Single product detail cache
             "stockAvailability",   // Stock availability (short TTL, evicted on stock events)
             "sitemap",             // Dynamic sitemap.xml — 6h TTL (there is also a controller-level header)
-            "invoicePdf"           // E-invoice PDF — 24h cache to avoid repeatedly fetching from Logo
+            "invoicePdf",          // E-invoice PDF — 24h cache to avoid repeatedly fetching from Logo
+            "alsoBought"           // "Customers also bought" recommendation ids per product (co-purchase query)
         );
         
         cacheManager.setCaffeine(Caffeine.newBuilder()

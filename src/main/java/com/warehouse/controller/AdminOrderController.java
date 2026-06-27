@@ -216,8 +216,8 @@ public class AdminOrderController {
                 try {
                     if (i.getProduct() != null) {
                         productId = i.getProduct().getId();
-                        if (i.getProduct().getImages() != null && !i.getProduct().getImages().isEmpty()) {
-                            var img = i.getProduct().getImages().stream().filter(im -> im.isPrimary()).findFirst().orElse(i.getProduct().getImages().get(0));
+                        var img = com.warehouse.util.ProductImageUtil.displayCover(i.getProduct().getImages()).orElse(null);
+                        if (img != null) {
                             imageUrl = "/api/admin/products/images/" + img.getId() + "/view?thumbnail=true";
                         }
                     }

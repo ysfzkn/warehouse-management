@@ -10,6 +10,7 @@ import com.warehouse.repository.CategoryRepository;
 import com.warehouse.repository.ColorRepository;
 import com.warehouse.repository.ProductRepository;
 import com.warehouse.repository.StockTransferRepository;
+import com.warehouse.repository.VariantGroupRepository;
 import com.warehouse.service.impl.ProductServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -48,6 +49,9 @@ class ProductServiceTest {
     private StockTransferRepository stockTransferRepository;
 
     @Mock
+    private VariantGroupRepository variantGroupRepository;
+
+    @Mock
     private ApplicationEventPublisher eventPublisher;
 
     private ProductService productService;
@@ -65,6 +69,7 @@ class ProductServiceTest {
                 brandRepository,
                 colorRepository,
                 stockTransferRepository,
+                variantGroupRepository,
                 eventPublisher
         );
         category = new Category();

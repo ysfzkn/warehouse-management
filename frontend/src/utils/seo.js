@@ -192,7 +192,7 @@ export function buildWebSiteSchema(siteSettings) {
       '@type': 'SearchAction',
       target: {
         '@type': 'EntryPoint',
-        urlTemplate: `${origin}urun-ara?q={search_term_string}`,
+        urlTemplate: `${origin}kategori/arama?q={search_term_string}`,
       },
       'query-input': 'required name=search_term_string',
     },

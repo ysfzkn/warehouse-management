@@ -53,6 +53,20 @@ public class ProductDto {
     public String primaryImageUrl; // set thumbnail (bundles only)
     public java.util.List<BundleItemDto> bundleItems;
 
+    // Color variants — the same product in other colors (see VariantGroup).
+    public Long variantGroupId;
+    public java.util.List<Long> variantSiblingIds; // write channel mirror (admin form submit)
+    public java.util.List<VariantSiblingDto> variantSiblings; // read: linked siblings for the edit form
+
+    public static class VariantSiblingDto {
+        public Long id;
+        public String name;
+        public String sku;
+        public String colorName;
+        public String colorHexCode;
+        public boolean active;
+    }
+
     public static class BundleItemDto {
         public Long productId;
         public String name;

@@ -3,6 +3,8 @@ import axios from 'axios';
 import SearchableSelect from './SearchableSelect';
 import ConfirmModal from './ConfirmModal';
 import BundleMemberPicker from './BundleMemberPicker';
+import VariantSiblingPicker from './VariantSiblingPicker';
+import confirmDialog from '../utils/confirmDialog';
 import './ProductForm.css';
 
 /** Drop empty groups/items from the structured technical specs before saving. */
@@ -105,6 +107,7 @@ const ProductForm = ({ product, onSuccess, onCancel, setMode = false }) => {
   // Structured technical specs: [{ title, items: [{ label, value }] }]
   const [technicalSpecs, setTechnicalSpecs] = useState([]);
   const [bundleMembers, setBundleMembers] = useState([]); // set mode: [{productId, name, sku, price, salePrice, quantity}]
+  const [variantSiblings, setVariantSiblings] = useState([]); // color variants: [{productId, name, sku, colorName, colorHexCode}]
   const [dragImageIndex, setDragImageIndex] = useState(null);
   const [dragOverIndex, setDragOverIndex] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -262,6 +265,24 @@ const ProductForm = ({ product, onSuccess, onCancel, setMode = false }) => {
           .catch(() => {});
       }
     }
+    // Non-set products: load existing color variants. The list payload doesn't carry them,
+    // so fetch the detail (which returns variantSiblings) unless they're already present.
+    if (!setMode && product.id) {
+      if (Array.isArray(product.variantSiblings)) {
+        setVariantSiblings(product.variantSiblings.map((s) => ({ ...s, productId: s.id ?? s.productId })));
+      } else {
+        axios
+          .get(`/api/products/${product.id}`)
+          .then((r) => {
+            const sibs = Array.isArray(r.data?.variantSiblings) ? r.data.variantSiblings : [];
+            setVariantSiblings(sibs.map((s) => ({ ...s, productId: s.id ?? s.productId })));
+          })
+          .catch(() => {});
+      }
+    } else {
+      setVariantSiblings([]);
+    }
+
     const resolvedBrandId = product.brand?.id ?? (product.brandId != null ? Number(product.brandId) : null);
     const resolvedColorId = product.color?.id ?? (product.colorId != null ? Number(product.colorId) : null);
 
@@ -734,7 +755,12 @@ const ProductForm = ({ product, onSuccess, onCancel, setMode = false }) => {
     );
   const bulkDeleteImages = async () => {
     if (selectedImageIds.size === 0) return;
-    if (!window.confirm(`${selectedImageIds.size} görsel kalıcı olarak silinecek. Emin misiniz?`)) return;
+    const ok = await confirmDialog({
+      title: 'Görseller Silinsin mi?',
+      message: `${selectedImageIds.size} görsel kalıcı olarak silinecek. Bu işlem geri alınamaz.`,
+      confirmText: 'Evet, Sil',
+    });
+    if (!ok) return;
     setBulkDeletingImages(true);
     try {
       const ids = Array.from(selectedImageIds);
@@ -763,8 +789,6 @@ const ProductForm = ({ product, onSuccess, onCancel, setMode = false }) => {
     'lg.com.tr',
     'miele.com',
     'miele.com.tr',
-    'haier.com',
-    'haier.com.tr',
     'fakir.com.tr',
     'fakir.com',
     'simfer.com.tr',
@@ -775,6 +799,9 @@ const ProductForm = ({ product, onSuccess, onCancel, setMode = false }) => {
     'tefal.com.tr',
     'tefal.com',
     'braunshop.com.tr',
+    'philips.com.tr',
+    'philips.com',
+    'rotaclimate.com',
   ];
   const isLikelySupportedUrl = (url) => {
     if (!url || typeof url !== 'string') return false;
@@ -800,7 +827,9 @@ const ProductForm = ({ product, onSuccess, onCancel, setMode = false }) => {
   // Description preview state — the admin can edit the text, then transfer it to ProductForm via "Apply"
   const [crawlEditableDesc, setCrawlEditableDesc] = useState('');
   const [crawlEditableShortDesc, setCrawlEditableShortDesc] = useState('');
-  const [crawlEditableSpecs, setCrawlEditableSpecs] = useState([]); // [{key, value}]
+  // Grouped specs, matching the page's sections and the product's structured
+  // technicalSpecs shape: [{title, items: [{label, value}]}]
+  const [crawlEditableSpecGroups, setCrawlEditableSpecGroups] = useState([]);
   const [crawlActiveTab, setCrawlActiveTab] = useState('images'); // 'images' | 'description'
   const [crawlDescAppliedToast, setCrawlDescAppliedToast] = useState(false);
 
@@ -835,9 +864,20 @@ const ProductForm = ({ product, onSuccess, onCancel, setMode = false }) => {
       // Hydrate the description state (the admin can edit it)
       setCrawlEditableDesc(data.description || '');
       setCrawlEditableShortDesc(data.shortDescription || '');
-      // Specs Map → editable array
-      const specsObj = data.specs || {};
-      setCrawlEditableSpecs(Object.entries(specsObj).map(([k, v]) => ({ key: k, value: v })));
+      // Grouped specs preferred (sections preserved: "Genel özellikler", "Boyutlar"…);
+      // flat specs map remains the fallback as a single group.
+      if (Array.isArray(data.specGroups) && data.specGroups.length > 0) {
+        setCrawlEditableSpecGroups(
+          data.specGroups.map((g) => ({
+            title: g.title || 'Teknik Özellikler',
+            items: (g.items || []).map((it) => ({ label: it.label || '', value: it.value || '' })),
+          }))
+        );
+      } else {
+        const specsObj = data.specs || {};
+        const items = Object.entries(specsObj).map(([k, v]) => ({ label: k, value: v }));
+        setCrawlEditableSpecGroups(items.length > 0 ? [{ title: 'Teknik Özellikler', items }] : []);
+      }
       // If no description was fetched, stay on the images tab; if present, also suggest the description tab
       if (data.description || data.shortDescription) {
         setCrawlActiveTab('images'); // default start is still images
@@ -893,19 +933,28 @@ const ProductForm = ({ product, onSuccess, onCancel, setMode = false }) => {
       updates.description = fullDesc;
     }
 
-    // Structured technical specs (replaces a previously auto-imported group).
-    const validSpecs = crawlEditableSpecs.filter((s) => s.key.trim() && s.value.trim());
+    // Structured technical specs — groups are applied AS-IS, preserving the page's
+    // sections ("Genel özellikler", "Boyutlar", "Soğutucu bölümü"…). An incoming
+    // group replaces any existing group with the same title; manually added groups
+    // with other titles are preserved.
+    const incomingGroups = crawlEditableSpecGroups
+      .map((g) => ({
+        title: (g.title || '').trim() || 'Teknik Özellikler',
+        items: (g.items || [])
+          .filter((it) => (it.label || '').trim() && (it.value || '').trim())
+          .map((it) => ({ label: it.label.trim(), value: it.value.trim() })),
+      }))
+      .filter((g) => g.items.length > 0);
     let specsApplied = false;
-    if (validSpecs.length > 0) {
-      const importedGroup = {
-        title: 'Teknik Özellikler',
-        items: validSpecs.map((s) => ({ label: s.key.trim(), value: s.value.trim() })),
-      };
+    let specItemCount = 0;
+    if (incomingGroups.length > 0) {
+      specItemCount = incomingGroups.reduce((n, g) => n + g.items.length, 0);
+      const incomingTitles = new Set(incomingGroups.map((g) => g.title.toLowerCase()));
       setTechnicalSpecs((prev) => {
         const others = (Array.isArray(prev) ? prev : []).filter(
-          (g) => (g.title || '').trim() !== 'Teknik Özellikler'
+          (g) => !incomingTitles.has((g.title || '').trim().toLowerCase())
         );
-        return [...others, importedGroup];
+        return [...others, ...incomingGroups];
       });
       specsApplied = true;
     }
@@ -922,6 +971,7 @@ const ProductForm = ({ product, onSuccess, onCancel, setMode = false }) => {
     const fieldList = [];
     if (updates.shortDescription) fieldList.push('Kısa Açıklama');
     if (updates.description) fieldList.push('Açıklama');
+    if (specsApplied) fieldList.push(`${incomingGroups.length} grup / ${specItemCount} özellik`);
 
     showToast(`✓ ${fieldList.join(' + ')} forma aktarıldı. KAYDET'e basmayı unutmayın!`, 'success');
 
@@ -948,17 +998,39 @@ const ProductForm = ({ product, onSuccess, onCancel, setMode = false }) => {
     }, 400);
   };
 
-  const updateCrawlSpec = (index, field, value) => {
-    setCrawlEditableSpecs((prev) => prev.map((s, i) => (i === index ? { ...s, [field]: value } : s)));
+  const updateCrawlSpecGroupTitle = (gi, title) => {
+    setCrawlEditableSpecGroups((prev) => prev.map((g, i) => (i === gi ? { ...g, title } : g)));
   };
 
-  const removeCrawlSpec = (index) => {
-    setCrawlEditableSpecs((prev) => prev.filter((_, i) => i !== index));
+  const removeCrawlSpecGroup = (gi) => {
+    setCrawlEditableSpecGroups((prev) => prev.filter((_, i) => i !== gi));
   };
 
-  const addCrawlSpec = () => {
-    setCrawlEditableSpecs((prev) => [...prev, { key: '', value: '' }]);
+  const addCrawlSpecGroup = () => {
+    setCrawlEditableSpecGroups((prev) => [...prev, { title: '', items: [{ label: '', value: '' }] }]);
   };
+
+  const updateCrawlSpecItem = (gi, ii, field, value) => {
+    setCrawlEditableSpecGroups((prev) =>
+      prev.map((g, i) =>
+        i === gi ? { ...g, items: g.items.map((it, j) => (j === ii ? { ...it, [field]: value } : it)) } : g
+      )
+    );
+  };
+
+  const removeCrawlSpecItem = (gi, ii) => {
+    setCrawlEditableSpecGroups((prev) =>
+      prev.map((g, i) => (i === gi ? { ...g, items: g.items.filter((_, j) => j !== ii) } : g))
+    );
+  };
+
+  const addCrawlSpecItem = (gi) => {
+    setCrawlEditableSpecGroups((prev) =>
+      prev.map((g, i) => (i === gi ? { ...g, items: [...g.items, { label: '', value: '' }] } : g))
+    );
+  };
+
+  const crawlSpecsCount = crawlEditableSpecGroups.reduce((n, g) => n + (g.items?.length || 0), 0);
 
   const importCrawled = async () => {
     if (!product?.id || crawlSelected.size === 0) return;
@@ -1050,6 +1122,8 @@ const ProductForm = ({ product, onSuccess, onCancel, setMode = false }) => {
               sortOrder: i,
             }))
           : undefined,
+        // Color variants — only for regular products (sets bundle different products, not colors).
+        variantSiblingIds: setMode ? undefined : variantSiblings.map((s) => s.productId),
       };
 
       let savedProductId = product?.id;
@@ -1696,6 +1770,19 @@ const ProductForm = ({ product, onSuccess, onCancel, setMode = false }) => {
           </div>
         </div>
 
+        {/* Color variants — link the same product in other colors (regular products only) */}
+        {!setMode && (
+          <div className="row">
+            <div className="col-12">
+              <VariantSiblingPicker
+                siblings={variantSiblings}
+                onChange={setVariantSiblings}
+                excludeProductId={product?.id}
+              />
+            </div>
+          </div>
+        )}
+
         {/* Shipping and Status Section */}
         <div className="row mt-4">
           <div className="col-12">
@@ -2334,6 +2421,8 @@ const ProductForm = ({ product, onSuccess, onCancel, setMode = false }) => {
                       </small>
                       {[
                         'profilo.com',
+                        'philips.com.tr',
+                        'rotaclimate.com',
                         'simfer.com.tr',
                         'ferreturkiye.com',
                         'kaercher.com',
@@ -2487,7 +2576,7 @@ const ProductForm = ({ product, onSuccess, onCancel, setMode = false }) => {
                             >
                               <i className="fas fa-align-left me-1" />
                               Açıklama & Özellikler
-                              {(crawlPreview.description || crawlEditableSpecs.length > 0) && (
+                              {(crawlPreview.description || crawlSpecsCount > 0) && (
                                 <span className="badge bg-success ms-2">
                                   <i className="fas fa-check" style={{ fontSize: 9 }} />
                                 </span>
@@ -2576,7 +2665,7 @@ const ProductForm = ({ product, onSuccess, onCancel, setMode = false }) => {
                         <div>
                           {!crawlPreview.description &&
                           !crawlPreview.shortDescription &&
-                          crawlEditableSpecs.length === 0 ? (
+                          crawlSpecsCount === 0 ? (
                             <div className="alert alert-warning small mb-3">
                               <i className="fas fa-exclamation-triangle me-1" />
                               Bu sayfadan açıklama veya teknik özellik çıkarılamadı. Manuel olarak ekleyebilir
@@ -2638,59 +2727,110 @@ const ProductForm = ({ product, onSuccess, onCancel, setMode = false }) => {
                             </small>
                           </div>
 
-                          {/* Specs editor */}
+                          {/* Grouped specs editor — sections preserved exactly as on the page */}
                           <div className="mb-3">
                             <div className="d-flex justify-content-between align-items-center mb-2">
                               <label className="form-label small fw-semibold mb-0">
-                                Teknik Özellikler ({crawlEditableSpecs.length})
+                                Teknik Özellikler
+                                {crawlSpecsCount > 0 && (
+                                  <span className="badge bg-primary ms-2">
+                                    {crawlEditableSpecGroups.length} grup · {crawlSpecsCount} özellik
+                                  </span>
+                                )}
                               </label>
                               <button
                                 type="button"
                                 className="btn btn-sm btn-outline-primary"
-                                onClick={addCrawlSpec}
+                                onClick={addCrawlSpecGroup}
                               >
                                 <i className="fas fa-plus me-1" />
-                                Yeni Özellik
+                                Yeni Grup
                               </button>
                             </div>
-                            {crawlEditableSpecs.length === 0 ? (
+                            {crawlEditableSpecGroups.length === 0 ? (
                               <div className="text-muted small text-center py-3 border rounded bg-light">
-                                Özellik çıkarılamadı. "Yeni Özellik" butonu ile elle ekleyebilirsiniz.
+                                Özellik çıkarılamadı. "Yeni Grup" butonu ile elle ekleyebilirsiniz.
                               </div>
                             ) : (
-                              <div style={{ maxHeight: 280, overflowY: 'auto' }}>
-                                {crawlEditableSpecs.map((spec, idx) => (
-                                  <div key={idx} className="d-flex gap-2 mb-2">
-                                    <input
-                                      type="text"
-                                      className="form-control form-control-sm"
-                                      placeholder="Özellik adı (örn. Kapasite)"
-                                      value={spec.key}
-                                      onChange={(e) => updateCrawlSpec(idx, 'key', e.target.value)}
-                                      style={{ flexBasis: '40%' }}
-                                    />
-                                    <input
-                                      type="text"
-                                      className="form-control form-control-sm"
-                                      placeholder="Değer (örn. 9 kg)"
-                                      value={spec.value}
-                                      onChange={(e) => updateCrawlSpec(idx, 'value', e.target.value)}
-                                      style={{ flexBasis: '55%' }}
-                                    />
-                                    <button
-                                      type="button"
-                                      className="btn btn-sm btn-outline-danger"
-                                      onClick={() => removeCrawlSpec(idx)}
-                                      title="Sil"
+                              <div style={{ maxHeight: 360, overflowY: 'auto' }}>
+                                {crawlEditableSpecGroups.map((group, gi) => (
+                                  <div key={gi} className="border rounded mb-2 overflow-hidden">
+                                    <div
+                                      className="d-flex gap-2 align-items-center px-2 py-1"
+                                      style={{ background: '#eef2ff' }}
                                     >
-                                      <i className="fas fa-trash" />
-                                    </button>
+                                      <i
+                                        className="fas fa-layer-group text-primary"
+                                        style={{ fontSize: 12 }}
+                                      />
+                                      <input
+                                        type="text"
+                                        className="form-control form-control-sm fw-semibold border-0 bg-transparent px-1"
+                                        placeholder="Grup başlığı (örn. Boyutlar)"
+                                        value={group.title}
+                                        onChange={(e) => updateCrawlSpecGroupTitle(gi, e.target.value)}
+                                      />
+                                      <span className="text-muted small flex-shrink-0">
+                                        {group.items.length} satır
+                                      </span>
+                                      <button
+                                        type="button"
+                                        className="btn btn-sm btn-outline-secondary py-0 px-1 flex-shrink-0"
+                                        onClick={() => addCrawlSpecItem(gi)}
+                                        title="Bu gruba satır ekle"
+                                      >
+                                        <i className="fas fa-plus" style={{ fontSize: 10 }} />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="btn btn-sm btn-outline-danger py-0 px-1 flex-shrink-0"
+                                        onClick={() => removeCrawlSpecGroup(gi)}
+                                        title="Grubu sil"
+                                      >
+                                        <i className="fas fa-trash" style={{ fontSize: 10 }} />
+                                      </button>
+                                    </div>
+                                    <div className="p-2">
+                                      {group.items.map((it, ii) => (
+                                        <div key={ii} className="d-flex gap-2 mb-1">
+                                          <input
+                                            type="text"
+                                            className="form-control form-control-sm"
+                                            placeholder="Özellik adı (örn. Kapasite)"
+                                            value={it.label}
+                                            onChange={(e) =>
+                                              updateCrawlSpecItem(gi, ii, 'label', e.target.value)
+                                            }
+                                            style={{ flexBasis: '42%' }}
+                                          />
+                                          <input
+                                            type="text"
+                                            className="form-control form-control-sm"
+                                            placeholder="Değer (örn. 422 litre)"
+                                            value={it.value}
+                                            onChange={(e) =>
+                                              updateCrawlSpecItem(gi, ii, 'value', e.target.value)
+                                            }
+                                            style={{ flexBasis: '53%' }}
+                                          />
+                                          <button
+                                            type="button"
+                                            className="btn btn-sm btn-outline-danger"
+                                            onClick={() => removeCrawlSpecItem(gi, ii)}
+                                            title="Satırı sil"
+                                          >
+                                            <i className="fas fa-trash" style={{ fontSize: 11 }} />
+                                          </button>
+                                        </div>
+                                      ))}
+                                    </div>
                                   </div>
                                 ))}
                               </div>
                             )}
                             <small className="text-muted">
-                              Aktarınca açıklamanın altına "Teknik Özellikler" tablosu olarak eklenir.
+                              Aktarınca gruplar olduğu gibi ürünün "Teknik Özellikler" bölümüne taşınır; aynı
+                              başlıklı mevcut gruplar güncellenir, diğerleri korunur.
                             </small>
                           </div>
 
@@ -2701,9 +2841,7 @@ const ProductForm = ({ product, onSuccess, onCancel, setMode = false }) => {
                               className="btn btn-success"
                               onClick={applyCrawlDescriptionToProduct}
                               disabled={
-                                !crawlEditableDesc &&
-                                !crawlEditableShortDesc &&
-                                crawlEditableSpecs.length === 0
+                                !crawlEditableDesc && !crawlEditableShortDesc && crawlSpecsCount === 0
                               }
                             >
                               <i className="fas fa-arrow-right me-1" />

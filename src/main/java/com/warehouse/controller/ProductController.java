@@ -9,9 +9,11 @@ import com.warehouse.dto.ProductDto;
 import com.warehouse.service.ProductService;
 import com.warehouse.service.ProductImageService;
 import com.warehouse.entity.ProductImage;
+import com.warehouse.service.ProductSetCoverService;
 import com.warehouse.service.StockService;
 import com.warehouse.service.PhotoStorageService;
 import com.warehouse.service.AdminSecurityService;
+import com.warehouse.util.ProductImageUtil;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import com.warehouse.dto.PagedResponse;
@@ -39,6 +41,7 @@ public class ProductController {
     private final PhotoStorageService photoStorageService;
     private final AdminSecurityService adminSecurityService;
     private final BundleItemRepository bundleItemRepository;
+    private final ProductSetCoverService productSetCoverService;
 
     @Autowired
     public ProductController(ProductService productService,
@@ -46,13 +49,15 @@ public class ProductController {
                              ProductImageService productImageService,
                              PhotoStorageService photoStorageService,
                              AdminSecurityService adminSecurityService,
-                             BundleItemRepository bundleItemRepository) {
+                             BundleItemRepository bundleItemRepository,
+                             ProductSetCoverService productSetCoverService) {
         this.productService = productService;
         this.stockService = stockService;
         this.productImageService = productImageService;
         this.photoStorageService = photoStorageService;
         this.adminSecurityService = adminSecurityService;
         this.bundleItemRepository = bundleItemRepository;
+        this.productSetCoverService = productSetCoverService;
     }
 
     @GetMapping
@@ -194,6 +199,8 @@ public class ProductController {
             dto.put("sortOrder", img.getSortOrder());
             dto.put("slot", img.getSlot());
             dto.put("primary", img.isPrimary());
+            dto.put("aiRole", img.getAiRole());
+            dto.put("memberProductId", img.getMemberProductId());
             dto.put("contentType", img.getContentType());
             dto.put("sizeBytes", img.getSizeBytes());
             dto.put("width", img.getWidth());
@@ -238,6 +245,79 @@ public class ProductController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("message", "Görsel yüklenemedi: " + e.getMessage()));
         }
+    }
+
+    // ── AI set cover: per-member input photos + generation ──
+
+    /** Upload (or replace) the AI cover input photo for one bundle member. */
+    @PutMapping("/{setId}/cover-inputs/{memberProductId}")
+    public ResponseEntity<?> uploadCoverInput(@PathVariable Long setId,
+                                              @PathVariable Long memberProductId,
+                                              @RequestParam("file") MultipartFile file) {
+        if (file.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Dosya boş."));
+        }
+        if (file.getContentType() == null || !file.getContentType().startsWith("image/")) {
+            return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE).body(Map.of("message", "Sadece görsel dosyaları yüklenebilir."));
+        }
+        try {
+            ProductImage image = productSetCoverService.setCoverInput(
+                    setId, memberProductId, file.getOriginalFilename(), file.getContentType(), file.getInputStream());
+            return ResponseEntity.ok(coverInputDto(image));
+        } catch (java.io.IOException e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("message", "Görsel yüklenemedi: " + e.getMessage()));
+        }
+    }
+
+    /** Copy one of the member product's own images as that member's AI cover input. */
+    @PutMapping("/{setId}/cover-inputs/{memberProductId}/from-image/{imageId}")
+    public ResponseEntity<Map<String, Object>> coverInputFromImage(@PathVariable Long setId,
+                                                                   @PathVariable Long memberProductId,
+                                                                   @PathVariable Long imageId) {
+        ProductImage image = productSetCoverService.setCoverInputFromImage(setId, memberProductId, imageId);
+        return ResponseEntity.ok(coverInputDto(image));
+    }
+
+    @DeleteMapping("/{setId}/cover-inputs/{memberProductId}")
+    public ResponseEntity<Void> deleteCoverInput(@PathVariable Long setId, @PathVariable Long memberProductId) {
+        productSetCoverService.deleteCoverInput(setId, memberProductId);
+        return ResponseEntity.noContent().build();
+    }
+
+    /** Fill every member's cover input from its primary photo. Reports members without photos. */
+    @PostMapping("/{setId}/cover-inputs/fill-from-primaries")
+    public ResponseEntity<Map<String, Object>> fillCoverInputsFromPrimaries(@PathVariable Long setId) {
+        ProductSetCoverService.FillResult result = productSetCoverService.fillCoverInputsFromPrimaries(setId);
+        return ResponseEntity.ok(Map.of(
+                "filled", result.filled(),
+                "missingMemberIds", result.missingMemberIds()
+        ));
+    }
+
+    /**
+     * Generate the AI set cover from the per-member inputs. Synchronous — the
+     * OpenAI image call may take 30–90 seconds; the frontend uses a long timeout.
+     */
+    @PostMapping("/{setId}/generate-cover")
+    public ResponseEntity<Map<String, Object>> generateSetCover(@PathVariable Long setId) {
+        ProductImage image = productSetCoverService.generateCover(setId);
+        return ResponseEntity.status(HttpStatus.CREATED).body(coverInputDto(image));
+    }
+
+    private Map<String, Object> coverInputDto(ProductImage image) {
+        Map<String, Object> dto = new java.util.LinkedHashMap<>();
+        dto.put("id", image.getId());
+        dto.put("fileName", image.getFileName());
+        dto.put("sortOrder", image.getSortOrder());
+        dto.put("slot", image.getSlot());
+        dto.put("primary", image.isPrimary());
+        dto.put("aiRole", image.getAiRole());
+        dto.put("memberProductId", image.getMemberProductId());
+        dto.put("contentType", image.getContentType());
+        dto.put("sizeBytes", image.getSizeBytes());
+        dto.put("width", image.getWidth());
+        dto.put("height", image.getHeight());
+        return dto;
     }
 
     @PutMapping("/images/{imageId}/set-primary")
@@ -427,12 +507,7 @@ public class ProductController {
             // Set thumbnail — so the Ürün Setleri list can show the set photo without opening it.
             try {
                 if (p.getImages() != null && !p.getImages().isEmpty()) {
-                    dto.primaryImageUrl = p.getImages().stream()
-                        .filter(ProductImage::isPrimary)
-                        .findFirst()
-                        .or(() -> p.getImages().stream()
-                            .min(java.util.Comparator.comparingInt(
-                                img -> img.getSortOrder() == null ? Integer.MAX_VALUE : img.getSortOrder())))
+                    dto.primaryImageUrl = ProductImageUtil.displayCover(p.getImages())
                         .map(img -> "/api/admin/products/images/" + img.getId() + "/view?thumbnail=true")
                         .orElse(null);
                 }
@@ -526,6 +601,15 @@ public class ProductController {
     private ProductDto toDtoWithTotal(Product product) {
         ProductDto dto = toDto(product);
         dto.totalQuantity = stockService.getTotalQuantityByProduct(product.getId());
+        // Single-product path only (edit form): list its linked color variants. Kept out of the
+        // shared toDto to avoid a per-row sibling query on product list pages.
+        dto.variantGroupId = product.getVariantGroupId();
+        if (product.getVariantGroupId() != null) {
+            dto.variantSiblings = productService.getVariantSiblings(product.getVariantGroupId(), product.getId());
+            dto.variantSiblingIds = dto.variantSiblings.stream()
+                    .map(s -> s.id)
+                    .collect(java.util.stream.Collectors.toList());
+        }
         return dto;
     }
 }

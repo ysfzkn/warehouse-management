@@ -55,6 +55,10 @@ public class ReturnRequest {
     @JsonIgnore
     private List<ReturnRequestItem> items;
 
+    @OneToMany(mappedBy = "returnRequest", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @JsonIgnore
+    private List<ReturnRequestPhoto> photos;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

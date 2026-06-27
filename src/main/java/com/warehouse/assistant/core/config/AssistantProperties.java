@@ -18,6 +18,7 @@ public class AssistantProperties {
     private Safety safety = new Safety();
     private EmbeddingConnection embedding = new EmbeddingConnection();
     private ChatConnection chat = new ChatConnection();
+    private Image image = new Image();
 
     public Cost getCost() { return cost; }
     public void setCost(Cost cost) { this.cost = cost; }
@@ -31,6 +32,8 @@ public class AssistantProperties {
     public void setEmbedding(EmbeddingConnection embedding) { this.embedding = embedding; }
     public ChatConnection getChat() { return chat; }
     public void setChat(ChatConnection chat) { this.chat = chat; }
+    public Image getImage() { return image; }
+    public void setImage(Image image) { this.image = image; }
 
     /** AI provider types. */
     public enum Provider { AZURE, OPENAI }
@@ -161,6 +164,29 @@ public class AssistantProperties {
         public void setApiKey(String v) { this.apiKey = v; }
         public String getModel() { return model; }
         public void setModel(String v) { this.model = v; }
+    }
+
+    // ---------- image generation (OpenAI Images API — AI set cover) ----------
+    public static class Image {
+        private String apiKey = "";                  // OpenAI API key (vanilla; not Azure)
+        private String endpoint = "";                // empty = https://api.openai.com
+        private String model = "gpt-image-1";        // best logo/text fidelity (input_fidelity=high)
+        private String quality = "medium";           // low | medium | high
+        private String size = "1024x1024";           // 1024x1024 | 1536x1024 | 1024x1536 | auto
+        private String prompt = "";                  // empty = built-in default combine prompt
+
+        public String getApiKey() { return apiKey; }
+        public void setApiKey(String v) { this.apiKey = v; }
+        public String getEndpoint() { return endpoint; }
+        public void setEndpoint(String v) { this.endpoint = v; }
+        public String getModel() { return model; }
+        public void setModel(String v) { this.model = v; }
+        public String getQuality() { return quality; }
+        public void setQuality(String v) { this.quality = v; }
+        public String getSize() { return size; }
+        public void setSize(String v) { this.size = v; }
+        public String getPrompt() { return prompt; }
+        public void setPrompt(String v) { this.prompt = v; }
     }
 
     // ---------- safety ----------

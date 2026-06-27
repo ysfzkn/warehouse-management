@@ -55,6 +55,32 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
            "WHERE p.id = :id")
     Optional<Product> findByIdWithRelations(@Param("id") Long id);
 
+    /**
+     * Active products by id (with card relations fetched) — for recommendation
+     * rails and recently-viewed hydration. DB order is unspecified; callers that
+     * need a specific order must reorder by the input id list.
+     */
+    @Query("SELECT p FROM Product p " +
+           "LEFT JOIN FETCH p.category c " +
+           "LEFT JOIN FETCH c.parent " +
+           "LEFT JOIN FETCH p.brand " +
+           "LEFT JOIN FETCH p.color " +
+           "WHERE p.id IN :ids AND p.isActive = true")
+    List<Product> findActiveByIdInWithRelations(@Param("ids") List<Long> ids);
+
+    /** Atomic, lock-free view-count bump. Bypasses optimistic versioning by design. */
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("UPDATE Product p SET p.viewCount = p.viewCount + 1 WHERE p.id = :id")
+    void incrementViewCount(@Param("id") Long id);
+
+    /** Popular active product ids in a category (by view count), excluding one product — recommendation fallback. */
+    @Query("SELECT p.id FROM Product p " +
+           "WHERE p.category.id = :categoryId AND p.isActive = true AND p.id <> :excludeId " +
+           "ORDER BY p.viewCount DESC, p.id DESC")
+    List<Long> findPopularIdsByCategory(@Param("categoryId") Long categoryId,
+                                        @Param("excludeId") Long excludeId,
+                                        org.springframework.data.domain.Pageable pageable);
+
     @Query("SELECT p FROM Product p WHERE (:brand IS NULL OR p.brand = :brand) AND (:color IS NULL OR p.color = :color) AND p.isActive = true ORDER BY p.name")
     @EntityGraph(value = Product.GRAPH_WITH_RELATIONS, type = EntityGraph.EntityGraphType.LOAD)
     List<Product> findActiveByBrandAndColor(@Param("brand") Brand brand, @Param("color") Color color);
@@ -195,6 +221,19 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
                                 @Param("colorId") Long colorId,
                                 @Param("productType") com.warehouse.entity.ProductType productType,
                                 Pageable pageable);
+
+    // Color variants — products sharing a variant_group_id are the same product in
+    // different colors. Storefront wants only the active members (with relations for
+    // color/image rendering); the admin reconcile path wants every member regardless
+    // of active flag.
+    @EntityGraph(value = Product.GRAPH_WITH_RELATIONS, type = EntityGraph.EntityGraphType.LOAD)
+    List<Product> findByVariantGroupIdAndIsActiveTrueOrderByIdAsc(Long variantGroupId);
+
+    List<Product> findByVariantGroupId(Long variantGroupId);
+
+    // Batch: active members of many variant groups at once (storefront product-card swatches).
+    @EntityGraph(value = Product.GRAPH_WITH_RELATIONS, type = EntityGraph.EntityGraphType.LOAD)
+    List<Product> findByVariantGroupIdInAndIsActiveTrue(java.util.Collection<Long> variantGroupIds);
 
     // E-commerce storefront queries
     @EntityGraph(value = Product.GRAPH_WITH_RELATIONS, type = EntityGraph.EntityGraphType.LOAD)

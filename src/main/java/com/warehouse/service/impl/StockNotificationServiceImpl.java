@@ -167,10 +167,8 @@ public class StockNotificationServiceImpl implements StockNotificationService {
     private String buildImageUrl(Product product) {
         try {
             if (product.getImages() != null && !product.getImages().isEmpty()) {
-                var primary = product.getImages().stream()
-                        .filter(i -> i.isPrimary())
-                        .findFirst()
-                        .orElse(product.getImages().get(0));
+                var primary = com.warehouse.util.ProductImageUtil.displayCover(product.getImages())
+                        .orElse(null);
                 if (primary != null) {
                     // Image API URL
                     String baseUrl = settingService.getSetting("seo_canonical_domain");

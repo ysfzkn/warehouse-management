@@ -32,20 +32,29 @@ public class StoreProductController {
     private final StockService stockService;
     private final ReviewRepository reviewRepository;
     private final com.warehouse.repository.StockRepository stockRepository;
+    private final com.warehouse.repository.ProductRepository productRepository;
     private final com.warehouse.service.StockNotificationService stockNotificationService;
+    private final com.warehouse.service.RecommendationService recommendationService;
     private final com.warehouse.security.JwtService jwtService;
+
+    /** Cap on how many products a single recently-viewed/by-ids request may hydrate. */
+    private static final int MAX_BY_IDS = 24;
 
     public StoreProductController(ProductService productService,
                                    StockService stockService,
                                    ReviewRepository reviewRepository,
                                    com.warehouse.repository.StockRepository stockRepository,
+                                   com.warehouse.repository.ProductRepository productRepository,
                                    com.warehouse.service.StockNotificationService stockNotificationService,
+                                   com.warehouse.service.RecommendationService recommendationService,
                                    com.warehouse.security.JwtService jwtService) {
         this.productService = productService;
         this.stockService = stockService;
         this.reviewRepository = reviewRepository;
         this.stockRepository = stockRepository;
+        this.productRepository = productRepository;
         this.stockNotificationService = stockNotificationService;
+        this.recommendationService = recommendationService;
         this.jwtService = jwtService;
     }
 
@@ -143,9 +152,18 @@ public class StoreProductController {
                 .map(Product::getId).collect(Collectors.toList());
         Map<Long, Integer> stockMap = batchStockAvailability(productIds);
         Map<Long, double[]> reviewMap = batchReviewStats(productIds); // [avgRating, count]
+        // Color-variant swatches for the cards — one batch query for every group on the page.
+        Map<Long, List<StoreProductDto.ColorVariantDto>> variantsByGroup =
+            batchCardColorVariants(productPage.getContent());
 
         List<StoreProductDto> dtos = productPage.getContent().stream()
-            .map(p -> toStoreDto(p, stockMap, reviewMap))
+            .map(p -> {
+                StoreProductDto dto = toStoreDto(p, stockMap, reviewMap);
+                if (p.getVariantGroupId() != null) {
+                    dto.setColorVariants(variantsByGroup.get(p.getVariantGroupId()));
+                }
+                return dto;
+            })
             .collect(Collectors.toList());
 
         PagedResponse<StoreProductDto> response = new PagedResponse<>(
@@ -166,6 +184,77 @@ public class StoreProductController {
     public ResponseEntity<StoreProductDto> getProductBySlug(@PathVariable String slug) {
         Product product = productService.getProductBySlug(slug);
         return ResponseEntity.ok(toStoreDto(product));
+    }
+
+    /**
+     * Record a product-detail view (popularity signal). Fire-and-forget from the
+     * client; kept separate from the cached GET so caching never suppresses the count.
+     */
+    @PostMapping("/{id}/track-view")
+    @org.springframework.transaction.annotation.Transactional
+    public ResponseEntity<Void> trackView(@PathVariable Long id) {
+        try {
+            productRepository.incrementViewCount(id);
+        } catch (Exception ignored) {
+            // never fail the page over a telemetry write
+        }
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * "Customers also bought" — co-purchase recommendations for a product, with a
+     * same-category popularity fallback so the rail is never empty.
+     */
+    @GetMapping("/{id}/also-bought")
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public ResponseEntity<List<StoreProductDto>> alsoBought(
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "8") int limit) {
+        int safeLimit = Math.max(1, Math.min(limit, 12));
+        List<Long> ids = recommendationService.alsoBoughtProductIds(id, safeLimit);
+        return ResponseEntity.ok(hydrateCards(ids));
+    }
+
+    /**
+     * Batch-hydrate product cards from a list of ids, preserving the given order —
+     * used by the "recently viewed" rail (ids come from the browser's localStorage).
+     * Inactive/deleted ids are silently dropped.
+     */
+    @PostMapping("/by-ids")
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public ResponseEntity<List<StoreProductDto>> productsByIds(@RequestBody List<Long> ids) {
+        if (ids == null || ids.isEmpty()) return ResponseEntity.ok(List.of());
+        List<Long> capped = ids.stream().filter(java.util.Objects::nonNull).distinct().limit(MAX_BY_IDS).collect(Collectors.toList());
+        return ResponseEntity.ok(hydrateCards(capped));
+    }
+
+    /**
+     * Loads active products for the given ids and builds card DTOs in the SAME order
+     * as the input, reusing the page batch queries (stock, reviews, color swatches)
+     * so there is no N+1.
+     */
+    private List<StoreProductDto> hydrateCards(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) return List.of();
+        List<Product> products = productRepository.findActiveByIdInWithRelations(ids);
+        if (products.isEmpty()) return List.of();
+
+        Map<Long, Product> byId = products.stream()
+                .collect(Collectors.toMap(Product::getId, p -> p, (a, b) -> a));
+        // Preserve the requested order (co-purchase ranking / recently-viewed recency).
+        List<Product> ordered = ids.stream().map(byId::get).filter(java.util.Objects::nonNull).collect(Collectors.toList());
+
+        List<Long> orderedIds = ordered.stream().map(Product::getId).collect(Collectors.toList());
+        Map<Long, Integer> stockMap = batchStockAvailability(orderedIds);
+        Map<Long, double[]> reviewMap = batchReviewStats(orderedIds);
+        Map<Long, List<StoreProductDto.ColorVariantDto>> variantsByGroup = batchCardColorVariants(ordered);
+
+        return ordered.stream().map(p -> {
+            StoreProductDto dto = toStoreDto(p, stockMap, reviewMap);
+            if (p.getVariantGroupId() != null) {
+                dto.setColorVariants(variantsByGroup.get(p.getVariantGroupId()));
+            }
+            return dto;
+        }).collect(Collectors.toList());
     }
 
     /**
@@ -214,6 +303,46 @@ public class StoreProductController {
             }
         } catch (Exception ignored) {}
         return map;
+    }
+
+    /**
+     * Color-variant swatches for a page of products — keyed by variant group id. Runs ONE query
+     * for all groups on the page (plus one stock batch), so adding swatches to cards doesn't
+     * reintroduce N+1. Groups with a single colour are omitted (nothing to show). Dots only — no
+     * image lookup. The `current` flag is left false; the card highlights its own colour by id.
+     */
+    private Map<Long, List<StoreProductDto.ColorVariantDto>> batchCardColorVariants(List<Product> products) {
+        Map<Long, List<StoreProductDto.ColorVariantDto>> byGroup = new java.util.HashMap<>();
+        List<Long> groupIds = products.stream()
+            .map(Product::getVariantGroupId)
+            .filter(java.util.Objects::nonNull)
+            .distinct()
+            .collect(Collectors.toList());
+        if (groupIds.isEmpty()) return byGroup;
+
+        List<Product> members = productService.getActiveVariantSiblingsByGroups(groupIds);
+        if (members.isEmpty()) return byGroup;
+
+        List<Long> memberIds = members.stream().map(Product::getId).collect(Collectors.toList());
+        Map<Long, Integer> memberStock = batchStockAvailability(memberIds);
+
+        Map<Long, List<Product>> grouped = members.stream()
+            .collect(Collectors.groupingBy(Product::getVariantGroupId));
+        for (Map.Entry<Long, List<Product>> e : grouped.entrySet()) {
+            List<StoreProductDto.ColorVariantDto> list = e.getValue().stream()
+                .sorted(java.util.Comparator.comparing(Product::getId))
+                .map(m -> StoreProductDto.ColorVariantDto.builder()
+                    .productId(m.getId())
+                    .slug(m.getSlug())
+                    .colorName(safe(() -> m.getColor() != null ? m.getColor().getName() : null))
+                    .colorHexCode(safe(() -> m.getColor() != null ? m.getColor().getHexCode() : null))
+                    .inStock(memberStock.getOrDefault(m.getId(), 0) > 0)
+                    .current(false)
+                    .build())
+                .collect(Collectors.toList());
+            if (list.size() > 1) byGroup.put(e.getKey(), list); // only show when there's a real choice
+        }
+        return byGroup;
     }
 
     /** Review statistics for all products (single query). Value: [avgRating, count]. */
@@ -329,7 +458,7 @@ public class StoreProductController {
                         .slot(img.getSlot())
                         .build();
                 imageDtos = product.getImages().stream()
-                    .filter(img -> img.getSlot() == null)
+                    .filter(com.warehouse.util.ProductImageUtil::isGalleryImage)
                     .sorted((a, b) -> Integer.compare(a.getSortOrder(), b.getSortOrder()))
                     .map(toDto)
                     .collect(Collectors.toList());
@@ -338,17 +467,32 @@ public class StoreProductController {
                     .sorted(java.util.Comparator.comparingInt(ProductImage::getSlot))
                     .map(toDto)
                     .collect(Collectors.toList());
-                primaryImageUrl = product.getImages().stream()
-                    .filter(img -> img.getSlot() == null)
-                    .filter(ProductImage::isPrimary)
-                    .findFirst()
-                    .or(() -> product.getImages().stream()
-                        .filter(img -> img.getSlot() == null)
-                        .min(java.util.Comparator.comparingInt(
-                            img -> img.getSortOrder() == null ? Integer.MAX_VALUE : img.getSortOrder())))
+                primaryImageUrl = com.warehouse.util.ProductImageUtil.displayCover(product.getImages())
                     .map(img -> "/api/admin/products/images/" + img.getId() + "/view?thumbnail=true")
                     .orElse(null);
             } catch (Exception ignored) {}
+        }
+
+        // Color variants — detail view only: the same product in other colors, as a swatch row.
+        // Includes the current product so the frontend can render and highlight it.
+        List<StoreProductDto.ColorVariantDto> colorVariants = null;
+        if (includeSpecs && product.getVariantGroupId() != null) {
+            List<Product> members = productService.getActiveVariantSiblings(product.getVariantGroupId());
+            if (members != null && members.size() > 1) {
+                List<Long> memberIds = members.stream().map(Product::getId).collect(Collectors.toList());
+                Map<Long, Integer> memberStock = batchStockAvailability(memberIds);
+                colorVariants = members.stream()
+                    .map(m -> StoreProductDto.ColorVariantDto.builder()
+                        .productId(m.getId())
+                        .slug(m.getSlug())
+                        .colorName(safe(() -> m.getColor() != null ? m.getColor().getName() : null))
+                        .colorHexCode(safe(() -> m.getColor() != null ? m.getColor().getHexCode() : null))
+                        .primaryImageUrl(primaryImageUrlFor(m))
+                        .inStock(memberStock.getOrDefault(m.getId(), 0) > 0)
+                        .current(m.getId().equals(product.getId()))
+                        .build())
+                    .collect(Collectors.toList());
+            }
         }
 
         // Reviews — avgRating + reviewCount came in as parameters (batch or single)
@@ -380,6 +524,8 @@ public class StoreProductController {
             .brandName(safe(() -> product.getBrand() != null ? product.getBrand().getName() : null))
             .brandSlug(safe(() -> product.getBrand() != null ? product.getBrand().getSlug() : null))
             .colorName(safe(() -> product.getColor() != null ? product.getColor().getName() : null))
+            .colorHexCode(safe(() -> product.getColor() != null ? product.getColor().getHexCode() : null))
+            .colorVariants(colorVariants)
             .stockStatus(stockStatus)
             .availableQuantity(totalAvailable)
             .images(imageDtos)
@@ -414,13 +560,7 @@ public class StoreProductController {
     /** Thumbnail URL of a product's primary image (or first by sort order). */
     private String primaryImageUrlFor(Product p) {
         try {
-            if (p.getImages() == null || p.getImages().isEmpty()) return null;
-            return p.getImages().stream()
-                .filter(ProductImage::isPrimary)
-                .findFirst()
-                .or(() -> p.getImages().stream()
-                    .min(java.util.Comparator.comparingInt(
-                        img -> img.getSortOrder() == null ? Integer.MAX_VALUE : img.getSortOrder())))
+            return com.warehouse.util.ProductImageUtil.displayCover(p.getImages())
                 .map(img -> "/api/admin/products/images/" + img.getId() + "/view?thumbnail=true")
                 .orElse(null);
         } catch (Exception e) {

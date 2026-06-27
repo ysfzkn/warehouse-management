@@ -129,6 +129,12 @@
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  /* Yatay taşmayı kök seviyesinde kırp. Bir alt sayfa viewport'tan
+   * taşarsa belgede yatay kaydırma oluşur ve position:sticky olan header
+   * de bu kaymayla birlikte sürüklenip logo/menü soldan kırpılır.
+   * `clip` kullanıyoruz; `hidden` overflow-y'yi auto'ya zorlayıp sticky'yi
+   * bozardı, `clip` ise kaydırma konteyneri oluşturmadan taşmayı keser. */
+  overflow-x: clip;
 }
 .store-main {
   flex: 1;

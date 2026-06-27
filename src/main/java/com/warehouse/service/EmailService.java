@@ -5,6 +5,7 @@ public interface EmailService {
     void sendPasswordReset(String toEmail, String firstName, String resetToken);
     void sendOrderConfirmation(String toEmail, String firstName, String orderNumber);
     void sendOrderStatusUpdate(String toEmail, String firstName, String orderNumber, String newStatus, String note);
+    void sendReturnStatusUpdate(String toEmail, String firstName, String returnNumber, String orderNumber, String statusLabel, String message);
     void sendPasswordResetConfirmation(String toEmail, String firstName);
 
     /**

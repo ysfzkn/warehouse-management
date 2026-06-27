@@ -33,13 +33,15 @@ public class StoreOrderController {
     private final com.warehouse.repository.SupportTicketRepository supportTicketRepo;
     private final com.warehouse.repository.CargoProviderRepository cargoProviderRepo;
     private final com.warehouse.service.InvoiceService invoiceService;
+    private final com.warehouse.service.ReturnRequestService returnService;
 
     public StoreOrderController(OrderRepository orderRepo, OrderItemRepository orderItemRepo,
                                  OrderStatusHistoryRepository statusHistoryRepo, JwtService jwtService,
                                  com.warehouse.repository.CustomerRepository customerRepo,
                                  com.warehouse.repository.SupportTicketRepository supportTicketRepo,
                                  com.warehouse.repository.CargoProviderRepository cargoProviderRepo,
-                                 com.warehouse.service.InvoiceService invoiceService) {
+                                 com.warehouse.service.InvoiceService invoiceService,
+                                 com.warehouse.service.ReturnRequestService returnService) {
         this.orderRepo = orderRepo;
         this.orderItemRepo = orderItemRepo;
         this.statusHistoryRepo = statusHistoryRepo;
@@ -48,6 +50,7 @@ public class StoreOrderController {
         this.supportTicketRepo = supportTicketRepo;
         this.cargoProviderRepo = cargoProviderRepo;
         this.invoiceService = invoiceService;
+        this.returnService = returnService;
     }
 
     @GetMapping
@@ -93,9 +96,11 @@ public class StoreOrderController {
                             // Product image
                             String imageUrl = null;
                             try {
-                                if (item.getProduct() != null && item.getProduct().getImages() != null && !item.getProduct().getImages().isEmpty()) {
-                                    var img = item.getProduct().getImages().stream().filter(i -> i.isPrimary()).findFirst().orElse(item.getProduct().getImages().get(0));
-                                    imageUrl = "/api/admin/products/images/" + img.getId() + "/view?thumbnail=true";
+                                if (item.getProduct() != null) {
+                                    var img = com.warehouse.util.ProductImageUtil.displayCover(item.getProduct().getImages()).orElse(null);
+                                    if (img != null) {
+                                        imageUrl = "/api/admin/products/images/" + img.getId() + "/view?thumbnail=true";
+                                    }
                                 }
                             } catch (Exception ignored2) {}
                             it.put("imageUrl", imageUrl);
@@ -137,43 +142,99 @@ public class StoreOrderController {
         return ResponseEntity.ok(Map.of("message", "Destek talebiniz alındı. En kısa sürede size dönüş yapacağız."));
     }
 
+    /**
+     * Create a return request. Body: {reason, note, items?:[{orderItemId, quantity, reason?}]}.
+     * When {@code items} is omitted the whole order is returned. Persists a proper
+     * ReturnRequest (the previous version only flipped the order status), restores
+     * nothing yet, notifies the admin and emails the customer — all in the service.
+     */
     @PostMapping("/{orderNumber}/return-requests")
-    @org.springframework.transaction.annotation.Transactional
     public ResponseEntity<?> requestReturn(HttpServletRequest request, @PathVariable String orderNumber,
-                                            @RequestBody Map<String, String> body) {
+                                            @RequestBody Map<String, Object> body) {
         Long customerId = extractCustomerId(request);
         if (customerId == null) return ResponseEntity.badRequest().body(Map.of("message", "Giriş yapmanız gerekiyor."));
 
-        Optional<Order> orderOpt = orderRepo.findByOrderNumber(orderNumber);
-        if (orderOpt.isEmpty()) return ResponseEntity.notFound().build();
-        Order order = orderOpt.get();
+        com.warehouse.enums.ReturnReason reason = parseReason(body.get("reason"));
+        String note = body.get("note") != null ? body.get("note").toString() : null;
+        List<com.warehouse.service.ReturnRequestService.ReturnItemRequest> items = parseItems(body.get("items"));
 
-        if (order.getCustomer() == null || !order.getCustomer().getId().equals(customerId)) {
-            return ResponseEntity.notFound().build();
+        var rr = returnService.createReturn(customerId, orderNumber, reason, note, items);
+        return ResponseEntity.ok(Map.of(
+                "message", "İade talebiniz alındı. En kısa sürede değerlendirilecektir.",
+                "returnNumber", rr.getReturnNumber()));
+    }
+
+    /** Customer's own return requests (tracking list). */
+    @GetMapping("/return-requests")
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public ResponseEntity<?> myReturns(HttpServletRequest request,
+                                       @RequestParam(defaultValue = "0") int page,
+                                       @RequestParam(defaultValue = "10") int size) {
+        Long customerId = extractCustomerId(request);
+        if (customerId == null) return ResponseEntity.ok(new PagedResponse<>(java.util.List.of(), 0, size, 0, 0, true, true));
+        var result = returnService.listForCustomer(customerId, PageRequest.of(page, size));
+        var content = result.getContent().stream()
+                .map(com.warehouse.dto.store.ReturnDtoMapper::toMap).collect(Collectors.toList());
+        return ResponseEntity.ok(new PagedResponse<>(content, result.getNumber(), result.getSize(),
+                result.getTotalElements(), result.getTotalPages(), result.isFirst(), result.isLast()));
+    }
+
+    /** Single return-request detail/tracking for the owning customer. */
+    @GetMapping("/return-requests/{returnNumber}")
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public ResponseEntity<?> myReturnDetail(HttpServletRequest request, @PathVariable String returnNumber) {
+        Long customerId = extractCustomerId(request);
+        if (customerId == null) return ResponseEntity.status(401).body(Map.of("message", "Giriş yapmanız gerekiyor."));
+        return ResponseEntity.ok(com.warehouse.dto.store.ReturnDtoMapper.toMap(
+                returnService.getForCustomer(customerId, returnNumber)));
+    }
+
+    /** Customer attaches an evidence photo to their own return request. */
+    @PostMapping("/return-requests/{returnNumber}/photos")
+    public ResponseEntity<?> uploadReturnPhoto(HttpServletRequest request, @PathVariable String returnNumber,
+                                               @RequestParam("file") org.springframework.web.multipart.MultipartFile file) {
+        Long customerId = extractCustomerId(request);
+        if (customerId == null) return ResponseEntity.status(401).body(Map.of("message", "Giriş yapmanız gerekiyor."));
+        if (file == null || file.isEmpty()) return ResponseEntity.badRequest().body(Map.of("message", "Dosya boş."));
+        if (file.getContentType() == null || !file.getContentType().startsWith("image/")) {
+            return ResponseEntity.status(415).body(Map.of("message", "Sadece görsel dosyaları yüklenebilir."));
         }
-
-        // Only SHIPPED or DELIVERED orders can be returned
-        if (order.getStatus() != OrderStatus.SHIPPED && order.getStatus() != OrderStatus.DELIVERED) {
-            return ResponseEntity.badRequest().body(Map.of("message", "Bu sipariş için iade talebi oluşturulamaz. Sadece kargoda veya teslim edilmiş siparişler iade edilebilir."));
+        try {
+            Long id = returnService.addPhoto(customerId, returnNumber,
+                    file.getOriginalFilename(), file.getContentType(), file.getInputStream());
+            return ResponseEntity.ok(Map.of("id", id, "url", "/api/admin/returns/photos/" + id + "/view"));
+        } catch (java.io.IOException e) {
+            return ResponseEntity.status(500).body(Map.of("message", "Fotoğraf yüklenemedi."));
         }
+    }
 
-        // Check not already in return process
-        if (order.getStatus() == OrderStatus.RETURN_REQUESTED) {
-            return ResponseEntity.badRequest().body(Map.of("message", "Bu sipariş için zaten bir iade talebi mevcut."));
+    private com.warehouse.enums.ReturnReason parseReason(Object raw) {
+        if (raw == null) return com.warehouse.enums.ReturnReason.OTHER;
+        try {
+            return com.warehouse.enums.ReturnReason.valueOf(raw.toString().trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            return com.warehouse.enums.ReturnReason.OTHER;
         }
+    }
 
-        String reason = body.getOrDefault("reason", "");
-        String note = body.getOrDefault("note", "");
-
-        OrderStatus oldStatus = order.getStatus();
-        order.setStatus(OrderStatus.RETURN_REQUESTED);
-        orderRepo.save(order);
-
-        statusHistoryRepo.save(OrderStatusHistoryFactory.create(
-                order, oldStatus, OrderStatus.RETURN_REQUESTED,
-                "customer", "CUSTOMER", "İade talebi: " + reason + (note.isEmpty() ? "" : " — " + note)));
-
-        return ResponseEntity.ok(Map.of("message", "İade talebiniz alındı. En kısa sürede değerlendirilecektir."));
+    @SuppressWarnings("unchecked")
+    private List<com.warehouse.service.ReturnRequestService.ReturnItemRequest> parseItems(Object raw) {
+        if (!(raw instanceof List<?> list) || list.isEmpty()) return java.util.List.of();
+        List<com.warehouse.service.ReturnRequestService.ReturnItemRequest> out = new java.util.ArrayList<>();
+        for (Object o : list) {
+            if (o instanceof Map<?, ?> m) {
+                Object oid = m.get("orderItemId");
+                Object qty = m.get("quantity");
+                Object rsn = m.get("reason");
+                if (oid != null) {
+                    out.add(new com.warehouse.service.ReturnRequestService.ReturnItemRequest(
+                            Long.valueOf(oid.toString()),
+                            qty != null ? Integer.parseInt(qty.toString()) : 1,
+                            rsn != null ? rsn.toString() : null));
+                }
+            }
+        }
+        return out;
     }
 
     /**

@@ -37,12 +37,14 @@ public class NotificationController {
                                                    @RequestParam(name = "page", defaultValue = "0") int page,
                                                    @RequestParam(name = "warehouseId", required = false) Long warehouseId,
                                                    @RequestParam(name = "entityType", required = false) String entityType,
+                                                   @RequestParam(name = "domain", required = false) String domain,
                                                    @RequestParam(name = "search", required = false) String search,
                                                    @RequestParam(name = "startDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
                                                    @RequestParam(name = "endDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate) {
         NotificationFilter filter = NotificationFilter.builder()
                 .warehouseId(warehouseId)
                 .entityType(entityType)
+                .domain(domain)
                 .search(search)
                 .startDate(startDate)
                 .endDate(endDate)
@@ -58,6 +60,7 @@ public class NotificationController {
                                                      @RequestParam(name = "page", defaultValue = "0") int page,
                                                      @RequestParam(name = "warehouseId", required = false) Long warehouseId,
                                                      @RequestParam(name = "entityType", required = false) String entityType,
+                                                     @RequestParam(name = "domain", required = false) String domain,
                                                      @RequestParam(name = "search", required = false) String search,
                                                      @RequestParam(name = "startDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
                                                      @RequestParam(name = "endDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate) {
@@ -65,6 +68,7 @@ public class NotificationController {
         NotificationFilter filter = NotificationFilter.builder()
                 .warehouseId(warehouseId)
                 .entityType(entityType)
+                .domain(domain)
                 .search(search)
                 .startDate(startDate)
                 .endDate(endDate)

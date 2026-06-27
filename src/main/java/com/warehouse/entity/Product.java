@@ -25,6 +25,7 @@ import java.util.List;
         @Index(name = "idx_products_category_id", columnList = "category_id"),
         @Index(name = "idx_products_brand_id", columnList = "brand_id"),
         @Index(name = "idx_products_color_id", columnList = "color_id"),
+        @Index(name = "idx_products_variant_group_id", columnList = "variant_group_id"),
         @Index(name = "idx_products_updated_at", columnList = "updated_at"),
         @Index(name = "idx_products_slug", columnList = "slug")
     }
@@ -162,6 +163,16 @@ public class Product {
     @JsonIgnoreProperties({"products", "hibernateLazyInitializer", "handler"})
     private Color color;
 
+    /**
+     * Shared id linking this product to its color variants — the same product sold in
+     * different colors. Products with the same non-null variant_group_id are color
+     * variants of each other; each keeps its own color, stock, images and storefront
+     * page. Null = standalone product with no color siblings. Managed by the service
+     * layer (see ProductServiceImpl#applyVariantGroup).
+     */
+    @Column(name = "variant_group_id")
+    private Long variantGroupId;
+
     @Column(name = "is_active", nullable = false)
     private boolean isActive = true;
 
@@ -193,6 +204,15 @@ public class Product {
      */
     @Transient
     private List<java.util.Map<String, Object>> bundleMemberRefs;
+
+    /**
+     * Write-only input channel for the admin form's "Renk Varyantları" picker: the ids of
+     * the other products that are the same product in different colors. Deserialized from
+     * the request and turned into a shared {@link #variantGroupId} by the service
+     * (see ProductServiceImpl#applyVariantGroup); never persisted directly.
+     */
+    @Transient
+    private List<Long> variantSiblingIds;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

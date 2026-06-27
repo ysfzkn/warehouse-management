@@ -136,6 +136,7 @@ public class SecurityConfig {
                         // Public image viewing
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/admin/stock-transfer-items/*/photo/view").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/admin/products/images/*/view").permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/admin/returns/photos/*/view").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/admin/settings/site/asset/view/**").permitAll()
                         // Stock transfer item photo operations
                         .requestMatchers(ApiPaths.ADMIN_STOCK_TRANSFER_ITEMS).hasAnyRole("ADMIN", "STOCK_IN", "STOCK_OUT")
@@ -198,6 +199,9 @@ public class SecurityConfig {
                         .requestMatchers(org.springframework.http.HttpMethod.POST, ApiPaths.STORE_PUBLIC_ORDER_TRACK).permitAll()
                         // Notify when out of stock: guests can subscribe too
                         .requestMatchers(org.springframework.http.HttpMethod.POST, ApiPaths.STORE_PRODUCT_NOTIFY_ME).permitAll()
+                        // Public popularity ping + recently-viewed batch hydration (no PII, no auth)
+                        .requestMatchers(org.springframework.http.HttpMethod.POST, ApiPaths.STORE_PRODUCT_TRACK_VIEW).permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.POST, ApiPaths.STORE_PRODUCTS_BY_IDS).permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.POST, ApiPaths.STORE_NEWSLETTER).permitAll()
                         // Public settings and banners
                         .requestMatchers(org.springframework.http.HttpMethod.GET, ApiPaths.STORE_SETTINGS).permitAll()

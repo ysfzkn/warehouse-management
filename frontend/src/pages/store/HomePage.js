@@ -13,7 +13,8 @@ import {
   buildHomeLocalKeywords,
   getLocalCity,
 } from '../../utils/seo';
-import { FiShoppingBag, FiArrowRight, FiStar, FiZap, FiTrendingUp, FiPackage } from 'react-icons/fi';
+import { FiShoppingBag, FiArrowRight, FiStar, FiZap, FiTrendingUp, FiPackage, FiClock } from 'react-icons/fi';
+import { getRecentlyViewedIds } from '../../utils/recentlyViewed';
 
 export default function HomePage() {
   const { cart } = useOutletContext();
@@ -24,6 +25,7 @@ export default function HomePage() {
   const [saleProducts, setSaleProducts] = useState([]);
   const [sets, setSets] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [recentlyViewed, setRecentlyViewed] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -55,6 +57,16 @@ export default function HomePage() {
         setSets(setsRes.data?.content || []);
       })
       .finally(() => setLoading(false));
+  }, []);
+
+  // Recently-viewed rail — hydrated from the browser's own history (no account needed).
+  useEffect(() => {
+    const ids = getRecentlyViewedIds().slice(0, 8);
+    if (ids.length === 0) return;
+    axios
+      .post('/api/store/products/by-ids', ids)
+      .then((res) => setRecentlyViewed(res.data || []))
+      .catch(() => setRecentlyViewed([]));
   }, []);
 
   const handleAddToCart = async (id) => {
@@ -194,6 +206,15 @@ export default function HomePage() {
           icon={<FiTrendingUp className="text-success me-2" />}
           products={newProducts}
           linkTo="/kategori/tumu"
+        />
+      )}
+
+      {/* Recently viewed — "continue browsing" nudge from the visitor's history */}
+      {recentlyViewed.length > 0 && (
+        <ProductSection
+          title="Son Gezdikleriniz"
+          icon={<FiClock className="text-secondary me-2" />}
+          products={recentlyViewed}
         />
       )}
     </div>
