@@ -174,6 +174,7 @@ public class AssistantProperties {
         private String quality = "medium";           // low | medium | high
         private String size = "1024x1024";           // 1024x1024 | 1536x1024 | 1024x1536 | auto
         private String prompt = "";                  // empty = built-in default combine prompt
+        private String mode = "DIGITAL";             // DIGITAL = free local compositor | AI = OpenAI
 
         public String getApiKey() { return apiKey; }
         public void setApiKey(String v) { this.apiKey = v; }
@@ -187,6 +188,8 @@ public class AssistantProperties {
         public void setSize(String v) { this.size = v; }
         public String getPrompt() { return prompt; }
         public void setPrompt(String v) { this.prompt = v; }
+        public String getMode() { return mode; }
+        public void setMode(String v) { this.mode = v; }
     }
 
     // ---------- safety ----------

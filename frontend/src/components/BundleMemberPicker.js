@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import axios from 'axios';
 
 /**
@@ -20,8 +20,10 @@ const BundleMemberPicker = ({ members = [], onChange, excludeProductId }) => {
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
   const debounceRef = useRef(null);
   const boxRef = useRef(null);
+  const listRef = useRef(null);
 
   useEffect(() => {
     const onDocClick = (e) => {
@@ -56,6 +58,23 @@ const BundleMemberPicker = ({ members = [], onChange, excludeProductId }) => {
     };
   }, [query]);
 
+  // Products that can still be added: not the set itself, not an existing member.
+  const visible = useMemo(
+    () => results.filter((p) => p.id !== excludeProductId && !members.some((m) => m.productId === p.id)),
+    [results, excludeProductId, members]
+  );
+
+  // Keep the highlighted row in range whenever the result list changes.
+  useEffect(() => {
+    setActiveIndex((i) => (i >= visible.length ? 0 : i));
+  }, [visible.length]);
+
+  // Scroll the highlighted row into view during keyboard navigation.
+  useEffect(() => {
+    const el = listRef.current?.querySelector(`[data-idx="${activeIndex}"]`);
+    if (el) el.scrollIntoView({ block: 'nearest' });
+  }, [activeIndex]);
+
   const addMember = (p) => {
     if (!p || p.id === excludeProductId) return;
     if (members.some((m) => m.productId === p.id)) return;
@@ -66,6 +85,25 @@ const BundleMemberPicker = ({ members = [], onChange, excludeProductId }) => {
     setQuery('');
     setResults([]);
     setOpen(false);
+  };
+
+  const onSearchKeyDown = (e) => {
+    if (!open || visible.length === 0) {
+      if (e.key === 'ArrowDown') setOpen(true);
+      return;
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setActiveIndex((i) => Math.min(i + 1, visible.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActiveIndex((i) => Math.max(i - 1, 0));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      addMember(visible[activeIndex]);
+    } else if (e.key === 'Escape') {
+      setOpen(false);
+    }
   };
 
   const removeMember = (productId) => onChange(members.filter((m) => m.productId !== productId));
@@ -108,42 +146,74 @@ const BundleMemberPicker = ({ members = [], onChange, excludeProductId }) => {
               className="form-control"
               placeholder="Ürün adı, SKU ile ara (en az 2 karakter)..."
               value={query}
+              role="combobox"
+              aria-controls="bundle-member-results"
+              aria-expanded={open && query.trim().length >= 2}
+              aria-autocomplete="list"
               onChange={(e) => {
                 setQuery(e.target.value);
                 setOpen(true);
               }}
               onFocus={() => setOpen(true)}
+              onKeyDown={onSearchKeyDown}
             />
           </div>
           {open && query.trim().length >= 2 && (
             <div
-              className="list-group position-absolute w-100 shadow"
-              style={{ zIndex: 30, maxHeight: 280, overflowY: 'auto', top: '100%' }}
+              ref={listRef}
+              id="bundle-member-results"
+              role="listbox"
+              className="list-group position-absolute w-100 shadow border rounded bg-white"
+              style={{ zIndex: 1056, maxHeight: 264, overflowY: 'auto', top: 'calc(100% + 4px)' }}
             >
-              {loading ? (
-                <div className="list-group-item text-center text-muted">
-                  <span className="spinner-border spinner-border-sm me-2" />
-                  Aranıyor...
+              {/* Slim loading bar keeps the previous results in place instead of
+                  flashing them away on every keystroke. */}
+              {loading && (
+                <div
+                  className="progress position-sticky top-0"
+                  style={{ height: 2, borderRadius: 0, zIndex: 1 }}
+                >
+                  <div className="progress-bar progress-bar-striped progress-bar-animated w-100" />
                 </div>
-              ) : results.length === 0 ? (
-                <div className="list-group-item text-muted small">Sonuç bulunamadı.</div>
+              )}
+              {visible.length === 0 ? (
+                <div className="list-group-item text-muted small border-0">
+                  {loading ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm me-2" />
+                      Aranıyor...
+                    </>
+                  ) : (
+                    'Sonuç bulunamadı.'
+                  )}
+                </div>
               ) : (
-                results
-                  .filter((p) => p.id !== excludeProductId && !members.some((m) => m.productId === p.id))
-                  .map((p) => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      className="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
-                      onClick={() => addMember(p)}
+                visible.map((p, idx) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    data-idx={idx}
+                    className={`list-group-item list-group-item-action d-flex justify-content-between align-items-center gap-2 border-0 ${
+                      idx === activeIndex ? 'active' : ''
+                    }`}
+                    style={{ minHeight: 52 }}
+                    onMouseEnter={() => setActiveIndex(idx)}
+                    onClick={() => addMember(p)}
+                  >
+                    <span className="text-start min-w-0 flex-grow-1">
+                      <span className="d-block fw-medium text-truncate">{p.name}</span>
+                      <small className={idx === activeIndex ? 'text-white-50' : 'text-muted'}>
+                        SKU: {p.sku}
+                      </small>
+                    </span>
+                    <span
+                      className={`fw-bold flex-shrink-0 ${idx === activeIndex ? 'text-white' : 'text-primary'}`}
+                      style={{ whiteSpace: 'nowrap' }}
                     >
-                      <span className="text-start">
-                        <span className="d-block fw-medium">{p.name}</span>
-                        <small className="text-muted">SKU: {p.sku}</small>
-                      </span>
-                      <span className="fw-bold text-primary">{fmt(effective(p))}</span>
-                    </button>
-                  ))
+                      {fmt(effective(p))}
+                    </span>
+                  </button>
+                ))
               )}
             </div>
           )}

@@ -6,6 +6,7 @@ import ProductForm from '../components/ProductForm';
 import SearchableSelect from '../components/SearchableSelect';
 import ConfirmModal from '../components/ConfirmModal';
 import PaginationControls from '../components/PaginationControls';
+import ExpandableText from '../components/ExpandableText';
 
 const normalizeText = (text) => (text || '').toLocaleLowerCase('tr-TR');
 
@@ -1481,11 +1482,12 @@ const Products = () => {
                         <td>
                           <div className="fw-semibold">{product.name}</div>
                           {product.description && (
-                            <small className="text-muted d-block mt-1" style={{ maxWidth: '300px' }}>
-                              {product.description.length > 80
-                                ? product.description.substring(0, 80) + '...'
-                                : product.description}
-                            </small>
+                            <ExpandableText
+                              text={product.description}
+                              lines={2}
+                              className="text-muted small d-block mt-1"
+                              style={{ maxWidth: '300px' }}
+                            />
                           )}
                         </td>
                         <td>
@@ -1711,11 +1713,11 @@ const Products = () => {
                         </div>
                       </div>
                       {product.description && (
-                        <small className="text-muted d-block mb-2">
-                          {product.description.length > 60
-                            ? `${product.description.substring(0, 60)}...`
-                            : product.description}
-                        </small>
+                        <ExpandableText
+                          text={product.description}
+                          lines={2}
+                          className="text-muted small d-block mb-2"
+                        />
                       )}
                       <div className="d-flex flex-wrap gap-1 align-items-center mb-2">
                         {product.category?.name && (

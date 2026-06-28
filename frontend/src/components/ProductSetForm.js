@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import BundleMemberPicker from './BundleMemberPicker';
 import confirmDialog from '../utils/confirmDialog';
+import { toUploadableImage, reencodeImageToPng } from '../utils/imageConvert';
 
 /**
  * Focused editor for a product set (bundle).
@@ -318,8 +319,10 @@ export default function ProductSetForm({ product, onSuccess, onCancel }) {
     try {
       const galleryCount = images.filter(isGallery).length;
       for (let i = 0; i < files.length; i += 1) {
+        // eslint-disable-next-line no-await-in-loop
+        const uploadable = await toUploadableImage(files[i]);
         const fd = new FormData();
-        fd.append('file', files[i]);
+        fd.append('file', uploadable);
         if (galleryCount === 0 && i === 0) fd.append('primary', 'true');
         // eslint-disable-next-line no-await-in-loop
         await axios.post(`/api/products/${editId}/images`, fd, {
@@ -344,8 +347,10 @@ export default function ProductSetForm({ product, onSuccess, onCancel }) {
     try {
       let nextSlot = images.filter((i) => i.slot).reduce((max, i) => Math.max(max, i.slot), 0) + 1;
       for (let i = 0; i < files.length; i += 1) {
+        // eslint-disable-next-line no-await-in-loop
+        const uploadable = await toUploadableImage(files[i]);
         const fd = new FormData();
-        fd.append('file', files[i]);
+        fd.append('file', uploadable);
         // eslint-disable-next-line no-await-in-loop
         await axios.post(`/api/products/${editId}/images?slot=${nextSlot}`, fd, {
           headers: { 'Content-Type': 'multipart/form-data' },
@@ -374,8 +379,11 @@ export default function ProductSetForm({ product, onSuccess, onCancel }) {
     if (!file || !editId) return;
     setCoverBusy(memberProductId);
     try {
+      // Convert AVIF/HEIC (and other browser-decodable formats) to PNG before
+      // upload so the backend never rejects an otherwise-fine photo.
+      const uploadable = await toUploadableImage(file);
       const fd = new FormData();
-      fd.append('file', file);
+      fd.append('file', uploadable);
       await axios.put(`/api/products/${editId}/cover-inputs/${memberProductId}`, fd, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
@@ -401,6 +409,52 @@ export default function ProductSetForm({ product, onSuccess, onCancel }) {
     }
   };
 
+  // True when the backend rejected a stored photo it couldn't decode (AICOVER_008
+  // — e.g. AVIF bytes saved under a .jpg name from crawling).
+  const isUnsupportedFormatError = (e) => e?.response?.data?.errorCode === 'AICOVER_008';
+
+  // Rescue path: fetch a stored image's bytes, re-encode them to PNG in the browser
+  // (which can decode AVIF/HEIC the server can't), and upload as the member's cover
+  // input. Returns true on success, false if even the browser can't decode it.
+  const uploadRescuedCoverInput = async (memberProductId, imageId) => {
+    const res = await axios.get(`/api/admin/products/images/${imageId}/view`, {
+      responseType: 'blob',
+    });
+    const png = await reencodeImageToPng(res.data, `cover-${memberProductId}.png`);
+    if (!png) return false;
+    const fd = new FormData();
+    fd.append('file', png);
+    await axios.put(`/api/products/${editId}/cover-inputs/${memberProductId}`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return true;
+  };
+
+  // For members the server skipped (primary photo in an undecodable format), rescue
+  // each one in the browser. Returns the ids still unresolved.
+  const rescueMissingFromPrimaries = async (missingIds) => {
+    const stillMissing = [];
+    for (let i = 0; i < missingIds.length; i += 1) {
+      const memberId = missingIds[i];
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        const imgs = (await axios.get(`/api/products/${memberId}/images`)).data || [];
+        const candidates = imgs.filter((im) => !im.slot && !im.aiRole);
+        const best = candidates.find((im) => im.primary) || candidates[0];
+        if (!best) {
+          stillMissing.push(memberId);
+          continue;
+        }
+        // eslint-disable-next-line no-await-in-loop
+        const ok = await uploadRescuedCoverInput(memberId, best.id);
+        if (!ok) stillMissing.push(memberId);
+      } catch {
+        stillMissing.push(memberId);
+      }
+    }
+    return stillMissing;
+  };
+
   const pickCoverInput = async (imageId) => {
     if (!pickingFor || !editId) return;
     setCoverBusy(pickingFor);
@@ -409,6 +463,18 @@ export default function ProductSetForm({ product, onSuccess, onCancel }) {
       loadImages(editId);
       setPickingFor(null);
     } catch (e) {
+      // Server can't decode this stored photo — rescue it via the browser.
+      if (isUnsupportedFormatError(e)) {
+        try {
+          if (await uploadRescuedCoverInput(pickingFor, imageId)) {
+            loadImages(editId);
+            setPickingFor(null);
+            return;
+          }
+        } catch {
+          /* fall through to the generic error below */
+        }
+      }
       coverError(e, 'Fotoğraf seçilemedi.');
     } finally {
       setCoverBusy(null);
@@ -431,15 +497,20 @@ export default function ProductSetForm({ product, onSuccess, onCancel }) {
     setCoverBusy('fill');
     try {
       const r = await axios.post(`/api/products/${editId}/cover-inputs/fill-from-primaries`);
+      // Members whose primary photo the server couldn't decode (e.g. AVIF) — try to
+      // rescue each in the browser before giving up.
+      let missing = r.data?.missingMemberIds || [];
+      if (missing.length > 0) {
+        missing = await rescueMissingFromPrimaries(missing);
+      }
       loadImages(editId);
-      const missing = r.data?.missingMemberIds || [];
       if (missing.length > 0) {
         const names = members
           .filter((m) => missing.includes(m.productId))
           .map((m) => m.name)
           .join(', ');
         showFlash(
-          `Fotoğrafı olmayan veya formatı desteklenmeyen (AVIF) üyeler atlandı: ${names}. Bu üyeler için elle JPEG/PNG seçin.`,
+          `Fotoğrafı olmayan veya okunamayan üyeler atlandı: ${names}. Bu üyeler için elle JPEG/PNG seçin.`,
           'warning'
         );
       } else {
@@ -457,8 +528,7 @@ export default function ProductSetForm({ product, onSuccess, onCancel }) {
     if (existingAiCover) {
       const ok = await confirmDialog({
         title: 'Kapak Yeniden Oluşturulsun mu?',
-        message:
-          'Mevcut yapay zeka kapak fotoğrafı silinecek ve yenisi oluşturulacak. Üretim 1-2 dakika sürebilir.',
+        message: 'Mevcut yapay zeka kapak fotoğrafı silinecek ve yenisi oluşturulacak.',
         confirmText: 'Evet, Oluştur',
         variant: 'primary',
         icon: 'fa-magic',
@@ -1223,7 +1293,7 @@ export default function ProductSetForm({ product, onSuccess, onCancel }) {
                 {generating ? (
                   <>
                     <span className="spinner-border spinner-border-sm me-2" />
-                    Oluşturuluyor... (1-2 dakika sürebilir)
+                    Oluşturuluyor...
                   </>
                 ) : (
                   <>
