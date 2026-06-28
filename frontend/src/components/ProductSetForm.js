@@ -413,6 +413,15 @@ export default function ProductSetForm({ product, onSuccess, onCancel }) {
   // — e.g. AVIF bytes saved under a .jpg name from crawling).
   const isUnsupportedFormatError = (e) => e?.response?.data?.errorCode === 'AICOVER_008';
 
+  // When generation fails on a specific member, the backend appends "(Üye: <name>)".
+  // Resolve that to the member so we can heal exactly that one's cover input.
+  const unsupportedMemberFromError = (e) => {
+    if (!isUnsupportedFormatError(e)) return null;
+    const match = /\(Üye:\s*([^)]+)\)/.exec(e?.response?.data?.message || '');
+    const name = match ? match[1].trim() : null;
+    return name ? members.find((m) => m.name === name) : null;
+  };
+
   // Rescue path: fetch a stored image's bytes, re-encode them to PNG in the browser
   // (which can decode AVIF/HEIC the server can't), and upload as the member's cover
   // input. Returns true on success, false if even the browser can't decode it.
@@ -537,9 +546,34 @@ export default function ProductSetForm({ product, onSuccess, onCancel }) {
     }
     setGenerating(true);
     try {
-      await axios.post(`/api/products/${editId}/generate-cover`, null, { timeout: 180000 });
-      loadImages(editId);
-      showFlash('Yapay zeka kapak fotoğrafı oluşturuldu ve birincil görsel olarak ayarlandı. 🎉');
+      // Generation re-reads every member's stored cover input. Older inputs may be
+      // in a format the server can't decode (AVIF/HEIC). Instead of failing, convert
+      // the offending member's photo in the browser (which CAN decode it), re-save
+      // it, and retry — so the user just sees it get fixed and the cover produced.
+      const converted = [];
+      for (let attempt = 0; attempt <= members.length; attempt += 1) {
+        try {
+          // eslint-disable-next-line no-await-in-loop
+          await axios.post(`/api/products/${editId}/generate-cover`, null, { timeout: 180000 });
+          loadImages(editId);
+          showFlash(
+            converted.length > 0
+              ? `${converted.join(', ')} için fotoğraf desteklenen biçime dönüştürüldü ve kapak oluşturuldu. 🎉`
+              : 'Yapay zeka kapak fotoğrafı oluşturuldu ve birincil görsel olarak ayarlandı. 🎉'
+          );
+          return;
+        } catch (e) {
+          const member = unsupportedMemberFromError(e);
+          // Only auto-heal a member we can identify and haven't already tried.
+          if (!member || converted.includes(member.name)) throw e;
+          const input = coverInputFor(member.productId);
+          // eslint-disable-next-line no-await-in-loop
+          const healed = input && (await uploadRescuedCoverInput(member.productId, input.id));
+          if (!healed) throw e;
+          converted.push(member.name);
+        }
+      }
+      throw new Error('exhausted');
     } catch (e) {
       coverError(e, 'Kapak fotoğrafı oluşturulamadı. Lütfen tekrar deneyin.');
     } finally {
