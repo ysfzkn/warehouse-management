@@ -312,8 +312,14 @@ public class S3PhotoStorageService implements PhotoStorageService {
             }
             // Fallback: JPEG. The JPEG writer cannot encode an alpha channel — handed
             // an ARGB image it writes an empty/garbage file (the failure that left
-            // transparent product photos blank). Flatten onto white first.
-            ImageIO.write(toOpaqueRgb(img), "jpg", baos);
+            // transparent product photos blank and crashed crawl imports). Flatten
+            // onto white first, and if the JPEG encoder still produces nothing, fall
+            // back to PNG (always available, supports the image as-is).
+            boolean wrote = ImageIO.write(toOpaqueRgb(img), "jpg", baos);
+            if (!wrote || baos.size() == 0) {
+                baos.reset();
+                ImageIO.write(img, "png", baos);
+            }
             return baos.toByteArray();
         }
     }
