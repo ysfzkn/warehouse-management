@@ -142,6 +142,19 @@ public class AssistantRuntimeConfig {
     public String getImagePrompt() {
         return getString("assistant.image.prompt", defaults.getImage().getPrompt());
     }
+    /**
+     * Set-cover engine: {@code DIGITAL} (free local compositor, default) or
+     * {@code AI} (OpenAI Images). Settable via the {@code ASSISTANT_IMAGE_MODE}
+     * env var / {@code assistant.image.mode} property, or the admin settings.
+     * Anything other than {@code AI} (case-insensitive) means DIGITAL.
+     */
+    public String getImageCoverMode() {
+        String raw = getString("assistant.image.mode", defaults.getImage().getMode());
+        return "AI".equalsIgnoreCase(raw == null ? null : raw.trim()) ? "AI" : "DIGITAL";
+    }
+    public boolean isAiCoverMode() {
+        return "AI".equals(getImageCoverMode());
+    }
 
     private String normalizeProvider(String v) {
         if (v == null) return "AZURE";
@@ -192,6 +205,7 @@ public class AssistantRuntimeConfig {
         m.put("chat.apiKey", maskSecret(getChatApiKey()));
         m.put("chat.model", getChatModel());
         // Image generation connection
+        m.put("image.mode", getImageCoverMode());
         m.put("image.apiKey", maskSecret(getImageApiKey()));
         m.put("image.endpoint", getImageEndpoint());
         m.put("image.model", getImageModel());
@@ -253,6 +267,7 @@ public class AssistantRuntimeConfig {
         putIfPresent(values, patch, "image.quality", "assistant.image.quality");
         putIfPresent(values, patch, "image.size", "assistant.image.size");
         putIfPresent(values, patch, "image.prompt", "assistant.image.prompt");
+        putIfPresent(values, patch, "image.mode", "assistant.image.mode");
         if (!patch.isEmpty()) {
             siteSettings.updateSettings(patch, updatedBy);
         }

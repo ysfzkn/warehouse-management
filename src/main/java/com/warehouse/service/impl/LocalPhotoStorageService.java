@@ -218,15 +218,20 @@ public class LocalPhotoStorageService implements PhotoStorageService {
             Path thumbPath = baseDir.resolve(thumbFileName);
 
             BufferedImage sourceImage = ImageIO.read(new ByteArrayInputStream(originalBytes));
-            if (sourceImage != null) {
+            // We must be able to BOTH decode and re-encode to optimize. WebP is a
+            // decode-only case here (the TwelveMonkeys reader plugin has no writer),
+            // so re-encoding would silently produce an empty/broken file. In that
+            // case — or when ImageIO can't read at all (AVIF, CMYK JPEG, …) — keep
+            // the original bytes untouched.
+            if (sourceImage != null && hasImageWriter(extension)) {
                 BufferedImage optimized = resizeIfNeeded(sourceImage,
                         properties.getMaxWidth(), properties.getMaxHeight());
                 BufferedImage thumbnail = resizeIfNeeded(sourceImage, 320, 320);
                 writeCompressedImage(optimized, extension, optimizedPath, properties.getQuality());
                 writeCompressedImage(thumbnail, extension, thumbPath, properties.getQuality());
             } else {
-                // ImageIO can't read (CMYK JPEG, some WebP, etc.) — save raw
-                log.info("ImageIO cannot process product image, saving raw: {}", originalFileName);
+                log.info("Saving product image raw (decodable={}, encodable={}): {}",
+                        sourceImage != null, hasImageWriter(extension), originalFileName);
                 Files.write(optimizedPath, originalBytes);
                 Files.write(thumbPath, originalBytes);
             }
@@ -582,6 +587,12 @@ public class LocalPhotoStorageService implements PhotoStorageService {
             g2d.dispose();
         }
         return resized;
+    }
+
+    /** True when ImageIO has an encoder for this file extension (e.g. jpg/png yes, webp no). */
+    private static boolean hasImageWriter(String extension) {
+        String format = "jpg".equalsIgnoreCase(extension) ? "jpeg" : extension.toLowerCase();
+        return ImageIO.getImageWritersByFormatName(format).hasNext();
     }
 
     private void writeCompressedImage(BufferedImage image, String extension, Path target, float quality)

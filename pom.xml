@@ -203,6 +203,15 @@
             <version>8.14.0</version>
         </dependency>
 
+        <!-- WebP ImageIO plugin (pure Java). Registers a WebP reader so ImageIO.read
+             can decode the WebP product photos the crawler stores — needed for the
+             local set-cover compositor and for WebP thumbnail generation. -->
+        <dependency>
+            <groupId>com.twelvemonkeys.imageio</groupId>
+            <artifactId>imageio-webp</artifactId>
+            <version>3.12.0</version>
+        </dependency>
+
         <!-- AOP (used for @Tool call logging across the assistant tool set) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

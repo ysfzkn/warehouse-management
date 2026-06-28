@@ -65,9 +65,13 @@ public class ProductSetCoverServiceImpl implements ProductSetCoverService {
             + "ADDITIONS ARE FORBIDDEN: no new text, captions, badges, stickers, energy labels, price tags, "
             + "watermarks, logos, props, decorations, plants, food, people, hands, or reflections of objects "
             + "that are not in the reference photos.\n\n"
-            + "COMPOSITION: place all products side by side in a single row at plausible relative real-world "
-            + "sizes, each product fully visible, none cropped, none overlapping another. Centered, with "
-            + "comfortable empty margins around the group.\n\n"
+            + "COMPOSITION: arrange the products as a balanced corner collage that fills a SQUARE frame — pin "
+            + "the products to the corners/quadrants of the frame instead of lining them up in one row. For "
+            + "three products use a classic three-corner layout: one in the upper-left, one in the upper-right, "
+            + "and one centered along the bottom. For two products place them in opposite corners; for four use "
+            + "the four corners. Distribute them evenly so no single quadrant is left large and empty. Every "
+            + "product must stay at a plausible relative real-world size, fully visible, none cropped, none "
+            + "overlapping another, with comfortable spacing between them.\n\n"
             + "SCENE: seamless neutral white-to-light-gray professional studio background, soft even diffused "
             + "lighting, subtle natural contact shadows under each product.\n\n"
             + "STYLE: photorealistic, sharp focus, high detail. The result must look like the original product "
@@ -80,6 +84,7 @@ public class ProductSetCoverServiceImpl implements ProductSetCoverService {
     private final ProductImageService productImageService;
     private final PhotoStorageService photoStorageService;
     private final OpenAiImageEditClient imageEditClient;
+    private final LocalSetCoverComposer localCoverComposer;
     private final AssistantRuntimeConfig runtimeConfig;
     private final TransactionTemplate transactionTemplate;
 
@@ -90,7 +95,7 @@ public class ProductSetCoverServiceImpl implements ProductSetCoverService {
     public ProductImage setCoverInput(Long setId, Long memberProductId,
                                       String originalFileName, String contentType, InputStream inputStream) {
         Product set = loadBundleOrThrow(setId);
-        requireMember(setId, memberProductId);
+        requireExistingProduct(memberProductId);
         byte[] bytes = readAll(inputStream);
         return storeCoverInput(set, memberProductId, originalFileName, contentType, bytes);
     }
@@ -99,7 +104,7 @@ public class ProductSetCoverServiceImpl implements ProductSetCoverService {
     @Transactional
     public ProductImage setCoverInputFromImage(Long setId, Long memberProductId, Long imageId) {
         Product set = loadBundleOrThrow(setId);
-        requireMember(setId, memberProductId);
+        requireExistingProduct(memberProductId);
         ProductImage source = productImageService.getImageOrThrow(imageId);
         if (!Objects.equals(source.getProduct().getId(), memberProductId)) {
             throw new WarehouseManagementException(ErrorCode.AI_COVER_IMAGE_NOT_OWNED);
@@ -167,6 +172,17 @@ public class ProductSetCoverServiceImpl implements ProductSetCoverService {
 
     @Override
     public ProductImage generateCover(Long setId) {
+        // The active engine is configured (env/admin), not chosen by the caller, so
+        // the single "Generate cover" button transparently uses DIGITAL or AI.
+        if (runtimeConfig.isAiCoverMode()) {
+            logger.info("Generating set cover for {} via AI (OpenAI)", setId);
+            return generateCoverViaAi(setId);
+        }
+        logger.info("Generating set cover for {} via DIGITAL (local compositor)", setId);
+        return generateCoverLocally(setId);
+    }
+
+    private ProductImage generateCoverViaAi(Long setId) {
         // Phase 1 (tx): validate and read all input bytes.
         Prepared prepared = transactionTemplate.execute(status -> prepareGeneration(setId));
 
@@ -178,11 +194,44 @@ public class ProductSetCoverServiceImpl implements ProductSetCoverService {
         return transactionTemplate.execute(status -> persistGeneratedCover(setId, png));
     }
 
+    @Override
+    public ProductImage generateCoverLocally(Long setId) {
+        // Phase 1 (tx): collect the per-member input bytes. No OpenAI key needed.
+        List<OpenAiImageEditClient.ImageInput> inputs =
+                transactionTemplate.execute(status -> collectInputs(setId));
+
+        // Phase 2 (NO tx, but fast): pure-Java compositing — no network call.
+        byte[] png;
+        try {
+            png = localCoverComposer.compose(
+                    inputs.stream().map(OpenAiImageEditClient.ImageInput::bytes).toList());
+        } catch (IllegalStateException e) {
+            // No input could be decoded (e.g. an exotic format ImageIO lacks a reader for).
+            throw new WarehouseManagementException(ErrorCode.AI_COVER_UNSUPPORTED_FORMAT,
+                    "Seçilen fotoğraflar okunamadı; lütfen JPEG/PNG/WebP bir fotoğraf seçin.");
+        }
+
+        // Phase 3 (tx): replace the previous AI cover and save the new primary.
+        return transactionTemplate.execute(status -> persistGeneratedCover(setId, png));
+    }
+
     private Prepared prepareGeneration(Long setId) {
-        Product set = loadBundleOrThrow(setId);
         if (!imageEditClient.isConfigured()) {
             throw new WarehouseManagementException(ErrorCode.AI_COVER_API_KEY_MISSING);
         }
+        List<OpenAiImageEditClient.ImageInput> payload = collectInputs(setId);
+        String customPrompt = runtimeConfig.getImagePrompt();
+        String prompt = (customPrompt != null && !customPrompt.isBlank()) ? customPrompt : DEFAULT_PROMPT;
+        return new Prepared(payload, prompt);
+    }
+
+    /**
+     * Loads every bundle member's COVER_INPUT photo, normalized to a format usable
+     * by both the OpenAI edit API and Java's ImageIO, in member order. Throws if
+     * the set has no members or any member is missing its input photo.
+     */
+    private List<OpenAiImageEditClient.ImageInput> collectInputs(Long setId) {
+        Product set = loadBundleOrThrow(setId);
         List<BundleItem> members = bundleItemRepository.findByBundleIdOrderBySortOrderAsc(setId);
         if (members.isEmpty()) {
             throw new WarehouseManagementException(ErrorCode.AI_COVER_INPUT_MISSING);
@@ -226,10 +275,7 @@ public class ProductSetCoverServiceImpl implements ProductSetCoverService {
                     ErrorCode.AI_COVER_INPUT_MISSING.getMessage()
                             + " Eksik: " + String.join(", ", missingNames));
         }
-
-        String customPrompt = runtimeConfig.getImagePrompt();
-        String prompt = (customPrompt != null && !customPrompt.isBlank()) ? customPrompt : DEFAULT_PROMPT;
-        return new Prepared(payload, prompt);
+        return payload;
     }
 
     private ProductImage persistGeneratedCover(Long setId, byte[] png) {
@@ -262,10 +308,17 @@ public class ProductSetCoverServiceImpl implements ProductSetCoverService {
         return set;
     }
 
-    private void requireMember(Long setId, Long memberProductId) {
-        boolean isMember = bundleItemRepository.findByBundleIdOrderBySortOrderAsc(setId).stream()
-                .anyMatch(bi -> Objects.equals(bi.getProduct().getId(), memberProductId));
-        if (!isMember) {
+    /**
+     * Cover inputs are keyed by member product id but are NOT required to be a
+     * <em>currently persisted</em> bundle member: while editing a set the admin
+     * may add a member and pick/upload its cover photo before re-saving the set,
+     * so the bundle_item row may not exist yet. A stored input for a non-member is
+     * harmless — generation only consumes inputs whose memberProductId matches an
+     * actual saved member ({@code collectInputs}) and ignores the rest. So we only
+     * guard against a genuinely non-existent product id here.
+     */
+    private void requireExistingProduct(Long memberProductId) {
+        if (memberProductId == null || !productRepository.existsById(memberProductId)) {
             throw new WarehouseManagementException(ErrorCode.AI_COVER_NOT_A_MEMBER);
         }
     }
@@ -282,6 +335,12 @@ public class ProductSetCoverServiceImpl implements ProductSetCoverService {
         // error now instead of a failed generation later. Crawled images are often
         // AVIF stored raw under a .jpg name, so sniff the actual bytes.
         AiSafeImage safe = normalizeForAi(bytes, fileName);
+        // Cover inputs are an internal pipeline image. Transcode WebP to PNG up front:
+        // ImageIO can READ WebP (reader plugin) but has no WebP WRITER, so leaving it
+        // as WebP makes the storage optimizer fall back to a raw copy and risks broken
+        // re-encodes downstream. PNG always round-trips (read AND write), guaranteeing
+        // the tile preview renders and generation can re-read it.
+        safe = transcodeWebpToPng(safe);
 
         imageRepository.findByProductAndAiRoleAndMemberProductId(set, ROLE_COVER_INPUT, memberProductId)
                 .forEach(old -> productImageService.deleteImage(old.getId()));
@@ -320,6 +379,28 @@ public class ProductSetCoverServiceImpl implements ProductSetCoverService {
 
     /** Bytes guaranteed to be in a format the OpenAI Images API accepts. */
     private record AiSafeImage(byte[] bytes, String contentType, String fileName) {}
+
+    /**
+     * Converts WebP bytes to PNG (PNG can be both read and written by ImageIO, WebP
+     * only read). Non-WebP input is returned untouched; an undecodable WebP also
+     * passes through unchanged (the storage layer will then keep it raw).
+     */
+    private AiSafeImage transcodeWebpToPng(AiSafeImage img) {
+        if (!"webp".equals(sniffImageFormat(img.bytes()))) {
+            return img;
+        }
+        try {
+            BufferedImage decoded = ImageIO.read(new ByteArrayInputStream(img.bytes()));
+            if (decoded != null) {
+                ByteArrayOutputStream out = new ByteArrayOutputStream();
+                ImageIO.write(decoded, "png", out);
+                return new AiSafeImage(out.toByteArray(), "image/png", stripExtension(img.fileName()) + ".png");
+            }
+        } catch (IOException e) {
+            logger.warn("WebP→PNG transcode failed, keeping original bytes: {}", e.getMessage());
+        }
+        return img;
+    }
 
     /**
      * Ensures the bytes are JPEG, PNG or WebP (the only formats the OpenAI edits

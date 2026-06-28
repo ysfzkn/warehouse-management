@@ -4,6 +4,7 @@ import useSecurityCodePrompt from '../components/useSecurityCodePrompt';
 import CategoryForm from '../components/CategoryForm';
 import FilterChips from '../components/FilterChips';
 import ConfirmModal from '../components/ConfirmModal';
+import ExpandableText from '../components/ExpandableText';
 
 const normalizeText = (text) => (text || '').toLocaleLowerCase('tr-TR');
 
@@ -29,7 +30,7 @@ const Categories = () => {
   };
   const categorySortOptions = [
     { value: 'name', label: 'İsme Göre', icon: 'fa-font' },
-    { value: 'updatedAt', label: 'Son Güncellemeye Göre', icon: 'fa-clock' }
+    { value: 'updatedAt', label: 'Son Güncellemeye Göre', icon: 'fa-clock' },
   ];
 
   const fetchCategories = useCallback(async () => {
@@ -38,20 +39,24 @@ const Categories = () => {
       // Fetch ALL categories with sorting
       const params = {
         sortBy: categorySortBy,
-        sortDir: categorySortDir
+        sortDir: categorySortDir,
       };
       const response = await axios.get('/api/categories/top-level', { params });
       const data = response.data || {};
-      const list = Array.isArray(data.content) ? data.content : (Array.isArray(data) ? data : []);
+      const list = Array.isArray(data.content) ? data.content : Array.isArray(data) ? data : [];
 
       const categoriesWithSubInfo = list.map((category) => {
         const ownCount = Number(category.productCount ?? 0);
-        const rawSubs = Array.isArray(category.children) ? category.children : (Array.isArray(category.subcategories) ? category.subcategories : []);
+        const rawSubs = Array.isArray(category.children)
+          ? category.children
+          : Array.isArray(category.subcategories)
+            ? category.subcategories
+            : [];
         const normalizedSubs = rawSubs.map((sub) => ({
           ...sub,
           parentId: sub.parentId ?? category.id,
           parentName: sub.parentName ?? category.name,
-          productCount: Number(sub.productCount ?? 0)
+          productCount: Number(sub.productCount ?? 0),
         }));
         const subTotalCount = normalizedSubs.reduce((sum, sub) => sum + Number(sub.productCount || 0), 0);
         return {
@@ -60,11 +65,11 @@ const Categories = () => {
           children: normalizedSubs,
           productCount: ownCount,
           totalProductCount: ownCount + subTotalCount,
-          totalSubcategories: normalizedSubs.length
+          totalSubcategories: normalizedSubs.length,
         };
       });
       setMainCategories(categoriesWithSubInfo);
-      
+
       // Pagination will be calculated in useEffect based on filteredCategories
     } catch (error) {
       console.error('Error fetching categories:', error);
@@ -81,21 +86,20 @@ const Categories = () => {
   // Refetch when sort changes
   useEffect(() => {
     fetchCategories();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [categorySortBy, categorySortDir]);
 
   const toggleCategoryExpansion = useCallback((categoryId) => {
     const id = Number(categoryId);
-    setExpandedCategories(prev => {
+    setExpandedCategories((prev) => {
       const isExpanded = prev.includes(id);
       if (isExpanded) {
-        return prev.filter(expandedId => expandedId !== id);
+        return prev.filter((expandedId) => expandedId !== id);
       } else {
         return [...prev, id];
       }
     });
   }, []);
-
 
   const handleCreate = () => {
     setEditingCategory(null);
@@ -103,11 +107,22 @@ const Categories = () => {
   };
   const role = (typeof window !== 'undefined' && localStorage.getItem('auth_role')) || 'ADMIN';
   const isAdmin = role === 'ADMIN';
-  const { askCode: askSecurityCode, SecurityCodePrompt, closePrompt: closeSecurityPrompt } = useSecurityCodePrompt();
+  const {
+    askCode: askSecurityCode,
+    SecurityCodePrompt,
+    closePrompt: closeSecurityPrompt,
+  } = useSecurityCodePrompt();
 
   const adminSecurityErrorCodes = new Set([
-    'AUTH_002','AUTH_003','AUTH_004','AUTH_005','AUTH_006','AUTH_007',
-    'ADMIN_SECURITY_CODE_REQUIRED','INVALID_ADMIN_SECURITY_CODE','ADMIN_SECURITY_CODE_MISMATCH'
+    'AUTH_002',
+    'AUTH_003',
+    'AUTH_004',
+    'AUTH_005',
+    'AUTH_006',
+    'AUTH_007',
+    'ADMIN_SECURITY_CODE_REQUIRED',
+    'INVALID_ADMIN_SECURITY_CODE',
+    'ADMIN_SECURITY_CODE_MISMATCH',
   ]);
 
   const isAdminSecurityError = (code, status) =>
@@ -120,7 +135,6 @@ const Categories = () => {
     const status = error?.response?.status;
     return { code, msg, status };
   };
-
 
   const handleEdit = (category) => {
     setEditingCategory(category);
@@ -145,7 +159,7 @@ const Categories = () => {
             const code = await askSecurityCode({
               prefill: lastCode,
               errorMessage: lastErrorMsg || (lastCode ? 'Güvenlik şifresi hatalı, tekrar deneyin.' : ''),
-              persistOnResolve: true
+              persistOnResolve: true,
             });
             if (code === null) {
               closeSecurityPrompt();
@@ -158,13 +172,18 @@ const Categories = () => {
               await axios.delete(`/api/categories/${id}`, { headers: { 'X-ADMIN-SECURITY-CODE': code } });
               closeSecurityPrompt();
               const toast = document.createElement('div');
-              toast.className = 'toast align-items-center text-bg-success border-0 position-fixed top-0 end-0 m-3 show fs-6';
+              toast.className =
+                'toast align-items-center text-bg-success border-0 position-fixed top-0 end-0 m-3 show fs-6';
               toast.style.minWidth = '360px';
               toast.style.padding = '0.5rem 0.75rem';
               toast.setAttribute('role', 'alert');
               toast.innerHTML = `<div class="d-flex"><div class="toast-body fw-semibold">Kategori başarıyla silindi</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
               document.body.appendChild(toast);
-              setTimeout(() => { try { document.body.removeChild(toast); } catch { } }, 7000);
+              setTimeout(() => {
+                try {
+                  document.body.removeChild(toast);
+                } catch {}
+              }, 7000);
               fetchCategories();
               break;
             } catch (error) {
@@ -176,25 +195,35 @@ const Categories = () => {
               if (!isSecurity) {
                 closeSecurityPrompt();
                 const toast = document.createElement('div');
-                toast.className = 'toast align-items-center text-bg-danger border-0 position-fixed top-0 end-0 m-3 show fs-6';
+                toast.className =
+                  'toast align-items-center text-bg-danger border-0 position-fixed top-0 end-0 m-3 show fs-6';
                 toast.style.minWidth = '360px';
                 toast.style.padding = '0.5rem 0.75rem';
                 toast.setAttribute('role', 'alert');
                 toast.innerHTML = `<div class="d-flex"><div class="toast-body fw-semibold">${msg}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
                 document.body.appendChild(toast);
-                setTimeout(() => { try { document.body.removeChild(toast); } catch { } }, 7000);
+                setTimeout(() => {
+                  try {
+                    document.body.removeChild(toast);
+                  } catch {}
+                }, 7000);
                 fetchCategories();
                 break;
               }
               // security error: show toast, keep modal open and retry
               const toast = document.createElement('div');
-              toast.className = 'toast align-items-center text-bg-danger border-0 position-fixed top-0 end-0 m-3 show fs-6';
+              toast.className =
+                'toast align-items-center text-bg-danger border-0 position-fixed top-0 end-0 m-3 show fs-6';
               toast.style.minWidth = '360px';
               toast.style.padding = '0.5rem 0.75rem';
               toast.setAttribute('role', 'alert');
               toast.innerHTML = `<div class="d-flex"><div class="toast-body fw-semibold">${msg || 'Güvenlik şifresi hatalı'}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
               document.body.appendChild(toast);
-              setTimeout(() => { try { document.body.removeChild(toast); } catch { } }, 7000);
+              setTimeout(() => {
+                try {
+                  document.body.removeChild(toast);
+                } catch {}
+              }, 7000);
               // on a security error keep the modal open and continue the loop
             }
           }
@@ -202,29 +231,42 @@ const Categories = () => {
           try {
             await axios.delete(`/api/categories/${id}`);
             const toast = document.createElement('div');
-            toast.className = 'toast align-items-center text-bg-success border-0 position-fixed top-0 end-0 m-3 show fs-6';
+            toast.className =
+              'toast align-items-center text-bg-success border-0 position-fixed top-0 end-0 m-3 show fs-6';
             toast.style.minWidth = '360px';
             toast.style.padding = '0.5rem 0.75rem';
             toast.setAttribute('role', 'alert');
             toast.innerHTML = `<div class="d-flex"><div class="toast-body fw-semibold">Kategori başarıyla silindi</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
             document.body.appendChild(toast);
-            setTimeout(() => { try { document.body.removeChild(toast); } catch { } }, 7000);
+            setTimeout(() => {
+              try {
+                document.body.removeChild(toast);
+              } catch {}
+            }, 7000);
           } catch (error) {
             const errorData = error?.response?.data;
-            const msg = errorData?.message || errorData?.error || (typeof errorData === 'string' ? errorData : 'Kategori silinirken hata oluştu');
+            const msg =
+              errorData?.message ||
+              errorData?.error ||
+              (typeof errorData === 'string' ? errorData : 'Kategori silinirken hata oluştu');
             const toast = document.createElement('div');
-            toast.className = 'toast align-items-center text-bg-danger border-0 position-fixed top-0 end-0 m-3 show fs-6';
+            toast.className =
+              'toast align-items-center text-bg-danger border-0 position-fixed top-0 end-0 m-3 show fs-6';
             toast.style.minWidth = '360px';
             toast.style.padding = '0.5rem 0.75rem';
             toast.setAttribute('role', 'alert');
             toast.innerHTML = `<div class="d-flex"><div class="toast-body fw-semibold">${msg}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
             document.body.appendChild(toast);
-            setTimeout(() => { try { document.body.removeChild(toast); } catch { } }, 7000);
+            setTimeout(() => {
+              try {
+                document.body.removeChild(toast);
+              } catch {}
+            }, 7000);
           } finally {
             fetchCategories();
           }
         }
-      }
+      },
     });
   };
 
@@ -248,32 +290,34 @@ const Categories = () => {
   const filteredCategories = useMemo(() => {
     const q = normalizeText(searchTerm);
     if (!q) return mainCategories;
-    return mainCategories.filter(c =>
-      normalizeText(c.name).includes(q) ||
-      normalizeText(c.description).includes(q) ||
-      c.subcategories.some(sub => normalizeText(sub.name).includes(q))
+    return mainCategories.filter(
+      (c) =>
+        normalizeText(c.name).includes(q) ||
+        normalizeText(c.description).includes(q) ||
+        c.subcategories.some((sub) => normalizeText(sub.name).includes(q))
     );
   }, [mainCategories, searchTerm]);
 
   // No pagination needed - showing all categories
 
   // Selection handlers
-  const allVisibleCategoryIds = filteredCategories.map(c => c.id);
-  const areAllVisibleSelected = filteredCategories.length > 0 && allVisibleCategoryIds.every(id => selectedCategories.includes(id));
+  const allVisibleCategoryIds = filteredCategories.map((c) => c.id);
+  const areAllVisibleSelected =
+    filteredCategories.length > 0 && allVisibleCategoryIds.every((id) => selectedCategories.includes(id));
   const selectedCategoryCount = selectedCategories.length;
 
   const toggleSelectAllVisible = () => {
     if (!filteredCategories.length) return;
     if (areAllVisibleSelected) {
-      setSelectedCategories(prev => prev.filter(id => !allVisibleCategoryIds.includes(id)));
+      setSelectedCategories((prev) => prev.filter((id) => !allVisibleCategoryIds.includes(id)));
     } else {
-      setSelectedCategories(prev => [...new Set([...prev, ...allVisibleCategoryIds])]);
+      setSelectedCategories((prev) => [...new Set([...prev, ...allVisibleCategoryIds])]);
     }
   };
 
   const toggleCategorySelection = (id) => {
-    setSelectedCategories(prev =>
-      prev.includes(id) ? prev.filter(existingId => existingId !== id) : [...prev, id]
+    setSelectedCategories((prev) =>
+      prev.includes(id) ? prev.filter((existingId) => existingId !== id) : [...prev, id]
     );
   };
 
@@ -302,7 +346,7 @@ const Categories = () => {
             const code = await askSecurityCode({
               prefill: lastCode,
               errorMessage: lastErrorMsg || (lastCode ? 'Güvenlik şifresi hatalı, tekrar deneyin.' : ''),
-              persistOnResolve: true
+              persistOnResolve: true,
             });
             if (code === null) {
               closeSecurityPrompt();
@@ -312,10 +356,12 @@ const Categories = () => {
             lastErrorMsg = '';
 
             try {
-              const deletePromises = ids.map(id => axios.delete(`/api/categories/${id}`, { headers: { 'X-ADMIN-SECURITY-CODE': code } }));
+              const deletePromises = ids.map((id) =>
+                axios.delete(`/api/categories/${id}`, { headers: { 'X-ADMIN-SECURITY-CODE': code } })
+              );
               const results = await Promise.allSettled(deletePromises);
-              const rejected = results.filter(r => r.status === 'rejected');
-              const securityRejected = rejected.filter(r => {
+              const rejected = results.filter((r) => r.status === 'rejected');
+              const securityRejected = rejected.filter((r) => {
                 const { code: rCode, status } = parseSecurityError(r.reason || r);
                 return isAdminSecurityError(rCode, status);
               });
@@ -324,18 +370,23 @@ const Categories = () => {
                 const { msg } = parseSecurityError(securityRejected[0].reason || securityRejected[0]);
                 lastErrorMsg = msg || 'Güvenlik şifresi hatalı';
                 const toast = document.createElement('div');
-                toast.className = 'toast align-items-center text-bg-danger border-0 position-fixed top-0 end-0 m-3 show fs-6';
+                toast.className =
+                  'toast align-items-center text-bg-danger border-0 position-fixed top-0 end-0 m-3 show fs-6';
                 toast.style.minWidth = '360px';
                 toast.style.padding = '0.5rem 0.75rem';
                 toast.setAttribute('role', 'alert');
                 toast.innerHTML = `<div class="d-flex"><div class="toast-body fw-semibold">${lastErrorMsg}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
                 document.body.appendChild(toast);
-                setTimeout(() => { try { document.body.removeChild(toast); } catch { } }, 7000);
+                setTimeout(() => {
+                  try {
+                    document.body.removeChild(toast);
+                  } catch {}
+                }, 7000);
                 // security error: keep modal open and retry
                 continue;
               }
 
-              const successful = results.filter(r => r.status === 'fulfilled').length;
+              const successful = results.filter((r) => r.status === 'fulfilled').length;
               const failed = rejected.length;
               setSelectedCategories([]);
               const toast = document.createElement('div');
@@ -343,12 +394,17 @@ const Categories = () => {
               toast.style.minWidth = '360px';
               toast.style.padding = '0.5rem 0.75rem';
               toast.setAttribute('role', 'alert');
-              const message = failed > 0
-                ? `${successful} kategori silindi, ${failed} kategori silinemedi (ürün veya alt kategori içeriyor olabilir)`
-                : `${successful} kategori başarıyla silindi`;
+              const message =
+                failed > 0
+                  ? `${successful} kategori silindi, ${failed} kategori silinemedi (ürün veya alt kategori içeriyor olabilir)`
+                  : `${successful} kategori başarıyla silindi`;
               toast.innerHTML = `<div class="d-flex"><div class="toast-body fw-semibold">${message}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
               document.body.appendChild(toast);
-              setTimeout(() => { try { document.body.removeChild(toast); } catch { } }, 7000);
+              setTimeout(() => {
+                try {
+                  document.body.removeChild(toast);
+                } catch {}
+              }, 7000);
               closeSecurityPrompt();
               fetchCategories();
               break;
@@ -356,13 +412,18 @@ const Categories = () => {
               const { code: errCode, msg, status } = parseSecurityError(error);
               lastErrorMsg = msg;
               const toast = document.createElement('div');
-              toast.className = 'toast align-items-center text-bg-danger border-0 position-fixed top-0 end-0 m-3 show fs-6';
+              toast.className =
+                'toast align-items-center text-bg-danger border-0 position-fixed top-0 end-0 m-3 show fs-6';
               toast.style.minWidth = '360px';
               toast.style.padding = '0.5rem 0.75rem';
               toast.setAttribute('role', 'alert');
               toast.innerHTML = `<div class="d-flex"><div class="toast-body fw-semibold">${msg || 'Güvenlik şifresi hatalı'}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
               document.body.appendChild(toast);
-              setTimeout(() => { try { document.body.removeChild(toast); } catch { } }, 7000);
+              setTimeout(() => {
+                try {
+                  document.body.removeChild(toast);
+                } catch {}
+              }, 7000);
 
               const isSecurity = isAdminSecurityError(errCode, status);
               if (!isSecurity) {
@@ -375,44 +436,59 @@ const Categories = () => {
           }
         } else {
           try {
-            const deletePromises = ids.map(id => axios.delete(`/api/categories/${id}`));
+            const deletePromises = ids.map((id) => axios.delete(`/api/categories/${id}`));
             const results = await Promise.allSettled(deletePromises);
-            const successful = results.filter(r => r.status === 'fulfilled').length;
-            const failed = results.filter(r => r.status === 'rejected').length;
+            const successful = results.filter((r) => r.status === 'fulfilled').length;
+            const failed = results.filter((r) => r.status === 'rejected').length;
             setSelectedCategories([]);
             const toast = document.createElement('div');
             toast.className = `toast align-items-center text-bg-${failed > 0 ? 'warning' : 'success'} border-0 position-fixed top-0 end-0 m-3 show fs-6`;
             toast.style.minWidth = '360px';
             toast.style.padding = '0.5rem 0.75rem';
             toast.setAttribute('role', 'alert');
-            const message = failed > 0
-              ? `${successful} kategori silindi, ${failed} kategori silinemedi (ürün veya alt kategori içeriyor olabilir)`
-              : `${successful} kategori başarıyla silindi`;
+            const message =
+              failed > 0
+                ? `${successful} kategori silindi, ${failed} kategori silinemedi (ürün veya alt kategori içeriyor olabilir)`
+                : `${successful} kategori başarıyla silindi`;
             toast.innerHTML = `<div class="d-flex"><div class="toast-body fw-semibold">${message}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
             document.body.appendChild(toast);
-            setTimeout(() => { try { document.body.removeChild(toast); } catch { } }, 7000);
+            setTimeout(() => {
+              try {
+                document.body.removeChild(toast);
+              } catch {}
+            }, 7000);
           } catch (error) {
             const errorData = error?.response?.data;
-            const msg = errorData?.message || errorData?.error || (typeof errorData === 'string' ? errorData : 'Kategoriler silinirken hata oluştu');
+            const msg =
+              errorData?.message ||
+              errorData?.error ||
+              (typeof errorData === 'string' ? errorData : 'Kategoriler silinirken hata oluştu');
             const toast = document.createElement('div');
-            toast.className = 'toast align-items-center text-bg-danger border-0 position-fixed top-0 end-0 m-3 show fs-6';
+            toast.className =
+              'toast align-items-center text-bg-danger border-0 position-fixed top-0 end-0 m-3 show fs-6';
             toast.style.minWidth = '360px';
             toast.style.padding = '0.5rem 0.75rem';
             toast.setAttribute('role', 'alert');
             toast.innerHTML = `<div class="d-flex"><div class="toast-body fw-semibold">${msg}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
             document.body.appendChild(toast);
-            setTimeout(() => { try { document.body.removeChild(toast); } catch { } }, 7000);
+            setTimeout(() => {
+              try {
+                document.body.removeChild(toast);
+              } catch {}
+            }, 7000);
           } finally {
             fetchCategories();
           }
         }
-      }
+      },
     });
   };
 
   useEffect(() => {
     if (!selectedCategories.length) return;
-    setSelectedCategories(prev => prev.filter(id => mainCategories.some(category => category.id === id)));
+    setSelectedCategories((prev) =>
+      prev.filter((id) => mainCategories.some((category) => category.id === id))
+    );
   }, [mainCategories, selectedCategories.length]);
 
   if (loading) {
@@ -532,8 +608,9 @@ const Categories = () => {
                     onChange={() => handleCategorySortChange(option.value)}
                   />
                   <label
-                    className={`btn btn-sm w-100 d-flex align-items-center justify-content-center gap-2 ${categorySortBy === option.value ? 'btn-primary text-white' : 'btn-outline-primary'
-                      }`}
+                    className={`btn btn-sm w-100 d-flex align-items-center justify-content-center gap-2 ${
+                      categorySortBy === option.value ? 'btn-primary text-white' : 'btn-outline-primary'
+                    }`}
                     htmlFor={`category-sort-${option.value}`}
                     style={{ minHeight: '38px' }}
                   >
@@ -550,7 +627,9 @@ const Categories = () => {
       {searchTerm && (
         <FilterChips
           className="mb-3"
-          chips={[{ icon: 'fas fa-search', label: `Arama: "${searchTerm}"`, onClear: () => setSearchTerm('') }]}
+          chips={[
+            { icon: 'fas fa-search', label: `Arama: "${searchTerm}"`, onClear: () => setSearchTerm('') },
+          ]}
           onClearAll={() => setSearchTerm('')}
         />
       )}
@@ -605,7 +684,9 @@ const Categories = () => {
                   <th className="text-center">Ürün Sayısı</th>
                   <th className="text-center">Alt Kategori</th>
                   <th>Oluşturulma Tarihi</th>
-                  <th className="text-center" style={{ width: '250px' }}>İşlemler</th>
+                  <th className="text-center" style={{ width: '250px' }}>
+                    İşlemler
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -617,7 +698,10 @@ const Categories = () => {
                         className={isSelected ? 'table-active' : ''}
                         style={{ cursor: category.totalSubcategories > 0 ? 'pointer' : 'default' }}
                         onClick={(e) => {
-                          if (category.totalSubcategories > 0 && !e.target.closest('button, .btn-group, .form-check')) {
+                          if (
+                            category.totalSubcategories > 0 &&
+                            !e.target.closest('button, .btn-group, .form-check')
+                          ) {
                             toggleCategoryExpansion(category.id);
                           }
                         }}
@@ -635,7 +719,9 @@ const Categories = () => {
                         </td>
                         <td>
                           {category.totalSubcategories > 0 && (
-                            <i className={`fas fa-chevron-${expandedCategories.includes(Number(category.id)) ? 'down' : 'right'} text-primary`}></i>
+                            <i
+                              className={`fas fa-chevron-${expandedCategories.includes(Number(category.id)) ? 'down' : 'right'} text-primary`}
+                            ></i>
                           )}
                         </td>
                         <td>
@@ -648,9 +734,7 @@ const Categories = () => {
                           )}
                         </td>
                         <td>
-                          <span className="text-muted small">
-                            {category.description || '-'}
-                          </span>
+                          <span className="text-muted small">{category.description || '-'}</span>
                         </td>
                         <td className="text-center">
                           <span className="badge bg-primary bg-opacity-10 text-primary">
@@ -696,8 +780,16 @@ const Categories = () => {
                               <button
                                 className="btn btn-outline-danger"
                                 onClick={() => handleDelete(category.id)}
-                                disabled={(category.totalProductCount ?? category.productCount) > 0 || category.totalSubcategories > 0}
-                                title={(category.totalProductCount ?? category.productCount) > 0 || category.totalSubcategories > 0 ? "Ürün veya alt kategori içeren kategoriler silinemez" : "Sil"}
+                                disabled={
+                                  (category.totalProductCount ?? category.productCount) > 0 ||
+                                  category.totalSubcategories > 0
+                                }
+                                title={
+                                  (category.totalProductCount ?? category.productCount) > 0 ||
+                                  category.totalSubcategories > 0
+                                    ? 'Ürün veya alt kategori içeren kategoriler silinemez'
+                                    : 'Sil'
+                                }
                                 style={{ minWidth: '45px', padding: '0.5rem 0.75rem' }}
                               >
                                 <i className="fas fa-trash"></i>
@@ -707,67 +799,75 @@ const Categories = () => {
                         </td>
                       </tr>
                       {/* Subcategories - shown when expanded */}
-                      {expandedCategories.includes(Number(category.id)) && category.subcategories && category.subcategories.length > 0 && (
-                        <tr className="table-light">
-                          <td colSpan="7" className="p-0">
-                            <div className="p-3 bg-light">
-                              <div className="small mb-2 fw-bold text-primary">
-                                <i className="fas fa-sitemap me-1"></i>
-                                Alt Kategoriler:
-                              </div>
-                              <div className="table-responsive">
-                                <table className="table table-sm table-bordered mb-0">
-                                  <thead>
-                                    <tr>
-                                      <th>Alt Kategori Adı</th>
-                                      <th className="text-center">Ürün Sayısı</th>
-                                      <th className="text-center" style={{ width: '180px' }}>İşlemler</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {category.subcategories.map((subcategory) => (
-                                      <tr key={subcategory.id}>
-                                        <td>
-                                          <div className="fw-semibold">{subcategory.name}</div>
-                                        </td>
-                                        <td className="text-center">
-                                          <span className="badge bg-primary bg-opacity-10 text-primary">
-                                            <i className="fas fa-box me-1"></i>
-                                            {subcategory.productCount || 0}
-                                          </span>
-                                        </td>
-                                        <td className="text-center">
-                                          <div className="d-flex justify-content-center">
-                                            <div className="btn-group" role="group">
-                                              <button
-                                                className="btn btn-outline-secondary"
-                                                onClick={() => handleEdit(subcategory)}
-                                                title="Düzenle"
-                                                style={{ minWidth: '45px', padding: '0.5rem 0.75rem' }}
-                                              >
-                                                <i className="fas fa-edit"></i>
-                                              </button>
-                                              <button
-                                                className="btn btn-outline-danger"
-                                                onClick={() => handleDelete(subcategory.id)}
-                                                disabled={(subcategory.productCount || 0) > 0}
-                                                title={(subcategory.productCount || 0) > 0 ? "Ürün içeren kategoriler silinemez" : "Sil"}
-                                                style={{ minWidth: '45px', padding: '0.5rem 0.75rem' }}
-                                              >
-                                                <i className="fas fa-trash"></i>
-                                              </button>
-                                            </div>
-                                          </div>
-                                        </td>
+                      {expandedCategories.includes(Number(category.id)) &&
+                        category.subcategories &&
+                        category.subcategories.length > 0 && (
+                          <tr className="table-light">
+                            <td colSpan="7" className="p-0">
+                              <div className="p-3 bg-light">
+                                <div className="small mb-2 fw-bold text-primary">
+                                  <i className="fas fa-sitemap me-1"></i>
+                                  Alt Kategoriler:
+                                </div>
+                                <div className="table-responsive">
+                                  <table className="table table-sm table-bordered mb-0">
+                                    <thead>
+                                      <tr>
+                                        <th>Alt Kategori Adı</th>
+                                        <th className="text-center">Ürün Sayısı</th>
+                                        <th className="text-center" style={{ width: '180px' }}>
+                                          İşlemler
+                                        </th>
                                       </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
+                                    </thead>
+                                    <tbody>
+                                      {category.subcategories.map((subcategory) => (
+                                        <tr key={subcategory.id}>
+                                          <td>
+                                            <div className="fw-semibold">{subcategory.name}</div>
+                                          </td>
+                                          <td className="text-center">
+                                            <span className="badge bg-primary bg-opacity-10 text-primary">
+                                              <i className="fas fa-box me-1"></i>
+                                              {subcategory.productCount || 0}
+                                            </span>
+                                          </td>
+                                          <td className="text-center">
+                                            <div className="d-flex justify-content-center">
+                                              <div className="btn-group" role="group">
+                                                <button
+                                                  className="btn btn-outline-secondary"
+                                                  onClick={() => handleEdit(subcategory)}
+                                                  title="Düzenle"
+                                                  style={{ minWidth: '45px', padding: '0.5rem 0.75rem' }}
+                                                >
+                                                  <i className="fas fa-edit"></i>
+                                                </button>
+                                                <button
+                                                  className="btn btn-outline-danger"
+                                                  onClick={() => handleDelete(subcategory.id)}
+                                                  disabled={(subcategory.productCount || 0) > 0}
+                                                  title={
+                                                    (subcategory.productCount || 0) > 0
+                                                      ? 'Ürün içeren kategoriler silinemez'
+                                                      : 'Sil'
+                                                  }
+                                                  style={{ minWidth: '45px', padding: '0.5rem 0.75rem' }}
+                                                >
+                                                  <i className="fas fa-trash"></i>
+                                                </button>
+                                              </div>
+                                            </div>
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
                               </div>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
+                            </td>
+                          </tr>
+                        )}
                     </React.Fragment>
                   );
                 })}
@@ -802,7 +902,9 @@ const Categories = () => {
                                 />
                               </div>
                               <div>
-                                <div className="fw-bold mb-1" style={{ fontSize: '1.05rem' }}>{category.name}</div>
+                                <div className="fw-bold mb-1" style={{ fontSize: '1.05rem' }}>
+                                  {category.name}
+                                </div>
                                 {category.totalSubcategories > 0 && (
                                   <small className="text-primary">
                                     <i className="fas fa-sitemap me-1"></i>
@@ -812,9 +914,11 @@ const Categories = () => {
                               </div>
                             </div>
                             {category.description && (
-                              <small className="text-muted d-block mb-2">
-                                {category.description.length > 60 ? `${category.description.substring(0, 60)}...` : category.description}
-                              </small>
+                              <ExpandableText
+                                text={category.description}
+                                lines={2}
+                                className="text-muted small d-block mb-2"
+                              />
                             )}
                           </div>
                           {category.totalSubcategories > 0 && (
@@ -883,8 +987,16 @@ const Categories = () => {
                             <button
                               className="btn btn-sm btn-outline-danger flex-fill"
                               onClick={() => handleDelete(category.id)}
-                              disabled={(category.totalProductCount ?? category.productCount) > 0 || category.totalSubcategories > 0}
-                              title={(category.totalProductCount ?? category.productCount) > 0 || category.totalSubcategories > 0 ? "Ürün veya alt kategori içeren kategoriler silinemez" : "Sil"}
+                              disabled={
+                                (category.totalProductCount ?? category.productCount) > 0 ||
+                                category.totalSubcategories > 0
+                              }
+                              title={
+                                (category.totalProductCount ?? category.productCount) > 0 ||
+                                category.totalSubcategories > 0
+                                  ? 'Ürün veya alt kategori içeren kategoriler silinemez'
+                                  : 'Sil'
+                              }
                             >
                               <i className="fas fa-trash"></i>
                             </button>
@@ -902,12 +1014,18 @@ const Categories = () => {
                         </div>
                         <div className="d-flex flex-column gap-2">
                           {category.subcategories.map((subcategory) => (
-                            <div key={subcategory.id} className="card border border-info bg-info bg-opacity-5">
+                            <div
+                              key={subcategory.id}
+                              className="card border border-info bg-info bg-opacity-5"
+                            >
                               <div className="card-body p-2">
                                 <div className="d-flex justify-content-between align-items-center">
                                   <div>
                                     <div className="fw-semibold small">{subcategory.name}</div>
-                                    <span className="badge bg-primary bg-opacity-10 text-primary" style={{ fontSize: '0.7rem' }}>
+                                    <span
+                                      className="badge bg-primary bg-opacity-10 text-primary"
+                                      style={{ fontSize: '0.7rem' }}
+                                    >
                                       <i className="fas fa-box me-1"></i>
                                       {subcategory.productCount || 0} ürün
                                     </span>
@@ -924,7 +1042,11 @@ const Categories = () => {
                                       className="btn btn-outline-danger btn-sm"
                                       onClick={() => handleDelete(subcategory.id)}
                                       disabled={(subcategory.productCount || 0) > 0}
-                                      title={(subcategory.productCount || 0) > 0 ? "Ürün içeren kategoriler silinemez" : "Sil"}
+                                      title={
+                                        (subcategory.productCount || 0) > 0
+                                          ? 'Ürün içeren kategoriler silinemez'
+                                          : 'Sil'
+                                      }
                                     >
                                       <i className="fas fa-trash"></i>
                                     </button>
@@ -958,14 +1080,8 @@ const Categories = () => {
           <div className="modal-dialog">
             <div className="modal-content">
               <div className="modal-header">
-                <h5 className="modal-title">
-                  {editingCategory ? 'Kategori Düzenle' : 'Yeni Kategori'}
-                </h5>
-                <button
-                  type="button"
-                  className="btn-close"
-                  onClick={() => setShowForm(false)}
-                ></button>
+                <h5 className="modal-title">{editingCategory ? 'Kategori Düzenle' : 'Yeni Kategori'}</h5>
+                <button type="button" className="btn-close" onClick={() => setShowForm(false)}></button>
               </div>
               <div className="modal-body">
                 <CategoryForm
@@ -1029,7 +1145,7 @@ const SubcategoryModal = ({ parentCategoryId, parentCategoryName, onSuccess, onC
   };
 
   const handleSubmit = async () => {
-    const validSubcategories = subcategories.filter(sub => sub.name.trim());
+    const validSubcategories = subcategories.filter((sub) => sub.name.trim());
     if (validSubcategories.length === 0) {
       onCancel();
       return;
@@ -1038,7 +1154,7 @@ const SubcategoryModal = ({ parentCategoryId, parentCategoryName, onSuccess, onC
     setLoading(true);
     try {
       await axios.post('/api/categories/batch', validSubcategories, {
-        params: { parentId: parentCategoryId }
+        params: { parentId: parentCategoryId },
       });
       onSuccess();
     } catch (error) {
@@ -1054,14 +1170,8 @@ const SubcategoryModal = ({ parentCategoryId, parentCategoryName, onSuccess, onC
       <div className="modal-dialog modal-lg">
         <div className="modal-content">
           <div className="modal-header">
-            <h5 className="modal-title">
-              "{parentCategoryName}" kategorisine alt kategoriler ekle
-            </h5>
-            <button
-              type="button"
-              className="btn-close"
-              onClick={onCancel}
-            ></button>
+            <h5 className="modal-title">"{parentCategoryName}" kategorisine alt kategoriler ekle</h5>
+            <button type="button" className="btn-close" onClick={onCancel}></button>
           </div>
           <div className="modal-body">
             <p>Bu ana kategoriye alt kategoriler eklemek için aşağıdaki formu doldurun.</p>
@@ -1100,30 +1210,16 @@ const SubcategoryModal = ({ parentCategoryId, parentCategoryName, onSuccess, onC
               </div>
             ))}
 
-            <button
-              type="button"
-              className="btn btn-outline-primary btn-sm mb-3"
-              onClick={addSubcategory}
-            >
+            <button type="button" className="btn btn-outline-primary btn-sm mb-3" onClick={addSubcategory}>
               <i className="fas fa-plus me-1"></i>
               Alt Kategori Ekle
             </button>
           </div>
           <div className="modal-footer">
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={onCancel}
-              disabled={loading}
-            >
+            <button type="button" className="btn btn-secondary" onClick={onCancel} disabled={loading}>
               İptal
             </button>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={handleSubmit}
-              disabled={loading}
-            >
+            <button type="button" className="btn btn-primary" onClick={handleSubmit} disabled={loading}>
               {loading ? (
                 <>
                   <span className="spinner-border spinner-border-sm me-2" role="status"></span>

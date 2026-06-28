@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import ProductForm from './ProductForm';
+import ExpandableText from './ExpandableText';
 import {
   extractPhoneDigits,
   formatPhoneForSubmit,
   formatPhoneInputValue,
   isPhoneComplete,
-  PHONE_PLACEHOLDER
+  PHONE_PLACEHOLDER,
 } from '../utils/phone';
 
 const INITIAL_VISIBLE_PRODUCTS = 12;
@@ -19,7 +20,7 @@ const buildItemFromProduct = (product) => ({
   quantity: '',
   minStockLevel: '',
   reservedQuantity: '0',
-  consignedQuantity: '0'
+  consignedQuantity: '0',
 });
 
 const StockForm = ({
@@ -30,7 +31,7 @@ const StockForm = ({
   onSubmit,
   onProductCreated,
   disableProductCreate = false,
-  mode = 'create'
+  mode = 'create',
 }) => {
   const [warehouseId, setWarehouseId] = useState('');
   const [items, setItems] = useState([]);
@@ -44,7 +45,7 @@ const StockForm = ({
     additionNote: null,
     customerName: null,
     customerPhone: null,
-    perItem: {}
+    perItem: {},
   });
   const [additionNote, setAdditionNote] = useState('');
   const [customerName, setCustomerName] = useState('');
@@ -76,18 +77,18 @@ const StockForm = ({
         setWarehouseStockQuantities({});
         return;
       }
-      
+
       try {
-        const productIds = localProducts.map(p => p.id);
+        const productIds = localProducts.map((p) => p.id);
         const response = await axios.post('/api/stocks/quantities-by-warehouse', {
           warehouseId: Number(warehouseId),
-          productIds
+          productIds,
         });
-        
+
         // Convert array response to map for quick lookup
         const quantitiesMap = {};
         if (Array.isArray(response.data)) {
-          response.data.forEach(item => {
+          response.data.forEach((item) => {
             if (item.productId) {
               quantitiesMap[item.productId] = item.quantity || 0;
             }
@@ -106,60 +107,48 @@ const StockForm = ({
   const filteredProducts = useMemo(() => {
     if (!productSearchTerm.trim()) return localProducts;
     const query = productSearchTerm.trim().toLocaleLowerCase('tr-TR');
-    return localProducts.filter(product => {
-      const haystack = [
-        product.name,
-        product.sku,
-        product.barcode,
-        product.brand?.name
-      ]
+    return localProducts.filter((product) => {
+      const haystack = [product.name, product.sku, product.barcode, product.brand?.name]
         .filter(Boolean)
-        .map(text => text.toLocaleLowerCase('tr-TR'));
-      return haystack.some(text => text.includes(query));
+        .map((text) => text.toLocaleLowerCase('tr-TR'));
+      return haystack.some((text) => text.includes(query));
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [products, productSearchTerm]);
 
   const productOptions = useMemo(() => filteredProducts.slice(0), [filteredProducts]);
   // Show all results when searching, otherwise apply pagination
-  const limitedProductOptions = useMemo(
-    () => {
-      if (productSearchTerm.trim()) {
-        // Show all results when searching
-        return productOptions;
-      }
-      // Apply pagination when there is no search
-      return productOptions.slice(0, visibleProductCount);
-    },
-    [productOptions, visibleProductCount, productSearchTerm]
-  );
+  const limitedProductOptions = useMemo(() => {
+    if (productSearchTerm.trim()) {
+      // Show all results when searching
+      return productOptions;
+    }
+    // Apply pagination when there is no search
+    return productOptions.slice(0, visibleProductCount);
+  }, [productOptions, visibleProductCount, productSearchTerm]);
   const hasMoreProducts = !productSearchTerm.trim() && productOptions.length > visibleProductCount;
 
   const selectedProductMap = useMemo(() => {
     const map = new Map();
-    items.forEach(item => map.set(String(item.productId), true));
+    items.forEach((item) => map.set(String(item.productId), true));
     return map;
   }, [items]);
 
   const filteredSelectedItems = useMemo(() => {
     const query = selectedSearchTerm.trim().toLocaleLowerCase('tr-TR');
     if (!query) return items;
-    return items.filter(item => {
+    return items.filter((item) => {
       const haystack = [item.name, item.sku, item.brand]
         .filter(Boolean)
-        .map(text => text.toLocaleLowerCase('tr-TR'));
-      return haystack.some(text => text.includes(query));
+        .map((text) => text.toLocaleLowerCase('tr-TR'));
+      return haystack.some((text) => text.includes(query));
     });
   }, [items, selectedSearchTerm]);
 
   const showToast = (message, type = 'success') => {
     const toast = document.createElement('div');
     const bgClass =
-      type === 'success'
-        ? 'text-bg-success'
-        : type === 'warning'
-          ? 'text-bg-warning'
-          : 'text-bg-danger';
+      type === 'success' ? 'text-bg-success' : type === 'warning' ? 'text-bg-warning' : 'text-bg-danger';
     const icon =
       type === 'success'
         ? 'fa-check-circle'
@@ -179,16 +168,19 @@ const StockForm = ({
       </div>
     `;
     document.body.appendChild(toast);
-    setTimeout(() => {
-      try {
-        toast.classList.remove('show');
-        setTimeout(() => {
-          try {
-            document.body.removeChild(toast);
-          } catch { }
-        }, 300);
-      } catch { }
-    }, type === 'success' ? 4000 : 7000);
+    setTimeout(
+      () => {
+        try {
+          toast.classList.remove('show');
+          setTimeout(() => {
+            try {
+              document.body.removeChild(toast);
+            } catch {}
+          }, 300);
+        } catch {}
+      },
+      type === 'success' ? 4000 : 7000
+    );
   };
 
   const handleProductCreateSuccess = async (created) => {
@@ -198,118 +190,117 @@ const StockForm = ({
       return;
     }
     const newProduct = Array.isArray(created) ? created[0] : created;
-    
+
     // Check if warehouse is selected
     if (!warehouseId) {
-      setErrors(prev => ({ ...prev, warehouseId: 'Önce depo seçiniz' }));
+      setErrors((prev) => ({ ...prev, warehouseId: 'Önce depo seçiniz' }));
       showToast('Ürün eklemek için önce depo seçmelisiniz', 'warning');
       return;
     }
-    
+
     // Fetch the complete product details from backend to ensure all fields are populated
     try {
       const response = await axios.get(`/api/products/${newProduct.id}`);
       const fullProduct = response.data;
-      
+
       // Add to the beginning of the list with full details
-      setLocalProducts(prev => [fullProduct, ...prev]);
-      
+      setLocalProducts((prev) => [fullProduct, ...prev]);
+
       // Fetch warehouse stock quantity for the new product
       if (warehouseId && fullProduct?.id) {
         try {
           const stockResponse = await axios.post('/api/stocks/quantities-by-warehouse', {
             warehouseId: Number(warehouseId),
-            productIds: [fullProduct.id]
+            productIds: [fullProduct.id],
           });
-          
+
           if (Array.isArray(stockResponse.data) && stockResponse.data.length > 0) {
             const qty = stockResponse.data[0].quantity || 0;
-            setWarehouseStockQuantities(prev => ({
+            setWarehouseStockQuantities((prev) => ({
               ...prev,
-              [fullProduct.id]: qty
+              [fullProduct.id]: qty,
             }));
           } else {
             // No stock record exists yet, set to 0
-            setWarehouseStockQuantities(prev => ({
+            setWarehouseStockQuantities((prev) => ({
               ...prev,
-              [fullProduct.id]: 0
+              [fullProduct.id]: 0,
             }));
           }
         } catch (stockError) {
           console.error('Error fetching stock quantity for new product:', stockError);
           // Default to 0 on error
-          setWarehouseStockQuantities(prev => ({
+          setWarehouseStockQuantities((prev) => ({
             ...prev,
-            [fullProduct.id]: 0
+            [fullProduct.id]: 0,
           }));
         }
       }
-      
+
       setShowProductModal(false);
-      
+
       // Clear search term so the new product is immediately visible
       setProductSearchTerm('');
-      
+
       // Notify parent component about new product
       if (onProductCreated) {
         onProductCreated(fullProduct);
       }
-      
+
       // Automatically add the product to selected items
       // Use the product directly instead of relying on state update
       const newItem = buildItemFromProduct(fullProduct);
-      setItems(prev => {
+      setItems((prev) => {
         // Check if already exists
-        if (prev.some(item => String(item.productId) === String(fullProduct.id))) {
+        if (prev.some((item) => String(item.productId) === String(fullProduct.id))) {
           return prev;
         }
         return [newItem, ...prev];
       });
-      setErrors(prev => ({ ...prev, items: null }));
-      
+      setErrors((prev) => ({ ...prev, items: null }));
+
       showToast('Ürün eklendi ve otomatik olarak seçildi!', 'success');
-      
     } catch (error) {
       console.error('Error fetching new product details:', error);
       // Fallback to using the created product as-is
-      setLocalProducts(prev => [newProduct, ...prev]);
+      setLocalProducts((prev) => [newProduct, ...prev]);
       setShowProductModal(false);
-      
+
       // Clear search term so the new product is immediately visible
       setProductSearchTerm('');
-      
+
       // Notify parent component about new product
       if (onProductCreated) {
         onProductCreated(newProduct);
       }
-      
+
       // Automatically add the product to selected items
       const newItem = buildItemFromProduct(newProduct);
-      setItems(prev => {
-        if (prev.some(item => String(item.productId) === String(newProduct.id))) {
+      setItems((prev) => {
+        if (prev.some((item) => String(item.productId) === String(newProduct.id))) {
           return prev;
         }
         return [newItem, ...prev];
       });
-      setErrors(prev => ({ ...prev, items: null }));
-      
+      setErrors((prev) => ({ ...prev, items: null }));
+
       showToast('Ürün eklendi ve otomatik olarak seçildi!', 'success');
     }
   };
 
   const selectedWarehouse = useMemo(() => {
-    return warehouses.find(w => String(w.id) === warehouseId);
+    return warehouses.find((w) => String(w.id) === warehouseId);
   }, [warehouses, warehouseId]);
 
   const isEmanetDepo = selectedWarehouse?.warehouseType === 'EMANET_DEPO';
 
   const clearFieldError = (field) => {
     if (!errors[field]) return;
-    setErrors(prev => ({ ...prev, [field]: null }));
+    setErrors((prev) => ({ ...prev, [field]: null }));
   };
 
   const clearItemFieldError = (productId, field) => {
-    setErrors(prev => {
+    setErrors((prev) => {
       if (!prev.perItem?.[productId]?.[field]) {
         return prev;
       }
@@ -348,33 +339,33 @@ const StockForm = ({
 
   const handleAddProduct = (productId) => {
     if (!warehouseId) {
-      setErrors(prev => ({ ...prev, warehouseId: 'Depo seçiniz' }));
+      setErrors((prev) => ({ ...prev, warehouseId: 'Depo seçiniz' }));
       return;
     }
-    const product = localProducts.find(p => String(p.id) === productId);
+    const product = localProducts.find((p) => String(p.id) === productId);
     if (!product) return;
-    setItems(prev => {
-      if (prev.some(item => String(item.productId) === productId)) {
+    setItems((prev) => {
+      if (prev.some((item) => String(item.productId) === productId)) {
         return prev;
       }
       return [buildItemFromProduct(product), ...prev];
     });
-    setErrors(prev => ({ ...prev, items: null }));
+    setErrors((prev) => ({ ...prev, items: null }));
   };
 
   const handleAddAllProducts = () => {
     if (!warehouseId) {
-      setErrors(prev => ({ ...prev, warehouseId: 'Depo seçiniz' }));
+      setErrors((prev) => ({ ...prev, warehouseId: 'Depo seçiniz' }));
       return;
     }
 
     if (productOptions.length === 0) return;
 
-    setItems(prev => {
-      const existing = new Set(prev.map(item => String(item.productId)));
+    setItems((prev) => {
+      const existing = new Set(prev.map((item) => String(item.productId)));
       const newItems = productOptions
-        .filter(product => !existing.has(String(product.id)))
-        .map(product => buildItemFromProduct(product));
+        .filter((product) => !existing.has(String(product.id)))
+        .map((product) => buildItemFromProduct(product));
 
       if (newItems.length === 0) {
         return prev;
@@ -382,17 +373,17 @@ const StockForm = ({
 
       return [...newItems, ...prev];
     });
-    setErrors(prev => ({ ...prev, items: null }));
+    setErrors((prev) => ({ ...prev, items: null }));
   };
 
   const handleClearSelectedItems = () => {
     setItems([]);
-    setErrors(prev => ({ ...prev, perItem: {}, items: null }));
+    setErrors((prev) => ({ ...prev, perItem: {}, items: null }));
   };
 
   const handleRemoveItem = (productId) => {
-    setItems(prev => prev.filter(item => String(item.productId) !== String(productId)));
-    setErrors(prev => {
+    setItems((prev) => prev.filter((item) => String(item.productId) !== String(productId)));
+    setErrors((prev) => {
       if (!prev.perItem?.[productId]) return prev;
       const nextPerItem = { ...prev.perItem };
       delete nextPerItem[productId];
@@ -401,12 +392,8 @@ const StockForm = ({
   };
 
   const updateItemField = (productId, field, value) => {
-    setItems(prev =>
-      prev.map(item =>
-        String(item.productId) === String(productId)
-          ? { ...item, [field]: value }
-          : item
-      )
+    setItems((prev) =>
+      prev.map((item) => (String(item.productId) === String(productId) ? { ...item, [field]: value } : item))
     );
     clearItemFieldError(productId, field);
   };
@@ -420,7 +407,14 @@ const StockForm = ({
   };
 
   const validateForm = () => {
-    const nextErrors = { general: null, warehouseId: null, items: null, customerName: null, customerPhone: null, perItem: {} };
+    const nextErrors = {
+      general: null,
+      warehouseId: null,
+      items: null,
+      customerName: null,
+      customerPhone: null,
+      perItem: {},
+    };
 
     if (!warehouseId) {
       nextErrors.warehouseId = 'Depo seçiniz';
@@ -442,7 +436,7 @@ const StockForm = ({
       nextErrors.customerPhone = 'Müşteri telefon numarası gereklidir';
     }
 
-    items.forEach(item => {
+    items.forEach((item) => {
       const itemErrors = {};
       const quantity = parseNumber(item.quantity);
       const minStockLevel = parseNumber(item.minStockLevel);
@@ -482,7 +476,7 @@ const StockForm = ({
     const note = additionNote?.trim() || null;
     const customer = isEmanetDepo && customerName?.trim() ? customerName.trim() : null;
     const phone = isEmanetDepo && customerPhone?.trim() ? formatPhoneForSubmit(customerPhone) : null;
-    return items.map(item => ({
+    return items.map((item) => ({
       product: { id: Number(item.productId) },
       warehouse: { id: Number(warehouseId) },
       quantity: Number(item.quantity),
@@ -491,7 +485,7 @@ const StockForm = ({
       consignedQuantity: item.consignedQuantity === '' ? 0 : Number(item.consignedQuantity),
       additionNote: note,
       customerName: customer,
-      customerPhone: phone
+      customerPhone: phone,
     }));
   };
 
@@ -512,11 +506,11 @@ const StockForm = ({
           additionNote,
           customerName,
           customerPhone,
-          items
+          items,
         });
         setFeedback({
           type: 'success',
-          message: 'Stok talebiniz oluşturuldu. Yönetici onayı bekleniyor.'
+          message: 'Stok talebiniz oluşturuldu. Yönetici onayı bekleniyor.',
         });
         setItems([]);
         setProductSearchTerm('');
@@ -531,7 +525,7 @@ const StockForm = ({
         const createdCount = Array.isArray(response.data) ? response.data.length : payload.length;
         setFeedback({
           type: 'success',
-          message: `${createdCount} stok kaydı işlendi.`
+          message: `${createdCount} stok kaydı işlendi.`,
         });
         setItems([]);
         setProductSearchTerm('');
@@ -548,15 +542,14 @@ const StockForm = ({
         error?.response?.data?.error ||
         (typeof error?.response?.data === 'string' ? error.response.data : null) ||
         'Stok kaydedilirken hata oluştu';
-      setErrors(prev => ({ ...prev, general: message }));
+      setErrors((prev) => ({ ...prev, general: message }));
       showToast(message, 'danger');
     } finally {
       setLoading(false);
     }
   };
 
-  const getItemError = (productId, field) =>
-    errors.perItem?.[productId]?.[field] || null;
+  const getItemError = (productId, field) => errors.perItem?.[productId]?.[field] || null;
 
   return (
     <form onSubmit={handleSubmit} className="stock-form">
@@ -570,8 +563,8 @@ const StockForm = ({
         <div className="alert alert-info d-flex align-items-start gap-2">
           <i className="fas fa-info-circle mt-1"></i>
           <div>
-            Stok giriş talebi oluşturuyorsunuz. Kayıtlar yöneticinin onayına
-            gönderilecek ve onaylandıktan sonra sisteme eklenecek.
+            Stok giriş talebi oluşturuyorsunuz. Kayıtlar yöneticinin onayına gönderilecek ve onaylandıktan
+            sonra sisteme eklenecek.
           </div>
         </div>
       )}
@@ -582,7 +575,11 @@ const StockForm = ({
             <div className="modal-content">
               <div className="modal-header">
                 <h5 className="modal-title">Yeni Ürün Ekle</h5>
-                <button type="button" className="btn-close" onClick={() => setShowProductModal(false)}></button>
+                <button
+                  type="button"
+                  className="btn-close"
+                  onClick={() => setShowProductModal(false)}
+                ></button>
               </div>
               <div className="modal-body">
                 <ProductForm
@@ -607,18 +604,14 @@ const StockForm = ({
             onChange={handleWarehouseChange}
           >
             <option value="">Depo seçiniz</option>
-            {warehouses.map(warehouse => (
+            {warehouses.map((warehouse) => (
               <option key={warehouse.id} value={warehouse.id}>
                 {warehouse.name} - {warehouse.location}
               </option>
             ))}
           </select>
-          {errors.warehouseId && (
-            <div className="invalid-feedback">{errors.warehouseId}</div>
-          )}
-          <small className="text-muted d-block mt-2">
-            Bu depoya ait yeni stok kayıtları oluşturulur.
-          </small>
+          {errors.warehouseId && <div className="invalid-feedback">{errors.warehouseId}</div>}
+          <small className="text-muted d-block mt-2">Bu depoya ait yeni stok kayıtları oluşturulur.</small>
         </div>
         <div className="col-lg-8">
           <div className="card border-0 shadow-sm h-100">
@@ -684,7 +677,9 @@ const StockForm = ({
               {errors.customerName ? (
                 <div className="invalid-feedback d-block">{errors.customerName}</div>
               ) : (
-                <small className="text-muted">Bu müşteri adı listede oluşturulan tüm stoklara işlenecek.</small>
+                <small className="text-muted">
+                  Bu müşteri adı listede oluşturulan tüm stoklara işlenecek.
+                </small>
               )}
               <small className="text-muted">{customerName.length}/255</small>
             </div>
@@ -697,7 +692,7 @@ const StockForm = ({
               <span className="input-group-text">+90</span>
               <input
                 type="tel"
-                className={`form-control ${errors.customerPhone ? 'is-invalid' : (customerPhone ? (isPhoneComplete(customerPhone) ? 'is-valid' : '') : '')}`}
+                className={`form-control ${errors.customerPhone ? 'is-invalid' : customerPhone ? (isPhoneComplete(customerPhone) ? 'is-valid' : '') : ''}`}
                 value={formatPhoneInputValue(customerPhone)}
                 onChange={handleCustomerPhoneChange}
                 placeholder={PHONE_PLACEHOLDER}
@@ -714,7 +709,9 @@ const StockForm = ({
                     <small className="text-muted">Telefon 10 haneli olmalıdır</small>
                   )}
                   {(!customerPhone || isPhoneComplete(customerPhone)) && (
-                    <small className="text-muted">Bu telefon numarası listede oluşturulan tüm stoklara işlenecek.</small>
+                    <small className="text-muted">
+                      Bu telefon numarası listede oluşturulan tüm stoklara işlenecek.
+                    </small>
                   )}
                 </>
               )}
@@ -732,15 +729,15 @@ const StockForm = ({
                 Ürün Seçimi
               </h5>
               <div className="d-flex flex-column flex-lg-row align-items-lg-center justify-content-lg-between gap-2">
-                <p className="text-muted small mb-0">
-                  Kartlara tıklayarak ürünleri listeye ekleyin.
-                </p>
+                <p className="text-muted small mb-0">Kartlara tıklayarak ürünleri listeye ekleyin.</p>
                 <button
                   type="button"
                   className="btn btn-outline-primary btn-sm"
                   onClick={() => setShowProductModal(true)}
                   disabled={disableProductCreate}
-                  title={disableProductCreate ? 'Ürün ekleme sadece yönetici tarafından yapılabilir.' : undefined}
+                  title={
+                    disableProductCreate ? 'Ürün ekleme sadece yönetici tarafından yapılabilir.' : undefined
+                  }
                 >
                   <i className="fas fa-plus me-2"></i>
                   Yeni Ürün Ekle
@@ -773,9 +770,7 @@ const StockForm = ({
               <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
                 <div className="d-flex small text-muted gap-3">
                   <span>{products.length} ürün</span>
-                  {productSearchTerm && (
-                    <span>{productOptions.length} sonuç</span>
-                  )}
+                  {productSearchTerm && <span>{productOptions.length} sonuç</span>}
                 </div>
                 <div className="d-flex gap-2">
                   <button
@@ -809,8 +804,14 @@ const StockForm = ({
               ) : (
                 <>
                   {/* Wide table view similar to transfer selection */}
-                  <div className="d-none d-md-block border rounded shadow-sm bg-white" style={{ maxHeight: '65vh', overflowY: 'auto', overflowX: 'hidden' }}>
-                    <table className="table table-hover table-sm mb-0" style={{ tableLayout: 'fixed', width: '100%' }}>
+                  <div
+                    className="d-none d-md-block border rounded shadow-sm bg-white"
+                    style={{ maxHeight: '65vh', overflowY: 'auto', overflowX: 'hidden' }}
+                  >
+                    <table
+                      className="table table-hover table-sm mb-0"
+                      style={{ tableLayout: 'fixed', width: '100%' }}
+                    >
                       <thead className="table-light">
                         <tr>
                           <th style={{ width: '40px' }}></th>
@@ -819,12 +820,14 @@ const StockForm = ({
                           <th style={{ width: '10%' }}>Marka</th>
                           <th style={{ width: '15%' }}>Kategori</th>
                           <th style={{ width: '10%' }}>Renk</th>
-                          <th style={{ width: '120px' }} className="text-center">Depodaki Miktar</th>
+                          <th style={{ width: '120px' }} className="text-center">
+                            Depodaki Miktar
+                          </th>
                           <th style={{ width: '18%' }}>Açıklama</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {limitedProductOptions.map(product => {
+                        {limitedProductOptions.map((product) => {
                           const productId = String(product.id);
                           const isSelected = selectedProductMap.has(productId);
                           const warehouseQty = warehouseStockQuantities[product.id] || 0;
@@ -839,12 +842,22 @@ const StockForm = ({
                                 {isSelected && <i className="fas fa-check text-success"></i>}
                               </td>
                               <td>
-                                <div className="fw-semibold" style={{ wordBreak: 'break-word', whiteSpace: 'normal' }}>
+                                <div
+                                  className="fw-semibold"
+                                  style={{ wordBreak: 'break-word', whiteSpace: 'normal' }}
+                                >
                                   {product.name}
                                 </div>
                               </td>
                               <td>
-                                <span className="badge text-bg-light border" style={{ wordBreak: 'break-all', whiteSpace: 'normal', display: 'inline-block' }}>
+                                <span
+                                  className="badge text-bg-light border"
+                                  style={{
+                                    wordBreak: 'break-all',
+                                    whiteSpace: 'normal',
+                                    display: 'inline-block',
+                                  }}
+                                >
                                   {product.sku}
                                 </span>
                               </td>
@@ -853,27 +866,48 @@ const StockForm = ({
                               </td>
                               <td>
                                 {product.category?.name ? (
-                                  <span className="badge bg-info bg-opacity-10 text-info border border-info" style={{ whiteSpace: 'normal', display: 'inline-block', wordBreak: 'break-word' }}>
-                                    {product.category.parentName ? `${product.category.parentName} > ` : ''}{product.category.name}
+                                  <span
+                                    className="badge bg-info bg-opacity-10 text-info border border-info"
+                                    style={{
+                                      whiteSpace: 'normal',
+                                      display: 'inline-block',
+                                      wordBreak: 'break-word',
+                                    }}
+                                  >
+                                    {product.category.parentName ? `${product.category.parentName} > ` : ''}
+                                    {product.category.name}
                                   </span>
-                                ) : '-'}
+                                ) : (
+                                  '-'
+                                )}
                               </td>
                               <td>
                                 {product.color?.name ? (
-                                  <span className="badge bg-light text-dark border" style={{ whiteSpace: 'normal', display: 'inline-block' }}>
+                                  <span
+                                    className="badge bg-light text-dark border"
+                                    style={{ whiteSpace: 'normal', display: 'inline-block' }}
+                                  >
                                     <i className="fas fa-palette me-1"></i>
                                     {product.color.name}
                                   </span>
-                                ) : '-'}
+                                ) : (
+                                  '-'
+                                )}
                               </td>
                               <td className="text-center">
-                                <span className={`badge ${warehouseQty > 0 ? 'bg-primary' : 'bg-secondary'} fs-6 px-3 py-2`}>
+                                <span
+                                  className={`badge ${warehouseQty > 0 ? 'bg-primary' : 'bg-secondary'} fs-6 px-3 py-2`}
+                                >
                                   <i className="fas fa-cubes me-1"></i>
                                   {warehouseQty}
                                 </span>
                               </td>
-                              <td className="text-muted small" style={{ wordBreak: 'break-word', whiteSpace: 'normal' }}>
-                                {product.description || '-'}
+                              <td className="text-muted small">
+                                {product.description ? (
+                                  <ExpandableText text={product.description} lines={2} />
+                                ) : (
+                                  '-'
+                                )}
                               </td>
                             </tr>
                           );
@@ -883,8 +917,11 @@ const StockForm = ({
                   </div>
 
                   {/* Mobile: stacked list */}
-                  <div className="d-md-none d-flex flex-column gap-2" style={{ maxHeight: '65vh', overflowY: 'auto' }}>
-                    {limitedProductOptions.map(product => {
+                  <div
+                    className="d-md-none d-flex flex-column gap-2"
+                    style={{ maxHeight: '65vh', overflowY: 'auto' }}
+                  >
+                    {limitedProductOptions.map((product) => {
                       const productId = String(product.id);
                       const isSelected = selectedProductMap.has(productId);
                       const warehouseQty = warehouseStockQuantities[product.id] || 0;
@@ -898,7 +935,9 @@ const StockForm = ({
                           <div className="card-body p-3">
                             <div className="d-flex justify-content-between align-items-start mb-2">
                               <div className="flex-grow-1" style={{ minWidth: 0 }}>
-                                <div className="fw-bold" style={{ wordBreak: 'break-word' }}>{product.name}</div>
+                                <div className="fw-bold" style={{ wordBreak: 'break-word' }}>
+                                  {product.name}
+                                </div>
                               </div>
                               <div className="ms-2 flex-shrink-0">
                                 {isSelected ? (
@@ -920,18 +959,24 @@ const StockForm = ({
                               </div>
                             </div>
                             <div className="d-flex flex-wrap gap-2 mb-2">
-                              <span className="badge bg-light text-dark border" style={{ wordBreak: 'break-all' }}>
-                                <i className="fas fa-barcode me-1"></i>{product.sku}
+                              <span
+                                className="badge bg-light text-dark border"
+                                style={{ wordBreak: 'break-all' }}
+                              >
+                                <i className="fas fa-barcode me-1"></i>
+                                {product.sku}
                               </span>
                               {product.brand?.name && (
                                 <span className="badge bg-light text-dark border">
-                                  <i className="fas fa-copyright me-1"></i>{product.brand.name}
+                                  <i className="fas fa-copyright me-1"></i>
+                                  {product.brand.name}
                                 </span>
                               )}
                               {product.category?.name && (
                                 <span className="badge bg-info bg-opacity-10 text-info border border-info">
                                   <i className="fas fa-tag me-1"></i>
-                                  {product.category.parentName ? `${product.category.parentName} > ` : ''}{product.category.name}
+                                  {product.category.parentName ? `${product.category.parentName} > ` : ''}
+                                  {product.category.name}
                                 </span>
                               )}
                               {product.color?.name && (
@@ -942,11 +987,17 @@ const StockForm = ({
                               )}
                             </div>
                             <div className="d-flex justify-content-between align-items-center">
-                              <div className="text-muted small" style={{ flex: 1, minWidth: 0, wordBreak: 'break-word' }}>
-                                {product.description || '-'}
+                              <div className="text-muted small" style={{ flex: 1, minWidth: 0 }}>
+                                {product.description ? (
+                                  <ExpandableText text={product.description} lines={2} />
+                                ) : (
+                                  '-'
+                                )}
                               </div>
                               <div className="ms-2 flex-shrink-0">
-                                <span className={`badge ${warehouseQty > 0 ? 'bg-primary' : 'bg-secondary'} fs-6 px-3 py-2`}>
+                                <span
+                                  className={`badge ${warehouseQty > 0 ? 'bg-primary' : 'bg-secondary'} fs-6 px-3 py-2`}
+                                >
                                   <i className="fas fa-cubes me-1"></i>
                                   {warehouseQty}
                                 </span>
@@ -962,9 +1013,7 @@ const StockForm = ({
                     <button
                       type="button"
                       className="btn btn-light btn-sm w-100 mt-2"
-                      onClick={() =>
-                        setVisibleProductCount(prev => prev + INITIAL_VISIBLE_PRODUCTS)
-                      }
+                      onClick={() => setVisibleProductCount((prev) => prev + INITIAL_VISIBLE_PRODUCTS)}
                     >
                       <i className="fas fa-chevron-down me-2"></i>
                       Daha fazla göster ({productOptions.length - limitedProductOptions.length} ürün)
@@ -1036,7 +1085,7 @@ const StockForm = ({
                 </div>
               ) : (
                 <div className="d-flex flex-column gap-3" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
-                  {filteredSelectedItems.map(item => (
+                  {filteredSelectedItems.map((item) => (
                     <div className="card border shadow-sm" key={item.productId}>
                       <div className="card-body">
                         <div className="d-flex justify-content-between align-items-start flex-wrap gap-2">
@@ -1064,12 +1113,11 @@ const StockForm = ({
                             <input
                               type="number"
                               min="1"
-                              className={`form-control form-control-sm ${getItemError(item.productId, 'quantity') ? 'is-invalid' : ''
-                                }`}
+                              className={`form-control form-control-sm ${
+                                getItemError(item.productId, 'quantity') ? 'is-invalid' : ''
+                              }`}
                               value={item.quantity}
-                              onChange={(e) =>
-                                updateItemField(item.productId, 'quantity', e.target.value)
-                              }
+                              onChange={(e) => updateItemField(item.productId, 'quantity', e.target.value)}
                             />
                             {getItemError(item.productId, 'quantity') && (
                               <div className="invalid-feedback">
@@ -1078,14 +1126,13 @@ const StockForm = ({
                             )}
                           </div>
                           <div className="col-md-3">
-                            <label className="form-label fw-semibold small text-muted">
-                              Min. Stok
-                            </label>
+                            <label className="form-label fw-semibold small text-muted">Min. Stok</label>
                             <input
                               type="number"
                               min="0"
-                              className={`form-control form-control-sm ${getItemError(item.productId, 'minStockLevel') ? 'is-invalid' : ''
-                                }`}
+                              className={`form-control form-control-sm ${
+                                getItemError(item.productId, 'minStockLevel') ? 'is-invalid' : ''
+                              }`}
                               placeholder="Opsiyonel"
                               value={item.minStockLevel}
                               onChange={(e) =>
@@ -1099,14 +1146,13 @@ const StockForm = ({
                             )}
                           </div>
                           <div className="col-md-3">
-                            <label className="form-label fw-semibold small text-muted">
-                              Rezerve
-                            </label>
+                            <label className="form-label fw-semibold small text-muted">Rezerve</label>
                             <input
                               type="number"
                               min="0"
-                              className={`form-control form-control-sm ${getItemError(item.productId, 'reservedQuantity') ? 'is-invalid' : ''
-                                }`}
+                              className={`form-control form-control-sm ${
+                                getItemError(item.productId, 'reservedQuantity') ? 'is-invalid' : ''
+                              }`}
                               placeholder="0"
                               value={item.reservedQuantity}
                               onChange={(e) =>
@@ -1120,14 +1166,13 @@ const StockForm = ({
                             )}
                           </div>
                           <div className="col-md-3">
-                            <label className="form-label fw-semibold small text-muted">
-                              Emanet
-                            </label>
+                            <label className="form-label fw-semibold small text-muted">Emanet</label>
                             <input
                               type="number"
                               min="0"
-                              className={`form-control form-control-sm ${getItemError(item.productId, 'consignedQuantity') ? 'is-invalid' : ''
-                                }`}
+                              className={`form-control form-control-sm ${
+                                getItemError(item.productId, 'consignedQuantity') ? 'is-invalid' : ''
+                              }`}
                               placeholder="0"
                               value={item.consignedQuantity}
                               onChange={(e) =>
@@ -1159,25 +1204,14 @@ const StockForm = ({
 
       <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-4">
         <div className="text-muted small">
-          {items.length > 0
-            ? `${items.length} ürün kayda hazır`
-            : 'Kayda hazır ürün bulunmuyor'}
+          {items.length > 0 ? `${items.length} ürün kayda hazır` : 'Kayda hazır ürün bulunmuyor'}
         </div>
         <div className="d-flex gap-2">
-          <button
-            type="button"
-            className="btn btn-outline-secondary"
-            onClick={onCancel}
-            disabled={loading}
-          >
+          <button type="button" className="btn btn-outline-secondary" onClick={onCancel} disabled={loading}>
             <i className="fas fa-times me-2"></i>
             Kapat
           </button>
-          <button
-            type="submit"
-            className="btn btn-primary"
-            disabled={loading || items.length === 0}
-          >
+          <button type="submit" className="btn btn-primary" disabled={loading || items.length === 0}>
             {loading ? (
               <>
                 <span

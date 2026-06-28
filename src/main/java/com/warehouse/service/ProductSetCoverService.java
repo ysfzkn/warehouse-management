@@ -42,4 +42,12 @@ public interface ProductSetCoverService {
      * Synchronous; the OpenAI call may take 30–90 seconds.
      */
     ProductImage generateCover(Long setId);
+
+    /**
+     * Build the cover locally by compositing the per-member input photos into one
+     * collage with Java 2D — no AI, no API key, no network — then store it as the
+     * set's primary gallery image exactly like {@link #generateCover(Long)}.
+     * Effectively instant and free; products keep their own backgrounds/lighting.
+     */
+    ProductImage generateCoverLocally(Long setId);
 }

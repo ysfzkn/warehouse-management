@@ -310,10 +310,26 @@ public class S3PhotoStorageService implements PhotoStorageService {
                 writer.dispose();
                 return baos.toByteArray();
             }
-            // Fallback: JPEG
-            ImageIO.write(img, "jpg", baos);
+            // Fallback: JPEG. The JPEG writer cannot encode an alpha channel — handed
+            // an ARGB image it writes an empty/garbage file (the failure that left
+            // transparent product photos blank). Flatten onto white first.
+            ImageIO.write(toOpaqueRgb(img), "jpg", baos);
             return baos.toByteArray();
         }
+    }
+
+    /** Composites any image with transparency onto a white opaque RGB canvas (JPEG-safe). */
+    private static BufferedImage toOpaqueRgb(BufferedImage img) {
+        if (img.getType() == BufferedImage.TYPE_INT_RGB && !img.getColorModel().hasAlpha()) {
+            return img;
+        }
+        BufferedImage rgb = new BufferedImage(img.getWidth(), img.getHeight(), BufferedImage.TYPE_INT_RGB);
+        var g = rgb.createGraphics();
+        g.setColor(java.awt.Color.WHITE);
+        g.fillRect(0, 0, img.getWidth(), img.getHeight());
+        g.drawImage(img, 0, 0, null);
+        g.dispose();
+        return rgb;
     }
 
     private BufferedImage resizeMax(BufferedImage src, int maxDim) {
@@ -324,6 +340,10 @@ public class S3PhotoStorageService implements PhotoStorageService {
         int nh = (int) (h * scale);
         BufferedImage scaled = new BufferedImage(nw, nh, BufferedImage.TYPE_INT_RGB);
         var g = scaled.createGraphics();
+        // TYPE_INT_RGB defaults to black; paint white so transparent source images
+        // don't get a black background once flattened.
+        g.setColor(java.awt.Color.WHITE);
+        g.fillRect(0, 0, nw, nh);
         g.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION,
                 java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR);
         g.drawImage(src, 0, 0, nw, nh, null);
