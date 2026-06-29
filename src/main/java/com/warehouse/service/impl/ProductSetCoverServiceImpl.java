@@ -349,6 +349,13 @@ public class ProductSetCoverServiceImpl implements ProductSetCoverService {
         // re-encodes downstream. PNG always round-trips (read AND write), guaranteeing
         // the tile preview renders and generation can re-read it.
         safe = transcodeWebpToPng(safe);
+        // If, after transcoding, the bytes still can't be decoded server-side (some
+        // crawled WebPs decode in browsers but not ImageIO), reject NOW — before we
+        // delete the existing input — so the UI converts it in the browser at pick
+        // time instead of storing an input that silently breaks at generation.
+        if (!isLocallyDecodable(safe.bytes())) {
+            throw new WarehouseManagementException(ErrorCode.AI_COVER_UNSUPPORTED_FORMAT);
+        }
 
         imageRepository.findByProductAndAiRoleAndMemberProductId(set, ROLE_COVER_INPUT, memberProductId)
                 .forEach(old -> productImageService.deleteImage(old.getId()));
