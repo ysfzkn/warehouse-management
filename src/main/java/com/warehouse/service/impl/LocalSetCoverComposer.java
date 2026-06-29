@@ -69,6 +69,13 @@ public class LocalSetCoverComposer {
         if (products.isEmpty()) {
             throw new IllegalStateException("No decodable product images to compose");
         }
+        // Never silently drop a member: if any input failed to decode, the collage
+        // would be missing a product. Callers validate decodability up front, so this
+        // is a guard against ever producing a partial cover without surfacing it.
+        if (products.size() != imageBytes.size()) {
+            throw new IllegalStateException(
+                    "Only " + products.size() + " of " + imageBytes.size() + " product images could be decoded");
+        }
 
         BufferedImage canvas = new BufferedImage(CANVAS, CANVAS, BufferedImage.TYPE_INT_RGB);
         Graphics2D g = canvas.createGraphics();
@@ -258,7 +265,9 @@ public class LocalSetCoverComposer {
         }
         try {
             return ImageIO.read(new ByteArrayInputStream(bytes));
-        } catch (IOException e) {
+        } catch (Exception e) {
+            // Catch RuntimeExceptions too: some WebP rasters throw ArrayIndexOutOfBounds
+            // ("Coordinate out of bounds!") rather than returning null.
             logger.warn("Skipping undecodable cover input ({} bytes): {}", bytes.length, e.getMessage());
             return null;
         }
