@@ -229,37 +229,56 @@ public class S3PhotoStorageService implements PhotoStorageService {
      */
     private StoredPhoto storeOptimized(String prefix, String originalFileName,
                                         String contentType, InputStream inputStream) {
+        byte[] original;
         try {
-            byte[] original = inputStream.readAllBytes();
-            BufferedImage img = ImageIO.read(new ByteArrayInputStream(original));
-            if (img == null) {
-                // Could not be parsed as an image (WebP/SVG/PDF etc. — Java ImageIO does
-                // not read WebP). Upload as-is; use the main file for the thumbnail
-                // (thumbnail_path is NOT NULL in the DB, and the frontend expects a thumb
-                // URL in all cases anyway, for fallback behavior).
-                String ext = inferExtension(originalFileName, contentType);
-                String key = prefix + "/" + shortUuid() + ext;
-                putObject(key, contentType, original, false);
-                return new StoredPhoto(key, key, key, contentType, original.length, null, null);
-                //                          ^^^ thumbnailPath = main key (same file)
-            }
-
-            String uuid = shortUuid();
-            String mainKey = prefix + "/" + uuid + ".webp";
-            String thumbKey = prefix + "/" + uuid + "_thumb.webp";
-
-            byte[] mainBytes = encodeWebp(img, 0.85f);
-            byte[] thumbBytes = encodeWebp(resizeMax(img, 400), 0.80f);
-
-            putObject(mainKey, "image/webp", mainBytes, false);
-            putObject(thumbKey, "image/webp", thumbBytes, false);
-
-            log.debug("S3 image stored: {} ({}KB main, {}KB thumb)",
-                    mainKey, mainBytes.length / 1024, thumbBytes.length / 1024);
-
-            return new StoredPhoto(uuid + ".webp", mainKey, thumbKey, "image/webp",
-                    mainBytes.length, img.getWidth(), img.getHeight());
+            original = inputStream.readAllBytes();
         } catch (IOException e) {
+            throw new RuntimeException("S3 image upload failed: " + e.getMessage(), e);
+        }
+
+        // Decode defensively: a corrupt/odd image can make ImageIO throw rather than
+        // return null. Treat any failure the same as "can't read" → store raw below.
+        BufferedImage img = null;
+        try {
+            img = ImageIO.read(new ByteArrayInputStream(original));
+        } catch (Exception e) {
+            log.warn("ImageIO could not read image ({}), storing raw: {}", originalFileName, e.getMessage());
+        }
+
+        if (img != null) {
+            try {
+                String uuid = shortUuid();
+                String mainKey = prefix + "/" + uuid + ".webp";
+                String thumbKey = prefix + "/" + uuid + "_thumb.webp";
+
+                byte[] mainBytes = encodeWebp(img, 0.85f);
+                byte[] thumbBytes = encodeWebp(resizeMax(img, 400), 0.80f);
+
+                putObject(mainKey, "image/webp", mainBytes, false);
+                putObject(thumbKey, "image/webp", thumbBytes, false);
+
+                log.debug("S3 image stored: {} ({}KB main, {}KB thumb)",
+                        mainKey, mainBytes.length / 1024, thumbBytes.length / 1024);
+
+                return new StoredPhoto(uuid + ".webp", mainKey, thumbKey, "image/webp",
+                        mainBytes.length, img.getWidth(), img.getHeight());
+            } catch (Exception e) {
+                // Some decoders (notably the TwelveMonkeys WebP reader) yield a raster
+                // that throws ArrayIndexOutOfBounds ("Coordinate out of bounds!") when
+                // re-drawn/re-encoded. The ORIGINAL bytes are a perfectly valid image,
+                // so fall back to storing them raw instead of failing the whole import.
+                log.warn("Image optimize failed for {}, storing raw: {}", originalFileName, e.toString());
+            }
+        }
+
+        // Raw upload fallback: unreadable, or optimize/encode failed. The original
+        // bytes render fine in browsers; thumbnail_path reuses the main key.
+        try {
+            String ext = inferExtension(originalFileName, contentType);
+            String key = prefix + "/" + shortUuid() + ext;
+            putObject(key, contentType, original, false);
+            return new StoredPhoto(key, key, key, contentType, original.length, null, null);
+        } catch (Exception e) {
             throw new RuntimeException("S3 image upload failed: " + e.getMessage(), e);
         }
     }
