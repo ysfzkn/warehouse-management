@@ -80,7 +80,11 @@ public class HostValidationFilter extends OncePerRequestFilter {
             response.getWriter().write("{\"error\":\"FORBIDDEN_HOST\"}");
             return;
         }
-        if (isStoreEndpoint && !allowedStoreHosts.isEmpty() && !matchesAny(host, allowedStoreHosts)) {
+        // Store endpoints serve PUBLIC data (settings, logo, catalog). The admin panel
+        // legitimately reads them for its own branding (logo, site name), so allow the
+        // admin host too — the XSS concern only runs the other way (store → admin).
+        if (isStoreEndpoint && !allowedStoreHosts.isEmpty()
+                && !matchesAny(host, allowedStoreHosts) && !matchesAny(host, allowedAdminHosts)) {
             log.warn("[HostValidation] Store endpoint cağrısı reddedildi: host={}, uri={}", host, uri);
             response.setStatus(HttpServletResponse.SC_FORBIDDEN);
             response.setContentType("application/json");
