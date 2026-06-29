@@ -21,8 +21,9 @@ FROM eclipse-temurin:21-jre-alpine
 
 WORKDIR /app
 
-# Install curl for Railway healthcheck
-RUN apk add --no-cache curl
+# curl: Railway healthcheck. libwebp-tools: provides `dwebp`, used as a fallback to
+# decode WebP images that the pure-Java reader can't (some crawled CDN WebPs).
+RUN apk add --no-cache curl libwebp-tools
 
 # Copy the built jar
 COPY --from=build /app/target/warehouse-management-*.jar app.jar

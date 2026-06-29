@@ -433,17 +433,68 @@ public class ProductSetCoverServiceImpl implements ProductSetCoverService {
         if (!"webp".equals(sniffImageFormat(img.bytes()))) {
             return img;
         }
+        String pngName = stripExtension(img.fileName()) + ".png";
         try {
             BufferedImage decoded = ImageIO.read(new ByteArrayInputStream(img.bytes()));
             if (decoded != null) {
                 ByteArrayOutputStream out = new ByteArrayOutputStream();
                 ImageIO.write(decoded, "png", out);
-                return new AiSafeImage(out.toByteArray(), "image/png", stripExtension(img.fileName()) + ".png");
+                return new AiSafeImage(out.toByteArray(), "image/png", pngName);
             }
-        } catch (IOException e) {
-            logger.warn("WebP→PNG transcode failed, keeping original bytes: {}", e.getMessage());
+        } catch (Exception e) {
+            logger.warn("WebP→PNG transcode via ImageIO failed: {}", e.getMessage());
+        }
+        // The pure-Java reader couldn't decode this WebP (some crawled CDN WebPs).
+        // Fall back to the `dwebp` CLI tool (libwebp-tools), which handles them.
+        byte[] viaTool = webpToPngViaDwebp(img.bytes());
+        if (viaTool != null) {
+            logger.info("WebP→PNG transcode succeeded via dwebp ({} bytes)", viaTool.length);
+            return new AiSafeImage(viaTool, "image/png", pngName);
         }
         return img;
+    }
+
+    /**
+     * Decodes WebP bytes to PNG using the {@code dwebp} command-line tool, a fallback
+     * for WebPs the in-JVM reader can't handle. Returns null if the tool is absent or
+     * fails (callers then fall back to their existing behavior). Pure subprocess — no
+     * JNI — so it works on the Alpine runtime where native ImageIO plugins can't load.
+     */
+    private byte[] webpToPngViaDwebp(byte[] webpBytes) {
+        java.nio.file.Path in = null;
+        java.nio.file.Path out = null;
+        try {
+            in = java.nio.file.Files.createTempFile("cover-in-", ".webp");
+            out = java.nio.file.Files.createTempFile("cover-out-", ".png");
+            java.nio.file.Files.write(in, webpBytes);
+            Process p = new ProcessBuilder("dwebp", in.toString(), "-o", out.toString())
+                    .redirectErrorStream(true)
+                    .start();
+            if (!p.waitFor(20, java.util.concurrent.TimeUnit.SECONDS)) {
+                p.destroyForcibly();
+                return null;
+            }
+            if (p.exitValue() != 0) {
+                return null;
+            }
+            byte[] png = java.nio.file.Files.readAllBytes(out);
+            return png.length > 0 ? png : null;
+        } catch (Exception e) {
+            logger.warn("dwebp WebP→PNG conversion unavailable/failed: {}", e.getMessage());
+            return null;
+        } finally {
+            deleteQuietly(in);
+            deleteQuietly(out);
+        }
+    }
+
+    private static void deleteQuietly(java.nio.file.Path path) {
+        if (path == null) return;
+        try {
+            java.nio.file.Files.deleteIfExists(path);
+        } catch (IOException ignored) {
+            // best-effort temp cleanup
+        }
     }
 
     /**
