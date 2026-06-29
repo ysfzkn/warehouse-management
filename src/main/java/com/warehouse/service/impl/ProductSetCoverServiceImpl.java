@@ -110,11 +110,17 @@ public class ProductSetCoverServiceImpl implements ProductSetCoverService {
             throw new WarehouseManagementException(ErrorCode.AI_COVER_IMAGE_NOT_OWNED);
         }
         // Copy bytes so the input survives even if the source product image is deleted.
-        byte[] bytes;
-        try (InputStream in = photoStorageService.openPhotoStream(source.getRelativePath())) {
-            bytes = in.readAllBytes();
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
+        byte[] bytes = readPhoto(source.getRelativePath());
+        // A transparent product photo stored by an older build can have a broken main
+        // file (alpha image the JPEG encoder couldn't write) while its thumbnail — which
+        // is flattened to RGB during resize — is fine. So if the main can't be decoded,
+        // fall back to the thumbnail so the pick still works.
+        if (!isLocallyDecodable(bytes) && source.getThumbnailPath() != null
+                && !source.getThumbnailPath().equals(source.getRelativePath())) {
+            byte[] thumb = readPhoto(source.getThumbnailPath());
+            if (isLocallyDecodable(thumb)) {
+                bytes = thumb;
+            }
         }
         return storeCoverInput(set, memberProductId, source.getFileName(), source.getContentType(), bytes);
     }
@@ -384,6 +390,15 @@ public class ProductSetCoverServiceImpl implements ProductSetCoverService {
 
     private byte[] readAll(InputStream in) {
         try {
+            return in.readAllBytes();
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    /** Reads a stored photo's bytes by its storage-relative path. */
+    private byte[] readPhoto(String relativePath) {
+        try (InputStream in = photoStorageService.openPhotoStream(relativePath)) {
             return in.readAllBytes();
         } catch (IOException e) {
             throw new UncheckedIOException(e);
