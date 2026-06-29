@@ -1125,6 +1125,11 @@ public class ProductImageCrawlerService {
         // Strip query string
         int q = lower.indexOf('?');
         String path = q >= 0 ? lower.substring(0, q) : lower;
+        // Vector/app assets are not raster product photos — never treat as candidates.
+        if (path.endsWith(".svg") || path.endsWith(".ico")) return false;
+        // Next.js app bundles its own static assets (logos/icons) under /_next/static/;
+        // those slip through the "/media/" heuristic, so exclude them explicitly.
+        if (lower.contains("/_next/")) return false;
         return path.endsWith(".jpg") || path.endsWith(".jpeg")
                 || path.endsWith(".png") || path.endsWith(".webp")
                 || path.endsWith(".avif") || path.endsWith(".gif")
