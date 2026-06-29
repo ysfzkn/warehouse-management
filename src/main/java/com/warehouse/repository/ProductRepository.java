@@ -264,6 +264,18 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
           AND (:brandId IS NULL OR b.id = :brandId)
           AND (:colorId IS NULL OR col.id = :colorId)
           AND (:productType IS NULL OR p.productType = :productType)
+        ORDER BY
+          CASE WHEN EXISTS (
+                 SELECT 1 FROM ProductImage pi
+                 WHERE pi.product = p AND pi.slot IS NULL
+                   AND (pi.aiRole IS NULL OR pi.aiRole <> 'COVER_INPUT')
+               ) THEN 0 ELSE 1 END,
+          CASE WHEN p.productType = com.warehouse.entity.ProductType.BUNDLE
+                    OR (SELECT COALESCE(SUM(COALESCE(s.quantity, 0)
+                                            - COALESCE(s.reservedQuantity, 0)
+                                            - COALESCE(s.consignedQuantity, 0)), 0)
+                        FROM Stock s WHERE s.product = p) > 0
+               THEN 0 ELSE 1 END
     """)
     @EntityGraph(value = Product.GRAPH_WITH_RELATIONS, type = EntityGraph.EntityGraphType.LOAD)
     Page<Product> findActiveByFilters(@Param("search") String search,
@@ -284,6 +296,18 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
           AND (:categoryId IS NULL OR c.id = :categoryId OR cp.id = :categoryId)
           AND (:brandIds IS NULL OR b.id IN :brandIds)
           AND (:colorIds IS NULL OR col.id IN :colorIds)
+        ORDER BY
+          CASE WHEN EXISTS (
+                 SELECT 1 FROM ProductImage pi
+                 WHERE pi.product = p AND pi.slot IS NULL
+                   AND (pi.aiRole IS NULL OR pi.aiRole <> 'COVER_INPUT')
+               ) THEN 0 ELSE 1 END,
+          CASE WHEN p.productType = com.warehouse.entity.ProductType.BUNDLE
+                    OR (SELECT COALESCE(SUM(COALESCE(s.quantity, 0)
+                                            - COALESCE(s.reservedQuantity, 0)
+                                            - COALESCE(s.consignedQuantity, 0)), 0)
+                        FROM Stock s WHERE s.product = p) > 0
+               THEN 0 ELSE 1 END
     """)
     @EntityGraph(value = Product.GRAPH_WITH_RELATIONS, type = EntityGraph.EntityGraphType.LOAD)
     Page<Product> findActiveByMultiFilters(@Param("search") String search,
