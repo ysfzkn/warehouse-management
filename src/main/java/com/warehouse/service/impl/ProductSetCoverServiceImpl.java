@@ -259,6 +259,14 @@ public class ProductSetCoverServiceImpl implements ProductSetCoverService {
             // Defensive re-check for inputs stored before format normalization existed.
             try {
                 AiSafeImage safe = normalizeForAi(bytes, input.getFileName());
+                // A WebP can pass the format sniff yet still be undecodable by ImageIO
+                // (some crawled WebPs). Such an input would be SILENTLY dropped by the
+                // local compositor → a collage missing that product, with no error.
+                // Reject it so the catch below names the member and the UI re-encodes
+                // it in the browser and retries.
+                if (!isLocallyDecodable(safe.bytes())) {
+                    throw new WarehouseManagementException(ErrorCode.AI_COVER_UNSUPPORTED_FORMAT);
+                }
                 payload.add(new OpenAiImageEditClient.ImageInput(
                         safe.bytes(), safe.contentType(), safe.fileName()));
             } catch (WarehouseManagementException e) {
@@ -379,6 +387,20 @@ public class ProductSetCoverServiceImpl implements ProductSetCoverService {
 
     /** Bytes guaranteed to be in a format the OpenAI Images API accepts. */
     private record AiSafeImage(byte[] bytes, String contentType, String fileName) {}
+
+    /**
+     * True when ImageIO can actually turn these bytes into a raster. The local
+     * compositor relies on this; a format that only passes a magic-byte sniff
+     * (e.g. an odd crawled WebP) but fails to decode would otherwise be dropped
+     * from the collage without a trace.
+     */
+    private static boolean isLocallyDecodable(byte[] bytes) {
+        try {
+            return ImageIO.read(new ByteArrayInputStream(bytes)) != null;
+        } catch (Exception e) {
+            return false;
+        }
+    }
 
     /**
      * Converts WebP bytes to PNG (PNG can be both read and written by ImageIO, WebP
