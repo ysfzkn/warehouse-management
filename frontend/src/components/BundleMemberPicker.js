@@ -38,10 +38,13 @@ const BundleMemberPicker = ({ members = [], onChange, excludeProductId }) => {
     const q = query.trim();
     if (q.length < 2) {
       setResults([]);
+      setLoading(false);
       return undefined;
     }
+    // Enter the loading state immediately (before the debounce) so the panel opens
+    // at full height with skeleton rows instead of popping open from a single line.
+    setLoading(true);
     debounceRef.current = setTimeout(async () => {
-      setLoading(true);
       try {
         const res = await axios.get('/api/products', {
           params: { search: q, size: 10, page: 0, productType: 'SIMPLE', sortBy: 'name', sortDir: 'asc' },
@@ -170,9 +173,10 @@ const BundleMemberPicker = ({ members = [], onChange, excludeProductId }) => {
               className="position-absolute w-100 bg-white border rounded-3 shadow-lg overflow-hidden"
               style={{ zIndex: 1056, top: 'calc(100% + 6px)' }}
             >
-              {/* Loading bar overlays the top edge (absolute) so it never nudges the
-                  rows — the results stay put during a refetch instead of flickering. */}
-              {loading && (
+              {/* During a REFETCH (old results still shown) a slim top bar signals
+                  loading without nudging the rows. The first search uses skeletons
+                  below instead, so the panel never pops open from a single line. */}
+              {loading && visible.length > 0 && (
                 <div
                   className="progress position-absolute top-0 start-0 end-0"
                   style={{ height: 2, borderRadius: 0, zIndex: 2 }}
@@ -183,16 +187,26 @@ const BundleMemberPicker = ({ members = [], onChange, excludeProductId }) => {
               {/* Fixed row height (56) × 5 rows + container borders → whole rows only,
                   never a half-cut item at the bottom. */}
               <div ref={listRef} style={{ maxHeight: 282, overflowY: 'auto' }}>
-                {visible.length === 0 ? (
+                {loading && visible.length === 0 ? (
+                  // Skeleton rows: open at a stable height instead of growing on load.
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <div
+                      key={`skeleton-${i}`}
+                      className="d-flex align-items-center justify-content-between px-3"
+                      style={{ height: 56, borderBottom: i < 4 ? '1px solid #f1f3f5' : undefined }}
+                    >
+                      <span className="flex-grow-1 me-3 placeholder-glow">
+                        <span className="placeholder col-6 rounded d-block" style={{ height: 12 }} />
+                        <span className="placeholder col-3 rounded d-block mt-2" style={{ height: 9 }} />
+                      </span>
+                      <span className="placeholder-glow">
+                        <span className="placeholder rounded d-block" style={{ height: 12, width: 68 }} />
+                      </span>
+                    </div>
+                  ))
+                ) : visible.length === 0 ? (
                   <div className="d-flex align-items-center text-muted small px-3" style={{ height: 56 }}>
-                    {loading ? (
-                      <>
-                        <span className="spinner-border spinner-border-sm me-2" />
-                        Aranıyor...
-                      </>
-                    ) : (
-                      'Sonuç bulunamadı.'
-                    )}
+                    Sonuç bulunamadı.
                   </div>
                 ) : (
                   visible.map((p, idx) => {
