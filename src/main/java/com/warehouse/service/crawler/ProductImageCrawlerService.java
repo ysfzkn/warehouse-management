@@ -124,53 +124,135 @@ public class ProductImageCrawlerService {
     public CrawlPreview preview(String pageUrl) {
         validateUrl(pageUrl);
         long t0 = System.currentTimeMillis();
-        try {
-            Document doc = Jsoup.connect(pageUrl)
-                    .userAgent(USER_AGENT)
-                    .timeout(FETCH_TIMEOUT_MS)
-                    .followRedirects(true)
-                    .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-                    .header("Accept-Language", "tr-TR,tr;q=0.9,en;q=0.8")
-                    .get();
+        Document doc = fetchDocument(pageUrl);
 
-            String title = firstNonBlank(
-                    doc.select("meta[property=og:title]").attr("content"),
-                    doc.title());
-
-            List<String> images = extractImageUrls(doc, pageUrl);
-
-            // Description + shortDescription + specs + brand
-            String description = extractDescription(doc);
-            String shortDescription = extractShortDescription(doc, description);
-            // Grouped specs first (sections preserved, e.g. BSH "Genel özellikler" /
-            // "Boyutlar" / "Soğutucu bölümü"); the flat map is derived from them so
-            // both shapes stay consistent. Flat extraction remains the fallback.
-            List<SpecGroup> specGroups = extractSpecGroups(doc);
-            java.util.Map<String, String> specs;
-            if (!specGroups.isEmpty()) {
-                specs = new java.util.LinkedHashMap<>();
-                for (SpecGroup g : specGroups) {
-                    for (SpecItem it : g.items()) specs.putIfAbsent(it.label(), it.value());
-                }
-            } else {
-                specs = extractSpecs(doc);
+        // Each field is extracted defensively: a flaky description/spec parser for one
+        // site must never sink the whole preview — above all, the IMAGES (the point of
+        // this feature) must still come through.
+        String title = safeExtract(() -> firstNonBlank(
+                doc.select("meta[property=og:title]").attr("content"), doc.title()), "", "title");
+        List<String> images = safeExtract(() -> extractImageUrls(doc, pageUrl),
+                java.util.List.of(), "images");
+        String description = safeExtract(() -> extractDescription(doc), null, "description");
+        String shortDescription = safeExtract(() -> extractShortDescription(doc, description),
+                null, "shortDescription");
+        // Grouped specs first (sections preserved, e.g. BSH "Genel özellikler" / "Boyutlar");
+        // the flat map is derived from them. Flat extraction is the fallback.
+        List<SpecGroup> specGroups = safeExtract(() -> extractSpecGroups(doc),
+                java.util.List.of(), "specGroups");
+        java.util.Map<String, String> specs;
+        if (!specGroups.isEmpty()) {
+            java.util.Map<String, String> derived = new java.util.LinkedHashMap<>();
+            for (SpecGroup g : specGroups) {
+                for (SpecItem it : g.items()) derived.putIfAbsent(it.label(), it.value());
             }
-            String brand = extractBrand(doc);
+            specs = derived;
+        } else {
+            specs = safeExtract(() -> extractSpecs(doc), java.util.Map.of(), "specs");
+        }
+        String brand = safeExtract(() -> extractBrand(doc), null, "brand");
 
-            long ms = System.currentTimeMillis() - t0;
-            log.info("[Crawler] preview {} → {} images, desc={} chars, specs={} in {} groups ({}ms)",
-                    pageUrl, images.size(),
-                    description != null ? description.length() : 0,
-                    specs.size(), specGroups.size(), ms);
-            return new CrawlPreview(pageUrl, title.trim(), images,
-                    description, shortDescription, specs, specGroups, brand, null);
-        } catch (org.jsoup.HttpStatusException e) {
-            throw new CrawlException("Sayfa erişilemez (" + e.getStatusCode() + ")", e);
-        } catch (java.net.SocketTimeoutException e) {
-            throw new CrawlException("Sayfa yanıt vermedi (timeout). Tekrar deneyin.", e);
+        long ms = System.currentTimeMillis() - t0;
+        log.info("[Crawler] preview {} → {} images, desc={} chars, specs={} in {} groups ({}ms)",
+                pageUrl, images.size(),
+                description != null ? description.length() : 0,
+                specs.size(), specGroups.size(), ms);
+        return new CrawlPreview(pageUrl, title.trim(), images,
+                description, shortDescription, specs, specGroups, brand, null);
+    }
+
+    /**
+     * Runs one extraction step, returning a fallback (and logging) if it throws — so a
+     * single fragile field parser can't crash the whole crawl request.
+     */
+    private <T> T safeExtract(java.util.function.Supplier<T> extractor, T fallback, String field) {
+        try {
+            T value = extractor.get();
+            return value != null ? value : fallback;
         } catch (Exception e) {
-            log.warn("[Crawler] preview hatası: {}", e.getMessage());
-            throw new CrawlException("Sayfa çekilemedi: " + e.getMessage(), e);
+            log.warn("[Crawler] '{}' çıkarımı atlandı: {}", field, e.toString());
+            return fallback;
+        }
+    }
+
+    /**
+     * Fetches the page with explicit HTTP-status handling and a single retry for
+     * transient upstream failures (nginx "currently unavailable" 5xx, timeouts).
+     * Turns error responses into short, actionable Turkish messages instead of
+     * dumping the raw error HTML back to the admin.
+     */
+    private Document fetchDocument(String pageUrl) {
+        final int maxAttempts = 2;
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                org.jsoup.Connection.Response resp = Jsoup.connect(pageUrl)
+                        .userAgent(USER_AGENT)
+                        .timeout(FETCH_TIMEOUT_MS)
+                        .followRedirects(true)
+                        .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+                        .header("Accept-Language", "tr-TR,tr;q=0.9,en;q=0.8")
+                        .ignoreHttpErrors(true) // inspect the status ourselves instead of throwing raw
+                        .execute();
+                int code = resp.statusCode();
+                if (code == 404 || code == 410) {
+                    throw new CrawlException("Ürün sayfası bulunamadı (" + code
+                            + "). URL eksik veya hatalı olabilir — tarayıcıdan açıp tam adresi kopyalayın.");
+                }
+                if (code == 429) {
+                    throw new CrawlException("Site çok fazla istek aldı (429). Lütfen biraz bekleyip tekrar deneyin.");
+                }
+                if (code >= 500) {
+                    if (attempt < maxAttempts) { sleepQuietly(1200); continue; }
+                    throw new CrawlException("Site şu an yanıt vermiyor (" + code
+                            + "). Birkaç saniye sonra tekrar deneyin.");
+                }
+                if (code < 200 || code >= 300) {
+                    throw new CrawlException("Sayfa erişilemez (" + code + ").");
+                }
+                Document doc = resp.parse();
+                if (looksLikeErrorPage(doc)) {
+                    if (attempt < maxAttempts) { sleepQuietly(1200); continue; }
+                    throw new CrawlException("Sayfa bir hata döndürdü. Ürün geçici olarak erişilemiyor olabilir "
+                            + "veya URL geçersiz — kontrol edip tekrar deneyin.");
+                }
+                return doc;
+            } catch (java.net.SocketTimeoutException e) {
+                if (attempt < maxAttempts) { sleepQuietly(1000); continue; }
+                throw new CrawlException("Sayfa yanıt vermedi (zaman aşımı). Tekrar deneyin.", e);
+            } catch (CrawlException e) {
+                throw e;
+            } catch (java.io.IOException e) {
+                if (attempt < maxAttempts) { sleepQuietly(1000); continue; }
+                throw new CrawlException("Sayfaya bağlanılamadı. Bağlantıyı kontrol edip tekrar deneyin.", e);
+            }
+        }
+        throw new CrawlException("Sayfa çekilemedi."); // unreachable; keeps the compiler happy
+    }
+
+    /** Heuristic: a server/error placeholder page rather than a real product page. */
+    private boolean looksLikeErrorPage(Document doc) {
+        if (doc == null) return true;
+        String title = doc.title() == null ? "" : doc.title().trim().toLowerCase();
+        if (title.equals("error") || title.startsWith("error ")
+                || title.startsWith("error-") || title.startsWith("error—")) {
+            return true;
+        }
+        if (!doc.select("html#__next_error__, #__next_error__").isEmpty()) {
+            return true;
+        }
+        String body = doc.body() != null ? doc.body().text().toLowerCase() : "";
+        if (body.isEmpty()) return true;
+        boolean nginxError = body.contains("an error occurred")
+                && (body.contains("nginx") || body.contains("try again later"));
+        boolean unavailable = body.contains("currently unavailable") && body.contains("try again later");
+        return nginxError || unavailable;
+    }
+
+    private void sleepQuietly(long ms) {
+        try {
+            Thread.sleep(ms);
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
         }
     }
 
