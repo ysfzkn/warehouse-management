@@ -169,7 +169,9 @@ public class ProductImageCrawlerService {
         try {
             T value = extractor.get();
             return value != null ? value : fallback;
-        } catch (Exception e) {
+        } catch (Exception | StackOverflowError e) {
+            // StackOverflowError (not an Exception) can come from a pathological regex
+            // on a specific site's markup — catch it here so one field can't 500 the crawl.
             log.warn("[Crawler] '{}' çıkarımı atlandı: {}", field, e.toString());
             return fallback;
         }
@@ -371,9 +373,13 @@ public class ProductImageCrawlerService {
             for (var el : doc.select("script[type=application/ld+json]")) {
                 String json = el.data();
                 if (json == null || json.isBlank()) continue;
-                // Simple regex — instead of risky full JSON parsing (\n etc.), search for description "..."
+                // Match a JSON string body safely: an escape sequence (\\.) OR any char
+                // that is NOT a quote or backslash. The two alternatives are mutually
+                // exclusive, so this can't catastrophically backtrack. (The old pattern
+                // (?:\\"|[^"])* let a backslash match either branch → ReDoS/StackOverflow
+                // on long escaped descriptions like fakir.com.tr's.)
                 java.util.regex.Matcher m = java.util.regex.Pattern.compile(
-                        "\"description\"\\s*:\\s*\"((?:\\\\\"|[^\"])*)\"")
+                        "\"description\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\"", java.util.regex.Pattern.DOTALL)
                         .matcher(json);
                 if (m.find()) {
                     String s = m.group(1)
