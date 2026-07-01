@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import axios from 'axios';
 
 /**
@@ -21,13 +22,41 @@ const BundleMemberPicker = ({ members = [], onChange, excludeProductId }) => {
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [rect, setRect] = useState(null); // fixed-position box for the portaled panel
   const debounceRef = useRef(null);
   const boxRef = useRef(null);
+  const inputWrapRef = useRef(null);
+  const dropdownRef = useRef(null);
   const listRef = useRef(null);
+
+  const isPanelOpen = open && query.trim().length >= 2;
+
+  // Measure the input so the portaled panel can sit right under it (fixed to the
+  // viewport → always above the modal, never clipped by any ancestor's overflow).
+  const updateRect = useCallback(() => {
+    const el = inputWrapRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    setRect({ left: r.left, top: r.bottom + 6, width: r.width });
+  }, []);
+
+  useEffect(() => {
+    if (!isPanelOpen) return undefined;
+    updateRect();
+    // Keep the panel glued to the input while the modal scrolls or the window resizes.
+    window.addEventListener('scroll', updateRect, true);
+    window.addEventListener('resize', updateRect);
+    return () => {
+      window.removeEventListener('scroll', updateRect, true);
+      window.removeEventListener('resize', updateRect);
+    };
+  }, [isPanelOpen, updateRect]);
 
   useEffect(() => {
     const onDocClick = (e) => {
-      if (boxRef.current && !boxRef.current.contains(e.target)) setOpen(false);
+      const inBox = boxRef.current && boxRef.current.contains(e.target);
+      const inDrop = dropdownRef.current && dropdownRef.current.contains(e.target);
+      if (!inBox && !inDrop) setOpen(false);
     };
     document.addEventListener('mousedown', onDocClick);
     return () => document.removeEventListener('mousedown', onDocClick);
@@ -144,8 +173,8 @@ const BundleMemberPicker = ({ members = [], onChange, excludeProductId }) => {
         </p>
 
         {/* Search */}
-        <div className="position-relative mb-3" ref={boxRef}>
-          <div className="input-group">
+        <div className="mb-3" ref={boxRef}>
+          <div className="input-group" ref={inputWrapRef}>
             <span className="input-group-text bg-transparent">
               <i className="fas fa-search text-secondary" />
             </span>
@@ -156,7 +185,7 @@ const BundleMemberPicker = ({ members = [], onChange, excludeProductId }) => {
               value={query}
               role="combobox"
               aria-controls="bundle-member-results"
-              aria-expanded={open && query.trim().length >= 2}
+              aria-expanded={isPanelOpen}
               aria-autocomplete="list"
               onChange={(e) => {
                 setQuery(e.target.value);
@@ -166,89 +195,102 @@ const BundleMemberPicker = ({ members = [], onChange, excludeProductId }) => {
               onKeyDown={onSearchKeyDown}
             />
           </div>
-          {open && query.trim().length >= 2 && (
-            <div
-              id="bundle-member-results"
-              role="listbox"
-              className="position-absolute w-100 bg-white border rounded-3 shadow-lg overflow-hidden"
-              style={{ zIndex: 1056, top: 'calc(100% + 6px)' }}
-            >
-              {/* During a REFETCH (old results still shown) a slim top bar signals
+          {isPanelOpen &&
+            rect &&
+            createPortal(
+              <div
+                ref={dropdownRef}
+                id="bundle-member-results"
+                role="listbox"
+                className="bg-white border rounded-3 shadow-lg overflow-hidden"
+                style={{
+                  position: 'fixed',
+                  left: rect.left,
+                  top: rect.top,
+                  width: rect.width,
+                  zIndex: 3050, // above the modal (1055) and its backdrop
+                }}
+              >
+                {/* During a REFETCH (old results still shown) a slim top bar signals
                   loading without nudging the rows. The first search uses skeletons
                   below instead, so the panel never pops open from a single line. */}
-              {loading && visible.length > 0 && (
-                <div
-                  className="progress position-absolute top-0 start-0 end-0"
-                  style={{ height: 2, borderRadius: 0, zIndex: 2 }}
-                >
-                  <div className="progress-bar progress-bar-striped progress-bar-animated w-100" />
-                </div>
-              )}
-              {/* Fixed row height (56) × 5 rows + container borders → whole rows only,
-                  never a half-cut item at the bottom. */}
-              <div ref={listRef} style={{ maxHeight: 282, overflowY: 'auto' }}>
-                {loading && visible.length === 0 ? (
-                  // Skeleton rows: open at a stable height instead of growing on load.
-                  Array.from({ length: 5 }).map((_, i) => (
-                    <div
-                      key={`skeleton-${i}`}
-                      className="d-flex align-items-center justify-content-between px-3"
-                      style={{ height: 56, borderBottom: i < 4 ? '1px solid #f1f3f5' : undefined }}
-                    >
-                      <span className="flex-grow-1 me-3 placeholder-glow">
-                        <span className="placeholder col-6 rounded d-block" style={{ height: 12 }} />
-                        <span className="placeholder col-3 rounded d-block mt-2" style={{ height: 9 }} />
-                      </span>
-                      <span className="placeholder-glow">
-                        <span className="placeholder rounded d-block" style={{ height: 12, width: 68 }} />
-                      </span>
-                    </div>
-                  ))
-                ) : visible.length === 0 ? (
-                  <div className="d-flex align-items-center text-muted small px-3" style={{ height: 56 }}>
-                    Sonuç bulunamadı.
+                {loading && visible.length > 0 && (
+                  <div
+                    className="progress position-absolute top-0 start-0 end-0"
+                    style={{ height: 2, borderRadius: 0, zIndex: 2 }}
+                  >
+                    <div className="progress-bar progress-bar-striped progress-bar-animated w-100" />
                   </div>
-                ) : (
-                  visible.map((p, idx) => {
-                    const active = idx === activeIndex;
-                    return (
-                      <button
-                        key={p.id}
-                        type="button"
-                        role="option"
-                        aria-selected={active}
-                        data-idx={idx}
-                        className="w-100 d-flex justify-content-between align-items-center gap-3 text-start border-0 bg-transparent px-3"
-                        style={{
-                          height: 56,
-                          cursor: 'pointer',
-                          // Subtle light-blue highlight with a left accent — always
-                          // dark text, so it can never wash out to white-on-white
-                          // (a store theme variable was doing that before).
-                          background: active ? '#eef4ff' : undefined,
-                          boxShadow: active ? 'inset 3px 0 0 #2563eb' : undefined,
-                          borderBottom: idx < visible.length - 1 ? '1px solid #f1f3f5' : undefined,
-                          transition: 'background-color 120ms ease',
-                        }}
-                        onMouseEnter={() => setActiveIndex(idx)}
-                        onClick={() => addMember(p)}
-                      >
-                        <span className="min-w-0 flex-grow-1">
-                          <span className="d-block fw-semibold text-truncate text-dark">{p.name}</span>
-                          <small className="text-muted" style={{ fontSize: 12 }}>
-                            SKU: {p.sku}
-                          </small>
-                        </span>
-                        <span className="fw-bold flex-shrink-0 text-primary" style={{ whiteSpace: 'nowrap' }}>
-                          {fmt(effective(p))}
-                        </span>
-                      </button>
-                    );
-                  })
                 )}
-              </div>
-            </div>
-          )}
+                {/* Fixed row height (56) × 5 rows + container borders → whole rows only,
+                  never a half-cut item at the bottom. */}
+                <div ref={listRef} style={{ maxHeight: 282, overflowY: 'auto' }}>
+                  {loading && visible.length === 0 ? (
+                    // Skeleton rows: open at a stable height instead of growing on load.
+                    Array.from({ length: 5 }).map((_, i) => (
+                      <div
+                        key={`skeleton-${i}`}
+                        className="d-flex align-items-center justify-content-between px-3"
+                        style={{ height: 56, borderBottom: i < 4 ? '1px solid #f1f3f5' : undefined }}
+                      >
+                        <span className="flex-grow-1 me-3 placeholder-glow">
+                          <span className="placeholder col-6 rounded d-block" style={{ height: 12 }} />
+                          <span className="placeholder col-3 rounded d-block mt-2" style={{ height: 9 }} />
+                        </span>
+                        <span className="placeholder-glow">
+                          <span className="placeholder rounded d-block" style={{ height: 12, width: 68 }} />
+                        </span>
+                      </div>
+                    ))
+                  ) : visible.length === 0 ? (
+                    <div className="d-flex align-items-center text-muted small px-3" style={{ height: 56 }}>
+                      Sonuç bulunamadı.
+                    </div>
+                  ) : (
+                    visible.map((p, idx) => {
+                      const active = idx === activeIndex;
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          role="option"
+                          aria-selected={active}
+                          data-idx={idx}
+                          className="w-100 d-flex justify-content-between align-items-center gap-3 text-start border-0 bg-transparent px-3"
+                          style={{
+                            height: 56,
+                            cursor: 'pointer',
+                            // Subtle light-blue highlight with a left accent — always
+                            // dark text, so it can never wash out to white-on-white
+                            // (a store theme variable was doing that before).
+                            background: active ? '#eef4ff' : undefined,
+                            boxShadow: active ? 'inset 3px 0 0 #2563eb' : undefined,
+                            borderBottom: idx < visible.length - 1 ? '1px solid #f1f3f5' : undefined,
+                            transition: 'background-color 120ms ease',
+                          }}
+                          onMouseEnter={() => setActiveIndex(idx)}
+                          onClick={() => addMember(p)}
+                        >
+                          <span className="min-w-0 flex-grow-1">
+                            <span className="d-block fw-semibold text-truncate text-dark">{p.name}</span>
+                            <small className="text-muted" style={{ fontSize: 12 }}>
+                              SKU: {p.sku}
+                            </small>
+                          </span>
+                          <span
+                            className="fw-bold flex-shrink-0 text-primary"
+                            style={{ whiteSpace: 'nowrap' }}
+                          >
+                            {fmt(effective(p))}
+                          </span>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </div>,
+              document.body
+            )}
         </div>
 
         {/* Selected members */}
