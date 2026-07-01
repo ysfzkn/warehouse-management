@@ -208,7 +208,11 @@ const BundleMemberPicker = ({ members = [], onChange, excludeProductId }) => {
                         style={{
                           height: 56,
                           cursor: 'pointer',
-                          background: active ? 'var(--store-primary, #2563eb)' : undefined,
+                          // Subtle light-blue highlight with a left accent — always
+                          // dark text, so it can never wash out to white-on-white
+                          // (a store theme variable was doing that before).
+                          background: active ? '#eef4ff' : undefined,
+                          boxShadow: active ? 'inset 3px 0 0 #2563eb' : undefined,
                           borderBottom: idx < visible.length - 1 ? '1px solid #f1f3f5' : undefined,
                           transition: 'background-color 120ms ease',
                         }}
@@ -216,19 +220,12 @@ const BundleMemberPicker = ({ members = [], onChange, excludeProductId }) => {
                         onClick={() => addMember(p)}
                       >
                         <span className="min-w-0 flex-grow-1">
-                          <span
-                            className={`d-block fw-semibold text-truncate ${active ? 'text-white' : 'text-dark'}`}
-                          >
-                            {p.name}
-                          </span>
-                          <small className={active ? 'text-white-50' : 'text-muted'} style={{ fontSize: 12 }}>
+                          <span className="d-block fw-semibold text-truncate text-dark">{p.name}</span>
+                          <small className="text-muted" style={{ fontSize: 12 }}>
                             SKU: {p.sku}
                           </small>
                         </span>
-                        <span
-                          className={`fw-bold flex-shrink-0 ${active ? 'text-white' : 'text-primary'}`}
-                          style={{ whiteSpace: 'nowrap' }}
-                        >
+                        <span className="fw-bold flex-shrink-0 text-primary" style={{ whiteSpace: 'nowrap' }}>
                           {fmt(effective(p))}
                         </span>
                       </button>
