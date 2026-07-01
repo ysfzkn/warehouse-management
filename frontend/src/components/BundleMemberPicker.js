@@ -64,16 +64,17 @@ const BundleMemberPicker = ({ members = [], onChange, excludeProductId }) => {
     [results, excludeProductId, members]
   );
 
-  // Keep the highlighted row in range whenever the result list changes.
+  // Reset the highlight to the top whenever a new result set arrives.
   useEffect(() => {
-    setActiveIndex((i) => (i >= visible.length ? 0 : i));
-  }, [visible.length]);
+    setActiveIndex(0);
+  }, [results]);
 
-  // Scroll the highlighted row into view during keyboard navigation.
-  useEffect(() => {
-    const el = listRef.current?.querySelector(`[data-idx="${activeIndex}"]`);
+  // Scroll a row into view. Called ONLY from keyboard navigation — never from mouse
+  // hover — so hovering can't trigger a scroll (which caused the list to jitter).
+  const scrollRowIntoView = (idx) => {
+    const el = listRef.current?.querySelector(`[data-idx="${idx}"]`);
     if (el) el.scrollIntoView({ block: 'nearest' });
-  }, [activeIndex]);
+  };
 
   const addMember = (p) => {
     if (!p || p.id === excludeProductId) return;
@@ -94,10 +95,14 @@ const BundleMemberPicker = ({ members = [], onChange, excludeProductId }) => {
     }
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      setActiveIndex((i) => Math.min(i + 1, visible.length - 1));
+      const next = Math.min(activeIndex + 1, visible.length - 1);
+      setActiveIndex(next);
+      scrollRowIntoView(next);
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      setActiveIndex((i) => Math.max(i - 1, 0));
+      const next = Math.max(activeIndex - 1, 0);
+      setActiveIndex(next);
+      scrollRowIntoView(next);
     } else if (e.key === 'Enter') {
       e.preventDefault();
       addMember(visible[activeIndex]);
@@ -160,61 +165,77 @@ const BundleMemberPicker = ({ members = [], onChange, excludeProductId }) => {
           </div>
           {open && query.trim().length >= 2 && (
             <div
-              ref={listRef}
               id="bundle-member-results"
               role="listbox"
-              className="list-group position-absolute w-100 shadow border rounded bg-white"
-              style={{ zIndex: 1056, maxHeight: 264, overflowY: 'auto', top: 'calc(100% + 4px)' }}
+              className="position-absolute w-100 bg-white border rounded-3 shadow-lg overflow-hidden"
+              style={{ zIndex: 1056, top: 'calc(100% + 6px)' }}
             >
-              {/* Slim loading bar keeps the previous results in place instead of
-                  flashing them away on every keystroke. */}
+              {/* Loading bar overlays the top edge (absolute) so it never nudges the
+                  rows — the results stay put during a refetch instead of flickering. */}
               {loading && (
                 <div
-                  className="progress position-sticky top-0"
-                  style={{ height: 2, borderRadius: 0, zIndex: 1 }}
+                  className="progress position-absolute top-0 start-0 end-0"
+                  style={{ height: 2, borderRadius: 0, zIndex: 2 }}
                 >
                   <div className="progress-bar progress-bar-striped progress-bar-animated w-100" />
                 </div>
               )}
-              {visible.length === 0 ? (
-                <div className="list-group-item text-muted small border-0">
-                  {loading ? (
-                    <>
-                      <span className="spinner-border spinner-border-sm me-2" />
-                      Aranıyor...
-                    </>
-                  ) : (
-                    'Sonuç bulunamadı.'
-                  )}
-                </div>
-              ) : (
-                visible.map((p, idx) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    data-idx={idx}
-                    className={`list-group-item list-group-item-action d-flex justify-content-between align-items-center gap-2 border-0 ${
-                      idx === activeIndex ? 'active' : ''
-                    }`}
-                    style={{ minHeight: 52 }}
-                    onMouseEnter={() => setActiveIndex(idx)}
-                    onClick={() => addMember(p)}
-                  >
-                    <span className="text-start min-w-0 flex-grow-1">
-                      <span className="d-block fw-medium text-truncate">{p.name}</span>
-                      <small className={idx === activeIndex ? 'text-white-50' : 'text-muted'}>
-                        SKU: {p.sku}
-                      </small>
-                    </span>
-                    <span
-                      className={`fw-bold flex-shrink-0 ${idx === activeIndex ? 'text-white' : 'text-primary'}`}
-                      style={{ whiteSpace: 'nowrap' }}
-                    >
-                      {fmt(effective(p))}
-                    </span>
-                  </button>
-                ))
-              )}
+              {/* Fixed row height (56) × 5 rows + container borders → whole rows only,
+                  never a half-cut item at the bottom. */}
+              <div ref={listRef} style={{ maxHeight: 282, overflowY: 'auto' }}>
+                {visible.length === 0 ? (
+                  <div className="d-flex align-items-center text-muted small px-3" style={{ height: 56 }}>
+                    {loading ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm me-2" />
+                        Aranıyor...
+                      </>
+                    ) : (
+                      'Sonuç bulunamadı.'
+                    )}
+                  </div>
+                ) : (
+                  visible.map((p, idx) => {
+                    const active = idx === activeIndex;
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        role="option"
+                        aria-selected={active}
+                        data-idx={idx}
+                        className="w-100 d-flex justify-content-between align-items-center gap-3 text-start border-0 bg-transparent px-3"
+                        style={{
+                          height: 56,
+                          cursor: 'pointer',
+                          background: active ? 'var(--store-primary, #2563eb)' : undefined,
+                          borderBottom: idx < visible.length - 1 ? '1px solid #f1f3f5' : undefined,
+                          transition: 'background-color 120ms ease',
+                        }}
+                        onMouseEnter={() => setActiveIndex(idx)}
+                        onClick={() => addMember(p)}
+                      >
+                        <span className="min-w-0 flex-grow-1">
+                          <span
+                            className={`d-block fw-semibold text-truncate ${active ? 'text-white' : 'text-dark'}`}
+                          >
+                            {p.name}
+                          </span>
+                          <small className={active ? 'text-white-50' : 'text-muted'} style={{ fontSize: 12 }}>
+                            SKU: {p.sku}
+                          </small>
+                        </span>
+                        <span
+                          className={`fw-bold flex-shrink-0 ${active ? 'text-white' : 'text-primary'}`}
+                          style={{ whiteSpace: 'nowrap' }}
+                        >
+                          {fmt(effective(p))}
+                        </span>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
             </div>
           )}
         </div>
