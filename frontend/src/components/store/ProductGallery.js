@@ -5,6 +5,10 @@ export default function ProductGallery({ images, productName }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [zoomed, setZoomed] = useState(false);
+  // URLs that failed to load. Kept in state so the fallback is applied DECLARATIVELY
+  // — otherwise every re-render (e.g. from hover/zoom) would re-apply a broken src and
+  // the image would reload-flicker on each mouse move.
+  const [failedSrc, setFailedSrc] = useState(() => new Set());
   const [zoomPos, setZoomPos] = useState({ x: 50, y: 50 });
   const touchRef = useRef({ startX: 0, startY: 0 });
   const galleryRef = useRef(null);
@@ -183,6 +187,14 @@ export default function ProductGallery({ images, productName }) {
   }
 
   const mainImage = sorted[activeIndex] || sorted[0];
+  // Resolve the src declaratively: prefer the full image, fall back to the thumbnail
+  // only once the full one has actually failed. Re-renders keep the resolved value, so
+  // hovering/zooming never re-triggers a load of a broken URL (the source of the flicker).
+  const primarySrc = mainImage.url || mainImage.thumbnailUrl;
+  const fallbackSrc = mainImage.thumbnailUrl || mainImage.url;
+  const mainSrc = primarySrc && !failedSrc.has(primarySrc) ? primarySrc : fallbackSrc;
+  const mainHidden = failedSrc.has(primarySrc) && failedSrc.has(fallbackSrc);
+  const onMainError = () => setFailedSrc((prev) => (prev.has(mainSrc) ? prev : new Set(prev).add(mainSrc)));
 
   return (
     <div className="store-gallery" ref={galleryRef}>
@@ -197,21 +209,16 @@ export default function ProductGallery({ images, productName }) {
         style={{ cursor: zoomed ? 'crosshair' : 'zoom-in' }}
       >
         <img
-          src={mainImage.url || mainImage.thumbnailUrl}
+          src={mainSrc}
           alt={productName ? `${productName} - görsel ${activeIndex + 1}` : 'Ürün görseli'}
-          onError={(e) => {
-            // Fall back to the thumbnail variant, then to a neutral placeholder.
-            if (mainImage.thumbnailUrl && e.target.src.indexOf(mainImage.thumbnailUrl) === -1) {
-              e.target.src = mainImage.thumbnailUrl;
-            } else {
-              e.target.style.visibility = 'hidden';
-            }
-          }}
+          onError={onMainError}
+          draggable={false}
           style={{
             transition: 'opacity 0.35s ease, transform 0.35s ease',
             opacity: isTransitioning ? 0.6 : 1,
             transform: zoomed ? `scale(2)` : isTransitioning ? 'scale(0.97)' : 'scale(1)',
             transformOrigin: zoomed ? `${zoomPos.x}% ${zoomPos.y}%` : 'center',
+            visibility: mainHidden ? 'hidden' : 'visible',
           }}
         />
 
