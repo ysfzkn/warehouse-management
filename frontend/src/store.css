@@ -269,55 +269,58 @@
   background: #f0f7ff;
 }
 
-/* Header
- * Scroll jitter fix notes:
- *  • Sadece `transform` animasyonu bırakıldı → GPU composite layer, reflow YOK.
- *  • `max-height` animasyonu kaldırıldı (her frame reflow tetikliyordu).
- *  • Collapsible blocklar artık `display:none` ile aniden yok olur — görsel smooth,
- *    layout sabit.
- *  • `will-change: transform` + `transform: translateZ(0)` promotion hint'leri.
- */
+/* Header — jitter-free architecture
+ * ----------------------------------------------------------------------------
+ * ESKİ sorun: Tüm `<header>` sticky idi ve scroll'da üst bölümler `display:none`
+ * ile gizleniyordu. Sticky elemanın yüksekliği değişince doküman scroll yüksekliği
+ * de değişiyor; kısa sayfalarda (büyük monitörlerde sık) tarayıcı scrollY'yi
+ * sınıra sabitliyor, bu da eşiği tekrar geçirip navbar'ı sonsuz aç/kapa döngüsüne
+ * (titreme) sokuyordu. Hysteresis / overflow-anchor gibi yamalar bunu tam çözemez.
+ *
+ * YENİ mimari: Duyuru + üst bar normal akışta kalır (scroll'da doğal olarak yukarı
+ * kayıp gider, hiçbir JS/reflow yok). SADECE ana header + kategori menüsü sticky'dir
+ * ve yüksekliği ASLA değişmez → doküman yüksekliği sabit → geri besleme döngüsü yok
+ * → titreme yok. Gizle/göster yalnızca `transform` ile yapılır (compositor katmanı,
+ * reflow yok). */
+
 .store-header {
   background: #fff;
-  border-bottom: 1px solid var(--color-gray-200);
+  position: relative;
+  z-index: 1000;
+}
+
+/* Duyuru + üst bar: sticky DEĞİL — sayfayla birlikte doğal olarak kayar. */
+.store-header-topband {
+  background: #fff;
+}
+
+/* Tek sticky parça. Sabit yükseklik: içeriği hiçbir scroll state'inde boyut
+   değiştirmez, dolayısıyla doküman scroll yüksekliğini etkilemez. */
+.store-header-sticky {
   position: sticky;
   top: 0;
   z-index: 1000;
-  transform: translateZ(0);
+  background: #fff;
+  border-bottom: 1px solid var(--color-gray-200);
   will-change: transform;
-  transition:
-    transform 0.25s ease,
-    box-shadow 0.25s ease;
   backface-visibility: hidden;
+  transition:
+    transform 0.28s cubic-bezier(0.22, 0.61, 0.36, 1),
+    box-shadow 0.25s ease;
 }
-.store-header--scrolled {
+.store-header-sticky--scrolled {
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
 }
-.store-header--hidden {
+.store-header-sticky--hidden {
   transform: translate3d(0, -100%, 0);
 }
 
-/* Top sections — scrolled halinde display:none (animasyon yok, reflow yok) */
-.store-header-collapsible {
-  overflow: hidden;
-}
-.store-header--scrolled .store-header-collapsible {
-  display: none;
-}
-/* Main header ölçü değişiklikleri: tek seferlik hafif compact, layout shift yok */
+/* Ana header — sabit yükseklik (scroll'da küçülme YOK; küçülme reflow yaratırdı). */
 .store-header-main {
-  padding: 10px 0;
-  transition: padding 0.2s ease;
-}
-.store-header--scrolled .store-header-main {
-  padding: 8px 0;
+  padding: 12px 0;
 }
 .store-logo {
-  max-height: 40px;
-  transition: max-height 0.2s ease;
-}
-.store-header--scrolled .store-logo {
-  max-height: 34px;
+  max-height: 44px;
 }
 
 /* Announcement Bar */
