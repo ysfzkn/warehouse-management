@@ -15,6 +15,8 @@ public interface BrandRepository extends JpaRepository<Brand, Long> {
 
     boolean existsByName(String name);
 
+    boolean existsBySlug(String slug);
+
     @Query("SELECT b FROM Brand b WHERE b.isActive = true ORDER BY b.name")
     List<Brand> findAllActive();
 

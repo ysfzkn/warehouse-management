@@ -75,6 +75,9 @@ public class BrandServiceImpl implements BrandService {
     public Brand createBrand(Brand brand) {
         logger.info("Creating new brand: {}", brand.getName());
         validateNameUniqueness(brand.getName());
+        if (brand.getSlug() == null || brand.getSlug().isBlank()) {
+            brand.setSlug(generateUniqueSlug(brand.getName(), null));
+        }
         Brand saved = brandRepository.save(brand);
         logger.info("Brand created successfully with id: {}", saved.getId());
         return saved;
@@ -85,9 +88,13 @@ public class BrandServiceImpl implements BrandService {
         logger.info("Updating brand with id: {}", id);
         Brand brand = getBrandByIdOrThrow(id);
         validateNameUniquenessOnUpdate(brand, details);
+        boolean nameChanged = !brand.getName().equals(details.getName());
         brand.setName(details.getName());
         brand.setDescription(details.getDescription());
         brand.setActive(details.isActive());
+        if (nameChanged || brand.getSlug() == null || brand.getSlug().isBlank()) {
+            brand.setSlug(generateUniqueSlug(details.getName(), brand.getSlug()));
+        }
         Brand saved = brandRepository.save(brand);
         logger.info("Brand updated successfully with id: {}", saved.getId());
         return saved;
@@ -145,6 +152,36 @@ public class BrandServiceImpl implements BrandService {
             ErrorCode.BRAND_NAME_ALREADY_EXISTS,
             "Brand"
         );
+    }
+
+    /**
+     * Generates a URL-safe slug from the brand name, ensuring uniqueness against
+     * the {@code idx_brands_slug} unique index. {@code currentSlug} is the brand's
+     * existing slug on update (excluded from the collision check) or {@code null}
+     * on create.
+     */
+    private String generateUniqueSlug(String name, String currentSlug) {
+        String base = generateSlug(name);
+        String candidate = base;
+        int suffix = 2;
+        while (!candidate.equals(currentSlug) && brandRepository.existsBySlug(candidate)) {
+            candidate = base + "-" + suffix++;
+        }
+        return candidate;
+    }
+
+    private String generateSlug(String name) {
+        if (name == null) return "brand-" + System.currentTimeMillis();
+        String slug = name.toLowerCase()
+            .replace("ı", "i").replace("ğ", "g").replace("ü", "u")
+            .replace("ş", "s").replace("ö", "o").replace("ç", "c")
+            .replace("İ", "i").replace("Ğ", "g").replace("Ü", "u")
+            .replace("Ş", "s").replace("Ö", "o").replace("Ç", "c")
+            .replaceAll("[^a-z0-9\\s-]", "")
+            .replaceAll("\\s+", "-")
+            .replaceAll("-+", "-")
+            .replaceAll("^-|-$", "");
+        return slug.isBlank() ? "brand-" + System.currentTimeMillis() : slug;
     }
 }
 
