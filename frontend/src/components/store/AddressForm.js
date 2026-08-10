@@ -50,9 +50,19 @@ const CITIES = TR_PROVINCES;
 
 export default function AddressForm({ onSubmit, initialData, submitLabel, onCancel }) {
   const [form, setForm] = useState({
-    title: '', firstName: '', lastName: '', phone: '',
-    city: '', district: '', neighborhood: '', addressLine: '', postalCode: '',
-    tcKimlikNo: '', companyName: '', taxOffice: '', taxNumber: '',
+    title: '',
+    firstName: '',
+    lastName: '',
+    phone: '',
+    city: '',
+    district: '',
+    neighborhood: '',
+    addressLine: '',
+    postalCode: '',
+    tcKimlikNo: '',
+    companyName: '',
+    taxOffice: '',
+    taxNumber: '',
     ...(initialData || {}),
   });
   const [showBilling, setShowBilling] = useState(!!(initialData?.companyName || initialData?.taxNumber));
@@ -60,11 +70,11 @@ export default function AddressForm({ onSubmit, initialData, submitLabel, onCanc
   const [touched, setTouched] = useState({});
 
   const f = (key, val) => {
-    setForm(prev => ({ ...prev, [key]: val }));
-    setErrors(prev => ({ ...prev, [key]: '' }));
+    setForm((prev) => ({ ...prev, [key]: val }));
+    setErrors((prev) => ({ ...prev, [key]: '' }));
   };
 
-  const touch = (key) => setTouched(prev => ({ ...prev, [key]: true }));
+  const touch = (key) => setTouched((prev) => ({ ...prev, [key]: true }));
 
   // Live validation
   useEffect(() => {
@@ -73,7 +83,8 @@ export default function AddressForm({ onSubmit, initialData, submitLabel, onCanc
     if (touched.lastName && !form.lastName.trim()) e.lastName = 'Soyad zorunludur';
     if (touched.phone) {
       if (!form.phone.trim()) e.phone = 'Telefon zorunludur';
-      else if (!validatePhone(form.phone)) e.phone = 'Geçerli bir telefon girin (0532 XXX XX XX veya +90 532 XXX XX XX)';
+      else if (!validatePhone(form.phone))
+        e.phone = 'Geçerli bir telefon girin (0532 XXX XX XX veya +90 532 XXX XX XX)';
     }
     if (touched.city && !form.city) e.city = 'İl seçiniz';
     if (touched.district && !form.district.trim()) e.district = 'İlçe zorunludur';
@@ -92,14 +103,24 @@ export default function AddressForm({ onSubmit, initialData, submitLabel, onCanc
 
   const validate = () => {
     const allTouched = {};
-    ['firstName','lastName','phone','city','district','addressLine'].forEach(k => allTouched[k] = true);
+    ['firstName', 'lastName', 'phone', 'city', 'district', 'addressLine'].forEach(
+      (k) => (allTouched[k] = true)
+    );
     if (form.tcKimlikNo) allTouched.tcKimlikNo = true;
     if (showBilling && form.taxNumber) allTouched.taxNumber = true;
     setTouched(allTouched);
 
-    if (!form.firstName.trim() || !form.lastName.trim() || !form.phone.trim() ||
-        !form.city || !form.district.trim() || !form.addressLine.trim() ||
-        form.addressLine.trim().length < 10 || !validatePhone(form.phone)) return false;
+    if (
+      !form.firstName.trim() ||
+      !form.lastName.trim() ||
+      !form.phone.trim() ||
+      !form.city ||
+      !form.district.trim() ||
+      !form.addressLine.trim() ||
+      form.addressLine.trim().length < 10 ||
+      !validatePhone(form.phone)
+    )
+      return false;
     if (form.tcKimlikNo && !validateTcKimlik(form.tcKimlikNo)) return false;
     return true;
   };
@@ -122,15 +143,20 @@ export default function AddressForm({ onSubmit, initialData, submitLabel, onCanc
   return (
     <form onSubmit={handleSubmit} noValidate>
       <div className="row g-3">
-
         {/* ── Address Title ── */}
         <div className="col-12">
-          <label className="form-label small fw-semibold"><FiHome size={14} className="me-1 text-primary" />Adres Başlığı</label>
+          <label className="form-label small fw-semibold">
+            <FiHome size={14} className="me-1 text-primary" />
+            Adres Başlığı
+          </label>
           <div className="d-flex gap-2 flex-wrap">
-            {['Ev', 'İş', 'Diğer'].map(t => (
-              <button key={t} type="button"
+            {['Ev', 'İş', 'Diğer'].map((t) => (
+              <button
+                key={t}
+                type="button"
                 className={`btn btn-sm ${form.title === t ? 'btn-primary' : 'btn-outline-secondary'}`}
-                onClick={() => f('title', t)}>
+                onClick={() => f('title', t)}
+              >
                 {t === 'Ev' && <FiHome size={13} className="me-1" />}
                 {t === 'İş' && <FiCreditCard size={13} className="me-1" />}
                 {t}
@@ -139,164 +165,327 @@ export default function AddressForm({ onSubmit, initialData, submitLabel, onCanc
             {!['Ev', 'İş', 'Diğer'].includes(form.title) && form.title && (
               <span className="btn btn-sm btn-primary">{form.title}</span>
             )}
-            <input className="form-control form-control-sm" style={{ maxWidth: 180 }}
-              placeholder="Özel başlık..." value={['Ev','İş','Diğer'].includes(form.title) ? '' : form.title}
-              onChange={e => f('title', e.target.value)} />
+            <input
+              className="form-control form-control-sm"
+              style={{ maxWidth: 180 }}
+              placeholder="Özel başlık..."
+              value={['Ev', 'İş', 'Diğer'].includes(form.title) ? '' : form.title}
+              onChange={(e) => f('title', e.target.value)}
+            />
           </div>
         </div>
 
         {/* ── Personal Information ── */}
-        <div className="col-12"><hr className="my-1" /><div className="small fw-semibold text-muted"><FiUser size={13} className="me-1" />Kişisel Bilgiler</div></div>
+        <div className="col-12">
+          <hr className="my-1" />
+          <div className="small fw-semibold text-muted">
+            <FiUser size={13} className="me-1" />
+            Kişisel Bilgiler
+          </div>
+        </div>
 
         <div className="col-md-6">
           <label htmlFor="addr-firstName" className="form-label small fw-medium">
-            Ad <span className="text-danger" aria-hidden="true">*</span>
+            Ad{' '}
+            <span className="text-danger" aria-hidden="true">
+              *
+            </span>
             <span className="visually-hidden">(zorunlu)</span>
           </label>
-          <input id="addr-firstName" className={inputClass('firstName')} name="firstName" value={form.firstName}
-            onChange={e => f('firstName', e.target.value)} onBlur={() => touch('firstName')}
+          <input
+            id="addr-firstName"
+            className={inputClass('firstName')}
+            name="firstName"
+            value={form.firstName}
+            onChange={(e) => f('firstName', e.target.value)}
+            onBlur={() => touch('firstName')}
             placeholder="Adınız"
             autoComplete="given-name"
             aria-required="true"
             aria-invalid={!!errors.firstName}
-            aria-describedby={errors.firstName ? 'addr-firstName-error' : undefined} />
-          {errors.firstName && <div id="addr-firstName-error" className="invalid-feedback">{errors.firstName}</div>}
+            aria-describedby={errors.firstName ? 'addr-firstName-error' : undefined}
+          />
+          {errors.firstName && (
+            <div id="addr-firstName-error" className="invalid-feedback" role="alert">
+              {errors.firstName}
+            </div>
+          )}
         </div>
 
         <div className="col-md-6">
           <label htmlFor="addr-lastName" className="form-label small fw-medium">
-            Soyad <span className="text-danger" aria-hidden="true">*</span>
+            Soyad{' '}
+            <span className="text-danger" aria-hidden="true">
+              *
+            </span>
             <span className="visually-hidden">(zorunlu)</span>
           </label>
-          <input id="addr-lastName" className={inputClass('lastName')} name="lastName" value={form.lastName}
-            onChange={e => f('lastName', e.target.value)} onBlur={() => touch('lastName')}
+          <input
+            id="addr-lastName"
+            className={inputClass('lastName')}
+            name="lastName"
+            value={form.lastName}
+            onChange={(e) => f('lastName', e.target.value)}
+            onBlur={() => touch('lastName')}
             placeholder="Soyadınız"
             autoComplete="family-name"
             aria-required="true"
             aria-invalid={!!errors.lastName}
-            aria-describedby={errors.lastName ? 'addr-lastName-error' : undefined} />
-          {errors.lastName && <div id="addr-lastName-error" className="invalid-feedback">{errors.lastName}</div>}
+            aria-describedby={errors.lastName ? 'addr-lastName-error' : undefined}
+          />
+          {errors.lastName && (
+            <div id="addr-lastName-error" className="invalid-feedback" role="alert">
+              {errors.lastName}
+            </div>
+          )}
         </div>
 
         <div className="col-md-6">
           <label htmlFor="addr-phone" className="form-label small fw-medium">
-            <FiPhone size={13} className="me-1" aria-hidden="true" />Telefon
-            <span className="text-danger" aria-hidden="true"> *</span>
+            <FiPhone size={13} className="me-1" aria-hidden="true" />
+            Telefon
+            <span className="text-danger" aria-hidden="true">
+              {' '}
+              *
+            </span>
             <span className="visually-hidden">(zorunlu)</span>
           </label>
           <div className="input-group">
-            <span className="input-group-text" style={{ fontSize: 13 }} aria-hidden="true">+90</span>
-            <input id="addr-phone" className={inputClass('phone')} value={form.phone}
-              onChange={e => f('phone', formatPhone(e.target.value))} onBlur={() => touch('phone')}
+            <span className="input-group-text" style={{ fontSize: 13 }} aria-hidden="true">
+              +90
+            </span>
+            <input
+              id="addr-phone"
+              className={inputClass('phone')}
+              value={form.phone}
+              onChange={(e) => f('phone', formatPhone(e.target.value))}
+              onBlur={() => touch('phone')}
               placeholder="5XX XXX XX XX"
-              inputMode="tel" maxLength={14}
+              inputMode="tel"
+              maxLength={14}
               autoComplete="tel-national"
               aria-required="true"
               aria-invalid={!!errors.phone}
-              aria-describedby={errors.phone ? 'addr-phone-error' : undefined} />
+              aria-describedby={errors.phone ? 'addr-phone-error' : undefined}
+            />
             {touched.phone && !errors.phone && form.phone && (
-              <span className="input-group-text text-success bg-transparent border-success" aria-hidden="true"><FiCheck size={14} /></span>
+              <span
+                className="input-group-text text-success bg-transparent border-success"
+                aria-hidden="true"
+              >
+                <FiCheck size={14} />
+              </span>
             )}
           </div>
-          {errors.phone && <div id="addr-phone-error" className="text-danger" role="alert" style={{ fontSize: '0.75rem', marginTop: 4 }}><FiAlertCircle size={12} className="me-1" aria-hidden="true" />{errors.phone}</div>}
+          {errors.phone && (
+            <div
+              id="addr-phone-error"
+              className="text-danger"
+              role="alert"
+              style={{ fontSize: '0.75rem', marginTop: 4 }}
+            >
+              <FiAlertCircle size={12} className="me-1" aria-hidden="true" />
+              {errors.phone}
+            </div>
+          )}
         </div>
 
         <div className="col-md-6">
-          <label className="form-label small fw-medium">TC Kimlik No <span className="text-muted fw-normal">(opsiyonel)</span></label>
+          <label className="form-label small fw-medium">
+            TC Kimlik No <span className="text-muted fw-normal">(opsiyonel)</span>
+          </label>
           <div className="input-group">
-            <input className={`form-control ${touched.tcKimlikNo && form.tcKimlikNo ? (errors.tcKimlikNo ? 'is-invalid' : 'is-valid') : ''}`}
+            <input
+              className={`form-control ${touched.tcKimlikNo && form.tcKimlikNo ? (errors.tcKimlikNo ? 'is-invalid' : 'is-valid') : ''}`}
               value={form.tcKimlikNo}
-              onChange={e => { const v = e.target.value.replace(/\D/g, '').slice(0, 11); f('tcKimlikNo', v); }}
+              onChange={(e) => {
+                const v = e.target.value.replace(/\D/g, '').slice(0, 11);
+                f('tcKimlikNo', v);
+              }}
               onBlur={() => touch('tcKimlikNo')}
-              placeholder="XXXXXXXXXXX" inputMode="numeric" maxLength={11} />
+              placeholder="XXXXXXXXXXX"
+              inputMode="numeric"
+              maxLength={11}
+            />
             {form.tcKimlikNo && validateTcKimlik(form.tcKimlikNo) && (
-              <span className="input-group-text text-success bg-transparent border-success"><FiCheck size={14} /></span>
+              <span className="input-group-text text-success bg-transparent border-success">
+                <FiCheck size={14} />
+              </span>
             )}
           </div>
-          {errors.tcKimlikNo && <div className="text-danger" style={{ fontSize: '0.75rem', marginTop: 4 }}>{errors.tcKimlikNo}</div>}
-          <div className="text-muted" style={{ fontSize: '0.7rem', marginTop: 2 }}>Fatura ve kargo işlemleri için kullanılır</div>
+          {errors.tcKimlikNo && (
+            <div className="text-danger" style={{ fontSize: '0.75rem', marginTop: 4 }}>
+              {errors.tcKimlikNo}
+            </div>
+          )}
+          <div className="text-muted" style={{ fontSize: '0.7rem', marginTop: 2 }}>
+            Fatura ve kargo işlemleri için kullanılır
+          </div>
         </div>
 
         {/* ── Address Information ── */}
-        <div className="col-12"><hr className="my-1" /><div className="small fw-semibold text-muted"><FiMapPin size={13} className="me-1" />Adres Bilgileri</div></div>
-
-        <div className="col-md-4">
-          <label className="form-label small fw-medium">İl <span className="text-danger">*</span></label>
-          <select className={`form-select ${touched.city ? (errors.city ? 'is-invalid' : form.city ? 'is-valid' : '') : ''}`}
-            value={form.city}
-            onChange={e => {
-              // Changing the province invalidates the district selection — clear it
-              if (e.target.value !== form.city) {
-                setForm(prev => ({ ...prev, city: e.target.value, district: '' }));
-                setErrors(prev => ({ ...prev, city: '', district: '' }));
-              }
-            }}
-            onBlur={() => touch('city')}>
-            <option value="">İl seçiniz...</option>
-            {CITIES.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
-          {errors.city && <div className="invalid-feedback">{errors.city}</div>}
+        <div className="col-12">
+          <hr className="my-1" />
+          <div className="small fw-semibold text-muted">
+            <FiMapPin size={13} className="me-1" />
+            Adres Bilgileri
+          </div>
         </div>
 
         <div className="col-md-4">
-          <label className="form-label small fw-medium">İlçe <span className="text-danger">*</span></label>
+          <label className="form-label small fw-medium">
+            İl <span className="text-danger">*</span>
+          </label>
+          <select
+            className={`form-select ${touched.city ? (errors.city ? 'is-invalid' : form.city ? 'is-valid' : '') : ''}`}
+            value={form.city}
+            onChange={(e) => {
+              // Changing the province invalidates the district selection — clear it
+              if (e.target.value !== form.city) {
+                setForm((prev) => ({ ...prev, city: e.target.value, district: '' }));
+                setErrors((prev) => ({ ...prev, city: '', district: '' }));
+              }
+            }}
+            onBlur={() => touch('city')}
+          >
+            <option value="">İl seçiniz...</option>
+            {CITIES.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+          {errors.city && (
+            <div className="invalid-feedback" role="alert">
+              {errors.city}
+            </div>
+          )}
+        </div>
+
+        <div className="col-md-4">
+          <label className="form-label small fw-medium">
+            İlçe <span className="text-danger">*</span>
+          </label>
           {(() => {
             const districts = getDistrictsForProvince(form.city);
             if (districts.length > 0) {
               // Province selected and we have a district list — cascading select
               return (
-                <select className={`form-select ${touched.district ? (errors.district ? 'is-invalid' : form.district ? 'is-valid' : '') : ''}`}
+                <select
+                  className={`form-select ${touched.district ? (errors.district ? 'is-invalid' : form.district ? 'is-valid' : '') : ''}`}
                   value={form.district}
-                  onChange={e => f('district', e.target.value)}
-                  onBlur={() => touch('district')}>
+                  onChange={(e) => f('district', e.target.value)}
+                  onBlur={() => touch('district')}
+                >
                   <option value="">İlçe seçiniz...</option>
-                  {districts.map(d => <option key={d} value={d}>{d}</option>)}
+                  {districts.map((d) => (
+                    <option key={d} value={d}>
+                      {d}
+                    </option>
+                  ))}
                 </select>
               );
             }
             // No province selected or a small province (no data) — free text fallback
             return (
-              <input className={inputClass('district')} value={form.district}
-                onChange={e => f('district', e.target.value)} onBlur={() => touch('district')}
+              <input
+                className={inputClass('district')}
+                value={form.district}
+                onChange={(e) => f('district', e.target.value)}
+                onBlur={() => touch('district')}
                 placeholder={form.city ? 'İlçe adı' : 'Önce il seçiniz'}
-                disabled={!form.city} />
+                disabled={!form.city}
+              />
             );
           })()}
-          {errors.district && <div className="invalid-feedback">{errors.district}</div>}
+          {errors.district && (
+            <div className="invalid-feedback" role="alert">
+              {errors.district}
+            </div>
+          )}
         </div>
 
         <div className="col-md-4">
           <label className="form-label small fw-medium">Mahalle</label>
-          <input className="form-control" value={form.neighborhood || ''}
-            onChange={e => f('neighborhood', e.target.value)} placeholder="Mahalle (opsiyonel)" />
+          <input
+            className="form-control"
+            value={form.neighborhood || ''}
+            onChange={(e) => f('neighborhood', e.target.value)}
+            placeholder="Mahalle (opsiyonel)"
+          />
         </div>
 
         <div className="col-md-9">
-          <label className="form-label small fw-medium">Açık Adres <span className="text-danger">*</span></label>
-          <textarea className={inputClass('addressLine')} rows={2} value={form.addressLine}
-            onChange={e => f('addressLine', e.target.value)} onBlur={() => touch('addressLine')}
-            placeholder="Sokak, cadde, bina no, daire no..." />
-          {errors.addressLine && <div className="invalid-feedback">{errors.addressLine}</div>}
+          <label className="form-label small fw-medium">
+            Açık Adres <span className="text-danger">*</span>
+          </label>
+          <textarea
+            className={inputClass('addressLine')}
+            rows={2}
+            value={form.addressLine}
+            onChange={(e) => f('addressLine', e.target.value)}
+            onBlur={() => touch('addressLine')}
+            placeholder="Sokak, cadde, bina no, daire no..."
+          />
+          {errors.addressLine && (
+            <div className="invalid-feedback" role="alert">
+              {errors.addressLine}
+            </div>
+          )}
           {form.addressLine && !errors.addressLine && (
-            <div className="text-muted" style={{ fontSize: '0.7rem', marginTop: 2 }}>{form.addressLine.length} karakter</div>
+            <div className="text-muted" style={{ fontSize: '0.7rem', marginTop: 2 }}>
+              {form.addressLine.length} karakter
+            </div>
           )}
         </div>
 
         <div className="col-md-3">
           <label className="form-label small fw-medium">Posta Kodu</label>
-          <input className="form-control" value={form.postalCode || ''}
-            onChange={e => f('postalCode', e.target.value.replace(/\D/g, '').slice(0, 5))}
-            placeholder="34000" inputMode="numeric" maxLength={5} />
+          <input
+            className="form-control"
+            value={form.postalCode || ''}
+            onChange={(e) => f('postalCode', e.target.value.replace(/\D/g, '').slice(0, 5))}
+            placeholder="34000"
+            inputMode="numeric"
+            maxLength={5}
+          />
         </div>
 
         {/* ── Corporate Invoice ── */}
         <div className="col-12">
-          <div className="d-flex align-items-center gap-2 p-2 rounded" style={{ background: showBilling ? '#eff6ff' : '#f8fafc', border: `1px solid ${showBilling ? '#bfdbfe' : '#e2e8f0'}`, cursor: 'pointer', transition: 'all 0.2s' }}
-            onClick={() => setShowBilling(!showBilling)}>
-            <input className="form-check-input m-0" type="checkbox" checked={showBilling} readOnly />
+          <div
+            className="d-flex align-items-center gap-2 p-2 rounded"
+            style={{
+              background: showBilling ? '#eff6ff' : '#f8fafc',
+              border: `1px solid ${showBilling ? '#bfdbfe' : '#e2e8f0'}`,
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+            }}
+            role="checkbox"
+            aria-checked={showBilling}
+            aria-label="Kurumsal fatura istiyorum"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                e.currentTarget.click();
+              }
+            }}
+            onClick={() => setShowBilling(!showBilling)}
+          >
+            <input
+              className="form-check-input m-0"
+              type="checkbox"
+              checked={showBilling}
+              readOnly
+              tabIndex={-1}
+              aria-hidden="true"
+            />
             <div>
               <div className="small fw-medium">Kurumsal fatura istiyorum</div>
-              <div className="text-muted" style={{ fontSize: '0.7rem' }}>Şirket adına fatura kesilmesini istiyorsanız işaretleyin</div>
+              <div className="text-muted" style={{ fontSize: '0.7rem' }}>
+                Şirket adına fatura kesilmesini istiyorsanız işaretleyin
+              </div>
             </div>
             <FiCreditCard size={16} className="ms-auto text-muted" />
           </div>
@@ -306,22 +495,38 @@ export default function AddressForm({ onSubmit, initialData, submitLabel, onCanc
           <>
             <div className="col-md-5">
               <label className="form-label small fw-medium">Şirket Unvanı</label>
-              <input className="form-control" value={form.companyName || ''}
-                onChange={e => f('companyName', e.target.value)} placeholder="ABC Ltd. Şti." />
+              <input
+                className="form-control"
+                value={form.companyName || ''}
+                onChange={(e) => f('companyName', e.target.value)}
+                placeholder="ABC Ltd. Şti."
+              />
             </div>
             <div className="col-md-3">
               <label className="form-label small fw-medium">Vergi Dairesi</label>
-              <input className="form-control" value={form.taxOffice || ''}
-                onChange={e => f('taxOffice', e.target.value)} placeholder="Kadıköy VD" />
+              <input
+                className="form-control"
+                value={form.taxOffice || ''}
+                onChange={(e) => f('taxOffice', e.target.value)}
+                placeholder="Kadıköy VD"
+              />
             </div>
             <div className="col-md-4">
               <label className="form-label small fw-medium">Vergi No</label>
-              <input className={`form-control ${touched.taxNumber && form.taxNumber ? (errors.taxNumber ? 'is-invalid' : 'is-valid') : ''}`}
+              <input
+                className={`form-control ${touched.taxNumber && form.taxNumber ? (errors.taxNumber ? 'is-invalid' : 'is-valid') : ''}`}
                 value={form.taxNumber || ''}
-                onChange={e => f('taxNumber', e.target.value.replace(/\D/g, '').slice(0, 11))}
+                onChange={(e) => f('taxNumber', e.target.value.replace(/\D/g, '').slice(0, 11))}
                 onBlur={() => touch('taxNumber')}
-                placeholder="XXXXXXXXXX" inputMode="numeric" maxLength={11} />
-              {errors.taxNumber && <div className="invalid-feedback">{errors.taxNumber}</div>}
+                placeholder="XXXXXXXXXX"
+                inputMode="numeric"
+                maxLength={11}
+              />
+              {errors.taxNumber && (
+                <div className="invalid-feedback" role="alert">
+                  {errors.taxNumber}
+                </div>
+              )}
             </div>
           </>
         )}
@@ -329,10 +534,13 @@ export default function AddressForm({ onSubmit, initialData, submitLabel, onCanc
         {/* ── Submit ── */}
         <div className="col-12 d-flex gap-2 mt-2">
           <button type="submit" className="btn btn-primary px-4">
-            <FiCheck size={15} className="me-1" />{submitLabel || 'Adresi Kaydet'}
+            <FiCheck size={15} className="me-1" />
+            {submitLabel || 'Adresi Kaydet'}
           </button>
           {onCancel && (
-            <button type="button" className="btn btn-outline-secondary" onClick={onCancel}>İptal</button>
+            <button type="button" className="btn btn-outline-secondary" onClick={onCancel}>
+              İptal
+            </button>
           )}
         </div>
       </div>

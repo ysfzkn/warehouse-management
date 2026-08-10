@@ -1,6 +1,9 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import axios from 'axios';
 
+const getAuthToken = () => localStorage.getItem('auth_token');
+const authHeader = () => ({ headers: { Authorization: `Bearer ${getAuthToken()}` } });
+
 /**
  * Admin log viewer for Cezeri assistant conversations. Paginated list with
  * filters (profile, date range, username search). Clicking a row opens a
@@ -18,9 +21,6 @@ export default function AssistantLogsPage() {
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState(null);
   const [selectedDetail, setSelectedDetail] = useState(null);
-
-  const token = () => localStorage.getItem('auth_token');
-  const authHeader = () => ({ headers: { Authorization: `Bearer ${token()}` } });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -44,7 +44,9 @@ export default function AssistantLogsPage() {
     }
   }, [page, profileFilter, startDate, endDate, searchTerm]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const resetFilters = () => {
     setProfileFilter('');
@@ -65,7 +67,10 @@ export default function AssistantLogsPage() {
     }
   };
 
-  const closeDetail = () => { setSelected(null); setSelectedDetail(null); };
+  const closeDetail = () => {
+    setSelected(null);
+    setSelectedDetail(null);
+  };
 
   const hasActiveFilters = profileFilter || startDate || endDate || searchTerm.trim();
 
@@ -82,8 +87,14 @@ export default function AssistantLogsPage() {
           <div className="row g-2 align-items-end">
             <div className="col-md-2">
               <label className="form-label small fw-semibold mb-1">Profil</label>
-              <select className="form-select form-select-sm" value={profileFilter}
-                onChange={(e) => { setProfileFilter(e.target.value); setPage(0); }}>
+              <select
+                className="form-select form-select-sm"
+                value={profileFilter}
+                onChange={(e) => {
+                  setProfileFilter(e.target.value);
+                  setPage(0);
+                }}
+              >
                 <option value="">Tümü</option>
                 <option value="STORE">Mağaza (Store)</option>
                 <option value="WMS">Depo (WMS)</option>
@@ -91,24 +102,53 @@ export default function AssistantLogsPage() {
             </div>
             <div className="col-md-2">
               <label className="form-label small fw-semibold mb-1">Başlangıç</label>
-              <input type="date" className="form-control form-control-sm" value={startDate}
-                onChange={(e) => { setStartDate(e.target.value); setPage(0); }} />
+              <input
+                type="date"
+                className="form-control form-control-sm"
+                value={startDate}
+                onChange={(e) => {
+                  setStartDate(e.target.value);
+                  setPage(0);
+                }}
+              />
             </div>
             <div className="col-md-2">
               <label className="form-label small fw-semibold mb-1">Bitiş</label>
-              <input type="date" className="form-control form-control-sm" value={endDate}
-                onChange={(e) => { setEndDate(e.target.value); setPage(0); }} />
+              <input
+                type="date"
+                className="form-control form-control-sm"
+                value={endDate}
+                onChange={(e) => {
+                  setEndDate(e.target.value);
+                  setPage(0);
+                }}
+              />
             </div>
             <div className="col-md-3">
               <label className="form-label small fw-semibold mb-1">Kullanıcı Ara</label>
-              <input type="text" className="form-control form-control-sm"
+              <input
+                type="text"
+                className="form-control form-control-sm"
                 placeholder="Kullanıcı adı veya session id..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') { setPage(0); load(); } }} />
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    setPage(0);
+                    load();
+                  }
+                }}
+              />
             </div>
             <div className="col-md-3 d-flex gap-2">
-              <button className="btn btn-sm btn-primary" onClick={() => { setPage(0); load(); }} disabled={loading}>
+              <button
+                className="btn btn-sm btn-primary"
+                onClick={() => {
+                  setPage(0);
+                  load();
+                }}
+                disabled={loading}
+              >
                 <i className="fas fa-search me-1"></i> Ara
               </button>
               {hasActiveFilters && (
@@ -137,48 +177,73 @@ export default function AssistantLogsPage() {
           ) : conversations.length === 0 ? (
             <div className="p-3 text-center text-muted">Kayıt yok.</div>
           ) : (
-            <table className="table table-hover mb-0">
-              <thead className="table-light">
-                <tr>
-                  <th style={{ minWidth: 150 }}>Tarih & Saat</th>
-                  <th>Profil</th>
-                  <th>Kullanıcı</th>
-                  <th className="text-center">Mesaj</th>
-                  <th>Token (P/C)</th>
-                  <th>Maliyet</th>
-                </tr>
-              </thead>
-              <tbody>
-                {conversations.map((c) => (
-                  <tr key={c.id} style={{ cursor: 'pointer' }} onClick={() => openDetail(c)}>
-                    <td>
-                      <div style={{ fontWeight: 500 }}>
-                        {c.startedAt ? new Date(c.startedAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', year: 'numeric' }) : ''}
-                      </div>
-                      <div className="text-muted small">
-                        {c.startedAt ? new Date(c.startedAt).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) : ''}
-                        {c.lastActivityAt && c.lastActivityAt !== c.startedAt ? (
-                          <> — {new Date(c.lastActivityAt).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}</>
-                        ) : null}
-                      </div>
-                    </td>
-                    <td>
-                      <span className={`badge ${c.profile === 'STORE' ? 'bg-success' : 'bg-info'} bg-opacity-75`}>
-                        {c.profile === 'STORE' ? 'Mağaza' : 'WMS'}
-                      </span>
-                    </td>
-                    <td>
-                      {c.username || (c.customerId ? `Müşteri #${c.customerId}` : (c.guestSessionId ? 'Misafir' : '-'))}
-                    </td>
-                    <td className="text-center">
-                      <span className="badge bg-secondary bg-opacity-50">{c.messageCount}</span>
-                    </td>
-                    <td className="small">{c.totalPromptTokens} / {c.totalCompletionTokens}</td>
-                    <td className="small">${formatCost(c.totalCostUsd)}</td>
+            <div className="table-responsive">
+              <table className="table table-hover mb-0">
+                <thead className="table-light">
+                  <tr>
+                    <th style={{ minWidth: 150 }}>Tarih & Saat</th>
+                    <th>Profil</th>
+                    <th>Kullanıcı</th>
+                    <th className="text-center">Mesaj</th>
+                    <th>Token (P/C)</th>
+                    <th>Maliyet</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {conversations.map((c) => (
+                    <tr key={c.id} style={{ cursor: 'pointer' }} onClick={() => openDetail(c)}>
+                      <td>
+                        <div style={{ fontWeight: 500 }}>
+                          {c.startedAt
+                            ? new Date(c.startedAt).toLocaleDateString('tr-TR', {
+                                day: 'numeric',
+                                month: 'short',
+                                year: 'numeric',
+                              })
+                            : ''}
+                        </div>
+                        <div className="text-muted small">
+                          {c.startedAt
+                            ? new Date(c.startedAt).toLocaleTimeString('tr-TR', {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })
+                            : ''}
+                          {c.lastActivityAt && c.lastActivityAt !== c.startedAt ? (
+                            <>
+                              {' '}
+                              —{' '}
+                              {new Date(c.lastActivityAt).toLocaleTimeString('tr-TR', {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </>
+                          ) : null}
+                        </div>
+                      </td>
+                      <td>
+                        <span
+                          className={`badge ${c.profile === 'STORE' ? 'bg-success' : 'bg-info'} bg-opacity-75`}
+                        >
+                          {c.profile === 'STORE' ? 'Mağaza' : 'WMS'}
+                        </span>
+                      </td>
+                      <td>
+                        {c.username ||
+                          (c.customerId ? `Müşteri #${c.customerId}` : c.guestSessionId ? 'Misafir' : '-')}
+                      </td>
+                      <td className="text-center">
+                        <span className="badge bg-secondary bg-opacity-50">{c.messageCount}</span>
+                      </td>
+                      <td className="small">
+                        {c.totalPromptTokens} / {c.totalCompletionTokens}
+                      </td>
+                      <td className="small">${formatCost(c.totalCostUsd)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       </div>
@@ -186,9 +251,23 @@ export default function AssistantLogsPage() {
       {/* ── Pagination ── */}
       {totalPages > 1 && (
         <div className="d-flex justify-content-center mt-3 gap-2">
-          <button className="btn btn-sm btn-outline-secondary" disabled={page === 0} onClick={() => setPage(page - 1)}>‹ Önceki</button>
-          <span className="align-self-center text-muted small">Sayfa {page + 1} / {totalPages}</span>
-          <button className="btn btn-sm btn-outline-secondary" disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)}>Sonraki ›</button>
+          <button
+            className="btn btn-sm btn-outline-secondary"
+            disabled={page === 0}
+            onClick={() => setPage(page - 1)}
+          >
+            ‹ Önceki
+          </button>
+          <span className="align-self-center text-muted small">
+            Sayfa {page + 1} / {totalPages}
+          </span>
+          <button
+            className="btn btn-sm btn-outline-secondary"
+            disabled={page >= totalPages - 1}
+            onClick={() => setPage(page + 1)}
+          >
+            Sonraki ›
+          </button>
         </div>
       )}
 
@@ -197,31 +276,48 @@ export default function AssistantLogsPage() {
         <div
           onClick={closeDetail}
           style={{
-            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-            background: 'rgba(0,0,0,0.5)', zIndex: 1050,
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.5)',
+            zIndex: 1050,
           }}
         >
           <div
             onClick={(e) => e.stopPropagation()}
             style={{
-              position: 'absolute', right: 0, top: 0, bottom: 0, width: '600px',
-              background: 'white', boxShadow: '-4px 0 20px rgba(0,0,0,0.2)',
-              overflowY: 'auto', padding: 20,
+              position: 'absolute',
+              right: 0,
+              top: 0,
+              bottom: 0,
+              width: '600px',
+              background: 'white',
+              boxShadow: '-4px 0 20px rgba(0,0,0,0.2)',
+              overflowY: 'auto',
+              padding: 20,
             }}
           >
             <div className="d-flex justify-content-between align-items-center mb-3">
               <h5 className="mb-0">Sohbet #{selected.id}</h5>
-              <button className="btn btn-sm btn-outline-secondary" onClick={closeDetail}>Kapat</button>
+              <button className="btn btn-sm btn-outline-secondary" onClick={closeDetail}>
+                Kapat
+              </button>
             </div>
             <div className="text-muted small mb-3">
-              <span className={`badge ${selected.profile === 'STORE' ? 'bg-success' : 'bg-info'} bg-opacity-75 me-2`}>
+              <span
+                className={`badge ${selected.profile === 'STORE' ? 'bg-success' : 'bg-info'} bg-opacity-75 me-2`}
+              >
                 {selected.profile === 'STORE' ? 'Mağaza' : 'WMS'}
               </span>
               {selected.username || 'Misafir'}
               {' — '}
               {selected.startedAt ? new Date(selected.startedAt).toLocaleString('tr-TR') : ''}
-              {' • '}{selected.messageCount} mesaj
-              {' • $'}{formatCost(selected.totalCostUsd)}
+              {' • '}
+              {selected.messageCount} mesaj
+              {' • $'}
+              {formatCost(selected.totalCostUsd)}
             </div>
             {!selectedDetail ? (
               <div className="text-muted">Yükleniyor…</div>
@@ -235,10 +331,24 @@ export default function AssistantLogsPage() {
                       <div className="d-flex justify-content-between">
                         <strong>{m.role === 'user' ? 'Kullanıcı' : 'Asistan'}</strong>
                         <small className="text-muted">
-                          {m.createdAt ? new Date(m.createdAt).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : ''}
+                          {m.createdAt
+                            ? new Date(m.createdAt).toLocaleTimeString('tr-TR', {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                second: '2-digit',
+                              })
+                            : ''}
                         </small>
                       </div>
-                      <div style={{ whiteSpace: 'pre-wrap', marginTop: 4, fontSize: 14 }}>{m.content}</div>
+                      <div
+                        style={{
+                          whiteSpace: 'pre-wrap',
+                          marginTop: 4,
+                          fontSize: 14,
+                        }}
+                      >
+                        {m.content}
+                      </div>
                       {m.role === 'assistant' && (m.promptTokens || m.completionTokens) ? (
                         <div className="text-muted small mt-2">
                           Token: {m.promptTokens || 0} / {m.completionTokens || 0}

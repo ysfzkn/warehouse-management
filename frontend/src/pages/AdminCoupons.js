@@ -333,65 +333,67 @@ export default function AdminCoupons() {
                   </button>
                 </div>
               ) : (
-                <table className="table table-hover align-middle mb-0">
-                  <thead className="table-light">
-                    <tr>
-                      <th>Kod</th>
-                      <th>İndirim</th>
-                      <th>Kullanım</th>
-                      <th>Geçerlilik</th>
-                      <th>Durum</th>
-                      <th style={{ width: 100 }}></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {coupons.map((c) => (
-                      <tr key={c.id}>
-                        <td>
-                          <code className="fw-bold">{c.code}</code>
-                          {c.description && <div className="text-muted small">{c.description}</div>}
-                        </td>
-                        <td>
-                          <span className="badge bg-primary bg-opacity-10 text-primary">
-                            {c.discountType === 'PERCENTAGE'
-                              ? `%${c.discountValue}`
-                              : c.discountType === 'FREE_SHIPPING'
-                                ? 'Ücretsiz Kargo'
-                                : `${c.discountValue}₺`}
-                          </span>
-                          {c.minOrderAmount > 0 && (
-                            <div className="text-muted small">Min: {c.minOrderAmount}₺</div>
-                          )}
-                        </td>
-                        <td>
-                          <span className="small">
-                            {c.usedCount || 0}
-                            {c.usageLimit ? `/${c.usageLimit}` : ''}
-                          </span>
-                        </td>
-                        <td>
-                          <div className="small">{formatDate(c.startsAt)}</div>
-                          <div className="small text-muted">{formatDate(c.expiresAt)}</div>
-                        </td>
-                        <td>
-                          <span className={`badge bg-${c.active ? 'success' : 'secondary'}`}>
-                            {c.active ? 'Aktif' : 'Pasif'}
-                          </span>
-                        </td>
-                        <td>
-                          <div className="btn-group btn-group-sm">
-                            <button className="btn btn-outline-primary" onClick={() => startEdit(c)}>
-                              <i className="fas fa-edit" />
-                            </button>
-                            <button className="btn btn-outline-danger" onClick={() => handleDelete(c)}>
-                              <i className="fas fa-trash" />
-                            </button>
-                          </div>
-                        </td>
+                <div className="table-responsive">
+                  <table className="table table-hover align-middle mb-0">
+                    <thead className="table-light">
+                      <tr>
+                        <th>Kod</th>
+                        <th>İndirim</th>
+                        <th>Kullanım</th>
+                        <th>Geçerlilik</th>
+                        <th>Durum</th>
+                        <th style={{ width: 100 }}></th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {coupons.map((c) => (
+                        <tr key={c.id}>
+                          <td>
+                            <code className="fw-bold">{c.code}</code>
+                            {c.description && <div className="text-muted small">{c.description}</div>}
+                          </td>
+                          <td>
+                            <span className="badge bg-primary bg-opacity-10 text-primary">
+                              {c.discountType === 'PERCENTAGE'
+                                ? `%${c.discountValue}`
+                                : c.discountType === 'FREE_SHIPPING'
+                                  ? 'Ücretsiz Kargo'
+                                  : `${c.discountValue}₺`}
+                            </span>
+                            {c.minOrderAmount > 0 && (
+                              <div className="text-muted small">Min: {c.minOrderAmount}₺</div>
+                            )}
+                          </td>
+                          <td>
+                            <span className="small">
+                              {c.usedCount || 0}
+                              {c.usageLimit ? `/${c.usageLimit}` : ''}
+                            </span>
+                          </td>
+                          <td>
+                            <div className="small">{formatDate(c.startsAt)}</div>
+                            <div className="small text-muted">{formatDate(c.expiresAt)}</div>
+                          </td>
+                          <td>
+                            <span className={`badge bg-${c.active ? 'success' : 'secondary'}`}>
+                              {c.active ? 'Aktif' : 'Pasif'}
+                            </span>
+                          </td>
+                          <td>
+                            <div className="btn-group btn-group-sm">
+                              <button className="btn btn-outline-primary" onClick={() => startEdit(c)}>
+                                <i className="fas fa-edit" />
+                              </button>
+                              <button className="btn btn-outline-danger" onClick={() => handleDelete(c)}>
+                                <i className="fas fa-trash" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </div>
           </div>

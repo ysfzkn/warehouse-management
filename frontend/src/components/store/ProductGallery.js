@@ -11,6 +11,7 @@ export default function ProductGallery({ images, productName }) {
   const [failedSrc, setFailedSrc] = useState(() => new Set());
   const [zoomPos, setZoomPos] = useState({ x: 50, y: 50 });
   const touchRef = useRef({ startX: 0, startY: 0 });
+  const mouseDrag = useRef({ active: false, startX: 0, startY: 0, dx: 0, dy: 0, didDrag: false });
   const galleryRef = useRef(null);
 
   // Fullscreen lightbox with pinch / double-tap zoom (mobile-first, works on desktop too)
@@ -66,8 +67,42 @@ export default function ProductGallery({ images, productName }) {
     }
   };
 
-  // Mouse zoom on hover
+  // Masaüstü: fare ile tutup sürükleyerek görsel değiştirme (dokunmatik swipe
+  // zaten var). Yatay sürükleme eşiği aşılınca yakınlaştırma kapatılır ki
+  // hover-zoom ile çakışmasın.
+  const onImgMouseDown = (e) => {
+    if (e.button !== 0 || sorted.length <= 1) return;
+    mouseDrag.current = {
+      active: true,
+      startX: e.clientX,
+      startY: e.clientY,
+      dx: 0,
+      dy: 0,
+      didDrag: false,
+    };
+  };
+  const endMouseDrag = () => {
+    const d = mouseDrag.current;
+    if (!d.active) return;
+    d.active = false;
+    if (d.didDrag && Math.abs(d.dx) > 45 && Math.abs(d.dx) > Math.abs(d.dy)) {
+      if (d.dx > 0) goPrev();
+      else goNext();
+    }
+  };
+
+  // Mouse zoom on hover + sürükleme algılama
   const handleMouseMove = (e) => {
+    const d = mouseDrag.current;
+    if (d.active) {
+      d.dx = e.clientX - d.startX;
+      d.dy = e.clientY - d.startY;
+      if (!d.didDrag && Math.abs(d.dx) > 8 && Math.abs(d.dx) > Math.abs(d.dy)) {
+        d.didDrag = true;
+        if (zoomed) setZoomed(false);
+      }
+      return; // sürüklerken hover-zoom pan çalışmasın
+    }
     if (!zoomed) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 100;
@@ -203,10 +238,15 @@ export default function ProductGallery({ images, productName }) {
         className="store-gallery-main position-relative"
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
+        onMouseDown={onImgMouseDown}
+        onMouseUp={endMouseDrag}
         onMouseMove={handleMouseMove}
         onMouseEnter={() => setZoomed(true)}
-        onMouseLeave={() => setZoomed(false)}
-        style={{ cursor: zoomed ? 'crosshair' : 'zoom-in' }}
+        onMouseLeave={() => {
+          setZoomed(false);
+          endMouseDrag();
+        }}
+        style={{ cursor: zoomed ? 'crosshair' : 'zoom-in', touchAction: 'pan-y' }}
       >
         <img
           src={mainSrc}

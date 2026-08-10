@@ -550,12 +550,22 @@
   left: 0;
   width: 84vw;
   max-width: 320px;
-  height: 100vh;
+  height: 100vh; /* fallback for browsers without dvh */
+  height: 100dvh; /* mobil tarayıcı çubuğunu hesaba katar → alt kısım kesilmez */
   background: #fff;
   z-index: 1999;
+  display: flex;
+  flex-direction: column;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
   box-shadow: var(--shadow-xl);
   animation: storeMenuSlideIn 0.25s ease;
+}
+/* Kategori listesi esner ve içeride kayar; baş/alt sabit kalır, çıkış her zaman erişilebilir */
+.store-mobile-menu .store-mobile-cat-list {
+  flex: 1 1 auto;
 }
 @keyframes storeMenuSlideIn {
   from {
@@ -1245,7 +1255,7 @@
 .store-product-card .card-brand {
   font-size: 0.7rem;
   font-weight: var(--font-medium);
-  color: var(--color-gray-400);
+  color: var(--color-gray-500); /* kontrast: #9ca3af ≈2.5:1 → #6b7280 ≈4.8:1 (WCAG 1.4.3) */
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -1281,7 +1291,7 @@
 }
 .store-product-card .product-price-old {
   font-size: 0.8rem;
-  color: var(--color-gray-400);
+  color: var(--color-gray-500); /* kontrast düzeltmesi (WCAG 1.4.3) */
   text-decoration: line-through;
   margin-right: 6px;
 }
@@ -1721,7 +1731,7 @@
   border-radius: 10px;
 }
 .store-result-count {
-  color: #94a3b8;
+  color: var(--color-gray-500); /* kontrast: #94a3b8 → #6b7280 (WCAG 1.4.3) */
   font-size: 0.82rem;
 }
 .store-sort-select {
@@ -1734,8 +1744,9 @@
   cursor: pointer;
   outline: none;
 }
-.store-sort-select:focus {
+.store-sort-select:focus-visible {
   border-color: var(--store-primary, #2563eb);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2); /* görünür focus halkası (WCAG 2.4.7) */
 }
 .store-view-toggle {
   display: flex;
@@ -1954,13 +1965,18 @@
   overflow-y: auto;
 }
 
-/* Mobile Filter Actions */
+/* Mobile Filter Actions — kaydırılan çekmece gövdesinin altına sabitlenir ki
+   "N Ürün Göster" CTA'sı uzun filtre listesinde her zaman görünür kalsın. */
 .store-filter-actions {
+  position: sticky;
+  bottom: 0;
   display: flex;
   gap: 10px;
   padding: 16px 20px;
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
   border-top: 1px solid #f1f5f9;
   background: #fff;
+  box-shadow: 0 -4px 14px rgba(15, 23, 42, 0.06);
 }
 .store-filter-action-clear {
   flex: 1;
@@ -2261,6 +2277,13 @@
   border-radius: var(--radius-lg);
   padding: 1.5rem;
 }
+/* Masaüstünde özet + "Ödemeye Geç" uzun ürün listesinde görünür kalsın. */
+@media (min-width: 992px) {
+  .store-cart-summary {
+    position: sticky;
+    top: 90px;
+  }
+}
 .store-cart-summary-row {
   display: flex;
   justify-content: space-between;
@@ -2281,7 +2304,8 @@
   right: -400px;
   width: 400px;
   max-width: 90vw;
-  height: 100vh;
+  height: 100vh; /* fallback */
+  height: 100dvh; /* mobilde tarayıcı çubuğu → ödeme butonu kesilmez */
   background: #fff;
   box-shadow: -4px 0 20px rgba(0, 0, 0, 0.15);
   z-index: 2000;
@@ -2820,8 +2844,8 @@
   position: fixed;
   bottom: 80px;
   right: var(--sp-4);
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   border-radius: var(--radius-full);
   background: var(--color-gray-800);
   color: white;
@@ -3373,6 +3397,21 @@
   }
   .card-wishlist-btn {
     opacity: 1; /* mobilde hover yok — her zaman göster */
+    width: 44px;
+    height: 44px;
+  }
+
+  /* Dokunma hedefleri ≥44px (WCAG 2.5.5) — araç çubuğu kontrolleri */
+  .store-view-toggle button {
+    width: 44px;
+    height: 44px;
+  }
+  .store-sort-select {
+    min-height: 44px;
+  }
+  .store-color-swatch {
+    width: 40px;
+    height: 40px;
   }
 
   /* Kategori nav — kaydırılabilir ipucu (sağ kenar fade) */
@@ -3420,8 +3459,8 @@
   position: absolute;
   bottom: 12px;
   left: 12px;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3575,4 +3614,367 @@
 }
 :root[data-theme='dark'] .store-pdp-acc-body {
   background: var(--surface-muted, #1f2937);
+}
+
+/* ============================================================
+   DARK MODE — sınırlı & coherent core, NON-DESTRUCTIVE
+   ------------------------------------------------------------
+   Bu blok YALNIZCA dark tetikleyiciler altında geçerlidir; ışık
+   modu hiçbir şekilde etkilenmez (aşağıdaki kurallar light'ta
+   uygulanmaz). Kod tabanında manuel toggle (data-theme) henüz
+   set edilmediğinden pratikte OS tercihi (prefers-color-scheme)
+   ile ateşlenir; ileride bir toggle eklenirse data-theme="dark"
+   de aynı sonucu verir. RHS'ler design-tokens.css'teki tema-duyarlı
+   surface / text / border token değerlerini kullanır.
+
+   Kapsam (sınırlı): sayfa zemini, header + kategori nav, ürün
+   kartı, mobil menü, arama input'u, filtre paneli/çekmecesi,
+   sepet çekmecesi. Footer zaten koyudur. PDP/checkout iç
+   bileşenleri ile sepet çekmecesindeki inline-stil detayları
+   bu pasa dahil değildir (ayrı ele alınacak).
+   ------------------------------------------------------------
+   NOT: Aynı kural gövdesi iki tetikleyici için tekrarlanır
+   (CSS'te media + attribute tek seçici listesinde birleşmez).
+   ============================================================ */
+
+/* --- 1) Manuel toggle: [data-theme="dark"] --- */
+:root[data-theme='dark'] .store-layout {
+  background: var(--surface-bg);
+}
+:root[data-theme='dark'] .store-header,
+:root[data-theme='dark'] .store-header-topband,
+:root[data-theme='dark'] .store-header-sticky,
+:root[data-theme='dark'] .store-header-main,
+:root[data-theme='dark'] .store-mega-menu,
+:root[data-theme='dark'] .store-cat-dropdown,
+:root[data-theme='dark'] .store-product-card,
+:root[data-theme='dark'] .store-mobile-menu,
+:root[data-theme='dark'] .store-mobile-menu-head,
+:root[data-theme='dark'] .store-sidebar-filters,
+:root[data-theme='dark'] .store-drawer,
+:root[data-theme='dark'] .store-cart-sidebar {
+  background: var(--surface-card);
+  color: var(--text-primary);
+}
+:root[data-theme='dark'] .store-header-sticky,
+:root[data-theme='dark'] .store-mega-menu,
+:root[data-theme='dark'] .store-product-card,
+:root[data-theme='dark'] .store-sidebar-filters,
+:root[data-theme='dark'] .store-drawer-header,
+:root[data-theme='dark'] .store-mobile-cat-link {
+  border-color: var(--border-subtle);
+}
+:root[data-theme='dark'] .store-cat-link,
+:root[data-theme='dark'] .store-cat-dropdown-item,
+:root[data-theme='dark'] .store-mobile-cat-link,
+:root[data-theme='dark'] .store-product-card .card-brand,
+:root[data-theme='dark'] .store-product-card .product-price-old {
+  color: var(--text-secondary);
+}
+:root[data-theme='dark'] .store-product-card .product-name {
+  color: var(--text-primary);
+}
+:root[data-theme='dark'] .store-cat-link:hover,
+:root[data-theme='dark'] .store-cat-dropdown-item:hover,
+:root[data-theme='dark'] .store-mobile-cat-link:hover {
+  background: var(--surface-elevated);
+  color: var(--text-primary);
+}
+:root[data-theme='dark'] .store-search-input {
+  background: var(--surface-elevated);
+  color: var(--text-primary);
+  border-color: var(--border-subtle);
+}
+:root[data-theme='dark'] .store-search-input::placeholder {
+  color: var(--text-muted);
+}
+
+/* --- 2) OS tercihi: prefers-color-scheme, manuel light seçilmediyse --- */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .store-layout {
+    background: var(--surface-bg);
+  }
+  :root:not([data-theme='light']) .store-header,
+  :root:not([data-theme='light']) .store-header-topband,
+  :root:not([data-theme='light']) .store-header-sticky,
+  :root:not([data-theme='light']) .store-header-main,
+  :root:not([data-theme='light']) .store-mega-menu,
+  :root:not([data-theme='light']) .store-cat-dropdown,
+  :root:not([data-theme='light']) .store-product-card,
+  :root:not([data-theme='light']) .store-mobile-menu,
+  :root:not([data-theme='light']) .store-mobile-menu-head,
+  :root:not([data-theme='light']) .store-sidebar-filters,
+  :root:not([data-theme='light']) .store-drawer,
+  :root:not([data-theme='light']) .store-cart-sidebar {
+    background: var(--surface-card);
+    color: var(--text-primary);
+  }
+  :root:not([data-theme='light']) .store-header-sticky,
+  :root:not([data-theme='light']) .store-mega-menu,
+  :root:not([data-theme='light']) .store-product-card,
+  :root:not([data-theme='light']) .store-sidebar-filters,
+  :root:not([data-theme='light']) .store-drawer-header,
+  :root:not([data-theme='light']) .store-mobile-cat-link {
+    border-color: var(--border-subtle);
+  }
+  :root:not([data-theme='light']) .store-cat-link,
+  :root:not([data-theme='light']) .store-cat-dropdown-item,
+  :root:not([data-theme='light']) .store-mobile-cat-link,
+  :root:not([data-theme='light']) .store-product-card .card-brand,
+  :root:not([data-theme='light']) .store-product-card .product-price-old {
+    color: var(--text-secondary);
+  }
+  :root:not([data-theme='light']) .store-product-card .product-name {
+    color: var(--text-primary);
+  }
+  :root:not([data-theme='light']) .store-cat-link:hover,
+  :root:not([data-theme='light']) .store-cat-dropdown-item:hover,
+  :root:not([data-theme='light']) .store-mobile-cat-link:hover {
+    background: var(--surface-elevated);
+    color: var(--text-primary);
+  }
+  :root:not([data-theme='light']) .store-search-input {
+    background: var(--surface-elevated);
+    color: var(--text-primary);
+    border-color: var(--border-subtle);
+  }
+  :root:not([data-theme='light']) .store-search-input::placeholder {
+    color: var(--text-muted);
+  }
+}
+
+/* ============================================================
+   DARK MODE — genişletme: SEPET ÇEKMECESI + PDP
+   ------------------------------------------------------------
+   Contained (kapsayıcı-scoped) yaklaşım: metin rengi yalnızca
+   .store-cart-sidebar ve .store-pdp-page kapsamlarında çevrilir;
+   böylece kapsanmayan beyaz yüzeyler (ör. modallar) etkilenmez.
+   Bazı yüzeyler inline stil taşıdığından !important gerekir.
+   Semantik bantlar (ücretsiz kargo, indirim rozetleri) bilinçli
+   olarak renkli bırakıldı. Işık modu değişmez.
+   ============================================================ */
+
+/* --- 1) Manuel toggle: [data-theme="dark"] --- */
+:root[data-theme='dark'] .store-cart-foot {
+  background: var(--surface-elevated) !important;
+}
+:root[data-theme='dark'] .store-cart-sidebar .form-control {
+  background: var(--surface-elevated);
+  color: var(--text-primary);
+  border-color: var(--border-subtle);
+}
+:root[data-theme='dark'] .store-cart-sidebar .form-control::placeholder {
+  color: var(--text-muted);
+}
+:root[data-theme='dark'] .store-cart-sidebar .input-group-text {
+  background: var(--surface-card);
+  color: var(--text-muted);
+  border-color: var(--border-subtle);
+}
+:root[data-theme='dark'] .store-cart-sidebar .border-top,
+:root[data-theme='dark'] .store-cart-sidebar .border-bottom {
+  border-color: var(--border-subtle) !important;
+}
+:root[data-theme='dark'] .store-cart-sidebar .text-muted,
+:root[data-theme='dark'] .store-pdp-page .text-muted {
+  color: var(--text-muted) !important;
+}
+:root[data-theme='dark'] .store-pdp-page {
+  color: var(--text-primary);
+}
+:root[data-theme='dark'] .store-pdp-price-box {
+  background: var(--surface-elevated) !important;
+  border-color: var(--border-subtle) !important;
+}
+:root[data-theme='dark'] .store-pdp-tabs {
+  border-color: var(--border-subtle);
+}
+:root[data-theme='dark'] .store-pdp-acc-item + .store-pdp-acc-item {
+  border-color: var(--border-subtle);
+}
+
+/* --- 2) OS tercihi: prefers-color-scheme --- */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .store-cart-foot {
+    background: var(--surface-elevated) !important;
+  }
+  :root:not([data-theme='light']) .store-cart-sidebar .form-control {
+    background: var(--surface-elevated);
+    color: var(--text-primary);
+    border-color: var(--border-subtle);
+  }
+  :root:not([data-theme='light']) .store-cart-sidebar .form-control::placeholder {
+    color: var(--text-muted);
+  }
+  :root:not([data-theme='light']) .store-cart-sidebar .input-group-text {
+    background: var(--surface-card);
+    color: var(--text-muted);
+    border-color: var(--border-subtle);
+  }
+  :root:not([data-theme='light']) .store-cart-sidebar .border-top,
+  :root:not([data-theme='light']) .store-cart-sidebar .border-bottom {
+    border-color: var(--border-subtle) !important;
+  }
+  :root:not([data-theme='light']) .store-cart-sidebar .text-muted,
+  :root:not([data-theme='light']) .store-pdp-page .text-muted {
+    color: var(--text-muted) !important;
+  }
+  :root:not([data-theme='light']) .store-pdp-page {
+    color: var(--text-primary);
+  }
+  :root:not([data-theme='light']) .store-pdp-price-box {
+    background: var(--surface-elevated) !important;
+    border-color: var(--border-subtle) !important;
+  }
+  :root:not([data-theme='light']) .store-pdp-tabs {
+    border-color: var(--border-subtle);
+  }
+  :root:not([data-theme='light']) .store-pdp-accordion {
+    border-color: var(--border-subtle);
+  }
+  :root:not([data-theme='light']) .store-pdp-acc-item + .store-pdp-acc-item {
+    border-color: var(--border-subtle);
+  }
+  :root:not([data-theme='light']) .store-pdp-acc-header {
+    background: var(--surface-card);
+    color: var(--text-primary);
+  }
+  :root:not([data-theme='light']) .store-pdp-acc-header[aria-expanded='true'] {
+    color: var(--store-primary);
+  }
+  :root:not([data-theme='light']) .store-pdp-acc-body {
+    background: var(--surface-elevated);
+  }
+}
+
+/* ============================================================
+   DARK MODE — PDP semantik alanları (bundle kutusu, güven/stok
+   metinleri). Renkli "chip" rozetleri ve yeşil/garanti metinleri
+   design-tokens'taki tema-duyarlı chip / pdp token'ları ile
+   otomatik döner (ışık = mevcut değerler). Buradaki kurallar
+   Bootstrap utility'lerini (.text-success vb. — !important) ve
+   inline stilleri ezmek içindir. Işık modu değişmez.
+   ------------------------------------------------------------
+   NOT: .store-warranty-box / .store-bundle-value / .store-qty-selector
+   için [data-theme="dark"] kuralları dosyanın üstünde zaten var;
+   burada yalnızca OS-media (prefers-color-scheme) eşlenikleri +
+   yeni ortak kurallar eklenir.
+   ============================================================ */
+
+/* --- Yeni ortak kurallar: manuel toggle --- */
+:root[data-theme='dark'] .store-pdp-page .text-success {
+  color: var(--chip-green-fg) !important;
+}
+:root[data-theme='dark'] .store-pdp-page .text-danger {
+  color: var(--cart-danger-fg) !important;
+}
+:root[data-theme='dark'] .store-pdp-page .text-dark {
+  color: var(--text-primary) !important;
+}
+:root[data-theme='dark'] .store-bundle-box {
+  border-color: var(--border-subtle) !important;
+}
+:root[data-theme='dark'] .store-bundle-thumb {
+  background: var(--surface-elevated);
+  border-color: var(--border-subtle);
+}
+:root[data-theme='dark'] .store-bundle-member:hover {
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+
+/* --- OS tercihi (prefers-color-scheme): tüm PDP semantik kuralları --- */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .store-warranty-box {
+    background: rgba(16, 185, 129, 0.12);
+    border-color: rgba(16, 185, 129, 0.3);
+  }
+  :root:not([data-theme='light']) .store-bundle-value {
+    background: rgba(16, 185, 129, 0.12);
+    border-top-color: rgba(16, 185, 129, 0.25);
+  }
+  :root:not([data-theme='light']) .store-bundle-box {
+    border-color: var(--border-subtle) !important;
+  }
+  :root:not([data-theme='light']) .store-bundle-thumb {
+    background: var(--surface-elevated);
+    border-color: var(--border-subtle);
+  }
+  :root:not([data-theme='light']) .store-bundle-member:hover {
+    background: rgba(255, 255, 255, 0.06) !important;
+  }
+  :root:not([data-theme='light']) .store-qty-selector {
+    background: var(--surface-card);
+    border-color: var(--border-strong);
+  }
+  :root:not([data-theme='light']) .store-qty-selector input {
+    background: var(--surface-card);
+    color: var(--text-primary);
+    border-color: var(--border-strong);
+  }
+  :root:not([data-theme='light']) .store-qty-selector button {
+    color: var(--text-secondary);
+  }
+  :root:not([data-theme='light']) .store-pdp-page .text-success {
+    color: var(--chip-green-fg) !important;
+  }
+  :root:not([data-theme='light']) .store-pdp-page .text-danger {
+    color: var(--cart-danger-fg) !important;
+  }
+  :root:not([data-theme='light']) .store-pdp-page .text-dark {
+    color: var(--text-primary) !important;
+  }
+}
+
+/* ============================================================
+   DARK MODE — kalan açık yüzeyler: Bootstrap bg-white / bg-light
+   rozet ve kutucukları (koyu yüzey üzerindekiler). Renkli zemin
+   üstündeki beyaz pill'ler (ör. indigo set başlığı) kasıtlı olarak
+   dokunulmadan bırakıldı. Bootstrap utility !important taşıdığından
+   burada da !important gerekir. Işık modu değişmez.
+   ============================================================ */
+
+/* --- Manuel toggle --- */
+:root[data-theme='dark'] .store-pdp-page .bg-light,
+:root[data-theme='dark'] .store-pdp-specs .bg-light {
+  background: var(--surface-elevated) !important;
+}
+:root[data-theme='dark'] .store-cart-sidebar .bg-white {
+  background: var(--surface-card) !important;
+}
+:root[data-theme='dark'] .store-notify-modal.bg-white {
+  background: var(--surface-card) !important;
+  color: var(--text-primary);
+  border: 1px solid var(--border-subtle);
+}
+:root[data-theme='dark'] .store-notify-modal .form-control {
+  background: var(--surface-elevated);
+  color: var(--text-primary);
+  border-color: var(--border-subtle);
+}
+:root[data-theme='dark'] .store-notify-modal .btn-close {
+  filter: invert(1) grayscale(100%) brightness(200%);
+}
+
+/* --- OS tercihi (prefers-color-scheme) --- */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .store-pdp-page .bg-light,
+  :root:not([data-theme='light']) .store-pdp-specs .bg-light {
+    background: var(--surface-elevated) !important;
+  }
+  :root:not([data-theme='light']) .store-cart-sidebar .bg-white {
+    background: var(--surface-card) !important;
+  }
+  :root:not([data-theme='light']) .store-notify-modal.bg-white {
+    background: var(--surface-card) !important;
+    color: var(--text-primary);
+    border: 1px solid var(--border-subtle);
+  }
+  :root:not([data-theme='light']) .store-notify-modal .form-control {
+    background: var(--surface-elevated);
+    color: var(--text-primary);
+    border-color: var(--border-subtle);
+  }
+  :root:not([data-theme='light']) .store-notify-modal .btn-close {
+    filter: invert(1) grayscale(100%) brightness(200%);
+  }
 }

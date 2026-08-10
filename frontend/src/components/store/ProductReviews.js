@@ -285,6 +285,7 @@ export default function ProductReviews({ productId }) {
                     type="button"
                     className="store-review-thumb-x"
                     onClick={() => removeExisting(im.id)}
+                    aria-label="Fotoğrafı kaldır"
                   >
                     <FiX size={12} />
                   </button>
@@ -297,6 +298,7 @@ export default function ProductReviews({ productId }) {
                     type="button"
                     className="store-review-thumb-x"
                     onClick={() => setStagedFiles((prev) => prev.filter((_, idx) => idx !== i))}
+                    aria-label="Fotoğrafı kaldır"
                   >
                     <FiX size={12} />
                   </button>

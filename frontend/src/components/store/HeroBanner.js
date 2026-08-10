@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { FiChevronLeft, FiChevronRight, FiPause, FiPlay } from 'react-icons/fi';
+import useSwipe from '../../hooks/useSwipe';
 
 export default function HeroBanner() {
   const [banners, setBanners] = useState([]);
@@ -58,6 +59,9 @@ export default function HeroBanner() {
     goTo((current + 1) % banners.length);
   }, [current, banners.length, goTo]);
 
+  // Dokunmatik kaydırma + fare ile sürükleme → slaytlar arası geçiş.
+  const swipe = useSwipe({ onSwipeLeft: next, onSwipeRight: prev });
+
   // Keyboard navigation
   const handleKeyDown = useCallback(
     (e) => {
@@ -101,19 +105,26 @@ export default function HeroBanner() {
       onMouseLeave={() => setPaused(false)}
       onKeyDown={handleKeyDown}
       tabIndex={0}
+      style={banners.length > 1 ? swipe.style : undefined}
+      {...(banners.length > 1 ? swipe.handlers : {})}
     >
       {/* Slides — real <img> so the full uploaded banner shows at its natural
           aspect ratio (full width, no cropping). Title/CTA overlay only when set. */}
       <div className={`theme-slide ${banner.imageUrl ? 'theme-slide--image' : ''}`}>
         {banner.imageUrl && (
-          <img src={banner.imageUrl} alt={banner.title || 'Kampanya görseli'} className="theme-slide-img" />
+          <img
+            src={banner.imageUrl}
+            alt={banner.title || 'Kampanya görseli'}
+            className="theme-slide-img"
+            draggable={false}
+          />
         )}
         {banner.title && <div className="theme-slide-overlay" />}
         {banner.title && (
           <div className="theme-slide-content">
             <h2 className="theme-slide-title">{banner.title}</h2>
             {banner.link && (
-              <a href={banner.link} className="theme-slide-cta">
+              <a href={banner.link} className="theme-slide-cta" onClickCapture={swipe.guardClick}>
                 Detaylı İncele
               </a>
             )}

@@ -551,15 +551,24 @@ export default function CheckoutPage() {
                   </label>
                   <input
                     type="email"
+                    inputMode="email"
+                    autoComplete="email"
+                    autoCapitalize="none"
+                    spellCheck={false}
                     className={`form-control ${guestErrors.email ? 'is-invalid' : ''}`}
                     placeholder="ornek@eposta.com"
                     value={guestEmail}
+                    aria-invalid={guestErrors.email ? 'true' : undefined}
                     onChange={(e) => {
                       setGuestEmail(e.target.value);
                       setGuestErrors((prev) => ({ ...prev, email: '' }));
                     }}
                   />
-                  {guestErrors.email && <div className="invalid-feedback">{guestErrors.email}</div>}
+                  {guestErrors.email && (
+                    <div className="invalid-feedback" role="alert">
+                      {guestErrors.email}
+                    </div>
+                  )}
                   <small className="text-muted">
                     Sipariş onayı ve hesap tamamlama bağlantısı bu adrese gönderilecektir.
                   </small>
@@ -591,12 +600,22 @@ export default function CheckoutPage() {
           {/* Saved addresses */}
           {savedAddresses.length > 0 && !showNewAddress && (
             <div className="mb-3">
-              <div className="row g-3">
+              <div className="row g-3" role="radiogroup" aria-label="Kayıtlı adresler">
                 {savedAddresses.map((a) => (
                   <div key={a.id} className="col-md-6">
                     <div
                       className={`card h-100 border-2 ${address?.id === a.id ? 'border-primary bg-primary bg-opacity-10' : 'border-light'}`}
                       style={{ cursor: 'pointer' }}
+                      role="radio"
+                      aria-checked={address?.id === a.id}
+                      aria-label={`${a.title || 'Adres'} — ${a.firstName} ${a.lastName}, ${a.district} / ${a.city}`}
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          e.currentTarget.click();
+                        }
+                      }}
                       onClick={() => setAddress(a)}
                     >
                       <div className="card-body small">
@@ -692,6 +711,16 @@ export default function CheckoutPage() {
                     key={cp.id}
                     className={`p-3 border rounded-3 d-flex align-items-center gap-3 ${isSelected ? 'border-primary bg-primary bg-opacity-10' : 'border-light'}`}
                     style={{ cursor: 'pointer', transition: 'all 0.15s' }}
+                    role="radio"
+                    aria-checked={isSelected}
+                    aria-label={cp.name}
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        e.currentTarget.click();
+                      }
+                    }}
                     onClick={() => {
                       setSelectedCargoProvider(cp);
                       setCargoCompany(cp.code);
@@ -702,6 +731,8 @@ export default function CheckoutPage() {
                       className="form-check-input m-0 flex-shrink-0"
                       checked={isSelected}
                       readOnly
+                      tabIndex={-1}
+                      aria-hidden="true"
                     />
                     <div className="flex-grow-1">
                       <div className="d-flex justify-content-between align-items-start">
@@ -943,7 +974,7 @@ export default function CheckoutPage() {
                   Geri
                 </button>
                 <button
-                  className="btn btn-primary flex-grow-1 order-1 order-sm-2"
+                  className="btn btn-primary flex-grow-1 order-1 order-sm-2 d-none d-md-block"
                   onClick={handlePlaceOrder}
                   disabled={loading || !contractAccepted || !preliminaryInfoAccepted || !purchasingEnabled}
                   style={{
