@@ -35,6 +35,15 @@ const SORT_OPTIONS = [
   { value: 'viewCount-desc', label: 'En Popüler' },
 ];
 
+/* Enter/Space ile tıklanabilir filtre label'larını klavyeyle etkinleştirir
+   (role=radio/checkbox olan öğeler için). onClick mantığını yeniden kullanır. */
+const handleFilterKey = (e) => {
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault();
+    e.currentTarget.click();
+  }
+};
+
 /* ─── Collapsible Filter Section ─── */
 function FilterSection({ title, defaultOpen = true, children, count }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -205,6 +214,21 @@ export default function CategoryPage() {
     fetchProducts();
   }, [fetchProducts]);
 
+  // Mobil filtre çekmecesi açıkken arka planın kaymasını engelle (Escape ile kapat).
+  useEffect(() => {
+    if (!filtersOpen) return undefined;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e) => {
+      if (e.key === 'Escape') setFiltersOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [filtersOpen]);
+
   // Infinite scroll — auto-load the next page when the sentinel nears the viewport.
   useEffect(() => {
     const el = sentinelRef.current;
@@ -269,9 +293,13 @@ export default function CategoryPage() {
     <>
       {/* Categories */}
       <FilterSection title="Kategoriler" defaultOpen={true}>
-        <div className="store-filter-list">
+        <div className="store-filter-list" role="radiogroup" aria-label="Kategoriler">
           <label
             className={`store-filter-item ${!categoryId ? 'active' : ''}`}
+            role="radio"
+            aria-checked={!categoryId}
+            tabIndex={0}
+            onKeyDown={handleFilterKey}
             onClick={() => {
               setCategoryId(null);
               setCategory(null);
@@ -287,6 +315,10 @@ export default function CategoryPage() {
             <React.Fragment key={cat.id}>
               <label
                 className={`store-filter-item ${categoryId === cat.id ? 'active' : ''}`}
+                role="radio"
+                aria-checked={categoryId === cat.id}
+                tabIndex={0}
+                onKeyDown={handleFilterKey}
                 onClick={() => {
                   setCategoryId(cat.id);
                   setCategory(cat);
@@ -302,6 +334,10 @@ export default function CategoryPage() {
                 <label
                   key={sub.id}
                   className={`store-filter-item store-filter-sub ${categoryId === sub.id ? 'active' : ''}`}
+                  role="radio"
+                  aria-checked={categoryId === sub.id}
+                  tabIndex={0}
+                  onKeyDown={handleFilterKey}
                   onClick={() => {
                     setCategoryId(sub.id);
                     setCategory(sub);
@@ -322,11 +358,15 @@ export default function CategoryPage() {
       {/* Brands — Multi-select */}
       {brands.length > 0 && (
         <FilterSection title="Markalar" count={selectedBrands.size}>
-          <div className="store-filter-list">
+          <div className="store-filter-list" role="group" aria-label="Markalar">
             {brands.map((b) => (
               <label
                 key={b.id}
                 className={`store-filter-item ${selectedBrands.has(b.id) ? 'active' : ''}`}
+                role="checkbox"
+                aria-checked={selectedBrands.has(b.id)}
+                tabIndex={0}
+                onKeyDown={handleFilterKey}
                 onClick={() => {
                   setSelectedBrands((prev) => toggleSet(prev, b.id));
                   setPage(0);
@@ -360,7 +400,10 @@ export default function CategoryPage() {
             {colors.map((c) => (
               <button
                 key={c.id}
+                type="button"
                 title={c.name}
+                aria-label={c.name}
+                aria-pressed={selectedColors.has(c.id)}
                 className={`store-color-swatch ${selectedColors.has(c.id) ? 'active' : ''}`}
                 style={{ '--swatch-color': c.hexCode || '#ccc' }}
                 onClick={() => {

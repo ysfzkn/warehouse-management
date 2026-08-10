@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
   FiX,
@@ -22,6 +22,22 @@ export default function CartSidebar({ cart }) {
   const [couponLoading, setCouponLoading] = useState(false);
   const [couponError, setCouponError] = useState('');
   const [clearing, setClearing] = useState(false);
+
+  // Modal davranışı: açıkken arka planı kilitle + Escape ile kapat.
+  const { sidebarOpen, setSidebarOpen } = cart;
+  useEffect(() => {
+    if (!sidebarOpen) return undefined;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e) => {
+      if (e.key === 'Escape') setSidebarOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [sidebarOpen, setSidebarOpen]);
 
   if (!cart.sidebarOpen) return null;
 
@@ -92,22 +108,30 @@ export default function CartSidebar({ cart }) {
         {hasItems && freeShippingThreshold > 0 && (
           <div
             className="px-3 pt-3 pb-2"
-            style={{ background: qualifiesForFreeShipping ? '#ecfdf5' : '#f0f9ff' }}
+            style={{
+              background: qualifiesForFreeShipping ? 'var(--cart-success-bg)' : 'var(--cart-info-bg)',
+            }}
           >
             {qualifiesForFreeShipping ? (
-              <div className="d-flex align-items-center gap-2" style={{ color: '#059669' }}>
+              <div
+                className="d-flex align-items-center gap-2"
+                style={{ color: 'var(--cart-success-strong)' }}
+              >
                 <FiCheck size={16} />
                 <small className="fw-semibold">🎉 Ücretsiz kargo hakkı kazandınız!</small>
               </div>
             ) : (
               <>
-                <div className="d-flex align-items-center gap-2 mb-1" style={{ color: '#0c4a6e' }}>
+                <div
+                  className="d-flex align-items-center gap-2 mb-1"
+                  style={{ color: 'var(--cart-info-fg)' }}
+                >
                   <FiTruck size={14} />
                   <small>
                     Ücretsiz kargo için <strong>{fmt(remaining)}</strong> daha ekleyin
                   </small>
                 </div>
-                <div className="progress" style={{ height: 6, background: '#e0f2fe' }}>
+                <div className="progress" style={{ height: 6, background: 'var(--cart-info-track)' }}>
                   <div
                     className="progress-bar"
                     role="progressbar"
@@ -248,11 +272,11 @@ export default function CartSidebar({ cart }) {
 
         {/* Footer — quick actions + coupon + totals + CTA */}
         {hasItems && (
-          <div className="border-top" style={{ background: '#fafbfc' }}>
+          <div className="border-top store-cart-foot" style={{ background: '#fafbfc' }}>
             {/* Clear cart confirmation */}
             {showClearConfirm ? (
-              <div className="p-3 border-bottom" style={{ background: '#fef2f2' }}>
-                <div className="small mb-2" style={{ color: '#991b1b' }}>
+              <div className="p-3 border-bottom" style={{ background: 'var(--cart-danger-bg)' }}>
+                <div className="small mb-2" style={{ color: 'var(--cart-danger-fg)' }}>
                   <strong>Sepetinizi boşaltmak istediğinize emin misiniz?</strong>
                   <div className="mt-1" style={{ fontSize: 11, opacity: 0.85 }}>
                     Tüm ürünler sepetten kaldırılacak. Bu işlem geri alınamaz.
@@ -318,15 +342,21 @@ export default function CartSidebar({ cart }) {
                 {appliedCoupon ? (
                   <div
                     className="d-flex align-items-center justify-content-between p-2 rounded mb-2"
-                    style={{ background: '#ecfdf5', border: '1px solid #bbf7d0' }}
+                    style={{
+                      background: 'var(--cart-success-bg)',
+                      border: '1px solid var(--cart-success-border)',
+                    }}
                   >
-                    <div className="d-flex align-items-center gap-2 small" style={{ color: '#047857' }}>
+                    <div
+                      className="d-flex align-items-center gap-2 small"
+                      style={{ color: 'var(--cart-success-fg)' }}
+                    >
                       <FiTag size={14} />
                       <span>
                         Kupon: <strong>{appliedCoupon}</strong>
                       </span>
                       {cart.cart?.discountAmount > 0 && (
-                        <span className="badge" style={{ background: '#059669' }}>
+                        <span className="badge" style={{ background: 'var(--cart-success-strong)' }}>
                           -{fmt(cart.cart.discountAmount)}
                         </span>
                       )}

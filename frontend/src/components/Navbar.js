@@ -802,19 +802,20 @@ const Navbar = () => {
           }
         }
 
+        /* Actions artık hamburger dışında (üst satırda her zaman görünür). Tüm
+           boyutlarda kompakt, satır-içi bir grup olarak kalır. */
         .mobile-user-actions {
-          margin-left: auto;
-          gap: 0.75rem;
+          gap: 0.5rem;
+          flex-shrink: 0;
         }
 
         @media (max-width: 1199.98px) {
-          .mobile-user-actions {
-            width: 100%;
-            justify-content: flex-end;
-            margin-top: 1rem;
-          }
           .mobile-user-actions .btn {
             padding: 0.35rem 0.45rem;
+          }
+          /* Dar ekranda kullanıcı rozetini biraz sıkılaştır (yalnızca avatar). */
+          .mobile-user-actions .me-3 {
+            margin-right: 0.5rem !important;
           }
         }
       `}</style>
@@ -898,6 +899,62 @@ const Navbar = () => {
               ))}
             </div>
           )}
+
+          {/* Bildirim + hesap: her zaman görünür (hamburger dışında). Masaüstünde
+              order-xl-last ile en sağa; mobil/tablette toggler'ın hemen solunda. */}
+          <div className="d-flex align-items-center position-relative mobile-user-actions order-xl-last ms-auto ms-xl-0">
+            {role === 'ADMIN' && (
+              <div className="position-relative me-3">
+                <button
+                  className="btn btn-link text-white position-relative"
+                  onClick={() => setShowNotif(!showNotif)}
+                  style={{ textDecoration: 'none' }}
+                  aria-label={`Bildirimler${unreadCount > 0 ? `, ${unreadCount} okunmamış` : ''}`}
+                  aria-haspopup="dialog"
+                  aria-expanded={showNotif}
+                >
+                  <i className="fas fa-bell fa-lg" aria-hidden="true"></i>
+                  {unreadCount > 0 && (
+                    <span className="notification-badge" style={{ right: -4 }}>
+                      {unreadCount}
+                    </span>
+                  )}
+                </button>
+              </div>
+            )}
+            <div
+              className="text-white d-flex align-items-center"
+              style={userBadgeStyle}
+              ref={userBadgeRef}
+              onClick={() => setShowUserDropdown(!showUserDropdown)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  setShowUserDropdown((v) => !v);
+                }
+              }}
+              role="button"
+              tabIndex={0}
+              aria-label="Hesap menüsü"
+              aria-haspopup="true"
+              aria-expanded={showUserDropdown}
+            >
+              <div
+                className="rounded-circle d-flex align-items-center justify-content-center me-2"
+                style={{
+                  width: '32px',
+                  height: '32px',
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  fontWeight: 'bold',
+                  fontSize: '0.9rem',
+                }}
+              >
+                {(localStorage.getItem('auth_user') || 'A').charAt(0).toUpperCase()}
+              </div>
+              <span className="me-2 d-none d-md-inline">{localStorage.getItem('auth_user') || 'Admin'}</span>
+              <i className={`fas fa-chevron-${showUserDropdown ? 'up' : 'down'} small`}></i>
+            </div>
+          </div>
 
           <button
             className="navbar-toggler border-0"
@@ -1276,50 +1333,6 @@ const Navbar = () => {
                 </li>
               )}
             </ul>
-
-            <div className="d-flex align-items-center position-relative mobile-user-actions ms-lg-3">
-              {role === 'ADMIN' && (
-                <div className="position-relative me-3">
-                  <button
-                    className="btn btn-link text-white position-relative"
-                    onClick={() => setShowNotif(!showNotif)}
-                    style={{ textDecoration: 'none' }}
-                  >
-                    <i className="fas fa-bell fa-lg"></i>
-                    {unreadCount > 0 && (
-                      <span className="notification-badge" style={{ right: -4 }}>
-                        {unreadCount}
-                      </span>
-                    )}
-                  </button>
-                </div>
-              )}
-              <div
-                className="text-white d-flex align-items-center"
-                style={userBadgeStyle}
-                ref={userBadgeRef}
-                onClick={() => setShowUserDropdown(!showUserDropdown)}
-                aria-haspopup="true"
-                aria-expanded={showUserDropdown}
-              >
-                <div
-                  className="rounded-circle d-flex align-items-center justify-content-center me-2"
-                  style={{
-                    width: '32px',
-                    height: '32px',
-                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                    fontWeight: 'bold',
-                    fontSize: '0.9rem',
-                  }}
-                >
-                  {(localStorage.getItem('auth_user') || 'A').charAt(0).toUpperCase()}
-                </div>
-                <span className="me-2 d-none d-md-inline">
-                  {localStorage.getItem('auth_user') || 'Admin'}
-                </span>
-                <i className={`fas fa-chevron-${showUserDropdown ? 'up' : 'down'} small`}></i>
-              </div>
-            </div>
           </div>
         </div>
       </nav>

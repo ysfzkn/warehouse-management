@@ -745,49 +745,51 @@ export default function AdminCms() {
                   </button>
                 </div>
               ) : (
-                <table className="table table-hover mb-0">
-                  <thead className="table-light">
-                    <tr>
-                      <th>Başlık</th>
-                      <th>Tip</th>
-                      <th>Durum</th>
-                      <th style={{ width: 100 }}></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {contentPages.map((p) => (
-                      <tr key={p.id}>
-                        <td>
-                          <div className="fw-medium small">{p.title}</div>
-                          <small className="text-muted">/sayfa/{p.slug}</small>
-                        </td>
-                        <td>
-                          <span className="badge bg-light text-dark">
-                            {PAGE_TYPES[p.pageType] || p.pageType}
-                          </span>
-                        </td>
-                        <td>
-                          <span className={`badge bg-${p.active ? 'success' : 'danger'}`}>
-                            {p.active ? 'Aktif' : 'Pasif'}
-                          </span>
-                        </td>
-                        <td>
-                          <div className="btn-group btn-group-sm">
-                            <button className="btn btn-outline-primary" onClick={() => startEdit(p)}>
-                              <i className="fas fa-edit" />
-                            </button>
-                            <button
-                              className="btn btn-outline-danger"
-                              onClick={() => handleDelete(p.id, p.title)}
-                            >
-                              <i className="fas fa-trash" />
-                            </button>
-                          </div>
-                        </td>
+                <div className="table-responsive">
+                  <table className="table table-hover mb-0">
+                    <thead className="table-light">
+                      <tr>
+                        <th>Başlık</th>
+                        <th>Tip</th>
+                        <th>Durum</th>
+                        <th style={{ width: 100 }}></th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {contentPages.map((p) => (
+                        <tr key={p.id}>
+                          <td>
+                            <div className="fw-medium small">{p.title}</div>
+                            <small className="text-muted">/sayfa/{p.slug}</small>
+                          </td>
+                          <td>
+                            <span className="badge bg-light text-dark">
+                              {PAGE_TYPES[p.pageType] || p.pageType}
+                            </span>
+                          </td>
+                          <td>
+                            <span className={`badge bg-${p.active ? 'success' : 'danger'}`}>
+                              {p.active ? 'Aktif' : 'Pasif'}
+                            </span>
+                          </td>
+                          <td>
+                            <div className="btn-group btn-group-sm">
+                              <button className="btn btn-outline-primary" onClick={() => startEdit(p)}>
+                                <i className="fas fa-edit" />
+                              </button>
+                              <button
+                                className="btn btn-outline-danger"
+                                onClick={() => handleDelete(p.id, p.title)}
+                              >
+                                <i className="fas fa-trash" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </div>
           </div>

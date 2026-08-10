@@ -185,7 +185,7 @@ export default function ProductDetailPage() {
   const waOrderUrl = buildWhatsappOrderUrl(settings, product, productUrl, settings.currency_symbol);
 
   return (
-    <div className="container my-3">
+    <div className="container my-3 store-pdp-page">
       <SeoHead
         title={seoTitle}
         description={seoDescription}
@@ -307,7 +307,7 @@ export default function ProductDetailPage() {
 
           {/* Price Section */}
           <div
-            className="p-3 rounded-3 mb-3"
+            className="p-3 rounded-3 mb-3 store-pdp-price-box"
             style={{
               background: hasDiscount
                 ? 'linear-gradient(135deg, #fef2f2 0%, #fff1f2 100%)'
@@ -335,7 +335,7 @@ export default function ProductDetailPage() {
             {hasDiscount && (
               <div
                 className="d-flex align-items-center gap-2 mt-2"
-                style={{ fontSize: '0.85rem', color: '#059669' }}
+                style={{ fontSize: '0.85rem', color: 'var(--pdp-savings-fg)' }}
               >
                 <svg
                   width="16"
@@ -540,7 +540,7 @@ export default function ProductDetailPage() {
                 <FiShield size={22} />
               </div>
               <div className="flex-grow-1 min-w-0">
-                <div className="fw-bold" style={{ color: '#047857' }}>
+                <div className="fw-bold" style={{ color: 'var(--pdp-warranty-fg)' }}>
                   {warrantyTitle}
                 </div>
                 <div className="small text-muted">
@@ -553,20 +553,20 @@ export default function ProductDetailPage() {
           {/* Trust Badges */}
           <div className="d-flex gap-2 mb-3 flex-wrap">
             {[
-              { icon: FiTruck, label: 'Hızlı Kargo', color: '#3b82f6', bg: '#eff6ff' },
-              { icon: FiShield, label: 'Güvenli Ödeme', color: '#10b981', bg: '#ecfdf5' },
-              { icon: FiRefreshCw, label: '14 Gün İade', color: '#f59e0b', bg: '#fffbeb' },
-              { icon: FiPackage, label: 'Orijinal Ürün', color: '#6366f1', bg: '#eef2ff' },
-            ].map(({ icon: Icon, label, color, bg }) => (
+              { icon: FiTruck, label: 'Hızlı Kargo', tone: 'blue' },
+              { icon: FiShield, label: 'Güvenli Ödeme', tone: 'green' },
+              { icon: FiRefreshCw, label: '14 Gün İade', tone: 'amber' },
+              { icon: FiPackage, label: 'Orijinal Ürün', tone: 'indigo' },
+            ].map(({ icon: Icon, label, tone }) => (
               <div
                 key={label}
                 className="d-flex align-items-center gap-2 px-3 py-2 rounded-pill"
                 style={{
-                  background: bg,
-                  border: `1px solid ${color}20`,
+                  background: `var(--chip-${tone}-bg)`,
+                  border: `1px solid var(--chip-${tone}-border)`,
                   fontSize: '0.78rem',
                   fontWeight: 500,
-                  color,
+                  color: `var(--chip-${tone}-fg)`,
                 }}
               >
                 <Icon size={14} />
@@ -853,7 +853,7 @@ export default function ProductDetailPage() {
           onClick={() => setNotifyModalOpen(false)}
         >
           <div
-            className="bg-white rounded-3 shadow-lg p-4 mx-3"
+            className="bg-white rounded-3 shadow-lg p-4 mx-3 store-notify-modal"
             style={{ maxWidth: 440, width: '100%' }}
             onClick={(e) => e.stopPropagation()}
           >

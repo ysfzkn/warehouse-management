@@ -14,6 +14,7 @@ describe('PaginationControls', () => {
     render(<PaginationControls page={0} totalPages={3} onPageChange={handleChange} />);
 
     const prevButton = screen.getByLabelText('Önceki sayfa');
+    // eslint-disable-next-line testing-library/no-node-access -- li wrapper class is the disabled indicator
     expect(prevButton.closest('li')).toHaveClass('disabled');
 
     const pageTwoButton = screen.getByRole('button', { name: '2' });
@@ -27,4 +28,3 @@ describe('PaginationControls', () => {
     expect(handleChange).toHaveBeenCalledTimes(2);
   });
 });
-

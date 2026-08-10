@@ -249,50 +249,55 @@ export default function AssistantDocumentsPage() {
           ) : docs.length === 0 ? (
             <div className="p-3 text-center text-muted">Henüz doküman yok.</div>
           ) : (
-            <table className="table table-hover mb-0">
-              <thead>
-                <tr>
-                  <th>Başlık</th>
-                  <th>Kapsam</th>
-                  <th>Durum</th>
-                  <th>Chunk</th>
-                  <th>Boyut</th>
-                  <th>Yükleyen</th>
-                  <th>Tarih</th>
-                  <th style={{ width: 200 }}>İşlemler</th>
-                </tr>
-              </thead>
-              <tbody>
-                {docs.map((d) => (
-                  <tr key={d.id}>
-                    <td>
-                      <strong>{d.title}</strong>
-                      <br />
-                      <small className="text-muted">{d.fileName}</small>
-                    </td>
-                    <td>{d.scope}</td>
-                    <td>
-                      {statusBadge(d.status)}
-                      {d.errorMessage && (
-                        <div style={{ fontSize: 11, color: '#ef4444', marginTop: 4 }}>{d.errorMessage}</div>
-                      )}
-                    </td>
-                    <td>{d.chunkCount}</td>
-                    <td>{Math.round(d.sizeBytes / 1024)} KB</td>
-                    <td>{d.uploadedBy || '-'}</td>
-                    <td>{d.createdAt ? new Date(d.createdAt).toLocaleString('tr-TR') : ''}</td>
-                    <td>
-                      <button className="btn btn-sm btn-outline-primary me-2" onClick={() => onReindex(d.id)}>
-                        Yeniden İndeksle
-                      </button>
-                      <button className="btn btn-sm btn-outline-danger" onClick={() => onDelete(d.id)}>
-                        Sil
-                      </button>
-                    </td>
+            <div className="table-responsive">
+              <table className="table table-hover mb-0">
+                <thead>
+                  <tr>
+                    <th>Başlık</th>
+                    <th>Kapsam</th>
+                    <th>Durum</th>
+                    <th>Chunk</th>
+                    <th>Boyut</th>
+                    <th>Yükleyen</th>
+                    <th>Tarih</th>
+                    <th style={{ width: 200 }}>İşlemler</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {docs.map((d) => (
+                    <tr key={d.id}>
+                      <td>
+                        <strong>{d.title}</strong>
+                        <br />
+                        <small className="text-muted">{d.fileName}</small>
+                      </td>
+                      <td>{d.scope}</td>
+                      <td>
+                        {statusBadge(d.status)}
+                        {d.errorMessage && (
+                          <div style={{ fontSize: 11, color: '#ef4444', marginTop: 4 }}>{d.errorMessage}</div>
+                        )}
+                      </td>
+                      <td>{d.chunkCount}</td>
+                      <td>{Math.round(d.sizeBytes / 1024)} KB</td>
+                      <td>{d.uploadedBy || '-'}</td>
+                      <td>{d.createdAt ? new Date(d.createdAt).toLocaleString('tr-TR') : ''}</td>
+                      <td>
+                        <button
+                          className="btn btn-sm btn-outline-primary me-2"
+                          onClick={() => onReindex(d.id)}
+                        >
+                          Yeniden İndeksle
+                        </button>
+                        <button className="btn btn-sm btn-outline-danger" onClick={() => onDelete(d.id)}>
+                          Sil
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       </div>
