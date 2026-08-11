@@ -58,20 +58,34 @@ export default function ProductCard({ product, onAddToCart }) {
             </div>
           )}
           <div className="card-badges">
-            {product.productType === 'BUNDLE' && (
-              <span className="card-badge card-badge-set">
-                <FiPackage size={11} className="me-1" />
-                {product.bundleItemCount ? `${product.bundleItemCount} Ürün Bir Arada` : 'SET'}
-              </span>
-            )}
-            {product.featured && (
-              <span className="card-badge card-badge-featured">
-                <FiStar size={10} className="me-1" />
-                Öne Çıkan
-              </span>
-            )}
-            {product.isNew && <span className="card-badge card-badge-new">Yeni</span>}
-            {hasDiscount && <span className="card-badge card-badge-sale">%{discountPercent}</span>}
+            {/* En fazla 2 rozet — öncelik sırası: set, indirim, yeni, öne çıkan.
+                Böylece rozetler ürün görselinin büyük kısmını kaplamaz. */}
+            {[
+              product.productType === 'BUNDLE' && (
+                <span key="set" className="card-badge card-badge-set">
+                  <FiPackage size={11} className="me-1" />
+                  {product.bundleItemCount ? `${product.bundleItemCount} Ürün Bir Arada` : 'SET'}
+                </span>
+              ),
+              hasDiscount && (
+                <span key="sale" className="card-badge card-badge-sale">
+                  %{discountPercent}
+                </span>
+              ),
+              product.isNew && (
+                <span key="new" className="card-badge card-badge-new">
+                  Yeni
+                </span>
+              ),
+              product.featured && (
+                <span key="featured" className="card-badge card-badge-featured">
+                  <FiStar size={10} className="me-1" />
+                  Öne Çıkan
+                </span>
+              ),
+            ]
+              .filter(Boolean)
+              .slice(0, 2)}
           </div>
           {/* Wishlist heart */}
           <button

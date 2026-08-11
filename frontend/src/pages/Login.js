@@ -53,7 +53,10 @@ const Login = () => {
             <div style={styles.logoContainer}>
               <img
                 src="/api/store/settings/logo"
-                onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = '/company-logo.png'; }}
+                onError={(e) => {
+                  e.currentTarget.onerror = null;
+                  e.currentTarget.src = '/company-logo.png';
+                }}
                 alt="Logo"
                 className="brand-logo brand-logo--company"
                 style={styles.logo}
@@ -71,7 +74,10 @@ const Login = () => {
 
                 <p className="hero-subtitle" style={styles.heroSubtitle}>
                   Depo operasyonlarınızı dijitalleştirin, envanter yönetiminizi optimize edin.
-                  <span className="hero-ai-line"> Cezeri ile yapay zekâ destekli hızlı arama ve yönlendirme.</span>
+                  <span className="hero-ai-line">
+                    {' '}
+                    Cezeri ile yapay zekâ destekli hızlı arama ve yönlendirme.
+                  </span>
                 </p>
               </div>
 
@@ -80,7 +86,9 @@ const Login = () => {
                   src={CEZERI_LOGO_SRC}
                   alt="Cezeri"
                   className="hero-cezeri-logo"
-                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                  }}
                 />
               </div>
             </div>
@@ -89,41 +97,57 @@ const Login = () => {
             <div className="features-grid" style={styles.featuresGrid}>
               <div className="feature-card" style={styles.featureCard}>
                 <div className="feature-icon" style={styles.featureIcon}>
-                  <i className="fas fa-boxes" style={{fontSize: '20px'}}></i>
+                  <i className="fas fa-boxes" style={{ fontSize: '20px' }}></i>
                 </div>
                 <div style={styles.featureText}>
-                  <div className="feature-title" style={styles.featureTitle}>Gerçek Zamanlı</div>
-                  <div className="feature-subtitle" style={styles.featureSubtitle}>Stok Takibi</div>
-                </div>
-              </div>
-              
-              <div className="feature-card" style={styles.featureCard}>
-                <div className="feature-icon" style={styles.featureIcon}>
-                  <i className="fas fa-warehouse" style={{fontSize: '20px'}}></i>
-                </div>
-                <div style={styles.featureText}>
-                  <div className="feature-title" style={styles.featureTitle}>Çoklu Depo</div>
-                  <div className="feature-subtitle" style={styles.featureSubtitle}>Yönetimi</div>
+                  <div className="feature-title" style={styles.featureTitle}>
+                    Gerçek Zamanlı
+                  </div>
+                  <div className="feature-subtitle" style={styles.featureSubtitle}>
+                    Stok Takibi
+                  </div>
                 </div>
               </div>
 
               <div className="feature-card" style={styles.featureCard}>
                 <div className="feature-icon" style={styles.featureIcon}>
-                  <i className="fas fa-exchange-alt" style={{fontSize: '20px'}}></i>
+                  <i className="fas fa-warehouse" style={{ fontSize: '20px' }}></i>
                 </div>
                 <div style={styles.featureText}>
-                  <div className="feature-title" style={styles.featureTitle}>Hızlı Transfer</div>
-                  <div className="feature-subtitle" style={styles.featureSubtitle}>Operasyonları</div>
+                  <div className="feature-title" style={styles.featureTitle}>
+                    Çoklu Depo
+                  </div>
+                  <div className="feature-subtitle" style={styles.featureSubtitle}>
+                    Yönetimi
+                  </div>
                 </div>
               </div>
 
               <div className="feature-card" style={styles.featureCard}>
                 <div className="feature-icon" style={styles.featureIcon}>
-                  <i className="fas fa-chart-line" style={{fontSize: '20px'}}></i>
+                  <i className="fas fa-exchange-alt" style={{ fontSize: '20px' }}></i>
                 </div>
                 <div style={styles.featureText}>
-                  <div className="feature-title" style={styles.featureTitle}>Detaylı</div>
-                  <div className="feature-subtitle" style={styles.featureSubtitle}>Raporlama</div>
+                  <div className="feature-title" style={styles.featureTitle}>
+                    Hızlı Transfer
+                  </div>
+                  <div className="feature-subtitle" style={styles.featureSubtitle}>
+                    Operasyonları
+                  </div>
+                </div>
+              </div>
+
+              <div className="feature-card" style={styles.featureCard}>
+                <div className="feature-icon" style={styles.featureIcon}>
+                  <i className="fas fa-chart-line" style={{ fontSize: '20px' }}></i>
+                </div>
+                <div style={styles.featureText}>
+                  <div className="feature-title" style={styles.featureTitle}>
+                    Detaylı
+                  </div>
+                  <div className="feature-subtitle" style={styles.featureSubtitle}>
+                    Raporlama
+                  </div>
                 </div>
               </div>
             </div>
@@ -155,8 +179,12 @@ const Login = () => {
               <div className="login-icon-container">
                 <i className="fas fa-lock login-icon"></i>
               </div>
-              <h2 className="login-title" style={styles.loginTitle}>Hoş Geldiniz</h2>
-              <p className="login-subtitle" style={styles.loginSubtitle}>Devam etmek için lütfen giriş yapın</p>
+              <h2 className="login-title" style={styles.loginTitle}>
+                Hoş Geldiniz
+              </h2>
+              <p className="login-subtitle" style={styles.loginSubtitle}>
+                Devam etmek için lütfen giriş yapın
+              </p>
             </div>
 
             {error && (
@@ -998,7 +1026,6 @@ const styles = {
   container: {
     position: 'relative',
     minHeight: '100vh',
-    height: '100vh',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',

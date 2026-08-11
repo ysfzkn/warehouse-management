@@ -399,7 +399,7 @@ const Navbar = () => {
                   {n.entityType && n.entityId && (
                     <button
                       className="btn btn-sm flex-fill btn-primary"
-                      style={{ minHeight: '38px' }}
+                      style={{ minHeight: '44px' }}
                       onClick={async () => {
                         const title = (n.title || '').toLowerCase();
                         const isTransfer = n.entityType === 'StockTransfer' || title.includes('transfer');
@@ -473,7 +473,7 @@ const Navbar = () => {
                   {!n.read && (
                     <button
                       className="btn btn-sm flex-fill btn-outline-primary"
-                      style={{ minHeight: '38px' }}
+                      style={{ minHeight: '44px' }}
                       onClick={async () => {
                         try {
                           await axios.post(`/api/notifications/${n.id}/read`);

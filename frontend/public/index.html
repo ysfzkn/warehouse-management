@@ -5,19 +5,7 @@
     <link rel="icon" id="dynamic-favicon" href="%PUBLIC_URL%/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#2563eb" />
-    <meta name="color-scheme" content="light dark" />
-    <!-- Tema başlangıcı (FOUC önleme): React'ten önce, kayıtlı tercihi uygula.
-         Değer yoksa/"system" ise data-theme set edilmez → OS tercihi geçerli. -->
-    <script>
-      (function () {
-        try {
-          var t = localStorage.getItem('theme');
-          if (t === 'dark' || t === 'light') {
-            document.documentElement.setAttribute('data-theme', t);
-          }
-        } catch (e) {}
-      })();
-    </script>
+    <meta name="color-scheme" content="light" />
     <meta name="description" content="ATS DTM — 1980'den beri Niğde'de Profilo, Simfer, Ferre, Fakir, Philips, Hoover ve Karcher yetkili satıcısı. Beyaz eşya, küçük ev aletleri ve ankastre ürünleri uygun fiyatlarla." />
     <!-- Google Search Console domain verification -->
     <meta name="google-site-verification" content="vRjlczOJAv1eMSowmyb7Anudk1jhUbW6N7vtu3EmUdk" />

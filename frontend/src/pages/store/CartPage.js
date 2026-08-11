@@ -9,13 +9,20 @@ export default function CartPage() {
   const toast = useToast();
   const [couponCode, setCouponCode] = useState('');
   const [couponError, setCouponError] = useState('');
+  const [couponLoading, setCouponLoading] = useState(false);
 
   const handleApplyCoupon = async () => {
+    const code = couponCode.trim().toUpperCase();
+    if (!code || couponLoading) return;
+    setCouponLoading(true);
+    setCouponError('');
     try {
-      setCouponError('');
-      await cart.applyCoupon(couponCode);
+      await cart.applyCoupon(code);
+      setCouponCode('');
     } catch (e) {
       setCouponError(e.response?.data?.message || 'Kupon uygulanamadı.');
+    } finally {
+      setCouponLoading(false);
     }
   };
 
@@ -236,14 +243,37 @@ export default function CartPage() {
                   className="form-control"
                   placeholder="Kupon Kodu"
                   value={couponCode}
-                  onChange={(e) => setCouponCode(e.target.value)}
+                  onChange={(e) => {
+                    setCouponCode(e.target.value);
+                    if (couponError) setCouponError('');
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleApplyCoupon();
+                    }
+                  }}
+                  style={{ textTransform: 'uppercase' }}
+                  disabled={couponLoading}
                   aria-label="Kupon Kodu"
                 />
-                <button className="btn btn-outline-primary" onClick={handleApplyCoupon}>
-                  Uygula
+                <button
+                  className="btn btn-outline-primary"
+                  onClick={handleApplyCoupon}
+                  disabled={!couponCode.trim() || couponLoading}
+                >
+                  {couponLoading ? (
+                    <span className="spinner-border spinner-border-sm" style={{ width: 12, height: 12 }} />
+                  ) : (
+                    'Uygula'
+                  )}
                 </button>
               </div>
-              {couponError && <small className="text-danger">{couponError}</small>}
+              {couponError && (
+                <small className="text-danger d-block mt-1" role="alert">
+                  {couponError}
+                </small>
+              )}
               {cart.cart.couponCode && (
                 <small className="text-success d-block mt-1">Kupon: {cart.cart.couponCode}</small>
               )}

@@ -15,11 +15,8 @@ import {
   FiMapPin,
   FiChevronDown,
   FiBell,
-  FiSun,
-  FiMoon,
 } from 'react-icons/fi';
 import { getDefaultPhone, telHref } from '../../utils/phones';
-import useTheme from '../../hooks/useTheme';
 
 export default function StoreHeader({ cart, settings }) {
   const [categories, setCategories] = useState([]);
@@ -37,7 +34,6 @@ export default function StoreHeader({ cart, settings }) {
   const mobileSearchRef = useRef(null);
   const searchTimerRef = useRef(null);
   const navigate = useNavigate();
-  const { isDark, toggle: toggleTheme } = useTheme();
 
   // Animate cart badge when count changes
   useEffect(() => {
@@ -643,18 +639,6 @@ export default function StoreHeader({ cart, settings }) {
                 aria-expanded={mobileSearchOpen}
               >
                 {mobileSearchOpen ? <FiX size={22} /> : <FiSearch size={22} />}
-              </button>
-
-              {/* Theme Toggle (light ⇄ dark) */}
-              <button
-                type="button"
-                className="store-action-btn store-theme-toggle"
-                onClick={toggleTheme}
-                aria-label={isDark ? 'Açık temaya geç' : 'Koyu temaya geç'}
-                title={isDark ? 'Açık tema' : 'Koyu tema'}
-                aria-pressed={isDark}
-              >
-                {isDark ? <FiSun size={20} /> : <FiMoon size={20} />}
               </button>
 
               {/* User Menu */}
