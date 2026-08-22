@@ -50,6 +50,9 @@ public class ProductServiceImpl implements ProductService {
 
     private static final Logger logger = LoggerFactory.getLogger(ProductServiceImpl.class);
 
+    /** Highest "-<n>" suffix tried before falling back to the SKU when a slug is taken. */
+    private static final int MAX_SLUG_SUFFIX = 100;
+
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
     private final BrandRepository brandRepository;
@@ -197,8 +200,9 @@ public class ProductServiceImpl implements ProductService {
         String slugBase = (product.getSlug() != null && !product.getSlug().isBlank())
                 ? product.getSlug()
                 : (product.getName() != null ? product.getName() : product.getSku());
-        product.setSlug(safeSlug(slugBase, product.getSku()));
-        validateSlugUniqueness(product.getSlug(), null);
+        // A taken slug never blocks the save; it gets a numeric suffix instead. The response
+        // carries the slug that was actually stored, so the UI can report the change.
+        product.setSlug(uniqueSlug(safeSlug(slugBase, product.getSku()), product.getSku(), null));
         applyBundleMembers(product, product.getProductType(), product.getBundleMemberRefs());
         applyVariantGroup(product, product.getVariantSiblingIds());
 
@@ -808,14 +812,47 @@ public class ProductServiceImpl implements ProductService {
      * instead of a raw data-integrity error.
      */
     private void validateSlugUniqueness(String slug, Long ownId) {
-        productRepository.findBySlug(slug)
-                .filter(existing -> ownId == null || !existing.getId().equals(ownId))
+        findSlugOwner(slug, ownId)
                 .ifPresent(existing -> {
                     logger.warn("Slug already exists: {} (product id {})", slug, existing.getId());
                     throw new WarehouseManagementException(ErrorCode.PRODUCT_NAME_ALREADY_EXISTS,
                             ErrorCode.PRODUCT_NAME_ALREADY_EXISTS.getMessage()
                                     + " (Mevcut kayıt: \"" + existing.getName() + "\")");
                 });
+    }
+
+    /** The product holding {@code slug}, ignoring {@code ownId} (the row being updated). */
+    private Optional<Product> findSlugOwner(String slug, Long ownId) {
+        return productRepository.findBySlug(slug)
+                .filter(existing -> ownId == null || !existing.getId().equals(ownId));
+    }
+
+    /**
+     * Product names are not unique, but products.slug is — so a slug that is already taken
+     * gets a numeric suffix ("-2", "-3", ...) instead of rejecting the save, whether it was
+     * derived from the name or typed by the admin. The SKU (unique by definition) is the
+     * last resort. Callers must persist the returned value and hand it back to the client,
+     * which compares it with the requested slug to tell the admin the URL changed.
+     *
+     * <p>Two concurrent creates can still pick the same candidate; the unique index then
+     * rejects the loser and GlobalExceptionHandler turns that into the duplicate message.
+     */
+    private String uniqueSlug(String slug, String sku, Long ownId) {
+        if (findSlugOwner(slug, ownId).isEmpty()) return slug;
+        for (int suffix = 2; suffix <= MAX_SLUG_SUFFIX; suffix++) {
+            String candidate = slug + "-" + suffix;
+            if (findSlugOwner(candidate, ownId).isEmpty()) {
+                logger.info("Slug '{}' is taken, saving as '{}'", slug, candidate);
+                return candidate;
+            }
+        }
+        String skuCandidate = safeSlug(slug + "-" + sku, sku);
+        if (findSlugOwner(skuCandidate, ownId).isEmpty()) {
+            logger.info("Slug '{}' is taken, saving as '{}'", slug, skuCandidate);
+            return skuCandidate;
+        }
+        validateSlugUniqueness(slug, ownId); // out of candidates: surface the usual error
+        return slug;
     }
 
     private void validateSkuUniquenessOnUpdate(Product product, Product productDetails) {
@@ -917,8 +954,7 @@ public class ProductServiceImpl implements ProductService {
         product.setActive(productDetails.isActive());
         if (productDetails.getSlug() != null) {
             String newSlug = safeSlug(productDetails.getSlug(), product.getSku());
-            validateSlugUniqueness(newSlug, product.getId());
-            product.setSlug(newSlug);
+            product.setSlug(uniqueSlug(newSlug, product.getSku(), product.getId()));
         }
         if (productDetails.getMetaTitle() != null) product.setMetaTitle(productDetails.getMetaTitle());
         if (productDetails.getMetaDescription() != null) product.setMetaDescription(productDetails.getMetaDescription());

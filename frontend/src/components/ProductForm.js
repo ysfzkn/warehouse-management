@@ -1138,6 +1138,19 @@ const ProductForm = ({ product, onSuccess, onCancel, setMode = false }) => {
         createdData = resp?.data;
       }
 
+      // A slug that is already taken is saved with a numeric suffix ("-2", "-3", ...) instead of
+      // being rejected. Compare against what we asked for — normalized the same way the backend
+      // sanitizes it — so only a real collision (not the sanitizing) triggers the notice.
+      const requestedSlug = (dataToSend.slug || '').replace(/-+/g, '-').replace(/^-|-$/g, '');
+      const savedSlug = createdData?.slug;
+      if (requestedSlug && savedSlug && savedSlug !== requestedSlug) {
+        setFormData((prev) => ({ ...prev, slug: savedSlug }));
+        showToast(
+          `"${requestedSlug}" adresi başka bir üründe kullanıldığı için ürün "${savedSlug}" adresiyle kaydedildi.`,
+          'warning'
+        );
+      }
+
       if (onSuccess) onSuccess(createdData || { id: savedProductId });
     } catch (error) {
       console.error('Error saving product:', error);
