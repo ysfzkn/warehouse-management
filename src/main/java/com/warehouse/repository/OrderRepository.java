@@ -63,6 +63,11 @@ public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecific
                                               @Param("paymentMethod") String paymentMethod,
                                               @Param("deadline") java.time.LocalDateTime deadline);
 
+    @Query("SELECT o FROM Order o WHERE o.status = com.warehouse.enums.OrderStatus.PENDING_PAYMENT " +
+           "AND o.paymentReminderAt IS NOT NULL AND o.paymentReminderAt <= :now AND o.paymentReminderSentAt IS NULL")
+    List<Order> findPaymentRemindersDue(@Param("now") LocalDateTime now);
+    Optional<Order> findByCustomerConfirmationTokenHash(String customerConfirmationTokenHash);
+
     /**
      * Public order tracking: queries by order number + customer e-mail.
      * The e-mail must match the one registered on the customer account.

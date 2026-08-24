@@ -5,6 +5,7 @@ import PaginationControls from '../components/PaginationControls';
 import useSecurityCodePrompt from '../components/useSecurityCodePrompt';
 import { useAdminToast } from '../components/AdminToast';
 import { promptDialog } from '../utils/confirmDialog';
+import ManualOrderModal from '../components/ManualOrderModal';
 
 const STATUS_CONFIG = {
   PENDING_PAYMENT: { label: 'Ödeme Bekliyor', color: 'warning', icon: 'fas fa-clock' },
@@ -25,6 +26,15 @@ const PAYMENT_LABELS = {
   DOOR_CASH: 'Kapıda Nakit',
   DOOR_CARD: 'Kapıda Kart',
   IYZICO: 'iyzico',
+};
+const CHANNEL_LABELS = {
+  ONLINE: 'E-Ticaret',
+  PHONE: 'Telefon',
+  WHATSAPP: 'WhatsApp',
+  IN_STORE: 'Mağaza',
+  INSTAGRAM: 'Instagram',
+  MARKETPLACE: 'Pazaryeri',
+  OTHER: 'Diğer',
 };
 const CHANGED_BY_LABELS = { system: 'Sistem', SYSTEM: 'Sistem', ADMIN: 'Yönetici', PAYMENT: 'Ödeme Sistemi' };
 
@@ -53,6 +63,8 @@ export default function AdminOrders() {
   const [search, setSearch] = useState('');
   const [paymentFilter, setPaymentFilter] = useState('');
   const [cargoFilter, setCargoFilter] = useState('');
+  const [channelFilter, setChannelFilter] = useState('');
+  const [showManualOrder, setShowManualOrder] = useState(false);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [showFilters, setShowFilters] = useState(false);
@@ -73,6 +85,7 @@ export default function AdminOrders() {
   const [invoiceFile, setInvoiceFile] = useState(null);
   const [invoiceNumber, setInvoiceNumber] = useState('');
   const [invoiceUploading, setInvoiceUploading] = useState(false);
+  const [paymentPlanModal, setPaymentPlanModal] = useState(null);
   const { askCode, SecurityCodePrompt } = useSecurityCodePrompt();
   const toast = useAdminToast();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -97,6 +110,7 @@ export default function AdminOrders() {
     if (search) params.search = search;
     if (paymentFilter) params.paymentMethod = paymentFilter;
     if (cargoFilter) params.cargoCompany = cargoFilter;
+    if (channelFilter) params.channel = channelFilter;
     if (startDate) params.startDate = startDate;
     if (endDate) params.endDate = endDate;
     axios
@@ -108,7 +122,7 @@ export default function AdminOrders() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [page, statusFilter, search, paymentFilter, cargoFilter, startDate, endDate]);
+  }, [page, statusFilter, search, paymentFilter, cargoFilter, channelFilter, startDate, endDate]);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -270,6 +284,41 @@ export default function AdminOrders() {
     );
   };
 
+  const copyConfirmationLink = async () => {
+    try {
+      const response = await axios.post(`/api/admin/orders/${orderDetail.id}/customer-confirmation-link`);
+      const url = `${window.location.protocol}//${window.location.hostname.replace(/^admin\./, '')}${response.data.path}`;
+      await navigator.clipboard.writeText(url);
+      toast.success('Müşteri onay bağlantısı kopyalandı.');
+      openDetail(orderDetail.id);
+    } catch (e) {
+      toast.error(e.response?.data?.message || 'Onay bağlantısı oluşturulamadı.');
+    }
+  };
+
+  const markManualPaymentReceived = async () => {
+    try {
+      await axios.put(`/api/admin/orders/${orderDetail.id}/payment-received`);
+      toast.success('Ödeme alındı olarak kaydedildi.');
+      openDetail(orderDetail.id);
+      fetchOrders();
+    } catch (e) {
+      toast.error(e.response?.data?.message || 'Ödeme güncellenemedi.');
+    }
+  };
+
+  const savePaymentPlan = async () => {
+    try {
+      await axios.put(`/api/admin/orders/${orderDetail.id}/payment-plan`, paymentPlanModal);
+      setPaymentPlanModal(null);
+      toast.success('Ödeme planı güncellendi.');
+      openDetail(orderDetail.id);
+      fetchOrders();
+    } catch (e) {
+      toast.error(e.response?.data?.message || 'Ödeme planı güncellenemedi.');
+    }
+  };
+
   const handleInvoiceUpload = async () => {
     if (!invoiceFile) {
       toast.error('Lütfen bir fatura dosyası seçin.');
@@ -297,6 +346,16 @@ export default function AdminOrders() {
   return (
     <div>
       {SecurityCodePrompt}
+      {showManualOrder && (
+        <ManualOrderModal
+          onClose={() => setShowManualOrder(false)}
+          onCreated={(data) => {
+            setShowManualOrder(false);
+            fetchOrders();
+            toast.success(`Sipariş oluşturuldu: ${data.orderNumber}`);
+          }}
+        />
+      )}
 
       {/* Invoice Upload Modal */}
       {showInvoiceModal && (
@@ -431,6 +490,9 @@ export default function AdminOrders() {
           <small className="text-muted">{totalElements} sipariş</small>
         </div>
         <div className="d-flex gap-2">
+          <button className="btn btn-primary btn-sm" onClick={() => setShowManualOrder(true)}>
+            <i className="fas fa-plus me-1" /> Sipariş Oluştur
+          </button>
           <button
             className={`btn btn-sm ${showFilters ? 'btn-primary' : 'btn-outline-primary'}`}
             onClick={() => setShowFilters(!showFilters)}
@@ -557,6 +619,24 @@ export default function AdminOrders() {
                 </select>
               </div>
               <div className="col-md-3">
+                <label className="form-label small fw-medium mb-1">Sipariş Kanalı</label>
+                <select
+                  className="form-select form-select-sm"
+                  value={channelFilter}
+                  onChange={(e) => {
+                    setChannelFilter(e.target.value);
+                    setPage(0);
+                  }}
+                >
+                  <option value="">Tümü</option>
+                  {Object.entries(CHANNEL_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="col-md-3">
                 <label className="form-label small fw-medium mb-1">Kargo Firması</label>
                 <select
                   className="form-select form-select-sm"
@@ -654,6 +734,16 @@ export default function AdminOrders() {
                   <tr key={o.id} style={{ cursor: 'pointer' }} onClick={() => openDetail(o.id)}>
                     <td>
                       <strong className="text-primary">{o.orderNumber}</strong>
+                      <div>
+                        <span
+                          className={`badge mt-1 ${o.orderChannel === 'WHATSAPP' ? 'bg-success' : o.orderChannel === 'PHONE' ? 'bg-info text-dark' : 'bg-secondary'}`}
+                        >
+                          {CHANNEL_LABELS[o.orderChannel] || o.orderChannel || 'E-Ticaret'}
+                        </span>
+                        {o.channelReference && (
+                          <small className="text-muted ms-1">{o.channelReference}</small>
+                        )}
+                      </div>
                     </td>
                     <td>
                       <div>{o.customerName}</div>
@@ -664,6 +754,13 @@ export default function AdminOrders() {
                     </td>
                     <td>
                       <small className="text-muted">{paymentLabel(o.paymentMethod)}</small>
+                      {o.paymentDueAt && (
+                        <div
+                          className={`small ${new Date(o.paymentDueAt) < new Date() && o.status === 'PENDING_PAYMENT' ? 'text-danger fw-bold' : 'text-muted'}`}
+                        >
+                          Vade: {formatDate(o.paymentDueAt)}
+                        </div>
+                      )}
                     </td>
                     <td className="text-end fw-bold">{formatPrice(o.grandTotal)}</td>
                     <td>
@@ -1139,6 +1236,91 @@ export default function AdminOrders() {
                             <span className="text-muted">Ödeme Yöntemi</span>
                             <span className="fw-medium">{paymentLabel(orderDetail.paymentMethod)}</span>
                           </div>
+                          {orderDetail.orderChannel && (
+                            <>
+                              <div className="d-flex justify-content-between mb-2">
+                                <span className="text-muted">Sipariş Kanalı</span>
+                                <span className="fw-medium">
+                                  {CHANNEL_LABELS[orderDetail.orderChannel] || orderDetail.orderChannel}
+                                </span>
+                              </div>
+                              {orderDetail.channelReference && (
+                                <div className="d-flex justify-content-between mb-2">
+                                  <span className="text-muted">Kanal Referansı</span>
+                                  <code>{orderDetail.channelReference}</code>
+                                </div>
+                              )}
+                              <div className="d-flex justify-content-between mb-2">
+                                <span className="text-muted">Müşteri Onayı</span>
+                                <span
+                                  className={`badge ${orderDetail.customerConfirmedAt ? 'bg-success' : 'bg-warning text-dark'}`}
+                                >
+                                  {orderDetail.customerConfirmedAt
+                                    ? `Onaylandı · ${formatDate(orderDetail.customerConfirmedAt)}`
+                                    : 'Bekleniyor'}
+                                </span>
+                              </div>
+                              {orderDetail.customerConfirmedAt && orderDetail.legalConsentSnapshot && (
+                                <div className="alert alert-success py-2 px-2 small">
+                                  <i className="fas fa-shield-alt me-1" />
+                                  Hukuki metin içerikleri ve SHA-256 sürüm kanıtları siparişte saklandı.
+                                </div>
+                              )}
+                              {orderDetail.paymentDueAt && (
+                                <div className="d-flex justify-content-between mb-2">
+                                  <span className="text-muted">Ödeme Vadesi</span>
+                                  <span>{formatDate(orderDetail.paymentDueAt)}</span>
+                                </div>
+                              )}
+                              {orderDetail.paymentReminderAt && (
+                                <div className="d-flex justify-content-between mb-2">
+                                  <span className="text-muted">Hatırlatma</span>
+                                  <span>{formatDate(orderDetail.paymentReminderAt)}</span>
+                                </div>
+                              )}
+                              {orderDetail.orderChannel !== 'ONLINE' && (
+                                <div className="d-grid gap-2 mt-3">
+                                  {!orderDetail.customerConfirmedAt && (
+                                    <button
+                                      className="btn btn-outline-primary btn-sm"
+                                      onClick={copyConfirmationLink}
+                                    >
+                                      <i className="fas fa-link me-1" />
+                                      Onay Bağlantısı Oluştur ve Kopyala
+                                    </button>
+                                  )}
+                                  {orderDetail.status === 'PENDING_PAYMENT' && (
+                                    <button
+                                      className="btn btn-success btn-sm"
+                                      onClick={markManualPaymentReceived}
+                                    >
+                                      <i className="fas fa-check me-1" />
+                                      Ödeme Alındı
+                                    </button>
+                                  )}
+                                  {orderDetail.status === 'PENDING_PAYMENT' && (
+                                    <button
+                                      className="btn btn-outline-secondary btn-sm"
+                                      onClick={() =>
+                                        setPaymentPlanModal({
+                                          state: orderDetail.manualPaymentState || 'WAITING',
+                                          dueAt: orderDetail.paymentDueAt
+                                            ? orderDetail.paymentDueAt.slice(0, 16)
+                                            : '',
+                                          reminderAt: orderDetail.paymentReminderAt
+                                            ? orderDetail.paymentReminderAt.slice(0, 16)
+                                            : '',
+                                        })
+                                      }
+                                    >
+                                      <i className="fas fa-calendar-alt me-1" />
+                                      Ödeme Planını Düzenle
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </>
+                          )}
                           <div className="d-flex justify-content-between mb-2">
                             <span className="text-muted">Kargo Firması</span>
                             <span>{orderDetail.cargoCompany || '—'}</span>
@@ -1564,6 +1746,58 @@ export default function AdminOrders() {
                 <button className="btn btn-success" onClick={submitConfirmPayment}>
                   <i className="fas fa-check me-1" />
                   Onayla
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {paymentPlanModal && (
+        <div className="modal show d-block" style={{ background: 'rgba(0,0,0,.5)', zIndex: 6500 }}>
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">Ödeme Planı</h5>
+                <button className="btn-close" onClick={() => setPaymentPlanModal(null)} />
+              </div>
+              <div className="modal-body">
+                <div className="mb-3">
+                  <label className="form-label">Durum</label>
+                  <select
+                    className="form-select"
+                    value={paymentPlanModal.state}
+                    onChange={(e) => setPaymentPlanModal({ ...paymentPlanModal, state: e.target.value })}
+                  >
+                    <option value="WAITING">Ödeme bekleniyor</option>
+                    <option value="SCHEDULED">Belirli tarihte ödenecek</option>
+                  </select>
+                </div>
+                <div className="mb-3">
+                  <label className="form-label">Son ödeme tarihi</label>
+                  <input
+                    type="datetime-local"
+                    className="form-control"
+                    value={paymentPlanModal.dueAt || ''}
+                    onChange={(e) => setPaymentPlanModal({ ...paymentPlanModal, dueAt: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="form-label">Admin hatırlatma zamanı</label>
+                  <input
+                    type="datetime-local"
+                    className="form-control"
+                    value={paymentPlanModal.reminderAt || ''}
+                    onChange={(e) => setPaymentPlanModal({ ...paymentPlanModal, reminderAt: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button className="btn btn-outline-secondary" onClick={() => setPaymentPlanModal(null)}>
+                  İptal
+                </button>
+                <button className="btn btn-primary" onClick={savePaymentPlan}>
+                  Kaydet
                 </button>
               </div>
             </div>

@@ -110,6 +110,22 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional(readOnly = true)
+    public Page<Product> getAllProducts(Pageable pageable, String search, Long categoryId, Long brandId, Long colorId,
+                                        ProductType productType, Boolean ecommerceVisible, Boolean hasImage) {
+        String normalizedSearch = (search != null && !search.trim().isEmpty()) ? search.trim() : null;
+        return productRepository.findByAdminFilters(normalizedSearch, categoryId, brandId, colorId, productType,
+                ecommerceVisible, hasImage, pageable);
+    }
+
+    @Override
+    @Transactional
+    public int setEcommerceVisibility(List<Long> ids, boolean visible) {
+        if (ids == null || ids.isEmpty()) return 0;
+        return productRepository.updateEcommerceVisibility(ids, visible);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<Product> getAllActiveProducts() {
         logger.debug("Fetching all active products");
         return productRepository.findAllActive();
@@ -747,7 +763,7 @@ public class ProductServiceImpl implements ProductService {
                 try {
                     Long id = Long.parseLong(m.group(1));
                     Optional<Product> byId = productRepository.findByIdWithRelations(id);
-                    if (byId.isPresent()) return byId.get();
+                    if (byId.isPresent() && byId.get().isActive() && byId.get().isEcommerceVisible()) return byId.get();
                 } catch (NumberFormatException ignored) {
                     // not a usable id — fall through
                 }
@@ -823,7 +839,7 @@ public class ProductServiceImpl implements ProductService {
 
     /** The product holding {@code slug}, ignoring {@code ownId} (the row being updated). */
     private Optional<Product> findSlugOwner(String slug, Long ownId) {
-        return productRepository.findBySlug(slug)
+        return productRepository.findAnyBySlug(slug)
                 .filter(existing -> ownId == null || !existing.getId().equals(ownId));
     }
 

@@ -23,6 +23,11 @@ public interface ProductService {
     Page<Product> getAllProducts(Pageable pageable, String search, Long categoryId, Long brandId, Long colorId,
                                  com.warehouse.entity.ProductType productType);
 
+    Page<Product> getAllProducts(Pageable pageable, String search, Long categoryId, Long brandId, Long colorId,
+                                 com.warehouse.entity.ProductType productType, Boolean ecommerceVisible, Boolean hasImage);
+
+    int setEcommerceVisibility(List<Long> ids, boolean visible);
+
     List<Product> getAllActiveProducts();
 
     Page<Product> getAllActiveProducts(Pageable pageable);

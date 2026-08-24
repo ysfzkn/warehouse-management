@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import jakarta.servlet.http.HttpServletRequest;
 
 /**
  * Public order tracking endpoints.
@@ -36,6 +37,25 @@ public class StorePublicOrderController {
     private final OrderStatusHistoryRepository statusHistoryRepository;
     private final OrderItemRepository orderItemRepository;
     private final CargoProviderRepository cargoProviderRepository;
+    private final com.warehouse.service.ManualOrderService manualOrderService;
+
+    @GetMapping("/confirm/{token}")
+    public ResponseEntity<?> confirmationPreview(@PathVariable String token) {
+        return ResponseEntity.ok(manualOrderService.confirmationPreview(token));
+    }
+
+    @PostMapping("/confirm/{token}")
+    public ResponseEntity<?> confirmManualOrder(@PathVariable String token,
+                                                 @RequestBody Map<String, Object> body,
+                                                 HttpServletRequest request) {
+        Map<String, String> hashes = new java.util.HashMap<>();
+        Object rawHashes = body == null ? null : body.get("legalHashes");
+        if (rawHashes instanceof Map<?, ?> map) {
+            map.forEach((key, value) -> hashes.put(String.valueOf(key), String.valueOf(value)));
+        }
+        Order order = manualOrderService.confirm(token, hashes, request.getRemoteAddr(), request.getHeader("User-Agent"));
+        return ResponseEntity.ok(Map.of("message", "Siparişiniz onaylandı.", "orderNumber", order.getOrderNumber()));
+    }
 
     /**
      * Order tracking: queries by order number + email.

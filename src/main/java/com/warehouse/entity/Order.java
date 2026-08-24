@@ -2,6 +2,8 @@ package com.warehouse.entity;
 
 import com.warehouse.enums.OrderStatus;
 import com.warehouse.enums.CargoCompany;
+import com.warehouse.enums.OrderChannel;
+import com.warehouse.enums.ManualPaymentState;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
 import lombok.*;
@@ -36,6 +38,51 @@ public class Order {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
     private OrderStatus status = OrderStatus.PENDING_PAYMENT;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "order_channel", nullable = false, length = 30)
+    private OrderChannel orderChannel = OrderChannel.ONLINE;
+
+    @Column(name = "channel_reference", length = 100)
+    private String channelReference;
+
+    @Column(name = "created_by_admin", length = 150)
+    private String createdByAdmin;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "manual_payment_state", length = 30)
+    private ManualPaymentState manualPaymentState;
+
+    @Column(name = "payment_due_at")
+    private LocalDateTime paymentDueAt;
+
+    @Column(name = "payment_reminder_at")
+    private LocalDateTime paymentReminderAt;
+
+    @Column(name = "payment_reminder_sent_at")
+    private LocalDateTime paymentReminderSentAt;
+
+    @Column(name = "payment_received_at")
+    private LocalDateTime paymentReceivedAt;
+
+    @Column(name = "customer_confirmation_token_hash", length = 64)
+    private String customerConfirmationTokenHash;
+
+    @Column(name = "customer_confirmation_expires_at")
+    private LocalDateTime customerConfirmationExpiresAt;
+
+    @Column(name = "customer_confirmed_at")
+    private LocalDateTime customerConfirmedAt;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "legal_consent_snapshot", columnDefinition = "jsonb")
+    private Map<String, Object> legalConsentSnapshot;
+
+    @Column(name = "customer_confirmation_ip", length = 45)
+    private String customerConfirmationIp;
+
+    @Column(name = "customer_confirmation_user_agent", length = 500)
+    private String customerConfirmationUserAgent;
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "shipping_address_snapshot", nullable = false, columnDefinition = "jsonb")

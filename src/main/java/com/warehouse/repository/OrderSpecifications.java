@@ -15,7 +15,7 @@ import java.util.List;
 public class OrderSpecifications {
 
     public static Specification<Order> withFilters(
-            String status, String paymentMethod, String cargoCompany,
+            String status, String paymentMethod, String cargoCompany, String channel,
             LocalDateTime startDate, LocalDateTime endDate, String search) {
 
         return (root, query, cb) -> {
@@ -31,6 +31,12 @@ public class OrderSpecifications {
             // Payment method filter
             if (paymentMethod != null && !paymentMethod.isBlank()) {
                 predicates.add(cb.equal(root.get("paymentMethod"), paymentMethod));
+            }
+
+            if (channel != null && !channel.isBlank()) {
+                try {
+                    predicates.add(cb.equal(root.get("orderChannel"), com.warehouse.enums.OrderChannel.valueOf(channel)));
+                } catch (Exception ignored) {}
             }
 
             // Cargo company filter

@@ -197,6 +197,7 @@ public class SecurityConfig {
                         .requestMatchers(org.springframework.http.HttpMethod.POST, ApiPaths.STORE_PAYMENT_INITIALIZE).permitAll()
                         // Public order tracking: protected by orderNumber + email combination
                         .requestMatchers(org.springframework.http.HttpMethod.POST, ApiPaths.STORE_PUBLIC_ORDER_TRACK).permitAll()
+                        .requestMatchers("/api/store/public/orders/confirm/**").permitAll()
                         // Notify when out of stock: guests can subscribe too
                         .requestMatchers(org.springframework.http.HttpMethod.POST, ApiPaths.STORE_PRODUCT_NOTIFY_ME).permitAll()
                         // Public popularity ping + recently-viewed batch hydration (no PII, no auth)

@@ -5,6 +5,7 @@ import com.warehouse.dto.admin.AdminOrderDto;
 import com.warehouse.dto.admin.AdminOrderDetailDto;
 import com.warehouse.dto.admin.OrderStatusUpdateRequest;
 import com.warehouse.dto.admin.OrderCargoUpdateRequest;
+import com.warehouse.dto.admin.ManualOrderRequest;
 import com.warehouse.entity.Order;
 import com.warehouse.entity.OrderItem;
 import com.warehouse.entity.OrderStatusHistory;
@@ -74,6 +75,7 @@ public class AdminOrderController {
     private final com.warehouse.service.cargo.CargoApiService cargoApiService;
     private final org.springframework.context.ApplicationEventPublisher eventPublisher;
     private final com.warehouse.service.PhotoStorageService photoStorageService;
+    private final com.warehouse.service.ManualOrderService manualOrderService;
 
     public AdminOrderController(OrderRepository orderRepository,
                                  OrderItemRepository orderItemRepository,
@@ -87,7 +89,8 @@ public class AdminOrderController {
                                  com.warehouse.service.notification.NotificationDispatchService notificationDispatchService,
                                  com.warehouse.service.cargo.CargoApiService cargoApiService,
                                  org.springframework.context.ApplicationEventPublisher eventPublisher,
-                                 com.warehouse.service.PhotoStorageService photoStorageService) {
+                                 com.warehouse.service.PhotoStorageService photoStorageService,
+                                 com.warehouse.service.ManualOrderService manualOrderService) {
         this.orderRepository = orderRepository;
         this.orderItemRepository = orderItemRepository;
         this.statusHistoryRepository = statusHistoryRepository;
@@ -101,6 +104,7 @@ public class AdminOrderController {
         this.cargoApiService = cargoApiService;
         this.eventPublisher = eventPublisher;
         this.photoStorageService = photoStorageService;
+        this.manualOrderService = manualOrderService;
     }
 
     @GetMapping
@@ -111,6 +115,7 @@ public class AdminOrderController {
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String paymentMethod,
             @RequestParam(required = false) String cargoCompany,
+            @RequestParam(required = false) String channel,
             @RequestParam(required = false) String startDate,
             @RequestParam(required = false) String endDate,
             @RequestParam(required = false) String search,
@@ -129,7 +134,7 @@ public class AdminOrderController {
         String searchParam = (search != null && !search.isBlank()) ? search : null;
 
         Page<Order> result = orderRepository.findAll(
-            com.warehouse.repository.OrderSpecifications.withFilters(statusFilter, pmFilter, cargoFilter, startDt, endDt, searchParam),
+            com.warehouse.repository.OrderSpecifications.withFilters(statusFilter, pmFilter, cargoFilter, channel, startDt, endDt, searchParam),
             PageRequest.of(page, size, sort));
 
         List<AdminOrderDto> dtos = result.getContent().stream().map(o -> AdminOrderDto.builder()
@@ -140,6 +145,11 @@ public class AdminOrderController {
             .status(o.getStatus())
             .grandTotal(o.getGrandTotal())
             .paymentMethod(o.getPaymentMethod())
+            .orderChannel(o.getOrderChannel())
+            .channelReference(o.getChannelReference())
+            .manualPaymentState(o.getManualPaymentState())
+            .paymentDueAt(o.getPaymentDueAt())
+            .paymentReminderAt(o.getPaymentReminderAt())
             .cargoCompany(o.getCargoCompany() != null ? o.getCargoCompany().name() : null)
             .cargoTrackingNo(o.getCargoTrackingNo())
             .itemCount(safeItemCount(o))
@@ -149,6 +159,45 @@ public class AdminOrderController {
 
         return ResponseEntity.ok(new PagedResponse<>(dtos, result.getNumber(), result.getSize(),
             result.getTotalElements(), result.getTotalPages(), result.isFirst(), result.isLast()));
+    }
+
+    @PostMapping("/manual")
+    public ResponseEntity<Map<String, Object>> createManualOrder(@Valid @RequestBody ManualOrderRequest request) {
+        Order order = manualOrderService.create(request, CurrentUser.usernameOrSystem());
+        return ResponseEntity.ok(Map.of(
+            "id", order.getId(),
+            "orderNumber", order.getOrderNumber(),
+            "status", order.getStatus().name(),
+            "grandTotal", order.getGrandTotal()
+        ));
+    }
+
+    @PutMapping("/{id}/payment-received")
+    public ResponseEntity<Map<String, Object>> markPaymentReceived(@PathVariable Long id) {
+        Order order = manualOrderService.markPaymentReceived(id, CurrentUser.usernameOrSystem());
+        return ResponseEntity.ok(Map.of("id", order.getId(), "status", order.getStatus().name()));
+    }
+
+    @PutMapping("/{id}/payment-plan")
+    public ResponseEntity<Map<String, Object>> updatePaymentPlan(@PathVariable Long id, @RequestBody Map<String, String> body) {
+        com.warehouse.enums.ManualPaymentState state;
+        try { state = com.warehouse.enums.ManualPaymentState.valueOf(body.getOrDefault("state", "WAITING")); }
+        catch (Exception e) { throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Geçersiz ödeme durumu"); }
+        Order order = manualOrderService.updatePaymentPlan(id, state, parseDateTime(body.get("dueAt")),
+                parseDateTime(body.get("reminderAt")), CurrentUser.usernameOrSystem());
+        return ResponseEntity.ok(Map.of("id", order.getId(), "state", order.getManualPaymentState().name()));
+    }
+
+    @PostMapping("/{id}/customer-confirmation-link")
+    public ResponseEntity<Map<String, Object>> createCustomerConfirmationLink(@PathVariable Long id) {
+        String token = manualOrderService.createConfirmationToken(id, CurrentUser.usernameOrSystem());
+        return ResponseEntity.ok(Map.of("path", "/siparis-onay/" + token, "expiresInDays", 7));
+    }
+
+    private LocalDateTime parseDateTime(String value) {
+        if (value == null || value.isBlank()) return null;
+        try { return LocalDateTime.parse(value); }
+        catch (Exception e) { throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Geçersiz tarih formatı"); }
     }
 
     @GetMapping("/{id}")
@@ -194,6 +243,17 @@ public class AdminOrderController {
             .grandTotal(order.getGrandTotal())
             .couponCode(order.getCouponCode())
             .paymentMethod(order.getPaymentMethod())
+            .orderChannel(order.getOrderChannel())
+            .channelReference(order.getChannelReference())
+            .createdByAdmin(order.getCreatedByAdmin())
+            .manualPaymentState(order.getManualPaymentState())
+            .paymentDueAt(order.getPaymentDueAt())
+            .paymentReminderAt(order.getPaymentReminderAt())
+            .paymentReceivedAt(order.getPaymentReceivedAt())
+            .customerConfirmationExpiresAt(order.getCustomerConfirmationExpiresAt())
+            .customerConfirmedAt(order.getCustomerConfirmedAt())
+            .legalConsentSnapshot(order.getLegalConsentSnapshot())
+            .customerConfirmationIp(order.getCustomerConfirmationIp())
             .installmentCount(order.getInstallmentCount())
             .cargoCompany(order.getCargoCompany() != null ? order.getCargoCompany().name() : null)
             .cargoTrackingNo(order.getCargoTrackingNo())

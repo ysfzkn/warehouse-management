@@ -11,6 +11,8 @@ public class ProductDto {
     public String description;
     public BigDecimal price;
     public boolean active;
+    public boolean ecommerceVisible;
+    public boolean hasImage;
     public Long categoryId;
     public String categoryName;
     public Long categoryParentId;

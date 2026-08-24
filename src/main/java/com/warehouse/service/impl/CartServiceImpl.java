@@ -56,8 +56,8 @@ public class CartServiceImpl implements CartService {
         Product product = productRepository.findById(productId)
             .orElseThrow(() -> new WarehouseManagementException(ErrorCode.PRODUCT_NOT_FOUND));
 
-        if (!product.isActive()) {
-            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Urun aktif degil.");
+        if (!product.isActive() || !product.isEcommerceVisible()) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Ürün e-ticarette satışa açık değil.");
         }
 
         var existingItem = cartItemRepository.findByCartIdAndProductId(cart.getId(), productId);
