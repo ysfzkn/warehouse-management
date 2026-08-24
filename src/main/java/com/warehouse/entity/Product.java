@@ -176,6 +176,10 @@ public class Product {
     @Column(name = "is_active", nullable = false)
     private boolean isActive = true;
 
+    /** Controls storefront publication independently from warehouse/admin activity. */
+    @Column(name = "ecommerce_visible", nullable = false)
+    private boolean ecommerceVisible = true;
+
     /** Own warranty in months (null = inherit from category). */
     @Column(name = "warranty_months")
     private Integer warrantyMonths;

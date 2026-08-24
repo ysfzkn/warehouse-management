@@ -102,7 +102,7 @@ public class CheckoutServiceImpl implements CheckoutService {
 
         for (CartItem item : items) {
             Product product = item.getProduct();
-            if (!product.isActive()) {
+            if (!product.isActive() || !product.isEcommerceVisible()) {
                 errors.add(product.getName() + " artik satilamaz.");
                 continue;
             }
@@ -306,6 +306,10 @@ public class CheckoutServiceImpl implements CheckoutService {
 
         for (CartItem ci : items) {
             Product p = ci.getProduct();
+            if (!p.isActive() || !p.isEcommerceVisible()) {
+                throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                    p.getName() + " e-ticarette satışa açık değil. Sepetinizi güncelleyin.");
+            }
             BigDecimal price = p.getSalePrice() != null && p.getSalePrice().compareTo(BigDecimal.ZERO) > 0 ? p.getSalePrice() : p.getPrice();
             if (price == null) price = BigDecimal.ZERO;
             BigDecimal lineTotal = price.multiply(BigDecimal.valueOf(ci.getQuantity()));

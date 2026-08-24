@@ -27,6 +27,8 @@ const Products = () => {
   const [subcategories, setSubcategories] = useState([]);
   const [selectedBrand, setSelectedBrand] = useState(null);
   const [selectedColor, setSelectedColor] = useState(null);
+  const [ecommerceFilter, setEcommerceFilter] = useState('');
+  const [imageFilter, setImageFilter] = useState('');
   const [selectedBrandOpt, setSelectedBrandOpt] = useState(null);
   const [selectedColorOpt, setSelectedColorOpt] = useState(null);
   const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null });
@@ -132,6 +134,8 @@ const Products = () => {
         if (selectedColor != null) {
           params.colorId = selectedColor;
         }
+        if (ecommerceFilter !== '') params.ecommerceVisible = ecommerceFilter === 'true';
+        if (imageFilter !== '') params.hasImage = imageFilter === 'true';
 
         const response = await axios.get('/api/products', { params });
         const data = response.data || {};
@@ -173,6 +177,8 @@ const Products = () => {
       selectedSubcategory,
       selectedBrand,
       selectedColor,
+      ecommerceFilter,
+      imageFilter,
     ]
   );
 
@@ -570,6 +576,21 @@ const Products = () => {
         show: true,
         title: 'Durum Güncelleme Hatası',
         message,
+      });
+    }
+  };
+
+  const updateEcommerceVisibility = async (ids, visible) => {
+    if (!ids.length) return;
+    try {
+      await axios.put('/api/products/bulk-ecommerce-visibility', { ids, visible });
+      setSelectedProducts([]);
+      fetchProducts(productPage, productPageSize);
+    } catch (error) {
+      setErrorModal({
+        show: true,
+        title: 'E-Ticaret Durumu Güncellenemedi',
+        message: error.response?.data?.message || 'İşlem başarısız.',
       });
     }
   };
@@ -1258,6 +1279,63 @@ const Products = () => {
         </div>
       )}
 
+      <div className="card border-0 shadow-sm mb-3">
+        <div className="card-body py-3">
+          <div className="row g-2 align-items-end">
+            <div className="col-md-3">
+              <label className="form-label small fw-semibold">E-Ticaret Durumu</label>
+              <select
+                className="form-select"
+                value={ecommerceFilter}
+                onChange={(e) => {
+                  setEcommerceFilter(e.target.value);
+                  setProductPage(0);
+                }}
+              >
+                <option value="">Tümü</option>
+                <option value="true">E-Ticaret'te</option>
+                <option value="false">E-Ticaret'te değil</option>
+              </select>
+            </div>
+            <div className="col-md-3">
+              <label className="form-label small fw-semibold">Ürün Fotoğrafı</label>
+              <select
+                className="form-select"
+                value={imageFilter}
+                onChange={(e) => {
+                  setImageFilter(e.target.value);
+                  setProductPage(0);
+                }}
+              >
+                <option value="">Tümü</option>
+                <option value="true">Fotoğrafı olan</option>
+                <option value="false">Fotoğrafı olmayan</option>
+              </select>
+            </div>
+            <div className="col-md-6">
+              <div className="d-flex gap-2 flex-wrap">
+                <button
+                  className="btn btn-success"
+                  disabled={!selectedProductCount}
+                  onClick={() => updateEcommerceVisibility([...selectedProducts], true)}
+                >
+                  <i className="fas fa-store me-1" />
+                  Seçilenleri E-Ticaret'e Ekle
+                </button>
+                <button
+                  className="btn btn-outline-danger"
+                  disabled={!selectedProductCount}
+                  onClick={() => updateEcommerceVisibility([...selectedProducts], false)}
+                >
+                  <i className="fas fa-store-slash me-1" />
+                  E-Ticaret'ten Çıkar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="row mb-4">
         <div className="col-md-6">
           <SearchableSelect
@@ -1587,6 +1665,19 @@ const Products = () => {
                           >
                             {product.active === false ? 'Pasif' : 'Aktif'}
                           </span>
+                          <div className="mt-1">
+                            <span
+                              className={`badge ${product.ecommerceVisible ? 'bg-primary' : 'bg-light text-dark border'}`}
+                            >
+                              {product.ecommerceVisible ? 'E-Ticaret’te' : 'E-Ticaret dışı'}
+                            </span>
+                          </div>
+                          <div className="mt-1">
+                            <small className={product.hasImage ? 'text-success' : 'text-danger'}>
+                              <i className={`fas ${product.hasImage ? 'fa-image' : 'fa-image-slash'} me-1`} />
+                              {product.hasImage ? 'Fotoğraflı' : 'Fotoğrafsız'}
+                            </small>
+                          </div>
                         </td>
                         <td className="text-center">
                           <div className="d-flex justify-content-center">

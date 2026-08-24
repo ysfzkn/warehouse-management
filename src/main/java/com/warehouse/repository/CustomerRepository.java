@@ -12,4 +12,5 @@ public interface CustomerRepository extends JpaRepository<Customer, Long>, JpaSp
     boolean existsByEmail(String email);
     Optional<Customer> findByEmailVerifyToken(String token);
     Optional<Customer> findByPasswordResetToken(String token);
+    Optional<Customer> findFirstByPhone(String phone);
 }

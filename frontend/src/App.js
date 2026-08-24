@@ -87,6 +87,9 @@ const PaymentResultPage = lazy(
 const BankTransferResumePage = lazy(
   () => import(/* webpackChunkName: "store-checkout" */ './pages/store/BankTransferResumePage')
 );
+const ManualOrderConfirmationPage = lazy(
+  () => import(/* webpackChunkName: "store-checkout" */ './pages/store/ManualOrderConfirmationPage')
+);
 const GoogleAuthCallback = lazy(
   () => import(/* webpackChunkName: "store" */ './pages/store/GoogleAuthCallback')
 );
@@ -226,6 +229,7 @@ function StoreRoutes() {
           <Route path="odeme/sonuc" element={<PaymentResultPage />} />
           {/* Resume bank transfer payment — clicked from My Orders, IBAN/QR/reference shown again */}
           <Route path="odeme/havale/:orderId" element={<BankTransferResumePage />} />
+          <Route path="siparis-onay/:token" element={<ManualOrderConfirmationPage />} />
           <Route path="sayfa/:slug" element={<StoreCmsPage />} />
           <Route path="giris" element={<StoreLoginPage />} />
           <Route path="kayit" element={<StoreRegisterPage />} />

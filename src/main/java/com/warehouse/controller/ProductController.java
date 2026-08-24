@@ -42,6 +42,7 @@ public class ProductController {
     private final AdminSecurityService adminSecurityService;
     private final BundleItemRepository bundleItemRepository;
     private final ProductSetCoverService productSetCoverService;
+    private final com.warehouse.repository.ProductImageRepository productImageRepository;
 
     @Autowired
     public ProductController(ProductService productService,
@@ -50,7 +51,8 @@ public class ProductController {
                              PhotoStorageService photoStorageService,
                              AdminSecurityService adminSecurityService,
                              BundleItemRepository bundleItemRepository,
-                             ProductSetCoverService productSetCoverService) {
+                             ProductSetCoverService productSetCoverService,
+                             com.warehouse.repository.ProductImageRepository productImageRepository) {
         this.productService = productService;
         this.stockService = stockService;
         this.productImageService = productImageService;
@@ -58,6 +60,7 @@ public class ProductController {
         this.adminSecurityService = adminSecurityService;
         this.bundleItemRepository = bundleItemRepository;
         this.productSetCoverService = productSetCoverService;
+        this.productImageRepository = productImageRepository;
     }
 
     @GetMapping
@@ -71,7 +74,9 @@ public class ProductController {
             @RequestParam(required = false) Long categoryId,
             @RequestParam(required = false) Long brandId,
             @RequestParam(required = false) Long colorId,
-            @RequestParam(required = false) String productType) {
+            @RequestParam(required = false) String productType,
+            @RequestParam(required = false) Boolean ecommerceVisible,
+            @RequestParam(required = false) Boolean hasImage) {
         ProductType type = parseProductType(productType);
         if (page != null && size != null) {
             // Paginated response
@@ -79,7 +84,7 @@ public class ProductController {
             int safeSize = Math.max(1, Math.min(size, 250));
             Sort sort = Sort.by(Sort.Direction.fromString(sortDir), sortBy);
             Pageable pageable = PageRequest.of(safePage, safeSize, sort);
-            Page<Product> productPage = productService.getAllProducts(pageable, search, categoryId, brandId, colorId, type);
+            Page<Product> productPage = productService.getAllProducts(pageable, search, categoryId, brandId, colorId, type, ecommerceVisible, hasImage);
             List<ProductDto> content = mapProductsWithTotals(productPage.getContent());
             PagedResponse<ProductDto> response = new PagedResponse<>(
                     content,
@@ -93,7 +98,7 @@ public class ProductController {
             return ResponseEntity.ok(response);
         } else {
             // Non-paginated response (backward compatibility)
-            Page<Product> productPage = productService.getAllProducts(Pageable.unpaged(), search, categoryId, brandId, colorId, type);
+            Page<Product> productPage = productService.getAllProducts(Pageable.unpaged(), search, categoryId, brandId, colorId, type, ecommerceVisible, hasImage);
             return ResponseEntity.ok(mapProductsWithTotals(productPage.getContent()));
         }
     }
@@ -469,6 +474,16 @@ public class ProductController {
         return ResponseEntity.ok().build();
     }
 
+    @PutMapping("/bulk-ecommerce-visibility")
+    public ResponseEntity<Map<String, Object>> setEcommerceVisibility(@RequestBody Map<String, Object> body) {
+        Object rawIds = body.get("ids");
+        if (!(rawIds instanceof List<?> list) || list.isEmpty()) return ResponseEntity.badRequest().build();
+        List<Long> ids = list.stream().map(v -> Long.valueOf(String.valueOf(v))).toList();
+        boolean visible = Boolean.parseBoolean(String.valueOf(body.getOrDefault("visible", true)));
+        int affected = productService.setEcommerceVisibility(ids, visible);
+        return ResponseEntity.ok(Map.of("affected", affected, "visible", visible));
+    }
+
     private ProductDto toDto(Product p) {
         ProductDto dto = new ProductDto();
         dto.id = p.getId();
@@ -477,6 +492,7 @@ public class ProductController {
         dto.description = p.getDescription();
         dto.price = p.getPrice();
         dto.active = p.isActive();
+        dto.ecommerceVisible = p.isEcommerceVisible();
         dto.weight = p.getWeight();
         dto.dimensions = p.getDimensions();
         dto.lengthCm = p.getLengthCm();
@@ -578,6 +594,10 @@ public class ProductController {
                 .map(Product::getId)
                 .toList();
         Map<Long, Long> totals = stockService.getTotalQuantitiesByProductIds(ids);
+        Map<Long, Long> imageCounts = new java.util.HashMap<>();
+        for (Object[] row : productImageRepository.countDisplayableByProductIds(ids)) {
+            imageCounts.put((Long) row[0], ((Number) row[1]).longValue());
+        }
         // Batch member counts for any bundles on this page (single query, no N+1).
         Map<Long, Integer> bundleCounts = new java.util.HashMap<>();
         boolean hasBundle = products.stream().anyMatch(p -> p.getProductType() == ProductType.BUNDLE);
@@ -590,6 +610,7 @@ public class ProductController {
                 .map(product -> {
                     ProductDto dto = toDto(product);
                     dto.totalQuantity = totals.getOrDefault(product.getId(), 0L);
+                    dto.hasImage = imageCounts.getOrDefault(product.getId(), 0L) > 0;
                     if (product.getProductType() == ProductType.BUNDLE && dto.bundleItemCount == null) {
                         dto.bundleItemCount = bundleCounts.getOrDefault(product.getId(), 0);
                     }
@@ -600,6 +621,7 @@ public class ProductController {
 
     private ProductDto toDtoWithTotal(Product product) {
         ProductDto dto = toDto(product);
+        dto.hasImage = !productImageRepository.countDisplayableByProductIds(List.of(product.getId())).isEmpty();
         dto.totalQuantity = stockService.getTotalQuantityByProduct(product.getId());
         // Single-product path only (edit form): list its linked color variants. Kept out of the
         // shared toDto to avoid a per-row sibling query on product list pages.

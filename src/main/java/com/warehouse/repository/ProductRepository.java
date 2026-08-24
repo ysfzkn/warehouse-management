@@ -65,7 +65,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
            "LEFT JOIN FETCH c.parent " +
            "LEFT JOIN FETCH p.brand " +
            "LEFT JOIN FETCH p.color " +
-           "WHERE p.id IN :ids AND p.isActive = true")
+           "WHERE p.id IN :ids AND p.isActive = true AND p.ecommerceVisible = true")
     List<Product> findActiveByIdInWithRelations(@Param("ids") List<Long> ids);
 
     /** Atomic, lock-free view-count bump. Bypasses optimistic versioning by design. */
@@ -75,7 +75,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 
     /** Popular active product ids in a category (by view count), excluding one product — recommendation fallback. */
     @Query("SELECT p.id FROM Product p " +
-           "WHERE p.category.id = :categoryId AND p.isActive = true AND p.id <> :excludeId " +
+           "WHERE p.category.id = :categoryId AND p.isActive = true AND p.ecommerceVisible = true AND p.id <> :excludeId " +
            "ORDER BY p.viewCount DESC, p.id DESC")
     List<Long> findPopularIdsByCategory(@Param("categoryId") Long categoryId,
                                         @Param("excludeId") Long excludeId,
@@ -222,22 +222,57 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
                                 @Param("productType") com.warehouse.entity.ProductType productType,
                                 Pageable pageable);
 
+    @Query("""
+        SELECT p FROM Product p
+        LEFT JOIN p.category c LEFT JOIN c.parent cp LEFT JOIN p.brand b LEFT JOIN p.color col
+        WHERE (:search IS NULL OR LOWER(p.name) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%'))
+               OR LOWER(p.sku) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')))
+          AND (:categoryId IS NULL OR c.id = :categoryId OR cp.id = :categoryId)
+          AND (:brandId IS NULL OR b.id = :brandId)
+          AND (:colorId IS NULL OR col.id = :colorId)
+          AND (:productType IS NULL OR p.productType = :productType)
+          AND (:ecommerceVisible IS NULL OR p.ecommerceVisible = :ecommerceVisible)
+          AND (:hasImage IS NULL OR
+               (:hasImage = true AND EXISTS (SELECT 1 FROM ProductImage pi WHERE pi.product = p AND pi.slot IS NULL)) OR
+               (:hasImage = false AND NOT EXISTS (SELECT 1 FROM ProductImage pi WHERE pi.product = p AND pi.slot IS NULL)))
+    """)
+    @EntityGraph(value = Product.GRAPH_WITH_RELATIONS, type = EntityGraph.EntityGraphType.LOAD)
+    Page<Product> findByAdminFilters(@Param("search") String search,
+                                     @Param("categoryId") Long categoryId,
+                                     @Param("brandId") Long brandId,
+                                     @Param("colorId") Long colorId,
+                                     @Param("productType") com.warehouse.entity.ProductType productType,
+                                     @Param("ecommerceVisible") Boolean ecommerceVisible,
+                                     @Param("hasImage") Boolean hasImage,
+                                     Pageable pageable);
+
+    @Modifying
+    @Query("UPDATE Product p SET p.ecommerceVisible = :visible WHERE p.id IN :ids")
+    int updateEcommerceVisibility(@Param("ids") List<Long> ids, @Param("visible") boolean visible);
+
     // Color variants — products sharing a variant_group_id are the same product in
     // different colors. Storefront wants only the active members (with relations for
     // color/image rendering); the admin reconcile path wants every member regardless
     // of active flag.
     @EntityGraph(value = Product.GRAPH_WITH_RELATIONS, type = EntityGraph.EntityGraphType.LOAD)
-    List<Product> findByVariantGroupIdAndIsActiveTrueOrderByIdAsc(Long variantGroupId);
+    @Query("SELECT p FROM Product p WHERE p.variantGroupId = :variantGroupId AND p.isActive = true " +
+           "AND p.ecommerceVisible = true ORDER BY p.id ASC")
+    List<Product> findByVariantGroupIdAndIsActiveTrueOrderByIdAsc(@Param("variantGroupId") Long variantGroupId);
 
     List<Product> findByVariantGroupId(Long variantGroupId);
 
     // Batch: active members of many variant groups at once (storefront product-card swatches).
     @EntityGraph(value = Product.GRAPH_WITH_RELATIONS, type = EntityGraph.EntityGraphType.LOAD)
-    List<Product> findByVariantGroupIdInAndIsActiveTrue(java.util.Collection<Long> variantGroupIds);
+    @Query("SELECT p FROM Product p WHERE p.variantGroupId IN :variantGroupIds AND p.isActive = true AND p.ecommerceVisible = true")
+    List<Product> findByVariantGroupIdInAndIsActiveTrue(@Param("variantGroupIds") java.util.Collection<Long> variantGroupIds);
 
     // E-commerce storefront queries
     @EntityGraph(value = Product.GRAPH_WITH_RELATIONS, type = EntityGraph.EntityGraphType.LOAD)
-    Optional<Product> findBySlug(String slug);
+    @Query("SELECT p FROM Product p WHERE p.slug = :slug AND p.isActive = true AND p.ecommerceVisible = true")
+    Optional<Product> findBySlug(@Param("slug") String slug);
+
+    @Query("SELECT p FROM Product p WHERE p.slug = :slug")
+    Optional<Product> findAnyBySlug(@Param("slug") String slug);
 
     /**
      * Store search — searches across product name + SKU + category + brand + sub-brand
@@ -251,7 +286,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
         LEFT JOIN c.parent cp
         LEFT JOIN p.brand b
         LEFT JOIN p.color col
-        WHERE p.isActive = true
+        WHERE p.isActive = true AND p.ecommerceVisible = true
           AND (:search IS NULL
                OR LOWER(p.name)             LIKE LOWER(CONCAT('%', CAST(:search AS string), '%'))
                OR LOWER(p.sku)              LIKE LOWER(CONCAT('%', CAST(:search AS string), '%'))
@@ -291,7 +326,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
         LEFT JOIN c.parent cp
         LEFT JOIN p.brand b
         LEFT JOIN p.color col
-        WHERE p.isActive = true
+        WHERE p.isActive = true AND p.ecommerceVisible = true
           AND (:search IS NULL OR LOWER(p.name) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')) OR LOWER(p.sku) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')))
           AND (:categoryId IS NULL OR c.id = :categoryId OR cp.id = :categoryId)
           AND (:brandIds IS NULL OR b.id IN :brandIds)
