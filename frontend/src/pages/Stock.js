@@ -9,6 +9,7 @@ import QuickStockAdjustModal from '../components/QuickStockAdjustModal';
 import StockRemoveSearchModal from '../components/StockRemoveSearchModal';
 import StockSettingsModal from '../components/StockSettingsModal';
 import StockTransferModal from '../components/StockTransferModal';
+import CustomerLinkPicker from '../components/CustomerLinkPicker';
 import StockRequestApprovalModal from '../components/StockRequestApprovalModal';
 import SearchableSelect from '../components/SearchableSelect';
 import MultiSearchableSelect from '../components/MultiSearchableSelect';
@@ -1483,6 +1484,30 @@ const Stock = () => {
 
   const closeTransferDetailModal = () => {
     setTransferDetailModal({ show: false, transfer: null });
+  };
+
+  /**
+   * Attaches (or detaches) the recipient's e-commerce account. Deliveries are often written
+   * down before anyone knows whether the customer has an account, so this stays available
+   * long after the shipment was created.
+   */
+  const linkTransferCustomer = async (transferId, customer) => {
+    try {
+      const response = await axios.put(`/api/stock-transfers/${transferId}/customer`, {
+        customerId: customer?.id ?? null,
+      });
+      const updated = response.data;
+      setTransferDetailModal((prev) =>
+        prev.transfer && prev.transfer.id === transferId ? { ...prev, transfer: updated } : prev
+      );
+      setTransfers((prev) => prev.map((t) => (t.id === transferId ? { ...t, ...updated } : t)));
+      showToast(
+        customer ? 'Sevkiyat müşteri kaydıyla eşleştirildi.' : 'Müşteri eşleştirmesi kaldırıldı.',
+        'success'
+      );
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Müşteri eşleştirmesi güncellenemedi.', 'error');
+    }
   };
 
   const handleStockPageChange = (newPage) => {
@@ -4141,6 +4166,24 @@ const Stock = () => {
                           </div>
                         </div>
                       </div>
+                      {(t.transferType || 'WAREHOUSE') === 'CUSTOMER_DELIVERY' && (
+                        <div className="border rounded-3 p-3 mb-4">
+                          <div className="d-flex align-items-center justify-content-between gap-2 mb-2">
+                            <small className="text-muted text-uppercase">E-ticaret müşteri kaydı</small>
+                            {t.orderNumber && (
+                              <span className="badge bg-primary-subtle text-primary">
+                                <i className="fas fa-receipt me-1"></i>
+                                Sipariş {t.orderNumber}
+                              </span>
+                            )}
+                          </div>
+                          <CustomerLinkPicker
+                            customer={t.linkedCustomer}
+                            onPick={(customer) => linkTransferCustomer(t.id, customer)}
+                            hint="Bu alıcı sitede kayıtlı değilse boş kalabilir; kaydı sonradan bulup eşleştirebilirsiniz."
+                          />
+                        </div>
+                      )}
                       <h6 className="fw-bold mb-2 d-flex align-items-center justify-content-between">
                         <span>
                           <i className="fas fa-box me-2"></i>
@@ -5176,6 +5219,12 @@ const Stock = () => {
                                         >
                                           <i className="fas fa-user-tag text-info fa-xs me-1 d-inline d-sm-none"></i>
                                           {transfer.customerFullName}
+                                          {transfer.customerId && (
+                                            <i
+                                              className="fas fa-user-check text-success ms-1"
+                                              title={`E-ticaret kaydı eşleşti${transfer.linkedCustomer?.email ? `: ${transfer.linkedCustomer.email}` : ''}`}
+                                            ></i>
+                                          )}
                                         </div>
                                         <small
                                           className="text-muted d-block text-break"

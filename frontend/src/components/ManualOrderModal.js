@@ -1,8 +1,17 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
+import { useAdminToast } from './AdminToast';
 import './ManualOrderModal.css';
 
-const emptyItem = { productId: '', quantity: 1, unitPrice: '', productName: '', sku: '', listPrice: 0 };
+const emptyItem = {
+  productId: '',
+  quantity: 1,
+  unitPrice: '',
+  productName: '',
+  sku: '',
+  listPrice: 0,
+  stock: 0,
+};
 const channels = [
   ['WHATSAPP', 'fab fa-whatsapp', 'WhatsApp'],
   ['PHONE', 'fas fa-phone', 'Telefon'],
@@ -11,7 +20,26 @@ const channels = [
   ['MARKETPLACE', 'fas fa-shopping-bag', 'Pazaryeri'],
   ['OTHER', 'fas fa-ellipsis-h', 'Diğer'],
 ];
+const DAY_MS = 24 * 60 * 60 * 1000;
 const money = (value) => Number(value || 0).toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' });
+const priceOf = (item) => Number(item.unitPrice === '' ? item.listPrice : item.unitPrice) || 0;
+const lineTotal = (item) => priceOf(item) * (Number(item.quantity) || 0);
+
+/** datetime-local expects local wall-clock time, which toISOString() would shift to UTC. */
+const toLocalInput = (date) => {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+};
+const formatDateTime = (value) =>
+  value
+    ? new Date(value).toLocaleString('tr-TR', {
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    : '';
 
 function Section({ number, icon, title, description, complete, children }) {
   return (
@@ -36,6 +64,7 @@ function Section({ number, icon, title, description, complete, children }) {
 }
 
 export default function ManualOrderModal({ onClose, onCreated }) {
+  const toast = useAdminToast();
   const [form, setForm] = useState({
     firstName: '',
     lastName: '',
@@ -47,34 +76,66 @@ export default function ManualOrderModal({ onClose, onCreated }) {
     paymentState: 'WAITING',
     paymentDueAt: '',
     reminderAt: '',
+    deliveryMethod: 'CARGO',
+    cargoProviderId: '',
+    cargoTrackingNo: '',
     shippingCost: 0,
     note: '',
     city: '',
     district: '',
     addressLine: '',
-    items: [{ ...emptyItem }],
+    items: [],
   });
   const [products, setProducts] = useState([]);
+  const [productsLoading, setProductsLoading] = useState(false);
+  const [productsError, setProductsError] = useState('');
+  const [cargoProviders, setCargoProviders] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [customerSearch, setCustomerSearch] = useState('');
   const [search, setSearch] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [touched, setTouched] = useState(false);
+  // Auto-filled fields stop being auto-filled once the user takes them over.
+  const [reminderTouched, setReminderTouched] = useState(false);
+  const [shippingTouched, setShippingTouched] = useState(false);
+  const searchInputRef = useRef(null);
 
   useEffect(() => {
-    const timer = setTimeout(
-      () =>
-        axios
-          .get('/api/products', {
-            params: { page: 0, size: 30, search: search || undefined, productType: 'SIMPLE' },
-          })
-          .then((r) => setProducts(r.data?.content || r.data || []))
-          .catch(() => setProducts([])),
-      250
-    );
-    return () => clearTimeout(timer);
+    let cancelled = false;
+    setProductsLoading(true);
+    const timer = setTimeout(() => {
+      axios
+        .get('/api/products', {
+          params: { page: 0, size: 24, search: search.trim() || undefined, productType: 'SIMPLE' },
+        })
+        .then((r) => {
+          if (cancelled) return;
+          setProducts(r.data?.content || (Array.isArray(r.data) ? r.data : []));
+          setProductsError('');
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setProducts([]);
+          setProductsError('Ürünler yüklenemedi. Aramayı tekrar deneyin.');
+        })
+        .finally(() => {
+          if (!cancelled) setProductsLoading(false);
+        });
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, [search]);
+
+  useEffect(() => {
+    axios
+      .get('/api/cargo-providers')
+      .then((r) => setCargoProviders((r.data || []).filter((p) => p.active)))
+      .catch(() => setCargoProviders([]));
+  }, []);
+
   useEffect(() => {
     if (customerSearch.trim().length < 2) {
       setCustomers([]);
@@ -90,6 +151,7 @@ export default function ManualOrderModal({ onClose, onCreated }) {
     );
     return () => clearTimeout(timer);
   }, [customerSearch]);
+
   useEffect(() => {
     const close = (event) => {
       if (event.key === 'Escape' && !saving) onClose();
@@ -104,6 +166,9 @@ export default function ManualOrderModal({ onClose, onCreated }) {
       ...old,
       items: old.items.map((item, i) => (i === index ? { ...item, ...patch } : item)),
     }));
+  const removeItem = (index) =>
+    setForm((old) => ({ ...old, items: old.items.filter((_, i) => i !== index) }));
+
   const selectCustomer = async (customer) => {
     setForm((old) => ({
       ...old,
@@ -129,44 +194,132 @@ export default function ManualOrderModal({ onClose, onCreated }) {
       /* Address can be entered manually. */
     }
   };
-  const selectProduct = (index, productId) => {
-    const product = products.find((p) => String(p.id) === String(productId));
-    setItem(
-      index,
-      product
-        ? {
-            productId,
-            productName: product.name,
-            sku: product.sku,
-            listPrice: Number(product.salePrice || product.price || 0),
-          }
-        : { ...emptyItem }
-    );
-  };
-  const subtotal = useMemo(
-    () =>
-      form.items.reduce(
-        (sum, item) =>
-          sum +
-          (item.unitPrice === '' ? item.listPrice : Number(item.unitPrice || 0)) * Number(item.quantity || 0),
-        0
-      ),
-    [form.items]
+
+  /** Adds the product, or bumps the quantity when it is already on the order. */
+  const addProduct = useCallback(
+    (product) => {
+      setForm((old) => {
+        const index = old.items.findIndex((item) => String(item.productId) === String(product.id));
+        if (index >= 0) {
+          return {
+            ...old,
+            items: old.items.map((item, i) =>
+              i === index ? { ...item, quantity: Number(item.quantity || 0) + 1 } : item
+            ),
+          };
+        }
+        return {
+          ...old,
+          items: [
+            ...old.items,
+            {
+              ...emptyItem,
+              productId: product.id,
+              productName: product.name,
+              sku: product.sku,
+              listPrice: Number(product.salePrice || product.price || 0),
+              stock: Number(product.totalQuantity || 0),
+            },
+          ],
+        };
+      });
+      toast.success(`${product.name} siparişe eklendi.`);
+    },
+    [toast]
   );
-  const total = subtotal + Number(form.shippingCost || 0);
+
+  /**
+   * The backend rejects a reminder later than the due date, so a due date less than a day
+   * out falls back to the due moment itself instead of "one day before".
+   */
+  const applyDefaultReminder = useCallback(
+    (dueValue, manual) => {
+      const due = new Date(dueValue);
+      if (Number.isNaN(due.getTime())) return;
+      const dayBefore = new Date(due.getTime() - DAY_MS);
+      if (dayBefore > new Date()) {
+        set('reminderAt', toLocalInput(dayBefore));
+        toast.info(`Hatırlatma otomatik olarak 1 gün öncesine ayarlandı: ${formatDateTime(dayBefore)}`);
+      } else {
+        set('reminderAt', toLocalInput(due));
+        toast.warning('Son ödeme tarihine 1 günden az kaldı; hatırlatma son ödeme anına ayarlandı.');
+      }
+      if (manual) setReminderTouched(false);
+    },
+    [toast]
+  );
+
+  const handleDueChange = (value) => {
+    set('paymentDueAt', value);
+    if (!value || reminderTouched) return;
+    applyDefaultReminder(value, false);
+  };
+
+  const selectCargoProvider = (provider) => {
+    setForm((old) => {
+      const next = { ...old, cargoProviderId: provider.id };
+      if (!shippingTouched) next.shippingCost = Number(provider.baseCost || 0);
+      return next;
+    });
+  };
+
+  const selectDeliveryMethod = (method) => {
+    setForm((old) => ({
+      ...old,
+      deliveryMethod: method,
+      cargoProviderId: method === 'CARGO' ? old.cargoProviderId : '',
+      cargoTrackingNo: method === 'CARGO' ? old.cargoTrackingNo : '',
+      shippingCost: method === 'OWN_TRANSFER' && !shippingTouched ? 0 : old.shippingCost,
+    }));
+  };
+
+  const subtotal = useMemo(() => form.items.reduce((sum, item) => sum + lineTotal(item), 0), [form.items]);
+  const selectedProvider = cargoProviders.find((p) => String(p.id) === String(form.cargoProviderId));
+  const freeShipping =
+    form.deliveryMethod === 'CARGO' &&
+    Boolean(selectedProvider) &&
+    Number(selectedProvider?.freeShippingThreshold) > 0 &&
+    subtotal >= Number(selectedProvider?.freeShippingThreshold);
+  const shippingCost = freeShipping && !shippingTouched ? 0 : Number(form.shippingCost || 0);
+  const trackingUrl =
+    selectedProvider?.trackingUrlTemplate && form.cargoTrackingNo.trim()
+      ? selectedProvider.trackingUrlTemplate.replace('{trackingNo}', form.cargoTrackingNo.trim())
+      : '';
+  const estimatedDelivery = selectedProvider
+    ? new Date(Date.now() + (selectedProvider.estimatedDeliveryDays || 3) * DAY_MS).toLocaleDateString(
+        'tr-TR',
+        { day: '2-digit', month: 'long', year: 'numeric' }
+      )
+    : '';
+  const total = subtotal + shippingCost;
   const itemCount = form.items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
   const customerComplete = Boolean(form.firstName && form.lastName && form.phone);
   const addressComplete = Boolean(form.addressLine && form.city);
   const productsComplete =
     form.items.length > 0 && form.items.every((item) => item.productId && Number(item.quantity) > 0);
+  const deliveryComplete = form.deliveryMethod === 'OWN_TRANSFER' || Boolean(form.cargoProviderId);
   const paymentComplete = form.paymentState !== 'SCHEDULED' || Boolean(form.paymentDueAt);
   const invalid = (value) => touched && !value;
+  const addedIds = new Set(form.items.map((item) => String(item.productId)));
+  const shortStock = form.items.filter((item) => Number(item.quantity) > Number(item.stock || 0));
 
   const submit = async () => {
     setTouched(true);
     setError('');
-    if (!customerComplete || !form.addressLine || !productsComplete || !paymentComplete) {
-      setError('Kırmızı işaretli zorunlu alanları tamamlayın.');
+    if (!customerComplete || !form.addressLine || !form.city) {
+      setError('Müşteri ve teslimat adresi alanlarını tamamlayın.');
+      return;
+    }
+    if (!productsComplete) {
+      setError('Siparişe en az bir ürün ekleyin ve adetlerin sıfırdan büyük olduğundan emin olun.');
+      return;
+    }
+    if (!deliveryComplete) {
+      setError('Kargo ile gönderim için bir kargo firması seçin.');
+      return;
+    }
+    if (!paymentComplete) {
+      setError('Planlı ödeme için son ödeme tarihi zorunludur.');
       return;
     }
     setSaving(true);
@@ -183,7 +336,10 @@ export default function ManualOrderModal({ onClose, onCreated }) {
         paymentState: form.paymentState,
         paymentDueAt: form.paymentDueAt || null,
         reminderAt: form.reminderAt || null,
-        shippingCost: Number(form.shippingCost || 0),
+        deliveryMethod: form.deliveryMethod,
+        cargoProviderId: form.deliveryMethod === 'CARGO' ? Number(form.cargoProviderId) : null,
+        cargoTrackingNo: form.deliveryMethod === 'CARGO' ? form.cargoTrackingNo.trim() || null : null,
+        shippingCost,
         note: form.note?.trim() || null,
         shippingAddress: {
           addressLine: form.addressLine.trim(),
@@ -199,7 +355,7 @@ export default function ManualOrderModal({ onClose, onCreated }) {
           unitPrice: item.unitPrice === '' ? null : Number(item.unitPrice),
         })),
       });
-      onCreated(response.data);
+      onCreated({ ...response.data, deliveryMethod: form.deliveryMethod });
     } catch (e) {
       setError(e.response?.data?.message || 'Sipariş oluşturulamadı. Bilgileri kontrol edip tekrar deneyin.');
     } finally {
@@ -422,114 +578,392 @@ export default function ManualOrderModal({ onClose, onCreated }) {
                   number="3"
                   icon="fas fa-box-open"
                   title="Sipariş ürünleri"
-                  description="Ürünleri, adetleri ve gerekiyorsa siparişe özel fiyatları belirleyin."
+                  description="Ürünü arayıp listeden ekleyin; adet ve siparişe özel fiyatı satırda düzenleyin."
                   complete={productsComplete}
                 >
-                  <div className="input-group mb-3 manual-order-search">
-                    <span className="input-group-text">
-                      <i className="fas fa-search" />
-                    </span>
-                    <input
-                      className="form-control"
-                      placeholder="Ürün adı veya SKU ile listeyi filtreleyin"
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                    />
-                  </div>
-                  <div className="d-flex flex-column gap-3">
-                    {form.items.map((item, index) => (
-                      <div className="manual-order-item" key={index}>
-                        <div className="manual-order-item__index">{index + 1}</div>
-                        <div className="row g-2 flex-grow-1 align-items-end">
-                          <div className="col-md-6">
-                            <label className="form-label">
-                              Ürün <span className="text-danger">*</span>
-                            </label>
-                            <select
-                              className={`form-select ${touched && !item.productId ? 'is-invalid' : ''}`}
-                              value={item.productId}
-                              onChange={(e) => selectProduct(index, e.target.value)}
-                            >
-                              <option value="">Ürün seçin</option>
-                              {item.productId &&
-                                !products.some((p) => String(p.id) === String(item.productId)) && (
-                                  <option value={item.productId}>
-                                    {item.productName} — {item.sku}
-                                  </option>
-                                )}
-                              {products.map((p) => (
-                                <option value={p.id} key={p.id}>
-                                  {p.name} — {p.sku} · Stok {p.totalQuantity || 0}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                          <div className="col-5 col-md-2">
-                            <label className="form-label">Adet</label>
-                            <input
-                              type="number"
-                              min="1"
-                              className="form-control"
-                              value={item.quantity}
-                              onChange={(e) => setItem(index, { quantity: e.target.value })}
-                            />
-                          </div>
-                          <div className="col-7 col-md-3">
-                            <label className="form-label">Birim fiyat</label>
-                            <div className="input-group">
-                              <span className="input-group-text">₺</span>
-                              <input
-                                type="number"
-                                min="0"
-                                step=".01"
-                                className="form-control"
-                                placeholder={item.productId ? String(item.listPrice) : 'Liste fiyatı'}
-                                value={item.unitPrice}
-                                onChange={(e) => setItem(index, { unitPrice: e.target.value })}
-                              />
-                            </div>
-                          </div>
-                          <div className="col-md-1">
-                            <button
-                              type="button"
-                              className="btn btn-outline-danger w-100"
-                              disabled={form.items.length === 1}
-                              onClick={() =>
-                                set(
-                                  'items',
-                                  form.items.filter((_, i) => i !== index)
-                                )
-                              }
-                              aria-label={`${index + 1}. ürünü kaldır`}
-                            >
-                              <i className="fas fa-trash-alt" />
-                            </button>
-                          </div>
-                          {item.productId && (
-                            <div className="col-12 small text-muted">
-                              Liste fiyatı: <strong>{money(item.listPrice)}</strong> · Satır toplamı:{' '}
-                              <strong>
-                                {money(
-                                  (item.unitPrice === '' ? item.listPrice : item.unitPrice) * item.quantity
-                                )}
-                              </strong>
-                            </div>
-                          )}
+                  <div className="manual-order-picker">
+                    <div className="input-group manual-order-search">
+                      <span className="input-group-text">
+                        <i className="fas fa-search" />
+                      </span>
+                      <input
+                        ref={searchInputRef}
+                        className="form-control"
+                        placeholder="Ürün adı, SKU, marka veya kategori ile arayın"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            if (products.length === 1) addProduct(products[0]);
+                          }
+                        }}
+                        autoComplete="off"
+                      />
+                      {productsLoading && (
+                        <span className="input-group-text bg-white border-start-0">
+                          <span className="spinner-border spinner-border-sm text-primary" />
+                        </span>
+                      )}
+                      {search && !productsLoading && (
+                        <button
+                          type="button"
+                          className="btn btn-outline-secondary"
+                          onClick={() => {
+                            setSearch('');
+                            searchInputRef.current?.focus();
+                          }}
+                          aria-label="Ürün aramasını temizle"
+                        >
+                          <i className="fas fa-times" />
+                        </button>
+                      )}
+                    </div>
+                    <div className="manual-order-picker__meta">
+                      <span>
+                        {search.trim()
+                          ? `"${search.trim()}" için ${products.length} sonuç`
+                          : `Son güncellenen ${products.length} ürün`}
+                      </span>
+                      <span className="text-muted">Eklemek için satıra tıklayın</span>
+                    </div>
+                    <div className="manual-order-picker__list">
+                      {productsError && (
+                        <div className="manual-order-picker__empty text-danger">
+                          <i className="fas fa-triangle-exclamation d-block fs-4 mb-2" />
+                          {productsError}
                         </div>
-                      </div>
-                    ))}
+                      )}
+                      {!productsError && !productsLoading && products.length === 0 && (
+                        <div className="manual-order-picker__empty">
+                          <i className="fas fa-magnifying-glass d-block fs-4 mb-2 opacity-50" />
+                          Eşleşen ürün bulunamadı. Farklı bir ad veya SKU deneyin.
+                        </div>
+                      )}
+                      {products.map((product) => {
+                        const stock = Number(product.totalQuantity || 0);
+                        const added = addedIds.has(String(product.id));
+                        return (
+                          <button
+                            type="button"
+                            key={product.id}
+                            className={`manual-order-product ${added ? 'is-added' : ''}`}
+                            onClick={() => addProduct(product)}
+                          >
+                            <span className="manual-order-product__info">
+                              <span className="manual-order-product__name">{product.name}</span>
+                              <span className="manual-order-product__meta">
+                                <span className="manual-order-sku">{product.sku}</span>
+                                {product.brandName && <span>{product.brandName}</span>}
+                                <span className={stock > 0 ? 'text-success' : 'text-danger'}>
+                                  <i className="fas fa-cubes me-1" />
+                                  {stock > 0 ? `${stock} adet stok` : 'Stok yok'}
+                                </span>
+                              </span>
+                            </span>
+                            <span className="manual-order-product__price">
+                              {money(product.salePrice || product.price)}
+                            </span>
+                            <span className="manual-order-product__action">
+                              <i className="fas fa-plus" />
+                              {added ? 'Adet +1' : 'Ekle'}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                  <button
-                    type="button"
-                    className="btn btn-outline-primary mt-3"
-                    onClick={() => set('items', [...form.items, { ...emptyItem }])}
-                  >
-                    <i className="fas fa-plus me-2" />
-                    Başka ürün ekle
-                  </button>
+
+                  {form.items.length === 0 ? (
+                    <div className={`manual-order-empty ${touched ? 'is-invalid' : ''}`}>
+                      <i className="fas fa-cart-plus d-block fs-3 mb-2 opacity-50" />
+                      Henüz ürün eklenmedi. Yukarıdaki listeden ürün seçin.
+                    </div>
+                  ) : (
+                    <div className="d-flex flex-column gap-3 mt-4">
+                      {form.items.map((item, index) => {
+                        const short = Number(item.quantity) > Number(item.stock || 0);
+                        return (
+                          <div className="manual-order-item" key={item.productId}>
+                            <div className="manual-order-item__index">{index + 1}</div>
+                            <div className="flex-grow-1 min-w-0">
+                              <div className="d-flex justify-content-between align-items-start gap-3">
+                                <div className="min-w-0">
+                                  <strong className="d-block text-truncate">{item.productName}</strong>
+                                  <span className="manual-order-sku">{item.sku}</span>
+                                  <span className={`ms-2 small ${short ? 'text-danger' : 'text-muted'}`}>
+                                    <i className="fas fa-cubes me-1" />
+                                    {item.stock} adet stok
+                                  </span>
+                                </div>
+                                <button
+                                  type="button"
+                                  className="btn btn-sm btn-outline-danger"
+                                  onClick={() => removeItem(index)}
+                                  aria-label={`${item.productName} ürününü kaldır`}
+                                >
+                                  <i className="fas fa-trash-alt" />
+                                </button>
+                              </div>
+                              <div className="row g-2 align-items-end mt-1">
+                                <div className="col-6 col-md-4">
+                                  <label className="form-label">Adet</label>
+                                  <div className="input-group manual-order-stepper">
+                                    <button
+                                      type="button"
+                                      className="btn btn-outline-secondary"
+                                      onClick={() =>
+                                        setItem(index, { quantity: Math.max(1, Number(item.quantity) - 1) })
+                                      }
+                                      aria-label="Adet azalt"
+                                    >
+                                      <i className="fas fa-minus" />
+                                    </button>
+                                    <input
+                                      type="number"
+                                      min="1"
+                                      className={`form-control text-center ${short ? 'is-invalid' : ''}`}
+                                      value={item.quantity}
+                                      onChange={(e) => setItem(index, { quantity: e.target.value })}
+                                    />
+                                    <button
+                                      type="button"
+                                      className="btn btn-outline-secondary"
+                                      onClick={() => setItem(index, { quantity: Number(item.quantity) + 1 })}
+                                      aria-label="Adet artır"
+                                    >
+                                      <i className="fas fa-plus" />
+                                    </button>
+                                  </div>
+                                </div>
+                                <div className="col-6 col-md-4">
+                                  <label className="form-label">Birim fiyat</label>
+                                  <div className="input-group">
+                                    <span className="input-group-text">₺</span>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      step=".01"
+                                      className="form-control"
+                                      placeholder={String(item.listPrice)}
+                                      value={item.unitPrice}
+                                      onChange={(e) => setItem(index, { unitPrice: e.target.value })}
+                                    />
+                                    {item.unitPrice !== '' && (
+                                      <button
+                                        type="button"
+                                        className="btn btn-outline-secondary"
+                                        title="Liste fiyatına dön"
+                                        onClick={() => setItem(index, { unitPrice: '' })}
+                                      >
+                                        <i className="fas fa-rotate-left" />
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="col-12 col-md-4 text-md-end">
+                                  <span className="text-muted small d-block">Satır toplamı</span>
+                                  <strong className="fs-6">{money(lineTotal(item))}</strong>
+                                </div>
+                              </div>
+                              {item.unitPrice !== '' && Number(item.unitPrice) !== Number(item.listPrice) && (
+                                <div className="small text-muted mt-2">
+                                  Liste fiyatı <strong>{money(item.listPrice)}</strong> yerine siparişe özel
+                                  fiyat uygulanıyor.
+                                </div>
+                              )}
+                              {short && (
+                                <div className="small text-danger mt-2">
+                                  <i className="fas fa-triangle-exclamation me-1" />
+                                  Stok {item.stock} adet; bu adetle sipariş kaydedilemeyebilir.
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </Section>
                 <Section
                   number="4"
+                  icon="fas fa-truck"
+                  title="Teslimat yöntemi"
+                  description="Sipariş kargoya mı verilecek, kendi aracımızla mı sevk edilecek?"
+                  complete={deliveryComplete}
+                >
+                  <div className="manual-order-delivery">
+                    {[
+                      [
+                        'CARGO',
+                        'fas fa-truck-fast',
+                        'Kargo ile gönder',
+                        'Seçilen kargo firmasına teslim edilir, takip numarası siparişe işlenir.',
+                      ],
+                      [
+                        'OWN_TRANSFER',
+                        'fas fa-truck-ramp-box',
+                        'Kendi aracımızla',
+                        'Sipariş, transfer ekranında müşteri sevkiyatı olarak açılır ve buradan izlenir.',
+                      ],
+                    ].map(([value, icon, label, hint]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        className={`manual-order-delivery__option ${form.deliveryMethod === value ? 'is-selected' : ''}`}
+                        onClick={() => selectDeliveryMethod(value)}
+                      >
+                        <i className={icon} />
+                        <span className="min-w-0">
+                          <strong className="d-block">{label}</strong>
+                          <small className="text-muted">{hint}</small>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+
+                  {form.deliveryMethod === 'CARGO' && (
+                    <div className="mt-4">
+                      <label className="form-label">
+                        Kargo firması <span className="text-danger">*</span>
+                      </label>
+                      {cargoProviders.length === 0 ? (
+                        <div className="alert alert-warning mb-0 d-flex align-items-center gap-2">
+                          <i className="fas fa-triangle-exclamation" />
+                          <span>
+                            Tanımlı aktif kargo firması yok. Kargo Ayarları ekranından firma ekleyin veya
+                            kendi aracınızla sevkiyatı seçin.
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="manual-order-cargo">
+                          {cargoProviders.map((provider) => (
+                            <button
+                              key={provider.id}
+                              type="button"
+                              className={`manual-order-cargo__option ${String(form.cargoProviderId) === String(provider.id) ? 'is-selected' : ''} ${touched && !form.cargoProviderId ? 'is-missing' : ''}`}
+                              onClick={() => selectCargoProvider(provider)}
+                            >
+                              <strong className="d-block">{provider.name}</strong>
+                              <span className="small text-muted d-block">
+                                {money(provider.baseCost)} · {provider.estimatedDeliveryDays || 3} iş günü
+                              </span>
+                              {Number(provider.freeShippingThreshold) > 0 && (
+                                <span className="small text-success d-block">
+                                  {money(provider.freeShippingThreshold)} üzeri ücretsiz
+                                </span>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {freeShipping && !shippingTouched && (
+                        <div className="small text-success mt-2">
+                          <i className="fas fa-gift me-1" />
+                          Sepet tutarı ücretsiz kargo limitini geçtiği için kargo ücreti sıfırlandı.
+                        </div>
+                      )}
+                      {selectedProvider && (
+                        <div className="row g-3 mt-1">
+                          <div className="col-md-7">
+                            <label className="form-label">
+                              Takip kodu <span className="text-muted small">(isteğe bağlı)</span>
+                            </label>
+                            <div className="input-group">
+                              <span className="input-group-text">
+                                <i className="fas fa-barcode" />
+                              </span>
+                              <input
+                                className="form-control"
+                                placeholder="Kargo fişindeki takip numarası"
+                                value={form.cargoTrackingNo}
+                                onChange={(e) => set('cargoTrackingNo', e.target.value)}
+                                autoComplete="off"
+                              />
+                              {trackingUrl && (
+                                <a
+                                  className="btn btn-outline-primary"
+                                  href={trackingUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  title="Takip sayfasını aç"
+                                >
+                                  <i className="fas fa-arrow-up-right-from-square" />
+                                </a>
+                              )}
+                            </div>
+                            <div className="form-text">
+                              {form.cargoTrackingNo.trim() && !trackingUrl
+                                ? `${selectedProvider.name} için takip URL tanımlı değil; Kargo Ayarlarından ekleyebilirsiniz.`
+                                : 'Kodu şimdi girmezseniz sipariş detayından sonradan ekleyebilirsiniz.'}
+                            </div>
+                          </div>
+                          <div className="col-md-5">
+                            <label className="form-label">Tahmini teslim</label>
+                            <div className="form-control-plaintext fw-semibold">
+                              <i className="fas fa-calendar-check me-2 text-success" />
+                              {estimatedDelivery}
+                            </div>
+                            <div className="form-text">
+                              {selectedProvider.name} tarifesindeki{' '}
+                              {selectedProvider.estimatedDeliveryDays || 3} iş gününe göre hesaplandı.
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {form.deliveryMethod === 'OWN_TRANSFER' && (
+                    <div className="alert alert-info d-flex align-items-start gap-2 mt-4 mb-0">
+                      <i className="fas fa-circle-info mt-1" />
+                      <span>
+                        Sipariş kaydedildikten sonra sipariş detayından <strong>Sevkiyat oluştur</strong> ile
+                        transfer kaydı açabilirsiniz. Sevkiyat yola çıktığında sipariş{' '}
+                        <strong>Kargoda</strong>, tamamlandığında <strong>Teslim Edildi</strong> durumuna
+                        geçer.
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="row g-3 mt-1">
+                    <div className="col-md-5">
+                      <label className="form-label">
+                        {form.deliveryMethod === 'CARGO' ? 'Kargo ücreti' : 'Sevkiyat ücreti'}
+                      </label>
+                      <div className="input-group">
+                        <span className="input-group-text">₺</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step=".01"
+                          className="form-control"
+                          value={shippingTouched ? form.shippingCost : shippingCost}
+                          onChange={(e) => {
+                            setShippingTouched(true);
+                            set('shippingCost', e.target.value);
+                          }}
+                        />
+                        {shippingTouched && (
+                          <button
+                            type="button"
+                            className="btn btn-outline-secondary"
+                            title="Firma tarifesine dön"
+                            onClick={() => {
+                              setShippingTouched(false);
+                              set('shippingCost', Number(selectedProvider?.baseCost || 0));
+                            }}
+                          >
+                            <i className="fas fa-rotate-left" />
+                          </button>
+                        )}
+                      </div>
+                      <div className="form-text">Müşteriye yansıtılacak tutar; genel toplama eklenir.</div>
+                    </div>
+                  </div>
+                </Section>
+                <Section
+                  number="5"
                   icon="fas fa-wallet"
                   title="Ödeme ve sipariş notu"
                   description="Tahsilat durumunu ve takip edilecek tarihleri belirleyin."
@@ -572,35 +1006,45 @@ export default function ManualOrderModal({ onClose, onCreated }) {
                             type="datetime-local"
                             className={`form-control ${form.paymentState === 'SCHEDULED' && invalid(form.paymentDueAt) ? 'is-invalid' : ''}`}
                             value={form.paymentDueAt}
-                            onChange={(e) => set('paymentDueAt', e.target.value)}
+                            onChange={(e) => handleDueChange(e.target.value)}
                           />
+                          <div className="form-text">
+                            Tarih girildiğinde hatırlatma otomatik olarak 1 gün öncesine ayarlanır.
+                          </div>
                         </div>
                         <div className="col-md-6">
-                          <label className="form-label">Admin hatırlatması</label>
+                          <label className="form-label d-flex justify-content-between align-items-center">
+                            <span>Admin hatırlatması</span>
+                            {form.paymentDueAt && (
+                              <button
+                                type="button"
+                                className="btn btn-link btn-sm p-0 text-decoration-none"
+                                onClick={() => applyDefaultReminder(form.paymentDueAt, true)}
+                              >
+                                <i className="fas fa-wand-magic-sparkles me-1" />1 gün öncesine ayarla
+                              </button>
+                            )}
+                          </label>
                           <input
                             type="datetime-local"
                             className="form-control"
                             value={form.reminderAt}
-                            onChange={(e) => set('reminderAt', e.target.value)}
+                            onChange={(e) => {
+                              setReminderTouched(true);
+                              set('reminderAt', e.target.value);
+                            }}
                           />
+                          {form.reminderAt && (
+                            <div className="form-text text-primary">
+                              <i className="fas fa-bell me-1" />
+                              {formatDateTime(form.reminderAt)} tarihinde hatırlatılacak
+                              {reminderTouched ? ' (elle ayarlandı)' : ''}.
+                            </div>
+                          )}
                         </div>
                       </>
                     )}
-                    <div className="col-md-4">
-                      <label className="form-label">Kargo ücreti</label>
-                      <div className="input-group">
-                        <span className="input-group-text">₺</span>
-                        <input
-                          type="number"
-                          min="0"
-                          step=".01"
-                          className="form-control"
-                          value={form.shippingCost}
-                          onChange={(e) => set('shippingCost', e.target.value)}
-                        />
-                      </div>
-                    </div>
-                    <div className="col-md-8">
+                    <div className="col-12">
                       <label className="form-label">
                         Sipariş notu <span className="text-muted small">(isteğe bağlı)</span>
                       </label>
@@ -639,24 +1083,15 @@ export default function ManualOrderModal({ onClose, onCreated }) {
                     </div>
                   </div>
                   <div className="manual-order-summary__items">
-                    {form.items.filter((item) => item.productId).length ? (
-                      form.items
-                        .filter((item) => item.productId)
-                        .map((item, index) => (
-                          <div
-                            className="d-flex justify-content-between gap-3"
-                            key={`${item.productId}-${index}`}
-                          >
-                            <span className="text-truncate">
-                              {item.quantity} × {item.productName}
-                            </span>
-                            <strong className="text-nowrap">
-                              {money(
-                                (item.unitPrice === '' ? item.listPrice : item.unitPrice) * item.quantity
-                              )}
-                            </strong>
-                          </div>
-                        ))
+                    {form.items.length ? (
+                      form.items.map((item) => (
+                        <div className="d-flex justify-content-between gap-3" key={item.productId}>
+                          <span className="text-truncate">
+                            {item.quantity} × {item.productName}
+                          </span>
+                          <strong className="text-nowrap">{money(lineTotal(item))}</strong>
+                        </div>
+                      ))
                     ) : (
                       <div className="text-center text-muted py-3">
                         <i className="fas fa-box-open d-block fs-3 mb-2 opacity-50" />
@@ -664,20 +1099,47 @@ export default function ManualOrderModal({ onClose, onCreated }) {
                       </div>
                     )}
                   </div>
+                  <div className="manual-order-summary__delivery">
+                    <i
+                      className={
+                        form.deliveryMethod === 'CARGO'
+                          ? 'fas fa-truck-fast text-primary'
+                          : 'fas fa-truck-ramp-box text-primary'
+                      }
+                    />
+                    <div className="min-w-0">
+                      <strong className="d-block">
+                        {form.deliveryMethod === 'CARGO' ? 'Kargo ile gönderim' : 'Kendi aracımızla sevkiyat'}
+                      </strong>
+                      <small className="text-muted d-block text-truncate">
+                        {form.deliveryMethod === 'CARGO'
+                          ? [selectedProvider?.name || 'Kargo firması seçilmedi', form.cargoTrackingNo.trim()]
+                              .filter(Boolean)
+                              .join(' · ')
+                          : 'Transfer ekranından takip edilir'}
+                      </small>
+                    </div>
+                  </div>
                   <div className="manual-order-summary__totals">
                     <div>
                       <span>Ara toplam</span>
                       <strong>{money(subtotal)}</strong>
                     </div>
                     <div>
-                      <span>Kargo</span>
-                      <strong>{Number(form.shippingCost) ? money(form.shippingCost) : 'Ücretsiz'}</strong>
+                      <span>{form.deliveryMethod === 'CARGO' ? 'Kargo' : 'Sevkiyat'}</span>
+                      <strong>{shippingCost ? money(shippingCost) : 'Ücretsiz'}</strong>
                     </div>
                     <div className="manual-order-summary__grand">
                       <span>Genel toplam</span>
                       <strong>{money(total)}</strong>
                     </div>
                   </div>
+                  {shortStock.length > 0 && (
+                    <div className="small text-danger mt-3">
+                      <i className="fas fa-triangle-exclamation me-2" />
+                      {shortStock.length} üründe istenen adet mevcut stoğun üzerinde.
+                    </div>
+                  )}
                   <div className="small text-muted mt-3">
                     <i className="fas fa-shield-alt me-2 text-success" />
                     Sipariş kaydedildikten sonra stok rezerve edilir.

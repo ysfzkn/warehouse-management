@@ -165,6 +165,19 @@ public class StockTransferController {
         return ResponseEntity.status(HttpStatus.CREATED).body(dto);
     }
 
+    /**
+     * Matches the delivery with an e-commerce customer record, or clears the match when
+     * {@code customerId} is omitted. Usable long after the shipment was created.
+     */
+    @PutMapping("/{id}/customer")
+    public ResponseEntity<StockTransferDto> linkCustomer(@PathVariable Long id,
+                                                         @RequestBody(required = false) Map<String, Object> body) {
+        Object raw = body == null ? null : body.get("customerId");
+        Long customerId = raw == null ? null : Long.valueOf(String.valueOf(raw));
+        StockTransfer transfer = stockTransferService.linkCustomer(id, customerId);
+        return ResponseEntity.ok(transferMapper.toDto(transfer));
+    }
+
     @PostMapping("/{id}/start")
     public ResponseEntity<StockTransferDto> startTransfer(@PathVariable Long id) {
         StockTransfer transfer = stockTransferService.startTransfer(id);
@@ -348,10 +361,14 @@ public class StockTransferController {
             transfer.setCustomerFullName(request.getCustomerFullName() != null ? request.getCustomerFullName().trim() : null);
             transfer.setCustomerPhone(request.getCustomerPhone() != null ? request.getCustomerPhone().trim() : null);
             transfer.setCustomerAddress(request.getCustomerAddress() != null ? request.getCustomerAddress().trim() : null);
+            transfer.setOrderId(request.getOrderId());
+            transfer.setCustomerId(request.getCustomerId());
         } else {
             transfer.setCustomerFullName(null);
             transfer.setCustomerPhone(null);
             transfer.setCustomerAddress(null);
+            transfer.setOrderId(null);
+            transfer.setCustomerId(null);
         }
 
         if (request.getItems() != null) {

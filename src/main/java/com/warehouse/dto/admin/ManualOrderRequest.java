@@ -1,5 +1,6 @@
 package com.warehouse.dto.admin;
 
+import com.warehouse.enums.DeliveryMethod;
 import com.warehouse.enums.ManualPaymentState;
 import com.warehouse.enums.OrderChannel;
 import jakarta.validation.Valid;
@@ -27,6 +28,11 @@ public class ManualOrderRequest {
     @NotNull private ManualPaymentState paymentState;
     private LocalDateTime paymentDueAt;
     private LocalDateTime reminderAt;
+    /** CARGO → cargoProviderId is required; OWN_TRANSFER → shipment is tracked as a stock transfer. */
+    private DeliveryMethod deliveryMethod = DeliveryMethod.CARGO;
+    private Long cargoProviderId;
+    /** Optional — a tracking number that already exists at the time the order is written down. */
+    private String cargoTrackingNo;
     private BigDecimal shippingCost = BigDecimal.ZERO;
     private String note;
     @NotNull private Map<String, Object> shippingAddress;

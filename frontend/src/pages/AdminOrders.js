@@ -1,11 +1,19 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import PaginationControls from '../components/PaginationControls';
 import useSecurityCodePrompt from '../components/useSecurityCodePrompt';
 import { useAdminToast } from '../components/AdminToast';
 import { promptDialog } from '../utils/confirmDialog';
 import ManualOrderModal from '../components/ManualOrderModal';
+import StockTransferModal from '../components/StockTransferModal';
+
+const TRANSFER_STATUS = {
+  PENDING: { label: 'Bekliyor', color: 'warning' },
+  IN_TRANSIT: { label: 'Yolda', color: 'info' },
+  COMPLETED: { label: 'Teslim Edildi', color: 'success' },
+  CANCELLED: { label: 'İptal', color: 'danger' },
+};
 
 const STATUS_CONFIG = {
   PENDING_PAYMENT: { label: 'Ödeme Bekliyor', color: 'warning', icon: 'fas fa-clock' },
@@ -86,6 +94,8 @@ export default function AdminOrders() {
   const [invoiceNumber, setInvoiceNumber] = useState('');
   const [invoiceUploading, setInvoiceUploading] = useState(false);
   const [paymentPlanModal, setPaymentPlanModal] = useState(null);
+  const [orderTransfers, setOrderTransfers] = useState([]);
+  const [showTransferModal, setShowTransferModal] = useState(false);
   const { askCode, SecurityCodePrompt } = useSecurityCodePrompt();
   const toast = useAdminToast();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -153,6 +163,7 @@ export default function AdminOrders() {
     try {
       const res = await axios.get(`/api/admin/orders/${orderId}`);
       setOrderDetail(res.data);
+      loadOrderTransfers(orderId);
     } catch (e) {
       setDetailError(e.response?.data?.message || 'Sipariş detayı yüklenemedi.');
     } finally {
@@ -162,6 +173,46 @@ export default function AdminOrders() {
   const closeDetail = () => {
     setSelectedOrder(null);
     setOrderDetail(null);
+    setOrderTransfers([]);
+  };
+
+  // Stable identity matters: StockTransferModal re-reads warehouse stock whenever this
+  // object changes, so an inline literal would refetch on every render of this page.
+  const transferOrder = useMemo(() => {
+    if (!orderDetail) return null;
+    return {
+      id: orderDetail.id,
+      orderNumber: orderDetail.orderNumber,
+      customerName: orderDetail.customerName,
+      customerPhone: orderDetail.customerPhone,
+      customerAddress: [
+        orderDetail.shippingAddress?.addressLine,
+        orderDetail.shippingAddress?.district,
+        orderDetail.shippingAddress?.city,
+      ]
+        .filter(Boolean)
+        .join(', '),
+      customer: orderDetail.customerId
+        ? {
+            id: orderDetail.customerId,
+            firstName: orderDetail.customerName,
+            lastName: '',
+            email: orderDetail.customerEmail,
+            phone: orderDetail.customerPhone,
+          }
+        : null,
+      items: orderDetail.items || [],
+    };
+  }, [orderDetail]);
+
+  /** Shipments dispatched with our own vehicle for this order (empty for cargo orders). */
+  const loadOrderTransfers = async (orderId) => {
+    try {
+      const res = await axios.get(`/api/admin/orders/${orderId}/transfers`);
+      setOrderTransfers(res.data || []);
+    } catch {
+      setOrderTransfers([]);
+    }
   };
 
   const fetchAllowedTransitions = async (orderId) => {
@@ -353,6 +404,27 @@ export default function AdminOrders() {
             setShowManualOrder(false);
             fetchOrders();
             toast.success(`Sipariş oluşturuldu: ${data.orderNumber}`);
+            if (data.deliveryMethod === 'OWN_TRANSFER') {
+              toast.info('Kendi sevkiyatınız: sipariş detayından "Sevkiyat Oluştur" ile transferi başlatın.');
+              openDetail(data.id);
+            }
+          }}
+        />
+      )}
+
+      {showTransferModal && transferOrder && (
+        <StockTransferModal
+          order={transferOrder}
+          onSuccess={() => {
+            setShowTransferModal(false);
+            loadOrderTransfers(orderDetail.id);
+            openDetail(orderDetail.id);
+            fetchOrders();
+            toast.success('Sevkiyat kaydı oluşturuldu.');
+          }}
+          onClose={() => {
+            setShowTransferModal(false);
+            loadOrderTransfers(orderDetail.id);
           }}
         />
       )}
@@ -764,7 +836,12 @@ export default function AdminOrders() {
                     </td>
                     <td className="text-end fw-bold">{formatPrice(o.grandTotal)}</td>
                     <td>
-                      {o.cargoTrackingNo ? (
+                      {o.deliveryMethod === 'OWN_TRANSFER' ? (
+                        <small className="text-primary">
+                          <i className="fas fa-truck-ramp-box me-1" />
+                          Kendi sevkiyatımız
+                        </small>
+                      ) : o.cargoTrackingNo ? (
                         <small className="text-success">
                           <i className="fas fa-truck me-1" />
                           {o.cargoTrackingNo}
@@ -844,17 +921,27 @@ export default function AdminOrders() {
                               <i className="fas fa-edit me-1" />
                               Durum Güncelle
                             </button>
-                            <button
-                              className="btn btn-sm btn-outline-secondary"
-                              onClick={() => {
-                                setCargoCompany(orderDetail.cargoCompany || '');
-                                setCargoTrackingNo(orderDetail.cargoTrackingNo || '');
-                                setShowCargoModal(true);
-                              }}
-                            >
-                              <i className="fas fa-truck me-1" />
-                              Kargo
-                            </button>
+                            {orderDetail.deliveryMethod === 'OWN_TRANSFER' ? (
+                              <button
+                                className="btn btn-sm btn-outline-primary"
+                                onClick={() => setShowTransferModal(true)}
+                              >
+                                <i className="fas fa-truck-ramp-box me-1" />
+                                Sevkiyat Oluştur
+                              </button>
+                            ) : (
+                              <button
+                                className="btn btn-sm btn-outline-secondary"
+                                onClick={() => {
+                                  setCargoCompany(orderDetail.cargoCompany || '');
+                                  setCargoTrackingNo(orderDetail.cargoTrackingNo || '');
+                                  setShowCargoModal(true);
+                                }}
+                              >
+                                <i className="fas fa-truck me-1" />
+                                Kargo
+                              </button>
+                            )}
                             {orderDetail.status === 'PENDING_PAYMENT' &&
                               orderDetail.paymentMethod === 'BANK_TRANSFER' && (
                                 <>
@@ -1322,100 +1409,171 @@ export default function AdminOrders() {
                             </>
                           )}
                           <div className="d-flex justify-content-between mb-2">
-                            <span className="text-muted">Kargo Firması</span>
-                            <span>{orderDetail.cargoCompany || '—'}</span>
-                          </div>
-                          {orderDetail.cargoTrackingNo ? (
-                            <>
-                              <div className="d-flex justify-content-between align-items-center mb-2">
-                                <span className="text-muted">Takip No</span>
-                                <span className="d-flex align-items-center gap-1">
-                                  <code className="fw-bold">{orderDetail.cargoTrackingNo}</code>
-                                  <button
-                                    className="btn btn-sm btn-link p-0"
-                                    title="Kopyala"
-                                    onClick={() => {
-                                      navigator.clipboard.writeText(orderDetail.cargoTrackingNo);
-                                      toast.success('Kopyalandı');
-                                    }}
-                                  >
-                                    <i className="fas fa-copy text-muted" />
-                                  </button>
-                                </span>
-                              </div>
-                              {orderDetail.cargoCompany && (
-                                <button
-                                  className="btn btn-sm btn-success w-100 mb-2"
-                                  onClick={() => {
-                                    axios
-                                      .get('/api/admin/cargo-providers')
-                                      .then((r) => {
-                                        const provider = (r.data || []).find(
-                                          (p) =>
-                                            p.code === orderDetail.cargoCompany ||
-                                            p.name === orderDetail.cargoCompany
-                                        );
-                                        if (provider?.trackingUrlTemplate) {
-                                          window.open(
-                                            provider.trackingUrlTemplate.replace(
-                                              '{trackingNo}',
-                                              orderDetail.cargoTrackingNo
-                                            ),
-                                            '_blank'
-                                          );
-                                        } else {
-                                          toast.info(
-                                            'Bu kargo firması için takip URL tanımlı değil. Kargo Ayarlarından ekleyebilirsiniz.'
-                                          );
-                                        }
-                                      })
-                                      .catch(() => toast.error('Kargo bilgisi alınamadı.'));
-                                  }}
-                                >
-                                  <i className="fas fa-external-link-alt me-2" />
-                                  Kargo Takip Sayfasına Git
-                                </button>
+                            <span className="text-muted">Teslimat Yöntemi</span>
+                            <span className="fw-medium">
+                              {orderDetail.deliveryMethod === 'OWN_TRANSFER' ? (
+                                <>
+                                  <i className="fas fa-truck-ramp-box me-1 text-primary" />
+                                  Kendi aracımızla
+                                </>
+                              ) : (
+                                <>
+                                  <i className="fas fa-truck-fast me-1 text-primary" />
+                                  Kargo ile
+                                </>
                               )}
-                              {/* Kargonomi label PDF download — when cargoProviderShipmentId is present */}
+                            </span>
+                          </div>
+                          {orderDetail.deliveryMethod === 'OWN_TRANSFER' ? (
+                            <>
+                              {orderTransfers.length === 0 ? (
+                                <p className="text-muted mb-3">
+                                  Bu sipariş için henüz sevkiyat kaydı açılmadı.
+                                </p>
+                              ) : (
+                                <div className="d-flex flex-column gap-2 mb-3">
+                                  {orderTransfers.map((transfer) => (
+                                    <div
+                                      key={transfer.id}
+                                      className="border rounded p-2 d-flex justify-content-between align-items-start gap-2"
+                                    >
+                                      <div className="min-w-0">
+                                        <div className="fw-medium">
+                                          Transfer #{transfer.id}
+                                          <span
+                                            className={`badge ms-2 bg-${TRANSFER_STATUS[transfer.status]?.color || 'secondary'}`}
+                                          >
+                                            {TRANSFER_STATUS[transfer.status]?.label || transfer.status}
+                                          </span>
+                                        </div>
+                                        <div className="text-muted">
+                                          {transfer.driverName} · {transfer.vehiclePlate}
+                                        </div>
+                                        <div className="text-muted">
+                                          {transfer.sourceWarehouse?.name || '—'} →{' '}
+                                          {transfer.customerFullName || 'Müşteri'}
+                                        </div>
+                                      </div>
+                                      <Link
+                                        to={`/stock?transferId=${transfer.id}`}
+                                        className="btn btn-sm btn-outline-secondary flex-shrink-0"
+                                        title="Transfer ekranında aç"
+                                      >
+                                        <i className="fas fa-arrow-up-right-from-square" />
+                                      </Link>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
                               <button
-                                className="btn btn-sm btn-outline-primary w-100"
-                                onClick={() => {
-                                  axios
-                                    .get(`/api/admin/cargo/orders/${orderDetail.id}/label`, {
-                                      responseType: 'blob',
-                                    })
-                                    .then((r) => {
-                                      const url = window.URL.createObjectURL(r.data);
-                                      const a = document.createElement('a');
-                                      a.href = url;
-                                      a.download = `kargo-etiket-${orderDetail.orderNumber}.pdf`;
-                                      a.click();
-                                      window.URL.revokeObjectURL(url);
-                                    })
-                                    .catch(async (err) => {
-                                      let msg = 'Etiket indirilemedi.';
-                                      try {
-                                        const body = await err.response?.data?.text?.();
-                                        if (body) {
-                                          const j = JSON.parse(body);
-                                          if (j.message) msg = j.message;
-                                        }
-                                      } catch {
-                                        /* ignore */
-                                      }
-                                      toast.error(msg);
-                                    });
-                                }}
+                                className="btn btn-sm btn-primary w-100"
+                                onClick={() => setShowTransferModal(true)}
                               >
-                                <i className="fas fa-download me-2" />
-                                Kargo Etiketi İndir (PDF)
+                                <i className="fas fa-truck-ramp-box me-2" />
+                                Sevkiyat Oluştur
                               </button>
                             </>
                           ) : (
-                            <div className="d-flex justify-content-between">
-                              <span className="text-muted">Takip No</span>
-                              <span className="text-muted">—</span>
-                            </div>
+                            <>
+                              <div className="d-flex justify-content-between mb-2">
+                                <span className="text-muted">Kargo Firması</span>
+                                <span>
+                                  {orderDetail.cargoProviderName || orderDetail.cargoCompany || '—'}
+                                </span>
+                              </div>
+                              {orderDetail.cargoTrackingNo ? (
+                                <>
+                                  <div className="d-flex justify-content-between align-items-center mb-2">
+                                    <span className="text-muted">Takip No</span>
+                                    <span className="d-flex align-items-center gap-1">
+                                      <code className="fw-bold">{orderDetail.cargoTrackingNo}</code>
+                                      <button
+                                        className="btn btn-sm btn-link p-0"
+                                        title="Kopyala"
+                                        onClick={() => {
+                                          navigator.clipboard.writeText(orderDetail.cargoTrackingNo);
+                                          toast.success('Kopyalandı');
+                                        }}
+                                      >
+                                        <i className="fas fa-copy text-muted" />
+                                      </button>
+                                    </span>
+                                  </div>
+                                  {orderDetail.cargoCompany && (
+                                    <button
+                                      className="btn btn-sm btn-success w-100 mb-2"
+                                      onClick={() => {
+                                        axios
+                                          .get('/api/admin/cargo-providers')
+                                          .then((r) => {
+                                            const provider = (r.data || []).find(
+                                              (p) =>
+                                                p.code === orderDetail.cargoCompany ||
+                                                p.name === orderDetail.cargoCompany
+                                            );
+                                            if (provider?.trackingUrlTemplate) {
+                                              window.open(
+                                                provider.trackingUrlTemplate.replace(
+                                                  '{trackingNo}',
+                                                  orderDetail.cargoTrackingNo
+                                                ),
+                                                '_blank'
+                                              );
+                                            } else {
+                                              toast.info(
+                                                'Bu kargo firması için takip URL tanımlı değil. Kargo Ayarlarından ekleyebilirsiniz.'
+                                              );
+                                            }
+                                          })
+                                          .catch(() => toast.error('Kargo bilgisi alınamadı.'));
+                                      }}
+                                    >
+                                      <i className="fas fa-external-link-alt me-2" />
+                                      Kargo Takip Sayfasına Git
+                                    </button>
+                                  )}
+                                  {/* Kargonomi label PDF download — when cargoProviderShipmentId is present */}
+                                  <button
+                                    className="btn btn-sm btn-outline-primary w-100"
+                                    onClick={() => {
+                                      axios
+                                        .get(`/api/admin/cargo/orders/${orderDetail.id}/label`, {
+                                          responseType: 'blob',
+                                        })
+                                        .then((r) => {
+                                          const url = window.URL.createObjectURL(r.data);
+                                          const a = document.createElement('a');
+                                          a.href = url;
+                                          a.download = `kargo-etiket-${orderDetail.orderNumber}.pdf`;
+                                          a.click();
+                                          window.URL.revokeObjectURL(url);
+                                        })
+                                        .catch(async (err) => {
+                                          let msg = 'Etiket indirilemedi.';
+                                          try {
+                                            const body = await err.response?.data?.text?.();
+                                            if (body) {
+                                              const j = JSON.parse(body);
+                                              if (j.message) msg = j.message;
+                                            }
+                                          } catch {
+                                            /* ignore */
+                                          }
+                                          toast.error(msg);
+                                        });
+                                    }}
+                                  >
+                                    <i className="fas fa-download me-2" />
+                                    Kargo Etiketi İndir (PDF)
+                                  </button>
+                                </>
+                              ) : (
+                                <div className="d-flex justify-content-between">
+                                  <span className="text-muted">Takip No</span>
+                                  <span className="text-muted">—</span>
+                                </div>
+                              )}
+                            </>
                           )}
                         </div>
                       </div>

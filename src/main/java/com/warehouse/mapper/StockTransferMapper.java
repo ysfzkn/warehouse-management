@@ -3,12 +3,16 @@ package com.warehouse.mapper;
 import com.warehouse.dto.StockTransferDto;
 import com.warehouse.entity.StockTransfer;
 import com.warehouse.entity.StockTransferItem;
+import com.warehouse.entity.Customer;
+import com.warehouse.repository.CustomerRepository;
 import com.warehouse.service.StockService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Component
@@ -16,8 +20,19 @@ import java.util.stream.Collectors;
 public class StockTransferMapper {
 
     private final StockService stockService;
+    private final CustomerRepository customerRepository;
 
     public StockTransferDto toDto(StockTransfer entity) {
+        StockTransferDto dto = mapBase(entity);
+        if (dto != null && dto.getCustomerId() != null) {
+            customerRepository.findById(dto.getCustomerId())
+                    .ifPresent(customer -> dto.setLinkedCustomer(toLinkedCustomer(customer)));
+        }
+        return dto;
+    }
+
+    /** Everything except the linked customer, which listings resolve in one batched query. */
+    private StockTransferDto mapBase(StockTransfer entity) {
         if (entity == null) {
             return null;
         }
@@ -39,6 +54,9 @@ public class StockTransferMapper {
         dto.setCustomerFullName(entity.getCustomerFullName());
         dto.setCustomerPhone(entity.getCustomerPhone());
         dto.setCustomerAddress(entity.getCustomerAddress());
+        dto.setOrderId(entity.getOrderId());
+        dto.setOrderNumber(entity.getOrderNumber());
+        dto.setCustomerId(entity.getCustomerId());
         dto.setCompletionNote(entity.getCompletionNote());
         dto.setCreatedBy(entity.getCreatedBy());
         dto.setCreatedAt(entity.getCreatedAt());
@@ -90,9 +108,35 @@ public class StockTransferMapper {
         if (entities == null) {
             return null;
         }
-        return entities.stream()
-                .map(this::toDto)
+        List<StockTransferDto> dtos = entities.stream()
+                .map(this::mapBase)
                 .collect(Collectors.toList());
+        attachLinkedCustomers(dtos);
+        return dtos;
+    }
+
+    /** One query for the whole page instead of one per matched delivery. */
+    private void attachLinkedCustomers(List<StockTransferDto> dtos) {
+        List<Long> ids = dtos.stream()
+                .filter(Objects::nonNull)
+                .map(StockTransferDto::getCustomerId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .collect(Collectors.toList());
+        if (ids.isEmpty()) return;
+        Map<Long, Customer> byId = customerRepository.findAllById(ids).stream()
+                .collect(Collectors.toMap(Customer::getId, Function.identity()));
+        for (StockTransferDto dto : dtos) {
+            if (dto == null || dto.getCustomerId() == null) continue;
+            Customer customer = byId.get(dto.getCustomerId());
+            if (customer != null) dto.setLinkedCustomer(toLinkedCustomer(customer));
+        }
+    }
+
+    private StockTransferDto.LinkedCustomerDto toLinkedCustomer(Customer customer) {
+        return new StockTransferDto.LinkedCustomerDto(
+                customer.getId(), customer.getFirstName(), customer.getLastName(),
+                customer.getEmail(), customer.getPhone());
     }
 
     private void mapItems(StockTransfer entity, StockTransferDto dto) {

@@ -33,6 +33,10 @@ public class StockTransferDto {
     private String customerFullName;
     private String customerPhone;
     private String customerAddress;
+    private Long orderId;
+    private String orderNumber;
+    private Long customerId;
+    private LinkedCustomerDto linkedCustomer;
     private String completionNote;
     private String createdBy;
     private LocalDateTime createdAt;
@@ -47,6 +51,18 @@ public class StockTransferDto {
     private LocalDateTime approvalDecisionAt;
     private String approvalNote;
     private boolean deleteRequest;
+
+    /** Populated only when the delivery is matched to an e-commerce customer. */
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class LinkedCustomerDto {
+        private Long id;
+        private String firstName;
+        private String lastName;
+        private String email;
+        private String phone;
+    }
 
     @Data
     @NoArgsConstructor

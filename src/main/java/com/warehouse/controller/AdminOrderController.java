@@ -76,6 +76,8 @@ public class AdminOrderController {
     private final org.springframework.context.ApplicationEventPublisher eventPublisher;
     private final com.warehouse.service.PhotoStorageService photoStorageService;
     private final com.warehouse.service.ManualOrderService manualOrderService;
+    private final com.warehouse.repository.StockTransferRepository stockTransferRepository;
+    private final com.warehouse.mapper.StockTransferMapper stockTransferMapper;
 
     public AdminOrderController(OrderRepository orderRepository,
                                  OrderItemRepository orderItemRepository,
@@ -90,7 +92,9 @@ public class AdminOrderController {
                                  com.warehouse.service.cargo.CargoApiService cargoApiService,
                                  org.springframework.context.ApplicationEventPublisher eventPublisher,
                                  com.warehouse.service.PhotoStorageService photoStorageService,
-                                 com.warehouse.service.ManualOrderService manualOrderService) {
+                                 com.warehouse.service.ManualOrderService manualOrderService,
+                                 com.warehouse.repository.StockTransferRepository stockTransferRepository,
+                                 com.warehouse.mapper.StockTransferMapper stockTransferMapper) {
         this.orderRepository = orderRepository;
         this.orderItemRepository = orderItemRepository;
         this.statusHistoryRepository = statusHistoryRepository;
@@ -105,6 +109,8 @@ public class AdminOrderController {
         this.eventPublisher = eventPublisher;
         this.photoStorageService = photoStorageService;
         this.manualOrderService = manualOrderService;
+        this.stockTransferRepository = stockTransferRepository;
+        this.stockTransferMapper = stockTransferMapper;
     }
 
     @GetMapping
@@ -150,6 +156,7 @@ public class AdminOrderController {
             .manualPaymentState(o.getManualPaymentState())
             .paymentDueAt(o.getPaymentDueAt())
             .paymentReminderAt(o.getPaymentReminderAt())
+            .deliveryMethod(o.getDeliveryMethod() != null ? o.getDeliveryMethod().name() : null)
             .cargoCompany(o.getCargoCompany() != null ? o.getCargoCompany().name() : null)
             .cargoTrackingNo(o.getCargoTrackingNo())
             .itemCount(safeItemCount(o))
@@ -170,6 +177,16 @@ public class AdminOrderController {
             "status", order.getStatus().name(),
             "grandTotal", order.getGrandTotal()
         ));
+    }
+
+    /**
+     * Shipments dispatched with our own vehicle for this order. Empty for cargo orders —
+     * those are tracked through the cargo provider instead.
+     */
+    @GetMapping("/{id}/transfers")
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public ResponseEntity<List<com.warehouse.dto.StockTransferDto>> orderTransfers(@PathVariable Long id) {
+        return ResponseEntity.ok(stockTransferMapper.toDtoList(stockTransferRepository.findByOrderId(id)));
     }
 
     @PutMapping("/{id}/payment-received")
@@ -231,6 +248,7 @@ public class AdminOrderController {
             .id(order.getId())
             .orderNumber(order.getOrderNumber())
             .status(order.getStatus())
+            .customerId(order.getCustomer() != null ? order.getCustomer().getId() : null)
             .customerName(safeCustomerName(order))
             .customerEmail(safeCustomerEmail(order))
             .customerPhone(safeCustomerPhone(order))
@@ -255,7 +273,9 @@ public class AdminOrderController {
             .legalConsentSnapshot(order.getLegalConsentSnapshot())
             .customerConfirmationIp(order.getCustomerConfirmationIp())
             .installmentCount(order.getInstallmentCount())
+            .deliveryMethod(order.getDeliveryMethod() != null ? order.getDeliveryMethod().name() : null)
             .cargoCompany(order.getCargoCompany() != null ? order.getCargoCompany().name() : null)
+            .cargoProviderName(order.getCargoProviderName())
             .cargoTrackingNo(order.getCargoTrackingNo())
             .estimatedDeliveryDate(order.getEstimatedDeliveryDate())
             .customerNote(order.getCustomerNote())
@@ -343,6 +363,7 @@ public class AdminOrderController {
 
         // If SHIPPED and no tracking number yet → auto-create shipment via cargo API
         if (newStatus == OrderStatus.SHIPPED
+                && order.getDeliveryMethod() != com.warehouse.enums.DeliveryMethod.OWN_TRANSFER
                 && (order.getCargoTrackingNo() == null || order.getCargoTrackingNo().isBlank())
                 && cargoApiService.isEnabled()) {
             try {

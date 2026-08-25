@@ -136,6 +136,26 @@ public class StockTransfer {
     @Column(name = "customer_address", length = 500)
     private String customerAddress;
 
+    /**
+     * The order this shipment fulfils, when the customer chose delivery by our own
+     * vehicle instead of a cargo provider. Only set for {@link TransferType#CUSTOMER_DELIVERY}.
+     * The order number is denormalised so listings can render it without a join.
+     */
+    @Column(name = "order_id")
+    private Long orderId;
+
+    /**
+     * The storefront customer this delivery goes to, when the recipient happens to have an
+     * e-commerce account. Optional and matchable after the fact — walk-in recipients simply
+     * stay as the free-text {@link #customerFullName} / {@link #customerPhone} fields.
+     */
+    @Column(name = "customer_id")
+    private Long customerId;
+
+    @Size(max = 50)
+    @Column(name = "order_number", length = 50)
+    private String orderNumber;
+
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss", timezone = "Europe/Istanbul")
     @Column(name = "transfer_date", nullable = false)
     private LocalDateTime transferDate;

@@ -24,6 +24,16 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, Lo
     @EntityGraph(value = StockTransfer.GRAPH_WITH_RELATIONS, type = EntityGraph.EntityGraphType.LOAD)
     Page<StockTransfer> findAll(Pageable pageable);
 
+    /** Shipments created for a specific order (customer chose our own delivery). */
+    @Query("SELECT DISTINCT st FROM StockTransfer st " +
+           "LEFT JOIN FETCH st.sourceWarehouse " +
+           "LEFT JOIN FETCH st.destinationWarehouse " +
+           "LEFT JOIN FETCH st.product " +
+           "LEFT JOIN FETCH st.items items " +
+           "LEFT JOIN FETCH items.product " +
+           "WHERE st.orderId = :orderId ORDER BY st.createdAt DESC")
+    List<StockTransfer> findByOrderId(@Param("orderId") Long orderId);
+
     @Query("SELECT DISTINCT st FROM StockTransfer st " +
            "LEFT JOIN FETCH st.sourceWarehouse " +
            "LEFT JOIN FETCH st.destinationWarehouse " +

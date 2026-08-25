@@ -9,6 +9,7 @@ import com.warehouse.enums.TransferStatus;
 import com.warehouse.enums.TransferType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import com.warehouse.repository.CustomerRepository;
 import com.warehouse.service.StockService;
 import org.mockito.Mockito;
 
@@ -22,6 +23,7 @@ class StockTransferMapperTest {
 
     private StockTransferMapper mapper;
     private StockService stockService;
+    private CustomerRepository customerRepository;
     private StockTransfer stockTransfer;
     private Warehouse sourceWarehouse;
     private Warehouse destinationWarehouse;
@@ -31,7 +33,8 @@ class StockTransferMapperTest {
     @BeforeEach
     void setUp() {
         stockService = Mockito.mock(StockService.class);
-        mapper = new StockTransferMapper(stockService);
+        customerRepository = Mockito.mock(CustomerRepository.class);
+        mapper = new StockTransferMapper(stockService, customerRepository);
 
         sourceWarehouse = new Warehouse();
         sourceWarehouse.setId(1L);

@@ -2,6 +2,7 @@ package com.warehouse.entity;
 
 import com.warehouse.enums.OrderStatus;
 import com.warehouse.enums.CargoCompany;
+import com.warehouse.enums.DeliveryMethod;
 import com.warehouse.enums.OrderChannel;
 import com.warehouse.enums.ManualPaymentState;
 import jakarta.persistence.*;
@@ -124,6 +125,11 @@ public class Order {
 
     @Column(name = "installment_count", nullable = false)
     private Integer installmentCount = 1;
+
+    /** Cargo hand-off vs. delivery by our own vehicle (see StockTransfer.orderId). */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "delivery_method", nullable = false, length = 30)
+    private DeliveryMethod deliveryMethod = DeliveryMethod.CARGO;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "cargo_company", length = 50)
