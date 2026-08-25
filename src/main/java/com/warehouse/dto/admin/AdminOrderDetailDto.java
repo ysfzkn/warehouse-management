@@ -16,6 +16,7 @@ public class AdminOrderDetailDto {
     private Long id;
     private String orderNumber;
     private OrderStatus status;
+    private Long customerId;
     private String customerName;
     private String customerEmail;
     private String customerPhone;
@@ -40,7 +41,9 @@ public class AdminOrderDetailDto {
     private Map<String, Object> legalConsentSnapshot;
     private String customerConfirmationIp;
     private Integer installmentCount;
+    private String deliveryMethod;      // CARGO | OWN_TRANSFER
     private String cargoCompany;
+    private String cargoProviderName;
     private String cargoTrackingNo;
     private LocalDate estimatedDeliveryDate;
     private String customerNote;

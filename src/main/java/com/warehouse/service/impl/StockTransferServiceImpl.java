@@ -22,6 +22,10 @@ import com.warehouse.repository.StockTransferRepository;
 import com.warehouse.repository.StockRepository;
 import com.warehouse.repository.ProductRepository;
 import com.warehouse.repository.WarehouseRepository;
+import com.warehouse.repository.OrderRepository;
+import com.warehouse.repository.OrderItemRepository;
+import com.warehouse.repository.OrderStatusHistoryRepository;
+import com.warehouse.repository.CustomerRepository;
 import com.warehouse.service.AuditService;
 import com.warehouse.service.NotificationService;
 import com.warehouse.service.StockTransferService;
@@ -68,6 +72,10 @@ public class StockTransferServiceImpl implements StockTransferService {
     private final AuditService auditService;
     private final NotificationService notificationService;
     private final AdminSecurityService adminSecurityService;
+    private final OrderRepository orderRepository;
+    private final OrderItemRepository orderItemRepository;
+    private final OrderStatusHistoryRepository orderStatusHistoryRepository;
+    private final CustomerRepository customerRepository;
 
     public StockTransferServiceImpl(StockTransferRepository stockTransferRepository,
                                     StockRepository stockRepository,
@@ -76,7 +84,11 @@ public class StockTransferServiceImpl implements StockTransferService {
                                     AuditService auditService,
                                     NotificationService notificationService,
                                     AdminSecurityService adminSecurityService,
-                                    StockService stockService) {
+                                    StockService stockService,
+                                    OrderRepository orderRepository,
+                                    OrderItemRepository orderItemRepository,
+                                    OrderStatusHistoryRepository orderStatusHistoryRepository,
+                                    CustomerRepository customerRepository) {
         this.stockTransferRepository = stockTransferRepository;
         this.stockRepository = stockRepository;
         this.productRepository = productRepository;
@@ -85,6 +97,10 @@ public class StockTransferServiceImpl implements StockTransferService {
         this.notificationService = notificationService;
         this.adminSecurityService = adminSecurityService;
         this.stockService = stockService;
+        this.orderRepository = orderRepository;
+        this.orderItemRepository = orderItemRepository;
+        this.orderStatusHistoryRepository = orderStatusHistoryRepository;
+        this.customerRepository = customerRepository;
     }
 
     @Override
@@ -283,7 +299,11 @@ public class StockTransferServiceImpl implements StockTransferService {
             destinationWarehouse = findWarehouseOrThrow(transfer.getDestinationWarehouse().getId());
         }
 
-        validateSufficientStockForItems(sourceWarehouse, normalizedItems);
+        validateCustomerLink(transfer.getCustomerId());
+        resolveLinkedOrder(transfer, transferType);
+        validateSufficientStockForItems(sourceWarehouse, normalizedItems,
+                reservedForOrder(transfer.getOrderId()));
+
 
         transfer.setSourceWarehouse(sourceWarehouse);
         transfer.setDestinationWarehouse(destinationWarehouse);
@@ -369,13 +389,22 @@ public class StockTransferServiceImpl implements StockTransferService {
 
         List<StockTransferItem> items = getTransferItemsOrFallback(transfer);
         Map<String, Stock> sourceStocks = loadSourceStocks(transfer.getSourceWarehouse(), items);
+        Map<Long, Integer> orderReservations = reservedForOrder(transfer.getOrderId());
         for (StockTransferItem item : items) {
             Stock sourceStock = sourceStocks.get(stockKey(item));
-            validateSufficientAvailableStock(sourceStock, item.getQuantity());
-            reserveStockForTransfer(sourceStock, item.getQuantity(), transfer);
+            int fromOrder = reservationShare(orderReservations, sourceStock, item.getQuantity());
+            validateSufficientAvailableStock(sourceStock, item.getQuantity(), fromOrder);
+            // The order already holds `fromOrder` units on this row — only reserve the remainder,
+            // otherwise the same units would be counted twice.
+            int shortfall = item.getQuantity() - fromOrder;
+            if (shortfall > 0) {
+                reserveStockForTransfer(sourceStock, shortfall, transfer);
+            }
         }
 
         transfer.setStatus(TransferStatus.IN_TRANSIT);
+        syncLinkedOrderStatus(transfer, com.warehouse.enums.OrderStatus.SHIPPED,
+                "Kendi aracımızla sevkiyat yola çıktı — transfer #" + transfer.getId());
         StockTransfer saved = stockTransferRepository.save(transfer);
         String username = CurrentUser.usernameOrSystem();
         AuditMetadata metadata = buildTransferMetadata(saved);
@@ -414,10 +443,16 @@ public class StockTransferServiceImpl implements StockTransferService {
         List<StockTransferItem> items = getTransferItemsOrFallback(transfer);
         Map<String, Stock> sourceStocks = loadSourceStocks(transfer.getSourceWarehouse(), items);
 
+        Map<Long, Integer> completionReservations = reservedForOrder(transfer.getOrderId());
         if (transfer.getStatus() == TransferStatus.PENDING) {
             for (StockTransferItem item : items) {
                 Stock sourceStock = sourceStocks.get(stockKey(item));
-                deductStockDirectly(sourceStock, item.getQuantity(), transfer);
+                // A never-started transfer holds no reservation of its own, but the linked
+                // order does — consume that part from the reservation, the rest directly.
+                int fromOrder = reservationShare(completionReservations, sourceStock, item.getQuantity());
+                if (fromOrder > 0) deductReservedStock(sourceStock, fromOrder, transfer);
+                int direct = item.getQuantity() - fromOrder;
+                if (direct > 0) deductStockDirectly(sourceStock, direct, transfer);
             }
         } else if (transfer.getStatus() == TransferStatus.IN_TRANSIT) {
             for (StockTransferItem item : items) {
@@ -432,6 +467,8 @@ public class StockTransferServiceImpl implements StockTransferService {
 
         transfer.setStatus(TransferStatus.COMPLETED);
         transfer.setCompletedDate(LocalDateTime.now());
+        syncLinkedOrderStatus(transfer, com.warehouse.enums.OrderStatus.DELIVERED,
+                "Kendi aracımızla teslim edildi — transfer #" + transfer.getId());
         if (completionNote != null && !completionNote.trim().isEmpty()) {
             transfer.setCompletionNote(completionNote.trim());
         } else if (transfer.getTransferType() == TransferType.CUSTOMER_DELIVERY) {
@@ -476,9 +513,13 @@ public class StockTransferServiceImpl implements StockTransferService {
         if (transfer.getStatus() == TransferStatus.IN_TRANSIT) {
             List<StockTransferItem> items = getTransferItemsOrFallback(transfer);
             Map<String, Stock> sourceStocks = loadSourceStocks(transfer.getSourceWarehouse(), items);
+            Map<Long, Integer> orderReservations = reservedForOrder(transfer.getOrderId());
             for (StockTransferItem item : items) {
                 Stock sourceStock = sourceStocks.get(stockKey(item));
-                releaseReservedStock(sourceStock, item.getQuantity());
+                // Release only what this transfer reserved on start; the linked order keeps its own.
+                int keptForOrder = reservationShare(orderReservations, sourceStock, item.getQuantity());
+                int release = item.getQuantity() - keptForOrder;
+                if (release > 0) releaseReservedStock(sourceStock, release);
             }
         }
 
@@ -836,6 +877,58 @@ public class StockTransferServiceImpl implements StockTransferService {
         return transferType;
     }
 
+    /**
+     * A customer delivery may be tied to an order (the customer chose "we deliver it
+     * ourselves" instead of a cargo provider). Denormalises the order number so listings
+     * can show it without joining.
+     */
+    private void resolveLinkedOrder(StockTransfer transfer, TransferType transferType) {
+        if (transfer.getOrderId() == null) {
+            transfer.setOrderNumber(null);
+            return;
+        }
+        if (transferType != TransferType.CUSTOMER_DELIVERY) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                    "Sipariş bağlantısı yalnızca müşteri sevkiyatı transferlerinde kullanılabilir");
+        }
+        com.warehouse.entity.Order order = orderRepository.findById(transfer.getOrderId())
+                .orElseThrow(() -> new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                        "Sevkiyata bağlanacak sipariş bulunamadı: " + transfer.getOrderId()));
+        transfer.setOrderNumber(order.getOrderNumber());
+        // The order always carries a customer record, so the delivery inherits the match for free.
+        if (transfer.getCustomerId() == null && order.getCustomer() != null) {
+            transfer.setCustomerId(order.getCustomer().getId());
+        }
+    }
+
+    /** Rejects a customer id that does not exist so the FK never fails deep inside a flush. */
+    private void validateCustomerLink(Long customerId) {
+        if (customerId == null) return;
+        if (!customerRepository.existsById(customerId)) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                    "Eşleştirilecek müşteri bulunamadı: " + customerId);
+        }
+    }
+
+    @Override
+    public StockTransfer linkCustomer(Long transferId, Long customerId) {
+        StockTransfer transfer = getTransferByIdOrThrow(transferId);
+        if (transfer.getTransferType() != TransferType.CUSTOMER_DELIVERY) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                    "Yalnızca müşteri sevkiyatları bir müşteri kaydıyla eşleştirilebilir");
+        }
+        validateCustomerLink(customerId);
+        transfer.setCustomerId(customerId);
+        StockTransfer saved = stockTransferRepository.save(transfer);
+        String username = CurrentUser.usernameOrSystem();
+        auditService.log(AuditAction.TRANSFER_UPDATE, DomainEntityType.StockTransfer.name(), saved.getId(), username,
+                customerId == null
+                        ? "Sevkiyatın müşteri eşleştirmesi kaldırıldı"
+                        : "Sevkiyat, e-ticaret müşterisi #" + customerId + " ile eşleştirildi",
+                buildTransferMetadata(saved));
+        return stockTransferRepository.findByIdWithRelations(saved.getId()).orElse(saved);
+    }
+
     private boolean isWarehouseTransfer(StockTransfer transfer) {
         return transfer.getTransferType() == null || transfer.getTransferType() == TransferType.WAREHOUSE;
     }
@@ -874,8 +967,13 @@ public class StockTransferServiceImpl implements StockTransferService {
     }
 
     private void validateSufficientAvailableStock(Stock stock, Integer quantity) {
-        if (stock.getAvailableQuantity() < quantity) {
-            logger.warn("Insufficient available stock. Available: {}, Requested: {}", stock.getAvailableQuantity(), quantity);
+        validateSufficientAvailableStock(stock, quantity, 0);
+    }
+
+    private void validateSufficientAvailableStock(Stock stock, Integer quantity, int alreadyReservedForThisJob) {
+        int available = stock.getAvailableQuantity() + alreadyReservedForThisJob;
+        if (available < quantity) {
+            logger.warn("Insufficient available stock. Available: {}, Requested: {}", available, quantity);
             throw new WarehouseManagementException(ErrorCode.INSUFFICIENT_STOCK);
         }
     }
@@ -1138,12 +1236,87 @@ public class StockTransferServiceImpl implements StockTransferService {
                 .collect(Collectors.joining(", "));
     }
 
-    private void validateSufficientStockForItems(Warehouse warehouse, List<StockTransferItem> items) {
+    private void validateSufficientStockForItems(Warehouse warehouse, List<StockTransferItem> items,
+                                                 Map<Long, Integer> orderReservations) {
         Map<String, Stock> stocks = loadSourceStocks(warehouse, items);
         for (StockTransferItem item : items) {
             Stock stock = stocks.get(stockKey(item));
-            validateSufficientAvailableStock(stock, item.getQuantity());
+            validateSufficientAvailableStock(stock, item.getQuantity(),
+                    reservationShare(orderReservations, stock, item.getQuantity()));
         }
+    }
+
+    /**
+     * Quantities already reserved on each stock row <em>by this very order</em>. Placing a
+     * manual order reserves its lines, so shipping that order with our own vehicle must be
+     * allowed to consume exactly that reservation instead of tripping the availability check.
+     */
+    /**
+     * Walks the linked order to {@code target} through the order state machine. Stock was
+     * already moved by the transfer itself, so the order's own DELIVERED bookkeeping must
+     * not run again — this only advances status and writes history.
+     */
+    private void syncLinkedOrderStatus(StockTransfer transfer, com.warehouse.enums.OrderStatus target, String note) {
+        if (transfer.getOrderId() == null) return;
+        orderRepository.findById(transfer.getOrderId()).ifPresent(order -> {
+            List<com.warehouse.enums.OrderStatus> path = statusPath(order.getStatus(), target);
+            if (path.isEmpty()) {
+                logger.info("Order {} stays in {} — no valid path to {}", order.getOrderNumber(), order.getStatus(), target);
+                return;
+            }
+            String username = CurrentUser.usernameOrSystem();
+            for (com.warehouse.enums.OrderStatus next : path) {
+                com.warehouse.enums.OrderStatus previous = order.getStatus();
+                order.setStatus(next);
+                orderStatusHistoryRepository.save(com.warehouse.util.OrderStatusHistoryFactory.create(
+                        order, previous, next, username, "STOCK_TRANSFER", note));
+            }
+            if (target == com.warehouse.enums.OrderStatus.DELIVERED) {
+                order.setActualDeliveryDate(java.time.LocalDate.now());
+            }
+            orderRepository.save(order);
+        });
+    }
+
+    /** Shortest sequence of valid transitions from {@code from} to {@code target}, empty if unreachable. */
+    private List<com.warehouse.enums.OrderStatus> statusPath(com.warehouse.enums.OrderStatus from,
+                                                             com.warehouse.enums.OrderStatus target) {
+        if (from == null || target == null || from == target) return List.of();
+        Map<com.warehouse.enums.OrderStatus, com.warehouse.enums.OrderStatus> cameFrom = new LinkedHashMap<>();
+        java.util.Deque<com.warehouse.enums.OrderStatus> queue = new java.util.ArrayDeque<>();
+        queue.add(from);
+        cameFrom.put(from, null);
+        while (!queue.isEmpty()) {
+            com.warehouse.enums.OrderStatus current = queue.poll();
+            if (current == target) break;
+            for (com.warehouse.enums.OrderStatus next : com.warehouse.util.OrderStatusMachine.getAllowedTransitions(current)) {
+                if (cameFrom.containsKey(next)) continue;
+                cameFrom.put(next, current);
+                queue.add(next);
+            }
+        }
+        if (!cameFrom.containsKey(target)) return List.of();
+        List<com.warehouse.enums.OrderStatus> path = new ArrayList<>();
+        for (com.warehouse.enums.OrderStatus step = target; step != null && step != from; step = cameFrom.get(step)) {
+            path.add(0, step);
+        }
+        return path;
+    }
+
+    /** How many of {@code quantity} on this stock row are already reserved by the linked order. */
+    private int reservationShare(Map<Long, Integer> orderReservations, Stock stock, Integer quantity) {
+        if (orderReservations.isEmpty() || stock == null || stock.getId() == null) return 0;
+        return Math.min(quantity == null ? 0 : quantity, orderReservations.getOrDefault(stock.getId(), 0));
+    }
+
+    private Map<Long, Integer> reservedForOrder(Long orderId) {
+        if (orderId == null) return Map.of();
+        Map<Long, Integer> reserved = new LinkedHashMap<>();
+        for (com.warehouse.entity.OrderItem line : orderItemRepository.findByOrderId(orderId)) {
+            if (line.getStockId() == null || line.getQuantity() == null) continue;
+            reserved.merge(line.getStockId(), line.getQuantity(), Integer::sum);
+        }
+        return reserved;
     }
 
     private Map<String, Stock> loadSourceStocks(Warehouse warehouse, List<StockTransferItem> items) {

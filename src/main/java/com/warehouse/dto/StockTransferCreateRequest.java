@@ -56,6 +56,12 @@ public class StockTransferCreateRequest {
     @Size(max = 500, message = "Customer address cannot exceed 500 characters")
     private String customerAddress;
 
+    /** Optional link to the order this customer delivery fulfils. */
+    private Long orderId;
+
+    /** Optional link to the recipient's e-commerce customer record. */
+    private Long customerId;
+
     @Valid
     @NotEmpty(message = "At least one product must be selected for transfer")
     private List<TransferItemRequest> items;

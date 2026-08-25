@@ -22,6 +22,7 @@ public class AdminOrderDto {
     private ManualPaymentState manualPaymentState;
     private LocalDateTime paymentDueAt;
     private LocalDateTime paymentReminderAt;
+    private String deliveryMethod;
     private String cargoCompany;
     private String cargoTrackingNo;
     private int itemCount;

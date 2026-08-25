@@ -29,6 +29,7 @@ public class ManualOrderService {
     private final PasswordEncoder passwordEncoder;
     private final com.warehouse.service.notification.NotificationDispatchService notificationDispatch;
     private final CmsPageRepository cmsPages;
+    private final CargoProviderRepository cargoProviders;
     private static final List<String> LEGAL_SLUGS = List.of(
         "mesafeli-satis-sozlesmesi", "on-bilgilendirme-formu", "kvkk-aydinlatma-metni");
 
@@ -36,7 +37,7 @@ public class ManualOrderService {
                               StockRepository stocks, PaymentTransactionRepository payments,
                               OrderStatusHistoryRepository history, PasswordEncoder passwordEncoder,
                               com.warehouse.service.notification.NotificationDispatchService notificationDispatch,
-                              CmsPageRepository cmsPages) {
+                              CmsPageRepository cmsPages, CargoProviderRepository cargoProviders) {
         this.customers = customers;
         this.products = products;
         this.orders = orders;
@@ -46,6 +47,7 @@ public class ManualOrderService {
         this.passwordEncoder = passwordEncoder;
         this.notificationDispatch = notificationDispatch;
         this.cmsPages = cmsPages;
+        this.cargoProviders = cargoProviders;
     }
 
     @Transactional
@@ -70,6 +72,7 @@ public class ManualOrderService {
             ? new LinkedHashMap<>(request.getShippingAddress()) : new LinkedHashMap<>(request.getBillingAddress()));
         order.setCustomerNote(trim(request.getNote()));
         order.setAdminNote("Admin tarafından manuel oluşturuldu" + (request.getChannelReference() == null ? "" : " — ref: " + request.getChannelReference()));
+        applyDelivery(order, request);
         order.setDistanceSalesContractAccepted(false);
         order.setPreliminaryInfoAccepted(false);
         order.setDiscountAmount(BigDecimal.ZERO);
@@ -388,6 +391,13 @@ public class ManualOrderService {
                 || String.valueOf(request.getShippingAddress().get("addressLine")).isBlank()) {
             throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Teslimat adresi zorunludur");
         }
+        DeliveryMethod delivery = request.getDeliveryMethod() == null ? DeliveryMethod.CARGO : request.getDeliveryMethod();
+        if (delivery == DeliveryMethod.CARGO && request.getCargoProviderId() == null) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Kargo ile gönderim için kargo firması seçilmelidir");
+        }
+        if (delivery == DeliveryMethod.OWN_TRANSFER && request.getCargoProviderId() != null) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Kendi sevkiyatınızda kargo firması seçilemez");
+        }
         if (request.getPaymentState() == ManualPaymentState.SCHEDULED && request.getPaymentDueAt() == null) {
             throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Planlı ödeme için son ödeme tarihi zorunludur");
         }
@@ -395,6 +405,36 @@ public class ManualOrderService {
                 && request.getReminderAt().isAfter(request.getPaymentDueAt())) {
             throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Hatırlatma zamanı son ödeme tarihinden sonra olamaz");
         }
+    }
+
+    /**
+     * Cargo hand-off records the chosen provider on the order (so the shipment can later be
+     * created through the cargo API); own delivery leaves the cargo fields empty — the
+     * shipment is tracked as a CUSTOMER_DELIVERY stock transfer linked to this order.
+     */
+    private void applyDelivery(Order order, ManualOrderRequest request) {
+        DeliveryMethod delivery = request.getDeliveryMethod() == null ? DeliveryMethod.CARGO : request.getDeliveryMethod();
+        order.setDeliveryMethod(delivery);
+        if (delivery != DeliveryMethod.CARGO) return;
+        CargoProvider provider = cargoProviders.findById(request.getCargoProviderId())
+            .orElseThrow(() -> new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Kargo firması bulunamadı"));
+        if (!provider.isActive()) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, provider.getName() + " şu anda pasif durumda");
+        }
+        order.setCargoProviderId(provider.getId());
+        order.setCargoProviderName(provider.getName());
+        order.setCargoCompany(cargoCompanyFor(provider.getCode()));
+        order.setCargoTrackingNo(trim(request.getCargoTrackingNo()));
+        if (provider.getEstimatedDeliveryDays() != null) {
+            order.setEstimatedDeliveryDate(java.time.LocalDate.now().plusDays(provider.getEstimatedDeliveryDays()));
+        }
+    }
+
+    /** Maps a provider code onto the legacy CargoCompany enum used by filters/exports. */
+    private CargoCompany cargoCompanyFor(String code) {
+        if (code == null) return CargoCompany.OTHER;
+        try { return CargoCompany.valueOf(code.trim().toUpperCase(Locale.ROOT)); }
+        catch (IllegalArgumentException e) { return CargoCompany.OTHER; }
     }
 
     private PaymentProvider providerFor(String method) {

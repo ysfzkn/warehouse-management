@@ -48,6 +48,12 @@ public interface StockTransferService {
 
     StockTransfer updateTransfer(Long transferId, StockTransfer updatedTransfer);
 
+    /**
+     * Matches (or clears, when {@code customerId} is null) the e-commerce customer record of a
+     * customer delivery. Can be done long after the shipment was created.
+     */
+    StockTransfer linkCustomer(Long transferId, Long customerId);
+
     StockTransferDeletionResult deleteTransfer(Long transferId, String adminSecurityCode);
 
     BulkDeleteResponse deleteTransfers(List<Long> transferIds);
