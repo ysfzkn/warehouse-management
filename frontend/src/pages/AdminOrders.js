@@ -491,7 +491,7 @@ export default function AdminOrders() {
         </div>
         <div className="d-flex gap-2">
           <button className="btn btn-primary btn-sm" onClick={() => setShowManualOrder(true)}>
-            <i className="fas fa-plus me-1" /> Sipariş Oluştur
+            <i className="fas fa-plus me-1" /> Yeni Sipariş Kaydı
           </button>
           <button
             className={`btn btn-sm ${showFilters ? 'btn-primary' : 'btn-outline-primary'}`}
