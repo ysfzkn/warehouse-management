@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import axios from 'axios';
 import { useAdminToast } from './AdminToast';
 import './ManualOrderModal.css';
+import { toTitleCaseTr } from '../utils/name';
 
 const emptyItem = {
   productId: '',
@@ -491,6 +492,12 @@ export default function ManualOrderModal({ onClose, onCreated }) {
                           placeholder={placeholder}
                           value={form[key]}
                           onChange={(e) => set(key, e.target.value)}
+                          // Ad/soyad blur'da düzgün büyük harfe çevrilir; diğer alanlara dokunulmaz.
+                          onBlur={
+                            key === 'firstName' || key === 'lastName'
+                              ? (e) => set(key, toTitleCaseTr(e.target.value))
+                              : undefined
+                          }
                         />
                       </div>
                     ))}

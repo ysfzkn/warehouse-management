@@ -11,6 +11,8 @@ import {
 } from '../utils/phone';
 import { compressImage } from '../utils/image';
 import CustomerLinkPicker from './CustomerLinkPicker';
+import { useCustomerActivityCheck } from './CustomerActivityWarning';
+import { toTitleCaseTr } from '../utils/name';
 
 const StockTransferModal = ({ stock, order, onSuccess, onClose, lockToCustomerDelivery = false }) => {
   const [currentStep, setCurrentStep] = useState(1);
@@ -20,6 +22,11 @@ const StockTransferModal = ({ stock, order, onSuccess, onClose, lockToCustomerDe
   const role = (typeof window !== 'undefined' && localStorage.getItem('auth_role')) || 'ADMIN';
   const isAdmin = role === 'ADMIN';
   const { askCode: askSecurityCode } = useSecurityCodePrompt();
+  const {
+    confirm: confirmCustomerActivity,
+    checking: activityChecking,
+    dialog: activityDialog,
+  } = useCustomerActivityCheck();
 
   // Get current date/time in Turkey timezone (GMT+3)
   const getTurkeyDateTime = () => {
@@ -870,6 +877,16 @@ const StockTransferModal = ({ stock, order, onSuccess, onClose, lockToCustomerDe
 
     if (!validateStep(2)) return;
 
+    // Warn before writing a second hand-over to a customer who already received something in
+    // the last month, whether it went out as a shipment or as a manual stock reduction.
+    if (formData.transferType === 'CUSTOMER_DELIVERY') {
+      const proceed = await confirmCustomerActivity({
+        name: formData.customerFullName,
+        phone: formatPhoneForSubmit(formData.customerPhone),
+      });
+      if (!proceed) return;
+    }
+
     setError(null);
     setLoading(true);
 
@@ -1085,469 +1102,581 @@ const StockTransferModal = ({ stock, order, onSuccess, onClose, lockToCustomerDe
       ];
 
   return (
-    <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
-      <div className="modal-dialog modal-xl modal-dialog-centered">
-        <div className="modal-content shadow-lg">
-          <div
-            className="modal-header bg-gradient text-white"
-            style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}
-          >
-            <div>
-              <h5 className="modal-title mb-1">
-                <i className="fas fa-exchange-alt me-2"></i>
-                Şubeler Arası Ürün Transferi
-              </h5>
-              <small className="opacity-75">Güvenli ve hızlı stok transferi</small>
-            </div>
-            <button
-              type="button"
-              className="btn-close btn-close-white"
-              onClick={handleClose}
-              disabled={loading && !submitSuccess}
-            ></button>
-          </div>
-
-          {/* Progress Steps */}
-          <div className="px-4 pt-4 pb-2">
-            <div className="d-flex justify-content-between align-items-center position-relative mb-3">
-              <div
-                className="position-absolute w-100 top-50 start-0"
-                style={{ height: '2px', background: '#e9ecef', zIndex: 0 }}
-              >
-                <div
-                  className={`h-100 transition-all ${submitSuccess ? 'bg-success' : 'bg-primary'}`}
-                  style={{
-                    width: `${((currentStep - 1) / (steps.length - 1)) * 100}%`,
-                    transition: 'width 0.3s ease',
-                  }}
-                ></div>
+    <>
+      {activityDialog}
+      <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
+        <div className="modal-dialog modal-xl modal-dialog-centered">
+          <div className="modal-content shadow-lg">
+            <div
+              className="modal-header bg-gradient text-white"
+              style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}
+            >
+              <div>
+                <h5 className="modal-title mb-1">
+                  <i className="fas fa-exchange-alt me-2"></i>
+                  Şubeler Arası Ürün Transferi
+                </h5>
+                <small className="opacity-75">Güvenli ve hızlı stok transferi</small>
               </div>
-              {steps.map((step) => (
+              <button
+                type="button"
+                className="btn-close btn-close-white"
+                onClick={handleClose}
+                disabled={loading && !submitSuccess}
+              ></button>
+            </div>
+
+            {/* Progress Steps */}
+            <div className="px-4 pt-4 pb-2">
+              <div className="d-flex justify-content-between align-items-center position-relative mb-3">
                 <div
-                  key={step.number}
-                  className="text-center position-relative"
-                  style={{ zIndex: 1, flex: 1 }}
+                  className="position-absolute w-100 top-50 start-0"
+                  style={{ height: '2px', background: '#e9ecef', zIndex: 0 }}
                 >
                   <div
-                    className={`mx-auto rounded-circle d-flex align-items-center justify-content-center ${
-                      currentStep >= step.number
-                        ? submitSuccess && step.number === 4
-                          ? 'bg-success text-white'
-                          : 'bg-primary text-white'
-                        : 'bg-light text-muted'
-                    }`}
+                    className={`h-100 transition-all ${submitSuccess ? 'bg-success' : 'bg-primary'}`}
                     style={{
-                      width: '50px',
-                      height: '50px',
-                      transition: 'all 0.3s ease',
-                      border: '3px solid white',
+                      width: `${((currentStep - 1) / (steps.length - 1)) * 100}%`,
+                      transition: 'width 0.3s ease',
                     }}
-                  >
-                    <i className={`fas ${step.icon} fa-lg`}></i>
-                  </div>
+                  ></div>
+                </div>
+                {steps.map((step) => (
                   <div
-                    className={`mt-2 small fw-bold ${
-                      currentStep >= step.number
-                        ? submitSuccess && step.number === 4
-                          ? 'text-success'
-                          : 'text-primary'
-                        : 'text-muted'
-                    }`}
+                    key={step.number}
+                    className="text-center position-relative"
+                    style={{ zIndex: 1, flex: 1 }}
                   >
-                    {step.title}
+                    <div
+                      className={`mx-auto rounded-circle d-flex align-items-center justify-content-center ${
+                        currentStep >= step.number
+                          ? submitSuccess && step.number === 4
+                            ? 'bg-success text-white'
+                            : 'bg-primary text-white'
+                          : 'bg-light text-muted'
+                      }`}
+                      style={{
+                        width: '50px',
+                        height: '50px',
+                        transition: 'all 0.3s ease',
+                        border: '3px solid white',
+                      }}
+                    >
+                      <i className={`fas ${step.icon} fa-lg`}></i>
+                    </div>
+                    <div
+                      className={`mt-2 small fw-bold ${
+                        currentStep >= step.number
+                          ? submitSuccess && step.number === 4
+                            ? 'text-success'
+                            : 'text-primary'
+                          : 'text-muted'
+                      }`}
+                    >
+                      {step.title}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
 
-          <form onSubmit={handleSubmit}>
-            <div className="modal-body" style={{ minHeight: '400px' }}>
-              {loadingData && (
-                <div className="alert alert-info" role="alert">
-                  <div className="d-flex align-items-center">
-                    <div className="spinner-border spinner-border-sm me-2" role="status">
-                      <span className="visually-hidden">Yükleniyor...</span>
-                    </div>
-                    <strong>Depolar ve ürünler yükleniyor...</strong>
-                  </div>
-                </div>
-              )}
-
-              {error && (
-                <div className="alert alert-danger alert-dismissible fade show" role="alert">
-                  <i className="fas fa-exclamation-triangle me-2"></i>
-                  <strong>Hata!</strong> {error}
-                  <button type="button" className="btn-close" onClick={() => setError(null)}></button>
-                </div>
-              )}
-
-              {order && (
-                <div className="alert alert-primary d-flex align-items-start gap-2" role="status">
-                  <i className="fas fa-receipt mt-1"></i>
-                  <div>
-                    <strong>{order.orderNumber}</strong> siparişinin sevkiyatı hazırlanıyor.
-                    <div className="small">
-                      Sevkiyat yola çıktığında sipariş <strong>Kargoda</strong>, tamamlandığında{' '}
-                      <strong>Teslim Edildi</strong> durumuna geçer. Siparişte rezerve edilen stok bu sevkiyat
-                      için kullanılabilir.
+            <form onSubmit={handleSubmit}>
+              <div className="modal-body" style={{ minHeight: '400px' }}>
+                {loadingData && (
+                  <div className="alert alert-info" role="alert">
+                    <div className="d-flex align-items-center">
+                      <div className="spinner-border spinner-border-sm me-2" role="status">
+                        <span className="visually-hidden">Yükleniyor...</span>
+                      </div>
+                      <strong>Depolar ve ürünler yükleniyor...</strong>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {/* Step 1: Transfer Details */}
-              {currentStep === 1 && (
-                <div style={{ animation: 'fadeIn 0.3s ease-in' }}>
-                  <h5 className="mb-3 text-primary">
-                    <i className="fas fa-boxes me-2"></i>
-                    Transfer Detaylarını Belirleyin
-                  </h5>
-                  <div className="row g-3 mb-4">
-                    {transferTypeOptions.map((option) => {
-                      const isActive = formData.transferType === option.key;
-                      const disabled = lockCustomerDelivery && option.key !== 'CUSTOMER_DELIVERY';
-                      return (
-                        <div className="col-md-6" key={option.key}>
-                          <button
-                            type="button"
-                            className={`transfer-type-toggle w-100 ${isActive ? 'active' : ''}`}
-                            onClick={() => handleTransferTypeChange(option.key)}
-                            disabled={disabled}
-                          >
-                            <div className="d-flex align-items-center">
-                              <div className={`transfer-type-icon me-3 ${isActive ? 'active' : ''}`}>
-                                <i className={`fas ${option.icon}`}></i>
+                {error && (
+                  <div className="alert alert-danger alert-dismissible fade show" role="alert">
+                    <i className="fas fa-exclamation-triangle me-2"></i>
+                    <strong>Hata!</strong> {error}
+                    <button type="button" className="btn-close" onClick={() => setError(null)}></button>
+                  </div>
+                )}
+
+                {order && (
+                  <div className="alert alert-primary d-flex align-items-start gap-2" role="status">
+                    <i className="fas fa-receipt mt-1"></i>
+                    <div>
+                      <strong>{order.orderNumber}</strong> siparişinin sevkiyatı hazırlanıyor.
+                      <div className="small">
+                        Sevkiyat yola çıktığında sipariş <strong>Kargoda</strong>, tamamlandığında{' '}
+                        <strong>Teslim Edildi</strong> durumuna geçer. Siparişte rezerve edilen stok bu
+                        sevkiyat için kullanılabilir.
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Step 1: Transfer Details */}
+                {currentStep === 1 && (
+                  <div style={{ animation: 'fadeIn 0.3s ease-in' }}>
+                    <h5 className="mb-3 text-primary">
+                      <i className="fas fa-boxes me-2"></i>
+                      Transfer Detaylarını Belirleyin
+                    </h5>
+                    <div className="row g-3 mb-4">
+                      {transferTypeOptions.map((option) => {
+                        const isActive = formData.transferType === option.key;
+                        const disabled = lockCustomerDelivery && option.key !== 'CUSTOMER_DELIVERY';
+                        return (
+                          <div className="col-md-6" key={option.key}>
+                            <button
+                              type="button"
+                              className={`transfer-type-toggle w-100 ${isActive ? 'active' : ''}`}
+                              onClick={() => handleTransferTypeChange(option.key)}
+                              disabled={disabled}
+                            >
+                              <div className="d-flex align-items-center">
+                                <div className={`transfer-type-icon me-3 ${isActive ? 'active' : ''}`}>
+                                  <i className={`fas ${option.icon}`}></i>
+                                </div>
+                                <div>
+                                  <div className="fw-bold transfer-type-title">{option.label}</div>
+                                  <small className="transfer-type-hint">{option.hint}</small>
+                                </div>
                               </div>
-                              <div>
-                                <div className="fw-bold transfer-type-title">{option.label}</div>
-                                <small className="transfer-type-hint">{option.hint}</small>
-                              </div>
-                            </div>
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  {!canChangeTransferType && (
-                    <div className="alert alert-info py-2 mb-3">
-                      <i className="fas fa-info-circle me-2"></i>
-                      Rolünüz gereği sadece müşteri sevkiyat transferi oluşturabilirsiniz.
+                            </button>
+                          </div>
+                        );
+                      })}
                     </div>
-                  )}
+                    {!canChangeTransferType && (
+                      <div className="alert alert-info py-2 mb-3">
+                        <i className="fas fa-info-circle me-2"></i>
+                        Rolünüz gereği sadece müşteri sevkiyat transferi oluşturabilirsiniz.
+                      </div>
+                    )}
 
-                  <div className="row g-3">
-                    <div className="col-md-6">
-                      <label className="form-label fw-bold">
-                        <i className="fas fa-warehouse text-danger me-1"></i>
-                        Kaynak Depo *
-                        <i className="fas fa-info-circle ms-1 text-muted" title="Stokun alınacağı depo"></i>
-                      </label>
-                      <select
-                        className={`form-select form-select-lg ${validationErrors.sourceWarehouseId ? 'is-invalid' : formData.sourceWarehouseId ? 'is-valid' : ''}`}
-                        name="sourceWarehouseId"
-                        value={formData.sourceWarehouseId}
-                        onChange={handleChange}
-                        required
-                        disabled={!!stock || warehouses.length === 0}
-                      >
-                        <option value="">
-                          {warehouses.length === 0 ? '-- Depo yükleniyor... --' : '-- Kaynak depo seçiniz --'}
-                        </option>
-                        {warehouses.map((warehouse) => (
-                          <option key={warehouse.id} value={warehouse.id}>
-                            📍 {warehouse.name} - {warehouse.location}
-                          </option>
-                        ))}
-                      </select>
-                      {validationErrors.sourceWarehouseId && (
-                        <div className="invalid-feedback">{validationErrors.sourceWarehouseId}</div>
-                      )}
-                      {sourceWarehouse && !validationErrors.sourceWarehouseId && (
-                        <small className="text-success d-block mt-1">
-                          <i className="fas fa-check-circle me-1"></i>
-                          {sourceWarehouse.location}
-                        </small>
-                      )}
-                      {warehouses.length === 0 && !stock && (
-                        <small className="text-danger d-block mt-1">
-                          <i className="fas fa-exclamation-circle me-1"></i>
-                          Aktif depo bulunamadı. Lütfen önce depo ekleyin.
-                        </small>
-                      )}
-                      {isEmanetSource && (
-                        <small className="text-warning d-block mt-1">
-                          <i className="fas fa-info-circle me-1"></i>
-                          Emanet depo: listedeki stoklarda müşteri adı/telefonu gösterilir ve aramada müşteri
-                          adına göre de arama yapılır.
-                        </small>
-                      )}
-                    </div>
-
-                    {!isCustomerTransfer ? (
+                    <div className="row g-3">
                       <div className="col-md-6">
                         <label className="form-label fw-bold">
-                          <i className="fas fa-warehouse text-success me-1"></i>
-                          Hedef Depo *
-                          <i
-                            className="fas fa-info-circle ms-1 text-muted"
-                            title="Stokun gönderileceği depo"
-                          ></i>
+                          <i className="fas fa-warehouse text-danger me-1"></i>
+                          Kaynak Depo *
+                          <i className="fas fa-info-circle ms-1 text-muted" title="Stokun alınacağı depo"></i>
                         </label>
                         <select
-                          className={`form-select form-select-lg ${validationErrors.destinationWarehouseId ? 'is-invalid' : formData.destinationWarehouseId ? 'is-valid' : ''}`}
-                          name="destinationWarehouseId"
-                          value={formData.destinationWarehouseId}
+                          className={`form-select form-select-lg ${validationErrors.sourceWarehouseId ? 'is-invalid' : formData.sourceWarehouseId ? 'is-valid' : ''}`}
+                          name="sourceWarehouseId"
+                          value={formData.sourceWarehouseId}
                           onChange={handleChange}
-                          required={!isCustomerTransfer}
-                          disabled={!formData.sourceWarehouseId || warehouses.length === 0}
+                          required
+                          disabled={!!stock || warehouses.length === 0}
                         >
                           <option value="">
-                            {!formData.sourceWarehouseId
-                              ? '-- Önce kaynak depo seçiniz --'
-                              : warehouses.length === 0
-                                ? '-- Depo bulunamadı --'
-                                : '-- Hedef depo seçiniz --'}
+                            {warehouses.length === 0
+                              ? '-- Depo yükleniyor... --'
+                              : '-- Kaynak depo seçiniz --'}
                           </option>
-                          {warehouses
-                            .filter((w) => String(w.id) !== String(formData.sourceWarehouseId))
-                            .map((warehouse) => (
-                              <option key={warehouse.id} value={warehouse.id}>
-                                📍 {warehouse.name} - {warehouse.location}
-                              </option>
-                            ))}
+                          {warehouses.map((warehouse) => (
+                            <option key={warehouse.id} value={warehouse.id}>
+                              📍 {warehouse.name} - {warehouse.location}
+                            </option>
+                          ))}
                         </select>
-                        {validationErrors.destinationWarehouseId && (
-                          <div className="invalid-feedback">{validationErrors.destinationWarehouseId}</div>
+                        {validationErrors.sourceWarehouseId && (
+                          <div className="invalid-feedback">{validationErrors.sourceWarehouseId}</div>
                         )}
-                        {destinationWarehouse && !validationErrors.destinationWarehouseId && (
+                        {sourceWarehouse && !validationErrors.sourceWarehouseId && (
                           <small className="text-success d-block mt-1">
                             <i className="fas fa-check-circle me-1"></i>
-                            {destinationWarehouse.location}
+                            {sourceWarehouse.location}
                           </small>
                         )}
-                        {warehouses.length === 0 && (
+                        {warehouses.length === 0 && !stock && (
                           <small className="text-danger d-block mt-1">
                             <i className="fas fa-exclamation-circle me-1"></i>
                             Aktif depo bulunamadı. Lütfen önce depo ekleyin.
                           </small>
                         )}
+                        {isEmanetSource && (
+                          <small className="text-warning d-block mt-1">
+                            <i className="fas fa-info-circle me-1"></i>
+                            Emanet depo: listedeki stoklarda müşteri adı/telefonu gösterilir ve aramada
+                            müşteri adına göre de arama yapılır.
+                          </small>
+                        )}
                       </div>
-                    ) : (
+
+                      {!isCustomerTransfer ? (
+                        <div className="col-md-6">
+                          <label className="form-label fw-bold">
+                            <i className="fas fa-warehouse text-success me-1"></i>
+                            Hedef Depo *
+                            <i
+                              className="fas fa-info-circle ms-1 text-muted"
+                              title="Stokun gönderileceği depo"
+                            ></i>
+                          </label>
+                          <select
+                            className={`form-select form-select-lg ${validationErrors.destinationWarehouseId ? 'is-invalid' : formData.destinationWarehouseId ? 'is-valid' : ''}`}
+                            name="destinationWarehouseId"
+                            value={formData.destinationWarehouseId}
+                            onChange={handleChange}
+                            required={!isCustomerTransfer}
+                            disabled={!formData.sourceWarehouseId || warehouses.length === 0}
+                          >
+                            <option value="">
+                              {!formData.sourceWarehouseId
+                                ? '-- Önce kaynak depo seçiniz --'
+                                : warehouses.length === 0
+                                  ? '-- Depo bulunamadı --'
+                                  : '-- Hedef depo seçiniz --'}
+                            </option>
+                            {warehouses
+                              .filter((w) => String(w.id) !== String(formData.sourceWarehouseId))
+                              .map((warehouse) => (
+                                <option key={warehouse.id} value={warehouse.id}>
+                                  📍 {warehouse.name} - {warehouse.location}
+                                </option>
+                              ))}
+                          </select>
+                          {validationErrors.destinationWarehouseId && (
+                            <div className="invalid-feedback">{validationErrors.destinationWarehouseId}</div>
+                          )}
+                          {destinationWarehouse && !validationErrors.destinationWarehouseId && (
+                            <small className="text-success d-block mt-1">
+                              <i className="fas fa-check-circle me-1"></i>
+                              {destinationWarehouse.location}
+                            </small>
+                          )}
+                          {warehouses.length === 0 && (
+                            <small className="text-danger d-block mt-1">
+                              <i className="fas fa-exclamation-circle me-1"></i>
+                              Aktif depo bulunamadı. Lütfen önce depo ekleyin.
+                            </small>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="col-12">
+                          <div className="card border-info shadow-sm">
+                            <div className="card-header bg-info text-white d-flex align-items-center">
+                              <i className="fas fa-shipping-fast me-2"></i>
+                              <div>
+                                <strong>Müşteri İletişim Bilgileri</strong>
+                                <div className="small opacity-75">
+                                  Teslimat adresi ve iletişim detaylarını eksiksiz doldurun
+                                </div>
+                              </div>
+                            </div>
+                            <div className="card-body">
+                              <div className="row g-3">
+                                <div className="col-12">
+                                  <label className="form-label fw-bold">
+                                    <i className="fas fa-address-card text-info me-1"></i>
+                                    E-ticaret müşteri kaydı
+                                    <span className="text-muted fw-normal ms-1">(isteğe bağlı)</span>
+                                  </label>
+                                  <CustomerLinkPicker
+                                    customer={linkedCustomer}
+                                    onPick={pickLinkedCustomer}
+                                    hint="Alıcı sitede kayıtlıysa eşleştirin; kayıtlı değilse boş bırakın, sonradan da eşleştirebilirsiniz."
+                                  />
+                                </div>
+                                <div className="col-md-6">
+                                  <label className="form-label fw-bold">
+                                    <i className="fas fa-user-tag text-info me-1"></i>
+                                    Müşteri Adı Soyadı *
+                                  </label>
+                                  <input
+                                    type="text"
+                                    className={`form-control form-control-lg ${validationErrors.customerFullName ? 'is-invalid' : formData.customerFullName ? 'is-valid' : ''}`}
+                                    name="customerFullName"
+                                    value={formData.customerFullName}
+                                    onChange={handleChange}
+                                    onBlur={(e) =>
+                                      setFormData((prev) => ({
+                                        ...prev,
+                                        customerFullName: toTitleCaseTr(e.target.value),
+                                      }))
+                                    }
+                                    placeholder="Örn: Ayşe Koç"
+                                    maxLength="150"
+                                    required
+                                    aria-describedby="customerNameHelp"
+                                  />
+                                  {validationErrors.customerFullName ? (
+                                    <div className="invalid-feedback">
+                                      {validationErrors.customerFullName}
+                                    </div>
+                                  ) : (
+                                    <small id="customerNameHelp" className="text-muted">
+                                      Fatura veya sevk irsaliyesinde yer alan tam isim
+                                    </small>
+                                  )}
+                                </div>
+                                <div className="col-md-6">
+                                  <label className="form-label fw-bold">
+                                    <i className="fas fa-phone-alt text-info me-1"></i>
+                                    Müşteri Telefonu *
+                                  </label>
+                                  <div className="input-group input-group-lg phone-input-group">
+                                    <span className="input-group-text">+90</span>
+                                    <input
+                                      type="tel"
+                                      className={`form-control ${getPhoneValidationClass(formData.customerPhone, validationErrors.customerPhone)}`}
+                                      name="customerPhone"
+                                      value={formatPhoneInputValue(formData.customerPhone)}
+                                      onChange={(e) => handlePhoneInput('customerPhone', e.target.value)}
+                                      placeholder={PHONE_PLACEHOLDER}
+                                      maxLength="13"
+                                      inputMode="numeric"
+                                    />
+                                  </div>
+                                  {validationErrors.customerPhone ? (
+                                    <div className="invalid-feedback d-block">
+                                      {validationErrors.customerPhone}
+                                    </div>
+                                  ) : (
+                                    <small className="text-muted">
+                                      Teslimat sırasında aranacak aktif numara
+                                    </small>
+                                  )}
+                                </div>
+                                <div className="col-12">
+                                  <label className="form-label fw-bold">
+                                    <i className="fas fa-map-marker-alt text-info me-1"></i>
+                                    Teslimat Adresi *
+                                  </label>
+                                  <textarea
+                                    className={`form-control ${validationErrors.customerAddress ? 'is-invalid' : formData.customerAddress ? 'is-valid' : ''}`}
+                                    name="customerAddress"
+                                    value={formData.customerAddress}
+                                    onChange={handleChange}
+                                    rows="4"
+                                    placeholder="Mahalle, cadde, bina, daire, il / ilçe..."
+                                    maxLength="500"
+                                    required
+                                    aria-describedby="customerAddressHelp"
+                                  ></textarea>
+                                  <div className="d-flex justify-content-between mt-1">
+                                    {validationErrors.customerAddress ? (
+                                      <div className="invalid-feedback d-block">
+                                        {validationErrors.customerAddress}
+                                      </div>
+                                    ) : (
+                                      <small id="customerAddressHelp" className="text-muted">
+                                        Navigasyonun kolay bulabilmesi için il/ilçe ve referans noktalarını
+                                        ekleyin
+                                      </small>
+                                    )}
+                                    <small className="text-muted">
+                                      {formData.customerAddress.length}/500
+                                    </small>
+                                  </div>
+                                </div>
+                                <div className="col-12">
+                                  <div className="alert alert-light border d-flex align-items-start mb-0">
+                                    <i className="fas fa-lightbulb text-warning fa-lg me-3 mt-1"></i>
+                                    <div>
+                                      <strong>İpucu:</strong> Teslim alacak kişinin adını, güvenlik kodu veya
+                                      site giriş talimatı gibi bilgileri notlar alanında paylaşabilirsiniz.
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
                       <div className="col-12">
-                        <div className="card border-info shadow-sm">
-                          <div className="card-header bg-info text-white d-flex align-items-center">
-                            <i className="fas fa-shipping-fast me-2"></i>
+                        <div className="card border-primary shadow-sm">
+                          <div className="card-header bg-primary bg-gradient text-white d-flex align-items-center">
+                            <i className="fas fa-boxes-stacked me-2"></i>
                             <div>
-                              <strong>Müşteri İletişim Bilgileri</strong>
+                              <strong>Ürün ve Miktar Seçimi</strong>
                               <div className="small opacity-75">
-                                Teslimat adresi ve iletişim detaylarını eksiksiz doldurun
+                                Kaynak depodaki stoklardan birden fazla ürün ekleyin
                               </div>
                             </div>
                           </div>
                           <div className="card-body">
-                            <div className="row g-3">
-                              <div className="col-12">
-                                <label className="form-label fw-bold">
-                                  <i className="fas fa-address-card text-info me-1"></i>
-                                  E-ticaret müşteri kaydı
-                                  <span className="text-muted fw-normal ms-1">(isteğe bağlı)</span>
-                                </label>
-                                <CustomerLinkPicker
-                                  customer={linkedCustomer}
-                                  onPick={pickLinkedCustomer}
-                                  hint="Alıcı sitede kayıtlıysa eşleştirin; kayıtlı değilse boş bırakın, sonradan da eşleştirebilirsiniz."
-                                />
+                            {!formData.sourceWarehouseId ? (
+                              <div className="alert alert-light border mb-0">
+                                <i className="fas fa-info-circle me-2 text-primary"></i>
+                                Önce kaynak depoyu seçerek stok listesini yükleyin.
                               </div>
-                              <div className="col-md-6">
-                                <label className="form-label fw-bold">
-                                  <i className="fas fa-user-tag text-info me-1"></i>
-                                  Müşteri Adı Soyadı *
-                                </label>
-                                <input
-                                  type="text"
-                                  className={`form-control form-control-lg ${validationErrors.customerFullName ? 'is-invalid' : formData.customerFullName ? 'is-valid' : ''}`}
-                                  name="customerFullName"
-                                  value={formData.customerFullName}
-                                  onChange={handleChange}
-                                  placeholder="Örn: Ayşe Koç"
-                                  maxLength="150"
-                                  required
-                                  aria-describedby="customerNameHelp"
-                                />
-                                {validationErrors.customerFullName ? (
-                                  <div className="invalid-feedback">{validationErrors.customerFullName}</div>
-                                ) : (
-                                  <small id="customerNameHelp" className="text-muted">
-                                    Fatura veya sevk irsaliyesinde yer alan tam isim
-                                  </small>
-                                )}
-                              </div>
-                              <div className="col-md-6">
-                                <label className="form-label fw-bold">
-                                  <i className="fas fa-phone-alt text-info me-1"></i>
-                                  Müşteri Telefonu *
-                                </label>
-                                <div className="input-group input-group-lg phone-input-group">
-                                  <span className="input-group-text">+90</span>
-                                  <input
-                                    type="tel"
-                                    className={`form-control ${getPhoneValidationClass(formData.customerPhone, validationErrors.customerPhone)}`}
-                                    name="customerPhone"
-                                    value={formatPhoneInputValue(formData.customerPhone)}
-                                    onChange={(e) => handlePhoneInput('customerPhone', e.target.value)}
-                                    placeholder={PHONE_PLACEHOLDER}
-                                    maxLength="13"
-                                    inputMode="numeric"
-                                  />
-                                </div>
-                                {validationErrors.customerPhone ? (
-                                  <div className="invalid-feedback d-block">
-                                    {validationErrors.customerPhone}
-                                  </div>
-                                ) : (
-                                  <small className="text-muted">
-                                    Teslimat sırasında aranacak aktif numara
-                                  </small>
-                                )}
-                              </div>
-                              <div className="col-12">
-                                <label className="form-label fw-bold">
-                                  <i className="fas fa-map-marker-alt text-info me-1"></i>
-                                  Teslimat Adresi *
-                                </label>
-                                <textarea
-                                  className={`form-control ${validationErrors.customerAddress ? 'is-invalid' : formData.customerAddress ? 'is-valid' : ''}`}
-                                  name="customerAddress"
-                                  value={formData.customerAddress}
-                                  onChange={handleChange}
-                                  rows="4"
-                                  placeholder="Mahalle, cadde, bina, daire, il / ilçe..."
-                                  maxLength="500"
-                                  required
-                                  aria-describedby="customerAddressHelp"
-                                ></textarea>
-                                <div className="d-flex justify-content-between mt-1">
-                                  {validationErrors.customerAddress ? (
-                                    <div className="invalid-feedback d-block">
-                                      {validationErrors.customerAddress}
+                            ) : (
+                              <>
+                                <div className="row g-3">
+                                  <div className="col-12">
+                                    <label className="form-label fw-bold">
+                                      <i className="fas fa-box text-primary me-1"></i>
+                                      Depo Stokları
+                                    </label>
+                                    <div className="input-group input-group-lg mb-2">
+                                      <span className="input-group-text bg-light">
+                                        <i className="fas fa-search text-muted"></i>
+                                      </span>
+                                      <input
+                                        type="text"
+                                        className="form-control"
+                                        placeholder="Ürün adı, SKU veya Müşteri ile ara..."
+                                        value={stockSearchTerm}
+                                        onChange={(e) => setStockSearchTerm(e.target.value)}
+                                        disabled={stockLoading || !warehouseStocks.length}
+                                      />
+                                      {stockSearchTerm && (
+                                        <button
+                                          type="button"
+                                          className="btn btn-outline-secondary"
+                                          onClick={() => setStockSearchTerm('')}
+                                          disabled={stockLoading}
+                                        >
+                                          Temizle
+                                        </button>
+                                      )}
                                     </div>
-                                  ) : (
-                                    <small id="customerAddressHelp" className="text-muted">
-                                      Navigasyonun kolay bulabilmesi için il/ilçe ve referans noktalarını
-                                      ekleyin
-                                    </small>
-                                  )}
-                                  <small className="text-muted">{formData.customerAddress.length}/500</small>
-                                </div>
-                              </div>
-                              <div className="col-12">
-                                <div className="alert alert-light border d-flex align-items-start mb-0">
-                                  <i className="fas fa-lightbulb text-warning fa-lg me-3 mt-1"></i>
-                                  <div>
-                                    <strong>İpucu:</strong> Teslim alacak kişinin adını, güvenlik kodu veya
-                                    site giriş talimatı gibi bilgileri notlar alanında paylaşabilirsiniz.
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
+                                    <div className="d-flex justify-content-between small text-muted mb-2">
+                                      <span>
+                                        {warehouseStocks.length > 0
+                                          ? `${warehouseStocks.length} ürün`
+                                          : 'Stok listesi hazır değil'}
+                                      </span>
+                                      {stockSearchTerm && <span>{filteredWarehouseStocks.length} sonuç</span>}
+                                    </div>
+                                    {stockLoading ? (
+                                      <div className="d-flex align-items-center gap-2 py-3">
+                                        <span
+                                          className="spinner-border spinner-border-sm text-primary"
+                                          role="status"
+                                          aria-hidden="true"
+                                        ></span>
+                                        <span className="text-muted">Stoklar yükleniyor...</span>
+                                      </div>
+                                    ) : (
+                                      <>
+                                        {filteredWarehouseStocks.length === 0 ? (
+                                          <div className="alert alert-light border mt-2 py-3 mb-0">
+                                            <i className="fas fa-info-circle me-2 text-primary"></i>
+                                            {stockSearchTerm
+                                              ? 'Arama kriterine uygun ürün bulunamadı. Farklı anahtar kelimeler deneyin.'
+                                              : 'Bu depoda henüz stok bulunmuyor.'}
+                                          </div>
+                                        ) : (
+                                          <>
+                                            {/* Desktop Table View */}
+                                            <div className="d-none d-md-block table-responsive border rounded shadow-sm bg-white">
+                                              <table className="table table-hover table-sm mb-0">
+                                                <thead className="table-light">
+                                                  <tr>
+                                                    <th style={{ width: '40px' }}></th>
+                                                    <th>Ürün Adı</th>
+                                                    <th>Stok Kodu</th>
+                                                    {isEmanetSource && <th>Müşteri</th>}
+                                                    <th className="text-center">Mevcut Stok</th>
+                                                    <th className="text-center">Rezerve</th>
+                                                    <th className="text-center">Emanet</th>
+                                                    <th className="text-center">Kullanılabilir</th>
+                                                  </tr>
+                                                </thead>
+                                                <tbody>
+                                                  {limitedStockList.map((stockItem) => {
+                                                    const optionProductId = String(stockItem.product.id);
+                                                    const optionStockId = String(stockItem.id);
+                                                    const isSelected =
+                                                      String(itemForm.stockId) === optionStockId;
+                                                    const available = calculateAvailableQuantity(stockItem);
+                                                    return (
+                                                      <tr
+                                                        key={stockItem.id}
+                                                        className={isSelected ? 'table-primary' : ''}
+                                                        style={{ cursor: 'pointer' }}
+                                                        onClick={() => {
+                                                          handleItemFormChange('productId', optionProductId);
+                                                          handleItemFormChange('stockId', optionStockId);
+                                                        }}
+                                                      >
+                                                        <td className="text-center">
+                                                          {isSelected && (
+                                                            <span className="badge bg-primary">
+                                                              <i className="fas fa-check"></i>
+                                                            </span>
+                                                          )}
+                                                        </td>
+                                                        <td>
+                                                          <div className="fw-semibold">
+                                                            {stockItem.product.name}
+                                                          </div>
+                                                          {stockItem.product.brand?.name && (
+                                                            <small className="text-muted d-block">
+                                                              <i className="fas fa-copyright me-1"></i>
+                                                              {stockItem.product.brand.name}
+                                                            </small>
+                                                          )}
+                                                        </td>
+                                                        <td>
+                                                          <span className="badge text-bg-light border">
+                                                            {stockItem.product.sku}
+                                                          </span>
+                                                        </td>
+                                                        {isEmanetSource && (
+                                                          <td>
+                                                            {stockItem.customerName ? (
+                                                              <>
+                                                                <div className="fw-semibold">
+                                                                  {stockItem.customerName}
+                                                                </div>
+                                                                {stockItem.customerPhone && (
+                                                                  <small className="text-muted d-block">
+                                                                    {stockItem.customerPhone}
+                                                                  </small>
+                                                                )}
+                                                              </>
+                                                            ) : (
+                                                              <span className="text-muted">-</span>
+                                                            )}
+                                                          </td>
+                                                        )}
+                                                        <td className="text-center">
+                                                          <span className="fw-bold">
+                                                            {stockItem.quantity}
+                                                          </span>
+                                                        </td>
+                                                        <td className="text-center">
+                                                          <span
+                                                            className={
+                                                              stockItem.reservedQuantity > 0
+                                                                ? 'text-warning fw-bold'
+                                                                : 'text-muted'
+                                                            }
+                                                          >
+                                                            {stockItem.reservedQuantity || 0}
+                                                          </span>
+                                                        </td>
+                                                        <td className="text-center">
+                                                          <span className="text-muted">
+                                                            {stockItem.consignedQuantity || 0}
+                                                          </span>
+                                                        </td>
+                                                        <td className="text-center">
+                                                          <span
+                                                            className={`badge ${available > 0 ? 'bg-success bg-opacity-10 text-success' : 'bg-danger bg-opacity-10 text-danger'}`}
+                                                          >
+                                                            {available}
+                                                          </span>
+                                                        </td>
+                                                      </tr>
+                                                    );
+                                                  })}
+                                                </tbody>
+                                              </table>
+                                            </div>
 
-                    <div className="col-12">
-                      <div className="card border-primary shadow-sm">
-                        <div className="card-header bg-primary bg-gradient text-white d-flex align-items-center">
-                          <i className="fas fa-boxes-stacked me-2"></i>
-                          <div>
-                            <strong>Ürün ve Miktar Seçimi</strong>
-                            <div className="small opacity-75">
-                              Kaynak depodaki stoklardan birden fazla ürün ekleyin
-                            </div>
-                          </div>
-                        </div>
-                        <div className="card-body">
-                          {!formData.sourceWarehouseId ? (
-                            <div className="alert alert-light border mb-0">
-                              <i className="fas fa-info-circle me-2 text-primary"></i>
-                              Önce kaynak depoyu seçerek stok listesini yükleyin.
-                            </div>
-                          ) : (
-                            <>
-                              <div className="row g-3">
-                                <div className="col-12">
-                                  <label className="form-label fw-bold">
-                                    <i className="fas fa-box text-primary me-1"></i>
-                                    Depo Stokları
-                                  </label>
-                                  <div className="input-group input-group-lg mb-2">
-                                    <span className="input-group-text bg-light">
-                                      <i className="fas fa-search text-muted"></i>
-                                    </span>
-                                    <input
-                                      type="text"
-                                      className="form-control"
-                                      placeholder="Ürün adı, SKU veya Müşteri ile ara..."
-                                      value={stockSearchTerm}
-                                      onChange={(e) => setStockSearchTerm(e.target.value)}
-                                      disabled={stockLoading || !warehouseStocks.length}
-                                    />
-                                    {stockSearchTerm && (
-                                      <button
-                                        type="button"
-                                        className="btn btn-outline-secondary"
-                                        onClick={() => setStockSearchTerm('')}
-                                        disabled={stockLoading}
-                                      >
-                                        Temizle
-                                      </button>
-                                    )}
-                                  </div>
-                                  <div className="d-flex justify-content-between small text-muted mb-2">
-                                    <span>
-                                      {warehouseStocks.length > 0
-                                        ? `${warehouseStocks.length} ürün`
-                                        : 'Stok listesi hazır değil'}
-                                    </span>
-                                    {stockSearchTerm && <span>{filteredWarehouseStocks.length} sonuç</span>}
-                                  </div>
-                                  {stockLoading ? (
-                                    <div className="d-flex align-items-center gap-2 py-3">
-                                      <span
-                                        className="spinner-border spinner-border-sm text-primary"
-                                        role="status"
-                                        aria-hidden="true"
-                                      ></span>
-                                      <span className="text-muted">Stoklar yükleniyor...</span>
-                                    </div>
-                                  ) : (
-                                    <>
-                                      {filteredWarehouseStocks.length === 0 ? (
-                                        <div className="alert alert-light border mt-2 py-3 mb-0">
-                                          <i className="fas fa-info-circle me-2 text-primary"></i>
-                                          {stockSearchTerm
-                                            ? 'Arama kriterine uygun ürün bulunamadı. Farklı anahtar kelimeler deneyin.'
-                                            : 'Bu depoda henüz stok bulunmuyor.'}
-                                        </div>
-                                      ) : (
-                                        <>
-                                          {/* Desktop Table View */}
-                                          <div className="d-none d-md-block table-responsive border rounded shadow-sm bg-white">
-                                            <table className="table table-hover table-sm mb-0">
-                                              <thead className="table-light">
-                                                <tr>
-                                                  <th style={{ width: '40px' }}></th>
-                                                  <th>Ürün Adı</th>
-                                                  <th>Stok Kodu</th>
-                                                  {isEmanetSource && <th>Müşteri</th>}
-                                                  <th className="text-center">Mevcut Stok</th>
-                                                  <th className="text-center">Rezerve</th>
-                                                  <th className="text-center">Emanet</th>
-                                                  <th className="text-center">Kullanılabilir</th>
-                                                </tr>
-                                              </thead>
-                                              <tbody>
+                                            {/* Mobile Card View */}
+                                            <div className="d-md-none">
+                                              <div
+                                                className="d-flex flex-column gap-2"
+                                                style={{ maxHeight: '60vh', overflowY: 'auto' }}
+                                              >
                                                 {limitedStockList.map((stockItem) => {
                                                   const optionProductId = String(stockItem.product.id);
                                                   const optionStockId = String(stockItem.id);
@@ -1555,138 +1684,35 @@ const StockTransferModal = ({ stock, order, onSuccess, onClose, lockToCustomerDe
                                                     String(itemForm.stockId) === optionStockId;
                                                   const available = calculateAvailableQuantity(stockItem);
                                                   return (
-                                                    <tr
+                                                    <div
                                                       key={stockItem.id}
-                                                      className={isSelected ? 'table-primary' : ''}
-                                                      style={{ cursor: 'pointer' }}
+                                                      className={`card border-2 shadow-sm ${isSelected ? 'border-primary bg-primary bg-opacity-10' : 'border-light'}`}
+                                                      style={{
+                                                        cursor: 'pointer',
+                                                        transition: 'all 0.2s ease',
+                                                        borderRadius: '8px',
+                                                      }}
                                                       onClick={() => {
                                                         handleItemFormChange('productId', optionProductId);
                                                         handleItemFormChange('stockId', optionStockId);
                                                       }}
                                                     >
-                                                      <td className="text-center">
-                                                        {isSelected && (
-                                                          <span className="badge bg-primary">
-                                                            <i className="fas fa-check"></i>
-                                                          </span>
-                                                        )}
-                                                      </td>
-                                                      <td>
-                                                        <div className="fw-semibold">
-                                                          {stockItem.product.name}
-                                                        </div>
-                                                        {stockItem.product.brand?.name && (
-                                                          <small className="text-muted d-block">
-                                                            <i className="fas fa-copyright me-1"></i>
-                                                            {stockItem.product.brand.name}
-                                                          </small>
-                                                        )}
-                                                      </td>
-                                                      <td>
-                                                        <span className="badge text-bg-light border">
-                                                          {stockItem.product.sku}
-                                                        </span>
-                                                      </td>
-                                                      {isEmanetSource && (
-                                                        <td>
-                                                          {stockItem.customerName ? (
-                                                            <>
-                                                              <div className="fw-semibold">
-                                                                {stockItem.customerName}
-                                                              </div>
-                                                              {stockItem.customerPhone && (
-                                                                <small className="text-muted d-block">
-                                                                  {stockItem.customerPhone}
-                                                                </small>
-                                                              )}
-                                                            </>
-                                                          ) : (
-                                                            <span className="text-muted">-</span>
-                                                          )}
-                                                        </td>
-                                                      )}
-                                                      <td className="text-center">
-                                                        <span className="fw-bold">{stockItem.quantity}</span>
-                                                      </td>
-                                                      <td className="text-center">
-                                                        <span
-                                                          className={
-                                                            stockItem.reservedQuantity > 0
-                                                              ? 'text-warning fw-bold'
-                                                              : 'text-muted'
-                                                          }
-                                                        >
-                                                          {stockItem.reservedQuantity || 0}
-                                                        </span>
-                                                      </td>
-                                                      <td className="text-center">
-                                                        <span className="text-muted">
-                                                          {stockItem.consignedQuantity || 0}
-                                                        </span>
-                                                      </td>
-                                                      <td className="text-center">
-                                                        <span
-                                                          className={`badge ${available > 0 ? 'bg-success bg-opacity-10 text-success' : 'bg-danger bg-opacity-10 text-danger'}`}
-                                                        >
-                                                          {available}
-                                                        </span>
-                                                      </td>
-                                                    </tr>
-                                                  );
-                                                })}
-                                              </tbody>
-                                            </table>
-                                          </div>
-
-                                          {/* Mobile Card View */}
-                                          <div className="d-md-none">
-                                            <div
-                                              className="d-flex flex-column gap-2"
-                                              style={{ maxHeight: '60vh', overflowY: 'auto' }}
-                                            >
-                                              {limitedStockList.map((stockItem) => {
-                                                const optionProductId = String(stockItem.product.id);
-                                                const optionStockId = String(stockItem.id);
-                                                const isSelected = String(itemForm.stockId) === optionStockId;
-                                                const available = calculateAvailableQuantity(stockItem);
-                                                return (
-                                                  <div
-                                                    key={stockItem.id}
-                                                    className={`card border-2 shadow-sm ${isSelected ? 'border-primary bg-primary bg-opacity-10' : 'border-light'}`}
-                                                    style={{
-                                                      cursor: 'pointer',
-                                                      transition: 'all 0.2s ease',
-                                                      borderRadius: '8px',
-                                                    }}
-                                                    onClick={() => {
-                                                      handleItemFormChange('productId', optionProductId);
-                                                      handleItemFormChange('stockId', optionStockId);
-                                                    }}
-                                                  >
-                                                    <div className="card-body p-2">
-                                                      <div className="d-flex justify-content-between align-items-start mb-2">
-                                                        <div
-                                                          className="flex-grow-1 pe-2"
-                                                          style={{ minWidth: 0 }}
-                                                        >
+                                                      <div className="card-body p-2">
+                                                        <div className="d-flex justify-content-between align-items-start mb-2">
                                                           <div
-                                                            className="fw-bold mb-1"
-                                                            style={{ fontSize: '0.9rem', lineHeight: '1.3' }}
+                                                            className="flex-grow-1 pe-2"
+                                                            style={{ minWidth: 0 }}
                                                           >
-                                                            {stockItem.product.name}
-                                                          </div>
-                                                          <div className="d-flex flex-wrap gap-1 align-items-center">
-                                                            <span
-                                                              className="badge bg-light text-dark border"
+                                                            <div
+                                                              className="fw-bold mb-1"
                                                               style={{
-                                                                fontSize: '0.7rem',
-                                                                padding: '0.25rem 0.5rem',
+                                                                fontSize: '0.9rem',
+                                                                lineHeight: '1.3',
                                                               }}
                                                             >
-                                                              <i className="fas fa-barcode me-1"></i>
-                                                              {stockItem.product.sku}
-                                                            </span>
-                                                            {stockItem.product.brand?.name && (
+                                                              {stockItem.product.name}
+                                                            </div>
+                                                            <div className="d-flex flex-wrap gap-1 align-items-center">
                                                               <span
                                                                 className="badge bg-light text-dark border"
                                                                 style={{
@@ -1694,290 +1720,333 @@ const StockTransferModal = ({ stock, order, onSuccess, onClose, lockToCustomerDe
                                                                   padding: '0.25rem 0.5rem',
                                                                 }}
                                                               >
-                                                                <i className="fas fa-copyright me-1"></i>
-                                                                {stockItem.product.brand.name.length > 12
-                                                                  ? `${stockItem.product.brand.name.substring(0, 12)}...`
-                                                                  : stockItem.product.brand.name}
+                                                                <i className="fas fa-barcode me-1"></i>
+                                                                {stockItem.product.sku}
+                                                              </span>
+                                                              {stockItem.product.brand?.name && (
+                                                                <span
+                                                                  className="badge bg-light text-dark border"
+                                                                  style={{
+                                                                    fontSize: '0.7rem',
+                                                                    padding: '0.25rem 0.5rem',
+                                                                  }}
+                                                                >
+                                                                  <i className="fas fa-copyright me-1"></i>
+                                                                  {stockItem.product.brand.name.length > 12
+                                                                    ? `${stockItem.product.brand.name.substring(0, 12)}...`
+                                                                    : stockItem.product.brand.name}
+                                                                </span>
+                                                              )}
+                                                              {isEmanetSource && stockItem.customerName && (
+                                                                <span className="badge bg-dark">
+                                                                  <i className="fas fa-user me-1"></i>
+                                                                  {stockItem.customerName}
+                                                                </span>
+                                                              )}
+                                                            </div>
+                                                            {isEmanetSource && stockItem.customerPhone && (
+                                                              <small className="text-muted d-block mt-1">
+                                                                {stockItem.customerPhone}
+                                                              </small>
+                                                            )}
+                                                          </div>
+                                                          <div className="flex-shrink-0">
+                                                            {isSelected && (
+                                                              <span
+                                                                className="badge bg-primary"
+                                                                style={{
+                                                                  fontSize: '0.75rem',
+                                                                  padding: '0.4rem 0.6rem',
+                                                                }}
+                                                              >
+                                                                <i className="fas fa-check"></i>
                                                               </span>
                                                             )}
-                                                            {isEmanetSource && stockItem.customerName && (
-                                                              <span className="badge bg-dark">
-                                                                <i className="fas fa-user me-1"></i>
-                                                                {stockItem.customerName}
-                                                              </span>
-                                                            )}
                                                           </div>
-                                                          {isEmanetSource && stockItem.customerPhone && (
-                                                            <small className="text-muted d-block mt-1">
-                                                              {stockItem.customerPhone}
-                                                            </small>
-                                                          )}
                                                         </div>
-                                                        <div className="flex-shrink-0">
-                                                          {isSelected && (
-                                                            <span
-                                                              className="badge bg-primary"
-                                                              style={{
-                                                                fontSize: '0.75rem',
-                                                                padding: '0.4rem 0.6rem',
-                                                              }}
-                                                            >
-                                                              <i className="fas fa-check"></i>
-                                                            </span>
-                                                          )}
-                                                        </div>
-                                                      </div>
 
-                                                      <div className="row g-1 mb-1">
-                                                        <div className="col-6">
-                                                          <div
-                                                            className="text-center p-2 bg-light rounded"
-                                                            style={{ border: '1px solid #dee2e6' }}
-                                                          >
+                                                        <div className="row g-1 mb-1">
+                                                          <div className="col-6">
                                                             <div
-                                                              className="small text-muted mb-1"
-                                                              style={{ fontSize: '0.7rem' }}
+                                                              className="text-center p-2 bg-light rounded"
+                                                              style={{ border: '1px solid #dee2e6' }}
                                                             >
-                                                              <i className="fas fa-cubes me-1"></i>
-                                                              Mevcut
+                                                              <div
+                                                                className="small text-muted mb-1"
+                                                                style={{ fontSize: '0.7rem' }}
+                                                              >
+                                                                <i className="fas fa-cubes me-1"></i>
+                                                                Mevcut
+                                                              </div>
+                                                              <div
+                                                                className="fw-bold"
+                                                                style={{ fontSize: '1rem' }}
+                                                              >
+                                                                {stockItem.quantity}
+                                                              </div>
                                                             </div>
+                                                          </div>
+                                                          <div className="col-6">
                                                             <div
-                                                              className="fw-bold"
-                                                              style={{ fontSize: '1rem' }}
+                                                              className={`text-center p-2 rounded ${available > 0 ? 'bg-success bg-opacity-10 border border-success' : 'bg-danger bg-opacity-10 border border-danger'}`}
                                                             >
-                                                              {stockItem.quantity}
+                                                              <div
+                                                                className="small mb-1"
+                                                                style={{ fontSize: '0.7rem' }}
+                                                              >
+                                                                <i className="fas fa-check-circle me-1"></i>
+                                                                Kullanılabilir
+                                                              </div>
+                                                              <div
+                                                                className={`fw-bold ${available > 0 ? 'text-success' : 'text-danger'}`}
+                                                                style={{ fontSize: '1rem' }}
+                                                              >
+                                                                {available}
+                                                              </div>
                                                             </div>
                                                           </div>
                                                         </div>
-                                                        <div className="col-6">
-                                                          <div
-                                                            className={`text-center p-2 rounded ${available > 0 ? 'bg-success bg-opacity-10 border border-success' : 'bg-danger bg-opacity-10 border border-danger'}`}
-                                                          >
-                                                            <div
-                                                              className="small mb-1"
-                                                              style={{ fontSize: '0.7rem' }}
-                                                            >
-                                                              <i className="fas fa-check-circle me-1"></i>
-                                                              Kullanılabilir
-                                                            </div>
-                                                            <div
-                                                              className={`fw-bold ${available > 0 ? 'text-success' : 'text-danger'}`}
-                                                              style={{ fontSize: '1rem' }}
-                                                            >
-                                                              {available}
-                                                            </div>
-                                                          </div>
-                                                        </div>
-                                                      </div>
 
-                                                      <div className="row g-1">
-                                                        <div className="col-6">
-                                                          <div
-                                                            className="text-center p-1 bg-light rounded"
-                                                            style={{ border: '1px solid #dee2e6' }}
-                                                          >
+                                                        <div className="row g-1">
+                                                          <div className="col-6">
                                                             <div
-                                                              className="small text-muted mb-0"
-                                                              style={{ fontSize: '0.65rem' }}
+                                                              className="text-center p-1 bg-light rounded"
+                                                              style={{ border: '1px solid #dee2e6' }}
                                                             >
-                                                              <i className="fas fa-lock me-1"></i>
-                                                              Rezerve
-                                                            </div>
-                                                            <div
-                                                              className={`fw-semibold ${stockItem.reservedQuantity > 0 ? 'text-warning' : 'text-muted'}`}
-                                                              style={{ fontSize: '0.85rem' }}
-                                                            >
-                                                              {stockItem.reservedQuantity || 0}
+                                                              <div
+                                                                className="small text-muted mb-0"
+                                                                style={{ fontSize: '0.65rem' }}
+                                                              >
+                                                                <i className="fas fa-lock me-1"></i>
+                                                                Rezerve
+                                                              </div>
+                                                              <div
+                                                                className={`fw-semibold ${stockItem.reservedQuantity > 0 ? 'text-warning' : 'text-muted'}`}
+                                                                style={{ fontSize: '0.85rem' }}
+                                                              >
+                                                                {stockItem.reservedQuantity || 0}
+                                                              </div>
                                                             </div>
                                                           </div>
-                                                        </div>
-                                                        <div className="col-6">
-                                                          <div
-                                                            className="text-center p-1 bg-light rounded"
-                                                            style={{ border: '1px solid #dee2e6' }}
-                                                          >
+                                                          <div className="col-6">
                                                             <div
-                                                              className="small text-muted mb-0"
-                                                              style={{ fontSize: '0.65rem' }}
+                                                              className="text-center p-1 bg-light rounded"
+                                                              style={{ border: '1px solid #dee2e6' }}
                                                             >
-                                                              <i className="fas fa-handshake me-1"></i>
-                                                              Emanet
-                                                            </div>
-                                                            <div
-                                                              className="fw-semibold text-muted"
-                                                              style={{ fontSize: '0.85rem' }}
-                                                            >
-                                                              {stockItem.consignedQuantity || 0}
+                                                              <div
+                                                                className="small text-muted mb-0"
+                                                                style={{ fontSize: '0.65rem' }}
+                                                              >
+                                                                <i className="fas fa-handshake me-1"></i>
+                                                                Emanet
+                                                              </div>
+                                                              <div
+                                                                className="fw-semibold text-muted"
+                                                                style={{ fontSize: '0.85rem' }}
+                                                              >
+                                                                {stockItem.consignedQuantity || 0}
+                                                              </div>
                                                             </div>
                                                           </div>
                                                         </div>
                                                       </div>
                                                     </div>
-                                                  </div>
-                                                );
-                                              })}
+                                                  );
+                                                })}
+                                              </div>
                                             </div>
-                                          </div>
-                                        </>
-                                      )}
-                                    </>
-                                  )}
-                                  {hasMoreStocks && (
+                                          </>
+                                        )}
+                                      </>
+                                    )}
+                                    {hasMoreStocks && (
+                                      <button
+                                        type="button"
+                                        className="btn btn-light btn-sm w-100 mt-2 stock-load-more"
+                                        onClick={() =>
+                                          setVisibleStockCount((prev) => prev + INITIAL_VISIBLE_STOCKS)
+                                        }
+                                      >
+                                        Daha fazla göster (
+                                        {filteredWarehouseStocks.length - limitedStockList.length} ürün)
+                                      </button>
+                                    )}
+                                    {validationErrors.itemProductId && (
+                                      <div className="invalid-feedback d-block">
+                                        {validationErrors.itemProductId}
+                                      </div>
+                                    )}
+                                    {!itemForm.productId && filteredWarehouseStocks.length > 0 && (
+                                      <small className="text-muted d-block mt-2">
+                                        Bir ürünü seçmek için listeden üzerine tıklayın.
+                                      </small>
+                                    )}
+                                  </div>
+                                  <div className="col-12 col-md-4 col-lg-3">
+                                    <label className="form-label fw-bold">
+                                      <i className="fas fa-sort-numeric-up text-info me-1"></i>
+                                      Eklenilecek Miktar
+                                    </label>
+                                    <input
+                                      type="number"
+                                      className={`form-control form-control-lg ${validationErrors.itemQuantity ? 'is-invalid' : ''}`}
+                                      value={itemForm.quantity}
+                                      min="1"
+                                      onChange={(e) => handleItemFormChange('quantity', e.target.value)}
+                                      placeholder="0"
+                                      disabled={!formData.sourceWarehouseId}
+                                    />
+                                    {validationErrors.itemQuantity && (
+                                      <div className="invalid-feedback">{validationErrors.itemQuantity}</div>
+                                    )}
+                                  </div>
+                                  <div className="col-12 col-md-4 col-lg-3 d-flex align-items-end">
                                     <button
                                       type="button"
-                                      className="btn btn-light btn-sm w-100 mt-2 stock-load-more"
-                                      onClick={() =>
-                                        setVisibleStockCount((prev) => prev + INITIAL_VISIBLE_STOCKS)
-                                      }
+                                      className="btn btn-primary btn-lg w-100"
+                                      onClick={handleAddItem}
+                                      disabled={!formData.sourceWarehouseId || stockLoading}
                                     >
-                                      Daha fazla göster (
-                                      {filteredWarehouseStocks.length - limitedStockList.length} ürün)
+                                      <i className="fas fa-plus me-1"></i>
+                                      Ekle
                                     </button>
-                                  )}
-                                  {validationErrors.itemProductId && (
-                                    <div className="invalid-feedback d-block">
-                                      {validationErrors.itemProductId}
-                                    </div>
-                                  )}
-                                  {!itemForm.productId && filteredWarehouseStocks.length > 0 && (
-                                    <small className="text-muted d-block mt-2">
-                                      Bir ürünü seçmek için listeden üzerine tıklayın.
-                                    </small>
-                                  )}
+                                  </div>
                                 </div>
-                                <div className="col-12 col-md-4 col-lg-3">
-                                  <label className="form-label fw-bold">
-                                    <i className="fas fa-sort-numeric-up text-info me-1"></i>
-                                    Eklenilecek Miktar
-                                  </label>
-                                  <input
-                                    type="number"
-                                    className={`form-control form-control-lg ${validationErrors.itemQuantity ? 'is-invalid' : ''}`}
-                                    value={itemForm.quantity}
-                                    min="1"
-                                    onChange={(e) => handleItemFormChange('quantity', e.target.value)}
-                                    placeholder="0"
-                                    disabled={!formData.sourceWarehouseId}
-                                  />
-                                  {validationErrors.itemQuantity && (
-                                    <div className="invalid-feedback">{validationErrors.itemQuantity}</div>
-                                  )}
-                                </div>
-                                <div className="col-12 col-md-4 col-lg-3 d-flex align-items-end">
-                                  <button
-                                    type="button"
-                                    className="btn btn-primary btn-lg w-100"
-                                    onClick={handleAddItem}
-                                    disabled={!formData.sourceWarehouseId || stockLoading}
-                                  >
-                                    <i className="fas fa-plus me-1"></i>
-                                    Ekle
-                                  </button>
-                                </div>
-                              </div>
 
-                              <div className="mt-4">
-                                {transferItems.length === 0 ? (
-                                  <div className="alert alert-light border mb-0 d-flex align-items-center">
-                                    <i className="fas fa-box-open text-muted fa-2x me-3"></i>
-                                    <div>
-                                      <strong>Henüz ürün eklemediniz.</strong>
-                                      <div className="text-muted small">
-                                        Stok listesinden ürün seçip "Ekle" butonuna basın.
+                                <div className="mt-4">
+                                  {transferItems.length === 0 ? (
+                                    <div className="alert alert-light border mb-0 d-flex align-items-center">
+                                      <i className="fas fa-box-open text-muted fa-2x me-3"></i>
+                                      <div>
+                                        <strong>Henüz ürün eklemediniz.</strong>
+                                        <div className="text-muted small">
+                                          Stok listesinden ürün seçip "Ekle" butonuna basın.
+                                        </div>
                                       </div>
                                     </div>
-                                  </div>
-                                ) : (
-                                  <>
-                                    <div className="table-responsive">
-                                      <table className="table table-sm align-middle">
-                                        <thead className="table-light">
-                                          <tr>
-                                            <th>Ürün</th>
-                                            <th>SKU</th>
-                                            <th className="text-center">Mevcut</th>
-                                            <th className="text-center">Miktar</th>
-                                            <th className="text-center">Fotoğraf</th>
-                                            <th className="text-center">İşlem</th>
-                                          </tr>
-                                        </thead>
-                                        <tbody>
-                                          {transferItems.map((item) => {
-                                            const photoInfo =
-                                              itemPhotos[item.stockId] || itemPhotos[item.productId];
-                                            const uploadState = photoUploads[item.stockId] || {
-                                              loading: false,
-                                              error: null,
-                                            };
-                                            return (
-                                              <tr key={item.stockId || item.productId}>
-                                                <td>{item.productName}</td>
-                                                <td>
-                                                  <span className="badge bg-light text-dark">{item.sku}</span>
-                                                </td>
-                                                <td className="text-center">
-                                                  <span
-                                                    className={`badge ${item.availableQuantity > 0 ? 'bg-success' : 'bg-danger'} bg-opacity-10 text-${item.availableQuantity > 0 ? 'success' : 'danger'}`}
-                                                  >
-                                                    {item.availableQuantity ?? 0}
-                                                  </span>
-                                                </td>
-                                                <td className="text-center" style={{ maxWidth: '120px' }}>
-                                                  <input
-                                                    type="number"
-                                                    className="form-control form-control-sm text-center"
-                                                    value={item.quantity}
-                                                    min="0"
-                                                    max={item.availableQuantity || undefined}
-                                                    onChange={(e) =>
-                                                      handleItemQuantityUpdate(
-                                                        item.productId,
-                                                        e.target.value,
-                                                        item.stockId
-                                                      )
-                                                    }
-                                                  />
-                                                </td>
-                                                <td className="text-center" style={{ minWidth: '130px' }}>
-                                                  <div className="d-flex flex-column align-items-center gap-1">
-                                                    {photoInfo?.meta ? (
-                                                      <>
-                                                        <div
-                                                          className="rounded border"
-                                                          style={{
-                                                            width: 64,
-                                                            height: 64,
-                                                            overflow: 'hidden',
-                                                            cursor: 'pointer',
-                                                          }}
-                                                          title="Fotoğrafı görüntüle"
-                                                          onClick={() => {
-                                                            const url =
-                                                              photoInfo.meta.viewUrl ||
-                                                              photoInfo.meta.thumbnailUrl;
-                                                            if (url) {
-                                                              window.open(url, '_blank', 'noopener');
-                                                            }
-                                                          }}
-                                                        >
-                                                          <img
-                                                            src={
-                                                              photoInfo.meta.localUrl ||
-                                                              photoInfo.meta.thumbnailUrl ||
-                                                              photoInfo.meta.viewUrl
-                                                            }
-                                                            alt="Ürün fotoğrafı"
+                                  ) : (
+                                    <>
+                                      <div className="table-responsive">
+                                        <table className="table table-sm align-middle">
+                                          <thead className="table-light">
+                                            <tr>
+                                              <th>Ürün</th>
+                                              <th>SKU</th>
+                                              <th className="text-center">Mevcut</th>
+                                              <th className="text-center">Miktar</th>
+                                              <th className="text-center">Fotoğraf</th>
+                                              <th className="text-center">İşlem</th>
+                                            </tr>
+                                          </thead>
+                                          <tbody>
+                                            {transferItems.map((item) => {
+                                              const photoInfo =
+                                                itemPhotos[item.stockId] || itemPhotos[item.productId];
+                                              const uploadState = photoUploads[item.stockId] || {
+                                                loading: false,
+                                                error: null,
+                                              };
+                                              return (
+                                                <tr key={item.stockId || item.productId}>
+                                                  <td>{item.productName}</td>
+                                                  <td>
+                                                    <span className="badge bg-light text-dark">
+                                                      {item.sku}
+                                                    </span>
+                                                  </td>
+                                                  <td className="text-center">
+                                                    <span
+                                                      className={`badge ${item.availableQuantity > 0 ? 'bg-success' : 'bg-danger'} bg-opacity-10 text-${item.availableQuantity > 0 ? 'success' : 'danger'}`}
+                                                    >
+                                                      {item.availableQuantity ?? 0}
+                                                    </span>
+                                                  </td>
+                                                  <td className="text-center" style={{ maxWidth: '120px' }}>
+                                                    <input
+                                                      type="number"
+                                                      className="form-control form-control-sm text-center"
+                                                      value={item.quantity}
+                                                      min="0"
+                                                      max={item.availableQuantity || undefined}
+                                                      onChange={(e) =>
+                                                        handleItemQuantityUpdate(
+                                                          item.productId,
+                                                          e.target.value,
+                                                          item.stockId
+                                                        )
+                                                      }
+                                                    />
+                                                  </td>
+                                                  <td className="text-center" style={{ minWidth: '130px' }}>
+                                                    <div className="d-flex flex-column align-items-center gap-1">
+                                                      {photoInfo?.meta ? (
+                                                        <>
+                                                          <div
+                                                            className="rounded border"
                                                             style={{
-                                                              width: '100%',
-                                                              height: '100%',
-                                                              objectFit: 'cover',
+                                                              width: 64,
+                                                              height: 64,
+                                                              overflow: 'hidden',
+                                                              cursor: 'pointer',
                                                             }}
-                                                          />
-                                                        </div>
-                                                        <div className="d-flex flex-column align-items-center gap-1 mt-1">
-                                                          <label className="btn btn-link btn-sm p-0">
-                                                            <i className="fas fa-sync-alt me-1"></i>
-                                                            Değiştir
+                                                            title="Fotoğrafı görüntüle"
+                                                            onClick={() => {
+                                                              const url =
+                                                                photoInfo.meta.viewUrl ||
+                                                                photoInfo.meta.thumbnailUrl;
+                                                              if (url) {
+                                                                window.open(url, '_blank', 'noopener');
+                                                              }
+                                                            }}
+                                                          >
+                                                            <img
+                                                              src={
+                                                                photoInfo.meta.localUrl ||
+                                                                photoInfo.meta.thumbnailUrl ||
+                                                                photoInfo.meta.viewUrl
+                                                              }
+                                                              alt="Ürün fotoğrafı"
+                                                              style={{
+                                                                width: '100%',
+                                                                height: '100%',
+                                                                objectFit: 'cover',
+                                                              }}
+                                                            />
+                                                          </div>
+                                                          <div className="d-flex flex-column align-items-center gap-1 mt-1">
+                                                            <label className="btn btn-link btn-sm p-0">
+                                                              <i className="fas fa-sync-alt me-1"></i>
+                                                              Değiştir
+                                                              <input
+                                                                type="file"
+                                                                accept="image/*"
+                                                                className="d-none"
+                                                                disabled={uploadState.loading}
+                                                                onChange={(e) => {
+                                                                  const file =
+                                                                    e.target.files && e.target.files[0];
+                                                                  e.target.value = '';
+                                                                  if (file) {
+                                                                    handlePhotoFileChange(item.stockId, file);
+                                                                  }
+                                                                }}
+                                                              />
+                                                            </label>
+                                                            <button
+                                                              type="button"
+                                                              className="btn btn-link btn-sm text-danger p-0"
+                                                              onClick={() => handleRemovePhoto(item.stockId)}
+                                                            >
+                                                              <i className="fas fa-trash-alt me-1"></i>
+                                                              Kaldır
+                                                            </button>
+                                                          </div>
+                                                        </>
+                                                      ) : (
+                                                        <>
+                                                          <label className="btn btn-outline-secondary btn-sm mb-0">
+                                                            <i className="fas fa-camera me-1"></i>
+                                                            Ekle
                                                             <input
                                                               type="file"
                                                               accept="image/*"
@@ -1993,687 +2062,671 @@ const StockTransferModal = ({ stock, order, onSuccess, onClose, lockToCustomerDe
                                                               }}
                                                             />
                                                           </label>
-                                                          <button
-                                                            type="button"
-                                                            className="btn btn-link btn-sm text-danger p-0"
-                                                            onClick={() => handleRemovePhoto(item.stockId)}
-                                                          >
-                                                            <i className="fas fa-trash-alt me-1"></i>
-                                                            Kaldır
-                                                          </button>
-                                                        </div>
-                                                      </>
-                                                    ) : (
-                                                      <>
-                                                        <label className="btn btn-outline-secondary btn-sm mb-0">
-                                                          <i className="fas fa-camera me-1"></i>
-                                                          Ekle
-                                                          <input
-                                                            type="file"
-                                                            accept="image/*"
-                                                            className="d-none"
-                                                            disabled={uploadState.loading}
-                                                            onChange={(e) => {
-                                                              const file =
-                                                                e.target.files && e.target.files[0];
-                                                              e.target.value = '';
-                                                              if (file) {
-                                                                handlePhotoFileChange(item.stockId, file);
-                                                              }
-                                                            }}
-                                                          />
-                                                        </label>
-                                                        {uploadState.loading && (
-                                                          <small className="text-muted d-block">
-                                                            <span
-                                                              className="spinner-border spinner-border-sm me-1"
-                                                              role="status"
-                                                            />
-                                                            Yükleniyor...
-                                                          </small>
-                                                        )}
-                                                        {uploadState.error && (
-                                                          <small className="text-danger d-block">
-                                                            {uploadState.error}
-                                                          </small>
-                                                        )}
-                                                      </>
-                                                    )}
-                                                  </div>
-                                                </td>
-                                                <td className="text-center">
-                                                  <button
-                                                    type="button"
-                                                    className="btn btn-link text-danger btn-sm"
-                                                    onClick={() => handleRemoveItem(item.stockId)}
-                                                  >
-                                                    <i className="fas fa-trash-alt"></i>
-                                                  </button>
-                                                </td>
-                                              </tr>
-                                            );
-                                          })}
-                                        </tbody>
-                                      </table>
+                                                          {uploadState.loading && (
+                                                            <small className="text-muted d-block">
+                                                              <span
+                                                                className="spinner-border spinner-border-sm me-1"
+                                                                role="status"
+                                                              />
+                                                              Yükleniyor...
+                                                            </small>
+                                                          )}
+                                                          {uploadState.error && (
+                                                            <small className="text-danger d-block">
+                                                              {uploadState.error}
+                                                            </small>
+                                                          )}
+                                                        </>
+                                                      )}
+                                                    </div>
+                                                  </td>
+                                                  <td className="text-center">
+                                                    <button
+                                                      type="button"
+                                                      className="btn btn-link text-danger btn-sm"
+                                                      onClick={() => handleRemoveItem(item.stockId)}
+                                                    >
+                                                      <i className="fas fa-trash-alt"></i>
+                                                    </button>
+                                                  </td>
+                                                </tr>
+                                              );
+                                            })}
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                      <div className="d-flex justify-content-between flex-wrap gap-2 mt-2">
+                                        <span className="badge bg-light text-dark">
+                                          <i className="fas fa-layer-group me-1"></i>
+                                          {transferItems.length} farklı ürün
+                                        </span>
+                                        <span className="badge bg-primary">
+                                          <i className="fas fa-boxes me-1"></i>
+                                          Toplam {totalTransferQuantity} adet
+                                        </span>
+                                      </div>
+                                    </>
+                                  )}
+                                  {validationErrors.transferItems && (
+                                    <div className="text-danger mt-2">
+                                      <i className="fas fa-exclamation-circle me-1"></i>
+                                      {validationErrors.transferItems}
                                     </div>
-                                    <div className="d-flex justify-content-between flex-wrap gap-2 mt-2">
-                                      <span className="badge bg-light text-dark">
-                                        <i className="fas fa-layer-group me-1"></i>
-                                        {transferItems.length} farklı ürün
-                                      </span>
-                                      <span className="badge bg-primary">
-                                        <i className="fas fa-boxes me-1"></i>
-                                        Toplam {totalTransferQuantity} adet
-                                      </span>
-                                    </div>
-                                  </>
-                                )}
-                                {validationErrors.transferItems && (
-                                  <div className="text-danger mt-2">
-                                    <i className="fas fa-exclamation-circle me-1"></i>
-                                    {validationErrors.transferItems}
-                                  </div>
-                                )}
-                              </div>
-                            </>
-                          )}
+                                  )}
+                                </div>
+                              </>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    <div className="col-12 mt-3">
-                      <div className="alert alert-info d-flex align-items-start">
-                        <i className="fas fa-lightbulb fa-2x me-3 mt-1"></i>
-                        <div>
-                          <strong>İpucu:</strong>{' '}
-                          {isCustomerTransfer ? (
-                            <>
-                              Müşteri sevkiyatlarında stok yalnızca kaynak depodan düşer ve teslimat bilgileri
-                              kayıt altına alınır. Şoför ve müşteri iletişim bilgilerini doğru girdiğinizden
-                              emin olun.
-                            </>
-                          ) : (
-                            <>
-                              Transfer işlemi, kaynak depodaki stoğu azaltıp hedef depodaki stoğu
-                              artıracaktır. Stok, transfer yolda iken rezerve edilir.
-                            </>
-                          )}
+                      <div className="col-12 mt-3">
+                        <div className="alert alert-info d-flex align-items-start">
+                          <i className="fas fa-lightbulb fa-2x me-3 mt-1"></i>
+                          <div>
+                            <strong>İpucu:</strong>{' '}
+                            {isCustomerTransfer ? (
+                              <>
+                                Müşteri sevkiyatlarında stok yalnızca kaynak depodan düşer ve teslimat
+                                bilgileri kayıt altına alınır. Şoför ve müşteri iletişim bilgilerini doğru
+                                girdiğinizden emin olun.
+                              </>
+                            ) : (
+                              <>
+                                Transfer işlemi, kaynak depodaki stoğu azaltıp hedef depodaki stoğu
+                                artıracaktır. Stok, transfer yolda iken rezerve edilir.
+                              </>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {/* Step 2: Driver & Vehicle Info */}
-              {currentStep === 2 && (
-                <div style={{ animation: 'fadeIn 0.3s ease-in' }}>
-                  <h5 className="mb-3 text-primary">
-                    <i className="fas fa-truck me-2"></i>
-                    Taşıma Bilgilerini Girin
-                  </h5>
+                {/* Step 2: Driver & Vehicle Info */}
+                {currentStep === 2 && (
+                  <div style={{ animation: 'fadeIn 0.3s ease-in' }}>
+                    <h5 className="mb-3 text-primary">
+                      <i className="fas fa-truck me-2"></i>
+                      Taşıma Bilgilerini Girin
+                    </h5>
 
-                  <div className="row g-3">
-                    <div className="col-md-6">
-                      <label className="form-label fw-bold">
-                        <i className="fas fa-user me-1"></i>
-                        Şoför Adı Soyadı *
-                      </label>
-                      <input
-                        type="text"
-                        className={`form-control form-control-lg ${validationErrors.driverName ? 'is-invalid' : formData.driverName.trim().length >= 3 ? 'is-valid' : ''}`}
-                        name="driverName"
-                        value={formData.driverName}
-                        onChange={handleChange}
-                        required
-                        placeholder="Örn: Ahmet Yılmaz"
-                        minLength="3"
-                        maxLength="100"
-                      />
-                      {validationErrors.driverName && (
-                        <div className="invalid-feedback">{validationErrors.driverName}</div>
-                      )}
-                    </div>
-
-                    <div className="col-md-6">
-                      <label className="form-label fw-bold">
-                        <i className="fas fa-id-card me-1"></i>
-                        TC Kimlik Numarası *
-                      </label>
-                      <input
-                        type="text"
-                        className={`form-control form-control-lg ${validationErrors.driverTcId ? 'is-invalid' : /^[0-9]{11}$/.test(formData.driverTcId) ? 'is-valid' : ''}`}
-                        name="driverTcId"
-                        value={formData.driverTcId}
-                        onChange={handleChange}
-                        required
-                        placeholder="00000000000"
-                        pattern="[0-9]{11}"
-                        maxLength="11"
-                      />
-                      {validationErrors.driverTcId && (
-                        <div className="invalid-feedback">{validationErrors.driverTcId}</div>
-                      )}
-                      {!validationErrors.driverTcId && formData.driverTcId && (
-                        <small className="text-muted">{formData.driverTcId.length}/11 rakam</small>
-                      )}
-                    </div>
-
-                    <div className="col-md-6">
-                      <label className="form-label fw-bold">
-                        <i className="fas fa-phone me-1"></i>
-                        Şoför Telefonu *
-                      </label>
-                      <div className="input-group input-group-lg phone-input-group">
-                        <span className="input-group-text">+90</span>
+                    <div className="row g-3">
+                      <div className="col-md-6">
+                        <label className="form-label fw-bold">
+                          <i className="fas fa-user me-1"></i>
+                          Şoför Adı Soyadı *
+                        </label>
                         <input
-                          type="tel"
-                          className={`form-control ${getPhoneValidationClass(formData.driverPhone, validationErrors.driverPhone)}`}
-                          name="driverPhone"
-                          value={formatPhoneInputValue(formData.driverPhone)}
-                          onChange={(e) => handlePhoneInput('driverPhone', e.target.value)}
+                          type="text"
+                          className={`form-control form-control-lg ${validationErrors.driverName ? 'is-invalid' : formData.driverName.trim().length >= 3 ? 'is-valid' : ''}`}
+                          name="driverName"
+                          value={formData.driverName}
+                          onChange={handleChange}
                           required
-                          placeholder={PHONE_PLACEHOLDER}
-                          maxLength="13"
-                          inputMode="numeric"
+                          placeholder="Örn: Ahmet Yılmaz"
+                          minLength="3"
+                          maxLength="100"
+                        />
+                        {validationErrors.driverName && (
+                          <div className="invalid-feedback">{validationErrors.driverName}</div>
+                        )}
+                      </div>
+
+                      <div className="col-md-6">
+                        <label className="form-label fw-bold">
+                          <i className="fas fa-id-card me-1"></i>
+                          TC Kimlik Numarası *
+                        </label>
+                        <input
+                          type="text"
+                          className={`form-control form-control-lg ${validationErrors.driverTcId ? 'is-invalid' : /^[0-9]{11}$/.test(formData.driverTcId) ? 'is-valid' : ''}`}
+                          name="driverTcId"
+                          value={formData.driverTcId}
+                          onChange={handleChange}
+                          required
+                          placeholder="00000000000"
+                          pattern="[0-9]{11}"
+                          maxLength="11"
+                        />
+                        {validationErrors.driverTcId && (
+                          <div className="invalid-feedback">{validationErrors.driverTcId}</div>
+                        )}
+                        {!validationErrors.driverTcId && formData.driverTcId && (
+                          <small className="text-muted">{formData.driverTcId.length}/11 rakam</small>
+                        )}
+                      </div>
+
+                      <div className="col-md-6">
+                        <label className="form-label fw-bold">
+                          <i className="fas fa-phone me-1"></i>
+                          Şoför Telefonu *
+                        </label>
+                        <div className="input-group input-group-lg phone-input-group">
+                          <span className="input-group-text">+90</span>
+                          <input
+                            type="tel"
+                            className={`form-control ${getPhoneValidationClass(formData.driverPhone, validationErrors.driverPhone)}`}
+                            name="driverPhone"
+                            value={formatPhoneInputValue(formData.driverPhone)}
+                            onChange={(e) => handlePhoneInput('driverPhone', e.target.value)}
+                            required
+                            placeholder={PHONE_PLACEHOLDER}
+                            maxLength="13"
+                            inputMode="numeric"
+                          />
+                        </div>
+                        {validationErrors.driverPhone && (
+                          <div className="invalid-feedback">{validationErrors.driverPhone}</div>
+                        )}
+                      </div>
+
+                      <div className="col-md-6">
+                        <label className="form-label fw-bold">
+                          <i className="fas fa-car me-1"></i>
+                          Araç Plakası *
+                        </label>
+                        <input
+                          type="text"
+                          className={`form-control form-control-lg text-uppercase ${validationErrors.vehiclePlate ? 'is-invalid' : formData.vehiclePlate.trim().length >= 2 ? 'is-valid' : ''}`}
+                          name="vehiclePlate"
+                          value={formData.vehiclePlate}
+                          onChange={handleChange}
+                          required
+                          placeholder="34 ABC 123"
+                          minLength="2"
+                          maxLength="20"
+                        />
+                        {validationErrors.vehiclePlate && (
+                          <div className="invalid-feedback">{validationErrors.vehiclePlate}</div>
+                        )}
+                      </div>
+
+                      <div className="col-md-6">
+                        <label className="form-label fw-bold">
+                          <i className="fas fa-calendar-alt me-1"></i>
+                          Transfer Tarihi
+                        </label>
+                        <input
+                          type="datetime-local"
+                          className="form-control form-control-lg"
+                          name="transferDate"
+                          value={formData.transferDate}
+                          onChange={handleChange}
+                          required
                         />
                       </div>
-                      {validationErrors.driverPhone && (
-                        <div className="invalid-feedback">{validationErrors.driverPhone}</div>
-                      )}
-                    </div>
 
-                    <div className="col-md-6">
-                      <label className="form-label fw-bold">
-                        <i className="fas fa-car me-1"></i>
-                        Araç Plakası *
-                      </label>
-                      <input
-                        type="text"
-                        className={`form-control form-control-lg text-uppercase ${validationErrors.vehiclePlate ? 'is-invalid' : formData.vehiclePlate.trim().length >= 2 ? 'is-valid' : ''}`}
-                        name="vehiclePlate"
-                        value={formData.vehiclePlate}
-                        onChange={handleChange}
-                        required
-                        placeholder="34 ABC 123"
-                        minLength="2"
-                        maxLength="20"
-                      />
-                      {validationErrors.vehiclePlate && (
-                        <div className="invalid-feedback">{validationErrors.vehiclePlate}</div>
-                      )}
-                    </div>
-
-                    <div className="col-md-6">
-                      <label className="form-label fw-bold">
-                        <i className="fas fa-calendar-alt me-1"></i>
-                        Transfer Tarihi
-                      </label>
-                      <input
-                        type="datetime-local"
-                        className="form-control form-control-lg"
-                        name="transferDate"
-                        value={formData.transferDate}
-                        onChange={handleChange}
-                        required
-                      />
-                    </div>
-
-                    <div className="col-12">
-                      <label className="form-label fw-bold">
-                        <i className="fas fa-sticky-note me-1"></i>
-                        Notlar (Opsiyonel)
-                      </label>
-                      <textarea
-                        className="form-control"
-                        name="notes"
-                        value={formData.notes}
-                        onChange={handleChange}
-                        rows="3"
-                        placeholder="Transfer ile ilgili ek bilgiler..."
-                        maxLength="500"
-                      ></textarea>
-                      <small className="text-muted float-end">{formData.notes.length}/500</small>
+                      <div className="col-12">
+                        <label className="form-label fw-bold">
+                          <i className="fas fa-sticky-note me-1"></i>
+                          Notlar (Opsiyonel)
+                        </label>
+                        <textarea
+                          className="form-control"
+                          name="notes"
+                          value={formData.notes}
+                          onChange={handleChange}
+                          rows="3"
+                          placeholder="Transfer ile ilgili ek bilgiler..."
+                          maxLength="500"
+                        ></textarea>
+                        <small className="text-muted float-end">{formData.notes.length}/500</small>
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {/* Step 3: Summary & Confirm */}
-              {currentStep === 3 && !submitSuccess && (
-                <div style={{ animation: 'fadeIn 0.3s ease-in' }}>
-                  {loading ? (
-                    <div className="py-4">
-                      <div className="text-center mb-4">
-                        <div
-                          className="spinner-border text-primary mb-3"
-                          style={{ width: '3.5rem', height: '3.5rem' }}
-                          role="status"
-                        >
-                          <span className="visually-hidden">Yükleniyor...</span>
-                        </div>
-                        <h4 className="text-primary mb-2">
-                          <i className="fas fa-cog fa-spin me-2"></i>
-                          Transfer Oluşturuluyor...
-                        </h4>
-                        <p className="text-muted mb-3">Transfer kaydı sisteme ekleniyor, lütfen bekleyin.</p>
-                        <div className="progress mx-auto" style={{ maxWidth: '500px', height: '8px' }}>
+                {/* Step 3: Summary & Confirm */}
+                {currentStep === 3 && !submitSuccess && (
+                  <div style={{ animation: 'fadeIn 0.3s ease-in' }}>
+                    {loading ? (
+                      <div className="py-4">
+                        <div className="text-center mb-4">
                           <div
-                            className="progress-bar progress-bar-striped progress-bar-animated bg-primary"
-                            role="progressbar"
-                            style={{ width: '100%' }}
-                          ></div>
-                        </div>
-                      </div>
-
-                      {/* Show summary while loading */}
-                      <div className="row g-2 mt-3">
-                        <div className="col-md-4">
-                          <div className="card border-danger h-100">
-                            <div className="card-body text-center py-3">
-                              <i className="fas fa-warehouse text-danger fa-2x mb-2"></i>
-                              <div className="small text-muted">Kaynak</div>
-                              <div className="fw-bold">{sourceWarehouse?.name}</div>
-                            </div>
+                            className="spinner-border text-primary mb-3"
+                            style={{ width: '3.5rem', height: '3.5rem' }}
+                            role="status"
+                          >
+                            <span className="visually-hidden">Yükleniyor...</span>
                           </div>
-                        </div>
-                        <div className="col-md-4">
-                          <div className="card border-success h-100">
-                            <div className="card-body text-center py-3">
-                              <i className="fas fa-warehouse text-success fa-2x mb-2"></i>
-                              <div className="small text-muted">Hedef</div>
-                              <div className="fw-bold">{destinationWarehouse?.name}</div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="col-md-4">
-                          <div className="card border-primary h-100">
-                            <div className="card-body text-center py-3">
-                              <i className="fas fa-boxes text-primary fa-2x mb-2"></i>
-                              <div className="small text-muted">Miktar</div>
-                              <div className="fw-bold fs-5">{totalTransferQuantity} Adet</div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="alert alert-primary d-flex align-items-center mb-4">
-                        <div className="flex-shrink-0">
-                          <i className="fas fa-info-circle fa-2x me-3"></i>
-                        </div>
-                        <div>
-                          <h5 className="alert-heading mb-1">
-                            <i className="fas fa-clipboard-check me-2"></i>
-                            Transfer Özeti
-                          </h5>
-                          <p className="mb-0">
-                            Lütfen transfer bilgilerini dikkatlice kontrol edin. Onayladığınızda transfer
-                            işlemi başlatılacaktır.
+                          <h4 className="text-primary mb-2">
+                            <i className="fas fa-cog fa-spin me-2"></i>
+                            Transfer Oluşturuluyor...
+                          </h4>
+                          <p className="text-muted mb-3">
+                            Transfer kaydı sisteme ekleniyor, lütfen bekleyin.
                           </p>
+                          <div className="progress mx-auto" style={{ maxWidth: '500px', height: '8px' }}>
+                            <div
+                              className="progress-bar progress-bar-striped progress-bar-animated bg-primary"
+                              role="progressbar"
+                              style={{ width: '100%' }}
+                            ></div>
+                          </div>
+                        </div>
+
+                        {/* Show summary while loading */}
+                        <div className="row g-2 mt-3">
+                          <div className="col-md-4">
+                            <div className="card border-danger h-100">
+                              <div className="card-body text-center py-3">
+                                <i className="fas fa-warehouse text-danger fa-2x mb-2"></i>
+                                <div className="small text-muted">Kaynak</div>
+                                <div className="fw-bold">{sourceWarehouse?.name}</div>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="col-md-4">
+                            <div className="card border-success h-100">
+                              <div className="card-body text-center py-3">
+                                <i className="fas fa-warehouse text-success fa-2x mb-2"></i>
+                                <div className="small text-muted">Hedef</div>
+                                <div className="fw-bold">{destinationWarehouse?.name}</div>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="col-md-4">
+                            <div className="card border-primary h-100">
+                              <div className="card-body text-center py-3">
+                                <i className="fas fa-boxes text-primary fa-2x mb-2"></i>
+                                <div className="small text-muted">Miktar</div>
+                                <div className="fw-bold fs-5">{totalTransferQuantity} Adet</div>
+                              </div>
+                            </div>
+                          </div>
                         </div>
                       </div>
-
-                      <div className="row g-3">
-                        <div className="col-md-6">
-                          <div className="card h-100 border-danger">
-                            <div className="card-header bg-danger text-white">
-                              <i className="fas fa-warehouse me-2"></i>
-                              Kaynak Depo
-                            </div>
-                            <div className="card-body">
-                              <h6 className="fw-bold">{sourceWarehouse?.name}</h6>
-                              <p className="mb-0 text-muted small">
-                                <i className="fas fa-map-marker-alt me-1"></i>
-                                {sourceWarehouse?.location}
-                              </p>
-                            </div>
+                    ) : (
+                      <>
+                        <div className="alert alert-primary d-flex align-items-center mb-4">
+                          <div className="flex-shrink-0">
+                            <i className="fas fa-info-circle fa-2x me-3"></i>
+                          </div>
+                          <div>
+                            <h5 className="alert-heading mb-1">
+                              <i className="fas fa-clipboard-check me-2"></i>
+                              Transfer Özeti
+                            </h5>
+                            <p className="mb-0">
+                              Lütfen transfer bilgilerini dikkatlice kontrol edin. Onayladığınızda transfer
+                              işlemi başlatılacaktır.
+                            </p>
                           </div>
                         </div>
 
-                        <div className="col-md-6">
-                          <div className={`card h-100 border-${isCustomerTransfer ? 'info' : 'success'}`}>
-                            <div
-                              className={`card-header text-white bg-${isCustomerTransfer ? 'info' : 'success'}`}
-                            >
-                              <i
-                                className={`fas ${isCustomerTransfer ? 'fa-user-tag' : 'fa-warehouse'} me-2`}
-                              ></i>
-                              {isCustomerTransfer ? 'Müşteri Bilgileri' : 'Hedef Depo'}
-                            </div>
-                            <div className="card-body">
-                              {isCustomerTransfer ? (
-                                <>
-                                  <h6 className="fw-bold">{formData.customerFullName}</h6>
-                                  <p className="mb-1 text-muted small">
-                                    <i className="fas fa-phone me-1"></i>
-                                    {formattedCustomerPhone || '-'}
-                                  </p>
-                                  <p className="mb-0 text-muted small">
-                                    <i className="fas fa-map-marker-alt me-1"></i>
-                                    {formData.customerAddress}
-                                  </p>
-                                </>
-                              ) : (
-                                <>
-                                  <h6 className="fw-bold">{destinationWarehouse?.name}</h6>
-                                  <p className="mb-0 text-muted small">
-                                    <i className="fas fa-map-marker-alt me-1"></i>
-                                    {destinationWarehouse?.location}
-                                  </p>
-                                </>
-                              )}
+                        <div className="row g-3">
+                          <div className="col-md-6">
+                            <div className="card h-100 border-danger">
+                              <div className="card-header bg-danger text-white">
+                                <i className="fas fa-warehouse me-2"></i>
+                                Kaynak Depo
+                              </div>
+                              <div className="card-body">
+                                <h6 className="fw-bold">{sourceWarehouse?.name}</h6>
+                                <p className="mb-0 text-muted small">
+                                  <i className="fas fa-map-marker-alt me-1"></i>
+                                  {sourceWarehouse?.location}
+                                </p>
+                              </div>
                             </div>
                           </div>
-                        </div>
 
-                        <div className="col-12">
-                          <div className="card border-primary">
-                            <div className="card-header bg-primary text-white">
-                              <i className="fas fa-box me-2"></i>
-                              Ürün Detayları
+                          <div className="col-md-6">
+                            <div className={`card h-100 border-${isCustomerTransfer ? 'info' : 'success'}`}>
+                              <div
+                                className={`card-header text-white bg-${isCustomerTransfer ? 'info' : 'success'}`}
+                              >
+                                <i
+                                  className={`fas ${isCustomerTransfer ? 'fa-user-tag' : 'fa-warehouse'} me-2`}
+                                ></i>
+                                {isCustomerTransfer ? 'Müşteri Bilgileri' : 'Hedef Depo'}
+                              </div>
+                              <div className="card-body">
+                                {isCustomerTransfer ? (
+                                  <>
+                                    <h6 className="fw-bold">{formData.customerFullName}</h6>
+                                    <p className="mb-1 text-muted small">
+                                      <i className="fas fa-phone me-1"></i>
+                                      {formattedCustomerPhone || '-'}
+                                    </p>
+                                    <p className="mb-0 text-muted small">
+                                      <i className="fas fa-map-marker-alt me-1"></i>
+                                      {formData.customerAddress}
+                                    </p>
+                                  </>
+                                ) : (
+                                  <>
+                                    <h6 className="fw-bold">{destinationWarehouse?.name}</h6>
+                                    <p className="mb-0 text-muted small">
+                                      <i className="fas fa-map-marker-alt me-1"></i>
+                                      {destinationWarehouse?.location}
+                                    </p>
+                                  </>
+                                )}
+                              </div>
                             </div>
-                            <div className="card-body">
-                              {transferItems.length === 0 ? (
-                                <div className="text-muted">
-                                  <i className="fas fa-box-open me-2"></i>
-                                  Ürün seçimi yapılmadı.
-                                </div>
-                              ) : (
-                                <div className="table-responsive">
-                                  <table className="table table-sm align-middle mb-0">
-                                    <thead className="table-light">
-                                      <tr>
-                                        <th>Ürün</th>
-                                        <th>SKU</th>
-                                        <th className="text-center">Miktar</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody>
-                                      {transferItems.map((item) => (
-                                        <tr key={item.stockId || item.productId}>
-                                          <td>{item.productName}</td>
-                                          <td>
-                                            <span className="badge bg-light text-dark">{item.sku}</span>
-                                          </td>
-                                          <td className="text-center">
-                                            <span className="badge bg-primary">{item.quantity}</span>
-                                          </td>
-                                        </tr>
-                                      ))}
-                                    </tbody>
-                                  </table>
-                                  <div className="text-end mt-2">
-                                    <strong>Toplam: {totalTransferQuantity} adet</strong>
+                          </div>
+
+                          <div className="col-12">
+                            <div className="card border-primary">
+                              <div className="card-header bg-primary text-white">
+                                <i className="fas fa-box me-2"></i>
+                                Ürün Detayları
+                              </div>
+                              <div className="card-body">
+                                {transferItems.length === 0 ? (
+                                  <div className="text-muted">
+                                    <i className="fas fa-box-open me-2"></i>
+                                    Ürün seçimi yapılmadı.
                                   </div>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="col-12">
-                          <div className="card border-info">
-                            <div className="card-header bg-info text-white">
-                              <i className="fas fa-truck me-2"></i>
-                              Taşıma Bilgileri
-                            </div>
-                            <div className="card-body">
-                              <div className="row">
-                                <div className="col-md-6 mb-2">
-                                  <i className="fas fa-user me-2 text-muted"></i>
-                                  <strong>Şoför:</strong> {formData.driverName}
-                                </div>
-                                <div className="col-md-6 mb-2">
-                                  <i className="fas fa-id-card me-2 text-muted"></i>
-                                  <strong>TC:</strong> {formData.driverTcId}
-                                </div>
-                                <div className="col-md-6 mb-2">
-                                  <i className="fas fa-phone me-2 text-muted"></i>
-                                  <strong>Telefon:</strong> {formattedDriverPhone || '-'}
-                                </div>
-                                <div className="col-md-6 mb-2">
-                                  <i className="fas fa-car me-2 text-muted"></i>
-                                  <strong>Plaka:</strong> {formData.vehiclePlate.toUpperCase()}
-                                </div>
-                                {formData.notes && (
-                                  <div className="col-12 mt-2">
-                                    <i className="fas fa-sticky-note me-2 text-muted"></i>
-                                    <strong>Notlar:</strong>
-                                    <p className="mb-0 text-muted">{formData.notes}</p>
+                                ) : (
+                                  <div className="table-responsive">
+                                    <table className="table table-sm align-middle mb-0">
+                                      <thead className="table-light">
+                                        <tr>
+                                          <th>Ürün</th>
+                                          <th>SKU</th>
+                                          <th className="text-center">Miktar</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {transferItems.map((item) => (
+                                          <tr key={item.stockId || item.productId}>
+                                            <td>{item.productName}</td>
+                                            <td>
+                                              <span className="badge bg-light text-dark">{item.sku}</span>
+                                            </td>
+                                            <td className="text-center">
+                                              <span className="badge bg-primary">{item.quantity}</span>
+                                            </td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                    <div className="text-end mt-2">
+                                      <strong>Toplam: {totalTransferQuantity} adet</strong>
+                                    </div>
                                   </div>
                                 )}
                               </div>
                             </div>
                           </div>
-                        </div>
 
-                        <div className="col-12">
-                          <div className="alert alert-warning">
-                            <i className="fas fa-exclamation-triangle me-2"></i>
-                            <strong>Dikkat:</strong> Transfer onaylandığında, kaynak depodaki stok rezerve
-                            edilecektir.
+                          <div className="col-12">
+                            <div className="card border-info">
+                              <div className="card-header bg-info text-white">
+                                <i className="fas fa-truck me-2"></i>
+                                Taşıma Bilgileri
+                              </div>
+                              <div className="card-body">
+                                <div className="row">
+                                  <div className="col-md-6 mb-2">
+                                    <i className="fas fa-user me-2 text-muted"></i>
+                                    <strong>Şoför:</strong> {formData.driverName}
+                                  </div>
+                                  <div className="col-md-6 mb-2">
+                                    <i className="fas fa-id-card me-2 text-muted"></i>
+                                    <strong>TC:</strong> {formData.driverTcId}
+                                  </div>
+                                  <div className="col-md-6 mb-2">
+                                    <i className="fas fa-phone me-2 text-muted"></i>
+                                    <strong>Telefon:</strong> {formattedDriverPhone || '-'}
+                                  </div>
+                                  <div className="col-md-6 mb-2">
+                                    <i className="fas fa-car me-2 text-muted"></i>
+                                    <strong>Plaka:</strong> {formData.vehiclePlate.toUpperCase()}
+                                  </div>
+                                  {formData.notes && (
+                                    <div className="col-12 mt-2">
+                                      <i className="fas fa-sticky-note me-2 text-muted"></i>
+                                      <strong>Notlar:</strong>
+                                      <p className="mb-0 text-muted">{formData.notes}</p>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="col-12">
+                            <div className="alert alert-warning">
+                              <i className="fas fa-exclamation-triangle me-2"></i>
+                              <strong>Dikkat:</strong> Transfer onaylandığında, kaynak depodaki stok rezerve
+                              edilecektir.
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </>
-                  )}
-                </div>
-              )}
-
-              {/* Step 4: Success */}
-              {currentStep === 4 && submitSuccess && (
-                <div style={{ animation: 'fadeIn 0.3s ease-in' }} className="text-center py-5">
-                  <div className="mb-4">
-                    <div
-                      className="mx-auto rounded-circle bg-success bg-opacity-10 d-inline-flex align-items-center justify-content-center"
-                      style={{ width: '120px', height: '120px' }}
-                    >
-                      <i className="fas fa-check-circle text-success" style={{ fontSize: '4rem' }}></i>
-                    </div>
-                  </div>
-
-                  <h3 className="text-success mb-3">
-                    <i className="fas fa-check-double me-2"></i>
-                    {submitSuccess?.isApprovalRequest
-                      ? 'Transfer Talebi Başarıyla Oluşturuldu!'
-                      : 'Transfer Başarıyla Oluşturuldu!'}
-                  </h3>
-
-                  <p className="text-muted mb-4">
-                    {submitSuccess?.isApprovalRequest ? (
-                      <>
-                        Transfer talebi <strong>#{createdTransferId}</strong> numarası ile sisteme başarıyla
-                        kaydedildi.
-                        <br />
-                        <strong className="text-warning">Yönetici onayı bekleniyor.</strong>
-                      </>
-                    ) : (
-                      <>
-                        Transfer kaydı <strong>#{createdTransferId}</strong> numarası ile sisteme başarıyla
-                        kaydedildi.
                       </>
                     )}
-                  </p>
-
-                  <div className="row g-3 mb-4">
-                    <div className="col-md-4">
-                      <div className="card border-primary">
-                        <div className="card-body">
-                          <div className="d-flex align-items-center">
-                            <div className="bg-primary bg-opacity-10 rounded-circle p-3 me-3">
-                              <i className="fas fa-warehouse text-primary fa-lg"></i>
-                            </div>
-                            <div className="text-start">
-                              <small className="text-muted d-block">Kaynak</small>
-                              <strong className="text-truncate d-block">{sourceWarehouse?.name}</strong>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="col-md-4">
-                      <div className="card border-success">
-                        <div className="card-body">
-                          <div className="d-flex align-items-center">
-                            <div className="bg-success bg-opacity-10 rounded-circle p-3 me-3">
-                              <i
-                                className={`fas ${isCustomerTransfer ? 'fa-user-tag' : 'fa-warehouse'} text-success fa-lg`}
-                              ></i>
-                            </div>
-                            <div className="text-start">
-                              <small className="text-muted d-block">
-                                {isCustomerTransfer ? 'Müşteri' : 'Hedef'}
-                              </small>
-                              <strong className="text-truncate d-block">
-                                {isCustomerTransfer ? formData.customerFullName : destinationWarehouse?.name}
-                              </strong>
-                              {isCustomerTransfer && (
-                                <small className="text-muted d-block text-truncate">
-                                  {formattedCustomerPhone}
-                                </small>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="col-md-4">
-                      <div className="card border-info">
-                        <div className="card-body">
-                          <div className="d-flex align-items-center">
-                            <div className="bg-info bg-opacity-10 rounded-circle p-3 me-3">
-                              <i className="fas fa-boxes text-info fa-lg"></i>
-                            </div>
-                            <div className="text-start">
-                              <small className="text-muted d-block">Miktar</small>
-                              <strong className="fs-5">{totalTransferQuantity} Adet</strong>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
                   </div>
+                )}
 
-                  <div
-                    className={`alert ${submitSuccess?.isApprovalRequest ? 'alert-warning' : 'alert-info'} d-flex align-items-start`}
-                  >
-                    <i
-                      className={`fas ${submitSuccess?.isApprovalRequest ? 'fa-clock' : 'fa-info-circle'} fa-2x me-3 mt-1`}
-                    ></i>
-                    <div className="text-start">
-                      <strong>
-                        {submitSuccess?.isApprovalRequest ? 'Onay Bekleniyor:' : 'Sonraki Adımlar:'}
-                      </strong>
-                      <ul className="mb-0 mt-2 text-start">
-                        {submitSuccess?.isApprovalRequest ? (
-                          <>
-                            <li>Transfer talebiniz yönetici onayına gönderildi</li>
-                            <li>Onay durumunu "Taleplerim" bölümünden takip edebilirsiniz</li>
-                            <li>Yönetici onayladıktan sonra transfer başlayacak</li>
-                            <li>
-                              Şoför: <strong>{formData.driverName}</strong>
-                            </li>
-                            <li>
-                              Araç plakası: <strong>{formData.vehiclePlate}</strong>
-                            </li>
-                          </>
-                        ) : (
-                          <>
-                            <li>Transfer "Transfer Geçmişi" bölümünden takip edilebilir</li>
-                            <li>
-                              Şoför <strong>{formData.driverName}</strong> transferi teslim alabilir
-                            </li>
-                            <li>
-                              Araç plakası: <strong>{formData.vehiclePlate}</strong>
-                            </li>
-                            <li>
-                              Transfer durumunu güncellemek için "Yola Çıkar" veya "Tamamla" butonlarını
-                              kullanabilirsiniz
-                            </li>
-                            {isCustomerTransfer && (
-                              <li>
-                                Müşteri: <strong>{formData.customerFullName}</strong> (
-                                {formattedCustomerPhone || '-'})
-                              </li>
-                            )}
-                          </>
-                        )}
-                      </ul>
+                {/* Step 4: Success */}
+                {currentStep === 4 && submitSuccess && (
+                  <div style={{ animation: 'fadeIn 0.3s ease-in' }} className="text-center py-5">
+                    <div className="mb-4">
+                      <div
+                        className="mx-auto rounded-circle bg-success bg-opacity-10 d-inline-flex align-items-center justify-content-center"
+                        style={{ width: '120px', height: '120px' }}
+                      >
+                        <i className="fas fa-check-circle text-success" style={{ fontSize: '4rem' }}></i>
+                      </div>
                     </div>
-                  </div>
-                </div>
-              )}
-            </div>
 
-            <div className="modal-footer bg-light">
-              {submitSuccess ? (
-                // Success step buttons
-                <button type="button" className="btn btn-success px-5" onClick={handleClose}>
-                  <i className="fas fa-check me-2"></i>
-                  Tamam, Kapat
-                </button>
-              ) : (
-                // Normal flow buttons
-                <>
-                  {currentStep > 1 && (
-                    <button
-                      type="button"
-                      className="btn btn-outline-secondary"
-                      onClick={handlePrevious}
-                      disabled={loading}
-                    >
-                      <i className="fas fa-arrow-left me-2"></i>
-                      Geri
-                    </button>
-                  )}
+                    <h3 className="text-success mb-3">
+                      <i className="fas fa-check-double me-2"></i>
+                      {submitSuccess?.isApprovalRequest
+                        ? 'Transfer Talebi Başarıyla Oluşturuldu!'
+                        : 'Transfer Başarıyla Oluşturuldu!'}
+                    </h3>
 
-                  <button type="button" className="btn btn-secondary" onClick={onClose} disabled={loading}>
-                    <i className="fas fa-times me-2"></i>
-                    İptal
-                  </button>
-
-                  {currentStep < 3 ? (
-                    <button
-                      type="button"
-                      className="btn btn-primary px-4"
-                      onClick={handleNext}
-                      disabled={loadingData}
-                    >
-                      İleri
-                      <i className="fas fa-arrow-right ms-2"></i>
-                    </button>
-                  ) : (
-                    <button
-                      type="submit"
-                      className="btn btn-success btn-lg px-5"
-                      disabled={loading || loadingData || totalTransferQuantity === 0}
-                    >
-                      {loading ? (
+                    <p className="text-muted mb-4">
+                      {submitSuccess?.isApprovalRequest ? (
                         <>
-                          <span
-                            className="spinner-border spinner-border-sm me-2"
-                            role="status"
-                            aria-hidden="true"
-                          ></span>
-                          Lütfen Bekleyin...
+                          Transfer talebi <strong>#{createdTransferId}</strong> numarası ile sisteme başarıyla
+                          kaydedildi.
+                          <br />
+                          <strong className="text-warning">Yönetici onayı bekleniyor.</strong>
                         </>
                       ) : (
                         <>
-                          <i className="fas fa-check-double me-2"></i>
-                          Transferi Onayla ve Oluştur
+                          Transfer kaydı <strong>#{createdTransferId}</strong> numarası ile sisteme başarıyla
+                          kaydedildi.
                         </>
                       )}
+                    </p>
+
+                    <div className="row g-3 mb-4">
+                      <div className="col-md-4">
+                        <div className="card border-primary">
+                          <div className="card-body">
+                            <div className="d-flex align-items-center">
+                              <div className="bg-primary bg-opacity-10 rounded-circle p-3 me-3">
+                                <i className="fas fa-warehouse text-primary fa-lg"></i>
+                              </div>
+                              <div className="text-start">
+                                <small className="text-muted d-block">Kaynak</small>
+                                <strong className="text-truncate d-block">{sourceWarehouse?.name}</strong>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="col-md-4">
+                        <div className="card border-success">
+                          <div className="card-body">
+                            <div className="d-flex align-items-center">
+                              <div className="bg-success bg-opacity-10 rounded-circle p-3 me-3">
+                                <i
+                                  className={`fas ${isCustomerTransfer ? 'fa-user-tag' : 'fa-warehouse'} text-success fa-lg`}
+                                ></i>
+                              </div>
+                              <div className="text-start">
+                                <small className="text-muted d-block">
+                                  {isCustomerTransfer ? 'Müşteri' : 'Hedef'}
+                                </small>
+                                <strong className="text-truncate d-block">
+                                  {isCustomerTransfer
+                                    ? formData.customerFullName
+                                    : destinationWarehouse?.name}
+                                </strong>
+                                {isCustomerTransfer && (
+                                  <small className="text-muted d-block text-truncate">
+                                    {formattedCustomerPhone}
+                                  </small>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="col-md-4">
+                        <div className="card border-info">
+                          <div className="card-body">
+                            <div className="d-flex align-items-center">
+                              <div className="bg-info bg-opacity-10 rounded-circle p-3 me-3">
+                                <i className="fas fa-boxes text-info fa-lg"></i>
+                              </div>
+                              <div className="text-start">
+                                <small className="text-muted d-block">Miktar</small>
+                                <strong className="fs-5">{totalTransferQuantity} Adet</strong>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div
+                      className={`alert ${submitSuccess?.isApprovalRequest ? 'alert-warning' : 'alert-info'} d-flex align-items-start`}
+                    >
+                      <i
+                        className={`fas ${submitSuccess?.isApprovalRequest ? 'fa-clock' : 'fa-info-circle'} fa-2x me-3 mt-1`}
+                      ></i>
+                      <div className="text-start">
+                        <strong>
+                          {submitSuccess?.isApprovalRequest ? 'Onay Bekleniyor:' : 'Sonraki Adımlar:'}
+                        </strong>
+                        <ul className="mb-0 mt-2 text-start">
+                          {submitSuccess?.isApprovalRequest ? (
+                            <>
+                              <li>Transfer talebiniz yönetici onayına gönderildi</li>
+                              <li>Onay durumunu "Taleplerim" bölümünden takip edebilirsiniz</li>
+                              <li>Yönetici onayladıktan sonra transfer başlayacak</li>
+                              <li>
+                                Şoför: <strong>{formData.driverName}</strong>
+                              </li>
+                              <li>
+                                Araç plakası: <strong>{formData.vehiclePlate}</strong>
+                              </li>
+                            </>
+                          ) : (
+                            <>
+                              <li>Transfer "Transfer Geçmişi" bölümünden takip edilebilir</li>
+                              <li>
+                                Şoför <strong>{formData.driverName}</strong> transferi teslim alabilir
+                              </li>
+                              <li>
+                                Araç plakası: <strong>{formData.vehiclePlate}</strong>
+                              </li>
+                              <li>
+                                Transfer durumunu güncellemek için "Yola Çıkar" veya "Tamamla" butonlarını
+                                kullanabilirsiniz
+                              </li>
+                              {isCustomerTransfer && (
+                                <li>
+                                  Müşteri: <strong>{formData.customerFullName}</strong> (
+                                  {formattedCustomerPhone || '-'})
+                                </li>
+                              )}
+                            </>
+                          )}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="modal-footer bg-light">
+                {submitSuccess ? (
+                  // Success step buttons
+                  <button type="button" className="btn btn-success px-5" onClick={handleClose}>
+                    <i className="fas fa-check me-2"></i>
+                    Tamam, Kapat
+                  </button>
+                ) : (
+                  // Normal flow buttons
+                  <>
+                    {currentStep > 1 && (
+                      <button
+                        type="button"
+                        className="btn btn-outline-secondary"
+                        onClick={handlePrevious}
+                        disabled={loading}
+                      >
+                        <i className="fas fa-arrow-left me-2"></i>
+                        Geri
+                      </button>
+                    )}
+
+                    <button type="button" className="btn btn-secondary" onClick={onClose} disabled={loading}>
+                      <i className="fas fa-times me-2"></i>
+                      İptal
                     </button>
-                  )}
-                </>
-              )}
-            </div>
-          </form>
+
+                    {currentStep < 3 ? (
+                      <button
+                        type="button"
+                        className="btn btn-primary px-4"
+                        onClick={handleNext}
+                        disabled={loadingData}
+                      >
+                        İleri
+                        <i className="fas fa-arrow-right ms-2"></i>
+                      </button>
+                    ) : (
+                      <button
+                        type="submit"
+                        className="btn btn-success btn-lg px-5"
+                        disabled={loading || activityChecking || loadingData || totalTransferQuantity === 0}
+                      >
+                        {activityChecking ? (
+                          <>
+                            <span
+                              className="spinner-border spinner-border-sm me-2"
+                              role="status"
+                              aria-hidden="true"
+                            ></span>
+                            Müşteri geçmişi kontrol ediliyor...
+                          </>
+                        ) : loading ? (
+                          <>
+                            <span
+                              className="spinner-border spinner-border-sm me-2"
+                              role="status"
+                              aria-hidden="true"
+                            ></span>
+                            Lütfen Bekleyin...
+                          </>
+                        ) : (
+                          <>
+                            <i className="fas fa-check-double me-2"></i>
+                            Transferi Onayla ve Oluştur
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+            </form>
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 };
 

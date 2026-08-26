@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import axios from 'axios';
 import NotesModal from './NotesModal';
 import confirmDialog from '../utils/confirmDialog';
+import { useAdminToast } from './AdminToast';
 
 const statusConfig = {
   PENDING: { label: 'Beklemede', className: 'warning', icon: 'fa-clock' },
@@ -29,6 +30,7 @@ const formatDate = (value) => {
 };
 
 const MyStockRequestsModal = ({ onClose }) => {
+  const toast = useAdminToast();
   const [allRequests, setAllRequests] = useState([]);
   const [filter, setFilter] = useState('PENDING');
   const [loading, setLoading] = useState(true);
@@ -83,7 +85,7 @@ const MyStockRequestsModal = ({ onClose }) => {
       await axios.delete(`/api/stock-requests/${requestId}`);
       await fetchRequests();
     } catch (err) {
-      alert(err.response?.data?.message || 'Talep silinirken hata oluştu');
+      toast.error(err.response?.data?.message || 'Talep silinirken hata oluştu.');
     } finally {
       setDeletingId(null);
     }

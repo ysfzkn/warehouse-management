@@ -75,4 +75,64 @@ public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecific
     @Query("SELECT o FROM Order o LEFT JOIN FETCH o.customer c WHERE o.orderNumber = :orderNumber AND LOWER(c.email) = LOWER(:email)")
     Optional<Order> findByOrderNumberAndCustomerEmail(@Param("orderNumber") String orderNumber,
                                                       @Param("email") String email);
+
+    /**
+     * Excel export source. Status/date are filtered in SQL and the customer is fetch-joined
+     * (single-valued, so the row limit still applies in SQL) — the export used to read the
+     * whole table with {@code PageRequest.of(0, Integer.MAX_VALUE)} and filter in Java.
+     */
+    @Query("SELECT o FROM Order o LEFT JOIN FETCH o.customer " +
+           "WHERE (:status IS NULL OR o.status = :status) " +
+           "AND o.createdAt >= :from AND o.createdAt <= :to ORDER BY o.createdAt DESC")
+    List<Order> findForExport(@Param("status") OrderStatus status,
+                              @Param("from") LocalDateTime from,
+                              @Param("to") LocalDateTime to,
+                              Pageable pageable);
+
+    /**
+     * Orders whose goods have physically left the warehouse recently — the third candidate pool
+     * for the duplicate-delivery check, alongside customer-delivery transfers and manual stock
+     * removals. Filtered by {@code updatedAt} so an old order that shipped this week still
+     * counts; names are matched in Java (see {@link com.warehouse.util.TurkishText}).
+     */
+    @Query("SELECT o FROM Order o LEFT JOIN FETCH o.customer " +
+           "WHERE o.status IN :statuses AND o.updatedAt >= :since ORDER BY o.updatedAt DESC")
+    List<Order> findRecentDispatched(@Param("statuses") java.util.Collection<OrderStatus> statuses,
+                                     @Param("since") LocalDateTime since,
+                                     Pageable pageable);
+
+    // ─── Sales dashboard aggregates ───────────────────────────────────────────
+    // These replace the previous "load every order and filter in Java" approach: the
+    // dashboard polls every 30 seconds, so a full table scan per widget did not scale.
+
+    /** {@code [status, orderCount, revenueSum]} for orders created at or after {@code from}. */
+    @Query("SELECT o.status, COUNT(o), COALESCE(SUM(o.grandTotal), 0) FROM Order o " +
+           "WHERE o.createdAt >= :from GROUP BY o.status")
+    List<Object[]> aggregateByStatusSince(@Param("from") LocalDateTime from);
+
+    /** {@code [orderCount, revenueSum]} for non-cancelled orders inside a half-open window. */
+    @Query("SELECT COUNT(o), COALESCE(SUM(o.grandTotal), 0) FROM Order o " +
+           "WHERE o.createdAt >= :from AND o.createdAt < :to AND o.status <> com.warehouse.enums.OrderStatus.CANCELLED")
+    Object[] aggregateBetween(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
+    /**
+     * {@code [createdAt, grandTotal]} of non-cancelled orders since {@code from} — two scalar
+     * columns instead of hydrated entities, so day/hour bucketing stays cheap and portable.
+     */
+    @Query("SELECT o.createdAt, COALESCE(o.grandTotal, 0) FROM Order o " +
+           "WHERE o.createdAt >= :from AND o.status <> com.warehouse.enums.OrderStatus.CANCELLED")
+    List<Object[]> findCreatedAtAndTotalSince(@Param("from") LocalDateTime from);
+
+    /** {@code [paymentMethod, orderCount, revenueSum]} across all non-cancelled orders. */
+    @Query("SELECT o.paymentMethod, COUNT(o), COALESCE(SUM(o.grandTotal), 0) FROM Order o " +
+           "WHERE o.status <> com.warehouse.enums.OrderStatus.CANCELLED AND o.paymentMethod IS NOT NULL " +
+           "GROUP BY o.paymentMethod")
+    List<Object[]> aggregateByPaymentMethod();
+
+    /** {@code [productName, quantitySum, revenueSum]} — best sellers, highest revenue first. */
+    @Query("SELECT p.name, COALESCE(SUM(i.quantity), 0), COALESCE(SUM(i.lineTotal), 0) " +
+           "FROM OrderItem i JOIN i.order o JOIN i.product p " +
+           "WHERE o.status <> com.warehouse.enums.OrderStatus.CANCELLED " +
+           "GROUP BY p.name ORDER BY SUM(i.lineTotal) DESC")
+    List<Object[]> aggregateTopProducts(Pageable pageable);
 }

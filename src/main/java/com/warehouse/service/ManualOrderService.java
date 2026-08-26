@@ -6,6 +6,7 @@ import com.warehouse.enums.*;
 import com.warehouse.exception.ErrorCode;
 import com.warehouse.exception.WarehouseManagementException;
 import com.warehouse.repository.*;
+import com.warehouse.util.TurkishText;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -94,15 +95,26 @@ public class ManualOrderService {
             subtotal = subtotal.add(total);
             vatTotal = vatTotal.add(total.multiply(vatRate).divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP));
 
+            // Reserve across warehouses, largest holding first — the previous version needed a
+            // single stock row to cover the whole line, so an order for 5 failed while two
+            // warehouses held 3 each. Matches how storefront checkout allocates.
             List<Stock> available = stocks.findAvailableByProductForUpdate(product.getId());
             int remaining = input.getQuantity();
-            Stock primary = available.stream().filter(s -> s.getAvailableQuantity() >= input.getQuantity()).findFirst().orElse(null);
             List<Map<String, Object>> allocations = new ArrayList<>();
-            if (primary != null) {
-                primary.setReservedQuantity((primary.getReservedQuantity() == null ? 0 : primary.getReservedQuantity()) + input.getQuantity());
-                stocks.save(primary);
-                allocations.add(Map.of("stockId", primary.getId(), "warehouseId", primary.getWarehouse().getId(), "quantity", input.getQuantity()));
-                remaining = 0;
+            Stock primary = null;
+            for (Stock candidate : available) {
+                if (remaining <= 0) break;
+                int free = candidate.getAvailableQuantity();
+                if (free <= 0) continue;
+                int toReserve = Math.min(remaining, free);
+                candidate.setReservedQuantity(
+                    (candidate.getReservedQuantity() == null ? 0 : candidate.getReservedQuantity()) + toReserve);
+                stocks.save(candidate);
+                allocations.add(Map.of("stockId", candidate.getId(),
+                    "warehouseId", candidate.getWarehouse().getId(), "quantity", toReserve));
+                // The line records its largest allocation, which is what the picking screens read.
+                if (primary == null) primary = candidate;
+                remaining -= toReserve;
             }
             if (remaining > 0) throw new WarehouseManagementException(ErrorCode.STOCK_RESERVATION_FAILED,
                 product.getName() + " için yeterli stok yok. Eksik: " + remaining);
@@ -370,7 +382,9 @@ public class ManualOrderService {
         Optional<Customer> byPhone = customers.findFirstByPhone(request.getPhone().trim());
         if (byPhone.isPresent()) return byPhone.get();
         Customer c = new Customer();
-        c.setFirstName(request.getFirstName().trim()); c.setLastName(request.getLastName().trim()); c.setPhone(request.getPhone().trim());
+        c.setFirstName(TurkishText.toTitleCase(request.getFirstName()));
+        c.setLastName(TurkishText.toTitleCase(request.getLastName()));
+        c.setPhone(request.getPhone().trim());
         c.setEmail(email == null ? "manual+" + UUID.randomUUID() + "@local.invalid" : email.toLowerCase(Locale.ROOT));
         c.setPasswordHash(passwordEncoder.encode(UUID.randomUUID().toString())); c.setActive(true); c.setEmailVerified(false);
         return customers.save(c);

@@ -509,7 +509,10 @@ public class EmailServiceImpl implements EmailService {
         try {
             String v = settingService.getSetting("seo_canonical_domain");
             if (v != null && !v.isBlank()) return v.trim().replaceAll("/$", "");
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            // Silently falling through here means every outgoing mail links to localhost.
+            log.warn("Kanonik alan adı okunamadı, e-posta bağlantıları localhost'a düşüyor: {}", e.toString());
+        }
         return "http://localhost:3000";
     }
 

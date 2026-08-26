@@ -176,7 +176,9 @@ public class StockNotificationServiceImpl implements StockNotificationService {
                     return cleanBase + "/api/admin/products/images/" + primary.getId() + "/view";
                 }
             }
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            logger.debug("Ürün görsel URL'i oluşturulamadı: {}", e.toString());
+        }
         return null;
     }
 

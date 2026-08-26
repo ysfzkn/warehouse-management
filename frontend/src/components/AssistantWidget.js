@@ -47,7 +47,6 @@ export default function AssistantWidget({ config, siteName }) {
   const initialSession = loadSessionWithId(config.getUserKey(config.storagePrefix), config.welcomeMessage);
   const [messages, setMessages] = useState(() => initialSession.messages);
   const [chatSessionId, setChatSessionId] = useState(() => initialSession.sessionId);
-  const [rateLimited, setRateLimited] = useState(null); // { friendlyMessage, reachedGuestLimit, retryAfterSeconds }
 
   const bodyRef = useRef(null);
 
@@ -92,7 +91,9 @@ export default function AssistantWidget({ config, siteName }) {
 
   useEffect(() => {
     if (!open) return;
-    const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+    const onKey = (e) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [open]);
@@ -116,23 +117,23 @@ export default function AssistantWidget({ config, siteName }) {
     setMessages(nextMessages.slice(-MAX_MESSAGES));
     setText('');
     setLoading(true);
-    setRateLimited(null);
 
     try {
       // Build request body per profile
-      const body = config.profile === 'wms'
-        ? {
-            messages: nextMessages,
-            allowMutations: !!config.sendAllowMutations,
-            ui: uiContext,
-            chatSessionId: chatSessionId,
-          }
-        : {
-            messages: nextMessages,
-            ui: uiContext,
-            siteName: siteName || '',
-            chatSessionId: chatSessionId,
-          };
+      const body =
+        config.profile === 'wms'
+          ? {
+              messages: nextMessages,
+              allowMutations: !!config.sendAllowMutations,
+              ui: uiContext,
+              chatSessionId: chatSessionId,
+            }
+          : {
+              messages: nextMessages,
+              ui: uiContext,
+              siteName: siteName || '',
+              chatSessionId: chatSessionId,
+            };
 
       const headers = {};
       const token = config.authTokenKey ? localStorage.getItem(config.authTokenKey) : null;
@@ -148,25 +149,34 @@ export default function AssistantWidget({ config, siteName }) {
 
       // Rate limit (store only). Render the friendly message and stop.
       if (data.rateLimit) {
-        setRateLimited(data.rateLimit);
+        // The banner reads rateLimit off the message itself (see isRateLimit below), so there
+        // is nothing to keep in separate state.
         setMessages((prev) =>
-          [...prev.slice(-MAX_MESSAGES), { role: 'assistant', content: assistant, isRateLimit: true, rateLimit: data.rateLimit }].slice(-MAX_MESSAGES)
+          [
+            ...prev.slice(-MAX_MESSAGES),
+            { role: 'assistant', content: assistant, isRateLimit: true, rateLimit: data.rateLimit },
+          ].slice(-MAX_MESSAGES)
         );
         return;
       }
 
       const full = String(assistant);
       const id = `a-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-      const reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const reducedMotion =
+        window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       const shouldAnimate = !reducedMotion && full.length > 0;
 
       if (!shouldAnimate) {
         setMessages((prev) =>
-          [...prev.slice(-MAX_MESSAGES), { id, role: 'assistant', content: full, isTyping: false }].slice(-MAX_MESSAGES)
+          [...prev.slice(-MAX_MESSAGES), { id, role: 'assistant', content: full, isTyping: false }].slice(
+            -MAX_MESSAGES
+          )
         );
       } else {
         setMessages((prev) =>
-          [...prev.slice(-MAX_MESSAGES), { id, role: 'assistant', content: '', isTyping: true }].slice(-MAX_MESSAGES)
+          [...prev.slice(-MAX_MESSAGES), { id, role: 'assistant', content: '', isTyping: true }].slice(
+            -MAX_MESSAGES
+          )
         );
         animateAssistantTyping({
           id,
@@ -206,9 +216,11 @@ export default function AssistantWidget({ config, siteName }) {
             <div className="cezeri-panel-title">
               <div className="name">{config.title || 'Cezeri'}</div>
               <div className="subtitle">
-                {loading ? 'Düşünüyorum…'
-                  : (config.requiresAuth && !authed) ? (config.unauthSubtitle || 'Giriş gerekli')
-                  : (config.subtitle || 'Yapay Zekâ Asistanı')}
+                {loading
+                  ? 'Düşünüyorum…'
+                  : config.requiresAuth && !authed
+                    ? config.unauthSubtitle || 'Giriş gerekli'
+                    : config.subtitle || 'Yapay Zekâ Asistanı'}
               </div>
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
@@ -236,18 +248,10 @@ export default function AssistantWidget({ config, siteName }) {
                   {m.isTyping ? <span className="cezeri-caret" aria-hidden="true" /> : null}
                   {m.isRateLimit && m.rateLimit && m.rateLimit.reachedGuestLimit ? (
                     <div style={{ marginTop: 10 }}>
-                      <a
-                        href="/giris"
-                        className="btn btn-sm btn-light"
-                        style={{ fontWeight: 600 }}
-                      >
+                      <a href="/giris" className="btn btn-sm btn-light" style={{ fontWeight: 600 }}>
                         Üye Girişi
                       </a>
-                      <a
-                        href="/kayit"
-                        className="btn btn-sm btn-outline-light"
-                        style={{ marginLeft: 8 }}
-                      >
+                      <a href="/kayit" className="btn btn-sm btn-outline-light" style={{ marginLeft: 8 }}>
                         Ücretsiz Üye Ol
                       </a>
                     </div>
@@ -360,13 +364,18 @@ function persistSession(userKey, messages, sessionId) {
     const safeMessages = (Array.isArray(messages) ? messages : [])
       .map((m) => ({ ...m, isTyping: false }))
       .slice(-MAX_MESSAGES);
-    localStorage.setItem(userKey, JSON.stringify({
-      v: 3,
-      ts: Date.now(),
-      sessionId: sessionId || generateSessionId(),
-      messages: safeMessages,
-    }));
-  } catch (e) { /* ignore */ }
+    localStorage.setItem(
+      userKey,
+      JSON.stringify({
+        v: 3,
+        ts: Date.now(),
+        sessionId: sessionId || generateSessionId(),
+        messages: safeMessages,
+      })
+    );
+  } catch (e) {
+    /* ignore */
+  }
 }
 
 function animateAssistantTyping({ id, fullText, setMessages, minMs, maxMs }) {

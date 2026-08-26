@@ -8,6 +8,7 @@ import com.warehouse.service.ReturnRequestService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import com.warehouse.util.PageLimits;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
@@ -43,7 +44,7 @@ public class AdminReturnController {
             @RequestParam(required = false) String status) {
         ReturnStatus statusFilter = parseStatus(status);
         Page<ReturnRequest> result = returnService.listForAdmin(
-                statusFilter, PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt")));
+                statusFilter, PageRequest.of(PageLimits.page(page), PageLimits.size(size), Sort.by(Sort.Direction.DESC, "createdAt")));
         List<Map<String, Object>> content = result.getContent().stream()
                 .map(ReturnDtoMapper::toMap).collect(Collectors.toList());
         return ResponseEntity.ok(new PagedResponse<>(

@@ -90,7 +90,10 @@ public class CargoTrackingJob {
                                 order.getCustomer(), order.getOrderNumber(),
                                 "DELIVERED", order.getCargoTrackingNo(),
                                 "Siparişiniz teslim edildi.");
-                    } catch (Exception ignored) {}
+                    } catch (Exception e) {
+                        logger.warn("Teslimat bildirimi gönderilemedi (sipariş {}): {}",
+                                order.getOrderNumber(), e.toString());
+                    }
 
                     deliveredCount++;
                     logger.info("Order auto-delivered: {} (tracking: {})",

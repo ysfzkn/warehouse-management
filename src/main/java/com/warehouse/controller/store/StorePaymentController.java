@@ -74,12 +74,19 @@ public class StorePaymentController {
         catch (Exception e) { return ResponseEntity.badRequest().body(Map.of("message", "Geçersiz orderId.")); }
 
         String paymentMethod = (String) body.get("paymentMethod");
+        // Quietly falling back to a single instalment would charge the customer differently
+        // from what they chose, so a malformed value is rejected instead.
         int installmentCount = 1;
-        try {
-            if (body.containsKey("installmentCount") && body.get("installmentCount") != null) {
-                installmentCount = ((Number) body.get("installmentCount")).intValue();
+        Object rawInstallment = body.get("installmentCount");
+        if (rawInstallment != null) {
+            if (!(rawInstallment instanceof Number number)) {
+                return ResponseEntity.badRequest().body(Map.of("message", "Geçersiz taksit sayısı."));
             }
-        } catch (Exception ignored) {}
+            installmentCount = number.intValue();
+            if (installmentCount < 1 || installmentCount > 12) {
+                return ResponseEntity.badRequest().body(Map.of("message", "Taksit sayısı 1 ile 12 arasında olmalıdır."));
+            }
+        }
         String idempotencyKey = (String) body.get("idempotencyKey");
         String ip = request.getRemoteAddr();
 

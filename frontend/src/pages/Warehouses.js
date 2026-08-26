@@ -7,10 +7,12 @@ import StockTransferModal from '../components/StockTransferModal';
 import FilterChips from '../components/FilterChips';
 import ConfirmModal from '../components/ConfirmModal';
 import useSecurityCodePrompt from '../components/useSecurityCodePrompt';
+import { useAdminToast } from '../components/AdminToast';
 
 const normalizeText = (text) => (text || '').toLocaleLowerCase('tr-TR');
 
 const Warehouses = () => {
+  const toast = useAdminToast();
   const navigate = useNavigate();
   const [warehouses, setWarehouses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -26,7 +28,11 @@ const Warehouses = () => {
   const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null });
   const role = (typeof window !== 'undefined' && localStorage.getItem('auth_role')) || 'ADMIN';
   const isAdmin = role === 'ADMIN';
-  const { askCode: askSecurityCode, SecurityCodePrompt, closePrompt: closeSecurityPrompt } = useSecurityCodePrompt();
+  const {
+    askCode: askSecurityCode,
+    SecurityCodePrompt,
+    closePrompt: closeSecurityPrompt,
+  } = useSecurityCodePrompt();
 
   const fetchedRef = useRef(false);
 
@@ -64,10 +70,11 @@ const Warehouses = () => {
   const filteredWarehouses = React.useMemo(() => {
     const term = normalizeText(searchTerm);
     if (!term) return warehouses;
-    return warehouses.filter(w =>
-      normalizeText(w.name).includes(term) ||
-      normalizeText(w.location).includes(term) ||
-      normalizeText(w.manager).includes(term)
+    return warehouses.filter(
+      (w) =>
+        normalizeText(w.name).includes(term) ||
+        normalizeText(w.location).includes(term) ||
+        normalizeText(w.manager).includes(term)
     );
   }, [warehouses, searchTerm]);
 
@@ -89,12 +96,23 @@ const Warehouses = () => {
     toast.setAttribute('role', 'alert');
     toast.innerHTML = `<div class="d-flex"><div class="toast-body fw-semibold">${msg}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button></div>`;
     document.body.appendChild(toast);
-    setTimeout(() => { try { document.body.removeChild(toast); } catch {} }, 7000);
+    setTimeout(() => {
+      try {
+        document.body.removeChild(toast);
+      } catch {}
+    }, 7000);
   };
 
   const securityErrorCodes = new Set([
-    'AUTH_002','AUTH_003','AUTH_004','AUTH_005','AUTH_006','AUTH_007',
-    'ADMIN_SECURITY_CODE_REQUIRED','INVALID_ADMIN_SECURITY_CODE','ADMIN_SECURITY_CODE_MISMATCH'
+    'AUTH_002',
+    'AUTH_003',
+    'AUTH_004',
+    'AUTH_005',
+    'AUTH_006',
+    'AUTH_007',
+    'ADMIN_SECURITY_CODE_REQUIRED',
+    'INVALID_ADMIN_SECURITY_CODE',
+    'ADMIN_SECURITY_CODE_MISMATCH',
   ]);
 
   const handleDelete = async (id) => {
@@ -113,7 +131,10 @@ const Warehouses = () => {
             fetchWarehouses();
           } catch (error) {
             const errorData = error?.response?.data;
-            const msg = errorData?.message || errorData?.error || (typeof errorData === 'string' ? errorData : 'Depo silinirken hata oluştu');
+            const msg =
+              errorData?.message ||
+              errorData?.error ||
+              (typeof errorData === 'string' ? errorData : 'Depo silinirken hata oluştu');
             showToast(msg, 'danger');
           }
           return;
@@ -127,7 +148,7 @@ const Warehouses = () => {
           const code = await askSecurityCode({
             prefill: lastCode,
             errorMessage: lastErrorMsg || (lastCode ? 'Güvenlik şifresi hatalı, tekrar deneyin.' : ''),
-            persistOnResolve: true
+            persistOnResolve: true,
           });
           if (code === null) {
             return;
@@ -144,7 +165,10 @@ const Warehouses = () => {
           } catch (error) {
             const errorData = error?.response?.data;
             const errCode = errorData?.code || errorData?.errorCode;
-            const msg = errorData?.message || errorData?.error || (typeof errorData === 'string' ? errorData : 'Depo silinirken hata oluştu');
+            const msg =
+              errorData?.message ||
+              errorData?.error ||
+              (typeof errorData === 'string' ? errorData : 'Depo silinirken hata oluştu');
             showToast(msg, 'danger');
             lastErrorMsg = msg;
 
@@ -156,7 +180,7 @@ const Warehouses = () => {
             // Otherwise loop continues, prompt remains for retry with error message
           }
         }
-      }
+      },
     });
   };
 
@@ -169,7 +193,10 @@ const Warehouses = () => {
       }
       fetchWarehouses();
     } catch (error) {
-      alert('Durum değiştirilirken hata oluştu: ' + error.response?.data);
+      toast.error(
+        'Durum değiştirilirken hata oluştu: ' +
+          (error.response?.data?.message || error.response?.data || error.message)
+      );
     }
   };
 
@@ -245,15 +272,25 @@ const Warehouses = () => {
       <div className="row mb-3">
         <div className="col-md-8">
           <div className="input-group">
-            <span className="input-group-text"><i className="fas fa-search"></i></span>
-            <input type="text" className="form-control" placeholder="Depo adı, konum veya yetkili ara..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+            <span className="input-group-text">
+              <i className="fas fa-search"></i>
+            </span>
+            <input
+              type="text"
+              className="form-control"
+              placeholder="Depo adı, konum veya yetkili ara..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
           </div>
         </div>
       </div>
-      {(searchTerm) && (
+      {searchTerm && (
         <FilterChips
           className="mb-3"
-          chips={[{ icon: 'fas fa-search', label: `Arama: "${searchTerm}"`, onClear: () => setSearchTerm('') }]}
+          chips={[
+            { icon: 'fas fa-search', label: `Arama: "${searchTerm}"`, onClear: () => setSearchTerm('') },
+          ]}
           onClearAll={() => setSearchTerm('')}
         />
       )}
@@ -270,12 +307,16 @@ const Warehouses = () => {
                       <span className={`badge ${warehouse.active === false ? 'bg-secondary' : 'bg-success'}`}>
                         {warehouse.active === false ? 'Pasif' : 'Aktif'}
                       </span>
-                      <span className={`badge ${
-                        warehouse.warehouseType === 'EMANET_DEPO' 
-                          ? 'bg-info bg-opacity-10 text-info border border-info' 
-                          : 'bg-primary bg-opacity-10 text-primary border border-primary'
-                      }`}>
-                        <i className={`fas ${warehouse.warehouseType === 'EMANET_DEPO' ? 'fa-handshake' : 'fa-warehouse'} me-1`}></i>
+                      <span
+                        className={`badge ${
+                          warehouse.warehouseType === 'EMANET_DEPO'
+                            ? 'bg-info bg-opacity-10 text-info border border-info'
+                            : 'bg-primary bg-opacity-10 text-primary border border-primary'
+                        }`}
+                      >
+                        <i
+                          className={`fas ${warehouse.warehouseType === 'EMANET_DEPO' ? 'fa-handshake' : 'fa-warehouse'} me-1`}
+                        ></i>
                         {warehouse.warehouseType === 'EMANET_DEPO' ? 'Emanet Depo' : 'Standart Depo'}
                       </span>
                     </div>
@@ -327,7 +368,10 @@ const Warehouses = () => {
                   </button>
                   <button
                     className="btn btn-outline-success btn-sm"
-                    onClick={() => { setTransferWarehouse(warehouse); setShowTransferModal(true); }}
+                    onClick={() => {
+                      setTransferWarehouse(warehouse);
+                      setShowTransferModal(true);
+                    }}
                   >
                     <i className="fas fa-exchange-alt me-1"></i>
                     Transfer Başlat
@@ -339,19 +383,18 @@ const Warehouses = () => {
                     <i className="fas fa-route me-1"></i>
                     Depo Hareketleri
                   </button>
-                  <button
-                    className="btn btn-outline-secondary btn-sm"
-                    onClick={() => handleEdit(warehouse)}
-                  >
+                  <button className="btn btn-outline-secondary btn-sm" onClick={() => handleEdit(warehouse)}>
                     <i className="fas fa-edit me-1"></i>
                     Düzenle
                   </button>
                   <button
-                    className={`btn btn-sm ${(warehouse.active === false) ? 'btn-outline-success' : 'btn-outline-warning'}`}
-                    onClick={() => handleToggleActive(warehouse.id, warehouse.active === false ? false : true)}
+                    className={`btn btn-sm ${warehouse.active === false ? 'btn-outline-success' : 'btn-outline-warning'}`}
+                    onClick={() =>
+                      handleToggleActive(warehouse.id, warehouse.active === false ? false : true)
+                    }
                   >
-                    <i className={`fas ${(warehouse.active === false) ? 'fa-play' : 'fa-pause'} me-1`}></i>
-                    {(warehouse.active === false) ? 'Aktifleştir' : 'Pasifleştir'}
+                    <i className={`fas ${warehouse.active === false ? 'fa-play' : 'fa-pause'} me-1`}></i>
+                    {warehouse.active === false ? 'Aktifleştir' : 'Pasifleştir'}
                   </button>
                   <button
                     className="btn btn-outline-danger btn-sm"
@@ -381,14 +424,8 @@ const Warehouses = () => {
           <div className="modal-dialog modal-lg">
             <div className="modal-content">
               <div className="modal-header">
-                <h5 className="modal-title">
-                  {editingWarehouse ? 'Depo Düzenle' : 'Yeni Depo'}
-                </h5>
-                <button
-                  type="button"
-                  className="btn-close"
-                  onClick={() => setShowForm(false)}
-                ></button>
+                <h5 className="modal-title">{editingWarehouse ? 'Depo Düzenle' : 'Yeni Depo'}</h5>
+                <button type="button" className="btn-close" onClick={() => setShowForm(false)}></button>
               </div>
               <div className="modal-body">
                 <WarehouseForm
@@ -404,10 +441,7 @@ const Warehouses = () => {
 
       {/* Stock Modal */}
       {showStockModal && selectedWarehouse && (
-        <StockModal
-          warehouse={selectedWarehouse}
-          onClose={() => setShowStockModal(false)}
-        />
+        <StockModal warehouse={selectedWarehouse} onClose={() => setShowStockModal(false)} />
       )}
 
       {showTransferModal && (

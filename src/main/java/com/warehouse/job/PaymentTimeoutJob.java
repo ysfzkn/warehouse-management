@@ -27,17 +27,20 @@ public class PaymentTimeoutJob {
     private final OrderItemRepository orderItemRepo;
     private final OrderStatusHistoryRepository statusHistoryRepo;
     private final StockRepository stockRepo;
+    private final com.warehouse.service.CouponService couponService;
 
     public PaymentTimeoutJob(PaymentTransactionRepository paymentRepo,
                               OrderRepository orderRepo,
                               OrderItemRepository orderItemRepo,
                               OrderStatusHistoryRepository statusHistoryRepo,
-                              StockRepository stockRepo) {
+                              StockRepository stockRepo,
+                              com.warehouse.service.CouponService couponService) {
         this.paymentRepo = paymentRepo;
         this.orderRepo = orderRepo;
         this.orderItemRepo = orderItemRepo;
         this.statusHistoryRepo = statusHistoryRepo;
         this.stockRepo = stockRepo;
+        this.couponService = couponService;
     }
 
     @Scheduled(fixedRate = 60000) // Every 60 seconds
@@ -54,7 +57,8 @@ public class PaymentTimeoutJob {
 
                 var order = tx.getOrder();
                 if (order.getStatus() == OrderStatus.PENDING_PAYMENT) {
-                    // Release reserved stock
+                    // Release reserved stock and the coupon use
+                    couponService.release(order.getId());
                     List<OrderItem> items = orderItemRepo.findByOrderId(order.getId());
                     for (OrderItem item : items) {
                         if (item.getStockId() != null) {

@@ -1,13 +1,41 @@
-import React, { useState, useEffect, useCallback, createContext, useContext } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, createContext, useContext } from 'react';
 import { FiCheckCircle, FiXCircle, FiAlertTriangle, FiInfo, FiX } from 'react-icons/fi';
 
 const ToastContext = createContext(null);
 
 const CONFIG = {
-  success: { icon: FiCheckCircle, bg: '#ecfdf5', text: '#065f46', accent: '#10b981', border: '#a7f3d0', label: 'Başarılı' },
-  error:   { icon: FiXCircle,     bg: '#fef2f2', text: '#991b1b', accent: '#ef4444', border: '#fecaca', label: 'Hata' },
-  warning: { icon: FiAlertTriangle, bg: '#fffbeb', text: '#92400e', accent: '#f59e0b', border: '#fde68a', label: 'Uyarı' },
-  info:    { icon: FiInfo,         bg: '#eff6ff', text: '#1e40af', accent: '#3b82f6', border: '#bfdbfe', label: 'Bilgi' },
+  success: {
+    icon: FiCheckCircle,
+    bg: '#ecfdf5',
+    text: '#065f46',
+    accent: '#10b981',
+    border: '#a7f3d0',
+    label: 'Başarılı',
+  },
+  error: {
+    icon: FiXCircle,
+    bg: '#fef2f2',
+    text: '#991b1b',
+    accent: '#ef4444',
+    border: '#fecaca',
+    label: 'Hata',
+  },
+  warning: {
+    icon: FiAlertTriangle,
+    bg: '#fffbeb',
+    text: '#92400e',
+    accent: '#f59e0b',
+    border: '#fde68a',
+    label: 'Uyarı',
+  },
+  info: {
+    icon: FiInfo,
+    bg: '#eff6ff',
+    text: '#1e40af',
+    accent: '#3b82f6',
+    border: '#bfdbfe',
+    label: 'Bilgi',
+  },
 };
 
 const DURATIONS = { success: 3500, error: 6000, warning: 4500, info: 3500 };
@@ -31,10 +59,16 @@ function ToastItem({ toast, onDismiss }) {
       setExiting(true);
       setTimeout(() => onDismiss(toast.id), 350);
     }, duration);
-    return () => { clearTimeout(timer); clearInterval(interval); };
+    return () => {
+      clearTimeout(timer);
+      clearInterval(interval);
+    };
   }, [toast, onDismiss, duration]);
 
-  const handleDismiss = () => { setExiting(true); setTimeout(() => onDismiss(toast.id), 350); };
+  const handleDismiss = () => {
+    setExiting(true);
+    setTimeout(() => onDismiss(toast.id), 350);
+  };
 
   return (
     <div
@@ -77,7 +111,7 @@ export function ToastProvider({ children }) {
 
   const addToast = useCallback((message, type = 'info') => {
     const id = Date.now() + Math.random();
-    setToasts(prev => {
+    setToasts((prev) => {
       // Max 3 visible toasts
       const next = [...prev, { id, message, type }];
       return next.length > 3 ? next.slice(-3) : next;
@@ -85,14 +119,14 @@ export function ToastProvider({ children }) {
   }, []);
 
   const dismiss = useCallback((id) => {
-    setToasts(prev => prev.filter(t => t.id !== id));
+    setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
   return (
     <ToastContext.Provider value={addToast}>
       {children}
       <div className="store-toast-container">
-        {toasts.map(toast => (
+        {toasts.map((toast) => (
           <div key={toast.id} style={{ pointerEvents: 'auto' }}>
             <ToastItem toast={toast} onDismiss={dismiss} />
           </div>
@@ -104,10 +138,14 @@ export function ToastProvider({ children }) {
 
 export function useToast() {
   const addToast = useContext(ToastContext);
-  return {
-    success: (msg) => addToast?.(msg, 'success'),
-    error: (msg) => addToast?.(msg, 'error'),
-    warning: (msg) => addToast?.(msg, 'warning'),
-    info: (msg) => addToast?.(msg, 'info'),
-  };
+  // Memoised so the object can safely sit in an effect's dependency array.
+  return useMemo(
+    () => ({
+      success: (msg) => addToast?.(msg, 'success'),
+      error: (msg) => addToast?.(msg, 'error'),
+      warning: (msg) => addToast?.(msg, 'warning'),
+      info: (msg) => addToast?.(msg, 'info'),
+    }),
+    [addToast]
+  );
 }

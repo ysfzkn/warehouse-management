@@ -7,6 +7,7 @@ import com.warehouse.repository.PaymentTransactionRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import com.warehouse.util.PageLimits;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
@@ -43,12 +44,12 @@ public class AdminPaymentController {
         if (status != null && !status.isEmpty()) {
             try {
                 PaymentStatus ps = PaymentStatus.valueOf(status);
-                result = paymentRepo.findByStatus(ps, PageRequest.of(page, size, sort));
+                result = paymentRepo.findByStatus(ps, PageRequest.of(PageLimits.page(page), PageLimits.size(size), sort));
             } catch (IllegalArgumentException e) {
-                result = paymentRepo.findAll(PageRequest.of(page, size, sort));
+                result = paymentRepo.findAll(PageRequest.of(PageLimits.page(page), PageLimits.size(size), sort));
             }
         } else {
-            result = paymentRepo.findAll(PageRequest.of(page, size, sort));
+            result = paymentRepo.findAll(PageRequest.of(PageLimits.page(page), PageLimits.size(size), sort));
         }
 
         List<Map<String, Object>> dtos = result.getContent().stream()

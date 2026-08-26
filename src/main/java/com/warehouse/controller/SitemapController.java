@@ -3,7 +3,6 @@ package com.warehouse.controller;
 import com.warehouse.entity.Category;
 import com.warehouse.entity.CmsPage;
 import com.warehouse.entity.Product;
-import com.warehouse.enums.CmsPageType;
 import com.warehouse.repository.CategoryRepository;
 import com.warehouse.repository.CmsPageRepository;
 import com.warehouse.repository.ProductRepository;
@@ -80,10 +79,8 @@ public class SitemapController {
         }
 
         // Published CMS pages (CONTENT, LEGAL, FAQ — exclude banners)
-        List<CmsPage> cmsPages = cmsPageRepository.findAll().stream()
-                .filter(CmsPage::isActive)
-                .filter(page -> page.getPageType() != CmsPageType.BANNER)
-                .toList();
+        // Filtered in SQL — the repository already exposes exactly this query.
+        List<CmsPage> cmsPages = cmsPageRepository.findByIsPublishedTrue();
         for (CmsPage page : cmsPages) {
             xml.append("  <url>\n");
             xml.append("    <loc>").append(escapeXml(baseUrl)).append("/sayfa/")

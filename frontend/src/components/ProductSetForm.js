@@ -3,6 +3,7 @@ import axios from 'axios';
 import BundleMemberPicker from './BundleMemberPicker';
 import confirmDialog from '../utils/confirmDialog';
 import { toUploadableImage, reencodeImageToPng } from '../utils/imageConvert';
+import { toProductNameCase } from '../utils/name';
 
 /**
  * Focused editor for a product set (bundle).
@@ -726,6 +727,7 @@ export default function ProductSetForm({ product, onSuccess, onCancel }) {
           placeholder="ör: Ankastre Set, Çeyiz Seti"
           value={name}
           onChange={(e) => setName(e.target.value)}
+          onBlur={(e) => setName(toProductNameCase(e.target.value))}
         />
         {errors.name && <div className="invalid-feedback">{errors.name}</div>}
         <div className="d-flex flex-wrap gap-1 mt-2">

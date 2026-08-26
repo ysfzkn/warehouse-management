@@ -25,12 +25,13 @@ class BankTransferExpiryJobTest {
     @Mock private PaymentTransactionRepository paymentRepo;
     @Mock private OrderStatusHistoryRepository statusHistoryRepo;
     @Mock private StockRepository stockRepo;
+    @Mock private com.warehouse.service.CouponService couponService;
 
     private BankTransferExpiryJob job;
 
     @BeforeEach
     void setUp() {
-        job = new BankTransferExpiryJob(orderRepo, orderItemRepo, paymentRepo, statusHistoryRepo, stockRepo);
+        job = new BankTransferExpiryJob(orderRepo, orderItemRepo, paymentRepo, statusHistoryRepo, stockRepo, couponService);
     }
 
     @Test

@@ -369,6 +369,14 @@ export default function AdminCoupons() {
                               {c.usedCount || 0}
                               {c.usageLimit ? `/${c.usageLimit}` : ''}
                             </span>
+                            {c.usageLimit && (c.usedCount || 0) >= c.usageLimit && (
+                              <span className="badge bg-danger ms-2">Tükendi</span>
+                            )}
+                            {c.usageLimitPerCustomer && (
+                              <div className="text-muted" style={{ fontSize: 11 }}>
+                                Kişi başı {c.usageLimitPerCustomer}
+                              </div>
+                            )}
                           </td>
                           <td>
                             <div className="small">{formatDate(c.startsAt)}</div>

@@ -32,13 +32,14 @@ class CartServiceImplTest {
     @Mock private StockService stockService;
     @Mock private com.warehouse.repository.ProductImageRepository productImageRepo;
     @Mock private com.warehouse.service.ShippingCostService shippingCostService;
+    @Mock private com.warehouse.service.CouponService couponService;
 
     private CartServiceImpl cartService;
 
     @BeforeEach
     void setUp() {
         cartService = new CartServiceImpl(cartRepo, cartItemRepo, productRepo, couponRepo,
-                stockService, productImageRepo, shippingCostService);
+                stockService, productImageRepo, shippingCostService, couponService);
     }
 
     @Test
@@ -176,7 +177,9 @@ class CartServiceImplTest {
         Coupon coupon = TestDataFactory.createCoupon("SAVE10", DiscountType.PERCENTAGE, new BigDecimal("10"));
 
         when(cartRepo.findByCustomerId(customer.getId())).thenReturn(Optional.of(cart));
-        when(couponRepo.findActiveByCode(eq("SAVE10"), any(LocalDateTime.class))).thenReturn(Optional.of(coupon));
+        // Rule checking and discount math live in CouponService now; this test covers the wiring.
+        when(couponService.validate(eq("SAVE10"), any(BigDecimal.class), eq(customer.getId()))).thenReturn(coupon);
+        when(couponService.calculateDiscount(eq(coupon), any(BigDecimal.class))).thenReturn(new BigDecimal("100.00"));
 
         Product product = TestDataFactory.createProduct();
         product.setPrice(new BigDecimal("1000.00"));
@@ -197,7 +200,9 @@ class CartServiceImplTest {
         Coupon coupon = TestDataFactory.createCoupon("FREESHIP", DiscountType.FREE_SHIPPING, new BigDecimal("1"));
 
         when(cartRepo.findByCustomerId(customer.getId())).thenReturn(Optional.of(cart));
-        when(couponRepo.findActiveByCode(eq("FREESHIP"), any(LocalDateTime.class))).thenReturn(Optional.of(coupon));
+        when(couponService.validate(eq("FREESHIP"), any(BigDecimal.class), eq(customer.getId()))).thenReturn(coupon);
+        when(couponService.calculateDiscount(eq(coupon), any(BigDecimal.class))).thenReturn(BigDecimal.ZERO);
+        when(couponService.isFreeShipping(coupon)).thenReturn(true);
 
         Product product = TestDataFactory.createProduct();
         product.setPrice(new BigDecimal("100.00")); // Below 500 threshold
@@ -216,7 +221,10 @@ class CartServiceImplTest {
         Cart cart = TestDataFactory.createCart(customer);
 
         when(cartRepo.findByCustomerId(customer.getId())).thenReturn(Optional.of(cart));
-        when(couponRepo.findActiveByCode(eq("INVALID"), any(LocalDateTime.class))).thenReturn(Optional.empty());
+        when(cartItemRepo.findByCartId(cart.getId())).thenReturn(List.of());
+        when(couponService.validate(eq("INVALID"), any(BigDecimal.class), eq(customer.getId())))
+            .thenThrow(new WarehouseManagementException(
+                com.warehouse.exception.ErrorCode.VALIDATION_ERROR, "Geçersiz veya süresi dolmuş kupon kodu."));
 
         assertThatThrownBy(() -> cartService.applyCoupon(customer.getId(), null, "INVALID"))
             .isInstanceOf(WarehouseManagementException.class);

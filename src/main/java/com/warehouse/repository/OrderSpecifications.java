@@ -23,9 +23,8 @@ public class OrderSpecifications {
 
             // Status filter
             if (status != null && !status.isBlank()) {
-                try {
-                    predicates.add(cb.equal(root.get("status"), OrderStatus.valueOf(status)));
-                } catch (Exception ignored) {}
+                predicates.add(cb.equal(root.get("status"),
+                        com.warehouse.util.EnumParams.parse(OrderStatus.class, status, "Sipariş durumu")));
             }
 
             // Payment method filter
@@ -34,16 +33,14 @@ public class OrderSpecifications {
             }
 
             if (channel != null && !channel.isBlank()) {
-                try {
-                    predicates.add(cb.equal(root.get("orderChannel"), com.warehouse.enums.OrderChannel.valueOf(channel)));
-                } catch (Exception ignored) {}
+                predicates.add(cb.equal(root.get("orderChannel"), com.warehouse.util.EnumParams.parse(
+                        com.warehouse.enums.OrderChannel.class, channel, "Sipariş kanalı")));
             }
 
             // Cargo company filter
             if (cargoCompany != null && !cargoCompany.isBlank()) {
-                try {
-                    predicates.add(cb.equal(root.get("cargoCompany"), CargoCompany.valueOf(cargoCompany)));
-                } catch (Exception ignored) {}
+                predicates.add(cb.equal(root.get("cargoCompany"),
+                        com.warehouse.util.EnumParams.parse(CargoCompany.class, cargoCompany, "Kargo firması")));
             }
 
             // Date range
