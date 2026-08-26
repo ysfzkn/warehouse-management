@@ -4659,7 +4659,7 @@ const Stock = () => {
                     <input
                       type="text"
                       className="form-control"
-                      placeholder="Müşteri ara — ad veya telefon (Ballı = Balli)"
+                      placeholder="Müşteri ara — ad veya telefon"
                       value={transferCustomer}
                       onChange={(e) => setTransferCustomer(e.target.value)}
                     />

@@ -72,7 +72,9 @@ export default function CustomerLinkPicker({ customer, onPick, disabled = false,
   }
 
   return (
-    <div className="position-relative">
+    // Own stacking context while the list is open — Bootstrap positions every `.input-group`
+    // child, so a later form field would otherwise paint over the dropdown.
+    <div className="position-relative" style={{ zIndex: open ? 1080 : 'auto' }}>
       <div className="input-group">
         <span className="input-group-text bg-white">
           <i className="fas fa-magnifying-glass" />
@@ -100,8 +102,8 @@ export default function CustomerLinkPicker({ customer, onPick, disabled = false,
       </div>
       {open && search.trim().length >= 2 && (
         <div
-          className="list-group shadow-sm position-absolute w-100"
-          style={{ zIndex: 40, maxHeight: 240, overflowY: 'auto' }}
+          className="list-group shadow-sm position-absolute w-100 mt-1"
+          style={{ maxHeight: 240, overflowY: 'auto' }}
         >
           {!loading && results.length === 0 && (
             <div className="list-group-item text-muted small">

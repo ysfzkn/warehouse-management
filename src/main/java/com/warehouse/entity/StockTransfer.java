@@ -169,6 +169,13 @@ public class StockTransfer {
     @Column(name = "driver_search", length = 400)
     private String driverSearch;
 
+    /**
+     * The directory entry this transfer's driver belongs to. The name/TC/phone/plate above stay
+     * as they were recorded — merging duplicate drivers moves this link, never the history.
+     */
+    @Column(name = "driver_id")
+    private Long driverId;
+
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss", timezone = "Europe/Istanbul")
     @Column(name = "transfer_date", nullable = false)
     private LocalDateTime transferDate;
