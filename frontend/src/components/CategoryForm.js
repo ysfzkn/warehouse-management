@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { useAdminToast } from './AdminToast';
 
 const CategoryForm = ({ category, onSuccess, onCancel }) => {
   const [formData, setFormData] = useState({
@@ -263,6 +264,7 @@ const CategoryForm = ({ category, onSuccess, onCancel }) => {
 };
 
 const SubcategoryModal = ({ parentCategoryId, onSuccess, onSkip }) => {
+  const toast = useAdminToast();
   const [subcategories, setSubcategories] = useState([{ name: '', description: '' }]);
   const [loading, setLoading] = useState(false);
 
@@ -297,7 +299,7 @@ const SubcategoryModal = ({ parentCategoryId, onSuccess, onSkip }) => {
       onSuccess();
     } catch (error) {
       console.error('Error creating subcategories:', error);
-      alert('Alt kategoriler oluşturulurken hata oluştu');
+      toast.error('Alt kategoriler oluşturulurken hata oluştu.');
     } finally {
       setLoading(false);
     }

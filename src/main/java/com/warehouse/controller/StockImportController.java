@@ -12,6 +12,7 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
+import com.warehouse.util.PageLimits;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -65,8 +66,11 @@ public class StockImportController {
 
     @GetMapping
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
-    public ResponseEntity<List<StockImportHistoryDto>> list() {
-        List<StockImportHistory> list = historyRepository.findAll();
+    public ResponseEntity<List<StockImportHistoryDto>> list(
+            @RequestParam(required = false, defaultValue = "100") Integer limit) {
+        // Import history only grows; the screen shows the newest entries, so bound the read.
+        List<StockImportHistory> list = historyRepository.findAllByOrderByCreatedAtDesc(
+                org.springframework.data.domain.PageRequest.of(0, PageLimits.size(limit)));
         var result = list.stream().map(h -> {
             // Translate status safely on a copy (DTO)
             return toDto(h);

@@ -42,14 +42,10 @@ public class AdminStockEventController {
             @RequestParam(required = false) String endDate,
             @RequestParam(required = false) String search) {
 
-        StockEventSource sourceEnum = null;
-        if (source != null && !source.isBlank()) {
-            try { sourceEnum = StockEventSource.valueOf(source); } catch (Exception ignored) {}
-        }
-        StockEventType typeEnum = null;
-        if (eventType != null && !eventType.isBlank()) {
-            try { typeEnum = StockEventType.valueOf(eventType); } catch (Exception ignored) {}
-        }
+        StockEventSource sourceEnum =
+                com.warehouse.util.EnumParams.parse(StockEventSource.class, source, "Kaynak");
+        StockEventType typeEnum =
+                com.warehouse.util.EnumParams.parse(StockEventType.class, eventType, "Hareket tipi");
         LocalDateTime start = startDate != null && !startDate.isBlank() ? LocalDate.parse(startDate).atStartOfDay() : null;
         LocalDateTime end = endDate != null && !endDate.isBlank() ? LocalDate.parse(endDate).plusDays(1).atStartOfDay() : null;
         String searchTerm = search != null && !search.isBlank() ? search : null;

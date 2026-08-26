@@ -419,7 +419,7 @@ public class StockImportServiceImpl implements StockImportService {
         }
 
         Product product = new Product();
-        product.setName(rowData.getName().trim());
+        product.setName(com.warehouse.util.TurkishText.toProductNameCase(rowData.getName()));
         product.setSku(skuTrimmed);
         product.setSlug(skuTrimmed.toLowerCase()
             .replace(" ", "-").replaceAll("[^a-z0-9\\-]", ""));

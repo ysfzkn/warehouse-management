@@ -209,6 +209,9 @@ public class ProductServiceImpl implements ProductService {
 
         validateSkuUniqueness(product.getSku());
 
+        // Normalised here rather than only in the form, so bulk imports and crawler-sourced
+        // names land in the same shape as hand-typed ones.
+        product.setName(com.warehouse.util.TurkishText.toProductNameCase(product.getName()));
         product.setCategory(category);
         setBrandIfPresent(product);
         setColorIfPresent(product);
@@ -949,7 +952,7 @@ public class ProductServiceImpl implements ProductService {
     }
 
     private void updateProductFields(Product product, Product productDetails) {
-        product.setName(productDetails.getName());
+        product.setName(com.warehouse.util.TurkishText.toProductNameCase(productDetails.getName()));
         product.setDescription(productDetails.getDescription());
         product.setShortDescription(productDetails.getShortDescription());
         product.setSku(productDetails.getSku());

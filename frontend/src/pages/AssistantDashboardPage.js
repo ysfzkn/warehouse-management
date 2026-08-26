@@ -1,7 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
 import useSecurityCodePrompt from '../components/useSecurityCodePrompt';
 import confirmDialog from '../utils/confirmDialog';
+
+// Read from localStorage only, so nothing here belongs to a render.
+const token = () => localStorage.getItem('auth_token');
+const authHeader = () => ({ headers: { Authorization: `Bearer ${token()}` } });
 
 /**
  * Admin dashboard for the Cezeri assistant platform. Shows per-profile
@@ -21,10 +25,7 @@ export default function AssistantDashboardPage() {
   const [flagSaving, setFlagSaving] = useState(false);
   const { askCode, SecurityCodePrompt } = useSecurityCodePrompt();
 
-  const token = () => localStorage.getItem('auth_token');
-  const authHeader = () => ({ headers: { Authorization: `Bearer ${token()}` } });
-
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
       const resp = await axios.get('/api/admin/assistant/dashboard', authHeader());
@@ -44,7 +45,7 @@ export default function AssistantDashboardPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   const toggleFlag = async (key) => {
     const willEnable = !flags[key];
@@ -118,10 +119,9 @@ export default function AssistantDashboardPage() {
     }
   };
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     load();
-  }, []);
+  }, [load]);
 
   const onReindexProducts = async () => {
     const ok = await confirmDialog({

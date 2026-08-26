@@ -431,12 +431,9 @@ export default function AdminOrders() {
 
       {/* Invoice Upload Modal */}
       {showInvoiceModal && (
-        <div
-          className="modal d-block"
-          style={{ background: 'rgba(0,0,0,0.5)', zIndex: 5000 }}
-          onClick={() => setShowInvoiceModal(false)}
-        >
-          <div className="modal-dialog modal-dialog-centered" onClick={(e) => e.stopPropagation()}>
+        <div className="modal d-block" style={{ background: 'rgba(0,0,0,0.5)', zIndex: 5000 }}>
+          {/* No backdrop dismissal: a stray click outside used to discard everything typed here. */}
+          <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content border-0 shadow" style={{ borderRadius: 16 }}>
               <div className="modal-header border-0 pb-0">
                 <div>
@@ -1801,12 +1798,9 @@ export default function AdminOrders() {
 
       {/* ══ Bank Transfer Confirmation Modal — reference + amount visible, verification flow ══ */}
       {confirmModal && orderDetail && (
-        <div
-          className="modal show d-block"
-          style={{ background: 'rgba(0,0,0,0.5)', zIndex: 4500 }}
-          onClick={() => setConfirmModal(null)}
-        >
-          <div className="modal-dialog modal-dialog-centered" onClick={(e) => e.stopPropagation()}>
+        <div className="modal show d-block" style={{ background: 'rgba(0,0,0,0.5)', zIndex: 4500 }}>
+          {/* No backdrop dismissal: a stray click outside used to discard everything typed here. */}
+          <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content border-0 shadow-lg" style={{ borderRadius: 14 }}>
               <div className="modal-header bg-success bg-opacity-10 border-0">
                 <h5 className="modal-title fw-bold text-success">

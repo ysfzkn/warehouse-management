@@ -344,6 +344,8 @@ public class StockServiceImpl implements StockService {
                 throw new WarehouseManagementException(ErrorCode.REQUIRED_FIELD_MISSING,
                         "Emanet depo için müşteri telefon numarası gereklidir.");
             }
+            // Title-cased on save so "ayşe yılmaz" and "AYŞE YILMAZ" do not read as two people.
+            stock.setCustomerName(com.warehouse.util.TurkishText.toTitleCase(stock.getCustomerName()));
         }
 
         Stock saved = stockRepository.save(stock);
@@ -492,7 +494,7 @@ public class StockServiceImpl implements StockService {
         if (warehouse.getWarehouseType() == WarehouseType.EMANET_DEPO) {
             // Update customer name if provided
             if (stockDetails.getCustomerName() != null) {
-                String customerName = stockDetails.getCustomerName().trim();
+                String customerName = com.warehouse.util.TurkishText.toTitleCase(stockDetails.getCustomerName());
                 if (customerName.isEmpty()) {
                     throw new WarehouseManagementException(ErrorCode.REQUIRED_FIELD_MISSING,
                             "Emanet depo için müşteri adı gereklidir.");
@@ -857,12 +859,17 @@ public class StockServiceImpl implements StockService {
         }
     }
 
+    /**
+     * Notes are often nothing but a customer name, so they get the same casing treatment as one:
+     * a short all-alphabetic note is title cased, a real sentence only gets its first letter
+     * capitalised — title casing the whole thing would read "Kalan 2 Adet Teslim Edildi".
+     */
     private String normalizeAdditionNote(String additionNote) {
         if (additionNote == null) {
             return null;
         }
         String trimmed = additionNote.trim();
-        return trimmed.isEmpty() ? null : trimmed;
+        return trimmed.isEmpty() ? null : com.warehouse.util.TurkishText.toNoteCase(trimmed);
     }
 
     private AuditMetadata buildStockMetadata(Stock stock, Integer quantityContext) {

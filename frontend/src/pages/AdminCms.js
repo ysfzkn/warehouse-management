@@ -3,6 +3,7 @@ import axios from 'axios';
 import useSecurityCodePrompt from '../components/useSecurityCodePrompt';
 import RichTextEditor from '../components/RichTextEditor';
 import confirmDialog from '../utils/confirmDialog';
+import { useAdminToast } from '../components/AdminToast';
 
 const PAGE_TYPES = { CONTENT: 'İçerik Sayfası', LEGAL: 'Yasal Sayfa', FAQ: 'SSS', BANNER: 'Banner / Slayt' };
 const BANNER_POSITIONS = { HERO: 'Ana Sayfa (Hero)', SIDEBAR: 'Yan Panel', FOOTER: 'Alt Kısım' };
@@ -13,6 +14,7 @@ const BANNER_SIZE_HINTS = {
 };
 
 export default function AdminCms() {
+  const toast = useAdminToast();
   const [pages, setPages] = useState([]);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({
@@ -87,7 +89,7 @@ export default function AdminCms() {
   const handleBannerImageUpload = async (file) => {
     if (!file || !file.type.startsWith('image/')) return;
     if (file.size > 10 * 1024 * 1024) {
-      alert("Dosya boyutu 10MB'ı aşamaz.");
+      toast.warning("Dosya boyutu 10MB'ı aşamaz.");
       return;
     }
     setBannerUploading(true);
@@ -100,7 +102,7 @@ export default function AdminCms() {
       });
       setForm((f) => ({ ...f, bannerImageUrl: res.data.url || '' }));
     } catch (e) {
-      alert(e.response?.data?.message || 'Görsel yüklenemedi.');
+      toast.error(e.response?.data?.message || 'Görsel yüklenemedi.');
     } finally {
       setBannerUploading(false);
     }
@@ -108,11 +110,11 @@ export default function AdminCms() {
 
   const handleSave = async () => {
     if (!form.title || !form.slug) {
-      alert('Başlık ve slug zorunludur');
+      toast.warning('Başlık ve slug zorunludur.');
       return;
     }
     if (form.pageType === 'BANNER' && !form.bannerPosition) {
-      alert('Banner pozisyonu seçiniz');
+      toast.warning('Banner pozisyonu seçiniz.');
       return;
     }
     try {
@@ -124,7 +126,7 @@ export default function AdminCms() {
       resetForm();
       fetchPages();
     } catch (e) {
-      alert(e.response?.data?.message || 'Hata oluştu');
+      toast.error(e.response?.data?.message || 'Kaydedilemedi.');
     }
   };
 
@@ -141,7 +143,7 @@ export default function AdminCms() {
       await axios.delete(`/api/admin/cms/${id}`, { headers: { 'X-ADMIN-SECURITY-CODE': code } });
       fetchPages();
     } catch (e) {
-      alert(e.response?.status === 403 ? 'Güvenlik şifresi hatalı.' : 'Silinemedi');
+      toast.error(e.response?.status === 403 ? 'Güvenlik şifresi hatalı.' : 'Silinemedi.');
     }
   };
 
@@ -265,7 +267,7 @@ export default function AdminCms() {
       });
       fetchPages();
     } catch (e) {
-      alert(e.response?.data?.message || 'Sayfa oluşturulamadı');
+      toast.error(e.response?.data?.message || 'Sayfa oluşturulamadı.');
     }
   };
 

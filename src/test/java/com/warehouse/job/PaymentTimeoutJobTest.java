@@ -25,12 +25,13 @@ class PaymentTimeoutJobTest {
     @Mock private OrderItemRepository orderItemRepo;
     @Mock private OrderStatusHistoryRepository statusHistoryRepo;
     @Mock private StockRepository stockRepo;
+    @Mock private com.warehouse.service.CouponService couponService;
 
     private PaymentTimeoutJob job;
 
     @BeforeEach
     void setUp() {
-        job = new PaymentTimeoutJob(paymentRepo, orderRepo, orderItemRepo, statusHistoryRepo, stockRepo);
+        job = new PaymentTimeoutJob(paymentRepo, orderRepo, orderItemRepo, statusHistoryRepo, stockRepo, couponService);
     }
 
     @Test

@@ -36,6 +36,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import com.warehouse.util.PageLimits;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
@@ -78,6 +79,7 @@ public class AdminOrderController {
     private final com.warehouse.service.ManualOrderService manualOrderService;
     private final com.warehouse.repository.StockTransferRepository stockTransferRepository;
     private final com.warehouse.mapper.StockTransferMapper stockTransferMapper;
+    private final com.warehouse.service.CouponService couponService;
 
     public AdminOrderController(OrderRepository orderRepository,
                                  OrderItemRepository orderItemRepository,
@@ -94,7 +96,8 @@ public class AdminOrderController {
                                  com.warehouse.service.PhotoStorageService photoStorageService,
                                  com.warehouse.service.ManualOrderService manualOrderService,
                                  com.warehouse.repository.StockTransferRepository stockTransferRepository,
-                                 com.warehouse.mapper.StockTransferMapper stockTransferMapper) {
+                                 com.warehouse.mapper.StockTransferMapper stockTransferMapper,
+                                 com.warehouse.service.CouponService couponService) {
         this.orderRepository = orderRepository;
         this.orderItemRepository = orderItemRepository;
         this.statusHistoryRepository = statusHistoryRepository;
@@ -111,6 +114,7 @@ public class AdminOrderController {
         this.manualOrderService = manualOrderService;
         this.stockTransferRepository = stockTransferRepository;
         this.stockTransferMapper = stockTransferMapper;
+        this.couponService = couponService;
     }
 
     @GetMapping
@@ -135,13 +139,13 @@ public class AdminOrderController {
         String pmFilter = (paymentMethod != null && !paymentMethod.isBlank()) ? paymentMethod : null;
         String cargoFilter = (cargoCompany != null && !cargoCompany.isBlank()) ? cargoCompany : null;
         java.time.LocalDateTime startDt = null, endDt = null;
-        try { if (startDate != null && !startDate.isBlank()) startDt = java.time.LocalDate.parse(startDate).atStartOfDay(); } catch (Exception ignored) {}
-        try { if (endDate != null && !endDate.isBlank()) endDt = java.time.LocalDate.parse(endDate).plusDays(1).atStartOfDay(); } catch (Exception ignored) {}
+        if (startDate != null && !startDate.isBlank()) startDt = parseFilterDate(startDate, "Başlangıç").atStartOfDay();
+        if (endDate != null && !endDate.isBlank()) endDt = parseFilterDate(endDate, "Bitiş").plusDays(1).atStartOfDay();
         String searchParam = (search != null && !search.isBlank()) ? search : null;
 
         Page<Order> result = orderRepository.findAll(
             com.warehouse.repository.OrderSpecifications.withFilters(statusFilter, pmFilter, cargoFilter, channel, startDt, endDt, searchParam),
-            PageRequest.of(page, size, sort));
+            PageRequest.of(PageLimits.page(page), PageLimits.size(size), sort));
 
         List<AdminOrderDto> dtos = result.getContent().stream().map(o -> AdminOrderDto.builder()
             .id(o.getId())
@@ -224,6 +228,9 @@ public class AdminOrderController {
             .orElseThrow(() -> new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Sipariş bulunamadı."));
 
         List<OrderItem> items = orderItemRepository.findByOrderId(id);
+        // Warehouse names in one query instead of one per line — an order with 20 lines used
+        // to fire 20 stock lookups just to render the detail modal.
+        Map<Long, String> warehouseNameByStockId = warehouseNamesFor(items);
         List<OrderStatusHistory> history = statusHistoryRepository.findByOrderIdOrderByCreatedAtDesc(id);
 
         // If bank transfer — pull the reference + status from the latest transaction (for admin approval)
@@ -284,24 +291,22 @@ public class AdminOrderController {
             .invoiceNumber(order.getInvoiceNumber())
             .invoiceUrl(order.getInvoiceUrl())
             .items(items.stream().map(i -> {
-                String warehouseName = "";
-                try {
-                    if (i.getWarehouseId() != null) {
-                        var wh = stockRepository.findById(i.getStockId());
-                        if (wh.isPresent()) warehouseName = wh.get().getWarehouse().getName();
-                    }
-                } catch (Exception ignored) {}
+                String warehouseName = i.getStockId() == null ? ""
+                    : warehouseNameByStockId.getOrDefault(i.getStockId(), "");
                 Long productId = null;
                 String imageUrl = null;
-                try {
-                    if (i.getProduct() != null) {
-                        productId = i.getProduct().getId();
+                if (i.getProduct() != null) {
+                    productId = i.getProduct().getId();
+                    // Images are lazily loaded; a detached line simply renders without a cover.
+                    try {
                         var img = com.warehouse.util.ProductImageUtil.displayCover(i.getProduct().getImages()).orElse(null);
                         if (img != null) {
                             imageUrl = "/api/admin/products/images/" + img.getId() + "/view?thumbnail=true";
                         }
+                    } catch (org.hibernate.LazyInitializationException e) {
+                        imageUrl = null;
                     }
-                } catch (Exception ignored2) {}
+                }
                 return AdminOrderDetailDto.OrderItemDto.builder()
                     .id(i.getId())
                     .productId(productId)
@@ -330,7 +335,12 @@ public class AdminOrderController {
             .build());
     }
 
+    /**
+     * Status change + its stock side effects must land together: a DELIVERED order whose
+     * deduction failed used to leave the stock reserved forever with only a WARN in the log.
+     */
     @PutMapping("/{id}/status")
+    @org.springframework.transaction.annotation.Transactional
     public ResponseEntity<Map<String, String>> updateStatus(@PathVariable Long id,
                                                              @Valid @RequestBody OrderStatusUpdateRequest body) {
         Order order = orderRepository.findByIdWithCustomer(id)
@@ -382,11 +392,10 @@ public class AdminOrderController {
 
         // If DELIVERED → deduct reserved stock (convert reservation to actual sale) + log StockEvent
         if (newStatus == OrderStatus.DELIVERED) {
-            try {
+            {
                 var items = orderItemRepository.findByOrderId(order.getId());
                 for (var item : items) {
-                    Long productId = null;
-                    try { productId = item.getProduct() != null ? item.getProduct().getId() : null; } catch (Exception ignored) {}
+                    Long productId = item.getProduct() != null ? item.getProduct().getId() : null;
 
                     if (item.getStockId() != null) {
                         stockRepository.findById(item.getStockId()).ifPresent(stock -> {
@@ -420,8 +429,6 @@ public class AdminOrderController {
                         stockEventRepository.save(event);
                     }
                 }
-            } catch (Exception e) {
-                org.slf4j.LoggerFactory.getLogger(getClass()).warn("Stock deduction failed for order {}: {}", order.getOrderNumber(), e.getMessage());
             }
 
             // Door payment → auto-complete payment with audit trail
@@ -440,13 +447,13 @@ public class AdminOrderController {
             }
         }
 
-        // If CANCELLED → release reserved stock + log StockEvent
+        // If CANCELLED → release reserved stock + the coupon use + log StockEvent
         if (newStatus == OrderStatus.CANCELLED) {
-            try {
+            couponService.release(order.getId());
+            {
                 var items = orderItemRepository.findByOrderId(order.getId());
                 for (var item : items) {
-                    Long pId = null;
-                    try { pId = item.getProduct() != null ? item.getProduct().getId() : null; } catch (Exception ignored) {}
+                    Long pId = item.getProduct() != null ? item.getProduct().getId() : null;
 
                     if (item.getStockId() != null) {
                         stockRepository.findById(item.getStockId()).ifPresent(stock -> {
@@ -477,8 +484,6 @@ public class AdminOrderController {
                         stockEventRepository.save(event);
                     }
                 }
-            } catch (Exception e) {
-                org.slf4j.LoggerFactory.getLogger(getClass()).warn("Stock release failed for cancelled order {}: {}", order.getOrderNumber(), e.getMessage());
             }
         }
 
@@ -493,7 +498,11 @@ public class AdminOrderController {
                         body.getNote()
                 );
             }
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            // A failed notification must not undo the status change, but it cannot be invisible.
+            org.slf4j.LoggerFactory.getLogger(getClass()).warn(
+                "Sipariş {} durum bildirimi gönderilemedi: {}", order.getOrderNumber(), e.toString());
+        }
 
         return ResponseEntity.ok(Map.of("message", "Sipariş durumu güncellendi: " + com.warehouse.util.OrderStatusMachine.getLabel(newStatus)));
     }
@@ -517,8 +526,8 @@ public class AdminOrderController {
         Order order = orderRepository.findById(id)
             .orElseThrow(() -> new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Sipariş bulunamadı."));
 
-        if (body.getCargoCompany() != null) {
-            try { order.setCargoCompany(CargoCompany.valueOf(body.getCargoCompany())); } catch (Exception ignored) {}
+        if (body.getCargoCompany() != null && !body.getCargoCompany().isBlank()) {
+            order.setCargoCompany(parseCargoCompany(body.getCargoCompany()));
         }
         order.setCargoTrackingNo(body.getCargoTrackingNo());
         orderRepository.save(order);
@@ -618,6 +627,45 @@ public class AdminOrderController {
         "Sipariş No", "Müşteri", "E-posta", "Tutar", "Durum", "Ödeme Yöntemi", "Kargo", "Tarih"
     };
 
+    /** A malformed filter date is a client error, not a reason to silently return everything. */
+    private static java.time.LocalDate parseFilterDate(String raw, String label) {
+        try {
+            return java.time.LocalDate.parse(raw.trim());
+        } catch (java.time.format.DateTimeParseException e) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                label + " tarihi geçersiz (beklenen biçim: YYYY-AA-GG): " + raw);
+        }
+    }
+
+    /** Unknown carrier codes map to OTHER instead of quietly clearing the field. */
+    private static CargoCompany parseCargoCompany(String raw) {
+        try {
+            return CargoCompany.valueOf(raw.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            return CargoCompany.OTHER;
+        }
+    }
+
+    /** Warehouse name per stock id for a batch of order lines — one query for the whole order. */
+    private Map<Long, String> warehouseNamesFor(List<OrderItem> items) {
+        List<Long> stockIds = items.stream()
+            .map(OrderItem::getStockId)
+            .filter(java.util.Objects::nonNull)
+            .distinct()
+            .collect(Collectors.toList());
+        if (stockIds.isEmpty()) return Map.of();
+        Map<Long, String> byStockId = new java.util.LinkedHashMap<>();
+        for (var stock : stockRepository.findAllById(stockIds)) {
+            if (stock.getWarehouse() != null && stock.getWarehouse().getName() != null) {
+                byStockId.put(stock.getId(), stock.getWarehouse().getName());
+            }
+        }
+        return byStockId;
+    }
+
+    /** Hard ceiling for a single Excel export; beyond this the user must narrow the date range. */
+    private static final int EXPORT_ROW_LIMIT = 20_000;
+
     @GetMapping("/export")
     @Transactional(readOnly = true)
     public ResponseEntity<Resource> exportOrders(
@@ -625,29 +673,20 @@ public class AdminOrderController {
             @RequestParam(required = false) String startDate,
             @RequestParam(required = false) String endDate) {
 
-        // Fetch all orders with customer eagerly loaded
-        List<Order> allOrders = orderRepository.findAllWithCustomer(
-                PageRequest.of(0, Integer.MAX_VALUE, Sort.by(Sort.Direction.DESC, "createdAt"))
-        ).getContent();
-
-        // Apply optional filters
-        if (status != null) {
-            allOrders = allOrders.stream()
-                    .filter(o -> o.getStatus() == status)
-                    .collect(Collectors.toList());
+        // Filters go into the query, and the result set is capped — a full-table read into
+        // memory would take the server down once the order table grows.
+        LocalDateTime from = (startDate != null && !startDate.isBlank())
+                ? LocalDate.parse(startDate).atStartOfDay()
+                : LocalDateTime.of(1970, 1, 1, 0, 0);
+        LocalDateTime to = (endDate != null && !endDate.isBlank())
+                ? LocalDate.parse(endDate).atTime(23, 59, 59)
+                : LocalDateTime.now().plusYears(1);
+        if (from.isAfter(to)) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                    "Başlangıç tarihi bitiş tarihinden sonra olamaz.");
         }
-        if (startDate != null && !startDate.isBlank()) {
-            LocalDateTime from = LocalDate.parse(startDate).atStartOfDay();
-            allOrders = allOrders.stream()
-                    .filter(o -> o.getCreatedAt() != null && !o.getCreatedAt().isBefore(from))
-                    .collect(Collectors.toList());
-        }
-        if (endDate != null && !endDate.isBlank()) {
-            LocalDateTime to = LocalDate.parse(endDate).atTime(23, 59, 59);
-            allOrders = allOrders.stream()
-                    .filter(o -> o.getCreatedAt() != null && !o.getCreatedAt().isAfter(to))
-                    .collect(Collectors.toList());
-        }
+        List<Order> allOrders = orderRepository.findForExport(status, from, to,
+                PageRequest.of(0, EXPORT_ROW_LIMIT));
 
         try (Workbook workbook = new XSSFWorkbook()) {
             Sheet sheet = workbook.createSheet("Siparişler");

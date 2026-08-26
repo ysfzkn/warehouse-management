@@ -24,6 +24,19 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, Lo
     @EntityGraph(value = StockTransfer.GRAPH_WITH_RELATIONS, type = EntityGraph.EntityGraphType.LOAD)
     Page<StockTransfer> findAll(Pageable pageable);
 
+    /**
+     * Recent customer deliveries — the candidate pool for the duplicate-delivery check.
+     * Cancelled shipments are excluded (they never reached anyone); name matching happens in
+     * Java, see {@link com.warehouse.util.TurkishText}.
+     */
+    @Query("SELECT st FROM StockTransfer st LEFT JOIN FETCH st.sourceWarehouse " +
+           "WHERE st.transferType = com.warehouse.enums.TransferType.CUSTOMER_DELIVERY " +
+           "AND st.status <> com.warehouse.enums.TransferStatus.CANCELLED " +
+           "AND st.transferDate >= :since " +
+           "ORDER BY st.transferDate DESC")
+    List<StockTransfer> findRecentCustomerDeliveries(@Param("since") LocalDateTime since,
+                                                     Pageable pageable);
+
     /** Shipments created for a specific order (customer chose our own delivery). */
     @Query("SELECT DISTINCT st FROM StockTransfer st " +
            "LEFT JOIN FETCH st.sourceWarehouse " +

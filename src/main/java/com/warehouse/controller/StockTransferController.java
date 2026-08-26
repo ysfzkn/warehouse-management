@@ -358,7 +358,8 @@ public class StockTransferController {
         transfer.setTransferType(transferType);
 
         if (transferType == TransferType.CUSTOMER_DELIVERY) {
-            transfer.setCustomerFullName(request.getCustomerFullName() != null ? request.getCustomerFullName().trim() : null);
+            // Stored title-cased so the same person reads identically on every screen.
+            transfer.setCustomerFullName(com.warehouse.util.TurkishText.toTitleCase(request.getCustomerFullName()));
             transfer.setCustomerPhone(request.getCustomerPhone() != null ? request.getCustomerPhone().trim() : null);
             transfer.setCustomerAddress(request.getCustomerAddress() != null ? request.getCustomerAddress().trim() : null);
             transfer.setOrderId(request.getOrderId());

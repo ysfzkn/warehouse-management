@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FiUser, FiPhone, FiMapPin, FiHome, FiCreditCard, FiCheck, FiAlertCircle } from 'react-icons/fi';
 import { TR_PROVINCES, getDistrictsForProvince } from '../../data/tr-locations';
+import { toTitleCaseTr } from '../../utils/name';
 
 // TC Kimlik No validation
 function validateTcKimlik(tc) {
@@ -198,7 +199,10 @@ export default function AddressForm({ onSubmit, initialData, submitLabel, onCanc
             name="firstName"
             value={form.firstName}
             onChange={(e) => f('firstName', e.target.value)}
-            onBlur={() => touch('firstName')}
+            onBlur={(e) => {
+              touch('firstName');
+              f('firstName', toTitleCaseTr(e.target.value));
+            }}
             placeholder="Adınız"
             autoComplete="given-name"
             aria-required="true"
@@ -226,7 +230,10 @@ export default function AddressForm({ onSubmit, initialData, submitLabel, onCanc
             name="lastName"
             value={form.lastName}
             onChange={(e) => f('lastName', e.target.value)}
-            onBlur={() => touch('lastName')}
+            onBlur={(e) => {
+              touch('lastName');
+              f('lastName', toTitleCaseTr(e.target.value));
+            }}
             placeholder="Soyadınız"
             autoComplete="family-name"
             aria-required="true"

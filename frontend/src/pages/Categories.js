@@ -5,6 +5,7 @@ import CategoryForm from '../components/CategoryForm';
 import FilterChips from '../components/FilterChips';
 import ConfirmModal from '../components/ConfirmModal';
 import ExpandableText from '../components/ExpandableText';
+import { useAdminToast } from '../components/AdminToast';
 
 const normalizeText = (text) => (text || '').toLocaleLowerCase('tr-TR');
 
@@ -1125,6 +1126,7 @@ const Categories = () => {
 };
 
 const SubcategoryModal = ({ parentCategoryId, parentCategoryName, onSuccess, onCancel }) => {
+  const toast = useAdminToast();
   const [subcategories, setSubcategories] = useState([{ name: '', description: '' }]);
   const [loading, setLoading] = useState(false);
 
@@ -1159,7 +1161,7 @@ const SubcategoryModal = ({ parentCategoryId, parentCategoryName, onSuccess, onC
       onSuccess();
     } catch (error) {
       console.error('Error creating subcategories:', error);
-      alert('Alt kategoriler oluşturulurken hata oluştu');
+      toast.error('Alt kategoriler oluşturulurken hata oluştu.');
     } finally {
       setLoading(false);
     }

@@ -1,5 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
+
+const token = () => localStorage.getItem('auth_token');
+const authHeader = () => ({ headers: { Authorization: `Bearer ${token()}` } });
 
 /**
  * Admin page for tuning assistant safety, rate limits, RAG, provider (Azure / OpenAI)
@@ -61,10 +64,7 @@ export default function AssistantSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(null);
 
-  const token = () => localStorage.getItem('auth_token');
-  const authHeader = () => ({ headers: { Authorization: `Bearer ${token()}` } });
-
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
       const resp = await axios.get('/api/admin/assistant/config', authHeader());
@@ -74,12 +74,11 @@ export default function AssistantSettingsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     load();
-  }, []);
+  }, [load]);
 
   const save = async () => {
     setSaving(true);

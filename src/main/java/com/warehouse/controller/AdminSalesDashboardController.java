@@ -15,6 +15,8 @@ import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import org.springframework.data.domain.PageRequest;
+
 @RestController
 @RequestMapping("/api/admin/sales-dashboard")
 @PreAuthorize("hasRole('ADMIN')")
@@ -60,24 +62,20 @@ public class AdminSalesDashboardController {
         summary.put("returnRequested", returnRequested);
         summary.put("activeOrders", paid + preparing + shipped);
 
-        // Revenue calculations from all orders
-        List<Object[]> revenueData = orderRepo.findAll().stream()
-            .filter(o -> o.getGrandTotal() != null)
-            .filter(o -> startDate == null || (o.getCreatedAt() != null && o.getCreatedAt().isAfter(startDate)))
-            .map(o -> new Object[]{o.getStatus(), o.getGrandTotal(), o.getCreatedAt()})
-            .collect(Collectors.toList());
-
-        BigDecimal totalRevenue = revenueData.stream()
-            .filter(r -> r[0] == OrderStatus.DELIVERED || r[0] == OrderStatus.PAID || r[0] == OrderStatus.PREPARING || r[0] == OrderStatus.SHIPPED)
-            .map(r -> (BigDecimal) r[1])
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        BigDecimal deliveredRevenue = revenueData.stream()
-            .filter(r -> r[0] == OrderStatus.DELIVERED)
-            .map(r -> (BigDecimal) r[1])
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        long periodOrders = revenueData.size();
+        // Revenue for the period — grouped in SQL, one row per status.
+        Set<OrderStatus> revenueStatuses = EnumSet.of(
+            OrderStatus.DELIVERED, OrderStatus.PAID, OrderStatus.PREPARING, OrderStatus.SHIPPED);
+        BigDecimal totalRevenue = BigDecimal.ZERO;
+        BigDecimal deliveredRevenue = BigDecimal.ZERO;
+        long periodOrders = 0;
+        for (Object[] row : orderRepo.aggregateByStatusSince(startDate == null ? EPOCH : startDate)) {
+            OrderStatus status = (OrderStatus) row[0];
+            long count = ((Number) row[1]).longValue();
+            BigDecimal revenue = toAmount(row[2]);
+            periodOrders += count;
+            if (revenueStatuses.contains(status)) totalRevenue = totalRevenue.add(revenue);
+            if (status == OrderStatus.DELIVERED) deliveredRevenue = deliveredRevenue.add(revenue);
+        }
         BigDecimal avgOrderValue = periodOrders > 0
             ? totalRevenue.divide(BigDecimal.valueOf(periodOrders), 2, java.math.RoundingMode.HALF_UP)
             : BigDecimal.ZERO;
@@ -101,15 +99,9 @@ public class AdminSalesDashboardController {
             LocalDateTime prevStart = startDate.minus(duration);
             LocalDateTime prevEnd = startDate;
 
-            List<Object[]> prevData = orderRepo.findAll().stream()
-                .filter(o -> o.getGrandTotal() != null && o.getCreatedAt() != null)
-                .filter(o -> o.getCreatedAt().isAfter(prevStart) && o.getCreatedAt().isBefore(prevEnd))
-                .filter(o -> o.getStatus() != OrderStatus.CANCELLED)
-                .map(o -> new Object[]{o.getGrandTotal(), o.getCreatedAt()})
-                .collect(Collectors.toList());
-
-            BigDecimal prevRevenue = prevData.stream().map(r -> (BigDecimal) r[0]).reduce(BigDecimal.ZERO, BigDecimal::add);
-            long prevOrders = prevData.size();
+            Object[] prev = orderRepo.aggregateBetween(prevStart, prevEnd);
+            long prevOrders = prev == null ? 0 : ((Number) prev[0]).longValue();
+            BigDecimal prevRevenue = prev == null ? BigDecimal.ZERO : toAmount(prev[1]);
 
             double revenueChange = prevRevenue.compareTo(BigDecimal.ZERO) > 0
                 ? totalRevenue.subtract(prevRevenue).doubleValue() / prevRevenue.doubleValue() * 100 : 0;
@@ -134,14 +126,12 @@ public class AdminSalesDashboardController {
         // 7 days x 24 hours matrix
         int[][] heatmap = new int[7][24]; // [dayOfWeek][hour]
 
-        orderRepo.findAll().stream()
-            .filter(o -> o.getCreatedAt() != null && o.getCreatedAt().isAfter(startDate))
-            .filter(o -> o.getStatus() != OrderStatus.CANCELLED)
-            .forEach(o -> {
-                int dow = o.getCreatedAt().getDayOfWeek().getValue() - 1; // 0=Mon, 6=Sun
-                int hour = o.getCreatedAt().getHour();
-                heatmap[dow][hour]++;
-            });
+        for (Object[] row : orderRepo.findCreatedAtAndTotalSince(startDate)) {
+            LocalDateTime createdAt = (LocalDateTime) row[0];
+            if (createdAt == null) continue;
+            int dow = createdAt.getDayOfWeek().getValue() - 1; // 0=Mon, 6=Sun
+            heatmap[dow][createdAt.getHour()]++;
+        }
 
         List<Map<String, Object>> result = new ArrayList<>();
         String[] dayNames = {"Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"};
@@ -163,15 +153,10 @@ public class AdminSalesDashboardController {
         LocalDateTime todayStart = LocalDate.now().atStartOfDay();
         Map<String, Object> live = new LinkedHashMap<>();
 
-        List<com.warehouse.entity.Order> todayOrders = orderRepo.findAll().stream()
-            .filter(o -> o.getCreatedAt() != null && o.getCreatedAt().isAfter(todayStart))
-            .collect(Collectors.toList());
-
-        long todayCount = todayOrders.stream().filter(o -> o.getStatus() != OrderStatus.CANCELLED).count();
-        BigDecimal todayRevenue = todayOrders.stream()
-            .filter(o -> o.getStatus() != OrderStatus.CANCELLED && o.getGrandTotal() != null)
-            .map(com.warehouse.entity.Order::getGrandTotal)
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
+        // Polled every 30s by the dashboard — must stay a single aggregate query.
+        Object[] today = orderRepo.aggregateBetween(todayStart, todayStart.plusDays(1));
+        long todayCount = today == null ? 0 : ((Number) today[0]).longValue();
+        BigDecimal todayRevenue = today == null ? BigDecimal.ZERO : toAmount(today[1]);
 
         live.put("todayOrders", todayCount);
         live.put("todayRevenue", todayRevenue);
@@ -198,14 +183,15 @@ public class AdminSalesDashboardController {
             ordersByDay.put(date, 0L);
         }
 
-        orderRepo.findAll().stream()
-            .filter(o -> o.getCreatedAt() != null && o.getCreatedAt().isAfter(startDate))
-            .filter(o -> o.getStatus() != OrderStatus.CANCELLED)
-            .forEach(o -> {
-                LocalDate day = o.getCreatedAt().toLocalDate();
-                revenueByDay.merge(day, o.getGrandTotal() != null ? o.getGrandTotal() : BigDecimal.ZERO, BigDecimal::add);
-                ordersByDay.merge(day, 1L, Long::sum);
-            });
+        for (Object[] row : orderRepo.findCreatedAtAndTotalSince(startDate)) {
+            LocalDateTime createdAt = (LocalDateTime) row[0];
+            if (createdAt == null) continue;
+            LocalDate day = createdAt.toLocalDate();
+            // merge() only counts days seeded above; older rows would create stray buckets.
+            if (!revenueByDay.containsKey(day)) continue;
+            revenueByDay.merge(day, toAmount(row[1]), BigDecimal::add);
+            ordersByDay.merge(day, 1L, Long::sum);
+        }
 
         for (Map.Entry<LocalDate, BigDecimal> entry : revenueByDay.entrySet()) {
             Map<String, Object> point = new LinkedHashMap<>();
@@ -222,36 +208,16 @@ public class AdminSalesDashboardController {
     public ResponseEntity<List<Map<String, Object>>> getTopProducts(
             @RequestParam(defaultValue = "10") int limit) {
 
-        Map<String, long[]> productStats = new LinkedHashMap<>(); // name -> [quantity, revenue]
-
-        orderRepo.findAll().stream()
-            .filter(o -> o.getStatus() != OrderStatus.CANCELLED)
-            .forEach(o -> {
-                try {
-                    if (o.getItems() != null) {
-                        o.getItems().forEach(item -> {
-                            String name = "Ürün";
-                            try {
-                                if (item.getProductSnapshot() != null) {
-                                    name = (String) item.getProductSnapshot().getOrDefault("name", "Ürün");
-                                }
-                            } catch (Exception ignored) {}
-                            long[] stats = productStats.computeIfAbsent(name, k -> new long[]{0, 0});
-                            stats[0] += item.getQuantity();
-                            stats[1] += item.getLineTotal() != null ? item.getLineTotal().longValue() : 0;
-                        });
-                    }
-                } catch (Exception ignored) {}
-            });
-
-        List<Map<String, Object>> topProducts = productStats.entrySet().stream()
-            .sorted((a, b) -> Long.compare(b.getValue()[1], a.getValue()[1]))
-            .limit(limit)
-            .map(e -> {
+        // Grouped and ordered in SQL, limited to the requested rows — the previous version
+        // walked every order's item collection (a full scan plus one query per order).
+        int safeLimit = Math.max(1, Math.min(limit, 100));
+        List<Map<String, Object>> topProducts = orderRepo.aggregateTopProducts(PageRequest.of(0, safeLimit))
+            .stream()
+            .map(row -> {
                 Map<String, Object> p = new LinkedHashMap<>();
-                p.put("name", e.getKey());
-                p.put("quantity", e.getValue()[0]);
-                p.put("revenue", e.getValue()[1]);
+                p.put("name", row[0] == null ? "Ürün" : String.valueOf(row[0]));
+                p.put("quantity", ((Number) row[1]).longValue());
+                p.put("revenue", toAmount(row[2]));
                 return p;
             })
             .collect(Collectors.toList());
@@ -261,16 +227,13 @@ public class AdminSalesDashboardController {
 
     @GetMapping("/payment-breakdown")
     public ResponseEntity<List<Map<String, Object>>> getPaymentBreakdown() {
-        Map<String, long[]> breakdown = new LinkedHashMap<>();
-
-        orderRepo.findAll().stream()
-            .filter(o -> o.getStatus() != OrderStatus.CANCELLED && o.getPaymentMethod() != null)
-            .forEach(o -> {
-                String method = o.getPaymentMethod();
-                long[] stats = breakdown.computeIfAbsent(method, k -> new long[]{0, 0});
-                stats[0]++;
-                stats[1] += o.getGrandTotal() != null ? o.getGrandTotal().longValue() : 0;
-            });
+        // [method -> {count, revenue}] straight from SQL; revenue stays BigDecimal so the
+        // kuruş are not truncated the way the old longValue() conversion did.
+        Map<String, Object[]> breakdown = new LinkedHashMap<>();
+        for (Object[] row : orderRepo.aggregateByPaymentMethod()) {
+            breakdown.put(String.valueOf(row[0]),
+                    new Object[]{((Number) row[1]).longValue(), toAmount(row[2])});
+        }
 
         Map<String, String> labels = Map.of(
             "CREDIT_CARD", "Kredi Kartı", "BANK_TRANSFER", "Havale/EFT",
@@ -294,7 +257,7 @@ public class AdminSalesDashboardController {
             @RequestParam(defaultValue = "10") int limit) {
 
         return ResponseEntity.ok(orderRepo.findAll(
-            org.springframework.data.domain.PageRequest.of(0, limit,
+            org.springframework.data.domain.PageRequest.of(0, Math.max(1, Math.min(limit, 100)),
                 org.springframework.data.domain.Sort.by("createdAt").descending())
         ).getContent().stream().map(o -> {
             Map<String, Object> dto = new LinkedHashMap<>();
@@ -310,6 +273,16 @@ public class AdminSalesDashboardController {
             } catch (Exception e) { dto.put("customerName", ""); }
             return dto;
         }).collect(Collectors.toList()));
+    }
+
+    /** Floor used when no period is selected — "since forever" without a null-guard in JPQL. */
+    private static final LocalDateTime EPOCH = LocalDateTime.of(1970, 1, 1, 0, 0);
+
+    /** SUM() comes back as BigDecimal on Postgres and as a plain Number elsewhere. */
+    private static BigDecimal toAmount(Object raw) {
+        if (raw == null) return BigDecimal.ZERO;
+        if (raw instanceof BigDecimal bd) return bd;
+        return BigDecimal.valueOf(((Number) raw).doubleValue());
     }
 
     private LocalDateTime getStartDate(String period) {

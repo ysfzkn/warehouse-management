@@ -28,17 +28,20 @@ public class BankTransferExpiryJob {
     private final PaymentTransactionRepository paymentRepo;
     private final OrderStatusHistoryRepository statusHistoryRepo;
     private final StockRepository stockRepo;
+    private final com.warehouse.service.CouponService couponService;
 
     public BankTransferExpiryJob(OrderRepository orderRepo,
                                   OrderItemRepository orderItemRepo,
                                   PaymentTransactionRepository paymentRepo,
                                   OrderStatusHistoryRepository statusHistoryRepo,
-                                  StockRepository stockRepo) {
+                                  StockRepository stockRepo,
+                                  com.warehouse.service.CouponService couponService) {
         this.orderRepo = orderRepo;
         this.orderItemRepo = orderItemRepo;
         this.paymentRepo = paymentRepo;
         this.statusHistoryRepo = statusHistoryRepo;
         this.stockRepo = stockRepo;
+        this.couponService = couponService;
     }
 
     @Scheduled(fixedRate = 300000) // Every 5 minutes
@@ -89,7 +92,8 @@ public class BankTransferExpiryJob {
             return;
         }
 
-        // Release the stock
+        // Release the stock and give the coupon use back
+        couponService.release(order.getId());
         List<OrderItem> items = orderItemRepo.findByOrderId(order.getId());
         for (OrderItem item : items) {
             if (item.getStockId() != null) {

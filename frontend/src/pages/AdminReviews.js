@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { useAdminToast } from '../components/AdminToast';
 import ConfirmModal from '../components/ConfirmModal';
@@ -26,23 +26,14 @@ export default function AdminReviews() {
   const [replySaving, setReplySaving] = useState(false);
   const [lightbox, setLightbox] = useState(null);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    fetchReviews();
-  }, [filter, page]);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    fetchInsights();
-  }, []);
-
-  const fetchInsights = async () => {
+  const fetchInsights = useCallback(async () => {
     try {
       const res = await axios.get('/api/admin/reviews/insights');
       setInsights(res.data);
     } catch {
       /* non-critical */
     }
-  };
+  }, []);
 
   const openReply = (r) => {
     setReplyTarget(r);
@@ -64,7 +55,7 @@ export default function AdminReviews() {
     }
   };
 
-  const fetchReviews = async () => {
+  const fetchReviews = useCallback(async () => {
     setLoading(true);
     try {
       const params = { page, size: 20 };
@@ -79,7 +70,15 @@ export default function AdminReviews() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filter, page, toast]);
+
+  useEffect(() => {
+    fetchReviews();
+  }, [fetchReviews]);
+
+  useEffect(() => {
+    fetchInsights();
+  }, [fetchInsights]);
 
   const approve = async (id) => {
     try {

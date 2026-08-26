@@ -6,6 +6,7 @@ import com.warehouse.repository.ContactMessageRepository;
 import com.warehouse.util.CurrentUser;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import com.warehouse.util.PageLimits;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,8 +38,8 @@ public class AdminContactMessageController {
 
         ContactMessageStatus statusFilter = parseStatus(status);
         Page<ContactMessage> result = (statusFilter != null)
-                ? repository.findByStatusOrderByCreatedAtDesc(statusFilter, PageRequest.of(page, size))
-                : repository.findAllByOrderByCreatedAtDesc(PageRequest.of(page, size));
+                ? repository.findByStatusOrderByCreatedAtDesc(statusFilter, PageRequest.of(PageLimits.page(page), PageLimits.size(size)))
+                : repository.findAllByOrderByCreatedAtDesc(PageRequest.of(PageLimits.page(page), PageLimits.size(size)));
 
         List<Map<String, Object>> dtos = result.getContent().stream().map(this::toDto).collect(Collectors.toList());
 

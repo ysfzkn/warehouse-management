@@ -14,6 +14,10 @@ public interface StockImportHistoryRepository extends JpaRepository<StockImportH
     @EntityGraph(attributePaths = {"warehouse"})
     @NonNull
     List<StockImportHistory> findAll();
+
+    /** Newest imports first — the history screen only ever shows the recent ones. */
+    @EntityGraph(attributePaths = {"warehouse"})
+    List<StockImportHistory> findAllByOrderByCreatedAtDesc(org.springframework.data.domain.Pageable pageable);
 }
 
 

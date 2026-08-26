@@ -686,7 +686,7 @@ export default function CheckoutPage() {
                     setShowNewAddress(false);
                     next();
                   } catch (err) {
-                    alert('Adres kaydedilemedi: ' + (err.response?.data?.message || err.message));
+                    toast.error('Adres kaydedilemedi: ' + (err.response?.data?.message || err.message));
                   }
                 }}
               />

@@ -7,6 +7,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
+import com.warehouse.util.PageLimits;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -28,7 +29,7 @@ public class AdminCmsController {
     public ResponseEntity<PagedResponse<CmsPage>> list(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        Page<CmsPage> result = cmsService.getAllPages(PageRequest.of(page, size, Sort.by("sortOrder").ascending()));
+        Page<CmsPage> result = cmsService.getAllPages(PageRequest.of(PageLimits.page(page), PageLimits.size(size), Sort.by("sortOrder").ascending()));
         return ResponseEntity.ok(new PagedResponse<>(result.getContent(), result.getNumber(), result.getSize(),
             result.getTotalElements(), result.getTotalPages(), result.isFirst(), result.isLast()));
     }

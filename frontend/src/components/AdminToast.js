@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, createContext, useContext } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, createContext, useContext } from 'react';
 
 const AdminToastContext = createContext(null);
 
@@ -80,11 +80,16 @@ export function AdminToastProvider({ children }) {
 
   const dismiss = useCallback((id) => setToasts((prev) => prev.filter((t) => t.id !== id)), []);
 
-  const api = useCallback((msg, type) => addToast(msg, type), [addToast]);
-  api.success = (msg) => addToast(msg, 'success');
-  api.error = (msg) => addToast(msg, 'error');
-  api.warning = (msg) => addToast(msg, 'warning');
-  api.info = (msg) => addToast(msg, 'info');
+  // Built once per addToast. Consumers put this object in effect dependency arrays; rebuilding
+  // it on every render would re-run those effects forever.
+  const api = useMemo(() => {
+    const call = (msg, type) => addToast(msg, type);
+    call.success = (msg) => addToast(msg, 'success');
+    call.error = (msg) => addToast(msg, 'error');
+    call.warning = (msg) => addToast(msg, 'warning');
+    call.info = (msg) => addToast(msg, 'info');
+    return call;
+  }, [addToast]);
 
   return (
     <AdminToastContext.Provider value={api}>
@@ -115,8 +120,12 @@ export function AdminToastProvider({ children }) {
   );
 }
 
+const NO_TOAST = { success: () => {}, error: () => {}, warning: () => {}, info: () => {} };
+
 export function useAdminToast() {
   const ctx = useContext(AdminToastContext);
-  if (!ctx) return { success: () => {}, error: () => {}, warning: () => {}, info: () => {} };
-  return { success: ctx.success, error: ctx.error, warning: ctx.warning, info: ctx.info };
+  return useMemo(
+    () => (ctx ? { success: ctx.success, error: ctx.error, warning: ctx.warning, info: ctx.info } : NO_TOAST),
+    [ctx]
+  );
 }

@@ -823,12 +823,9 @@ export default function MyOrdersPage() {
 
       {/* ══════ RETURN REQUEST MODAL ══════ */}
       {returnModal && (
-        <div
-          className="modal d-block"
-          style={{ background: 'rgba(0,0,0,0.5)', zIndex: 3000 }}
-          onClick={() => setReturnModal(null)}
-        >
-          <div className="modal-dialog modal-dialog-centered" onClick={(e) => e.stopPropagation()}>
+        <div className="modal d-block" style={{ background: 'rgba(0,0,0,0.5)', zIndex: 3000 }}>
+          {/* No backdrop dismissal: a stray click outside used to discard everything typed here. */}
+          <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content border-0 shadow" style={{ borderRadius: 16 }}>
               <div className="modal-header border-0">
                 <h5 className="modal-title fw-bold">
@@ -974,12 +971,9 @@ export default function MyOrdersPage() {
 
       {/* ══════ SUPPORT REQUEST MODAL ══════ */}
       {supportModal && (
-        <div
-          className="modal d-block"
-          style={{ background: 'rgba(0,0,0,0.5)', zIndex: 3000 }}
-          onClick={() => setSupportModal(null)}
-        >
-          <div className="modal-dialog modal-dialog-centered" onClick={(e) => e.stopPropagation()}>
+        <div className="modal d-block" style={{ background: 'rgba(0,0,0,0.5)', zIndex: 3000 }}>
+          {/* No backdrop dismissal: a stray click outside used to discard everything typed here. */}
+          <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content border-0 shadow" style={{ borderRadius: 16 }}>
               <div className="modal-header border-0">
                 <h5 className="modal-title fw-bold">

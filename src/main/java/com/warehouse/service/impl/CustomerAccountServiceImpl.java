@@ -198,7 +198,9 @@ public class CustomerAccountServiceImpl implements CustomerAccountService {
         }
 
         // ── 2) Revoke refresh tokens (terminate sessions) ──
-        try { refreshTokenRepo.deleteByCustomerId(customerId); } catch (Exception ignored) {}
+        // A silently failed revocation would leave the "deleted" account's sessions alive.
+        try { refreshTokenRepo.deleteByCustomerId(customerId); }
+        catch (Exception e) { log.warn("Oturum sonlandırma hatası (customerId={}): {}", customerId, e.toString()); }
 
         // ── 3) Clear cart ──
         try {
@@ -228,8 +230,10 @@ public class CustomerAccountServiceImpl implements CustomerAccountService {
         } catch (Exception e) { log.warn("Yorum anonimleştirme hatası: {}", e.getMessage()); }
 
         // ── 7) Delete notification preferences and stock notification subscriptions ──
-        try { notifPrefRepo.deleteByCustomerId(customerId); } catch (Exception ignored) {}
-        try { stockNotifRepo.deleteByCustomerId(customerId); } catch (Exception ignored) {}
+        try { notifPrefRepo.deleteByCustomerId(customerId); }
+        catch (Exception e) { log.warn("Bildirim tercihi silme hatası (customerId={}): {}", customerId, e.toString()); }
+        try { stockNotifRepo.deleteByCustomerId(customerId); }
+        catch (Exception e) { log.warn("Stok bildirimi silme hatası (customerId={}): {}", customerId, e.toString()); }
 
         // ── 8) Anonymize the customer's PII ──
         String anonHash = sha256(c.getEmail() + ":" + System.currentTimeMillis()).substring(0, 12);

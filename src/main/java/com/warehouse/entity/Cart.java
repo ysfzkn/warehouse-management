@@ -24,6 +24,14 @@ public class Cart {
     private LocalDateTime expiresAt;
 
     /**
+     * Coupon applied to this cart. Kept as a code rather than an FK so an admin can delete or
+     * deactivate a coupon without breaking existing carts — it is re-validated on every read
+     * and dropped silently once it stops qualifying.
+     */
+    @Column(name = "coupon_code", length = 50)
+    private String couponCode;
+
+    /**
      * Timestamp when the abandoned-cart reminder email was sent.
      * If null, it has not been sent yet. Prevents duplicate sends.
      */

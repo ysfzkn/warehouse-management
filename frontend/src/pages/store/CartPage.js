@@ -11,6 +11,19 @@ export default function CartPage() {
   const [couponError, setCouponError] = useState('');
   const [couponLoading, setCouponLoading] = useState(false);
 
+  const handleRemoveCoupon = async () => {
+    if (couponLoading) return;
+    setCouponLoading(true);
+    setCouponError('');
+    try {
+      await cart.removeCoupon();
+    } catch (e) {
+      setCouponError(e.response?.data?.message || 'Kupon kaldırılamadı.');
+    } finally {
+      setCouponLoading(false);
+    }
+  };
+
   const handleApplyCoupon = async () => {
     const code = couponCode.trim().toUpperCase();
     if (!code || couponLoading) return;
@@ -275,7 +288,20 @@ export default function CartPage() {
                 </small>
               )}
               {cart.cart.couponCode && (
-                <small className="text-success d-block mt-1">Kupon: {cart.cart.couponCode}</small>
+                <div className="d-flex align-items-center justify-content-between gap-2 mt-2 p-2 rounded border border-success-subtle bg-success-subtle">
+                  <small className="text-success">
+                    <strong>{cart.cart.couponCode}</strong> uygulandı
+                    {cart.cart.discountAmount > 0 && ` · -${formatPrice(cart.cart.discountAmount)}`}
+                  </small>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-link text-decoration-none text-danger p-0"
+                    onClick={handleRemoveCoupon}
+                    disabled={couponLoading}
+                  >
+                    Kaldır
+                  </button>
+                </div>
               )}
             </div>
             <Link to="/odeme" className="btn btn-primary w-100 mt-3 btn-lg">

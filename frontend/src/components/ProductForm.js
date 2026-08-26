@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import SearchableSelect from './SearchableSelect';
 import ConfirmModal from './ConfirmModal';
@@ -6,6 +6,7 @@ import BundleMemberPicker from './BundleMemberPicker';
 import VariantSiblingPicker from './VariantSiblingPicker';
 import confirmDialog from '../utils/confirmDialog';
 import './ProductForm.css';
+import { toProductNameCase } from '../utils/name';
 
 /** Drop empty groups/items from the structured technical specs before saving. */
 function cleanTechnicalSpecs(groups) {
@@ -832,6 +833,12 @@ const ProductForm = ({ product, onSuccess, onCancel, setMode = false }) => {
   const [crawlEditableSpecGroups, setCrawlEditableSpecGroups] = useState([]);
   const [crawlActiveTab, setCrawlActiveTab] = useState('images'); // 'images' | 'description'
   const [crawlDescAppliedToast, setCrawlDescAppliedToast] = useState(false);
+  // Sticks around after a transfer, unlike the transient badge above — it tells us the form
+  // holds crawled-but-unsaved content, so leaving the page needs a warning.
+  const [crawlContentApplied, setCrawlContentApplied] = useState(false);
+  const [crawlFullRunning, setCrawlFullRunning] = useState(false);
+  // Escape fires again while the discard confirmation is open; this keeps it single-shot.
+  const crawlClosingRef = useRef(false);
 
   const openCrawlModal = () => {
     setCrawlOpen(true);
@@ -841,6 +848,7 @@ const ProductForm = ({ product, onSuccess, onCancel, setMode = false }) => {
     setCrawlSelected(new Set());
     setCrawlReplace(false);
     setCrawlResult(null);
+    setCrawlContentApplied(false);
   };
 
   const fetchCrawlPreview = async () => {
@@ -915,7 +923,30 @@ const ProductForm = ({ product, onSuccess, onCancel, setMode = false }) => {
    *   - automatically close the modal and flash-highlight the form fields (visual feedback)
    *   - toast reminding to press Save (so the user does not think "was it auto-saved on transfer?")
    */
-  const applyCrawlDescriptionToProduct = () => {
+  /** Scrolls to the description fields and flashes them, so the transfer is visible. */
+  const focusCrawledFormFields = () => {
+    const descField = document.getElementById('description');
+    const shortField = document.getElementById('shortDescription');
+    const target = descField || shortField;
+    if (!target) return;
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    [descField, shortField].filter(Boolean).forEach((el) => {
+      el.style.transition = 'box-shadow 0.3s ease, background-color 0.3s ease';
+      el.style.boxShadow = '0 0 0 3px rgba(34, 197, 94, 0.4)';
+      el.style.backgroundColor = '#dcfce7';
+      setTimeout(() => {
+        el.style.boxShadow = '';
+        el.style.backgroundColor = '';
+      }, 2500);
+    });
+  };
+
+  /**
+   * Writes the edited description + specs into the form's own fields.
+   * Returns the list of touched field labels, or null when there was nothing to write —
+   * the caller decides how to report that (single action vs. combined run).
+   */
+  const applyCrawlContentToForm = () => {
     const updates = {};
 
     // Short description (1000 char limit)
@@ -960,40 +991,32 @@ const ProductForm = ({ product, onSuccess, onCancel, setMode = false }) => {
     }
 
     if (Object.keys(updates).length === 0 && !specsApplied) {
-      showToast('Aktarılacak açıklama veya özellik yok', 'warning');
-      return;
+      return null;
     }
 
     // CRITICAL: update state via the prev callback form — prevents a race condition
     setFormData((prev) => ({ ...prev, ...updates }));
-    setCrawlDescAppliedToast(true);
+    setCrawlContentApplied(true);
 
     const fieldList = [];
     if (updates.shortDescription) fieldList.push('Kısa Açıklama');
     if (updates.description) fieldList.push('Açıklama');
     if (specsApplied) fieldList.push(`${incomingGroups.length} grup / ${specItemCount} özellik`);
+    return fieldList;
+  };
 
+  /** "Sadece açıklamayı aktar" — transfers the text, then returns the user to the form. */
+  const applyCrawlDescriptionToProduct = () => {
+    const fieldList = applyCrawlContentToForm();
+    if (!fieldList) {
+      showToast('Aktarılacak açıklama veya özellik yok', 'warning');
+      return;
+    }
+    setCrawlDescAppliedToast(true);
     showToast(`✓ ${fieldList.join(' + ')} forma aktarıldı. KAYDET'e basmayı unutmayın!`, 'success');
-
-    // Automatically close the modal and scroll to the form fields + flash highlight
     setTimeout(() => {
       setCrawlOpen(false);
-      // Scroll to the form fields + a 2-second flash highlight
-      const descField = document.getElementById('description');
-      const shortField = document.getElementById('shortDescription');
-      const target = descField || shortField;
-      if (target) {
-        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        [descField, shortField].filter(Boolean).forEach((el) => {
-          el.style.transition = 'box-shadow 0.3s ease, background-color 0.3s ease';
-          el.style.boxShadow = '0 0 0 3px rgba(34, 197, 94, 0.4)';
-          el.style.backgroundColor = '#dcfce7';
-          setTimeout(() => {
-            el.style.boxShadow = '';
-            el.style.backgroundColor = '';
-          }, 2500);
-        });
-      }
+      focusCrawledFormFields();
       setCrawlDescAppliedToast(false);
     }, 400);
   };
@@ -1031,9 +1054,19 @@ const ProductForm = ({ product, onSuccess, onCancel, setMode = false }) => {
   };
 
   const crawlSpecsCount = crawlEditableSpecGroups.reduce((n, g) => n + (g.items?.length || 0), 0);
+  const crawlBusy = crawlLoading || crawlImporting || crawlFullRunning;
+  const crawlHasContent = Boolean(
+    crawlEditableDesc?.trim() || crawlEditableShortDesc?.trim() || crawlSpecsCount > 0
+  );
+  const crawlImageCount = crawlPreview?.images?.length || 0;
 
-  const importCrawled = async () => {
-    if (!product?.id || crawlSelected.size === 0) return;
+  /**
+   * Downloads the selected images onto the (already saved) product.
+   * Returns the API result, or null when it failed. {@code silent} suppresses the per-step
+   * toast so the combined run can report everything in one message.
+   */
+  const importCrawledImages = async ({ silent = false } = {}) => {
+    if (!product?.id || crawlSelected.size === 0) return null;
     setCrawlImporting(true);
     setCrawlError('');
     try {
@@ -1047,23 +1080,104 @@ const ProductForm = ({ product, onSuccess, onCancel, setMode = false }) => {
       // Reload product images
       const imgs = await axios.get(`/api/products/${product.id}/images`);
       setProductImages(imgs.data || []);
-      // Toast notification
       const { success = 0, total = 0, errors = [] } = res.data || {};
-      if (success > 0 && errors.length === 0) {
-        showToast(`${success}/${total} görsel başarıyla yüklendi`, 'success');
-      } else if (success > 0 && errors.length > 0) {
-        showToast(`${success}/${total} yüklendi — ${errors.length} hata`, 'warning');
-      } else {
-        showToast(`Hiçbir görsel yüklenemedi (${errors.length} hata)`, 'error');
+      if (!silent) {
+        if (success > 0 && errors.length === 0) {
+          showToast(`${success}/${total} görsel başarıyla yüklendi`, 'success');
+        } else if (success > 0 && errors.length > 0) {
+          showToast(`${success}/${total} yüklendi — ${errors.length} hata`, 'warning');
+        } else {
+          showToast(`Hiçbir görsel yüklenemedi (${errors.length} hata)`, 'error');
+        }
       }
+      return res.data;
     } catch (e) {
       const msg = e.response?.data?.message || 'İçe aktarma başarısız';
       setCrawlError(msg);
       showToast(msg, 'error');
+      return null;
     } finally {
       setCrawlImporting(false);
     }
   };
+
+  const importCrawled = () => importCrawledImages();
+
+  /**
+   * One button for the whole job: download the selected images, push the description and
+   * technical specs into the form, then close the modal and land the user on those fields.
+   * Images are stored server-side immediately; the text only lives in the form until Save,
+   * which is why the closing toast insists on it.
+   */
+  const runFullCrawlImport = async () => {
+    if (!crawlPreview || crawlFullRunning || crawlImporting) return;
+    setCrawlFullRunning(true);
+    try {
+      const imageResult = crawlSelected.size > 0 ? await importCrawledImages({ silent: true }) : null;
+      const fieldList = applyCrawlContentToForm();
+
+      const parts = [];
+      if (imageResult) {
+        const { success = 0, total = 0, errors = [] } = imageResult;
+        parts.push(`${success}/${total} görsel`);
+        if (errors.length > 0) parts.push(`${errors.length} görsel hatası`);
+      }
+      if (fieldList) parts.push(fieldList.join(' + '));
+
+      if (parts.length === 0) {
+        showToast('Aktarılacak görsel veya açıklama seçilmedi', 'warning');
+        return;
+      }
+      const failed = imageResult && imageResult.success === 0 && crawlSelected.size > 0;
+      showToast(
+        `${failed ? '⚠' : '✓'} ${parts.join(' · ')} aktarıldı. Açıklama ve özellikler için KAYDET'e basın!`,
+        failed ? 'warning' : 'success'
+      );
+      setCrawlOpen(false);
+      // Let the modal unmount before scrolling, otherwise the overlay is still covering
+      // the field we are scrolling to.
+      setTimeout(focusCrawledFormFields, 300);
+    } finally {
+      setCrawlFullRunning(false);
+    }
+  };
+
+  /**
+   * Guarded close — the modal never dismisses on a stray backdrop click, and a preview that
+   * has not been transferred yet asks before being thrown away.
+   */
+  const closeCrawlModal = async ({ force = false } = {}) => {
+    if (crawlLoading || crawlImporting || crawlFullRunning || crawlClosingRef.current) return;
+    const hasUnusedPreview = Boolean(crawlPreview) && !crawlContentApplied && !crawlResult;
+    if (!force && hasUnusedPreview) {
+      crawlClosingRef.current = true;
+      try {
+        const ok = await confirmDialog({
+          title: 'Çekilen veriler silinsin mi?',
+          message:
+            'Sayfadan çekilen görseller ve açıklama henüz ürüne aktarılmadı. Kapatırsanız bu veriler kaybolur.',
+          confirmText: 'Evet, Kapat',
+          cancelText: 'Vazgeç',
+          variant: 'warning',
+        });
+        if (!ok) return;
+      } finally {
+        crawlClosingRef.current = false;
+      }
+    }
+    setCrawlOpen(false);
+  };
+
+  useEffect(() => {
+    if (!crawlOpen) return undefined;
+    const onKey = (e) => {
+      if (e.key === 'Escape') closeCrawlModal();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+    // closeCrawlModal reads current crawl state on every render; re-binding is cheap.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [crawlOpen, crawlPreview, crawlResult, crawlContentApplied, crawlBusy]);
 
   const handleSubmit = async (e) => {
     if (e && typeof e.preventDefault === 'function') {
@@ -1215,6 +1329,7 @@ const ProductForm = ({ product, onSuccess, onCancel, setMode = false }) => {
                 name="name"
                 value={formData.name}
                 onChange={handleChange}
+                onBlur={(e) => setFormData((prev) => ({ ...prev, name: toProductNameCase(e.target.value) }))}
                 placeholder="Samsung Buzdolabı"
                 required
               />
@@ -2385,12 +2500,17 @@ const ProductForm = ({ product, onSuccess, onCancel, setMode = false }) => {
                   disabled={!product?.id}
                 >
                   <i className="fas fa-globe me-2" />
-                  Üretici Sayfasından Görsel Çek (Profilo, Siemens, Bosch...)
+                  Üretici Sayfasından Görsel + Açıklama Çek (Profilo, Siemens, Bosch...)
                 </button>
               </div>
               {!product?.id && (
                 <div className="text-center small text-muted mt-1">
                   URL'den çekmek için önce ürünü kaydedin
+                </div>
+              )}
+              {product?.id && (
+                <div className="text-center text-muted mt-1" style={{ fontSize: 11 }}>
+                  Görseller, açıklama ve teknik özellikler tek adımda aktarılabilir.
                 </div>
               )}
             </div>
@@ -2399,27 +2519,45 @@ const ProductForm = ({ product, onSuccess, onCancel, setMode = false }) => {
 
         {/* ─── Crawl modal ─── */}
         {crawlOpen && (
-          <div
-            className="modal show d-block"
-            tabIndex="-1"
-            style={{ background: 'rgba(0,0,0,0.5)' }}
-            onClick={() => !crawlLoading && !crawlImporting && setCrawlOpen(false)}
-          >
-            <div
-              className="modal-dialog modal-lg modal-dialog-scrollable"
-              onClick={(e) => e.stopPropagation()}
-            >
+          <div className="modal show d-block" tabIndex="-1" style={{ background: 'rgba(0,0,0,0.5)' }}>
+            {/* Deliberately no backdrop-click close: a stray click next to the URL field
+                used to wipe everything that had been fetched. */}
+            <div className="modal-dialog modal-xl modal-dialog-scrollable">
               <div className="modal-content">
-                <div className="modal-header">
-                  <h5 className="modal-title">
-                    <i className="fas fa-globe text-info me-2" />
-                    Üretici Sayfasından Görsel İndir
-                  </h5>
+                <div className="modal-header align-items-start">
+                  <div>
+                    <h5 className="modal-title">
+                      <i className="fas fa-globe text-info me-2" />
+                      Üretici Sayfasından İçerik Çek
+                    </h5>
+                    <div className="d-flex align-items-center gap-2 mt-2 flex-wrap">
+                      {[
+                        ['1', 'URL yapıştır', Boolean(crawlPreview)],
+                        ['2', 'Görsel & açıklamayı seç', Boolean(crawlResult || crawlContentApplied)],
+                        ['3', 'Ürüne aktar', Boolean(crawlResult && crawlContentApplied)],
+                      ].map(([step, label, done], i) => (
+                        <React.Fragment key={step}>
+                          {i > 0 && <i className="fas fa-chevron-right text-muted" style={{ fontSize: 9 }} />}
+                          <span
+                            className={`badge rounded-pill ${done ? 'bg-success' : 'bg-light text-dark border'}`}
+                            style={{ fontWeight: 500 }}
+                          >
+                            <i
+                              className={`fas ${done ? 'fa-check' : 'fa-circle'} me-1`}
+                              style={{ fontSize: 8 }}
+                            />
+                            {step}. {label}
+                          </span>
+                        </React.Fragment>
+                      ))}
+                    </div>
+                  </div>
                   <button
                     type="button"
                     className="btn-close"
-                    onClick={() => setCrawlOpen(false)}
-                    disabled={crawlLoading || crawlImporting}
+                    onClick={() => closeCrawlModal()}
+                    disabled={crawlBusy}
+                    aria-label="Kapat"
                   ></button>
                 </div>
                 <div className="modal-body">
@@ -2552,6 +2690,36 @@ const ProductForm = ({ product, onSuccess, onCancel, setMode = false }) => {
 
                   {crawlPreview && (
                     <>
+                      {/* ── What the page yielded, at a glance ── */}
+                      <div className="d-flex flex-wrap gap-2 align-items-center mb-3 p-2 border rounded bg-light">
+                        <span className="small fw-semibold text-muted me-1">Sayfadan çekilenler:</span>
+                        <span className={`badge ${crawlImageCount > 0 ? 'bg-primary' : 'bg-secondary'}`}>
+                          <i className="fas fa-images me-1" />
+                          {crawlImageCount} görsel
+                        </span>
+                        <span
+                          className={`badge ${crawlEditableDesc || crawlEditableShortDesc ? 'bg-success' : 'bg-secondary'}`}
+                        >
+                          <i className="fas fa-align-left me-1" />
+                          {crawlEditableDesc || crawlEditableShortDesc ? 'Açıklama var' : 'Açıklama yok'}
+                        </span>
+                        <span className={`badge ${crawlSpecsCount > 0 ? 'bg-success' : 'bg-secondary'}`}>
+                          <i className="fas fa-list-ul me-1" />
+                          {crawlSpecsCount} teknik özellik
+                        </span>
+                        {crawlContentApplied && (
+                          <span className="badge bg-success-subtle text-success border border-success">
+                            <i className="fas fa-check me-1" />
+                            Açıklama forma aktarıldı
+                          </span>
+                        )}
+                        <span className="small text-muted ms-auto">
+                          <i className="fas fa-lightbulb me-1 text-warning" />
+                          Tek adımda bitirmek için aşağıdaki <strong>Hepsini Aktar</strong> düğmesini
+                          kullanın.
+                        </span>
+                      </div>
+
                       {/* ── Preview header: title + brand + tab navigation ── */}
                       <div className="border-bottom pb-2 mb-3">
                         {crawlPreview.title && (
@@ -2858,7 +3026,7 @@ const ProductForm = ({ product, onSuccess, onCancel, setMode = false }) => {
                               }
                             >
                               <i className="fas fa-arrow-right me-1" />
-                              Ürün Formuna Aktar
+                              Açıklamayı Forma Aktar
                             </button>
                             {crawlDescAppliedToast && (
                               <span className="badge bg-success">
@@ -2885,58 +3053,67 @@ const ProductForm = ({ product, onSuccess, onCancel, setMode = false }) => {
                       </div>
                     )}
                 </div>
-                <div className="modal-footer">
-                  {crawlResult && crawlResult.success > 0 ? (
-                    <>
+                <div className="modal-footer flex-wrap gap-2 justify-content-between">
+                  <button
+                    type="button"
+                    className="btn btn-outline-secondary"
+                    onClick={() => closeCrawlModal()}
+                    disabled={crawlBusy}
+                  >
+                    Kapat
+                  </button>
+                  {crawlPreview && (
+                    <div className="d-flex flex-wrap gap-2 ms-auto">
+                      {/* Single-step actions stay available next to the combined one. */}
                       <button
                         type="button"
-                        className="btn btn-outline-secondary"
-                        onClick={() => setCrawlOpen(false)}
-                      >
-                        <i className="fas fa-images me-1" />
-                        Daha Fazla Görsel Ekle
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-success"
-                        onClick={() => {
-                          setCrawlOpen(false);
-                          if (onSuccess) onSuccess({ id: product?.id });
-                        }}
-                      >
-                        <i className="fas fa-arrow-right me-1" />
-                        Ürün Detayına Dön
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button
-                        type="button"
-                        className="btn btn-secondary"
-                        onClick={() => setCrawlOpen(false)}
-                        disabled={crawlLoading || crawlImporting}
-                      >
-                        Kapat
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-primary"
-                        disabled={!crawlPreview || crawlSelected.size === 0 || crawlImporting || crawlLoading}
+                        className="btn btn-outline-primary"
+                        disabled={crawlSelected.size === 0 || crawlBusy}
                         onClick={importCrawled}
+                        title="Yalnızca seçili görselleri ürüne yükler"
                       >
-                        {crawlImporting ? (
+                        {crawlImporting && !crawlFullRunning ? (
                           <>
                             <span className="spinner-border spinner-border-sm me-1" />
-                            Yükleniyor...
+                            Yükleniyor…
                           </>
                         ) : (
                           <>
                             <i className="fas fa-download me-1" />
-                            {crawlSelected.size} Görseli İndir
+                            Sadece Görseller ({crawlSelected.size})
                           </>
                         )}
                       </button>
-                    </>
+                      <button
+                        type="button"
+                        className="btn btn-outline-success"
+                        disabled={!crawlHasContent || crawlBusy}
+                        onClick={applyCrawlDescriptionToProduct}
+                        title="Yalnızca açıklama ve teknik özellikleri forma yazar"
+                      >
+                        <i className="fas fa-align-left me-1" />
+                        Sadece Açıklama
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-success"
+                        disabled={(crawlSelected.size === 0 && !crawlHasContent) || crawlBusy}
+                        onClick={runFullCrawlImport}
+                        title="Görselleri indirir, açıklama ve özellikleri forma aktarır, sonra forma döner"
+                      >
+                        {crawlFullRunning ? (
+                          <>
+                            <span className="spinner-border spinner-border-sm me-1" />
+                            Aktarılıyor…
+                          </>
+                        ) : (
+                          <>
+                            <i className="fas fa-wand-magic-sparkles me-1" />
+                            Hepsini Aktar ve Forma Dön
+                          </>
+                        )}
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>

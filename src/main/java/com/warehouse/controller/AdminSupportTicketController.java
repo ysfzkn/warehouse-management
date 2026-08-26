@@ -6,6 +6,7 @@ import com.warehouse.util.CurrentUser;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import com.warehouse.util.PageLimits;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,7 +38,7 @@ public class AdminSupportTicketController {
         String searchParam = (search != null && !search.isBlank()) ? search : null;
 
         Page<SupportTicket> result = ticketRepo.findByFilters(statusParam, searchParam,
-            PageRequest.of(page, size, Sort.by("createdAt").descending()));
+            PageRequest.of(PageLimits.page(page), PageLimits.size(size), Sort.by("createdAt").descending()));
 
         List<Map<String, Object>> dtos = result.getContent().stream().map(t -> {
             Map<String, Object> dto = new LinkedHashMap<>();

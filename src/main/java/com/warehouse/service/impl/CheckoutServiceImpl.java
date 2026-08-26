@@ -36,6 +36,7 @@ public class CheckoutServiceImpl implements CheckoutService {
 
     private static final Logger logger = LoggerFactory.getLogger(CheckoutServiceImpl.class);
 
+    private final com.warehouse.service.CouponService couponService;
     private final CartRepository cartRepository;
     private final CartItemRepository cartItemRepository;
     private final CustomerRepository customerRepository;
@@ -50,7 +51,8 @@ public class CheckoutServiceImpl implements CheckoutService {
     private final EmailService emailService;
     private final SiteSettingService siteSettingService;
 
-    public CheckoutServiceImpl(CartRepository cartRepository, CartItemRepository cartItemRepository,
+    public CheckoutServiceImpl(com.warehouse.service.CouponService couponService,
+                               CartRepository cartRepository, CartItemRepository cartItemRepository,
                                 CustomerRepository customerRepository, CustomerAddressRepository addressRepository,
                                 OrderRepository orderRepository, StockService stockService,
                                 StockRepository stockRepository, CartService cartService,
@@ -59,6 +61,7 @@ public class CheckoutServiceImpl implements CheckoutService {
                                 PasswordEncoder passwordEncoder,
                                 EmailService emailService,
                                 SiteSettingService siteSettingService) {
+        this.couponService = couponService;
         this.cartRepository = cartRepository;
         this.cartItemRepository = cartItemRepository;
         this.customerRepository = customerRepository;
@@ -392,7 +395,26 @@ public class CheckoutServiceImpl implements CheckoutService {
             shippingCost = ShippingConstants.calculateShippingCost(subtotal);
         }
 
-        BigDecimal grandTotal = subtotal.add(shippingCost).add(shippingVat).add(vatTotal);
+        // ─── Coupon ───────────────────────────────────────────────────────────
+        // Re-validated against the final subtotal: the basket may have changed since the code
+        // was applied, and the coupon's window or remaining uses may have moved on. A coupon
+        // that no longer qualifies fails the checkout loudly rather than silently charging
+        // the customer the undiscounted total they were never shown.
+        Cart sourceCart = items.isEmpty() ? null : items.get(0).getCart();
+        Coupon coupon = null;
+        BigDecimal discountAmount = BigDecimal.ZERO;
+        if (sourceCart != null && sourceCart.getCouponCode() != null) {
+            coupon = couponService.validate(sourceCart.getCouponCode(), subtotal, customer.getId());
+            discountAmount = couponService.calculateDiscount(coupon, subtotal);
+            if (couponService.isFreeShipping(coupon)) {
+                shippingCost = BigDecimal.ZERO;
+                shippingVat = BigDecimal.ZERO;
+            }
+        }
+
+        BigDecimal grandTotal = subtotal.subtract(discountAmount)
+                .add(shippingCost).add(shippingVat).add(vatTotal);
+        if (grandTotal.signum() < 0) grandTotal = BigDecimal.ZERO;
 
         Order order = new Order();
         order.setOrderNumber(orderNumber);
@@ -405,7 +427,12 @@ public class CheckoutServiceImpl implements CheckoutService {
         order.setShippingVat(shippingVat);
         order.setVatTotal(vatTotal);
         order.setGrandTotal(grandTotal);
-        order.setDiscountAmount(BigDecimal.ZERO);
+        order.setDiscountAmount(discountAmount);
+        if (coupon != null) {
+            order.setCouponId(coupon.getId());
+            order.setCouponCode(coupon.getCode());
+            order.setCouponDiscount(discountAmount);
+        }
         order.setSctTotal(BigDecimal.ZERO);
         order.setPaymentMethod(paymentMethod);
         order.setCustomerNote(customerNote);
@@ -431,10 +458,11 @@ public class CheckoutServiceImpl implements CheckoutService {
         if (cargoProvider != null) {
             order.setCargoProviderId(cargoProvider.getId());
             order.setCargoProviderName(cargoProvider.getName());
-            // Also set legacy enum for backward compatibility
-            try { order.setCargoCompany(com.warehouse.enums.CargoCompany.valueOf(cargoProvider.getCode())); } catch (Exception ignored) {}
-        } else if (cargoCompanyStr != null) {
-            try { order.setCargoCompany(com.warehouse.enums.CargoCompany.valueOf(cargoCompanyStr)); } catch (Exception ignored) {}
+            // Also set legacy enum for backward compatibility. A carrier the enum does not know
+            // becomes OTHER rather than leaving the order with no carrier recorded at all.
+            order.setCargoCompany(toCargoCompany(cargoProvider.getCode()));
+        } else if (cargoCompanyStr != null && !cargoCompanyStr.isBlank()) {
+            order.setCargoCompany(toCargoCompany(cargoCompanyStr));
         }
 
         order = orderRepository.save(order);
@@ -444,6 +472,14 @@ public class CheckoutServiceImpl implements CheckoutService {
         }
         order.setItems(orderItems);
         order = orderRepository.save(order);
+
+        if (coupon != null) {
+            // Committed together with the stock reservation; released again by the cancel /
+            // timeout paths, so a failed payment does not burn one of a limited coupon's uses.
+            couponService.redeem(coupon.getId(), customer, order, subtotal);
+            sourceCart.setCouponCode(null);
+            cartRepository.save(sourceCart);
+        }
 
         // NOTE: Cart is NOT cleared here — cleared after successful payment
         // This allows cart recovery if payment fails
@@ -456,6 +492,15 @@ public class CheckoutServiceImpl implements CheckoutService {
             .grandTotal(order.getGrandTotal())
             .status(order.getStatus().name())
             .build();
+    }
+
+    private static com.warehouse.enums.CargoCompany toCargoCompany(String raw) {
+        if (raw == null || raw.isBlank()) return com.warehouse.enums.CargoCompany.OTHER;
+        try {
+            return com.warehouse.enums.CargoCompany.valueOf(raw.trim().toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            return com.warehouse.enums.CargoCompany.OTHER;
+        }
     }
 
     /**

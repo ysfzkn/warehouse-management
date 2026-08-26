@@ -9,6 +9,7 @@ import {
   isPhoneComplete,
   PHONE_PLACEHOLDER,
 } from '../utils/phone';
+import { toNoteCase, toTitleCaseTr } from '../utils/name';
 
 const INITIAL_VISIBLE_PRODUCTS = 12;
 
@@ -331,6 +332,9 @@ const StockForm = ({
     clearFieldError('customerName');
   };
 
+  // Normalised on blur, not on every keystroke — retyping mid-word must not move the caret.
+  const handleCustomerNameBlur = (event) => setCustomerName(toTitleCaseTr(event.target.value));
+
   const handleCustomerPhoneChange = (event) => {
     const digits = extractPhoneDigits(event.target.value);
     setCustomerPhone(digits);
@@ -647,6 +651,7 @@ const StockForm = ({
           maxLength="500"
           value={additionNote}
           onChange={handleAdditionNoteChange}
+          onBlur={(e) => setAdditionNote(toNoteCase(e.target.value))}
           placeholder="Bu stok ekleme işlemi için genel not girin..."
         ></textarea>
         <div className="d-flex justify-content-between mt-1">
@@ -670,6 +675,7 @@ const StockForm = ({
               className={`form-control ${errors.customerName ? 'is-invalid' : ''}`}
               value={customerName}
               onChange={handleCustomerNameChange}
+              onBlur={handleCustomerNameBlur}
               placeholder="Müşteri adını giriniz"
               maxLength="255"
             />

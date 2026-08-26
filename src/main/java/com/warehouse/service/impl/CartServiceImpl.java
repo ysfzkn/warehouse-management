@@ -22,6 +22,8 @@ import java.util.stream.Collectors;
 @Transactional
 public class CartServiceImpl implements CartService {
 
+    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(CartServiceImpl.class);
+
     private final CartRepository cartRepository;
     private final CartItemRepository cartItemRepository;
     private final ProductRepository productRepository;
@@ -29,12 +31,14 @@ public class CartServiceImpl implements CartService {
     private final StockService stockService;
     private final com.warehouse.repository.ProductImageRepository productImageRepository;
     private final com.warehouse.service.ShippingCostService shippingCostService;
+    private final com.warehouse.service.CouponService couponService;
 
     public CartServiceImpl(CartRepository cartRepository, CartItemRepository cartItemRepository,
                            ProductRepository productRepository, CouponRepository couponRepository,
                            StockService stockService,
                            com.warehouse.repository.ProductImageRepository productImageRepository,
-                           com.warehouse.service.ShippingCostService shippingCostService) {
+                           com.warehouse.service.ShippingCostService shippingCostService,
+                           com.warehouse.service.CouponService couponService) {
         this.cartRepository = cartRepository;
         this.cartItemRepository = cartItemRepository;
         this.productRepository = productRepository;
@@ -42,6 +46,7 @@ public class CartServiceImpl implements CartService {
         this.stockService = stockService;
         this.productImageRepository = productImageRepository;
         this.shippingCostService = shippingCostService;
+        this.couponService = couponService;
     }
 
     @Override
@@ -109,18 +114,28 @@ public class CartServiceImpl implements CartService {
     @Override
     public CartDto applyCoupon(Long customerId, String sessionId, String couponCode) {
         Cart cart = findOrCreateCart(customerId, sessionId);
-        Coupon coupon = couponRepository.findActiveByCode(couponCode, LocalDateTime.now())
-            .orElseThrow(() -> new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Geçersiz veya süresi dolmuş kupon kodu."));
-
-        // Store coupon code in a transient way - we'll apply it during checkout
-        // For now just validate and return the cart with discount preview
+        // Every rule (minimum basket, total limit, per-customer limit) is checked here, not
+        // just the code's existence — and the code is stored so it survives a page reload.
+        Coupon coupon = couponService.validate(couponCode, subtotalOf(cart), customerId);
+        cart.setCouponCode(coupon.getCode());
+        cartRepository.save(cart);
         return toCartDtoWithCoupon(cart, coupon);
     }
 
     @Override
     public CartDto removeCoupon(Long customerId, String sessionId) {
         Cart cart = findOrCreateCart(customerId, sessionId);
-        return toCartDto(cart);
+        cart.setCouponCode(null);
+        cartRepository.save(cart);
+        return toCartDtoWithCoupon(cart, null);
+    }
+
+    /** Basket total before discount and shipping — what every coupon rule is measured against. */
+    private BigDecimal subtotalOf(Cart cart) {
+        return cartItemRepository.findByCartId(cart.getId()).stream()
+            .map(this::toCartItemDto)
+            .map(CartItemDto::getLineTotal)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     @Override
@@ -158,8 +173,21 @@ public class CartServiceImpl implements CartService {
         return null;
     }
 
+    /**
+     * Re-validates whatever coupon the cart carries. A coupon that expired, ran out of uses or
+     * no longer meets the minimum simply stops applying (and is cleared from the cart) instead
+     * of blocking the basket.
+     */
     private CartDto toCartDto(Cart cart) {
-        return toCartDtoWithCoupon(cart, null);
+        if (cart.getCouponCode() == null) return toCartDtoWithCoupon(cart, null);
+        Long customerId = cart.getCustomer() != null ? cart.getCustomer().getId() : null;
+        Coupon coupon = couponService.validateQuietly(cart.getCouponCode(), subtotalOf(cart), customerId)
+            .orElse(null);
+        if (coupon == null) {
+            cart.setCouponCode(null);
+            cartRepository.save(cart);
+        }
+        return toCartDtoWithCoupon(cart, coupon);
     }
 
     private CartDto toCartDtoWithCoupon(Cart cart, Coupon coupon) {
@@ -176,19 +204,9 @@ public class CartServiceImpl implements CartService {
         if (coupon != null) {
             couponCode = coupon.getCode();
             couponDesc = coupon.getDescription();
-            switch (coupon.getDiscountType()) {
-                case PERCENTAGE:
-                    discountAmount = subtotal.multiply(coupon.getDiscountValue()).divide(BigDecimal.valueOf(100), 2, java.math.RoundingMode.HALF_UP);
-                    if (coupon.getMaxDiscountAmount() != null && discountAmount.compareTo(coupon.getMaxDiscountAmount()) > 0) {
-                        discountAmount = coupon.getMaxDiscountAmount();
-                    }
-                    break;
-                case FIXED_AMOUNT:
-                    discountAmount = coupon.getDiscountValue();
-                    break;
-                case FREE_SHIPPING:
-                    break;
-            }
+            // Same calculation the order will use, so the basket preview cannot drift from
+            // what is actually charged.
+            discountAmount = couponService.calculateDiscount(coupon, subtotal);
         }
 
         // Shipping cost: read from site settings configurable in the admin panel
@@ -196,7 +214,7 @@ public class CartServiceImpl implements CartService {
         // once a provider is chosen during checkout).
         BigDecimal shippingCost = shippingCostService.calculate(subtotal, null);
         if (shippingCost == null) shippingCost = BigDecimal.ZERO;
-        if (coupon != null && coupon.getDiscountType() == com.warehouse.enums.DiscountType.FREE_SHIPPING) {
+        if (couponService.isFreeShipping(coupon)) {
             shippingCost = BigDecimal.ZERO;
         }
 
@@ -240,7 +258,10 @@ public class CartServiceImpl implements CartService {
             try {
                 List<Stock> stocks = stockService.getStocksByProduct(product.getId());
                 available = stocks.stream().mapToInt(Stock::getAvailableQuantity).sum();
-            } catch (Exception ignored) {}
+            } catch (Exception e) {
+                // Falls back to "0 available", which shows the item as out of stock — worth a trace.
+                logger.warn("Sepet stok sorgusu başarısız (productId={}): {}", product.getId(), e.toString());
+            }
         }
 
         BigDecimal unitPrice = product.getPrice() != null ? product.getPrice() : BigDecimal.ZERO;
@@ -255,7 +276,10 @@ public class CartServiceImpl implements CartService {
             if (img != null) {
                 imageUrl = "/api/admin/products/images/" + img.getId() + "/view?thumbnail=true";
             }
-        } catch (Exception ignored) {}
+        } catch (org.hibernate.LazyInitializationException e) {
+            // Detached product — the row simply renders without a cover image.
+            imageUrl = null;
+        }
 
         return CartItemDto.builder()
             .id(item.getId())
@@ -287,7 +311,9 @@ public class CartServiceImpl implements CartService {
             try {
                 memberAvail = stockService.getStocksByProduct(m.getId()).stream()
                     .mapToInt(Stock::getAvailableQuantity).sum();
-            } catch (Exception ignored) {}
+            } catch (Exception e) {
+                logger.warn("Set üyesi stok sorgusu başarısız (productId={}): {}", m.getId(), e.toString());
+            }
             minSets = Math.min(minSets, memberAvail / qty);
         }
         return minSets == Integer.MAX_VALUE ? 0 : minSets;
