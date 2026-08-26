@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
+import { formatPhoneForDisplay } from '../utils/phone';
 
 /**
  * Type-ahead pickers for the two things that get retyped on every single transfer: the driver
@@ -54,11 +55,25 @@ const useOutsideClose = (onClose) => {
   return ref;
 };
 
+/**
+ * Wrapper that owns the stacking context. Bootstrap positions every `.input-group` child, so a
+ * form field further down the page paints over an absolutely positioned dropdown that only
+ * raises its own z-index — the phone field was landing in the middle of the driver list. While
+ * the list is open the whole picker is lifted into a layer above the rest of the form.
+ */
+function PickerShell({ open, children, innerRef }) {
+  return (
+    <div className="position-relative" ref={innerRef} style={{ zIndex: open ? 1080 : 'auto' }}>
+      {children}
+    </div>
+  );
+}
+
 function Dropdown({ children }) {
   return (
     <div
-      className="list-group shadow position-absolute w-100"
-      style={{ zIndex: 60, maxHeight: 280, overflowY: 'auto' }}
+      className="list-group shadow position-absolute w-100 mt-1"
+      style={{ maxHeight: 280, overflowY: 'auto' }}
     >
       {children}
     </div>
@@ -77,7 +92,7 @@ export function DriverPicker({ onPick, disabled = false }) {
   const ref = useOutsideClose(() => setOpen(false));
 
   return (
-    <div className="position-relative" ref={ref}>
+    <PickerShell open={open} innerRef={ref}>
       <div className="input-group input-group-lg">
         <span className="input-group-text bg-white">
           <i className="fas fa-id-card text-primary" />
@@ -128,7 +143,7 @@ export function DriverPicker({ onPick, disabled = false }) {
                 <div className="min-w-0">
                   <div className="fw-semibold">{d.name}</div>
                   <small className="text-muted">
-                    {d.phone || 'Telefon yok'}
+                    {d.phone ? formatPhoneForDisplay(d.phone) : 'Telefon yok'}
                     {d.vehiclePlate ? ` · ${d.vehiclePlate}` : ''}
                   </small>
                 </div>
@@ -142,7 +157,7 @@ export function DriverPicker({ onPick, disabled = false }) {
           ))}
         </Dropdown>
       )}
-    </div>
+    </PickerShell>
   );
 }
 
@@ -163,7 +178,7 @@ export function PastCustomerPicker({ onPick, disabled = false }) {
   const ref = useOutsideClose(() => setOpen(false));
 
   return (
-    <div className="position-relative" ref={ref}>
+    <PickerShell open={open} innerRef={ref}>
       <div className="input-group input-group-lg">
         <span className="input-group-text bg-white">
           <i className="fas fa-clock-rotate-left text-info" />
@@ -185,9 +200,6 @@ export function PastCustomerPicker({ onPick, disabled = false }) {
             <span className="spinner-border spinner-border-sm text-info" />
           </span>
         )}
-      </div>
-      <div className="form-text">
-        Türkçe karakter farkı gözetilmez: “Ballı” araması “Balli” kaydını da bulur.
       </div>
       {open && (
         <Dropdown>
@@ -212,7 +224,9 @@ export function PastCustomerPicker({ onPick, disabled = false }) {
               <div className="d-flex justify-content-between align-items-start gap-2">
                 <div className="min-w-0">
                   <div className="fw-semibold">{c.name}</div>
-                  <small className="text-muted d-block">{c.phone || 'Telefon yok'}</small>
+                  <small className="text-muted d-block">
+                    {c.phone ? formatPhoneForDisplay(c.phone) : 'Telefon yok'}
+                  </small>
                   {c.address && (
                     <small className="text-muted d-block text-truncate" title={c.address}>
                       {c.address}
@@ -230,6 +244,6 @@ export function PastCustomerPicker({ onPick, disabled = false }) {
           ))}
         </Dropdown>
       )}
-    </div>
+    </PickerShell>
   );
 }

@@ -331,9 +331,15 @@ public class StockTransferServiceImpl implements StockTransferService {
 
         StockTransfer saved = stockTransferRepository.save(transfer);
         // Files the driver into the directory so the next transfer can offer them back instead
-        // of making the operator retype name, TC, phone and plate.
-        driverService.recordUsage(saved.getDriverName(), saved.getDriverTcId(),
+        // of making the operator retype name, TC, phone and plate. The link lets duplicates be
+        // merged later without touching this transfer's own record of who drove.
+        com.warehouse.entity.Driver directoryEntry = driverService.recordUsage(
+                saved.getDriverName(), saved.getDriverTcId(),
                 saved.getDriverPhone(), saved.getVehiclePlate());
+        if (directoryEntry != null && saved.getDriverId() == null) {
+            saved.setDriverId(directoryEntry.getId());
+            saved = stockTransferRepository.save(saved);
+        }
         AuditMetadata metadata = buildTransferMetadata(saved);
         auditService.log(AuditAction.TRANSFER_CREATE, DomainEntityType.StockTransfer.name(), saved.getId(), username,
                 String.format("Transfer oluşturuldu: %s | Ürünler=%s",

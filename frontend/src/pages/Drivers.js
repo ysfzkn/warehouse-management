@@ -3,8 +3,14 @@ import axios from 'axios';
 import { useAdminToast } from '../components/AdminToast';
 import useSecurityCodePrompt from '../components/useSecurityCodePrompt';
 import confirmDialog from '../utils/confirmDialog';
+import DriverMergeModal from '../components/DriverMergeModal';
 import { toTitleCaseTr } from '../utils/name';
-import { formatPhoneInputValue, formatPhoneForSubmit, PHONE_PLACEHOLDER } from '../utils/phone';
+import {
+  formatPhoneForDisplay,
+  formatPhoneInputValue,
+  formatPhoneForSubmit,
+  PHONE_PLACEHOLDER,
+} from '../utils/phone';
 
 /**
  * Driver directory.
@@ -32,6 +38,7 @@ export default function Drivers() {
   const [editing, setEditing] = useState(null); // null | { id?, ...form }
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState({});
+  const [mergeOpen, setMergeOpen] = useState(false);
 
   const fetchDrivers = useCallback(async () => {
     setLoading(true);
@@ -139,16 +146,22 @@ export default function Drivers() {
             silebilirsiniz.
           </p>
         </div>
-        <button
-          className="btn btn-primary"
-          onClick={() => {
-            setErrors({});
-            setEditing({ ...emptyForm });
-          }}
-        >
-          <i className="fas fa-plus me-2" />
-          Yeni Şoför
-        </button>
+        <div className="d-flex gap-2">
+          <button className="btn btn-outline-primary" onClick={() => setMergeOpen(true)}>
+            <i className="fas fa-object-group me-2" />
+            Mükerrer Şoförleri Birleştir
+          </button>
+          <button
+            className="btn btn-primary"
+            onClick={() => {
+              setErrors({});
+              setEditing({ ...emptyForm });
+            }}
+          >
+            <i className="fas fa-plus me-2" />
+            Yeni Şoför
+          </button>
+        </div>
       </div>
 
       <div className="card mb-3">
@@ -171,9 +184,6 @@ export default function Drivers() {
                     <i className="fas fa-times" />
                   </button>
                 )}
-              </div>
-              <div className="form-text">
-                Türkçe karakter farkı gözetilmez — “Ballı” araması “Balli” kaydını da bulur.
               </div>
             </div>
             <div className="col-md-4">
@@ -232,7 +242,7 @@ export default function Drivers() {
                       <div className="fw-semibold">{d.name}</div>
                       {d.notes && <small className="text-muted">{d.notes}</small>}
                     </td>
-                    <td>{d.phone ? formatPhoneInputValue(d.phone) : '—'}</td>
+                    <td>{d.phone ? formatPhoneForDisplay(d.phone) : '—'}</td>
                     <td>{d.tcId || '—'}</td>
                     <td>
                       {d.vehiclePlate ? <span className="badge bg-secondary">{d.vehiclePlate}</span> : '—'}
@@ -275,6 +285,15 @@ export default function Drivers() {
           </table>
         </div>
       </div>
+
+      {mergeOpen && (
+        <DriverMergeModal
+          askCode={askCode}
+          toast={toast}
+          onMerged={fetchDrivers}
+          onClose={() => setMergeOpen(false)}
+        />
+      )}
 
       {editing && (
         <div className="modal show d-block" style={{ background: 'rgba(15,23,42,0.6)', zIndex: 3000 }}>

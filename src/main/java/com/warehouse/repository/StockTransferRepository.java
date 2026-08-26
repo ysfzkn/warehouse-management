@@ -55,6 +55,17 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, Lo
     List<StockTransfer> findRecentCustomerDeliveries(@Param("since") LocalDateTime since,
                                                      Pageable pageable);
 
+    long countByDriverId(Long driverId);
+
+    /**
+     * Moves every transfer that pointed at a duplicate driver onto the surviving record.
+     * Only the link moves — each transfer keeps its own driver name, TC, phone and plate, so
+     * the history still shows what was actually written at the time.
+     */
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("UPDATE StockTransfer st SET st.driverId = :targetId WHERE st.driverId IN :sourceIds")
+    int repointDriver(@Param("targetId") Long targetId, @Param("sourceIds") List<Long> sourceIds);
+
     /** Shipments created for a specific order (customer chose our own delivery). */
     @Query("SELECT DISTINCT st FROM StockTransfer st " +
            "LEFT JOIN FETCH st.sourceWarehouse " +
