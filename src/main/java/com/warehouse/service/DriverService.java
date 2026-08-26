@@ -6,6 +6,7 @@ import com.warehouse.exception.WarehouseManagementException;
 import com.warehouse.dto.DriverDuplicateGroupDto;
 import com.warehouse.repository.DriverRepository;
 import com.warehouse.repository.StockTransferRepository;
+import com.warehouse.repository.VehicleRepository;
 import com.warehouse.util.TurkishText;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,10 +41,13 @@ public class DriverService {
 
     private final DriverRepository drivers;
     private final StockTransferRepository transfers;
+    private final VehicleRepository vehicles;
 
-    public DriverService(DriverRepository drivers, StockTransferRepository transfers) {
+    public DriverService(DriverRepository drivers, StockTransferRepository transfers,
+                         VehicleRepository vehicles) {
         this.drivers = drivers;
         this.transfers = transfers;
+        this.vehicles = vehicles;
     }
 
     /** Type-ahead for the transfer form. A blank query returns the most-used drivers. */
@@ -129,7 +133,11 @@ public class DriverService {
         driver.setName(normalizeName(input.getName()));
         driver.setTcId(trimToNull(input.getTcId()));
         driver.setPhone(trimToNull(input.getPhone()));
-        driver.setVehiclePlate(upper(input.getVehiclePlate()));
+        // The plate on the driver is now only a "last used" hint — vehicles are their own
+        // records. The edit form no longer sends it, so a null must not wipe it.
+        if (upper(input.getVehiclePlate()) != null) {
+            driver.setVehiclePlate(upper(input.getVehiclePlate()));
+        }
         driver.setNotes(trimToNull(input.getNotes()));
         driver.setActive(input.isActive());
         driver.setSearchText(searchTextOf(driver));
@@ -270,6 +278,9 @@ public class DriverService {
         }
 
         int repointed = transfers.repointDriver(primaryId, sources);
+        // Vehicles the absorbed records were allowed to drive move across too, otherwise the
+        // merge would quietly take vehicles away from the surviving driver.
+        vehicles.moveAssignments(primaryId, sources);
         drivers.deleteAll(duplicates);
         // Flushed before the survivor is saved, so the unique phone index cannot trip on a
         // number that the delete is about to free.

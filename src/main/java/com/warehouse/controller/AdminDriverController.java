@@ -3,6 +3,7 @@ package com.warehouse.controller;
 import com.warehouse.entity.Driver;
 import com.warehouse.service.AdminSecurityService;
 import com.warehouse.service.DriverService;
+import com.warehouse.service.VehicleService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -21,10 +22,13 @@ import java.util.Map;
 public class AdminDriverController {
 
     private final DriverService driverService;
+    private final VehicleService vehicleService;
     private final AdminSecurityService adminSecurityService;
 
-    public AdminDriverController(DriverService driverService, AdminSecurityService adminSecurityService) {
+    public AdminDriverController(DriverService driverService, VehicleService vehicleService,
+                                 AdminSecurityService adminSecurityService) {
         this.driverService = driverService;
+        this.vehicleService = vehicleService;
         this.adminSecurityService = adminSecurityService;
     }
 
@@ -44,6 +48,12 @@ public class AdminDriverController {
     @GetMapping("/{id}")
     public ResponseEntity<Driver> get(@PathVariable Long id) {
         return ResponseEntity.ok(driverService.get(id));
+    }
+
+    /** Vehicles this driver is allowed to take. */
+    @GetMapping("/{id}/vehicles")
+    public ResponseEntity<List<com.warehouse.entity.Vehicle>> vehicles(@PathVariable Long id) {
+        return ResponseEntity.ok(vehicleService.forDriver(id));
     }
 
     @PostMapping

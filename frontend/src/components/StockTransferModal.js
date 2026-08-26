@@ -12,7 +12,7 @@ import {
 import { compressImage } from '../utils/image';
 import CustomerLinkPicker from './CustomerLinkPicker';
 import { useCustomerActivityCheck } from './CustomerActivityWarning';
-import { DriverPicker, PastCustomerPicker } from './TransferPeoplePicker';
+import { DriverPicker, PastCustomerPicker, VehiclePicker } from './TransferPeoplePicker';
 import { toTitleCaseTr } from '../utils/name';
 
 const StockTransferModal = ({ stock, order, onSuccess, onClose, lockToCustomerDelivery = false }) => {
@@ -81,6 +81,8 @@ const StockTransferModal = ({ stock, order, onSuccess, onClose, lockToCustomerDe
   const [orderItemsSeeded, setOrderItemsSeeded] = useState(false);
   // Recipient's e-commerce account, when they have one. Optional by design.
   const [linkedCustomer, setLinkedCustomer] = useState(null);
+  // Set when a driver is picked from the directory; the plate list is narrowed to their vehicles.
+  const [selectedDriverId, setSelectedDriverId] = useState(null);
   const requireAdminSecurityHeaders = async () => {
     if (!isAdmin) return {};
     const code = await askSecurityCode();
@@ -551,6 +553,7 @@ const StockTransferModal = ({ stock, order, onSuccess, onClose, lockToCustomerDe
       driverPhone: driver.phone ? formatPhoneInputValue(driver.phone) : prev.driverPhone,
       vehiclePlate: driver.vehiclePlate || prev.vehiclePlate,
     }));
+    setSelectedDriverId(driver.id || null);
     setValidationErrors((prev) => ({
       ...prev,
       driverName: undefined,
@@ -559,6 +562,12 @@ const StockTransferModal = ({ stock, order, onSuccess, onClose, lockToCustomerDe
       vehiclePlate: undefined,
     }));
     showToast(`${driver.name} seçildi.`, 'success');
+  };
+
+  /** Plate comes from the vehicle directory; clearing it empties the field. */
+  const applyVehicle = (vehicle) => {
+    setFormData((prev) => ({ ...prev, vehiclePlate: vehicle?.plate || '' }));
+    setValidationErrors((prev) => ({ ...prev, vehiclePlate: undefined }));
   };
 
   /** Fills the recipient fields from a previous delivery to the same person. */
@@ -2284,19 +2293,19 @@ const StockTransferModal = ({ stock, order, onSuccess, onClose, lockToCustomerDe
                           <i className="fas fa-car me-1"></i>
                           Araç Plakası *
                         </label>
-                        <input
-                          type="text"
-                          className={`form-control form-control-lg text-uppercase ${validationErrors.vehiclePlate ? 'is-invalid' : formData.vehiclePlate.trim().length >= 2 ? 'is-valid' : ''}`}
-                          name="vehiclePlate"
+                        <VehiclePicker
                           value={formData.vehiclePlate}
-                          onChange={handleChange}
-                          required
-                          placeholder="34 ABC 123"
-                          minLength="2"
-                          maxLength="20"
+                          driverId={selectedDriverId}
+                          invalid={Boolean(validationErrors.vehiclePlate)}
+                          onPick={applyVehicle}
                         />
-                        {validationErrors.vehiclePlate && (
-                          <div className="invalid-feedback">{validationErrors.vehiclePlate}</div>
+                        {validationErrors.vehiclePlate ? (
+                          <div className="text-danger small mt-1">{validationErrors.vehiclePlate}</div>
+                        ) : (
+                          <small className="text-muted">
+                            Şoför seçiliyse ona atanmış araçlar üstte listelenir. Yeni plakayı yazıp listeden
+                            ekleyebilirsiniz.
+                          </small>
                         )}
                       </div>
 

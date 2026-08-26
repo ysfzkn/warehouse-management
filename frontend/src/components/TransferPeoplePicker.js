@@ -161,6 +161,196 @@ export function DriverPicker({ onPick, disabled = false }) {
   );
 }
 
+/**
+ * Plate picker.
+ *
+ * A plate is no longer free text: it comes from the vehicle directory, with the vehicles already
+ * assigned to the chosen driver offered first — that is what the operator wants nine times out of
+ * ten. A plate that is genuinely new can still be registered inline, because a vehicle usually
+ * turns up mid-transfer and sending the operator to another screen would push them back to typing
+ * whatever they like.
+ */
+export function VehiclePicker({ value, driverId, onPick, invalid = false }) {
+  const [assigned, setAssigned] = useState([]);
+  const [all, setAll] = useState([]);
+  const [query, setQuery] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [open, setOpen] = useState(false);
+  const ref = useOutsideClose(() => setOpen(false));
+
+  // The driver's own vehicles are a short, stable list — fetched once per driver.
+  useEffect(() => {
+    if (!driverId) {
+      setAssigned([]);
+      return undefined;
+    }
+    let cancelled = false;
+    axios
+      .get(`/api/admin/vehicles/by-driver/${driverId}`)
+      .then((r) => !cancelled && setAssigned(Array.isArray(r.data) ? r.data : []))
+      .catch(() => !cancelled && setAssigned([]));
+    return () => {
+      cancelled = true;
+    };
+  }, [driverId]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    setLoading(true);
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      axios
+        .get('/api/admin/vehicles/suggest', { params: { q: query.trim() || undefined } })
+        .then((r) => !cancelled && setAll(Array.isArray(r.data) ? r.data : []))
+        .catch(() => !cancelled && setAll([]))
+        .finally(() => !cancelled && setLoading(false));
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [query, open]);
+
+  const normalize = (plate) => (plate || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+  const assignedKeys = new Set(assigned.map((v) => normalize(v.plate)));
+  const matches = (v) => !query.trim() || normalize(v.plate).includes(normalize(query));
+  const visibleAssigned = assigned.filter(matches);
+  const others = all.filter((v) => !assignedKeys.has(normalize(v.plate)));
+
+  const typedKey = normalize(query);
+  const alreadyKnown = [...assigned, ...all].some((v) => normalize(v.plate) === typedKey);
+  const canCreate = typedKey.length >= 4 && !alreadyKnown;
+
+  const choose = (vehicle) => {
+    onPick(vehicle);
+    setQuery('');
+    setOpen(false);
+  };
+
+  const createVehicle = async () => {
+    setCreating(true);
+    try {
+      const res = await axios.post('/api/admin/vehicles', { plate: query.trim() });
+      choose(res.data);
+    } catch (e) {
+      // Surfaced through the field itself; the caller owns toasts.
+      setOpen(true);
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  return (
+    <PickerShell open={open} innerRef={ref}>
+      <div className="input-group input-group-lg">
+        <span className="input-group-text bg-white">
+          <i className="fas fa-truck-front text-secondary" />
+        </span>
+        <input
+          className={`form-control text-uppercase ${invalid ? 'is-invalid' : value ? 'is-valid' : ''}`}
+          placeholder="Plaka seçin veya yazın"
+          value={open ? query : value || ''}
+          autoComplete="off"
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setOpen(true);
+          }}
+          onFocus={() => {
+            setQuery('');
+            setOpen(true);
+          }}
+        />
+        {value && !open && (
+          <button
+            type="button"
+            className="btn btn-outline-secondary"
+            title="Plakayı temizle"
+            onClick={() => onPick(null)}
+          >
+            <i className="fas fa-times" />
+          </button>
+        )}
+        {loading && (
+          <span className="input-group-text bg-white">
+            <span className="spinner-border spinner-border-sm text-secondary" />
+          </span>
+        )}
+      </div>
+      {open && (
+        <Dropdown>
+          {visibleAssigned.length > 0 && (
+            <div className="list-group-item bg-light small fw-semibold text-muted py-1">
+              Bu şoföre atanmış araçlar
+            </div>
+          )}
+          {visibleAssigned.map((v) => (
+            <button
+              type="button"
+              key={`assigned-${v.id}`}
+              className="list-group-item list-group-item-action"
+              onClick={() => choose(v)}
+            >
+              <div className="d-flex justify-content-between align-items-center gap-2">
+                <span className="fw-semibold">{v.plate}</span>
+                <span className="badge bg-primary-subtle text-primary border">Atanmış</span>
+              </div>
+              {v.brandModel && <small className="text-muted">{v.brandModel}</small>}
+            </button>
+          ))}
+
+          {others.length > 0 && (
+            <div className="list-group-item bg-light small fw-semibold text-muted py-1">Diğer araçlar</div>
+          )}
+          {others.map((v) => (
+            <button
+              type="button"
+              key={`other-${v.id}`}
+              className="list-group-item list-group-item-action"
+              onClick={() => choose(v)}
+            >
+              <div className="d-flex justify-content-between align-items-center gap-2">
+                <span className="fw-semibold">{v.plate}</span>
+                {v.transferCount > 0 && (
+                  <span className="badge bg-light text-dark border">{v.transferCount} transfer</span>
+                )}
+              </div>
+              {v.brandModel && <small className="text-muted">{v.brandModel}</small>}
+            </button>
+          ))}
+
+          {canCreate && (
+            <button
+              type="button"
+              className="list-group-item list-group-item-action text-primary"
+              disabled={creating}
+              onClick={createVehicle}
+            >
+              {creating ? (
+                <>
+                  <span className="spinner-border spinner-border-sm me-2" />
+                  Ekleniyor…
+                </>
+              ) : (
+                <>
+                  <i className="fas fa-plus me-2" />
+                  <strong>{query.trim().toUpperCase()}</strong> plakasını yeni araç olarak ekle
+                </>
+              )}
+            </button>
+          )}
+
+          {!loading && visibleAssigned.length === 0 && others.length === 0 && !canCreate && (
+            <div className="list-group-item text-muted small">
+              Araç bulunamadı. Plakayı yazınca yeni araç olarak ekleyebilirsiniz.
+            </div>
+          )}
+        </Dropdown>
+      )}
+    </PickerShell>
+  );
+}
+
 const formatDate = (value) =>
   value
     ? new Date(value).toLocaleDateString('tr-TR', { day: '2-digit', month: 'short', year: 'numeric' })

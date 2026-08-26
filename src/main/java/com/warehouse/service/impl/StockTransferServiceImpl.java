@@ -77,6 +77,7 @@ public class StockTransferServiceImpl implements StockTransferService {
     private final OrderStatusHistoryRepository orderStatusHistoryRepository;
     private final CustomerRepository customerRepository;
     private final com.warehouse.service.DriverService driverService;
+    private final com.warehouse.service.VehicleService vehicleService;
 
     public StockTransferServiceImpl(StockTransferRepository stockTransferRepository,
                                     StockRepository stockRepository,
@@ -90,7 +91,8 @@ public class StockTransferServiceImpl implements StockTransferService {
                                     OrderItemRepository orderItemRepository,
                                     OrderStatusHistoryRepository orderStatusHistoryRepository,
                                     CustomerRepository customerRepository,
-                                    com.warehouse.service.DriverService driverService) {
+                                    com.warehouse.service.DriverService driverService,
+                                    com.warehouse.service.VehicleService vehicleService) {
         this.stockTransferRepository = stockTransferRepository;
         this.stockRepository = stockRepository;
         this.productRepository = productRepository;
@@ -104,6 +106,7 @@ public class StockTransferServiceImpl implements StockTransferService {
         this.orderStatusHistoryRepository = orderStatusHistoryRepository;
         this.customerRepository = customerRepository;
         this.driverService = driverService;
+        this.vehicleService = vehicleService;
     }
 
     @Override
@@ -336,9 +339,23 @@ public class StockTransferServiceImpl implements StockTransferService {
         com.warehouse.entity.Driver directoryEntry = driverService.recordUsage(
                 saved.getDriverName(), saved.getDriverTcId(),
                 saved.getDriverPhone(), saved.getVehiclePlate());
+        com.warehouse.entity.Vehicle vehicleEntry = vehicleService.recordUsage(saved.getVehiclePlate());
+        boolean linksChanged = false;
         if (directoryEntry != null && saved.getDriverId() == null) {
             saved.setDriverId(directoryEntry.getId());
+            linksChanged = true;
+        }
+        if (vehicleEntry != null && saved.getVehicleId() == null) {
+            saved.setVehicleId(vehicleEntry.getId());
+            linksChanged = true;
+        }
+        if (linksChanged) {
             saved = stockTransferRepository.save(saved);
+        }
+        // Driving a vehicle is what assigns it: the pairing the operator actually used becomes
+        // the pairing the transfer form offers next time.
+        if (directoryEntry != null && vehicleEntry != null) {
+            vehicleService.linkQuietly(directoryEntry.getId(), vehicleEntry.getId());
         }
         AuditMetadata metadata = buildTransferMetadata(saved);
         auditService.log(AuditAction.TRANSFER_CREATE, DomainEntityType.StockTransfer.name(), saved.getId(), username,

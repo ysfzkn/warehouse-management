@@ -1072,8 +1072,8 @@ const Navbar = () => {
                     to="/drivers"
                     style={navLinkStyle('/drivers')}
                   >
-                    <i className="fas fa-id-card me-2"></i>
-                    Şoförler
+                    <i className="fas fa-truck-fast me-2"></i>
+                    Şoförler ve Araçlar
                   </Link>
                 </li>
               )}
