@@ -157,6 +157,16 @@ public class StockTransferController {
         return ResponseEntity.ok(response);
     }
 
+    /**
+     * Customers this warehouse has delivered to before, for the new-transfer form's picker.
+     * Saves retyping name, phone and address — and keeps one customer spelled one way.
+     */
+    @GetMapping("/customers")
+    public ResponseEntity<List<Map<String, Object>>> recentCustomers(
+            @RequestParam(required = false) String q) {
+        return ResponseEntity.ok(stockTransferService.findRecentCustomers(q));
+    }
+
     @PostMapping
     public ResponseEntity<StockTransferDto> createTransfer(@Valid @RequestBody StockTransferCreateRequest request) {
         StockTransfer transfer = mapToEntity(request);

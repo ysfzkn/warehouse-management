@@ -90,6 +90,14 @@ public class Stock {
     @Column(name = "customer_phone", length = 20)
     private String customerPhone; // For EMANET_DEPO warehouses
 
+    /**
+     * Consignment customer name + phone folded onto ASCII, so the stock screen finds
+     * "Fehmi Ballı" when the record was typed "Fehmi Balli". Maintained on every write.
+     */
+    @Size(max = 400)
+    @Column(name = "customer_search", length = 400)
+    private String customerSearch;
+
     @Version
     @Column(name = "version", nullable = false)
     private Long version = 0L;
@@ -108,11 +116,19 @@ public class Stock {
     @PreUpdate
     protected void onUpdate() {
         this.lastUpdated = LocalDateTime.now();
+        refreshSearchColumn();
     }
 
     @PrePersist
     protected void onCreate() {
         this.lastUpdated = LocalDateTime.now();
+        refreshSearchColumn();
+    }
+
+    /** See {@link #customerSearch} — kept in step with every write, from any code path. */
+    private void refreshSearchColumn() {
+        this.customerSearch = com.warehouse.util.TurkishText.normalizeForSearch(
+                this.customerName, this.customerPhone);
     }
 
     // Business logic methods

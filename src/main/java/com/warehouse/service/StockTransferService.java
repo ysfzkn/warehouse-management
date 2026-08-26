@@ -54,6 +54,9 @@ public interface StockTransferService {
      */
     StockTransfer linkCustomer(Long transferId, Long customerId);
 
+    /** Distinct customers from past customer deliveries, for the new-transfer picker. */
+    java.util.List<java.util.Map<String, Object>> findRecentCustomers(String query);
+
     StockTransferDeletionResult deleteTransfer(Long transferId, String adminSecurityCode);
 
     BulkDeleteResponse deleteTransfers(List<Long> transferIds);

@@ -76,6 +76,7 @@ public class StockTransferServiceImpl implements StockTransferService {
     private final OrderItemRepository orderItemRepository;
     private final OrderStatusHistoryRepository orderStatusHistoryRepository;
     private final CustomerRepository customerRepository;
+    private final com.warehouse.service.DriverService driverService;
 
     public StockTransferServiceImpl(StockTransferRepository stockTransferRepository,
                                     StockRepository stockRepository,
@@ -88,7 +89,8 @@ public class StockTransferServiceImpl implements StockTransferService {
                                     OrderRepository orderRepository,
                                     OrderItemRepository orderItemRepository,
                                     OrderStatusHistoryRepository orderStatusHistoryRepository,
-                                    CustomerRepository customerRepository) {
+                                    CustomerRepository customerRepository,
+                                    com.warehouse.service.DriverService driverService) {
         this.stockTransferRepository = stockTransferRepository;
         this.stockRepository = stockRepository;
         this.productRepository = productRepository;
@@ -101,6 +103,7 @@ public class StockTransferServiceImpl implements StockTransferService {
         this.orderItemRepository = orderItemRepository;
         this.orderStatusHistoryRepository = orderStatusHistoryRepository;
         this.customerRepository = customerRepository;
+        this.driverService = driverService;
     }
 
     @Override
@@ -327,6 +330,10 @@ public class StockTransferServiceImpl implements StockTransferService {
         }
 
         StockTransfer saved = stockTransferRepository.save(transfer);
+        // Files the driver into the directory so the next transfer can offer them back instead
+        // of making the operator retype name, TC, phone and plate.
+        driverService.recordUsage(saved.getDriverName(), saved.getDriverTcId(),
+                saved.getDriverPhone(), saved.getVehiclePlate());
         AuditMetadata metadata = buildTransferMetadata(saved);
         auditService.log(AuditAction.TRANSFER_CREATE, DomainEntityType.StockTransfer.name(), saved.getId(), username,
                 String.format("Transfer oluşturuldu: %s | Ürünler=%s",
@@ -1251,6 +1258,24 @@ public class StockTransferServiceImpl implements StockTransferService {
      * manual order reserves its lines, so shipping that order with our own vehicle must be
      * allowed to consume exactly that reservation instead of tripping the availability check.
      */
+    @Override
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> findRecentCustomers(String query) {
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (Object[] row : stockTransferRepository.findDistinctCustomers(
+                com.warehouse.util.TurkishText.searchPattern(query),
+                org.springframework.data.domain.PageRequest.of(0, 15))) {
+            Map<String, Object> customer = new LinkedHashMap<>();
+            customer.put("name", row[0]);
+            customer.put("phone", row[1]);
+            customer.put("address", row[2]);
+            customer.put("lastDeliveryAt", row[3]);
+            customer.put("deliveryCount", ((Number) row[4]).longValue());
+            result.add(customer);
+        }
+        return result;
+    }
+
     /**
      * Walks the linked order to {@code target} through the order state machine. Stock was
      * already moved by the transfer itself, so the order's own DELIVERED bookkeeping must
@@ -1555,7 +1580,7 @@ public class StockTransferServiceImpl implements StockTransferService {
                 this.driverPattern = driverNameProvided ? likePattern(driverName) : "%";
                 this.notesPattern = notesProvided ? likePattern(notes) : "%";
                 String digits = customerQuery != null ? customerQuery.replaceAll("\\D", "") : null;
-                boolean digitsProvided = digits != null && !digits.isBlank();
+                boolean digitsProvided = digits != null && digits.length() >= 3;
                 this.customerNamePattern = customerProvided ? likePattern(customerQuery) : "%";
                 this.customerPhonePattern = digitsProvided ? ("%" + digits + "%") : (customerProvided ? likePattern(customerQuery) : "%");
             }
@@ -1570,9 +1595,13 @@ public class StockTransferServiceImpl implements StockTransferService {
             return id > 0 ? id : null;
         }
 
+        /**
+         * Patterns are built against the normalised {@code *_search} columns, not the raw text:
+         * LOWER() alone leaves "ı" and "i" different, so a record typed "Balli" never matched a
+         * search for "Ballı". Folding both sides onto ASCII makes the two spellings equal.
+         */
         private static String likePattern(String value) {
-            // Use Turkish locale for proper case-insensitive search with Turkish characters
-            return "%" + value.toLowerCase(Locale.forLanguageTag("tr-TR")) + "%";
+            return "%" + com.warehouse.util.TurkishText.normalize(value) + "%";
         }
     }
 }

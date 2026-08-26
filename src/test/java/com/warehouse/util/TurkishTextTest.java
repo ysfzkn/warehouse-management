@@ -156,6 +156,37 @@ class TurkishTextTest {
         assertThat(TurkishText.toNoteCase(null)).isNull();
     }
 
+    // ─── search columns ──────────────────────────────────────────────────────
+
+    @Test
+    void search_column_should_make_turkish_spellings_equal() {
+        // The whole point: a record typed "Fehmi Balli" must be found by searching "Ballı".
+        String stored = TurkishText.normalizeForSearch("Fehmi Balli", null);
+        assertThat(stored).contains(TurkishText.normalize("Ballı"));
+        assertThat(stored).contains(TurkishText.normalize("BALLI"));
+        assertThat(TurkishText.normalizeForSearch("Fehmi Ballı", null)).isEqualTo(stored);
+    }
+
+    @Test
+    void search_column_should_carry_the_compact_phone_form() {
+        String stored = TurkishText.normalizeForSearch("Ayşe Yılmaz", "0532 111 22 33");
+        // Normalising splits the spaced phone, so the digits-only spelling is stored too.
+        assertThat(stored).contains("5321112233");
+        assertThat(stored).contains("ayse yilmaz");
+    }
+
+    @Test
+    void search_column_should_be_null_when_there_is_nothing_to_index() {
+        assertThat(TurkishText.normalizeForSearch(null, "  ")).isNull();
+        assertThat(TurkishText.normalizeForSearch()).isNull();
+    }
+
+    @Test
+    void search_pattern_should_wrap_the_normalised_query() {
+        assertThat(TurkishText.searchPattern("Ballı")).isEqualTo("%balli%");
+        assertThat(TurkishText.searchPattern("  ")).isNull();
+    }
+
     // ─── phone matching ──────────────────────────────────────────────────────
 
     @Test
