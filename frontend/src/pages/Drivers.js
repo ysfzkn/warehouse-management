@@ -1,7 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
-import { useAdminToast } from '../components/AdminToast';
-import useSecurityCodePrompt from '../components/useSecurityCodePrompt';
 import confirmDialog from '../utils/confirmDialog';
 import DriverMergeModal from '../components/DriverMergeModal';
 import { toTitleCaseTr } from '../utils/name';
@@ -13,24 +11,21 @@ import {
 } from '../utils/phone';
 
 /**
- * Driver directory.
+ * Driver tab of the fleet screen.
  *
  * The list fills itself: every transfer files its driver away, ranked by how often they drive.
- * This screen is for the corrections that follow — a mistyped plate, a duplicate created before
- * the directory existed, a driver who no longer works here.
+ * This tab is for the corrections that follow — a duplicate created before the directory
+ * existed, a driver who no longer works here — and for saying which vehicles a driver may take.
  */
 
-const emptyForm = { name: '', tcId: '', phone: '', vehiclePlate: '', notes: '', active: true };
+const emptyForm = { name: '', tcId: '', phone: '', notes: '', active: true };
 
 const formatDate = (value) =>
   value
     ? new Date(value).toLocaleDateString('tr-TR', { day: '2-digit', month: 'short', year: 'numeric' })
     : '—';
 
-export default function Drivers() {
-  const toast = useAdminToast();
-  const { askCode, SecurityCodePrompt } = useSecurityCodePrompt();
-
+export default function Drivers({ toast, askCode, canManage }) {
   const [drivers, setDrivers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -39,6 +34,9 @@ export default function Drivers() {
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState({});
   const [mergeOpen, setMergeOpen] = useState(false);
+  // driverId -> assigned vehicles, so the table can show them without a request per row.
+  const [vehiclesByDriver, setVehiclesByDriver] = useState({});
+  const [allVehicles, setAllVehicles] = useState([]);
 
   const fetchDrivers = useCallback(async () => {
     setLoading(true);
@@ -46,7 +44,20 @@ export default function Drivers() {
       const res = await axios.get('/api/admin/drivers', {
         params: { q: search.trim() || undefined, activeOnly },
       });
-      setDrivers(res.data || []);
+      const list = res.data || [];
+      setDrivers(list);
+
+      // One request per driver would be a request storm on a full page; the assignment lists
+      // are tiny, so they are fetched together and cached by id.
+      const pairs = await Promise.all(
+        list.map((d) =>
+          axios
+            .get(`/api/admin/drivers/${d.id}/vehicles`)
+            .then((r) => [d.id, r.data || []])
+            .catch(() => [d.id, []])
+        )
+      );
+      setVehiclesByDriver(Object.fromEntries(pairs));
     } catch (e) {
       toast.error(e.response?.data?.message || 'Şoförler yüklenemedi.');
     } finally {
@@ -59,6 +70,34 @@ export default function Drivers() {
     const timer = setTimeout(fetchDrivers, 250);
     return () => clearTimeout(timer);
   }, [fetchDrivers]);
+
+  // The pick-list for the assignment editor; active vehicles only.
+  useEffect(() => {
+    axios
+      .get('/api/admin/vehicles', { params: { activeOnly: true } })
+      .then((r) => setAllVehicles(r.data || []))
+      .catch(() => setAllVehicles([]));
+  }, []);
+
+  const assignVehicle = async (driverId, vehicleId) => {
+    try {
+      await axios.post(`/api/admin/vehicles/${vehicleId}/drivers/${driverId}`);
+      const r = await axios.get(`/api/admin/drivers/${driverId}/vehicles`);
+      setVehiclesByDriver((prev) => ({ ...prev, [driverId]: r.data || [] }));
+    } catch (e) {
+      toast.error(e.response?.data?.message || 'Araç atanamadı.');
+    }
+  };
+
+  const unassignVehicle = async (driverId, vehicleId) => {
+    try {
+      await axios.delete(`/api/admin/vehicles/${vehicleId}/drivers/${driverId}`);
+      const r = await axios.get(`/api/admin/drivers/${driverId}/vehicles`);
+      setVehiclesByDriver((prev) => ({ ...prev, [driverId]: r.data || [] }));
+    } catch (e) {
+      toast.error(e.response?.data?.message || 'Atama kaldırılamadı.');
+    }
+  };
 
   const validate = (form) => {
     const next = {};
@@ -77,7 +116,6 @@ export default function Drivers() {
         name: editing.name.trim(),
         tcId: (editing.tcId || '').replace(/\D/g, '') || null,
         phone: formatPhoneForSubmit(editing.phone) || null,
-        vehiclePlate: (editing.vehiclePlate || '').trim().toUpperCase() || null,
         notes: (editing.notes || '').trim() || null,
         active: editing.active !== false,
       };
@@ -133,41 +171,10 @@ export default function Drivers() {
 
   return (
     <div>
-      {SecurityCodePrompt}
-
-      <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
-        <div>
-          <h4 className="fw-bold mb-1">
-            <i className="fas fa-id-card text-primary me-2" />
-            Şoförler
-          </h4>
-          <p className="text-muted small mb-0">
-            Transfer kaydedildikçe rehber kendi kendine dolar; buradan düzeltebilir, pasife alabilir veya
-            silebilirsiniz.
-          </p>
-        </div>
-        <div className="d-flex gap-2">
-          <button className="btn btn-outline-primary" onClick={() => setMergeOpen(true)}>
-            <i className="fas fa-object-group me-2" />
-            Mükerrer Şoförleri Birleştir
-          </button>
-          <button
-            className="btn btn-primary"
-            onClick={() => {
-              setErrors({});
-              setEditing({ ...emptyForm });
-            }}
-          >
-            <i className="fas fa-plus me-2" />
-            Yeni Şoför
-          </button>
-        </div>
-      </div>
-
       <div className="card mb-3">
         <div className="card-body py-3">
           <div className="row g-2 align-items-end">
-            <div className="col-md-8">
+            <div className="col-md-5">
               <label className="form-label small fw-medium mb-1">Ara</label>
               <div className="input-group">
                 <span className="input-group-text bg-white">
@@ -186,7 +193,7 @@ export default function Drivers() {
                 )}
               </div>
             </div>
-            <div className="col-md-4">
+            <div className="col-md-3">
               <div className="form-check">
                 <input
                   className="form-check-input"
@@ -200,6 +207,24 @@ export default function Drivers() {
                 </label>
               </div>
             </div>
+            <div className="col-md-4 d-flex gap-2 justify-content-md-end">
+              {canManage && (
+                <button className="btn btn-outline-primary" onClick={() => setMergeOpen(true)}>
+                  <i className="fas fa-object-group me-2" />
+                  Mükerrerleri Birleştir
+                </button>
+              )}
+              <button
+                className="btn btn-primary"
+                onClick={() => {
+                  setErrors({});
+                  setEditing({ ...emptyForm });
+                }}
+              >
+                <i className="fas fa-plus me-2" />
+                Yeni Şoför
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -212,7 +237,7 @@ export default function Drivers() {
                 <th>Şoför</th>
                 <th>Telefon</th>
                 <th>TC Kimlik</th>
-                <th>Plaka</th>
+                <th>Araçlar</th>
                 <th className="text-center">Transfer</th>
                 <th>Son Kullanım</th>
                 <th>Durum</th>
@@ -245,7 +270,17 @@ export default function Drivers() {
                     <td>{d.phone ? formatPhoneForDisplay(d.phone) : '—'}</td>
                     <td>{d.tcId || '—'}</td>
                     <td>
-                      {d.vehiclePlate ? <span className="badge bg-secondary">{d.vehiclePlate}</span> : '—'}
+                      {(vehiclesByDriver[d.id] || []).length === 0 ? (
+                        <span className="text-muted">—</span>
+                      ) : (
+                        <div className="d-flex flex-wrap gap-1">
+                          {(vehiclesByDriver[d.id] || []).map((v) => (
+                            <span key={v.id} className="badge bg-secondary">
+                              {v.plate}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </td>
                     <td className="text-center">{d.transferCount || 0}</td>
                     <td className="small">{formatDate(d.lastUsedAt)}</td>
@@ -255,28 +290,32 @@ export default function Drivers() {
                       </span>
                     </td>
                     <td className="text-end">
-                      <div className="btn-group btn-group-sm">
-                        <button
-                          className="btn btn-outline-primary"
-                          title="Düzenle"
-                          onClick={() => {
-                            setErrors({});
-                            setEditing({ ...d, phone: formatPhoneInputValue(d.phone || '') });
-                          }}
-                        >
-                          <i className="fas fa-pen" />
-                        </button>
-                        <button
-                          className="btn btn-outline-secondary"
-                          title={d.active ? 'Pasife al' : 'Aktifleştir'}
-                          onClick={() => toggle(d)}
-                        >
-                          <i className={`fas fa-${d.active ? 'eye-slash' : 'eye'}`} />
-                        </button>
-                        <button className="btn btn-outline-danger" title="Sil" onClick={() => remove(d)}>
-                          <i className="fas fa-trash-alt" />
-                        </button>
-                      </div>
+                      {canManage ? (
+                        <div className="btn-group btn-group-sm">
+                          <button
+                            className="btn btn-outline-primary"
+                            title="Düzenle ve araç ata"
+                            onClick={() => {
+                              setErrors({});
+                              setEditing({ ...d, phone: formatPhoneInputValue(d.phone || '') });
+                            }}
+                          >
+                            <i className="fas fa-pen" />
+                          </button>
+                          <button
+                            className="btn btn-outline-secondary"
+                            title={d.active ? 'Pasife al' : 'Aktifleştir'}
+                            onClick={() => toggle(d)}
+                          >
+                            <i className={`fas fa-${d.active ? 'eye-slash' : 'eye'}`} />
+                          </button>
+                          <button className="btn btn-outline-danger" title="Sil" onClick={() => remove(d)}>
+                            <i className="fas fa-trash-alt" />
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-muted small">—</span>
+                      )}
                     </td>
                   </tr>
                 ))
@@ -349,16 +388,57 @@ export default function Drivers() {
                     />
                     {errors.tcId && <div className="invalid-feedback">{errors.tcId}</div>}
                   </div>
-                  <div className="col-md-6">
-                    <label className="form-label">Plaka</label>
-                    <input
-                      className="form-control text-uppercase"
-                      value={editing.vehiclePlate || ''}
-                      onChange={(e) => setEditing({ ...editing, vehiclePlate: e.target.value })}
-                      placeholder="34 ABC 123"
-                      maxLength="20"
-                    />
-                  </div>
+                  {/* Assignments are saved as you click, not on submit — they are their own
+                      records, and an unsaved list of them would be a trap. */}
+                  {editing.id && (
+                    <div className="col-12">
+                      <label className="form-label">Kullanabileceği araçlar</label>
+                      <div className="border rounded p-2">
+                        {(vehiclesByDriver[editing.id] || []).length === 0 ? (
+                          <div className="text-muted small mb-2">Henüz araç atanmadı.</div>
+                        ) : (
+                          <div className="d-flex flex-wrap gap-2 mb-2">
+                            {(vehiclesByDriver[editing.id] || []).map((v) => (
+                              <span
+                                key={v.id}
+                                className="badge bg-secondary d-inline-flex align-items-center gap-2"
+                              >
+                                {v.plate}
+                                <button
+                                  type="button"
+                                  className="btn-close btn-close-white"
+                                  style={{ fontSize: 8 }}
+                                  aria-label={`${v.plate} atamasını kaldır`}
+                                  onClick={() => unassignVehicle(editing.id, v.id)}
+                                />
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        <select
+                          className="form-select form-select-sm"
+                          value=""
+                          onChange={(e) => {
+                            if (e.target.value) assignVehicle(editing.id, Number(e.target.value));
+                          }}
+                        >
+                          <option value="">+ Araç ata…</option>
+                          {allVehicles
+                            .filter((v) => !(vehiclesByDriver[editing.id] || []).some((a) => a.id === v.id))
+                            .map((v) => (
+                              <option key={v.id} value={v.id}>
+                                {v.plate}
+                                {v.brandModel ? ` — ${v.brandModel}` : ''}
+                              </option>
+                            ))}
+                        </select>
+                        <div className="form-text">
+                          Transfer ekranında bu şoför seçilince bu araçlar en üstte listelenir. Yeni bir
+                          araçla sefere çıkılırsa atama kendiliğinden eklenir.
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   <div className="col-md-6 d-flex align-items-end">
                     <div className="form-check">
                       <input

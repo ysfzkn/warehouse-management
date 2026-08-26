@@ -176,6 +176,13 @@ public class StockTransfer {
     @Column(name = "driver_id")
     private Long driverId;
 
+    /**
+     * The vehicle directory entry used for this transfer. As with the driver, the plate text
+     * above stays as recorded — this only says which vehicle record it refers to.
+     */
+    @Column(name = "vehicle_id")
+    private Long vehicleId;
+
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss", timezone = "Europe/Istanbul")
     @Column(name = "transfer_date", nullable = false)
     private LocalDateTime transferDate;

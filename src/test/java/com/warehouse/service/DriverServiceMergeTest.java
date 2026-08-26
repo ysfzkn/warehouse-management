@@ -5,6 +5,7 @@ import com.warehouse.entity.Driver;
 import com.warehouse.exception.WarehouseManagementException;
 import com.warehouse.repository.DriverRepository;
 import com.warehouse.repository.StockTransferRepository;
+import com.warehouse.repository.VehicleRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,12 +37,13 @@ class DriverServiceMergeTest {
 
     @Mock private DriverRepository drivers;
     @Mock private StockTransferRepository transfers;
+    @Mock private VehicleRepository vehicles;
 
     private DriverService service;
 
     @BeforeEach
     void setUp() {
-        service = new DriverService(drivers, transfers);
+        service = new DriverService(drivers, transfers, vehicles);
         when(transfers.countByDriverId(anyLong())).thenReturn(0L);
         when(drivers.save(any(Driver.class))).thenAnswer(i -> i.getArgument(0));
     }
@@ -128,6 +130,8 @@ class DriverServiceMergeTest {
         // The blank field on the survivor is filled from the record it absorbed.
         assertThat(result.driver().getTcId()).isEqualTo("11111111111");
         verify(drivers).deleteAll(List.of(dupe));
+        // Vehicles the absorbed record could drive follow the survivor.
+        verify(vehicles).moveAssignments(1L, List.of(2L));
     }
 
     @Test

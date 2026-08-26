@@ -24,6 +24,9 @@ export default function DriverMergeModal({ onClose, onMerged, askCode, toast }) 
   const [loading, setLoading] = useState(true);
   const [selection, setSelection] = useState({}); // groupKey -> { primaryId, memberIds: Set }
   const [merging, setMerging] = useState(false);
+  // Deciding a group collapses it, so a long list of duplicates stays walkable: what is left
+  // expanded is exactly what still needs a decision.
+  const [collapsed, setCollapsed] = useState({});
 
   const groupKey = (g, i) => `${g.matchedOn}-${g.matchedValue}-${i}`;
 
@@ -54,12 +57,16 @@ export default function DriverMergeModal({ onClose, onMerged, askCode, toast }) 
     load();
   }, [load]);
 
-  const setPrimary = (key, id) =>
+  const setPrimary = (key, id) => {
     setSelection((prev) => ({
       ...prev,
       // Choosing a survivor implies keeping it in the group.
       [key]: { primaryId: id, memberIds: new Set([...prev[key].memberIds, id]) },
     }));
+    setCollapsed((prev) => ({ ...prev, [key]: true }));
+  };
+
+  const toggleCollapsed = (key) => setCollapsed((prev) => ({ ...prev, [key]: !prev[key] }));
 
   const toggleMember = (key, id) =>
     setSelection((prev) => {
@@ -175,18 +182,45 @@ export default function DriverMergeModal({ onClose, onMerged, askCode, toast }) 
                   {groups.map((g, i) => {
                     const key = groupKey(g, i);
                     const chosen = selection[key] || { primaryId: null, memberIds: new Set() };
+                    const isCollapsed = Boolean(collapsed[key]);
+                    const survivor = g.candidates.find((c) => c.id === chosen.primaryId);
+                    const foldCount = [...chosen.memberIds].filter((id) => id !== chosen.primaryId).length;
                     return (
-                      <div key={key} className="border rounded-3">
-                        <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 px-3 py-2 bg-light border-bottom">
-                          <div className="small">
-                            <span className="badge bg-secondary me-2">
+                      <div
+                        key={key}
+                        className="border rounded-3"
+                        style={isCollapsed ? { borderColor: '#a7f3d0' } : undefined}
+                      >
+                        <div
+                          className="d-flex justify-content-between align-items-center flex-wrap gap-2 px-3 py-2 border-bottom"
+                          style={{ background: isCollapsed ? '#f0fdf4' : '#f8f9fa', cursor: 'pointer' }}
+                          onClick={() => toggleCollapsed(key)}
+                        >
+                          <div className="small d-flex align-items-center gap-2 flex-wrap">
+                            <i
+                              className={`fas fa-chevron-${isCollapsed ? 'right' : 'down'} text-muted`}
+                              style={{ fontSize: 11 }}
+                            />
+                            <span className="badge bg-secondary">
                               {g.matchedOn === 'telefon' ? 'Aynı telefon' : 'Aynı ad'}
                             </span>
-                            <span className="text-muted">{g.candidates.length} kayıt</span>
+                            {isCollapsed && survivor ? (
+                              <span>
+                                <i className="fas fa-check-circle text-success me-1" />
+                                <strong>{survivor.name}</strong> kalacak
+                                {foldCount > 0 ? ` · ${foldCount} kayıt birleşecek` : ' · birleştirme yok'}
+                              </span>
+                            ) : (
+                              <span className="text-muted">{g.candidates.length} kayıt</span>
+                            )}
                           </div>
-                          <div className="small text-muted">Toplam {g.affectedTransfers} bağlı transfer</div>
+                          <div className="small text-muted">
+                            {isCollapsed
+                              ? 'Değiştirmek için tıklayın'
+                              : `Toplam ${g.affectedTransfers} bağlı transfer`}
+                          </div>
                         </div>
-                        <div className="table-responsive">
+                        <div className="table-responsive" hidden={isCollapsed}>
                           <table className="table table-sm align-middle mb-0">
                             <thead>
                               <tr className="small text-muted">
