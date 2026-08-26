@@ -1064,6 +1064,20 @@ const Navbar = () => {
                 </li>
               )}
 
+              {/* Warehouse roles fill in transfers, so they need the driver directory too. */}
+              {isWms && (
+                <li className="nav-item">
+                  <Link
+                    className="nav-link nav-link-custom text-white"
+                    to="/drivers"
+                    style={navLinkStyle('/drivers')}
+                  >
+                    <i className="fas fa-id-card me-2"></i>
+                    Şoförler
+                  </Link>
+                </li>
+              )}
+
               {(role !== 'ADMIN' || isWms) && (
                 <li className="nav-item">
                   <Link

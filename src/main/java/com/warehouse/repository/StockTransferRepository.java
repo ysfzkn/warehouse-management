@@ -25,6 +25,24 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, Lo
     Page<StockTransfer> findAll(Pageable pageable);
 
     /**
+     * Distinct customers seen on past customer deliveries, most recent first.
+     * {@code [customerFullName, customerPhone, customerAddress, lastUsedAt, deliveryCount]}
+     *
+     * <p>Grouped on the raw fields so the operator gets the spelling that was actually used,
+     * but filtered on the normalised column so "Ballı" finds "Balli".</p>
+     */
+    @Query("SELECT st.customerFullName, st.customerPhone, MAX(st.customerAddress), " +
+           "MAX(st.transferDate), COUNT(st) " +
+           "FROM StockTransfer st " +
+           "WHERE st.transferType = com.warehouse.enums.TransferType.CUSTOMER_DELIVERY " +
+           "AND st.status <> com.warehouse.enums.TransferStatus.CANCELLED " +
+           "AND st.customerFullName IS NOT NULL AND st.customerFullName <> '' " +
+           "AND (:pattern IS NULL OR COALESCE(st.customerSearch, '') LIKE :pattern) " +
+           "GROUP BY st.customerFullName, st.customerPhone " +
+           "ORDER BY MAX(st.transferDate) DESC")
+    List<Object[]> findDistinctCustomers(@Param("pattern") String pattern, Pageable pageable);
+
+    /**
      * Recent customer deliveries — the candidate pool for the duplicate-delivery check.
      * Cancelled shipments are excluded (they never reached anyone); name matching happens in
      * Java, see {@link com.warehouse.util.TurkishText}.
@@ -176,7 +194,7 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, Lo
           AND (:destinationWarehouseId IS NULL OR st.destinationWarehouse.id = :destinationWarehouseId)
           AND (st.transferDate >= COALESCE(:startDate, st.transferDate))
           AND (st.transferDate <= COALESCE(:endDate, st.transferDate))
-          AND (:driverProvided = false OR LOWER(st.driverName) LIKE :driverPattern)
+          AND (:driverProvided = false OR COALESCE(st.driverSearch, '') LIKE :driverPattern)
           AND (
                 :productNameProvided = false
                 OR LOWER(COALESCE(directProduct.name, '')) LIKE :productNamePattern
@@ -201,9 +219,9 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, Lo
           )
           AND (
                 :customerProvided = false
-                OR LOWER(COALESCE(st.customerFullName, '')) LIKE :customerNamePattern
-                OR LOWER(COALESCE(st.customerPhone, '')) LIKE :customerPhonePattern
-                OR LOWER(COALESCE(st.driverName, '')) LIKE :customerNamePattern
+                OR COALESCE(st.customerSearch, '') LIKE :customerNamePattern
+                OR COALESCE(st.customerSearch, '') LIKE :customerPhonePattern
+                OR COALESCE(st.driverSearch, '') LIKE :customerNamePattern
                 OR LOWER(COALESCE(st.createdBy, '')) LIKE :customerNamePattern
                 OR EXISTS (
                     SELECT 1 FROM StockTransferItem itemCustomer
@@ -213,8 +231,8 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, Lo
                           SELECT 1 FROM Stock s
                           WHERE s.id = itemCustomer.stockId
                             AND (
-                                LOWER(COALESCE(s.customerName, '')) LIKE :customerNamePattern
-                                OR LOWER(COALESCE(s.customerPhone, '')) LIKE :customerPhonePattern
+                                COALESCE(s.customerSearch, '') LIKE :customerNamePattern
+                                OR COALESCE(s.customerSearch, '') LIKE :customerPhonePattern
                             )
                       )
                 )
@@ -259,7 +277,7 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, Lo
           AND (:destinationWarehouseId IS NULL OR st.destinationWarehouse.id = :destinationWarehouseId)
           AND (st.transferDate >= COALESCE(:startDate, st.transferDate))
           AND (st.transferDate <= COALESCE(:endDate, st.transferDate))
-          AND (:driverProvided = false OR LOWER(st.driverName) LIKE :driverPattern)
+          AND (:driverProvided = false OR COALESCE(st.driverSearch, '') LIKE :driverPattern)
           AND (
                 :productNameProvided = false
                 OR LOWER(COALESCE(directProduct.name, '')) LIKE :productNamePattern
@@ -280,9 +298,9 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, Lo
           )
           AND (
                 :customerProvided = false
-                OR LOWER(COALESCE(st.customerFullName, '')) LIKE :customerNamePattern
-                OR LOWER(COALESCE(st.customerPhone, '')) LIKE :customerPhonePattern
-                OR LOWER(COALESCE(st.driverName, '')) LIKE :customerNamePattern
+                OR COALESCE(st.customerSearch, '') LIKE :customerNamePattern
+                OR COALESCE(st.customerSearch, '') LIKE :customerPhonePattern
+                OR COALESCE(st.driverSearch, '') LIKE :customerNamePattern
                 OR LOWER(COALESCE(st.createdBy, '')) LIKE :customerNamePattern
                 OR EXISTS (
                     SELECT 1 FROM StockTransferItem itemCustomer
@@ -292,8 +310,8 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, Lo
                           SELECT 1 FROM Stock s
                           WHERE s.id = itemCustomer.stockId
                             AND (
-                                LOWER(COALESCE(s.customerName, '')) LIKE :customerNamePattern
-                                OR LOWER(COALESCE(s.customerPhone, '')) LIKE :customerPhonePattern
+                                COALESCE(s.customerSearch, '') LIKE :customerNamePattern
+                                OR COALESCE(s.customerSearch, '') LIKE :customerPhonePattern
                             )
                       )
                 )
@@ -327,7 +345,7 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, Lo
           AND (:destinationWarehouseId IS NULL OR st.destinationWarehouse.id = :destinationWarehouseId)
           AND (st.transferDate >= COALESCE(:startDate, st.transferDate))
           AND (st.transferDate <= COALESCE(:endDate, st.transferDate))
-          AND (:driverProvided = false OR LOWER(st.driverName) LIKE :driverPattern)
+          AND (:driverProvided = false OR COALESCE(st.driverSearch, '') LIKE :driverPattern)
           AND (
                 :productNameProvided = false
                 OR LOWER(COALESCE(directProduct.name, '')) LIKE :productNamePattern
@@ -348,9 +366,9 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, Lo
           )
           AND (
                 :customerProvided = false
-                OR LOWER(COALESCE(st.customerFullName, '')) LIKE :customerNamePattern
-                OR LOWER(COALESCE(st.customerPhone, '')) LIKE :customerPhonePattern
-                OR LOWER(COALESCE(st.driverName, '')) LIKE :customerNamePattern
+                OR COALESCE(st.customerSearch, '') LIKE :customerNamePattern
+                OR COALESCE(st.customerSearch, '') LIKE :customerPhonePattern
+                OR COALESCE(st.driverSearch, '') LIKE :customerNamePattern
                 OR LOWER(COALESCE(st.createdBy, '')) LIKE :customerNamePattern
                 OR EXISTS (
                     SELECT 1 FROM StockTransferItem itemCustomer
@@ -360,8 +378,8 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, Lo
                           SELECT 1 FROM Stock s
                           WHERE s.id = itemCustomer.stockId
                             AND (
-                                LOWER(COALESCE(s.customerName, '')) LIKE :customerNamePattern
-                                OR LOWER(COALESCE(s.customerPhone, '')) LIKE :customerPhonePattern
+                                COALESCE(s.customerSearch, '') LIKE :customerNamePattern
+                                OR COALESCE(s.customerSearch, '') LIKE :customerPhonePattern
                             )
                       )
                 )

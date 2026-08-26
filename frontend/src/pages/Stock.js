@@ -909,6 +909,7 @@ const Stock = () => {
   const [transferProductName, setTransferProductName] = useState('');
   const [transferSku, setTransferSku] = useState('');
   const [transferDriver, setTransferDriver] = useState('');
+  const [transferCustomer, setTransferCustomer] = useState('');
   const [transferNotes, setTransferNotes] = useState('');
   const [transferSourceWarehouseId, setTransferSourceWarehouseId] = useState(null);
   const [transferDestinationWarehouseId, setTransferDestinationWarehouseId] = useState(null);
@@ -1157,6 +1158,9 @@ const Stock = () => {
           : undefined;
         const normalizedSku = transferSku ? transferSku.toLocaleLowerCase('tr-TR') : undefined;
         const normalizedDriver = transferDriver ? transferDriver.toLocaleLowerCase('tr-TR') : undefined;
+        // Sent as typed: the server normalises both the query and the stored value, so "Ballı"
+        // finds "Balli" — lower-casing here would not achieve that.
+        const customerQuery = transferCustomer.trim() || undefined;
         const normalizedNotes = transferNotes ? transferNotes.toLocaleLowerCase('tr-TR') : undefined;
 
         // Date + optional time (HH:mm): no time = full day, with time = that moment
@@ -1188,6 +1192,7 @@ const Stock = () => {
           productName: normalizedProductName,
           sku: normalizedSku,
           driverName: normalizedDriver,
+          customerQuery,
           notes: normalizedNotes,
           sourceWarehouseId: transferSourceWarehouseId || undefined,
           destinationWarehouseId: transferDestinationWarehouseId || undefined,
@@ -1231,6 +1236,7 @@ const Stock = () => {
       transferProductName,
       transferSku,
       transferDriver,
+      transferCustomer,
       transferNotes,
       transferSourceWarehouseId,
       transferDestinationWarehouseId,
@@ -1577,6 +1583,7 @@ const Stock = () => {
     transferProductName,
     transferSku,
     transferDriver,
+    transferCustomer,
     transferNotes,
     transferSourceWarehouseId,
     transferDestinationWarehouseId,
@@ -4647,6 +4654,32 @@ const Stock = () => {
                 <div className="col-md-12">
                   <div className="input-group">
                     <span className="input-group-text">
+                      <i className="fas fa-user-tag"></i>
+                    </span>
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="Müşteri ara — ad veya telefon (Ballı = Balli)"
+                      value={transferCustomer}
+                      onChange={(e) => setTransferCustomer(e.target.value)}
+                    />
+                    {transferCustomer && (
+                      <button
+                        className="btn btn-outline-secondary"
+                        type="button"
+                        onClick={() => setTransferCustomer('')}
+                        title="Temizle"
+                      >
+                        <i className="fas fa-times"></i>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <div className="row g-2 mt-2">
+                <div className="col-md-12">
+                  <div className="input-group">
+                    <span className="input-group-text">
                       <i className="fas fa-sticky-note"></i>
                     </span>
                     <input
@@ -4834,6 +4867,7 @@ const Stock = () => {
                 {(transferProductName ||
                   transferSku ||
                   transferDriver ||
+                  transferCustomer ||
                   transferNotes ||
                   transferSourceWarehouseId ||
                   transferDestinationWarehouseId) && (
@@ -4843,6 +4877,7 @@ const Stock = () => {
                       setTransferProductName('');
                       setTransferSku('');
                       setTransferDriver('');
+                      setTransferCustomer('');
                       setTransferNotes('');
                       setTransferSourceWarehouseId(null);
                       setTransferDestinationWarehouseId(null);

@@ -156,6 +156,19 @@ public class StockTransfer {
     @Column(name = "order_number", length = 50)
     private String orderNumber;
 
+    /**
+     * Customer name + phone with Turkish letters folded onto ASCII, so a search for "Ballı"
+     * finds a record typed "Balli". Maintained by the service on every write.
+     */
+    @Size(max = 400)
+    @Column(name = "customer_search", length = 400)
+    private String customerSearch;
+
+    /** Same treatment for driver name, phone, TC and plate. */
+    @Size(max = 400)
+    @Column(name = "driver_search", length = 400)
+    private String driverSearch;
+
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss", timezone = "Europe/Istanbul")
     @Column(name = "transfer_date", nullable = false)
     private LocalDateTime transferDate;
@@ -195,10 +208,22 @@ public class StockTransfer {
     @Column(name = "delete_request", nullable = false)
     private boolean deleteRequest = false;
 
+    /**
+     * Derived here rather than in a service so no write path can forget: an out-of-date search
+     * column silently drops the record out of the customer / driver filters.
+     */
+    private void refreshSearchColumns() {
+        this.customerSearch = com.warehouse.util.TurkishText.normalizeForSearch(
+                this.customerFullName, this.customerPhone);
+        this.driverSearch = com.warehouse.util.TurkishText.normalizeForSearch(
+                this.driverName, this.driverPhone, this.driverTcId, this.vehiclePlate);
+    }
+
     @PrePersist
     protected void onCreate() {
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
+        refreshSearchColumns();
         if (this.transferDate == null) {
             this.transferDate = LocalDateTime.now();
         }
@@ -207,6 +232,7 @@ public class StockTransfer {
     @PreUpdate
     protected void onUpdate() {
         this.updatedAt = LocalDateTime.now();
+        refreshSearchColumns();
     }
 
     public void setItems(List<StockTransferItem> items) {

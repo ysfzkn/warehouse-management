@@ -55,6 +55,39 @@ public final class TurkishText {
         return sb.toString().trim().replaceAll("\\s+", " ");
     }
 
+    /**
+     * Joins the given parts and normalises them into the value stored in a {@code *_search}
+     * column. Returns null for an all-blank input so the column stays NULL rather than empty,
+     * which keeps "no data" and "normalised to nothing" distinguishable.
+     */
+    public static String normalizeForSearch(String... parts) {
+        if (parts == null || parts.length == 0) return null;
+        StringBuilder joined = new StringBuilder();
+        for (String part : parts) {
+            if (part == null || part.isBlank()) continue;
+            if (joined.length() > 0) joined.append(' ');
+            joined.append(part);
+        }
+        // Normalising turns "0532 111 22 33" into separate groups, so a search for the compact
+        // form would miss. Both spellings go into the column.
+        for (String part : parts) {
+            if (part == null) continue;
+            String digits = part.replaceAll("\\D", "");
+            if (digits.length() >= 7) joined.append(' ').append(digits);
+        }
+        String normalized = normalize(joined.toString());
+        return normalized.isEmpty() ? null : normalized;
+    }
+
+    /**
+     * Wraps a user's query into a LIKE pattern for a {@code *_search} column. Returns null when
+     * there is nothing to search on, which the queries read as "no filter".
+     */
+    public static String searchPattern(String query) {
+        String normalized = normalize(query);
+        return normalized.isEmpty() ? null : "%" + normalized + "%";
+    }
+
     /** Identifying tokens of a name or a free-text note, in order, without duplicates. */
     public static List<String> tokens(String raw) {
         List<String> result = new ArrayList<>();

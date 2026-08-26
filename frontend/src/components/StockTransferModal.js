@@ -12,6 +12,7 @@ import {
 import { compressImage } from '../utils/image';
 import CustomerLinkPicker from './CustomerLinkPicker';
 import { useCustomerActivityCheck } from './CustomerActivityWarning';
+import { DriverPicker, PastCustomerPicker } from './TransferPeoplePicker';
 import { toTitleCaseTr } from '../utils/name';
 
 const StockTransferModal = ({ stock, order, onSuccess, onClose, lockToCustomerDelivery = false }) => {
@@ -539,6 +540,42 @@ const StockTransferModal = ({ stock, order, onSuccess, onClose, lockToCustomerDe
     } catch (_) {
       /* Address stays manual. */
     }
+  };
+
+  /** Fills the driver fields from a directory entry; they stay editable afterwards. */
+  const applyDriver = (driver) => {
+    setFormData((prev) => ({
+      ...prev,
+      driverName: driver.name || prev.driverName,
+      driverTcId: driver.tcId || prev.driverTcId,
+      driverPhone: driver.phone ? formatPhoneInputValue(driver.phone) : prev.driverPhone,
+      vehiclePlate: driver.vehiclePlate || prev.vehiclePlate,
+    }));
+    setValidationErrors((prev) => ({
+      ...prev,
+      driverName: undefined,
+      driverTcId: undefined,
+      driverPhone: undefined,
+      vehiclePlate: undefined,
+    }));
+    showToast(`${driver.name} seçildi.`, 'success');
+  };
+
+  /** Fills the recipient fields from a previous delivery to the same person. */
+  const applyPastCustomer = (customer) => {
+    setFormData((prev) => ({
+      ...prev,
+      customerFullName: customer.name || prev.customerFullName,
+      customerPhone: customer.phone ? formatPhoneInputValue(customer.phone) : prev.customerPhone,
+      customerAddress: customer.address || prev.customerAddress,
+    }));
+    setValidationErrors((prev) => ({
+      ...prev,
+      customerFullName: undefined,
+      customerPhone: undefined,
+      customerAddress: undefined,
+    }));
+    showToast(`${customer.name} bilgileri dolduruldu.`, 'success');
   };
 
   const handleAddItem = () => {
@@ -1370,6 +1407,14 @@ const StockTransferModal = ({ stock, order, onSuccess, onClose, lockToCustomerDe
                               <div className="row g-3">
                                 <div className="col-12">
                                   <label className="form-label fw-bold">
+                                    <i className="fas fa-clock-rotate-left text-info me-1"></i>
+                                    Önceki sevkiyatlardan müşteri seç
+                                    <span className="text-muted fw-normal ms-1">(isteğe bağlı)</span>
+                                  </label>
+                                  <PastCustomerPicker onPick={applyPastCustomer} />
+                                </div>
+                                <div className="col-12">
+                                  <label className="form-label fw-bold">
                                     <i className="fas fa-address-card text-info me-1"></i>
                                     E-ticaret müşteri kaydı
                                     <span className="text-muted fw-normal ms-1">(isteğe bağlı)</span>
@@ -2151,6 +2196,18 @@ const StockTransferModal = ({ stock, order, onSuccess, onClose, lockToCustomerDe
                       <i className="fas fa-truck me-2"></i>
                       Taşıma Bilgilerini Girin
                     </h5>
+
+                    {/* Pick a known driver instead of retyping four fields every time. */}
+                    <div className="card border-primary-subtle bg-light mb-3">
+                      <div className="card-body py-3">
+                        <label className="form-label fw-bold mb-2">
+                          <i className="fas fa-address-book text-primary me-1"></i>
+                          Kayıtlı şoförlerden seç
+                          <span className="text-muted fw-normal ms-1">(isteğe bağlı)</span>
+                        </label>
+                        <DriverPicker onPick={applyDriver} />
+                      </div>
+                    </div>
 
                     <div className="row g-3">
                       <div className="col-md-6">

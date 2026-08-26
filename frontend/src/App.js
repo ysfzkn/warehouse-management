@@ -19,6 +19,7 @@ import { WorkspaceProvider } from './components/WorkspaceContext';
 // Admin pages
 const Dashboard = lazy(() => import(/* webpackChunkName: "admin" */ './pages/Dashboard'));
 const Warehouses = lazy(() => import(/* webpackChunkName: "admin" */ './pages/Warehouses'));
+const Drivers = lazy(() => import(/* webpackChunkName: "admin" */ './pages/Drivers'));
 const Products = lazy(() => import(/* webpackChunkName: "admin" */ './pages/Products'));
 const ProductSets = lazy(() => import(/* webpackChunkName: "admin" */ './pages/ProductSets'));
 const Categories = lazy(() => import(/* webpackChunkName: "admin" */ './pages/Categories'));
@@ -272,6 +273,16 @@ function AdminRoutes({ authed, role }) {
             element={
               authed && role === 'ADMIN' ? (
                 <Dashboard />
+              ) : (
+                <Navigate to={authed ? '/stock' : '/login'} replace />
+              )
+            }
+          />
+          <Route
+            path="drivers"
+            element={
+              authed && (role === 'ADMIN' || role === 'STOCK_IN' || role === 'STOCK_OUT') ? (
+                <Drivers />
               ) : (
                 <Navigate to={authed ? '/stock' : '/login'} replace />
               )

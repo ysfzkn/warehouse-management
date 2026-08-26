@@ -87,6 +87,10 @@ public class StockServiceImpl implements StockService {
         boolean searchEnabled = search != null && !search.isBlank();
         // Use Turkish locale for proper case-insensitive search with Turkish characters
         String searchPattern = searchEnabled ? "%" + search.toLowerCase(Locale.forLanguageTag("tr-TR")) + "%" : "%";
+        // Consignment customers are matched on the normalised column as well, so "Ballı" finds a
+        // record typed "Balli" — lower-casing alone leaves those two different strings.
+        String customerSearchPattern = searchEnabled
+                ? "%" + com.warehouse.util.TurkishText.normalize(search) + "%" : "%";
 
         logger.debug("Fetching stocks with advanced filters - page: {}, size: {}", pageable.getPageNumber(),
                 pageable.getPageSize());
@@ -109,6 +113,7 @@ public class StockServiceImpl implements StockService {
                 appliedFilter.getSubCategoryId(),
                 searchEnabled,
                 searchPattern,
+                customerSearchPattern,
                 appliedFilter.isReservedOnly(),
                 appliedFilter.isConsignedOnly(),
                 appliedFilter.isHideOutOfStock(),
@@ -233,6 +238,8 @@ public class StockServiceImpl implements StockService {
         String search = appliedFilter.getSearch();
         boolean searchEnabled = search != null && !search.isBlank();
         String searchPattern = searchEnabled ? "%" + search.toLowerCase(Locale.forLanguageTag("tr-TR")) + "%" : "%";
+        String customerSearchPattern = searchEnabled
+                ? "%" + com.warehouse.util.TurkishText.normalize(search) + "%" : "%";
 
         LocalDateTime from = appliedFilter.getLastUpdatedFrom() != null ? appliedFilter.getLastUpdatedFrom() : LocalDateTime.of(1970, 1, 1, 0, 0);
         LocalDateTime to = appliedFilter.getLastUpdatedTo() != null ? appliedFilter.getLastUpdatedTo() : LocalDateTime.of(2099, 12, 31, 23, 59, 59);
@@ -251,6 +258,7 @@ public class StockServiceImpl implements StockService {
                 appliedFilter.getSubCategoryId(),
                 searchEnabled,
                 searchPattern,
+                customerSearchPattern,
                 appliedFilter.isReservedOnly(),
                 appliedFilter.isConsignedOnly(),
                 appliedFilter.isHideOutOfStock(),

@@ -306,6 +306,7 @@ public class StockExportServiceImpl implements StockExportService {
                     params.subCategoryId(),
                     params.searchEnabled(),
                     params.searchPattern(),
+                    params.customerSearchPattern(),
                     params.reservedOnly(),
                     params.consignedOnly(),
                     params.hideOutOfStock(),
@@ -331,6 +332,10 @@ public class StockExportServiceImpl implements StockExportService {
         String searchPattern = searchEnabled && search != null
                 ? "%" + search.toLowerCase(Locale.forLanguageTag("tr-TR")) + "%"
                 : "%";
+        // Matches the list screen: consignment customers are found on the normalised column.
+        String customerSearchPattern = searchEnabled && search != null
+                ? "%" + com.warehouse.util.TurkishText.normalize(search) + "%"
+                : "%";
         LocalDateTime lastUpdatedFrom = filter.getLastUpdatedFrom() != null ? filter.getLastUpdatedFrom() : LocalDateTime.of(1970, 1, 1, 0, 0);
         LocalDateTime lastUpdatedTo = filter.getLastUpdatedTo() != null ? filter.getLastUpdatedTo() : LocalDateTime.of(2099, 12, 31, 23, 59, 59);
         List<Long> warehouseIds = filter.getWarehouseIds();
@@ -347,6 +352,7 @@ public class StockExportServiceImpl implements StockExportService {
                 filter.getSubCategoryId(),
                 searchEnabled,
                 searchPattern,
+                customerSearchPattern,
                 filter.isReservedOnly(),
                 filter.isConsignedOnly(),
                 filter.isHideOutOfStock(),
@@ -495,6 +501,7 @@ public class StockExportServiceImpl implements StockExportService {
             Long subCategoryId,
             boolean searchEnabled,
             String searchPattern,
+            String customerSearchPattern,
             boolean reservedOnly,
             boolean consignedOnly,
             boolean hideOutOfStock,

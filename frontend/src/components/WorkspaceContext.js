@@ -29,7 +29,7 @@ const ECOM_PREFIXES = [
   '/admin/coupons',
   '/admin/reviews',
 ];
-const WMS_PREFIXES = ['/warehouses', '/stock', '/stock-imports', '/admin/stock-movements'];
+const WMS_PREFIXES = ['/warehouses', '/drivers', '/stock', '/stock-imports', '/admin/stock-movements'];
 
 export function domainForPath(pathname) {
   if (!pathname) return null;
