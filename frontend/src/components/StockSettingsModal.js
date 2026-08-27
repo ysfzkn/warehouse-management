@@ -7,6 +7,7 @@ import {
   isPhoneComplete,
   PHONE_PLACEHOLDER,
 } from '../utils/phone';
+import { todayIsoDate } from '../utils/date';
 
 /**
  * Stock settings modal - for managing consigned, reserved, and min stock levels
@@ -20,6 +21,8 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
     customerName: '',
     customerPhone: '',
     additionNote: '',
+    irsaliyeNo: '',
+    irsaliyeDate: '',
   });
   const [productSearchTerm, setProductSearchTerm] = useState('');
   const [showProductDropdown, setShowProductDropdown] = useState(false);
@@ -28,6 +31,7 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [errors, setErrors] = useState({});
+  const todayIso = useMemo(() => todayIsoDate(), []);
 
   // Check if warehouse is EMANET_DEPO type
   // Support both string and enum formats
@@ -44,6 +48,8 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
         customerName: stock.customerName || '',
         customerPhone: stock.customerPhone ? extractPhoneDigits(stock.customerPhone) : '',
         additionNote: stock.additionNote || '',
+        irsaliyeNo: stock.irsaliyeNo || '',
+        irsaliyeDate: stock.irsaliyeDate || '',
       });
       // Set initial product search term to current product name
       if (stock.product?.name) {
@@ -120,7 +126,18 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
       if (errors.customerPhone) {
         setErrors((prev) => ({ ...prev, customerPhone: null }));
       }
-    } else if (name === 'customerName' || name === 'additionNote') {
+    } else if (name === 'irsaliyeNo') {
+      // Emptying the number takes the date with it, so the form shows what will actually be
+      // saved rather than a stale date sitting in a disabled field.
+      setSettings((prev) => ({
+        ...prev,
+        irsaliyeNo: value,
+        irsaliyeDate: value.trim() ? prev.irsaliyeDate : '',
+      }));
+      if (errors[name]) {
+        setErrors((prev) => ({ ...prev, [name]: null }));
+      }
+    } else if (name === 'customerName' || name === 'additionNote' || name === 'irsaliyeDate') {
       setSettings((prev) => ({
         ...prev,
         [name]: value,
@@ -167,11 +184,15 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
     const originalCustomerPhone = stock.customerPhone ? extractPhoneDigits(stock.customerPhone) : '';
     const originalProductId = stock.product?.id || null;
     const originalAdditionNote = stock.additionNote || '';
+    const originalIrsaliyeNo = stock.irsaliyeNo || '';
+    const originalIrsaliyeDate = stock.irsaliyeDate || '';
     const hasChanges =
       settings.productId !== originalProductId ||
       settings.consignedQuantity !== (stock.consignedQuantity || 0) ||
       settings.minStockLevel !== (stock.minStockLevel || 2) ||
       settings.additionNote.trim() !== originalAdditionNote ||
+      settings.irsaliyeNo.trim() !== originalIrsaliyeNo ||
+      settings.irsaliyeDate !== originalIrsaliyeDate ||
       (isEmanetDepo &&
         (settings.customerName.trim() !== originalCustomerName ||
           settings.customerPhone.trim() !== originalCustomerPhone));
@@ -193,6 +214,11 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
         consignedQuantity: settings.consignedQuantity,
         minStockLevel: settings.minStockLevel,
         additionNote: settings.additionNote.trim() || null,
+        // Sent as '' rather than null when cleared. The backend reads a present-but-empty number
+        // as "this block was submitted and is now blank" and null as "leave it alone", so null
+        // here would make a mistyped waybill impossible to remove.
+        irsaliyeNo: settings.irsaliyeNo.trim(),
+        irsaliyeDate: settings.irsaliyeNo.trim() && settings.irsaliyeDate ? settings.irsaliyeDate : null,
         // Explicitly NOT including quantity field for security
       };
 
@@ -568,6 +594,68 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
                     </div>
                   </>
                 )}
+
+                {/*
+                  The waybill is recorded when the goods come in; this is where a mistyped number
+                  gets corrected. Clearing the number clears the date with it — a date on its own
+                  is unreachable by any waybill lookup.
+                */}
+                <div className="mb-3 p-3 rounded-3 border border-primary border-opacity-25 bg-primary bg-opacity-10">
+                  <label className="form-label fw-bold mb-2">
+                    <i className="fas fa-file-invoice me-1 text-primary"></i>
+                    İrsaliye Bilgileri <small className="text-muted fw-normal">(opsiyonel)</small>
+                  </label>
+                  <div className="row g-2">
+                    <div className="col-sm-7">
+                      <label className="form-label small mb-1" htmlFor="irsaliyeNo">
+                        İrsaliye Numarası
+                      </label>
+                      <div className="input-group">
+                        <span className="input-group-text bg-white">
+                          <i className="fas fa-hashtag text-primary"></i>
+                        </span>
+                        <input
+                          type="text"
+                          className="form-control"
+                          id="irsaliyeNo"
+                          name="irsaliyeNo"
+                          value={settings.irsaliyeNo}
+                          onChange={handleChange}
+                          placeholder="Örn: ABC2026000000123"
+                          maxLength="50"
+                          autoComplete="off"
+                        />
+                      </div>
+                    </div>
+                    <div className="col-sm-5">
+                      <label className="form-label small mb-1" htmlFor="irsaliyeDate">
+                        İrsaliye Tarihi
+                      </label>
+                      <div className="input-group">
+                        <span className="input-group-text bg-white">
+                          <i className="fas fa-calendar-day text-primary"></i>
+                        </span>
+                        <input
+                          type="date"
+                          className="form-control"
+                          id="irsaliyeDate"
+                          name="irsaliyeDate"
+                          value={settings.irsaliyeDate}
+                          max={todayIso}
+                          onChange={handleChange}
+                          disabled={!settings.irsaliyeNo.trim()}
+                          title={
+                            settings.irsaliyeNo.trim() ? 'İrsaliye tarihi' : 'Önce irsaliye numarasını girin'
+                          }
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <small className="text-muted d-block mt-2">
+                    Stok ekranından irsaliye numarası ve tarihine göre filtrelenebilir. Numarayı silerseniz
+                    tarih de temizlenir.
+                  </small>
+                </div>
 
                 <div className="mb-3">
                   <label htmlFor="additionNote" className="form-label fw-bold">

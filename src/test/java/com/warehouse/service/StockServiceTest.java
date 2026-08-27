@@ -333,4 +333,54 @@ class StockServiceTest {
 
         verify(stockRepository, times(1)).delete(stock);
     }
+
+    // ─── Waybill on update ───────────────────────────────────────────────────
+    // The settings screen relies on this exact distinction: a present-but-empty number means
+    // "the waybill block was submitted and is now blank", an absent one means "leave it alone".
+    // Callers that only touch quantities or the note send no number at all and must not wipe it.
+
+    private Stock stockWithWaybill() {
+        stock.setIrsaliyeNo("ABC-2026-14");
+        stock.setIrsaliyeDate(java.time.LocalDate.of(2026, 3, 1));
+        when(stockRepository.findById(1L)).thenReturn(Optional.of(stock));
+        when(stockRepository.save(any(Stock.class))).thenAnswer(i -> i.getArgument(0));
+        return stock;
+    }
+
+    @Test
+    void updateStock_WhenWaybillOmitted_ShouldLeaveItUntouched() {
+        stockWithWaybill();
+        Stock changes = new Stock();
+        changes.setMinStockLevel(5);
+
+        Stock result = stockService.updateStock(1L, changes);
+
+        assertEquals("ABC-2026-14", result.getIrsaliyeNo());
+        assertEquals(java.time.LocalDate.of(2026, 3, 1), result.getIrsaliyeDate());
+    }
+
+    @Test
+    void updateStock_WhenWaybillBlank_ShouldClearNumberAndDate() {
+        stockWithWaybill();
+        Stock changes = new Stock();
+        changes.setIrsaliyeNo("");
+
+        Stock result = stockService.updateStock(1L, changes);
+
+        assertNull(result.getIrsaliyeNo());
+        assertNull(result.getIrsaliyeDate(), "clearing the number must take the date with it");
+    }
+
+    @Test
+    void updateStock_WhenWaybillCorrected_ShouldReplaceBoth() {
+        stockWithWaybill();
+        Stock changes = new Stock();
+        changes.setIrsaliyeNo("  XYZ/2026/99  ");
+        changes.setIrsaliyeDate(java.time.LocalDate.of(2026, 4, 2));
+
+        Stock result = stockService.updateStock(1L, changes);
+
+        assertEquals("XYZ/2026/99", result.getIrsaliyeNo(), "stored as typed, only trimmed");
+        assertEquals(java.time.LocalDate.of(2026, 4, 2), result.getIrsaliyeDate());
+    }
 }
