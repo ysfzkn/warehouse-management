@@ -98,7 +98,11 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
              OR LOWER(COALESCE(s.additionNote, '')) LIKE :searchPattern
              OR LOWER(COALESCE(s.customerName, '')) LIKE :searchPattern
              OR LOWER(COALESCE(s.customerPhone, '')) LIKE :searchPattern
-             OR COALESCE(s.customerSearch, '') LIKE :customerSearchPattern))
+             OR COALESCE(s.customerSearch, '') LIKE :customerSearchPattern
+             OR COALESCE(s.irsaliyeKey, '') LIKE :irsaliyeSearchPattern))
+          AND (:irsaliyeKeyPattern IS NULL OR COALESCE(s.irsaliyeKey, '') LIKE :irsaliyeKeyPattern)
+          AND (CAST(:irsaliyeDateFrom AS date) IS NULL OR s.irsaliyeDate >= :irsaliyeDateFrom)
+          AND (CAST(:irsaliyeDateTo AS date) IS NULL OR s.irsaliyeDate <= :irsaliyeDateTo)
           AND (:reservedOnly = false OR COALESCE(s.reservedQuantity, 0) > 0)
           AND (:consignedOnly = false OR COALESCE(s.consignedQuantity, 0) > 0)
           AND (:hideOutOfStock = false OR s.quantity > 0)
@@ -120,6 +124,10 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
                               @Param("searchEnabled") boolean searchEnabled,
                               @Param("searchPattern") String searchPattern,
                               @Param("customerSearchPattern") String customerSearchPattern,
+                              @Param("irsaliyeSearchPattern") String irsaliyeSearchPattern,
+                              @Param("irsaliyeKeyPattern") String irsaliyeKeyPattern,
+                              @Param("irsaliyeDateFrom") java.time.LocalDate irsaliyeDateFrom,
+                              @Param("irsaliyeDateTo") java.time.LocalDate irsaliyeDateTo,
                               @Param("reservedOnly") boolean reservedOnly,
                               @Param("consignedOnly") boolean consignedOnly,
                               @Param("hideOutOfStock") boolean hideOutOfStock,
@@ -151,7 +159,11 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
              OR LOWER(COALESCE(s.additionNote, '')) LIKE :searchPattern
              OR LOWER(COALESCE(s.customerName, '')) LIKE :searchPattern
              OR LOWER(COALESCE(s.customerPhone, '')) LIKE :searchPattern
-             OR COALESCE(s.customerSearch, '') LIKE :customerSearchPattern))
+             OR COALESCE(s.customerSearch, '') LIKE :customerSearchPattern
+             OR COALESCE(s.irsaliyeKey, '') LIKE :irsaliyeSearchPattern))
+          AND (:irsaliyeKeyPattern IS NULL OR COALESCE(s.irsaliyeKey, '') LIKE :irsaliyeKeyPattern)
+          AND (CAST(:irsaliyeDateFrom AS date) IS NULL OR s.irsaliyeDate >= :irsaliyeDateFrom)
+          AND (CAST(:irsaliyeDateTo AS date) IS NULL OR s.irsaliyeDate <= :irsaliyeDateTo)
           AND (:reservedOnly = false OR COALESCE(s.reservedQuantity, 0) > 0)
           AND (:consignedOnly = false OR COALESCE(s.consignedQuantity, 0) > 0)
           AND (:hideOutOfStock = false OR s.quantity > 0)
@@ -173,6 +185,10 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
                               @Param("searchEnabled") boolean searchEnabled,
                               @Param("searchPattern") String searchPattern,
                               @Param("customerSearchPattern") String customerSearchPattern,
+                              @Param("irsaliyeSearchPattern") String irsaliyeSearchPattern,
+                              @Param("irsaliyeKeyPattern") String irsaliyeKeyPattern,
+                              @Param("irsaliyeDateFrom") java.time.LocalDate irsaliyeDateFrom,
+                              @Param("irsaliyeDateTo") java.time.LocalDate irsaliyeDateTo,
                               @Param("reservedOnly") boolean reservedOnly,
                               @Param("consignedOnly") boolean consignedOnly,
                               @Param("hideOutOfStock") boolean hideOutOfStock,

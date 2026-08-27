@@ -73,6 +73,9 @@ public class StockController {
             @RequestParam(required = false, defaultValue = "all") String status,
             @RequestParam(required = false) String lastUpdatedFrom,
             @RequestParam(required = false) String lastUpdatedTo,
+            @RequestParam(required = false) String irsaliyeNo,
+            @RequestParam(required = false) String irsaliyeDateFrom,
+            @RequestParam(required = false) String irsaliyeDateTo,
             @RequestParam(required = false, defaultValue = "0") Integer page,
             @RequestParam(required = false, defaultValue = "20") Integer size,
             @RequestParam(defaultValue = "lastUpdated") String sortBy,
@@ -83,7 +86,8 @@ public class StockController {
         Pageable pageable = PageRequest.of(safePage, safeSize, sort);
 
         StockFilter filter = buildStockFilter(brandId, colorId, warehouseId, categoryId,
-                subCategoryId, reservedOnly, consignedOnly, hideOutOfStock, search, status, lastUpdatedFrom, lastUpdatedTo, warehouseIds);
+                subCategoryId, reservedOnly, consignedOnly, hideOutOfStock, search, status, lastUpdatedFrom, lastUpdatedTo, warehouseIds,
+                irsaliyeNo, irsaliyeDateFrom, irsaliyeDateTo);
 
         Page<Stock> stocks = stockService.getStocks(filter, pageable);
         List<StockDto> content = stocks.getContent().stream().map(this::toDto).toList();
@@ -192,20 +196,20 @@ public class StockController {
             @RequestParam(required = false) Boolean consignedOnly,
             @RequestParam(required = false) Boolean hideOutOfStock,
             @RequestParam(required = false) String search,
-            @RequestParam(required = false, defaultValue = "all") String status
+            @RequestParam(required = false, defaultValue = "all") String status,
+            @RequestParam(required = false) String lastUpdatedFrom,
+            @RequestParam(required = false) String lastUpdatedTo,
+            @RequestParam(required = false) String irsaliyeNo,
+            @RequestParam(required = false) String irsaliyeDateFrom,
+            @RequestParam(required = false) String irsaliyeDateTo
     ) {
-        StockFilter filter = new StockFilter();
-        filter.setBrandId(brandId);
-        filter.setColorId(colorId);
-        filter.setWarehouseId(warehouseId);
-        filter.setWarehouseIds(warehouseIds);
-        filter.setCategoryId(categoryId);
-        filter.setSubCategoryId(subCategoryId);
-        filter.setReservedOnly(Boolean.TRUE.equals(reservedOnly));
-        filter.setConsignedOnly(Boolean.TRUE.equals(consignedOnly));
-        filter.setHideOutOfStock(Boolean.TRUE.equals(hideOutOfStock));
-        filter.setSearch(search != null && !search.isBlank() ? search.trim() : null);
-        filter.setStatus(StockFilter.Status.from(status));
+        // Shares the list screen's filter builder on purpose: this number is displayed as the
+        // total of what is on screen, so a filter the list applies and the total does not is a
+        // wrong number. Building it separately here is how the date bounds came to be ignored.
+        StockFilter filter = buildStockFilter(brandId, colorId, warehouseId, categoryId,
+                subCategoryId, reservedOnly, consignedOnly, hideOutOfStock, search, status,
+                lastUpdatedFrom, lastUpdatedTo, warehouseIds,
+                irsaliyeNo, irsaliyeDateFrom, irsaliyeDateTo);
 
         Long total = stockService.getTotalQuantityByFilter(filter);
         return ResponseEntity.ok(total);
@@ -240,14 +244,18 @@ public class StockController {
             @RequestParam(required = false) String search,
             @RequestParam(required = false, defaultValue = "all") String status,
             @RequestParam(required = false) String lastUpdatedFrom,
-            @RequestParam(required = false) String lastUpdatedTo) {
+            @RequestParam(required = false) String lastUpdatedTo,
+            @RequestParam(required = false) String irsaliyeNo,
+            @RequestParam(required = false) String irsaliyeDateFrom,
+            @RequestParam(required = false) String irsaliyeDateTo) {
 
         logger.debug("Excel export requested with filters - brandId: {}, colorId: {}, warehouseId: {}, categoryId: {}, subCategoryId: {}, status: {}",
                 brandId, colorId, warehouseId, categoryId, subCategoryId, status);
 
         try {
             StockFilter filter = buildStockFilter(brandId, colorId, warehouseId, categoryId,
-                    subCategoryId, reservedOnly, consignedOnly, hideOutOfStock, search, status, lastUpdatedFrom, lastUpdatedTo, warehouseIds);
+                    subCategoryId, reservedOnly, consignedOnly, hideOutOfStock, search, status, lastUpdatedFrom, lastUpdatedTo, warehouseIds,
+                irsaliyeNo, irsaliyeDateFrom, irsaliyeDateTo);
             
             org.springframework.core.io.Resource resource = stockExportService.exportToExcel(filter);
             String filename = generateExportFilename();
@@ -269,7 +277,8 @@ public class StockController {
                                         Boolean hideOutOfStock,
                                         String search, String status,
                                         String lastUpdatedFrom, String lastUpdatedTo,
-                                        List<Long> warehouseIds) {
+                                        List<Long> warehouseIds,
+                                        String irsaliyeNo, String irsaliyeDateFrom, String irsaliyeDateTo) {
         StockFilter filter = new StockFilter();
         filter.setBrandId(brandId);
         filter.setColorId(colorId);
@@ -298,8 +307,29 @@ public class StockController {
                 logger.warn("Invalid lastUpdatedTo format: {}", lastUpdatedTo, e);
             }
         }
-        
+
+        filter.setIrsaliyeNo(irsaliyeNo != null && !irsaliyeNo.isBlank() ? irsaliyeNo.trim() : null);
+        filter.setIrsaliyeDateFrom(parseLocalDateOrNull(irsaliyeDateFrom, "irsaliyeDateFrom"));
+        filter.setIrsaliyeDateTo(parseLocalDateOrNull(irsaliyeDateTo, "irsaliyeDateTo"));
+
         return filter;
+    }
+
+    /**
+     * The waybill date is a plain calendar date on the paper, so it arrives as "yyyy-MM-dd" from
+     * the date input and needs no timezone handling — unlike the lastUpdated bounds above, which
+     * are instants.
+     */
+    private java.time.LocalDate parseLocalDateOrNull(String value, String field) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return java.time.LocalDate.parse(value.trim());
+        } catch (Exception e) {
+            logger.warn("Invalid {} format: {}", field, value);
+            return null;
+        }
     }
     
     /**
@@ -404,13 +434,16 @@ public class StockController {
     @PreAuthorize("hasAnyRole('ADMIN', 'STOCK_IN')")
     public ResponseEntity<?> addToStock(@PathVariable Long id, @RequestParam Integer quantity,
                                         @RequestParam(required = false) String notes,
+                                        @RequestParam(required = false) String irsaliyeNo,
+                                        @RequestParam(required = false) String irsaliyeDate,
                                         @RequestHeader(value = "X-ADMIN-SECURITY-CODE", required = false) String adminSecurityCode) {
         String userRole = CurrentUser.getRole();
         
         // ADMIN users can directly add stock
         if ("ADMIN".equals(userRole)) {
             adminSecurityService.requireSecurityCodeForAdmin(adminSecurityCode);
-            Stock updatedStock = stockService.addToStock(id, quantity, notes);
+            Stock updatedStock = stockService.addToStock(id, quantity, notes, irsaliyeNo,
+                    parseLocalDateOrNull(irsaliyeDate, "irsaliyeDate"));
             try {
                 ssePushService.broadcastCounts();
                 logger.debug("SSE counts broadcasted after addToStock. stockId={}, quantity={} ", id, quantity);
@@ -428,7 +461,9 @@ public class StockController {
                     null,
                     null,
                     null,
-                    null
+                    null,
+                    irsaliyeNo,
+                    parseLocalDateOrNull(irsaliyeDate, "irsaliyeDate")
             );
             return ResponseEntity.status(HttpStatus.ACCEPTED)
                     .body(Map.of("message", "Stok ekleme talebi oluşturuldu. Yönetici onayı bekleniyor.",
@@ -464,6 +499,8 @@ public class StockController {
                     StockRequestType.REMOVE,
                     quantity,
                     notes,
+                    null,
+                    null,
                     null,
                     null,
                     null,
@@ -546,6 +583,8 @@ public class StockController {
         dto.additionNote = s.getAdditionNote();
         dto.customerName = s.getCustomerName();
         dto.customerPhone = s.getCustomerPhone();
+        dto.irsaliyeNo = s.getIrsaliyeNo();
+        dto.irsaliyeDate = s.getIrsaliyeDate();
         if (s.getProduct() != null) {
             StockDto.ProductDto p = new StockDto.ProductDto();
             p.id = s.getProduct().getId();
@@ -576,6 +615,8 @@ public class StockController {
         dto.additionNote = s.getAdditionNote();
         dto.customerName = s.getCustomerName();
         dto.customerPhone = s.getCustomerPhone();
+        dto.irsaliyeNo = s.getIrsaliyeNo();
+        dto.irsaliyeDate = s.getIrsaliyeDate();
         if (s.getProduct() != null) {
             StockDto.ProductDto p = new StockDto.ProductDto();
             p.id = s.getProduct().getId();

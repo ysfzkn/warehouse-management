@@ -3,6 +3,7 @@ import axios from 'axios';
 import useSecurityCodePrompt from './useSecurityCodePrompt';
 import { useCustomerActivityCheck } from './CustomerActivityWarning';
 import { toNoteCase } from '../utils/name';
+import { todayIsoDate } from '../utils/date';
 
 /**
  * Quick stock adjustment modal - simplified for fast add/remove operations
@@ -11,6 +12,9 @@ const QuickStockAdjustModal = ({ stock, type, onSuccess, onClose }) => {
   const role = (typeof window !== 'undefined' && localStorage.getItem('auth_role')) || 'ADMIN';
   const [quantity, setQuantity] = useState('');
   const [notes, setNotes] = useState('');
+  const [irsaliyeNo, setIrsaliyeNo] = useState('');
+  const [irsaliyeDate, setIrsaliyeDate] = useState('');
+  const todayIso = useMemo(() => todayIsoDate(), []);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
@@ -129,6 +133,13 @@ const QuickStockAdjustModal = ({ stock, type, onSuccess, onClose }) => {
       const params = { quantity: parseInt(quantity) };
       if (notes) {
         params.notes = notes;
+      }
+      // Only on an addition: units coming in arrive on a waybill, units going out do not.
+      if (isAdd && irsaliyeNo.trim()) {
+        params.irsaliyeNo = irsaliyeNo.trim();
+        if (irsaliyeDate) {
+          params.irsaliyeDate = irsaliyeDate;
+        }
       }
 
       const endpoint = isAdd ? `/api/stocks/${stock.id}/add` : `/api/stocks/${stock.id}/remove`;
@@ -306,6 +317,48 @@ const QuickStockAdjustModal = ({ stock, type, onSuccess, onClose }) => {
                     </div>
                   </div>
                 </div>
+
+                {/* Goods coming in arrive on a waybill; goods going out do not, so this is
+                    only offered on an addition. */}
+                {isAdd && (
+                  <div className="mb-3 p-2 rounded-3 border border-primary border-opacity-25 bg-primary bg-opacity-10">
+                    <label className="form-label mb-2">
+                      <i className="fas fa-file-invoice me-1 text-primary"></i>
+                      İrsaliye <small className="text-muted">(opsiyonel)</small>
+                    </label>
+                    <div className="row g-2">
+                      <div className="col-7">
+                        <div className="input-group input-group-sm">
+                          <span className="input-group-text bg-white">
+                            <i className="fas fa-hashtag text-primary"></i>
+                          </span>
+                          <input
+                            type="text"
+                            className="form-control"
+                            value={irsaliyeNo}
+                            onChange={(e) => setIrsaliyeNo(e.target.value)}
+                            placeholder="İrsaliye numarası"
+                            maxLength="50"
+                            autoComplete="off"
+                          />
+                        </div>
+                      </div>
+                      <div className="col-5">
+                        <input
+                          type="date"
+                          className="form-control form-control-sm"
+                          value={irsaliyeDate}
+                          max={todayIso}
+                          onChange={(e) => setIrsaliyeDate(e.target.value)}
+                          title="İrsaliye tarihi"
+                        />
+                      </div>
+                    </div>
+                    <small className="text-muted d-block mt-1">
+                      Girerseniz bu stok kaydının irsaliyesi güncellenir ve arama/filtrede bulunur.
+                    </small>
+                  </div>
+                )}
 
                 <div className="mb-3">
                   <label htmlFor="notes" className="form-label">

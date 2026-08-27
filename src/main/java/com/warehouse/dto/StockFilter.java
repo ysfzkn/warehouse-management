@@ -1,5 +1,6 @@
 package com.warehouse.dto;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
@@ -38,6 +39,10 @@ public class StockFilter {
     private boolean hideOutOfStock;
     private LocalDateTime lastUpdatedFrom;
     private LocalDateTime lastUpdatedTo;
+    /** Partial match on the waybill number; punctuation and case are ignored. */
+    private String irsaliyeNo;
+    private LocalDate irsaliyeDateFrom;
+    private LocalDate irsaliyeDateTo;
 
     public Long getBrandId() {
         return brandId;
@@ -141,6 +146,30 @@ public class StockFilter {
 
     public void setLastUpdatedTo(LocalDateTime lastUpdatedTo) {
         this.lastUpdatedTo = lastUpdatedTo;
+    }
+
+    public String getIrsaliyeNo() {
+        return irsaliyeNo;
+    }
+
+    public void setIrsaliyeNo(String irsaliyeNo) {
+        this.irsaliyeNo = irsaliyeNo;
+    }
+
+    public LocalDate getIrsaliyeDateFrom() {
+        return irsaliyeDateFrom;
+    }
+
+    public void setIrsaliyeDateFrom(LocalDate irsaliyeDateFrom) {
+        this.irsaliyeDateFrom = irsaliyeDateFrom;
+    }
+
+    public LocalDate getIrsaliyeDateTo() {
+        return irsaliyeDateTo;
+    }
+
+    public void setIrsaliyeDateTo(LocalDate irsaliyeDateTo) {
+        this.irsaliyeDateTo = irsaliyeDateTo;
     }
 }
 

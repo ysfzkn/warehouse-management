@@ -29,6 +29,8 @@ public class StockRequestDto {
     private OffsetDateTime reviewedAt;
     private String rejectionReason;
     private String notes;
+    private String irsaliyeNo;
+    private java.time.LocalDate irsaliyeDate;
     private Integer currentStockQuantity;
     private Integer availableQuantity;
 }

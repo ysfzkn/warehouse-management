@@ -47,6 +47,8 @@ public class StockRequestController {
         StockRequestType type = StockRequestType.valueOf(payload.get("type").toString());
         Integer quantity = Integer.valueOf(payload.get("quantity").toString());
         String notes = payload.containsKey("notes") ? payload.get("notes").toString() : null;
+        String irsaliyeNo = payload.get("irsaliyeNo") != null ? payload.get("irsaliyeNo").toString() : null;
+        java.time.LocalDate irsaliyeDate = parseLocalDateOrNull(payload.get("irsaliyeDate"));
 
         StockRequest request = stockRequestService.createRequest(
                 stockId,
@@ -56,7 +58,9 @@ public class StockRequestController {
                 productId,
                 warehouseId,
                 customerName,
-                customerPhone
+                customerPhone,
+                irsaliyeNo,
+                irsaliyeDate
         );
         return ResponseEntity.status(HttpStatus.CREATED).body(stockRequestService.toDto(request));
     }
@@ -131,6 +135,22 @@ public class StockRequestController {
         adminSecurityService.requireSecurityCodeForAdmin(adminSecurityCode);
         stockRequestService.deleteOwnPendingRequest(id);
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * The waybill date arrives as "yyyy-MM-dd" from a date input. A value that will not parse is
+     * dropped rather than failing the whole request — the date is optional detail on an operation
+     * whose point is the quantity.
+     */
+    private static java.time.LocalDate parseLocalDateOrNull(Object value) {
+        if (value == null || value.toString().isBlank()) {
+            return null;
+        }
+        try {
+            return java.time.LocalDate.parse(value.toString().trim());
+        } catch (Exception e) {
+            return null;
+        }
     }
 }
 

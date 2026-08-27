@@ -65,7 +65,8 @@ public class StockExportServiceImpl implements StockExportService {
     private static final String[] COLUMN_HEADERS = {
         "ID", "Ürün Adı", "SKU", "Marka", "Renk", "Kategori", "Alt Kategori",
         "Depo", "Depo Tipi", "Konum", "Miktar", "Rezerve", "Emanet", 
-        "Müsait", "Min. Stok", "Müşteri Adı", "Müşteri Telefon", "Not", "Son Güncelleme"
+        "Müsait", "Min. Stok", "Müşteri Adı", "Müşteri Telefon", "İrsaliye No", "İrsaliye Tarihi",
+        "Not", "Son Güncelleme"
     };
 
     private final StockRepository stockRepository;
@@ -182,6 +183,11 @@ public class StockExportServiceImpl implements StockExportService {
         
         setCellValue(row, columnIndex++, getCustomerName(stock), styles.dataStyle);
         setCellValue(row, columnIndex++, getCustomerPhone(stock), styles.dataStyle);
+        setCellValue(row, columnIndex++,
+                stock.getIrsaliyeNo() != null ? stock.getIrsaliyeNo() : EMPTY_VALUE, styles.dataStyle);
+        setCellValue(row, columnIndex++,
+                stock.getIrsaliyeDate() != null ? stock.getIrsaliyeDate().toString() : EMPTY_VALUE,
+                styles.dataStyle);
         setCellValue(row, columnIndex++, getAdditionNote(stock), styles.dataStyle);
         setCellValue(row, columnIndex, formatLastUpdated(stock), styles.dateStyle);
     }
@@ -258,6 +264,16 @@ public class StockExportServiceImpl implements StockExportService {
         if (filter.getStatus() != null && filter.getStatus() != StockFilter.Status.ALL) {
             filterInfo.add("Durum: " + getStatusText(filter.getStatus()));
         }
+
+        if (filter.getIrsaliyeNo() != null && !filter.getIrsaliyeNo().isBlank()) {
+            filterInfo.add("İrsaliye No: " + filter.getIrsaliyeNo());
+        }
+        if (filter.getIrsaliyeDateFrom() != null || filter.getIrsaliyeDateTo() != null) {
+            filterInfo.add("İrsaliye Tarihi: "
+                    + (filter.getIrsaliyeDateFrom() != null ? filter.getIrsaliyeDateFrom() : "...")
+                    + " - "
+                    + (filter.getIrsaliyeDateTo() != null ? filter.getIrsaliyeDateTo() : "..."));
+        }
         
         if (filter.isReservedOnly()) {
             filterInfo.add("Sadece Rezerve Olanlar");
@@ -307,6 +323,10 @@ public class StockExportServiceImpl implements StockExportService {
                     params.searchEnabled(),
                     params.searchPattern(),
                     params.customerSearchPattern(),
+                    params.irsaliyeSearchPattern(),
+                    params.irsaliyeKeyPattern(),
+                    params.irsaliyeDateFrom(),
+                    params.irsaliyeDateTo(),
                     params.reservedOnly(),
                     params.consignedOnly(),
                     params.hideOutOfStock(),
@@ -322,6 +342,12 @@ public class StockExportServiceImpl implements StockExportService {
         
         logger.debug("Fetched {} stocks for export", allStocks.size());
         return allStocks;
+    }
+
+    /** Same folding as the list screen, so an export matches what was on screen. */
+    private static String irsaliyeLikePattern(String raw) {
+        String key = com.warehouse.entity.Stock.toIrsaliyeKey(raw);
+        return key == null ? null : "%" + key + "%";
     }
 
     private FilterParams buildFilterParams(StockFilter filter) {
@@ -353,6 +379,10 @@ public class StockExportServiceImpl implements StockExportService {
                 searchEnabled,
                 searchPattern,
                 customerSearchPattern,
+                searchEnabled ? irsaliyeLikePattern(search) : "%",
+                irsaliyeLikePattern(filter.getIrsaliyeNo()),
+                filter.getIrsaliyeDateFrom(),
+                filter.getIrsaliyeDateTo(),
                 filter.isReservedOnly(),
                 filter.isConsignedOnly(),
                 filter.isHideOutOfStock(),
@@ -502,6 +532,10 @@ public class StockExportServiceImpl implements StockExportService {
             boolean searchEnabled,
             String searchPattern,
             String customerSearchPattern,
+            String irsaliyeSearchPattern,
+            String irsaliyeKeyPattern,
+            java.time.LocalDate irsaliyeDateFrom,
+            java.time.LocalDate irsaliyeDateTo,
             boolean reservedOnly,
             boolean consignedOnly,
             boolean hideOutOfStock,

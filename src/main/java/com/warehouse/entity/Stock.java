@@ -19,7 +19,9 @@ import java.time.LocalDateTime;
         @Index(name = "idx_stocks_warehouse_id", columnList = "warehouse_id"),
         @Index(name = "idx_stocks_last_updated", columnList = "last_updated"),
         @Index(name = "idx_stocks_quantity", columnList = "quantity"),
-        @Index(name = "idx_stocks_customer_name", columnList = "customer_name")
+        @Index(name = "idx_stocks_customer_name", columnList = "customer_name"),
+        @Index(name = "idx_stocks_irsaliye_key", columnList = "irsaliye_key"),
+        @Index(name = "idx_stocks_irsaliye_date", columnList = "irsaliye_date")
     }
 )
 @NamedEntityGraph(
@@ -98,6 +100,29 @@ public class Stock {
     @Column(name = "customer_search", length = 400)
     private String customerSearch;
 
+    /**
+     * Waybill this stock came in on. Kept as the operator typed it — the paper is the reference,
+     * so it should read back the same way.
+     */
+    @Size(max = 50, message = "İrsaliye numarası en fazla 50 karakter olabilir")
+    @Column(name = "irsaliye_no", length = 50)
+    private String irsaliyeNo;
+
+    /**
+     * {@link #irsaliyeNo} without punctuation and upper-cased, so "ABC 2026-14" and "abc202614"
+     * find each other. Maintained on every write — never set this by hand.
+     */
+    @Size(max = 50)
+    @Column(name = "irsaliye_key", length = 50)
+    private String irsaliyeKey;
+
+    /**
+     * The date printed on the waybill, which is not the same as when the row was created — goods
+     * are often booked in a day or two later, and it is the paper's date that gets reconciled.
+     */
+    @Column(name = "irsaliye_date")
+    private java.time.LocalDate irsaliyeDate;
+
     @Version
     @Column(name = "version", nullable = false)
     private Long version = 0L;
@@ -129,6 +154,18 @@ public class Stock {
     private void refreshSearchColumn() {
         this.customerSearch = com.warehouse.util.TurkishText.normalizeForSearch(
                 this.customerName, this.customerPhone);
+        this.irsaliyeKey = toIrsaliyeKey(this.irsaliyeNo);
+    }
+
+    /**
+     * Comparison form of a waybill number: letters and digits only, upper-cased. Deliberately
+     * uses the root locale rather than Turkish — a Turkish upper-case of "i" is "İ", which would
+     * put a non-ASCII character in a key that PostgreSQL's own UPPER() renders as "I".
+     */
+    public static String toIrsaliyeKey(String raw) {
+        if (raw == null) return null;
+        String key = raw.replaceAll("[^A-Za-z0-9]", "").toUpperCase(java.util.Locale.ROOT);
+        return key.isEmpty() ? null : key;
     }
 
     // Business logic methods

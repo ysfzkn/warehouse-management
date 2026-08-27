@@ -12,6 +12,8 @@ public class StockDto {
     public String additionNote;
     public String customerName;
     public String customerPhone;
+    public String irsaliyeNo;
+    public java.time.LocalDate irsaliyeDate;
     public ProductDto product;
     public WarehouseDto warehouse;
 

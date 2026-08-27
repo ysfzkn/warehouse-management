@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import useSecurityCodePrompt from './useSecurityCodePrompt';
+import { formatIsoDateTr } from '../utils/date';
 
 const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' }) => {
   const [activeTab, setActiveTab] = useState(initialTab);
@@ -950,7 +951,7 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                                   <div>
                                     <div className="my-requests-card__title">Talep #{request.id}</div>
                                     <small className="my-requests-card__meta">
-                                      {request.requestType === 'ADD' ? 'Stok Ekleme' : 'Stok Çıkarma'}
+                                      {request.type === 'ADD' ? 'Stok Ekleme' : 'Stok Çıkarma'}
                                     </small>
                                   </div>
                                   <span className={`my-requests-pill badge bg-${statusMeta.className}`}>
@@ -990,13 +991,29 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                                     Toplam {request.currentStockQuantity ?? request.stock?.quantity ?? '-'}
                                   </span>
                                   <span
-                                    className={`badge ${request.requestType === 'ADD' ? 'bg-success' : 'bg-danger'}`}
+                                    className={`badge ${request.type === 'ADD' ? 'bg-success' : 'bg-danger'}`}
                                   >
                                     <i
-                                      className={`fas fa-${request.requestType === 'ADD' ? 'plus' : 'minus'} me-1`}
+                                      className={`fas fa-${request.type === 'ADD' ? 'plus' : 'minus'} me-1`}
                                     ></i>
-                                    {request.requestType === 'ADD' ? 'Ekleme' : 'Çıkarma'}
+                                    {request.type === 'ADD' ? 'Ekleme' : 'Çıkarma'}
                                   </span>
+                                  {/* The waybill is what an approver checks the delivery against,
+                                      so it belongs on the card rather than behind the detail view. */}
+                                  {request.irsaliyeNo && (
+                                    <span
+                                      className="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25"
+                                      title={`İrsaliye No: ${request.irsaliyeNo}`}
+                                    >
+                                      <i className="fas fa-file-invoice me-1"></i>
+                                      {request.irsaliyeNo}
+                                      {request.irsaliyeDate && (
+                                        <span className="ms-1 opacity-75">
+                                          {formatIsoDateTr(request.irsaliyeDate)}
+                                        </span>
+                                      )}
+                                    </span>
+                                  )}
                                 </div>
                                 {request.notes && (
                                   <button

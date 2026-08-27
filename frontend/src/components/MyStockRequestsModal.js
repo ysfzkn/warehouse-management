@@ -3,6 +3,7 @@ import axios from 'axios';
 import NotesModal from './NotesModal';
 import confirmDialog from '../utils/confirmDialog';
 import { useAdminToast } from './AdminToast';
+import { formatIsoDateTr } from '../utils/date';
 
 const statusConfig = {
   PENDING: { label: 'Beklemede', className: 'warning', icon: 'fa-clock' },
@@ -486,6 +487,22 @@ const MyStockRequestsModal = ({ onClose }) => {
                                       ></i>
                                       {request.type === 'ADD' ? 'Ekleme' : 'Çıkarma'}
                                     </span>
+                                    {/* Lets the requester confirm they typed the right waybill
+                                        before an admin acts on the request. */}
+                                    {request.irsaliyeNo && (
+                                      <span
+                                        className="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25"
+                                        title={`İrsaliye No: ${request.irsaliyeNo}`}
+                                      >
+                                        <i className="fas fa-file-invoice me-1"></i>
+                                        {request.irsaliyeNo}
+                                        {request.irsaliyeDate && (
+                                          <span className="ms-1 opacity-75">
+                                            {formatIsoDateTr(request.irsaliyeDate)}
+                                          </span>
+                                        )}
+                                      </span>
+                                    )}
                                   </div>
                                   <div className="my-requests-actions d-flex flex-wrap gap-2">
                                     {request.notes && (

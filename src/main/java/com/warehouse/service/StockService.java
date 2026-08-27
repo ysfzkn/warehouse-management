@@ -62,6 +62,14 @@ public interface StockService {
 
     Stock addToStock(Long stockId, Integer quantity, String note);
 
+    /**
+     * Adds stock that arrived on a waybill. The number and date are stamped onto the row inside
+     * the same transaction and named in the audit entry, so "where did these units come from"
+     * has an answer afterwards. A blank number leaves whatever is already recorded alone.
+     */
+    Stock addToStock(Long stockId, Integer quantity, String note, String irsaliyeNo,
+                     java.time.LocalDate irsaliyeDate);
+
     Stock removeFromStock(Long stockId, Integer quantity);
 
     Stock removeFromStock(Long stockId, Integer quantity, String note);

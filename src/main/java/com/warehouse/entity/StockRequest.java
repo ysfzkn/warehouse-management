@@ -55,6 +55,17 @@ public class StockRequest {
 
     @Column(name = "notes", length = 1000)
     private String notes;
+
+    /**
+     * Waybill the requested goods arrived on. Carried on the request rather than written into
+     * {@link #notes}, so that it lands in the stock row's own columns on approval and stays
+     * searchable — a warehouse user's delivery is no less worth finding than an admin's.
+     */
+    @Column(name = "irsaliye_no", length = 50)
+    private String irsaliyeNo;
+
+    @Column(name = "irsaliye_date")
+    private java.time.LocalDate irsaliyeDate;
 }
 
 

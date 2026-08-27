@@ -47,7 +47,9 @@ public class StockRequestServiceImpl implements StockRequestService {
                                       Long productId,
                                       Long warehouseId,
                                       String customerName,
-                                      String customerPhone) {
+                                      String customerPhone,
+                                      String irsaliyeNo,
+                                      java.time.LocalDate irsaliyeDate) {
         logger.info("Creating stock request: stockId={}, type={}, quantity={}, productId={}, warehouseId={}",
                 stockId, type, quantity, productId, warehouseId);
 
@@ -102,6 +104,10 @@ public class StockRequestServiceImpl implements StockRequestService {
         request.setRequestedBy(username);
         request.setRequestedAt(OffsetDateTime.now());
         request.setNotes(notes);
+        // Held on the request until approval, when it is stamped onto the stock row itself.
+        String cleanIrsaliyeNo = irsaliyeNo != null && !irsaliyeNo.isBlank() ? irsaliyeNo.trim() : null;
+        request.setIrsaliyeNo(cleanIrsaliyeNo);
+        request.setIrsaliyeDate(cleanIrsaliyeNo != null ? irsaliyeDate : null);
 
         StockRequest saved = stockRequestRepository.save(request);
         logger.info("Stock request created successfully with id: {}", saved.getId());
@@ -181,7 +187,10 @@ public class StockRequestServiceImpl implements StockRequestService {
         // Execute the stock operation (pass the user's note for audit/notification trail)
         Stock stock = request.getStock();
         if (request.getType() == StockRequestType.ADD) {
-            stockService.addToStock(stock.getId(), request.getQuantity(), request.getNotes());
+            // The waybill the requester recorded moves onto the stock row here — this is the
+            // moment the goods actually enter stock, so it is the moment it becomes searchable.
+            stockService.addToStock(stock.getId(), request.getQuantity(), request.getNotes(),
+                    request.getIrsaliyeNo(), request.getIrsaliyeDate());
         } else {
             stockService.removeFromStock(stock.getId(), request.getQuantity(), request.getNotes());
         }
@@ -273,6 +282,8 @@ public class StockRequestServiceImpl implements StockRequestService {
         dto.setReviewedAt(request.getReviewedAt());
         dto.setRejectionReason(request.getRejectionReason());
         dto.setNotes(request.getNotes());
+        dto.setIrsaliyeNo(request.getIrsaliyeNo());
+        dto.setIrsaliyeDate(request.getIrsaliyeDate());
         dto.setCurrentStockQuantity(request.getStock().getQuantity());
         dto.setAvailableQuantity(request.getStock().getAvailableQuantity());
         return dto;

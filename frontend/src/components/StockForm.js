@@ -10,6 +10,7 @@ import {
   PHONE_PLACEHOLDER,
 } from '../utils/phone';
 import { toNoteCase, toTitleCaseTr } from '../utils/name';
+import { todayIsoDate } from '../utils/date';
 
 const INITIAL_VISIBLE_PRODUCTS = 12;
 
@@ -46,11 +47,18 @@ const StockForm = ({
     additionNote: null,
     customerName: null,
     customerPhone: null,
+    irsaliyeNo: null,
+    irsaliyeDate: null,
     perItem: {},
   });
   const [additionNote, setAdditionNote] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
+  // The waybill belongs to the delivery, not to one line of it, so it is captured once for the
+  // whole form and stamped onto every stock row created from it — same as the note above.
+  const [irsaliyeNo, setIrsaliyeNo] = useState('');
+  const [irsaliyeDate, setIrsaliyeDate] = useState('');
+  const todayIso = useMemo(() => todayIsoDate(), []);
   const [feedback, setFeedback] = useState(null);
   const [showProductModal, setShowProductModal] = useState(false);
   const [localProducts, setLocalProducts] = useState(products || []);
@@ -417,6 +425,8 @@ const StockForm = ({
       items: null,
       customerName: null,
       customerPhone: null,
+      irsaliyeNo: null,
+      irsaliyeDate: null,
       perItem: {},
     };
 
@@ -438,6 +448,18 @@ const StockForm = ({
 
     if (isEmanetDepo && (!customerPhone || !customerPhone.trim())) {
       nextErrors.customerPhone = 'Müşteri telefon numarası gereklidir';
+    }
+
+    if (irsaliyeNo.trim().length > 50) {
+      nextErrors.irsaliyeNo = 'İrsaliye numarası en fazla 50 karakter olabilir';
+    }
+    // A date on its own has nothing to identify — it would land on the row as a stray value that
+    // no waybill lookup can reach.
+    if (irsaliyeDate && !irsaliyeNo.trim()) {
+      nextErrors.irsaliyeNo = 'Tarih girdiyseniz irsaliye numarasını da yazın';
+    }
+    if (irsaliyeDate && irsaliyeDate > todayIso) {
+      nextErrors.irsaliyeDate = 'İrsaliye tarihi ileri bir tarih olamaz';
     }
 
     items.forEach((item) => {
@@ -470,6 +492,8 @@ const StockForm = ({
       Boolean(nextErrors.items) ||
       Boolean(nextErrors.customerName) ||
       Boolean(nextErrors.customerPhone) ||
+      Boolean(nextErrors.irsaliyeNo) ||
+      Boolean(nextErrors.irsaliyeDate) ||
       Object.keys(nextErrors.perItem).length > 0;
 
     setErrors(nextErrors);
@@ -490,6 +514,8 @@ const StockForm = ({
       additionNote: note,
       customerName: customer,
       customerPhone: phone,
+      irsaliyeNo: irsaliyeNo.trim() || null,
+      irsaliyeDate: irsaliyeNo.trim() && irsaliyeDate ? irsaliyeDate : null,
     }));
   };
 
@@ -510,6 +536,8 @@ const StockForm = ({
           additionNote,
           customerName,
           customerPhone,
+          irsaliyeNo: irsaliyeNo.trim(),
+          irsaliyeDate: irsaliyeNo.trim() ? irsaliyeDate : '',
           items,
         });
         setFeedback({
@@ -521,6 +549,8 @@ const StockForm = ({
         setAdditionNote('');
         setCustomerName('');
         setCustomerPhone('');
+        setIrsaliyeNo('');
+        setIrsaliyeDate('');
         if (onSuccess) {
           onSuccess({ close: true });
         }
@@ -536,6 +566,8 @@ const StockForm = ({
         setAdditionNote('');
         setCustomerName('');
         setCustomerPhone('');
+        setIrsaliyeNo('');
+        setIrsaliyeDate('');
         if (onSuccess) {
           onSuccess({ close: false, message: 'Stok kayıtları işlendi.' });
         }
@@ -617,9 +649,91 @@ const StockForm = ({
           {errors.warehouseId && <div className="invalid-feedback">{errors.warehouseId}</div>}
           <small className="text-muted d-block mt-2">Bu depoya ait yeni stok kayıtları oluşturulur.</small>
         </div>
+
+        {/*
+          Waybill for the whole delivery. It sits next to the warehouse rather than on each line,
+          because one irsaliye covers everything that came off the truck — and it is the first
+          thing on the paper the operator is holding while filling this in.
+        */}
         <div className="col-lg-8">
-          <div className="card border-0 shadow-sm h-100">
-            <div className="card-body d-flex flex-column justify-content-center">
+          <div className="card h-100 border-primary border-opacity-25 bg-primary bg-opacity-10">
+            <div className="card-body py-3">
+              <div className="d-flex align-items-center gap-2 mb-2">
+                <span
+                  className="d-inline-flex align-items-center justify-content-center rounded-circle bg-primary text-white flex-shrink-0"
+                  style={{ width: 32, height: 32 }}
+                >
+                  <i className="fas fa-file-invoice"></i>
+                </span>
+                <div>
+                  <div className="fw-semibold lh-1">İrsaliye Bilgileri</div>
+                  <small className="text-muted">Bu girişteki tüm ürünlere işlenir (opsiyonel)</small>
+                </div>
+              </div>
+              <div className="row g-2">
+                <div className="col-sm-7">
+                  <label className="form-label small fw-semibold mb-1" htmlFor="stock-irsaliye-no">
+                    İrsaliye Numarası
+                  </label>
+                  <div className="input-group">
+                    <span className="input-group-text bg-white">
+                      <i className="fas fa-hashtag text-primary"></i>
+                    </span>
+                    <input
+                      id="stock-irsaliye-no"
+                      type="text"
+                      className={`form-control ${errors.irsaliyeNo ? 'is-invalid' : irsaliyeNo.trim() ? 'is-valid' : ''}`}
+                      value={irsaliyeNo}
+                      onChange={(e) => {
+                        setIrsaliyeNo(e.target.value);
+                        clearFieldError('irsaliyeNo');
+                      }}
+                      placeholder="Örn: ABC2026000000123"
+                      maxLength="50"
+                      autoComplete="off"
+                    />
+                  </div>
+                  {errors.irsaliyeNo && <div className="invalid-feedback d-block">{errors.irsaliyeNo}</div>}
+                </div>
+                <div className="col-sm-5">
+                  <label className="form-label small fw-semibold mb-1" htmlFor="stock-irsaliye-date">
+                    İrsaliye Tarihi
+                  </label>
+                  <div className="input-group">
+                    <span className="input-group-text bg-white">
+                      <i className="fas fa-calendar-day text-primary"></i>
+                    </span>
+                    <input
+                      id="stock-irsaliye-date"
+                      type="date"
+                      className={`form-control ${errors.irsaliyeDate ? 'is-invalid' : ''}`}
+                      value={irsaliyeDate}
+                      max={todayIso}
+                      onChange={(e) => {
+                        setIrsaliyeDate(e.target.value);
+                        clearFieldError('irsaliyeDate');
+                        clearFieldError('irsaliyeNo');
+                      }}
+                    />
+                  </div>
+                  {errors.irsaliyeDate && (
+                    <div className="invalid-feedback d-block">{errors.irsaliyeDate}</div>
+                  )}
+                </div>
+              </div>
+              {irsaliyeNo.trim() && !irsaliyeDate && (
+                <small className="text-muted d-block mt-2">
+                  <i className="fas fa-circle-info me-1"></i>
+                  Tarihi de girerseniz stok ekranından tarihe göre filtreleyebilirsiniz.
+                </small>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="col-12">
+          <div className="card border-0 shadow-sm">
+            <div className="card-body py-2">
               <div className="d-flex flex-wrap align-items-center gap-3">
                 <span className="badge bg-primary bg-opacity-10 text-primary px-3 py-2">
                   <i className="fas fa-boxes me-2"></i>

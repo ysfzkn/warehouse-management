@@ -23,7 +23,9 @@ public interface StockRequestService {
                                Long productId,
                                Long warehouseId,
                                String customerName,
-                               String customerPhone);
+                               String customerPhone,
+                               String irsaliyeNo,
+                               java.time.LocalDate irsaliyeDate);
 
     /**
      * Get all requests

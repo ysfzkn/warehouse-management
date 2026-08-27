@@ -34,6 +34,7 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -91,6 +92,10 @@ public class StockServiceImpl implements StockService {
         // record typed "Balli" — lower-casing alone leaves those two different strings.
         String customerSearchPattern = searchEnabled
                 ? "%" + com.warehouse.util.TurkishText.normalize(search) + "%" : "%";
+        // The free-text box should find a waybill too, and on the same punctuation-blind terms as
+        // the dedicated filter: typing "abc 2026-14" has to reach a row stored as "ABC202614".
+        String irsaliyeSearchPattern = searchEnabled ? irsaliyeLikePattern(search) : "%";
+        String irsaliyeKeyPattern = irsaliyeLikePattern(appliedFilter.getIrsaliyeNo());
 
         logger.debug("Fetching stocks with advanced filters - page: {}, size: {}", pageable.getPageNumber(),
                 pageable.getPageSize());
@@ -114,6 +119,10 @@ public class StockServiceImpl implements StockService {
                 searchEnabled,
                 searchPattern,
                 customerSearchPattern,
+                irsaliyeSearchPattern,
+                irsaliyeKeyPattern,
+                appliedFilter.getIrsaliyeDateFrom(),
+                appliedFilter.getIrsaliyeDateTo(),
                 appliedFilter.isReservedOnly(),
                 appliedFilter.isConsignedOnly(),
                 appliedFilter.isHideOutOfStock(),
@@ -121,6 +130,16 @@ public class StockServiceImpl implements StockService {
                 from,
                 to,
                 pageable);
+    }
+
+    /**
+     * LIKE pattern for the waybill key column. Null when there is nothing to match on, which the
+     * queries read as "no filter"; otherwise the query is folded exactly like the stored key, so
+     * the punctuation the operator did or did not type stops mattering.
+     */
+    private static String irsaliyeLikePattern(String raw) {
+        String key = Stock.toIrsaliyeKey(raw);
+        return key == null ? null : "%" + key + "%";
     }
 
     @Override
@@ -259,6 +278,10 @@ public class StockServiceImpl implements StockService {
                 searchEnabled,
                 searchPattern,
                 customerSearchPattern,
+                searchEnabled ? irsaliyeLikePattern(search) : "%",
+                irsaliyeLikePattern(appliedFilter.getIrsaliyeNo()),
+                appliedFilter.getIrsaliyeDateFrom(),
+                appliedFilter.getIrsaliyeDateTo(),
                 appliedFilter.isReservedOnly(),
                 appliedFilter.isConsignedOnly(),
                 appliedFilter.isHideOutOfStock(),
@@ -336,12 +359,19 @@ public class StockServiceImpl implements StockService {
             String note = normalizeAdditionNote(stock.getAdditionNote());
             logger.info("Existing stock found (id={}); merging quantity {} via addToStock",
                     existing.get().getId(), addQty);
-            return addToStock(existing.get().getId(), addQty, note);
+            return addToStock(existing.get().getId(), addQty, note,
+                    stock.getIrsaliyeNo(), stock.getIrsaliyeDate());
         }
 
         stock.setProduct(product);
         stock.setWarehouse(warehouse);
         stock.setAdditionNote(normalizeAdditionNote(stock.getAdditionNote()));
+        stock.setIrsaliyeNo(trimToNull(stock.getIrsaliyeNo()));
+        // A date with no number is unreachable by any waybill lookup, so it is not worth storing.
+        // The form blocks this; the API is a second entry point that has to agree.
+        if (stock.getIrsaliyeNo() == null) {
+            stock.setIrsaliyeDate(null);
+        }
 
         // For STANDART warehouses, customerName and customerPhone should be null
         if (warehouse.getWarehouseType() == WarehouseType.STANDART) {
@@ -406,6 +436,8 @@ public class StockServiceImpl implements StockService {
         String oldAdditionNote = stock.getAdditionNote();
         String oldCustomerName = stock.getCustomerName();
         String oldCustomerPhone = stock.getCustomerPhone();
+        String oldIrsaliyeNo = stock.getIrsaliyeNo();
+        LocalDate oldIrsaliyeDate = stock.getIrsaliyeDate();
         
         // Track changes
         List<String> changes = new ArrayList<>();
@@ -498,6 +530,27 @@ public class StockServiceImpl implements StockService {
             }
         }
 
+        // Waybill number and date move together: the number being present in the request means the
+        // waybill block was submitted, so an empty number clears the date with it. Omitting the
+        // number entirely leaves both alone, which is what the callers that only touch quantities
+        // or the note need.
+        if (stockDetails.getIrsaliyeNo() != null) {
+            String newIrsaliyeNo = trimToNull(stockDetails.getIrsaliyeNo());
+            LocalDate newIrsaliyeDate = newIrsaliyeNo == null ? null : stockDetails.getIrsaliyeDate();
+            if (!Objects.equals(oldIrsaliyeNo, newIrsaliyeNo)) {
+                stock.setIrsaliyeNo(newIrsaliyeNo);
+                changes.add(String.format("İrsaliye No: %s → %s",
+                        oldIrsaliyeNo != null ? oldIrsaliyeNo : "(boş)",
+                        newIrsaliyeNo != null ? newIrsaliyeNo : "(boş)"));
+            }
+            if (!Objects.equals(oldIrsaliyeDate, newIrsaliyeDate)) {
+                stock.setIrsaliyeDate(newIrsaliyeDate);
+                changes.add(String.format("İrsaliye Tarihi: %s → %s",
+                        oldIrsaliyeDate != null ? oldIrsaliyeDate : "(boş)",
+                        newIrsaliyeDate != null ? newIrsaliyeDate : "(boş)"));
+            }
+        }
+
         // Update customer info for EMANET_DEPO warehouses
         if (warehouse.getWarehouseType() == WarehouseType.EMANET_DEPO) {
             // Update customer name if provided
@@ -572,10 +625,23 @@ public class StockServiceImpl implements StockService {
 
     @Override
     public Stock addToStock(Long stockId, Integer quantity, String note) {
+        return addToStock(stockId, quantity, note, null, null);
+    }
+
+    @Override
+    public Stock addToStock(Long stockId, Integer quantity, String note, String irsaliyeNo,
+                            LocalDate irsaliyeDate) {
         logger.info("Adding {} units to stock id: {}", quantity, stockId);
         ValidationUtil.requirePositive(quantity, "Quantity to add");
         Stock stock = getStockByIdOrThrow(stockId);
         stock.setQuantity(stock.getQuantity() + quantity);
+        // The row now holds goods from this delivery, so it carries this delivery's waybill.
+        // Nothing is wiped when the caller has none — an older number is better than no number.
+        String cleanIrsaliyeNo = trimToNull(irsaliyeNo);
+        if (cleanIrsaliyeNo != null) {
+            stock.setIrsaliyeNo(cleanIrsaliyeNo);
+            stock.setIrsaliyeDate(irsaliyeDate);
+        }
         Stock saved = stockRepository.save(stock);
         String username = CurrentUser.usernameOrSystem();
         String normalizedNote = normalizeAdditionNote(note);
@@ -584,6 +650,10 @@ public class StockServiceImpl implements StockService {
         String detailsMessage = String.format("Stok artırıldı: +%s adet → Yeni=%s | Depo=%s, Ürün=%s",
                 String.valueOf(quantity), String.valueOf(saved.getQuantity()),
                 saved.getWarehouse().getName(), saved.getProduct().getName());
+        if (cleanIrsaliyeNo != null) {
+            detailsMessage += String.format(" | İrsaliye: %s%s", cleanIrsaliyeNo,
+                    irsaliyeDate != null ? " (" + irsaliyeDate + ")" : "");
+        }
         if (normalizedNote != null) {
             detailsMessage += String.format(" | Not: %s", normalizedNote);
         }
@@ -878,6 +948,19 @@ public class StockServiceImpl implements StockService {
         }
         String trimmed = additionNote.trim();
         return trimmed.isEmpty() ? null : com.warehouse.util.TurkishText.toNoteCase(trimmed);
+    }
+
+    /**
+     * Waybill numbers are stored exactly as typed — the paper is the reference — so only
+     * surrounding whitespace is removed. Matching is handled by the key column, which folds case
+     * and punctuation.
+     */
+    private static String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     private AuditMetadata buildStockMetadata(Stock stock, Integer quantityContext) {

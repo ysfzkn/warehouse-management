@@ -5,6 +5,7 @@ import useSecurityCodePrompt from '../components/useSecurityCodePrompt';
 import { compressImage } from '../utils/image';
 import { formatPhoneForDisplay } from '../utils/phone';
 import StockForm from '../components/StockForm';
+import { formatIsoDateTr } from '../utils/date';
 import QuickStockAdjustModal from '../components/QuickStockAdjustModal';
 import StockRemoveSearchModal from '../components/StockRemoveSearchModal';
 import StockSettingsModal from '../components/StockSettingsModal';
@@ -83,6 +84,12 @@ const StockFiltersBar = ({
   setStockLastUpdatedFromTime,
   stockLastUpdatedToTime,
   setStockLastUpdatedToTime,
+  stockIrsaliyeNo,
+  setStockIrsaliyeNo,
+  stockIrsaliyeDateFrom,
+  setStockIrsaliyeDateFrom,
+  stockIrsaliyeDateTo,
+  setStockIrsaliyeDateTo,
   getWarehouseById,
 }) => {
   const searchInputRef = useRef(null);
@@ -487,7 +494,7 @@ const StockFiltersBar = ({
                 ref={searchInputRef}
                 type="text"
                 className="form-control border-start-0"
-                placeholder="Ürün adı, stok kodu, depo, müşteri adı veya telefon ara..."
+                placeholder="Ürün adı, stok kodu, depo, müşteri, telefon veya irsaliye no ara..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
@@ -656,6 +663,73 @@ const StockFiltersBar = ({
         </div>
       </div>
 
+      {/*
+        Waybill filters. Grouped into one card so it reads as "find the delivery" rather than as
+        three unrelated boxes — the number alone answers "what came in on this irsaliye", and the
+        date range answers "what came in that week" when nobody remembers the number.
+      */}
+      <div className="row g-3 mb-3">
+        <div className="col-12">
+          <div className="stock-filter-card">
+            <small>
+              <i className="fas fa-file-invoice me-1"></i>
+              İrsaliye
+            </small>
+            <div className="row g-2 mt-2">
+              <div className="col-12 col-lg-6">
+                {/* The card's own rule adds a top margin to any .input-group; here the three
+                    controls sit side by side and must line up, so it is neutralised. */}
+                <div className="input-group" style={{ marginTop: 0 }}>
+                  <span className="input-group-text bg-white">
+                    <i className="fas fa-hashtag text-muted"></i>
+                  </span>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="İrsaliye no ile ara (kısmi arama)"
+                    value={stockIrsaliyeNo}
+                    onChange={(e) => setStockIrsaliyeNo(e.target.value)}
+                    style={{ fontSize: '0.9rem' }}
+                    maxLength="50"
+                  />
+                  {stockIrsaliyeNo && (
+                    <button
+                      type="button"
+                      className="btn btn-outline-secondary"
+                      onClick={() => setStockIrsaliyeNo('')}
+                      title="İrsaliye no filtresini temizle"
+                    >
+                      <i className="fas fa-times"></i>
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="col-6 col-lg-3">
+                <input
+                  type="date"
+                  className="form-control"
+                  value={stockIrsaliyeDateFrom}
+                  onChange={(e) => setStockIrsaliyeDateFrom(e.target.value)}
+                  title="İrsaliye tarihi - başlangıç"
+                  style={{ fontSize: '0.9rem' }}
+                />
+              </div>
+              <div className="col-6 col-lg-3">
+                <input
+                  type="date"
+                  className="form-control"
+                  value={stockIrsaliyeDateTo}
+                  onChange={(e) => setStockIrsaliyeDateTo(e.target.value)}
+                  min={stockIrsaliyeDateFrom || undefined}
+                  title="İrsaliye tarihi - bitiş"
+                  style={{ fontSize: '0.9rem' }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Additional filters */}
       <div className="stock-filter-toggle-modern mb-3">
         <div>
@@ -813,6 +887,23 @@ const StockFiltersBar = ({
                 },
               }
             : null,
+          stockIrsaliyeNo
+            ? {
+                icon: 'fas fa-file-invoice',
+                label: `İrsaliye No: "${stockIrsaliyeNo}"`,
+                onClear: () => setStockIrsaliyeNo(''),
+              }
+            : null,
+          stockIrsaliyeDateFrom || stockIrsaliyeDateTo
+            ? {
+                icon: 'fas fa-calendar-day',
+                label: `İrsaliye Tarihi: ${formatIsoDateTr(stockIrsaliyeDateFrom) || '...'} - ${formatIsoDateTr(stockIrsaliyeDateTo) || '...'}`,
+                onClear: () => {
+                  setStockIrsaliyeDateFrom('');
+                  setStockIrsaliyeDateTo('');
+                },
+              }
+            : null,
         ].filter(Boolean)}
         onClearAll={() => {
           setSearchTerm('');
@@ -832,6 +923,9 @@ const StockFiltersBar = ({
           setStockLastUpdatedTo('');
           setStockLastUpdatedFromTime('');
           setStockLastUpdatedToTime('');
+          setStockIrsaliyeNo('');
+          setStockIrsaliyeDateFrom('');
+          setStockIrsaliyeDateTo('');
         }}
       />
     </>
@@ -933,6 +1027,11 @@ const Stock = () => {
   const [stockLastUpdatedTo, setStockLastUpdatedTo] = useState('');
   const [stockLastUpdatedFromTime, setStockLastUpdatedFromTime] = useState('');
   const [stockLastUpdatedToTime, setStockLastUpdatedToTime] = useState('');
+  // Waybill filters. The number is a partial match and the dates bound the date printed on the
+  // paper — which is not the same thing as when the row was last touched, so it gets its own pair.
+  const [stockIrsaliyeNo, setStockIrsaliyeNo] = useState('');
+  const [stockIrsaliyeDateFrom, setStockIrsaliyeDateFrom] = useState('');
+  const [stockIrsaliyeDateTo, setStockIrsaliyeDateTo] = useState('');
   // Stock list sorting
   const [stockSortBy, setStockSortBy] = useState('lastUpdated'); // 'warehouse' | 'lastUpdated' | 'quantity'
   const [stockSortDir, setStockSortDir] = useState('desc'); // 'asc' | 'desc'
@@ -1009,6 +1108,10 @@ const Stock = () => {
       search: normalizedSearch || undefined,
       lastUpdatedFrom: lastUpdatedFrom,
       lastUpdatedTo: lastUpdatedTo,
+      // Plain yyyy-MM-dd: the waybill date is a calendar date on paper, not an instant.
+      irsaliyeNo: stockIrsaliyeNo.trim() || undefined,
+      irsaliyeDateFrom: stockIrsaliyeDateFrom || undefined,
+      irsaliyeDateTo: stockIrsaliyeDateTo || undefined,
     };
   }, [
     brandId,
@@ -1024,6 +1127,9 @@ const Stock = () => {
     stockLastUpdatedTo,
     stockLastUpdatedFromTime,
     stockLastUpdatedToTime,
+    stockIrsaliyeNo,
+    stockIrsaliyeDateFrom,
+    stockIrsaliyeDateTo,
   ]);
 
   const handleExportToExcel = useCallback(async () => {
@@ -1573,6 +1679,9 @@ const Stock = () => {
     stockLastUpdatedTo,
     stockLastUpdatedFromTime,
     stockLastUpdatedToTime,
+    stockIrsaliyeNo,
+    stockIrsaliyeDateFrom,
+    stockIrsaliyeDateTo,
   ]);
 
   useEffect(() => {
@@ -2490,6 +2599,10 @@ const Stock = () => {
     }
 
     const notes = meta.additionNote || '';
+    // Carried as real fields, not inside the note: on approval the backend stamps them onto the
+    // stock row's own columns, so a warehouse user's waybill is as searchable as an admin's.
+    const irsaliyeNo = meta.irsaliyeNo || undefined;
+    const irsaliyeDate = (irsaliyeNo && meta.irsaliyeDate) || undefined;
     const failures = [];
     let successCount = 0;
 
@@ -2514,6 +2627,8 @@ const Stock = () => {
           type: 'ADD',
           quantity: entry.quantity,
           notes,
+          irsaliyeNo,
+          irsaliyeDate,
         });
         successCount += 1;
       } catch (error) {
@@ -3117,6 +3232,12 @@ const Stock = () => {
           setStockLastUpdatedFromTime={setStockLastUpdatedFromTime}
           stockLastUpdatedToTime={stockLastUpdatedToTime}
           setStockLastUpdatedToTime={setStockLastUpdatedToTime}
+          stockIrsaliyeNo={stockIrsaliyeNo}
+          setStockIrsaliyeNo={setStockIrsaliyeNo}
+          stockIrsaliyeDateFrom={stockIrsaliyeDateFrom}
+          setStockIrsaliyeDateFrom={setStockIrsaliyeDateFrom}
+          stockIrsaliyeDateTo={stockIrsaliyeDateTo}
+          setStockIrsaliyeDateTo={setStockIrsaliyeDateTo}
           getWarehouseById={getWarehouseById}
         />
       )}
@@ -3562,6 +3683,19 @@ const Stock = () => {
                               {categoryPath}
                             </small>
                           )}
+                          {stock.irsaliyeNo && (
+                            <small
+                              className="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 mt-1 d-inline-block"
+                              style={{ fontSize: '0.7rem' }}
+                              title={`İrsaliye No: ${stock.irsaliyeNo}${stock.irsaliyeDate ? ` — ${formatIsoDateTr(stock.irsaliyeDate)}` : ''}`}
+                            >
+                              <i className="fas fa-file-invoice me-1"></i>
+                              {stock.irsaliyeNo}
+                              {stock.irsaliyeDate && (
+                                <span className="ms-1 opacity-75">{formatIsoDateTr(stock.irsaliyeDate)}</span>
+                              )}
+                            </small>
+                          )}
                           {stock.additionNote && (
                             <div
                               className="text-muted fst-italic d-block mt-1"
@@ -3825,6 +3959,21 @@ const Stock = () => {
                                   </span>
                                 )}
                               </>
+                            )}
+                            {stock.irsaliyeNo && (
+                              <span
+                                className="mobile-chip bg-primary bg-opacity-10 text-primary border border-primary"
+                                title={`İrsaliye No: ${stock.irsaliyeNo}`}
+                                style={{ fontSize: '0.7rem' }}
+                              >
+                                <i className="fas fa-file-invoice me-1"></i>
+                                {stock.irsaliyeNo}
+                                {stock.irsaliyeDate && (
+                                  <span className="ms-1 opacity-75">
+                                    {formatIsoDateTr(stock.irsaliyeDate)}
+                                  </span>
+                                )}
+                              </span>
                             )}
                             {stock.additionNote && (
                               <div className="mobile-chip mobile-chip-note" title={stock.additionNote}>
