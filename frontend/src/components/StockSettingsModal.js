@@ -5,7 +5,7 @@ import {
   formatPhoneForSubmit,
   formatPhoneInputValue,
   isPhoneComplete,
-  PHONE_PLACEHOLDER
+  PHONE_PLACEHOLDER,
 } from '../utils/phone';
 
 /**
@@ -19,7 +19,7 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
     minStockLevel: 2,
     customerName: '',
     customerPhone: '',
-    additionNote: ''
+    additionNote: '',
   });
   const [productSearchTerm, setProductSearchTerm] = useState('');
   const [showProductDropdown, setShowProductDropdown] = useState(false);
@@ -32,7 +32,8 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
   // Check if warehouse is EMANET_DEPO type
   // Support both string and enum formats
   const warehouseType = stock?.warehouse?.warehouseType;
-  const isEmanetDepo = warehouseType === 'EMANET_DEPO' || warehouseType === 'EmanetDepo' || warehouseType === 'emanetDepo';
+  const isEmanetDepo =
+    warehouseType === 'EMANET_DEPO' || warehouseType === 'EmanetDepo' || warehouseType === 'emanetDepo';
 
   useEffect(() => {
     if (stock) {
@@ -42,7 +43,7 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
         minStockLevel: stock.minStockLevel || 2,
         customerName: stock.customerName || '',
         customerPhone: stock.customerPhone ? extractPhoneDigits(stock.customerPhone) : '',
-        additionNote: stock.additionNote || ''
+        additionNote: stock.additionNote || '',
       });
       // Set initial product search term to current product name
       if (stock.product?.name) {
@@ -60,36 +61,33 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
   const filteredProducts = useMemo(() => {
     if (!productSearchTerm.trim()) return [];
     const query = productSearchTerm.trim().toLocaleLowerCase('tr-TR');
-    return products.filter(product => {
-      const haystack = [
-        product.name,
-        product.sku,
-        product.barcode,
-        product.brand?.name
-      ]
-        .filter(Boolean)
-        .map(text => text.toLocaleLowerCase('tr-TR'));
-      return haystack.some(text => text.includes(query));
-    }).slice(0, 10); // Limit to 10 results for better UX
+    return products
+      .filter((product) => {
+        const haystack = [product.name, product.sku, product.barcode, product.brand?.name]
+          .filter(Boolean)
+          .map((text) => text.toLocaleLowerCase('tr-TR'));
+        return haystack.some((text) => text.includes(query));
+      })
+      .slice(0, 10); // Limit to 10 results for better UX
   }, [products, productSearchTerm]);
 
   // Get selected product name for display
   const selectedProduct = useMemo(() => {
     if (!settings.productId) return null;
-    return products.find(p => p.id === settings.productId);
+    return products.find((p) => p.id === settings.productId);
   }, [products, settings.productId]);
 
   // Handle product selection
   const handleProductSelect = (product) => {
-    setSettings(prev => ({
+    setSettings((prev) => ({
       ...prev,
-      productId: product.id
+      productId: product.id,
     }));
     setProductSearchTerm(product.name);
     setShowProductDropdown(false);
     setHighlightedProductIndex(0);
     if (errors.productId) {
-      setErrors(prev => ({ ...prev, productId: null }));
+      setErrors((prev) => ({ ...prev, productId: null }));
     }
   };
 
@@ -97,13 +95,11 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
   const handleProductSearchKeyDown = (e) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      setHighlightedProductIndex(prev => 
-        Math.min(prev + 1, filteredProducts.length - 1)
-      );
+      setHighlightedProductIndex((prev) => Math.min(prev + 1, filteredProducts.length - 1));
       setShowProductDropdown(true);
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      setHighlightedProductIndex(prev => Math.max(prev - 1, 0));
+      setHighlightedProductIndex((prev) => Math.max(prev - 1, 0));
       setShowProductDropdown(true);
     } else if (e.key === 'Enter' && filteredProducts.length > 0) {
       e.preventDefault();
@@ -117,25 +113,25 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
     const { name, value } = e.target;
     if (name === 'customerPhone') {
       const digits = extractPhoneDigits(value);
-      setSettings(prev => ({
+      setSettings((prev) => ({
         ...prev,
-        [name]: digits
+        [name]: digits,
       }));
       if (errors.customerPhone) {
-        setErrors(prev => ({ ...prev, customerPhone: null }));
+        setErrors((prev) => ({ ...prev, customerPhone: null }));
       }
     } else if (name === 'customerName' || name === 'additionNote') {
-      setSettings(prev => ({
+      setSettings((prev) => ({
         ...prev,
-        [name]: value
+        [name]: value,
       }));
       if (errors[name]) {
-        setErrors(prev => ({ ...prev, [name]: null }));
+        setErrors((prev) => ({ ...prev, [name]: null }));
       }
     } else {
-      setSettings(prev => ({
+      setSettings((prev) => ({
         ...prev,
-        [name]: parseInt(value) || 0
+        [name]: parseInt(value) || 0,
       }));
     }
   };
@@ -171,15 +167,14 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
     const originalCustomerPhone = stock.customerPhone ? extractPhoneDigits(stock.customerPhone) : '';
     const originalProductId = stock.product?.id || null;
     const originalAdditionNote = stock.additionNote || '';
-    const hasChanges = 
+    const hasChanges =
       settings.productId !== originalProductId ||
       settings.consignedQuantity !== (stock.consignedQuantity || 0) ||
       settings.minStockLevel !== (stock.minStockLevel || 2) ||
       settings.additionNote.trim() !== originalAdditionNote ||
-      (isEmanetDepo && (
-        settings.customerName.trim() !== originalCustomerName ||
-        settings.customerPhone.trim() !== originalCustomerPhone
-      ));
+      (isEmanetDepo &&
+        (settings.customerName.trim() !== originalCustomerName ||
+          settings.customerPhone.trim() !== originalCustomerPhone));
 
     if (!hasChanges) {
       setError('Herhangi bir değişiklik yapılmadı');
@@ -197,15 +192,15 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
       const updateData = {
         consignedQuantity: settings.consignedQuantity,
         minStockLevel: settings.minStockLevel,
-        additionNote: settings.additionNote.trim() || null
+        additionNote: settings.additionNote.trim() || null,
         // Explicitly NOT including quantity field for security
       };
-      
+
       // Include product if it changed
       if (settings.productId && settings.productId !== (stock.product?.id || null)) {
         updateData.product = { id: settings.productId };
       }
-      
+
       if (isEmanetDepo) {
         updateData.customerName = settings.customerName.trim();
         updateData.customerPhone = formatPhoneForSubmit(settings.customerPhone);
@@ -235,7 +230,8 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
   const getStockStatus = () => {
     const available = (stock.quantity || 0) - (stock.reservedQuantity || 0) - settings.consignedQuantity;
     if (available <= 0) return { label: 'Stok Dışı', class: 'danger', icon: 'times-circle' };
-    if (available <= settings.minStockLevel) return { label: 'Düşük Stok', class: 'warning', icon: 'exclamation-triangle' };
+    if (available <= settings.minStockLevel)
+      return { label: 'Düşük Stok', class: 'warning', icon: 'exclamation-triangle' };
     return { label: 'Normal', class: 'success', icon: 'check-circle' };
   };
 
@@ -270,7 +266,7 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
                     {status.label}
                   </span>
                 </div>
-                
+
                 <div className="row mt-3 text-center">
                   <div className="col-4">
                     <div className="fs-5 fw-bold">{stock.quantity}</div>
@@ -327,7 +323,7 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
                         setProductSearchTerm(e.target.value);
                         setShowProductDropdown(true);
                         if (e.target.value.trim() === '') {
-                          setSettings(prev => ({ ...prev, productId: null }));
+                          setSettings((prev) => ({ ...prev, productId: null }));
                         }
                       }}
                       onFocus={() => {
@@ -343,7 +339,7 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
                       }}
                       onKeyDown={handleProductSearchKeyDown}
                       style={{
-                        borderWidth: showProductDropdown ? '2px' : '1px'
+                        borderWidth: showProductDropdown ? '2px' : '1px',
                       }}
                     />
                     {productSearchTerm && (
@@ -352,7 +348,7 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
                         className="btn btn-sm btn-link position-absolute end-0 top-50 translate-middle-y me-2"
                         onClick={() => {
                           setProductSearchTerm('');
-                          setSettings(prev => ({ ...prev, productId: null }));
+                          setSettings((prev) => ({ ...prev, productId: null }));
                           setShowProductDropdown(false);
                         }}
                         style={{ zIndex: 1056 }}
@@ -361,7 +357,7 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
                       </button>
                     )}
                     {showProductDropdown && filteredProducts.length > 0 && (
-                      <div 
+                      <div
                         className="list-group position-absolute w-100"
                         style={{
                           zIndex: 1055,
@@ -373,10 +369,13 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
                           borderRadius: '0.375rem',
                           boxShadow: '0 0.5rem 1rem rgba(0, 0, 0, 0.15)',
                           top: '100%',
-                          left: 0
+                          left: 0,
                         }}
                       >
-                        <div className="list-group-item bg-light border-bottom fw-semibold small text-muted py-2 px-3" style={{ position: 'sticky', top: 0, zIndex: 1 }}>
+                        <div
+                          className="list-group-item bg-light border-bottom fw-semibold small text-muted py-2 px-3"
+                          style={{ position: 'sticky', top: 0, zIndex: 1 }}
+                        >
                           <i className="fas fa-list me-2"></i>
                           {filteredProducts.length} sonuç bulundu
                         </div>
@@ -389,7 +388,7 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
                             } ${settings.productId === product.id ? 'bg-success bg-opacity-10 border-start border-success border-3' : ''}`}
                             style={{
                               transition: 'all 0.15s ease',
-                              cursor: 'pointer'
+                              cursor: 'pointer',
                             }}
                             onMouseDown={(e) => {
                               e.preventDefault();
@@ -399,17 +398,27 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
                           >
                             <div className="d-flex justify-content-between align-items-center">
                               <div className="flex-grow-1">
-                                <div className={`fw-bold ${index === highlightedProductIndex ? 'text-white' : ''}`}>
+                                <div
+                                  className={`fw-bold ${index === highlightedProductIndex ? 'text-white' : ''}`}
+                                >
                                   {product.name}
                                 </div>
-                                <small className={index === highlightedProductIndex ? 'text-white text-opacity-75' : 'text-muted'}>
+                                <small
+                                  className={
+                                    index === highlightedProductIndex
+                                      ? 'text-white text-opacity-75'
+                                      : 'text-muted'
+                                  }
+                                >
                                   {product.sku && <span>SKU: {product.sku}</span>}
                                   {product.sku && product.brand?.name && ' • '}
                                   {product.brand?.name && <span>Marka: {product.brand.name}</span>}
                                 </small>
                               </div>
                               {settings.productId === product.id && (
-                                <i className={`fas fa-check-circle ${index === highlightedProductIndex ? 'text-white' : 'text-success'} ms-2`}></i>
+                                <i
+                                  className={`fas fa-check-circle ${index === highlightedProductIndex ? 'text-white' : 'text-success'} ms-2`}
+                                ></i>
                               )}
                             </div>
                           </button>
@@ -417,7 +426,7 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
                       </div>
                     )}
                     {showProductDropdown && productSearchTerm.trim() && filteredProducts.length === 0 && (
-                      <div 
+                      <div
                         className="position-absolute w-100"
                         style={{
                           zIndex: 1055,
@@ -428,7 +437,7 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
                           borderRadius: '0.375rem',
                           boxShadow: '0 0.5rem 1rem rgba(0, 0, 0, 0.15)',
                           top: '100%',
-                          left: 0
+                          left: 0,
                         }}
                       >
                         <div className="text-muted text-center">
@@ -443,14 +452,16 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
                       <div className="alert alert-light border d-flex justify-content-between align-items-center py-2">
                         <div>
                           <strong>Seçili Ürün:</strong> {selectedProduct.name}
-                          {selectedProduct.sku && <span className="text-muted ms-2">({selectedProduct.sku})</span>}
+                          {selectedProduct.sku && (
+                            <span className="text-muted ms-2">({selectedProduct.sku})</span>
+                          )}
                         </div>
                         <button
                           type="button"
                           className="btn btn-sm btn-outline-danger"
                           onClick={() => {
                             setProductSearchTerm('');
-                            setSettings(prev => ({ ...prev, productId: null }));
+                            setSettings((prev) => ({ ...prev, productId: null }));
                           }}
                         >
                           <i className="fas fa-times me-1"></i>
@@ -459,11 +470,10 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
                       </div>
                     </div>
                   )}
-                  {errors.productId && (
-                    <div className="invalid-feedback d-block">{errors.productId}</div>
-                  )}
+                  {errors.productId && <div className="invalid-feedback d-block">{errors.productId}</div>}
                   <small className="text-muted d-block mt-1">
-                    Ürün adı veya stok kodunu yazarak arama yapın ve listeden seçin. Enter tuşu ile ilk sonucu seçebilirsiniz.
+                    Ürün adı veya stok kodunu yazarak arama yapın ve listeden seçin. Enter tuşu ile ilk sonucu
+                    seçebilirsiniz.
                   </small>
                 </div>
 
@@ -483,9 +493,7 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
                     onChange={handleChange}
                     inputMode="numeric"
                   />
-                  <small className="text-muted">
-                    Emanet olarak verilen stok miktarı (kullanılamaz)
-                  </small>
+                  <small className="text-muted">Emanet olarak verilen stok miktarı (kullanılamaz)</small>
                 </div>
 
                 <div className="mb-3">
@@ -529,9 +537,7 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
                         placeholder="Müşteri adını giriniz"
                         maxLength="255"
                       />
-                      {errors.customerName && (
-                        <div className="invalid-feedback">{errors.customerName}</div>
-                      )}
+                      {errors.customerName && <div className="invalid-feedback">{errors.customerName}</div>}
                     </div>
                     <div className="mb-3">
                       <label htmlFor="customerPhone" className="form-label fw-bold">
@@ -541,7 +547,7 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
                         <span className="input-group-text">+90</span>
                         <input
                           type="tel"
-                          className={`form-control form-control-lg ${errors.customerPhone ? 'is-invalid' : (settings.customerPhone ? (isPhoneComplete(settings.customerPhone) ? 'is-valid' : '') : '')}`}
+                          className={`form-control form-control-lg ${errors.customerPhone ? 'is-invalid' : settings.customerPhone ? (isPhoneComplete(settings.customerPhone) ? 'is-valid' : '') : ''}`}
                           id="customerPhone"
                           name="customerPhone"
                           value={formatPhoneInputValue(settings.customerPhone)}
@@ -554,9 +560,11 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
                       {errors.customerPhone && (
                         <div className="invalid-feedback d-block">{errors.customerPhone}</div>
                       )}
-                      {!errors.customerPhone && settings.customerPhone && !isPhoneComplete(settings.customerPhone) && (
-                        <small className="text-muted">Telefon 10 haneli olmalıdır</small>
-                      )}
+                      {!errors.customerPhone &&
+                        settings.customerPhone &&
+                        !isPhoneComplete(settings.customerPhone) && (
+                          <small className="text-muted">Telefon 10 haneli olmalıdır</small>
+                        )}
                     </div>
                   </>
                 )}
@@ -577,11 +585,12 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
                     style={{
                       resize: 'vertical',
                       minHeight: '80px',
-                      maxHeight: '200px'
+                      maxHeight: '200px',
                     }}
                   />
                   <small className="text-muted">
-                    Bu not stok listesinde görüntülenir ve stok'u oluşturan kişi veya adminler tarafından düzenlenebilir.
+                    Bu not stok listesinde görüntülenir ve stok'u oluşturan kişi veya adminler tarafından
+                    düzenlenebilir.
                   </small>
                 </div>
 
@@ -607,11 +616,16 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
                     <hr className="my-2" />
                     <div className="d-flex justify-content-between">
                       <span className="fw-bold">Kullanılabilir:</span>
-                      <strong className={
-                        (stock.quantity - (stock.reservedQuantity || 0) - settings.consignedQuantity) <= 0 ? 'text-danger' :
-                        (stock.quantity - (stock.reservedQuantity || 0) - settings.consignedQuantity) <= settings.minStockLevel ? 'text-warning' :
-                        'text-success'
-                      }>
+                      <strong
+                        className={
+                          stock.quantity - (stock.reservedQuantity || 0) - settings.consignedQuantity <= 0
+                            ? 'text-danger'
+                            : stock.quantity - (stock.reservedQuantity || 0) - settings.consignedQuantity <=
+                                settings.minStockLevel
+                              ? 'text-warning'
+                              : 'text-success'
+                        }
+                      >
                         {(stock.quantity || 0) - (stock.reservedQuantity || 0) - settings.consignedQuantity}
                       </strong>
                     </div>
@@ -631,11 +645,7 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
                     </button>
                   </div>
                   <div className="col-6">
-                    <button
-                      type="submit"
-                      className="btn btn-primary w-100"
-                      disabled={loading || success}
-                    >
+                    <button type="submit" className="btn btn-primary w-100" disabled={loading || success}>
                       {loading ? (
                         <>
                           <span className="spinner-border spinner-border-sm me-1"></span>
@@ -660,8 +670,3 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
 };
 
 export default StockSettingsModal;
-
-
-
-
-
