@@ -29,6 +29,7 @@ import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
@@ -56,6 +57,9 @@ import java.util.stream.Collectors;
 public class StockServiceImpl implements StockService {
 
     private static final Logger logger = LoggerFactory.getLogger(StockServiceImpl.class);
+
+    /** Enough to recognise the delivery being typed without turning the dropdown into a list. */
+    private static final int IRSALIYE_SUGGESTION_LIMIT = 10;
 
     private final StockRepository stockRepository;
     private final ProductRepository productRepository;
@@ -130,6 +134,16 @@ public class StockServiceImpl implements StockService {
                 from,
                 to,
                 pageable);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<com.warehouse.dto.IrsaliyeSummaryDto> summarizeIrsaliye(String query) {
+        return stockRepository
+                .summarizeIrsaliye(irsaliyeLikePattern(query), PageRequest.of(0, IRSALIYE_SUGGESTION_LIMIT))
+                .stream()
+                .map(com.warehouse.dto.IrsaliyeSummaryDto::of)
+                .toList();
     }
 
     /**

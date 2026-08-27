@@ -70,6 +70,13 @@ public interface StockService {
     Stock addToStock(Long stockId, Integer quantity, String note, String irsaliyeNo,
                      java.time.LocalDate irsaliyeDate);
 
+    /**
+     * Waybills matching {@code query}, each with what it currently adds up to. A blank query
+     * returns the most recently touched ones, which is what the operator wants when the delivery
+     * they are entering is the one they were entering a minute ago.
+     */
+    java.util.List<com.warehouse.dto.IrsaliyeSummaryDto> summarizeIrsaliye(String query);
+
     Stock removeFromStock(Long stockId, Integer quantity);
 
     Stock removeFromStock(Long stockId, Integer quantity, String note);

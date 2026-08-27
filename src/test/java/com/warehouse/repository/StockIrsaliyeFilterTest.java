@@ -150,6 +150,48 @@ class StockIrsaliyeFilterTest {
                 .containsExactly("SKU-1");
     }
 
+    // ─── Waybill summary (type-ahead) ────────────────────────────────────────
+
+    private List<StockRepository.IrsaliyeSummary> summarize(String pattern) {
+        return stockRepository.summarizeIrsaliye(pattern, PAGE);
+    }
+
+    @Test
+    void summaryAddsUpTheRowsOfOneDelivery() {
+        stockWith("SKU-1", "ABC-2026-14", LocalDate.of(2026, 3, 1)).setQuantity(10);
+        stockWith("SKU-2", "ABC 2026 14", LocalDate.of(2026, 3, 1));
+        stockWith("SKU-3", "XYZ/2026/99", LocalDate.of(2026, 3, 2));
+
+        List<StockRepository.IrsaliyeSummary> all = summarize(null);
+
+        assertThat(all).hasSize(2);
+        StockRepository.IrsaliyeSummary abc = all.stream()
+                .filter(r -> "ABC202614".equals(Stock.toIrsaliyeKey(r.getIrsaliyeNo())))
+                .findFirst()
+                .orElseThrow();
+        // Two rows entered with different punctuation are one delivery, not two.
+        assertThat(abc.getStockCount()).isEqualTo(2);
+        assertThat(abc.getTotalQuantity()).isEqualTo(20);
+        assertThat(abc.getIrsaliyeDate()).isEqualTo(LocalDate.of(2026, 3, 1));
+    }
+
+    @Test
+    void summaryMatchesRegardlessOfHowTheQueryIsPunctuated() {
+        stockWith("SKU-1", "ABC-2026-14", LocalDate.of(2026, 3, 1));
+        stockWith("SKU-2", "XYZ/2026/99", LocalDate.of(2026, 3, 2));
+
+        assertThat(summarize("%ABC2026%"))
+                .singleElement()
+                .satisfies(r -> assertThat(Stock.toIrsaliyeKey(r.getIrsaliyeNo())).isEqualTo("ABC202614"));
+    }
+
+    @Test
+    void summarySkipsRowsWithoutAWaybill() {
+        stockWith("SKU-1", null, null);
+
+        assertThat(summarize(null)).isEmpty();
+    }
+
     /** Clearing the number must clear the key, otherwise a deleted waybill still matches. */
     @Test
     void clearingTheNumberClearsTheSearchKey() {

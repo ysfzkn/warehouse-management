@@ -8,6 +8,7 @@ import {
   PHONE_PLACEHOLDER,
 } from '../utils/phone';
 import { todayIsoDate } from '../utils/date';
+import IrsaliyePicker from './IrsaliyePicker';
 
 /**
  * Stock settings modal - for managing consigned, reserved, and min stock levels
@@ -610,22 +611,18 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
                       <label className="form-label small mb-1" htmlFor="irsaliyeNo">
                         İrsaliye Numarası
                       </label>
-                      <div className="input-group">
-                        <span className="input-group-text bg-white">
-                          <i className="fas fa-hashtag text-primary"></i>
-                        </span>
-                        <input
-                          type="text"
-                          className="form-control"
-                          id="irsaliyeNo"
-                          name="irsaliyeNo"
-                          value={settings.irsaliyeNo}
-                          onChange={handleChange}
-                          placeholder="Örn: ABC2026000000123"
-                          maxLength="50"
-                          autoComplete="off"
-                        />
-                      </div>
+                      <IrsaliyePicker
+                        id="irsaliyeNo"
+                        value={settings.irsaliyeNo}
+                        onChange={(next) => handleChange({ target: { name: 'irsaliyeNo', value: next } })}
+                        onPick={({ irsaliyeNo: pickedNo, irsaliyeDate: pickedDate }) =>
+                          setSettings((prev) => ({
+                            ...prev,
+                            irsaliyeNo: pickedNo,
+                            irsaliyeDate: pickedDate || prev.irsaliyeDate,
+                          }))
+                        }
+                      />
                     </div>
                     <div className="col-sm-5">
                       <label className="form-label small mb-1" htmlFor="irsaliyeDate">

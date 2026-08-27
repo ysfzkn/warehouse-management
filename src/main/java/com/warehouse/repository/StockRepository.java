@@ -579,4 +579,43 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
 
     @Query(value = "SELECT * FROM stocks WHERE id = :stockId FOR UPDATE", nativeQuery = true)
     Optional<Stock> findByIdForUpdate(@Param("stockId") Long stockId);
+
+    // ============================================================================
+    // İrsaliye: one delivery, many stock rows
+    // ============================================================================
+
+    /**
+     * What a waybill number adds up to. One irsaliye covers a whole truckload, so the useful
+     * question at entry time is not "does this number exist" but "how much is already on it" —
+     * that is what tells the operator they are adding to the right delivery.
+     */
+    interface IrsaliyeSummary {
+        String getIrsaliyeNo();
+        java.time.LocalDate getIrsaliyeDate();
+        long getStockCount();
+        long getTotalQuantity();
+        java.time.LocalDateTime getLastUpdated();
+    }
+
+    /**
+     * Groups stock rows by the folded waybill key, so a delivery entered as "ABC 2026-14" one day
+     * and "abc202614" the next still adds up to one entry.
+     *
+     * <p>The displayed number is a {@code MAX} over the group. Every member normalises to the same
+     * key, so they differ only in punctuation and case — any of them reads correctly, and picking
+     * one deterministically beats showing the same delivery twice.</p>
+     */
+    @Query("""
+        SELECT MAX(s.irsaliyeNo) AS irsaliyeNo,
+               MAX(s.irsaliyeDate) AS irsaliyeDate,
+               COUNT(s) AS stockCount,
+               COALESCE(SUM(s.quantity), 0) AS totalQuantity,
+               MAX(s.lastUpdated) AS lastUpdated
+          FROM Stock s
+         WHERE s.irsaliyeKey IS NOT NULL
+           AND (:pattern IS NULL OR s.irsaliyeKey LIKE :pattern)
+         GROUP BY s.irsaliyeKey
+         ORDER BY MAX(s.lastUpdated) DESC
+    """)
+    List<IrsaliyeSummary> summarizeIrsaliye(@Param("pattern") String pattern, Pageable pageable);
 }

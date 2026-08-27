@@ -4,6 +4,7 @@ import useSecurityCodePrompt from './useSecurityCodePrompt';
 import { useCustomerActivityCheck } from './CustomerActivityWarning';
 import { toNoteCase } from '../utils/name';
 import { todayIsoDate } from '../utils/date';
+import IrsaliyePicker from './IrsaliyePicker';
 
 /**
  * Quick stock adjustment modal - simplified for fast add/remove operations
@@ -328,20 +329,16 @@ const QuickStockAdjustModal = ({ stock, type, onSuccess, onClose }) => {
                     </label>
                     <div className="row g-2">
                       <div className="col-7">
-                        <div className="input-group input-group-sm">
-                          <span className="input-group-text bg-white">
-                            <i className="fas fa-hashtag text-primary"></i>
-                          </span>
-                          <input
-                            type="text"
-                            className="form-control"
-                            value={irsaliyeNo}
-                            onChange={(e) => setIrsaliyeNo(e.target.value)}
-                            placeholder="İrsaliye numarası"
-                            maxLength="50"
-                            autoComplete="off"
-                          />
-                        </div>
+                        <IrsaliyePicker
+                          id="quick-irsaliye-no"
+                          value={irsaliyeNo}
+                          placeholder="İrsaliye numarası"
+                          onChange={setIrsaliyeNo}
+                          onPick={({ irsaliyeNo: pickedNo, irsaliyeDate: pickedDate }) => {
+                            setIrsaliyeNo(pickedNo);
+                            if (pickedDate) setIrsaliyeDate(pickedDate);
+                          }}
+                        />
                       </div>
                       <div className="col-5">
                         <input

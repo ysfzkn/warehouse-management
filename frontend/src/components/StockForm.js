@@ -11,6 +11,7 @@ import {
 } from '../utils/phone';
 import { toNoteCase, toTitleCaseTr } from '../utils/name';
 import { todayIsoDate } from '../utils/date';
+import IrsaliyePicker from './IrsaliyePicker';
 
 const INITIAL_VISIBLE_PRODUCTS = 12;
 
@@ -675,24 +676,23 @@ const StockForm = ({
                   <label className="form-label small fw-semibold mb-1" htmlFor="stock-irsaliye-no">
                     İrsaliye Numarası
                   </label>
-                  <div className="input-group">
-                    <span className="input-group-text bg-white">
-                      <i className="fas fa-hashtag text-primary"></i>
-                    </span>
-                    <input
-                      id="stock-irsaliye-no"
-                      type="text"
-                      className={`form-control ${errors.irsaliyeNo ? 'is-invalid' : irsaliyeNo.trim() ? 'is-valid' : ''}`}
-                      value={irsaliyeNo}
-                      onChange={(e) => {
-                        setIrsaliyeNo(e.target.value);
-                        clearFieldError('irsaliyeNo');
-                      }}
-                      placeholder="Örn: ABC2026000000123"
-                      maxLength="50"
-                      autoComplete="off"
-                    />
-                  </div>
+                  <IrsaliyePicker
+                    id="stock-irsaliye-no"
+                    value={irsaliyeNo}
+                    invalid={Boolean(errors.irsaliyeNo)}
+                    onChange={(next) => {
+                      setIrsaliyeNo(next);
+                      clearFieldError('irsaliyeNo');
+                    }}
+                    onPick={({ irsaliyeNo: pickedNo, irsaliyeDate: pickedDate }) => {
+                      // Picking an existing delivery brings its date along; that is the whole
+                      // point of choosing one instead of retyping it.
+                      setIrsaliyeNo(pickedNo);
+                      if (pickedDate) setIrsaliyeDate(pickedDate);
+                      clearFieldError('irsaliyeNo');
+                      clearFieldError('irsaliyeDate');
+                    }}
+                  />
                   {errors.irsaliyeNo && <div className="invalid-feedback d-block">{errors.irsaliyeNo}</div>}
                 </div>
                 <div className="col-sm-5">
@@ -721,12 +721,6 @@ const StockForm = ({
                   )}
                 </div>
               </div>
-              {irsaliyeNo.trim() && !irsaliyeDate && (
-                <small className="text-muted d-block mt-2">
-                  <i className="fas fa-circle-info me-1"></i>
-                  Tarihi de girerseniz stok ekranından tarihe göre filtreleyebilirsiniz.
-                </small>
-              )}
             </div>
           </div>
         </div>

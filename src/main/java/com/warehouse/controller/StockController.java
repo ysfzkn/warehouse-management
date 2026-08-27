@@ -103,6 +103,18 @@ public class StockController {
         return ResponseEntity.ok(response);
     }
 
+    /**
+     * Type-ahead for the waybill field on the stock entry screens, with what each number already
+     * adds up to. Sits above {@code /{id}} only for readability — the two path segments mean it
+     * cannot be shadowed by it.
+     */
+    @GetMapping("/irsaliye/suggest")
+    @Transactional(readOnly = true)
+    public ResponseEntity<List<com.warehouse.dto.IrsaliyeSummaryDto>> suggestIrsaliye(
+            @RequestParam(required = false) String q) {
+        return ResponseEntity.ok(stockService.summarizeIrsaliye(q));
+    }
+
     @GetMapping("/{id}")
     @Transactional(readOnly = true)
     public ResponseEntity<StockDto> getStockById(@PathVariable Long id) {

@@ -20,6 +20,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * through to the admin-only catch-all. The failure was invisible: the type-ahead saw a 403, showed
  * an empty list, and looked exactly like a directory with nothing in it.
  *
+ * <p>The same reasoning covers the waybill type-ahead on the stock entry screens: warehouse staff
+ * are the ones entering deliveries, so it has to answer for them too.</p>
+ *
  * <p>These tests pin the intended split so it cannot drift back. The URL rule covers the whole
  * {@code /vehicles/**} subtree, so exercising {@code /suggest} also covers {@code /by-driver} —
  * which cannot be called here anyway, since its join table is created by Flyway and the test
@@ -45,6 +48,14 @@ class DirectoryAccessSecurityTest {
     @WithMockUser(roles = "STOCK_IN")
     void warehouseRoleCanSearchTheVehicleDirectory() throws Exception {
         mockMvc.perform(get("/api/admin/vehicles/suggest").param("q", "34")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @WithMockUser(roles = "STOCK_IN")
+    void warehouseRoleCanLookUpPreviousWaybills() throws Exception {
+        mockMvc.perform(get("/api/admin/stocks/irsaliye/suggest").param("q", "ABC")
                         .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk());
     }
