@@ -146,6 +146,14 @@
             <scope>test</scope>
         </dependency>
 
+        <!-- Lets tests run a request as a given role, so the URL-level rules in SecurityConfig
+             are covered rather than only the @PreAuthorize annotations. -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
         <!-- Mockito for testing -->
         <dependency>
             <groupId>org.mockito</groupId>

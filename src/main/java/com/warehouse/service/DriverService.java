@@ -12,7 +12,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -43,11 +46,16 @@ public class DriverService {
     private final StockTransferRepository transfers;
     private final VehicleRepository vehicles;
 
+    /** Used by {@link #recordUsage} so the directory write commits or fails on its own. */
+    private final TransactionTemplate ownTransaction;
+
     public DriverService(DriverRepository drivers, StockTransferRepository transfers,
-                         VehicleRepository vehicles) {
+                         VehicleRepository vehicles, PlatformTransactionManager transactionManager) {
         this.drivers = drivers;
         this.transfers = transfers;
         this.vehicles = vehicles;
+        this.ownTransaction = new TransactionTemplate(transactionManager);
+        this.ownTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     /** Type-ahead for the transfer form. A blank query returns the most-used drivers. */
@@ -70,44 +78,52 @@ public class DriverService {
      * Called whenever a transfer is saved. Matches on the phone first (the one field that is both
      * unique and reliably filled), then the TC number; anything else creates a new entry.
      *
-     * <p>Never throws: a failure to file the driver away must not cost the operator a transfer.</p>
+     * <p>Never throws: a failure to file the driver away must not cost the operator a transfer.
+     * A catch alone does not achieve that. A failed flush marks the surrounding transaction
+     * rollback-only, so swallowing the exception still loses the transfer at commit time — and
+     * putting {@code REQUIRES_NEW} on this method only moves the problem, because the commit
+     * that then fails happens after the catch has already returned. The write therefore runs in
+     * a transaction this method opens and closes itself, with the catch around the commit.</p>
      */
-    @Transactional
     public Driver recordUsage(String name, String tcId, String phone, String vehiclePlate) {
         try {
-            if (name == null || name.isBlank()) return null;
-            String cleanPhone = trimToNull(phone);
-            String cleanTc = trimToNull(tcId);
-
-            Driver driver = null;
-            if (cleanPhone != null) driver = drivers.findByPhone(cleanPhone).orElse(null);
-            if (driver == null && cleanTc != null) driver = drivers.findByTcId(cleanTc).orElse(null);
-
-            if (driver == null) {
-                driver = Driver.builder()
-                    .name(normalizeName(name))
-                    .tcId(cleanTc)
-                    .phone(cleanPhone)
-                    .vehiclePlate(upper(vehiclePlate))
-                    .transferCount(0)
-                    .active(true)
-                    .build();
-            } else {
-                // The freshest spelling wins — a driver who changed vehicle should not keep
-                // showing the old plate in the suggestions.
-                driver.setName(normalizeName(name));
-                if (cleanTc != null) driver.setTcId(cleanTc);
-                if (upper(vehiclePlate) != null) driver.setVehiclePlate(upper(vehiclePlate));
-                driver.setActive(true);
-            }
-            driver.setTransferCount((driver.getTransferCount() == null ? 0 : driver.getTransferCount()) + 1);
-            driver.setLastUsedAt(LocalDateTime.now());
-            driver.setSearchText(searchTextOf(driver));
-            return drivers.save(driver);
+            return ownTransaction.execute(status -> upsertUsage(name, tcId, phone, vehiclePlate));
         } catch (Exception e) {
             logger.warn("Şoför rehberine yazılamadı ({}): {}", name, e.toString());
             return null;
         }
+    }
+
+    private Driver upsertUsage(String name, String tcId, String phone, String vehiclePlate) {
+        if (name == null || name.isBlank()) return null;
+        String cleanPhone = trimToNull(phone);
+        String cleanTc = trimToNull(tcId);
+
+        Driver driver = null;
+        if (cleanPhone != null) driver = drivers.findByPhone(cleanPhone).orElse(null);
+        if (driver == null && cleanTc != null) driver = drivers.findByTcId(cleanTc).orElse(null);
+
+        if (driver == null) {
+            driver = Driver.builder()
+                .name(normalizeName(name))
+                .tcId(cleanTc)
+                .phone(cleanPhone)
+                .vehiclePlate(upper(vehiclePlate))
+                .transferCount(0)
+                .active(true)
+                .build();
+        } else {
+            // The freshest spelling wins — a driver who changed vehicle should not keep
+            // showing the old plate in the suggestions.
+            driver.setName(normalizeName(name));
+            if (cleanTc != null) driver.setTcId(cleanTc);
+            if (upper(vehiclePlate) != null) driver.setVehiclePlate(upper(vehiclePlate));
+            driver.setActive(true);
+        }
+        driver.setTransferCount((driver.getTransferCount() == null ? 0 : driver.getTransferCount()) + 1);
+        driver.setLastUsedAt(LocalDateTime.now());
+        driver.setSearchText(searchTextOf(driver));
+        return drivers.save(driver);
     }
 
     @Transactional

@@ -150,6 +150,20 @@ public class SecurityConfig {
                                 ApiPaths.ADMIN_BRANDS,
                                 ApiPaths.ADMIN_COLORS
                         ).hasAnyRole("ADMIN", "STOCK_IN", "STOCK_OUT")
+                        // Driver and vehicle directories: warehouse roles are the ones filling in
+                        // transfers, so they have to be able to search and pick from both. Without
+                        // this the type-ahead fell through to the admin-only rule below and every
+                        // lookup came back 403 — which the picker could only render as "no records".
+                        // Editing and deleting stay admin-only, enforced by @PreAuthorize on the
+                        // controllers; only the vehicle create endpoint is opened up, because a new
+                        // plate usually turns up mid-transfer.
+                        .requestMatchers(org.springframework.http.HttpMethod.GET,
+                                ApiPaths.ADMIN_DRIVERS,
+                                ApiPaths.ADMIN_VEHICLES
+                        ).hasAnyRole("ADMIN", "STOCK_IN", "STOCK_OUT")
+                        .requestMatchers(org.springframework.http.HttpMethod.POST,
+                                ApiPaths.ADMIN_VEHICLES_CREATE
+                        ).hasAnyRole("ADMIN", "STOCK_IN", "STOCK_OUT")
                         // Everything else admin-only
                         .requestMatchers(ApiPaths.ADMIN_ANY).hasRole("ADMIN")
                 )

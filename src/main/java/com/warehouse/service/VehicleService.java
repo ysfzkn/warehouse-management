@@ -9,7 +9,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -31,8 +34,13 @@ public class VehicleService {
 
     private final VehicleRepository vehicles;
 
-    public VehicleService(VehicleRepository vehicles) {
+    /** Backs the best-effort writes below, which must commit or fail on their own. */
+    private final TransactionTemplate ownTransaction;
+
+    public VehicleService(VehicleRepository vehicles, PlatformTransactionManager transactionManager) {
         this.vehicles = vehicles;
+        this.ownTransaction = new TransactionTemplate(transactionManager);
+        this.ownTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     @Transactional(readOnly = true)
@@ -57,29 +65,35 @@ public class VehicleService {
 
     /**
      * Called when a transfer is saved. Returns the directory entry so the transfer can link to
-     * it. Never throws — filing the vehicle away must not cost the operator their transfer.
+     * it. Never throws — filing the vehicle away must not cost the operator their transfer. That
+     * takes more than a catch: a failed flush marks the surrounding transaction rollback-only, so
+     * the transfer would still be lost at commit. See {@code DriverService.recordUsage} for why
+     * the transaction is opened here rather than declared with {@code REQUIRES_NEW}.
      */
-    @Transactional
     public Vehicle recordUsage(String rawPlate) {
         try {
-            String key = Vehicle.toPlateKey(rawPlate);
-            if (key == null) return null;
-            Vehicle vehicle = vehicles.findByPlateKey(key).orElseGet(() -> Vehicle.builder()
-                .plate(display(rawPlate))
-                .plateKey(key)
-                .transferCount(0)
-                .active(true)
-                .build());
-            vehicle.setPlate(display(rawPlate));
-            vehicle.setActive(true);
-            vehicle.setTransferCount((vehicle.getTransferCount() == null ? 0 : vehicle.getTransferCount()) + 1);
-            vehicle.setLastUsedAt(LocalDateTime.now());
-            vehicle.setSearchText(TurkishText.normalizeForSearch(vehicle.getPlate(), vehicle.getBrandModel()));
-            return vehicles.save(vehicle);
+            return ownTransaction.execute(status -> upsertUsage(rawPlate));
         } catch (Exception e) {
             logger.warn("Araç rehberine yazılamadı ({}): {}", rawPlate, e.toString());
             return null;
         }
+    }
+
+    private Vehicle upsertUsage(String rawPlate) {
+        String key = Vehicle.toPlateKey(rawPlate);
+        if (key == null) return null;
+        Vehicle vehicle = vehicles.findByPlateKey(key).orElseGet(() -> Vehicle.builder()
+            .plate(display(rawPlate))
+            .plateKey(key)
+            .transferCount(0)
+            .active(true)
+            .build());
+        vehicle.setPlate(display(rawPlate));
+        vehicle.setActive(true);
+        vehicle.setTransferCount((vehicle.getTransferCount() == null ? 0 : vehicle.getTransferCount()) + 1);
+        vehicle.setLastUsedAt(LocalDateTime.now());
+        vehicle.setSearchText(TurkishText.normalizeForSearch(vehicle.getPlate(), vehicle.getBrandModel()));
+        return vehicles.save(vehicle);
     }
 
     @Transactional
@@ -147,11 +161,10 @@ public class VehicleService {
     }
 
     /** Best-effort assignment used by the transfer flow; a failure must not break the save. */
-    @Transactional
     public void linkQuietly(Long driverId, Long vehicleId) {
         if (driverId == null || vehicleId == null) return;
         try {
-            vehicles.assign(driverId, vehicleId);
+            ownTransaction.executeWithoutResult(status -> vehicles.assign(driverId, vehicleId));
         } catch (Exception e) {
             logger.warn("Şoför-araç ataması yapılamadı ({} / {}): {}", driverId, vehicleId, e.toString());
         }

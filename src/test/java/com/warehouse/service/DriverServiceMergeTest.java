@@ -13,6 +13,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.transaction.PlatformTransactionManager;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -38,12 +39,14 @@ class DriverServiceMergeTest {
     @Mock private DriverRepository drivers;
     @Mock private StockTransferRepository transfers;
     @Mock private VehicleRepository vehicles;
+    @Mock private PlatformTransactionManager transactionManager;
 
     private DriverService service;
 
     @BeforeEach
     void setUp() {
-        service = new DriverService(drivers, transfers, vehicles);
+        // The transaction manager only backs recordUsage, which merging never reaches.
+        service = new DriverService(drivers, transfers, vehicles, transactionManager);
         when(transfers.countByDriverId(anyLong())).thenReturn(0L);
         when(drivers.save(any(Driver.class))).thenAnswer(i -> i.getArgument(0));
     }

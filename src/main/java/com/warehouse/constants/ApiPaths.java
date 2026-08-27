@@ -38,6 +38,10 @@ public final class ApiPaths {
     public static final String ADMIN_BRANDS = API_ADMIN_BASE + "/brands/**";
     public static final String ADMIN_COLORS = API_ADMIN_BASE + "/colors/**";
     public static final String ADMIN_CUSTOMERS = API_ADMIN_BASE + "/customers/**";
+    public static final String ADMIN_DRIVERS = API_ADMIN_BASE + "/drivers/**";
+    public static final String ADMIN_VEHICLES = API_ADMIN_BASE + "/vehicles/**";
+    /** Exact path of the vehicle create endpoint — a plate may be registered mid-transfer. */
+    public static final String ADMIN_VEHICLES_CREATE = API_ADMIN_BASE + "/vehicles";
     public static final String ADMIN_ANY = API_ADMIN_BASE + "/**";
 
     // ── Store paths (e-commerce) ─────────────────────

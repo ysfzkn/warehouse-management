@@ -12,16 +12,33 @@ import { formatPhoneForDisplay } from '../utils/phone';
  * different vehicle today.
  */
 
+/**
+ * A failed lookup must not read as "there is nothing here" — that is how a permission or network
+ * problem spent a long time looking like an empty directory. The message is deliberately plain,
+ * because the operator's next move is the same either way: type the details in by hand.
+ */
+const failureMessage = (error) => {
+  const status = error?.response?.status;
+  if (status === 401 || status === 403)
+    return 'Bu listeyi görme yetkiniz yok — bilgileri elle yazabilirsiniz.';
+  return 'Liste alınamadı. Bağlantınızı kontrol edin veya bilgileri elle yazın.';
+};
+
 const usePeopleSearch = (endpoint, minChars) => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
     if (!open) return undefined;
     if (query.trim().length > 0 && query.trim().length < minChars) {
+      // The pending request was just cancelled, so the spinner has to be cleared here too —
+      // otherwise a query trimmed back to a single character spins forever over an empty list.
       setResults([]);
+      setError(null);
+      setLoading(false);
       return undefined;
     }
     setLoading(true);
@@ -29,8 +46,16 @@ const usePeopleSearch = (endpoint, minChars) => {
     const timer = setTimeout(() => {
       axios
         .get(endpoint, { params: { q: query.trim() || undefined } })
-        .then((r) => !cancelled && setResults(Array.isArray(r.data) ? r.data : []))
-        .catch(() => !cancelled && setResults([]))
+        .then((r) => {
+          if (cancelled) return;
+          setResults(Array.isArray(r.data) ? r.data : []);
+          setError(null);
+        })
+        .catch((e) => {
+          if (cancelled) return;
+          setResults([]);
+          setError(failureMessage(e));
+        })
         .finally(() => !cancelled && setLoading(false));
     }, 250);
     return () => {
@@ -39,7 +64,7 @@ const usePeopleSearch = (endpoint, minChars) => {
     };
   }, [query, open, endpoint, minChars]);
 
-  return { query, setQuery, results, loading, open, setOpen };
+  return { query, setQuery, results, loading, error, open, setOpen };
 };
 
 /** Closes the dropdown when the click lands outside the picker. */
@@ -85,7 +110,7 @@ function Dropdown({ children }) {
  * fill its own form fields.
  */
 export function DriverPicker({ onPick, disabled = false }) {
-  const { query, setQuery, results, loading, open, setOpen } = usePeopleSearch(
+  const { query, setQuery, results, loading, error, open, setOpen } = usePeopleSearch(
     '/api/admin/drivers/suggest',
     2
   );
@@ -121,11 +146,14 @@ export function DriverPicker({ onPick, disabled = false }) {
       </div>
       {open && (
         <Dropdown>
-          {!loading && results.length === 0 && (
+          {error && <div className="list-group-item text-danger small">{error}</div>}
+          {!loading && !error && results.length === 0 && (
             <div className="list-group-item text-muted small">
-              {query.trim().length >= 2
-                ? 'Eşleşen şoför yok — aşağıya elle yazabilirsiniz.'
-                : 'Henüz kayıtlı şoför yok.'}
+              {query.trim().length === 0
+                ? 'Henüz kayıtlı şoför yok.'
+                : query.trim().length < 2
+                  ? 'Aramak için en az 2 karakter yazın.'
+                  : 'Eşleşen şoför yok — aşağıya elle yazabilirsiniz.'}
             </div>
           )}
           {results.map((d) => (
@@ -176,6 +204,7 @@ export function VehiclePicker({ value, driverId, onPick, invalid = false }) {
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [error, setError] = useState(null);
   const [open, setOpen] = useState(false);
   const ref = useOutsideClose(() => setOpen(false));
 
@@ -202,8 +231,16 @@ export function VehiclePicker({ value, driverId, onPick, invalid = false }) {
     const timer = setTimeout(() => {
       axios
         .get('/api/admin/vehicles/suggest', { params: { q: query.trim() || undefined } })
-        .then((r) => !cancelled && setAll(Array.isArray(r.data) ? r.data : []))
-        .catch(() => !cancelled && setAll([]))
+        .then((r) => {
+          if (cancelled) return;
+          setAll(Array.isArray(r.data) ? r.data : []);
+          setError(null);
+        })
+        .catch((e) => {
+          if (cancelled) return;
+          setAll([]);
+          setError(failureMessage(e));
+        })
         .finally(() => !cancelled && setLoading(false));
     }, 250);
     return () => {
@@ -232,9 +269,12 @@ export function VehiclePicker({ value, driverId, onPick, invalid = false }) {
     setCreating(true);
     try {
       const res = await axios.post('/api/admin/vehicles', { plate: query.trim() });
+      setError(null);
       choose(res.data);
     } catch (e) {
-      // Surfaced through the field itself; the caller owns toasts.
+      // Shown inside the dropdown: clicking "add this plate" and getting nothing back is
+      // indistinguishable from a dead button.
+      setError(e?.response?.data?.message || failureMessage(e));
       setOpen(true);
     } finally {
       setCreating(false);
@@ -279,6 +319,7 @@ export function VehiclePicker({ value, driverId, onPick, invalid = false }) {
       </div>
       {open && (
         <Dropdown>
+          {error && <div className="list-group-item text-danger small">{error}</div>}
           {visibleAssigned.length > 0 && (
             <div className="list-group-item bg-light small fw-semibold text-muted py-1">
               Bu şoföre atanmış araçlar
@@ -340,7 +381,7 @@ export function VehiclePicker({ value, driverId, onPick, invalid = false }) {
             </button>
           )}
 
-          {!loading && visibleAssigned.length === 0 && others.length === 0 && !canCreate && (
+          {!loading && !error && visibleAssigned.length === 0 && others.length === 0 && !canCreate && (
             <div className="list-group-item text-muted small">
               Araç bulunamadı. Plakayı yazınca yeni araç olarak ekleyebilirsiniz.
             </div>
@@ -361,7 +402,7 @@ const formatDate = (value) =>
  * reused — which also stops the same person being stored under three spellings.
  */
 export function PastCustomerPicker({ onPick, disabled = false }) {
-  const { query, setQuery, results, loading, open, setOpen } = usePeopleSearch(
+  const { query, setQuery, results, loading, error, open, setOpen } = usePeopleSearch(
     '/api/admin/stock-transfers/customers',
     2
   );
@@ -393,11 +434,14 @@ export function PastCustomerPicker({ onPick, disabled = false }) {
       </div>
       {open && (
         <Dropdown>
-          {!loading && results.length === 0 && (
+          {error && <div className="list-group-item text-danger small">{error}</div>}
+          {!loading && !error && results.length === 0 && (
             <div className="list-group-item text-muted small">
-              {query.trim().length >= 2
-                ? 'Eşleşen müşteri yok — aşağıya elle yazabilirsiniz.'
-                : 'Henüz sevkiyat yapılmış müşteri yok.'}
+              {query.trim().length === 0
+                ? 'Henüz sevkiyat yapılmış müşteri yok.'
+                : query.trim().length < 2
+                  ? 'Aramak için en az 2 karakter yazın.'
+                  : 'Eşleşen müşteri yok — aşağıya elle yazabilirsiniz.'}
             </div>
           )}
           {results.map((c, i) => (

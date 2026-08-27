@@ -12,6 +12,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -233,6 +234,27 @@ public class GlobalExceptionHandler {
         // Short warning-level log for other async requests
         logger.warn("Async request timed out at path={}", uri);
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).build();
+    }
+
+    /**
+     * A {@code @PreAuthorize} rejection is a normal outcome, not a crash. Without this it fell
+     * through to the catch-all below and came back as a 500 "Beklenmeyen bir hata oluştu.", which
+     * hid every permission problem behind a generic failure — and put a stack trace in the log
+     * for something the caller simply is not allowed to do.
+     */
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleAccessDenied(
+            AccessDeniedException ex, HttpServletRequest request) {
+
+        ErrorResponse errorResponse = new ErrorResponse(
+                ErrorCode.UNAUTHORIZED_ACTION.getCode(),
+                HttpStatus.FORBIDDEN.value(),
+                HttpStatus.FORBIDDEN.name(),
+                ErrorCode.UNAUTHORIZED_ACTION.getMessage(),
+                request.getRequestURI()
+        );
+        logger.warn("Access denied at path={} : {}", request.getRequestURI(), ex.getMessage());
+        return new ResponseEntity<>(errorResponse, HttpStatus.FORBIDDEN);
     }
 
     @ExceptionHandler(Exception.class)

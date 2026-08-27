@@ -49,7 +49,12 @@ public final class TurkishText {
                 case 'ö' -> sb.append('o');
                 case 'ç' -> sb.append('c');
                 case 'â' -> sb.append('a');
-                default -> sb.append(Character.isLetterOrDigit(c) ? c : ' ');
+                // Anything outside a-z0-9 becomes a separator. This is not just tidiness: the
+                // same folding is done in SQL by wm_normalize_search (V87), which reduces to
+                // exactly [a-z0-9]. Keeping other letters here — "é", "ñ" — would make a row
+                // written by the application disagree with a row backfilled by the migration,
+                // and a search could then never match one of them.
+                default -> sb.append((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') ? c : ' ');
             }
         }
         return sb.toString().trim().replaceAll("\\s+", " ");
