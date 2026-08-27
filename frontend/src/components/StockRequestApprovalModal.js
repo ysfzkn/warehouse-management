@@ -15,7 +15,11 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
   const [processing, setProcessing] = useState(null);
   const [rejectionModal, setRejectionModal] = useState({ show: false, id: null, reason: '', type: 'stock' });
   const [notesModal, setNotesModal] = useState({ show: false, title: '', content: '', type: 'info' });
-  const [requestDetailModal, setRequestDetailModal] = useState({ show: false, payload: null, context: 'stock' });
+  const [requestDetailModal, setRequestDetailModal] = useState({
+    show: false,
+    payload: null,
+    context: 'stock',
+  });
   const [transferDetailPhotos, setTransferDetailPhotos] = useState({});
   const [transferLightbox, setTransferLightbox] = useState({ show: false, images: [], index: 0 });
 
@@ -28,7 +32,7 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
         if (!src) return null;
         return {
           src,
-          title: `${item.product?.name || 'Ürün'} • ${item.product?.sku || ''}`.trim()
+          title: `${item.product?.name || 'Ürün'} • ${item.product?.sku || ''}`.trim(),
         };
       })
       .filter(Boolean);
@@ -45,7 +49,7 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
     setTransferLightbox({
       show: true,
       images,
-      index: startIndex === -1 ? 0 : startIndex
+      index: startIndex === -1 ? 0 : startIndex,
     });
   };
   const [filter, setFilter] = useState('PENDING');
@@ -54,11 +58,22 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
   const [transferLoading, setTransferLoading] = useState(true);
   const [transferProcessing, setTransferProcessing] = useState(null);
   const [transferFilter, setTransferFilter] = useState('PENDING');
-  const { askCode: askSecurityCode, SecurityCodePrompt, closePrompt: closeSecurityPrompt } = useSecurityCodePrompt();
+  const {
+    askCode: askSecurityCode,
+    SecurityCodePrompt,
+    closePrompt: closeSecurityPrompt,
+  } = useSecurityCodePrompt();
 
   const adminSecurityErrorCodes = new Set([
-    'AUTH_002','AUTH_003','AUTH_004','AUTH_005','AUTH_006','AUTH_007',
-    'ADMIN_SECURITY_CODE_REQUIRED','INVALID_ADMIN_SECURITY_CODE','ADMIN_SECURITY_CODE_MISMATCH'
+    'AUTH_002',
+    'AUTH_003',
+    'AUTH_004',
+    'AUTH_005',
+    'AUTH_006',
+    'AUTH_007',
+    'ADMIN_SECURITY_CODE_REQUIRED',
+    'INVALID_ADMIN_SECURITY_CODE',
+    'ADMIN_SECURITY_CODE_MISMATCH',
   ]);
 
   const parseSecurityError = (err) => {
@@ -71,9 +86,12 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
   const showToast = (message, type = 'success', duration = 6000) => {
     try {
       const bgClass =
-        type === 'success' ? 'text-bg-success'
-          : type === 'warning' ? 'text-bg-warning'
-            : type === 'danger' ? 'text-bg-danger'
+        type === 'success'
+          ? 'text-bg-success'
+          : type === 'warning'
+            ? 'text-bg-warning'
+            : type === 'danger'
+              ? 'text-bg-danger'
               : 'text-bg-secondary';
 
       const toast = document.createElement('div');
@@ -90,12 +108,18 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
       `;
       document.body.appendChild(toast);
       toast.querySelector('.btn-close')?.addEventListener('click', () => {
-        try { document.body.removeChild(toast); } catch {}
+        try {
+          document.body.removeChild(toast);
+        } catch {}
       });
       setTimeout(() => {
         try {
           toast.classList.remove('show');
-          setTimeout(() => { try { document.body.removeChild(toast); } catch {} }, 300);
+          setTimeout(() => {
+            try {
+              document.body.removeChild(toast);
+            } catch {}
+          }, 300);
         } catch {}
       }, duration);
     } catch {}
@@ -107,14 +131,14 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
 
   useEffect(() => {
     fetchTransferApprovals();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     setTransferApprovals(
-      allTransferApprovals.filter(approval => matchesFilter(approval.approvalStatus, transferFilter))
+      allTransferApprovals.filter((approval) => matchesFilter(approval.approvalStatus, transferFilter))
     );
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [transferFilter, allTransferApprovals]);
 
   const fetchStockRequests = async () => {
@@ -128,7 +152,7 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
             const list = Array.isArray(data) ? data : [];
             return list.map((item) => ({
               ...item,
-              status: item.status || status
+              status: item.status || status,
             }));
           } catch (err) {
             console.error(`❌ Error fetching stock requests for ${status}:`, err);
@@ -155,12 +179,12 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
         statuses.map(async (status) => {
           try {
             const { data } = await axios.get('/api/stock-transfers/approvals', {
-              params: { status }
+              params: { status },
             });
             const list = Array.isArray(data) ? data : [];
             return list.map((item) => ({
               ...item,
-              approvalStatus: item.approvalStatus || status
+              approvalStatus: item.approvalStatus || status,
             }));
           } catch (error) {
             console.error(`❌ Error fetching transfer approvals for ${status}:`, error);
@@ -171,7 +195,9 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
 
       const mergedList = responses.flat();
       setAllTransferApprovals(mergedList);
-      setTransferApprovals(mergedList.filter((approval) => matchesFilter(approval.approvalStatus, transferFilter)));
+      setTransferApprovals(
+        mergedList.filter((approval) => matchesFilter(approval.approvalStatus, transferFilter))
+      );
     } catch (error) {
       console.error('❌ Error fetching transfer approvals:', error);
     } finally {
@@ -191,7 +217,7 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
           errorMessage: lastErrorMsg || (lastCode ? 'Güvenlik şifresi hatalı, tekrar deneyin.' : ''),
           persistOnResolve: true,
           title: 'Yönetici Güvenlik Şifresi',
-          description: 'Stok talebini onaylamak için güvenlik şifresini girin.'
+          description: 'Stok talebini onaylamak için güvenlik şifresini girin.',
         });
         if (code === null) {
           closeSecurityPrompt();
@@ -201,7 +227,7 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
         lastErrorMsg = '';
         try {
           await axios.post(`/api/stock-requests/${requestId}/approve`, null, {
-            headers: { 'X-ADMIN-SECURITY-CODE': code }
+            headers: { 'X-ADMIN-SECURITY-CODE': code },
           });
           closeSecurityPrompt();
           break;
@@ -230,7 +256,8 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
     try {
       setTransferProcessing(transferId);
       const normalizedNote = (approvalNote || '').toUpperCase();
-      const isDeleteRequest = !!deleteRequestFlag || normalizedNote === 'DELETE_REQUEST' || normalizedNote === 'SILME_TALEBI';
+      const isDeleteRequest =
+        !!deleteRequestFlag || normalizedNote === 'DELETE_REQUEST' || normalizedNote === 'SILME_TALEBI';
       if (!isDeleteRequest) {
         await axios.post(`/api/stock-transfers/${transferId}/approve-start`, { note: approvalNote });
       } else {
@@ -243,7 +270,7 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
             errorMessage: lastErrorMsg || (lastCode ? 'Güvenlik şifresi hatalı, tekrar deneyin.' : ''),
             persistOnResolve: true,
             title: 'Yönetici Güvenlik Şifresi',
-            description: 'Silme talebini onaylamak için güvenlik şifresini girin.'
+            description: 'Silme talebini onaylamak için güvenlik şifresini girin.',
           });
           if (code === null) {
             closeSecurityPrompt();
@@ -286,7 +313,7 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
       try {
         setTransferProcessing(rejectionModal.id);
         await axios.post(`/api/stock-transfers/${rejectionModal.id}/reject-start`, {
-          reason: rejectionModal.reason
+          reason: rejectionModal.reason,
         });
         setRejectionModal({ show: false, id: null, reason: '', type: 'transfer' });
         await fetchTransferApprovals();
@@ -310,7 +337,7 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
             errorMessage: lastErrorMsg || (lastCode ? 'Güvenlik şifresi hatalı, tekrar deneyin.' : ''),
             persistOnResolve: true,
             title: 'Yönetici Güvenlik Şifresi',
-            description: 'Stok talebini reddetmek için güvenlik şifresini girin.'
+            description: 'Stok talebini reddetmek için güvenlik şifresini girin.',
           });
           if (code === null) {
             closeSecurityPrompt();
@@ -319,11 +346,15 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
           lastCode = code;
           lastErrorMsg = '';
           try {
-            await axios.post(`/api/stock-requests/${rejectionModal.id}/reject`, {
-              rejectionReason: rejectionModal.reason
-            }, {
-              headers: { 'X-ADMIN-SECURITY-CODE': code }
-            });
+            await axios.post(
+              `/api/stock-requests/${rejectionModal.id}/reject`,
+              {
+                rejectionReason: rejectionModal.reason,
+              },
+              {
+                headers: { 'X-ADMIN-SECURITY-CODE': code },
+              }
+            );
             closeSecurityPrompt();
             break;
           } catch (err) {
@@ -357,7 +388,7 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
       month: '2-digit',
       day: '2-digit',
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
     });
   };
 
@@ -395,16 +426,22 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
   };
 
   // Calculate counts from all requests
-  const pendingCount = allRequests.filter(r => matchesFilter(r.status, 'PENDING')).length;
-  const approvedCount = allRequests.filter(r => matchesFilter(r.status, 'APPROVED')).length;
-  const rejectedCount = allRequests.filter(r => matchesFilter(r.status, 'REJECTED')).length;
+  const pendingCount = allRequests.filter((r) => matchesFilter(r.status, 'PENDING')).length;
+  const approvedCount = allRequests.filter((r) => matchesFilter(r.status, 'APPROVED')).length;
+  const rejectedCount = allRequests.filter((r) => matchesFilter(r.status, 'REJECTED')).length;
 
   // Filter requests based on selected filter
-  const requests = allRequests.filter(r => matchesFilter(r.status, filter));
+  const requests = allRequests.filter((r) => matchesFilter(r.status, filter));
 
-  const transferPendingCount = allTransferApprovals.filter(a => matchesFilter(a.approvalStatus, 'PENDING')).length;
-  const transferApprovedCount = allTransferApprovals.filter(a => matchesFilter(a.approvalStatus, 'APPROVED')).length;
-  const transferRejectedCount = allTransferApprovals.filter(a => matchesFilter(a.approvalStatus, 'REJECTED')).length;
+  const transferPendingCount = allTransferApprovals.filter((a) =>
+    matchesFilter(a.approvalStatus, 'PENDING')
+  ).length;
+  const transferApprovedCount = allTransferApprovals.filter((a) =>
+    matchesFilter(a.approvalStatus, 'APPROVED')
+  ).length;
+  const transferRejectedCount = allTransferApprovals.filter((a) =>
+    matchesFilter(a.approvalStatus, 'REJECTED')
+  ).length;
 
   return (
     <>
@@ -510,8 +547,15 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
           }
         }
       `}</style>
-      <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1050, padding: '1rem' }}>
-        <div className="modal-dialog modal-xl modal-dialog-scrollable" style={{ maxWidth: 'min(1100px, 95vw)' }}>
+      <div
+        className="modal show d-block"
+        tabIndex="-1"
+        style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1050, padding: '1rem' }}
+      >
+        <div
+          className="modal-dialog modal-xl modal-dialog-scrollable"
+          style={{ maxWidth: 'min(1100px, 95vw)' }}
+        >
           <div className="modal-content rounded-4 border-0 shadow-lg" style={{ maxHeight: '90vh' }}>
             <div className="modal-header bg-primary text-white">
               <h5 className="modal-title">
@@ -676,35 +720,73 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                       </div>
                     ) : (
                       <div className="table-responsive" style={{ overflowX: 'auto' }}>
-                        <table className="table table-hover align-middle mb-0" style={{ width: '100%', tableLayout: 'auto' }}>
+                        <table
+                          className="table table-hover align-middle mb-0"
+                          style={{ width: '100%', tableLayout: 'auto' }}
+                        >
                           <thead className="table-light sticky-top" style={{ top: 0 }}>
                             <tr>
-                              <th className="text-center" style={{ width: 'auto', minWidth: '60px' }}>ID</th>
+                              <th className="text-center" style={{ width: 'auto', minWidth: '60px' }}>
+                                ID
+                              </th>
                               <th style={{ width: 'auto', minWidth: '120px' }}>Ürün</th>
                               <th style={{ width: 'auto', minWidth: '100px' }}>Depo</th>
-                              <th className="text-center" style={{ width: 'auto', minWidth: '90px' }}>İşlem</th>
-                              <th className="text-center" style={{ width: 'auto', minWidth: '70px' }}>Miktar</th>
+                              <th className="text-center" style={{ width: 'auto', minWidth: '90px' }}>
+                                İşlem
+                              </th>
+                              <th className="text-center" style={{ width: 'auto', minWidth: '70px' }}>
+                                Miktar
+                              </th>
                               <th style={{ width: 'auto', minWidth: '100px' }}>Mevcut Stok</th>
                               <th style={{ width: 'auto', minWidth: '100px' }}>Talep Eden</th>
                               <th style={{ width: 'auto', minWidth: '120px' }}>Talep Tarihi</th>
-                              <th className="text-center" style={{ width: 'auto', minWidth: '90px' }}>Durum</th>
-                              <th className="text-center" style={{ width: 'auto', minWidth: '150px' }}>İşlemler</th>
+                              <th className="text-center" style={{ width: 'auto', minWidth: '90px' }}>
+                                Durum
+                              </th>
+                              <th className="text-center" style={{ width: 'auto', minWidth: '150px' }}>
+                                İşlemler
+                              </th>
                             </tr>
                           </thead>
                           <tbody>
                             {requests.map((request) => (
-                              <tr key={request.id} className={request.status === 'PENDING' ? 'table-warning' : ''}>
+                              <tr
+                                key={request.id}
+                                className={request.status === 'PENDING' ? 'table-warning' : ''}
+                              >
                                 <td className="text-center">
                                   <span className="badge bg-dark">#{request.id}</span>
                                 </td>
                                 <td>
-                                  <div className="fw-bold text-truncate" style={{ maxWidth: '200px' }} title={request.productName}>{request.productName}</div>
-                                  <small className="text-muted text-truncate d-block" style={{ maxWidth: '200px' }} title={request.productSku}>SKU: {request.productSku}</small>
+                                  <div
+                                    className="fw-bold text-truncate"
+                                    style={{ maxWidth: '200px' }}
+                                    title={request.productName}
+                                  >
+                                    {request.productName}
+                                  </div>
+                                  <small
+                                    className="text-muted text-truncate d-block"
+                                    style={{ maxWidth: '200px' }}
+                                    title={request.productSku}
+                                  >
+                                    SKU: {request.productSku}
+                                  </small>
                                 </td>
-                                <td className="text-truncate" style={{ maxWidth: '150px' }} title={request.warehouseName}>{request.warehouseName}</td>
+                                <td
+                                  className="text-truncate"
+                                  style={{ maxWidth: '150px' }}
+                                  title={request.warehouseName}
+                                >
+                                  {request.warehouseName}
+                                </td>
                                 <td className="text-center">
-                                  <span className={`badge ${request.type === 'ADD' ? 'bg-success' : 'bg-danger'}`}>
-                                    <i className={`fas fa-${request.type === 'ADD' ? 'plus' : 'minus'} me-1`}></i>
+                                  <span
+                                    className={`badge ${request.type === 'ADD' ? 'bg-success' : 'bg-danger'}`}
+                                  >
+                                    <i
+                                      className={`fas fa-${request.type === 'ADD' ? 'plus' : 'minus'} me-1`}
+                                    ></i>
                                     {request.type === 'ADD' ? 'Ekleme' : 'Çıkarma'}
                                   </span>
                                 </td>
@@ -713,8 +795,12 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                                 </td>
                                 <td>
                                   <div className="small">
-                                    <div>Toplam: <strong>{request.currentStockQuantity}</strong></div>
-                                    <div className="text-muted">Kullanılabilir: {request.availableQuantity}</div>
+                                    <div>
+                                      Toplam: <strong>{request.currentStockQuantity}</strong>
+                                    </div>
+                                    <div className="text-muted">
+                                      Kullanılabilir: {request.availableQuantity}
+                                    </div>
                                   </div>
                                 </td>
                                 <td>
@@ -736,7 +822,9 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                                         <i className="fas fa-check me-1"></i>Onaylandı
                                       </span>
                                       <small className="text-muted d-block">{request.reviewedBy}</small>
-                                      <small className="text-muted d-block">{formatDate(request.reviewedAt)}</small>
+                                      <small className="text-muted d-block">
+                                        {formatDate(request.reviewedAt)}
+                                      </small>
                                     </div>
                                   )}
                                   {request.status === 'REJECTED' && (
@@ -745,7 +833,9 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                                         <i className="fas fa-times me-1"></i>Reddedildi
                                       </span>
                                       <small className="text-muted d-block">{request.reviewedBy}</small>
-                                      <small className="text-muted d-block">{formatDate(request.reviewedAt)}</small>
+                                      <small className="text-muted d-block">
+                                        {formatDate(request.reviewedAt)}
+                                      </small>
                                     </div>
                                   )}
                                 </td>
@@ -769,7 +859,14 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                                       </button>
                                       <button
                                         className="btn btn-sm btn-danger"
-                                        onClick={() => setRejectionModal({ show: true, id: request.id, reason: '', type: 'stock' })}
+                                        onClick={() =>
+                                          setRejectionModal({
+                                            show: true,
+                                            id: request.id,
+                                            reason: '',
+                                            type: 'stock',
+                                          })
+                                        }
                                         disabled={processing === request.id}
                                         title="Talebi reddet"
                                       >
@@ -782,15 +879,17 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                                       {request.status === 'REJECTED' && request.rejectionReason && (
                                         <button
                                           className="btn btn-sm btn-outline-danger"
-                                          onClick={() => setNotesModal({
-                                            show: true,
-                                            title: 'Reddetme Nedeni',
-                                            content: request.rejectionReason,
-                                            type: 'danger',
-                                            icon: 'fa-times-circle',
-                                            productName: request.productName,
-                                            requestType: request.type
-                                          })}
+                                          onClick={() =>
+                                            setNotesModal({
+                                              show: true,
+                                              title: 'Reddetme Nedeni',
+                                              content: request.rejectionReason,
+                                              type: 'danger',
+                                              icon: 'fa-times-circle',
+                                              productName: request.productName,
+                                              requestType: request.type,
+                                            })
+                                          }
                                           title="Ret nedenini gör"
                                         >
                                           <i className="fas fa-comment-alt"></i>
@@ -799,15 +898,17 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                                       {request.notes && (
                                         <button
                                           className="btn btn-sm btn-outline-info"
-                                          onClick={() => setNotesModal({
-                                            show: true,
-                                            title: 'Talep Notları',
-                                            content: request.notes,
-                                            type: 'info',
-                                            icon: 'fa-sticky-note',
-                                            productName: request.productName,
-                                            requestType: request.type
-                                          })}
+                                          onClick={() =>
+                                            setNotesModal({
+                                              show: true,
+                                              title: 'Talep Notları',
+                                              content: request.notes,
+                                              type: 'info',
+                                              icon: 'fa-sticky-note',
+                                              productName: request.productName,
+                                              requestType: request.type,
+                                            })
+                                          }
                                           title="Notları gör"
                                         >
                                           <i className="fas fa-sticky-note"></i>
@@ -888,8 +989,12 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                                     <i className="fas fa-layer-group me-1"></i>
                                     Toplam {request.currentStockQuantity ?? request.stock?.quantity ?? '-'}
                                   </span>
-                                  <span className={`badge ${request.requestType === 'ADD' ? 'bg-success' : 'bg-danger'}`}>
-                                    <i className={`fas fa-${request.requestType === 'ADD' ? 'plus' : 'minus'} me-1`}></i>
+                                  <span
+                                    className={`badge ${request.requestType === 'ADD' ? 'bg-success' : 'bg-danger'}`}
+                                  >
+                                    <i
+                                      className={`fas fa-${request.requestType === 'ADD' ? 'plus' : 'minus'} me-1`}
+                                    ></i>
                                     {request.requestType === 'ADD' ? 'Ekleme' : 'Çıkarma'}
                                   </span>
                                 </div>
@@ -897,7 +1002,12 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                                   <button
                                     className="btn btn-outline-secondary btn-sm w-100 mb-3"
                                     onClick={() =>
-                                      setNotesModal({ show: true, title: 'Talep Notu', content: request.notes, type: 'info' })
+                                      setNotesModal({
+                                        show: true,
+                                        title: 'Talep Notu',
+                                        content: request.notes,
+                                        type: 'info',
+                                      })
                                     }
                                   >
                                     <i className="fas fa-sticky-note me-1"></i>
@@ -906,7 +1016,9 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                                 )}
                                 <button
                                   className="btn btn-outline-primary btn-sm w-100 mb-2"
-                                  onClick={() => setRequestDetailModal({ show: true, payload: request, context: 'stock' })}
+                                  onClick={() =>
+                                    setRequestDetailModal({ show: true, payload: request, context: 'stock' })
+                                  }
                                 >
                                   <i className="fas fa-eye me-1"></i>
                                   Detay
@@ -930,7 +1042,14 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                                       </button>
                                       <button
                                         className="btn btn-outline-danger btn-sm flex-fill"
-                                        onClick={() => setRejectionModal({ show: true, id: request.id, reason: '', type: 'stock' })}
+                                        onClick={() =>
+                                          setRejectionModal({
+                                            show: true,
+                                            id: request.id,
+                                            reason: '',
+                                            type: 'stock',
+                                          })
+                                        }
                                         disabled={processing === request.id}
                                       >
                                         <i className="fas fa-times me-1"></i>
@@ -945,7 +1064,7 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                                           show: true,
                                           title: 'Reddetme Nedeni',
                                           content: request.rejectionReason,
-                                          type: 'danger'
+                                          type: 'danger',
                                         })
                                       }
                                     >
@@ -960,7 +1079,7 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                                           show: true,
                                           title: 'Talep Notları',
                                           content: request.notes,
-                                          type: 'info'
+                                          type: 'info',
                                         })
                                       }
                                     >
@@ -1013,7 +1132,7 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
 
                   <div className="p-3 bg-light border-bottom">
                     <div className="approval-filter-stack" role="group">
-                      {['PENDING', 'APPROVED', 'REJECTED', 'ALL'].map(status => (
+                      {['PENDING', 'APPROVED', 'REJECTED', 'ALL'].map((status) => (
                         <div className="toggle-option" key={status}>
                           <input
                             type="radio"
@@ -1025,24 +1144,28 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                             onChange={(e) => setTransferFilter(e.target.value)}
                           />
                           <label
-                            className={`btn ${status === 'PENDING'
-                              ? 'btn-outline-warning'
-                              : status === 'APPROVED'
-                                ? 'btn-outline-success'
-                                : status === 'REJECTED'
-                                  ? 'btn-outline-danger'
-                                  : 'btn-outline-secondary'
-                              }`}
+                            className={`btn ${
+                              status === 'PENDING'
+                                ? 'btn-outline-warning'
+                                : status === 'APPROVED'
+                                  ? 'btn-outline-success'
+                                  : status === 'REJECTED'
+                                    ? 'btn-outline-danger'
+                                    : 'btn-outline-secondary'
+                            }`}
                             htmlFor={`transfer-${status.toLowerCase()}`}
                           >
-                            <i className={`fas ${status === 'PENDING'
-                              ? 'fa-clock'
-                              : status === 'APPROVED'
-                                ? 'fa-check'
-                                : status === 'REJECTED'
-                                  ? 'fa-times'
-                                  : 'fa-list'
-                              } me-1`}></i>
+                            <i
+                              className={`fas ${
+                                status === 'PENDING'
+                                  ? 'fa-clock'
+                                  : status === 'APPROVED'
+                                    ? 'fa-check'
+                                    : status === 'REJECTED'
+                                      ? 'fa-times'
+                                      : 'fa-list'
+                              } me-1`}
+                            ></i>
                             {status === 'PENDING' && 'Bekleyen'}
                             {status === 'APPROVED' && 'Onaylanan'}
                             {status === 'REJECTED' && 'Reddedilen'}
@@ -1071,7 +1194,10 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                       </div>
                     ) : (
                       <div className="table-responsive" style={{ overflowX: 'auto' }}>
-                        <table className="table table-hover align-middle mb-0" style={{ width: '100%', tableLayout: 'auto' }}>
+                        <table
+                          className="table table-hover align-middle mb-0"
+                          style={{ width: '100%', tableLayout: 'auto' }}
+                        >
                           <thead className="table-light sticky-top" style={{ top: 0 }}>
                             <tr>
                               <th style={{ width: 'auto', minWidth: '70px' }}>Transfer</th>
@@ -1086,203 +1212,288 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                           <tbody>
                             {transferApprovals.map((transfer) => {
                               const noteUpper = (transfer.approvalNote || '').toUpperCase();
-                              const isDeleteRequest = !!transfer.deleteRequest || noteUpper === 'DELETE_REQUEST' || noteUpper === 'SILME_TALEBI';
-                              const sanitizedNote = (noteUpper === 'START_REQUEST' || noteUpper === 'DELETE_REQUEST' || noteUpper === 'SILME_TALEBI')
-                                ? ''
-                                : transfer.approvalNote;
+                              const isDeleteRequest =
+                                !!transfer.deleteRequest ||
+                                noteUpper === 'DELETE_REQUEST' ||
+                                noteUpper === 'SILME_TALEBI';
+                              const sanitizedNote =
+                                noteUpper === 'START_REQUEST' ||
+                                noteUpper === 'DELETE_REQUEST' ||
+                                noteUpper === 'SILME_TALEBI'
+                                  ? ''
+                                  : transfer.approvalNote;
                               return (
                                 <tr key={transfer.id}>
-                                <td>
-                                  <span className="badge bg-dark">#{transfer.id}</span>
-                                  <small className="text-muted text-uppercase">
-                                    {transfer.transferType === 'CUSTOMER_DELIVERY' ? 'Müşteri' : 'Depo'}
-                                  </small>
-                                </td>
-                                <td>
-                                  {transfer.transferType === 'CUSTOMER_DELIVERY' ? (
-                                    <>
-                                      <div className="fw-semibold text-truncate" style={{ maxWidth: '200px' }} title={transfer.customerFullName || '-'}>{transfer.customerFullName || '-'}</div>
-                                      <small className="text-muted d-block text-truncate" style={{ maxWidth: '200px' }}>
-                                        {transfer.sourceWarehouse?.name || '-'} → {transfer.customerFullName || 'Müşteri'}
-                                      </small>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <div className="fw-semibold text-truncate" style={{ maxWidth: '200px' }} title={transfer.sourceWarehouse?.name || '-'}>{transfer.sourceWarehouse?.name || '-'}</div>
-                                      <small className="text-muted d-block text-truncate" style={{ maxWidth: '200px' }} title={`${transfer.sourceWarehouse?.name || '-'} → ${transfer.destinationWarehouse?.name || '-'}`}>
-                                        {transfer.sourceWarehouse?.name || '-'} → {transfer.destinationWarehouse?.name || '-'}
-                                      </small>
-                                    </>
-                                  )}
-                                </td>
-                                <td>
-                                  {transfer.items && transfer.items.length > 0 ? (
-                                    <>
-                                      {transfer.items.slice(0, 3).map(item => (
-                                        <div key={`${transfer.id}-${item.id}`} className="d-flex justify-content-between small">
-                                          <span className="text-truncate me-2">{item.product?.name || 'Ürün'}</span>
-                                          <span className="badge bg-dark text-light d-inline-flex align-items-center justify-content-center mb-1" style={{ minWidth: '3.25rem' }}>{item.quantity}</span>
-                                        </div>
-                                      ))}
-                                      {transfer.items.length > 3 && (
-                                        <small className="text-muted">
-                                          + {transfer.items.length - 3} ürün daha
-                                        </small>
-                                      )}
-                                    </>
-                                  ) : (
-                                    <span className="text-muted">Ürün bilgisi yok</span>
-                                  )}
-                                </td>
-                                <td>
-                                  <div className="fw-semibold">{transfer.approvalRequestedBy || '-'}</div>
-                                  <small className="text-muted">{transfer.createdBy && `Oluşturan: ${transfer.createdBy}`}</small>
-                                </td>
-                                <td>
-                                  <small>{formatDate(transfer.approvalRequestedAt || transfer.transferDate)}</small>
-                                </td>
-                                <td>
-                                  <div className="d-flex flex-column align-items-start gap-1">
-                                    <span className={`badge ${transfer.approvalStatus === 'PENDING'
-                                      ? (isDeleteRequest ? 'bg-dark' : 'bg-warning')
-                                      : transfer.approvalStatus === 'APPROVED'
-                                        ? 'bg-success'
-                                        : transfer.approvalStatus === 'REJECTED'
-                                          ? 'bg-danger'
-                                          : 'bg-secondary'
-                                      }`}>
-                                      {transfer.approvalStatus === 'PENDING' && (isDeleteRequest ? 'Silme Onayı Bekliyor' : 'Onay Bekliyor')}
-                                      {transfer.approvalStatus === 'APPROVED' && 'Onaylandı'}
-                                      {transfer.approvalStatus === 'REJECTED' && 'Reddedildi'}
-                                      {transfer.approvalStatus === 'NONE' && '—'}
-                                    </span>
-                                    {isDeleteRequest && (
-                                      <span className="badge bg-dark">
-                                        <i className="fas fa-trash me-1"></i>
-                                        Silme Talebi
-                                      </span>
-                                    )}
-                                    {transfer.approvalDecisionBy && (
-                                      <small className="d-block text-muted mt-1">
-                                        {transfer.approvalDecisionBy}
-                                      </small>
-                                    )}
-                                  </div>
-                                </td>
-                                <td>
-                                  {transfer.approvalStatus === 'PENDING' ? (
-                                    <div className="d-flex gap-1 flex-wrap">
-                                      <button
-                                        className="btn btn-sm btn-success"
-                                        onClick={() => handleApproveTransfer(transfer.id, transfer.approvalNote, transfer.deleteRequest)}
-                                        disabled={transferProcessing === transfer.id}
-                                      >
-                                        {transferProcessing === transfer.id ? (
-                                          <span className="spinner-border spinner-border-sm"></span>
-                                        ) : (
-                                          <>
-                                            <i className="fas fa-check me-1"></i>
-                                            Onayla
-                                          </>
-                                        )}
-                                      </button>
-                                      <button
-                                        className="btn btn-sm btn-danger"
-                                        onClick={() => setRejectionModal({ show: true, id: transfer.id, reason: '', type: 'transfer' })}
-                                        disabled={transferProcessing === transfer.id}
-                                      >
-                                        <i className="fas fa-times me-1"></i>
-                                        Reddet
-                                      </button>
-                                      <button
-                                        className="btn btn-sm btn-outline-primary"
-                                        onClick={async () => {
-                                          setRequestDetailModal({ show: true, payload: transfer, context: 'transfer' });
-                                          try {
-                                            const photos = {};
-                                            if (Array.isArray(transfer.items)) {
-                                              await Promise.all(
-                                                transfer.items.map(async (item) => {
-                                                  if (!item.id) return;
-                                                  try {
-                                                    const resp = await axios.get(`/api/stock-transfer-items/${item.id}/photo`);
-                                                    photos[item.id] = resp.data;
-                                                  } catch {
-                                                    // ignore missing
-                                                  }
-                                                })
-                                              );
-                                            }
-                                            setTransferDetailPhotos(photos);
-                                          } catch (e) {
-                                            console.error('Error loading transfer photos for approval detail', e);
-                                            setTransferDetailPhotos({});
-                                          }
-                                        }}
-                                      >
-                                        <i className="fas fa-eye me-1"></i>
-                                        Detay
-                                      </button>
-                                    </div>
-                                  ) : (
-                                    <div className="d-flex gap-1 flex-wrap">
-                                      {sanitizedNote && !isDeleteRequest && (
-                                        <button
-                                          className="btn btn-sm btn-outline-info"
-                                          onClick={() => setNotesModal({
-                                            show: true,
-                                            title: transfer.approvalStatus === 'REJECTED' ? 'Ret Notu' : 'Onay Notu',
-                                            content: sanitizedNote,
-                                            type: transfer.approvalStatus === 'REJECTED' ? 'danger' : 'info',
-                                            icon: transfer.approvalStatus === 'REJECTED' ? 'fa-times-circle' : 'fa-sticky-note',
-                                            transferId: transfer.id
-                                          })}
+                                  <td>
+                                    <span className="badge bg-dark">#{transfer.id}</span>
+                                    <small className="text-muted text-uppercase">
+                                      {transfer.transferType === 'CUSTOMER_DELIVERY' ? 'Müşteri' : 'Depo'}
+                                    </small>
+                                  </td>
+                                  <td>
+                                    {transfer.transferType === 'CUSTOMER_DELIVERY' ? (
+                                      <>
+                                        <div
+                                          className="fw-semibold text-truncate"
+                                          style={{ maxWidth: '200px' }}
+                                          title={transfer.customerFullName || '-'}
                                         >
-                                          <i className="fas fa-sticky-note"></i>
-                                        </button>
-                                      )}
+                                          {transfer.customerFullName || '-'}
+                                        </div>
+                                        <small
+                                          className="text-muted d-block text-truncate"
+                                          style={{ maxWidth: '200px' }}
+                                        >
+                                          {transfer.sourceWarehouse?.name || '-'} →{' '}
+                                          {transfer.customerFullName || 'Müşteri'}
+                                        </small>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <div
+                                          className="fw-semibold text-truncate"
+                                          style={{ maxWidth: '200px' }}
+                                          title={transfer.sourceWarehouse?.name || '-'}
+                                        >
+                                          {transfer.sourceWarehouse?.name || '-'}
+                                        </div>
+                                        <small
+                                          className="text-muted d-block text-truncate"
+                                          style={{ maxWidth: '200px' }}
+                                          title={`${transfer.sourceWarehouse?.name || '-'} → ${transfer.destinationWarehouse?.name || '-'}`}
+                                        >
+                                          {transfer.sourceWarehouse?.name || '-'} →{' '}
+                                          {transfer.destinationWarehouse?.name || '-'}
+                                        </small>
+                                      </>
+                                    )}
+                                  </td>
+                                  <td>
+                                    {transfer.items && transfer.items.length > 0 ? (
+                                      <>
+                                        {transfer.items.slice(0, 3).map((item) => (
+                                          <div
+                                            key={`${transfer.id}-${item.id}`}
+                                            className="d-flex justify-content-between small"
+                                          >
+                                            <span className="text-truncate me-2">
+                                              {item.product?.name || 'Ürün'}
+                                            </span>
+                                            <span
+                                              className="badge bg-dark text-light d-inline-flex align-items-center justify-content-center mb-1"
+                                              style={{ minWidth: '3.25rem' }}
+                                            >
+                                              {item.quantity}
+                                            </span>
+                                          </div>
+                                        ))}
+                                        {transfer.items.length > 3 && (
+                                          <small className="text-muted">
+                                            + {transfer.items.length - 3} ürün daha
+                                          </small>
+                                        )}
+                                      </>
+                                    ) : (
+                                      <span className="text-muted">Ürün bilgisi yok</span>
+                                    )}
+                                  </td>
+                                  <td>
+                                    <div className="fw-semibold">{transfer.approvalRequestedBy || '-'}</div>
+                                    <small className="text-muted">
+                                      {transfer.createdBy && `Oluşturan: ${transfer.createdBy}`}
+                                    </small>
+                                  </td>
+                                  <td>
+                                    <small>
+                                      {formatDate(transfer.approvalRequestedAt || transfer.transferDate)}
+                                    </small>
+                                  </td>
+                                  <td>
+                                    <div className="d-flex flex-column align-items-start gap-1">
+                                      <span
+                                        className={`badge ${
+                                          transfer.approvalStatus === 'PENDING'
+                                            ? isDeleteRequest
+                                              ? 'bg-dark'
+                                              : 'bg-warning'
+                                            : transfer.approvalStatus === 'APPROVED'
+                                              ? 'bg-success'
+                                              : transfer.approvalStatus === 'REJECTED'
+                                                ? 'bg-danger'
+                                                : 'bg-secondary'
+                                        }`}
+                                      >
+                                        {transfer.approvalStatus === 'PENDING' &&
+                                          (isDeleteRequest ? 'Silme Onayı Bekliyor' : 'Onay Bekliyor')}
+                                        {transfer.approvalStatus === 'APPROVED' && 'Onaylandı'}
+                                        {transfer.approvalStatus === 'REJECTED' && 'Reddedildi'}
+                                        {transfer.approvalStatus === 'NONE' && '—'}
+                                      </span>
                                       {isDeleteRequest && (
-                                        <span className="badge bg-dark d-inline-flex align-items-center">
+                                        <span className="badge bg-dark">
                                           <i className="fas fa-trash me-1"></i>
-                                          Silme talebi
+                                          Silme Talebi
                                         </span>
                                       )}
-                                      <button
-                                        className="btn btn-sm btn-outline-primary"
-                                        onClick={async () => {
-                                          setRequestDetailModal({ show: true, payload: transfer, context: 'transfer' });
-                                          try {
-                                            const photos = {};
-                                            if (Array.isArray(transfer.items)) {
-                                              await Promise.all(
-                                                transfer.items.map(async (item) => {
-                                                  if (!item.id) return;
-                                                  try {
-                                                    const resp = await axios.get(`/api/stock-transfer-items/${item.id}/photo`);
-                                                    photos[item.id] = resp.data;
-                                                  } catch {
-                                                    // ignore
-                                                  }
-                                                })
-                                              );
-                                            }
-                                            setTransferDetailPhotos(photos);
-                                          } catch (e) {
-                                            console.error('Error loading transfer photos for approval detail', e);
-                                            setTransferDetailPhotos({});
-                                          }
-                                        }}
-                                      >
-                                        <i className="fas fa-eye me-1"></i>
-                                        Detay
-                                      </button>
-                                      {!sanitizedNote && (
-                                        <span className="text-muted small"></span>
+                                      {transfer.approvalDecisionBy && (
+                                        <small className="d-block text-muted mt-1">
+                                          {transfer.approvalDecisionBy}
+                                        </small>
                                       )}
                                     </div>
-                                  )}
-                                </td>
-                              </tr>
+                                  </td>
+                                  <td>
+                                    {transfer.approvalStatus === 'PENDING' ? (
+                                      <div className="d-flex gap-1 flex-wrap">
+                                        <button
+                                          className="btn btn-sm btn-success"
+                                          onClick={() =>
+                                            handleApproveTransfer(
+                                              transfer.id,
+                                              transfer.approvalNote,
+                                              transfer.deleteRequest
+                                            )
+                                          }
+                                          disabled={transferProcessing === transfer.id}
+                                        >
+                                          {transferProcessing === transfer.id ? (
+                                            <span className="spinner-border spinner-border-sm"></span>
+                                          ) : (
+                                            <>
+                                              <i className="fas fa-check me-1"></i>
+                                              Onayla
+                                            </>
+                                          )}
+                                        </button>
+                                        <button
+                                          className="btn btn-sm btn-danger"
+                                          onClick={() =>
+                                            setRejectionModal({
+                                              show: true,
+                                              id: transfer.id,
+                                              reason: '',
+                                              type: 'transfer',
+                                            })
+                                          }
+                                          disabled={transferProcessing === transfer.id}
+                                        >
+                                          <i className="fas fa-times me-1"></i>
+                                          Reddet
+                                        </button>
+                                        <button
+                                          className="btn btn-sm btn-outline-primary"
+                                          onClick={async () => {
+                                            setRequestDetailModal({
+                                              show: true,
+                                              payload: transfer,
+                                              context: 'transfer',
+                                            });
+                                            try {
+                                              const photos = {};
+                                              if (Array.isArray(transfer.items)) {
+                                                await Promise.all(
+                                                  transfer.items.map(async (item) => {
+                                                    if (!item.id) return;
+                                                    try {
+                                                      const resp = await axios.get(
+                                                        `/api/stock-transfer-items/${item.id}/photo`
+                                                      );
+                                                      photos[item.id] = resp.data;
+                                                    } catch {
+                                                      // ignore missing
+                                                    }
+                                                  })
+                                                );
+                                              }
+                                              setTransferDetailPhotos(photos);
+                                            } catch (e) {
+                                              console.error(
+                                                'Error loading transfer photos for approval detail',
+                                                e
+                                              );
+                                              setTransferDetailPhotos({});
+                                            }
+                                          }}
+                                        >
+                                          <i className="fas fa-eye me-1"></i>
+                                          Detay
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <div className="d-flex gap-1 flex-wrap">
+                                        {sanitizedNote && !isDeleteRequest && (
+                                          <button
+                                            className="btn btn-sm btn-outline-info"
+                                            onClick={() =>
+                                              setNotesModal({
+                                                show: true,
+                                                title:
+                                                  transfer.approvalStatus === 'REJECTED'
+                                                    ? 'Ret Notu'
+                                                    : 'Onay Notu',
+                                                content: sanitizedNote,
+                                                type:
+                                                  transfer.approvalStatus === 'REJECTED' ? 'danger' : 'info',
+                                                icon:
+                                                  transfer.approvalStatus === 'REJECTED'
+                                                    ? 'fa-times-circle'
+                                                    : 'fa-sticky-note',
+                                                transferId: transfer.id,
+                                              })
+                                            }
+                                          >
+                                            <i className="fas fa-sticky-note"></i>
+                                          </button>
+                                        )}
+                                        {isDeleteRequest && (
+                                          <span className="badge bg-dark d-inline-flex align-items-center">
+                                            <i className="fas fa-trash me-1"></i>
+                                            Silme talebi
+                                          </span>
+                                        )}
+                                        <button
+                                          className="btn btn-sm btn-outline-primary"
+                                          onClick={async () => {
+                                            setRequestDetailModal({
+                                              show: true,
+                                              payload: transfer,
+                                              context: 'transfer',
+                                            });
+                                            try {
+                                              const photos = {};
+                                              if (Array.isArray(transfer.items)) {
+                                                await Promise.all(
+                                                  transfer.items.map(async (item) => {
+                                                    if (!item.id) return;
+                                                    try {
+                                                      const resp = await axios.get(
+                                                        `/api/stock-transfer-items/${item.id}/photo`
+                                                      );
+                                                      photos[item.id] = resp.data;
+                                                    } catch {
+                                                      // ignore
+                                                    }
+                                                  })
+                                                );
+                                              }
+                                              setTransferDetailPhotos(photos);
+                                            } catch (e) {
+                                              console.error(
+                                                'Error loading transfer photos for approval detail',
+                                                e
+                                              );
+                                              setTransferDetailPhotos({});
+                                            }
+                                          }}
+                                        >
+                                          <i className="fas fa-eye me-1"></i>
+                                          Detay
+                                        </button>
+                                        {!sanitizedNote && <span className="text-muted small"></span>}
+                                      </div>
+                                    )}
+                                  </td>
+                                </tr>
                               );
                             })}
                           </tbody>
@@ -1311,10 +1522,16 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                               : `${transfer.sourceWarehouse?.name || '-'} → ${transfer.destinationWarehouse?.name || '-'}`;
                           const statusMeta = getStatusMeta(transfer.approvalStatus);
                           const noteUpper = (transfer.approvalNote || '').toUpperCase();
-                          const isDeleteRequest = !!transfer.deleteRequest || noteUpper === 'DELETE_REQUEST' || noteUpper === 'SILME_TALEBI';
-                          const sanitizedNote = (noteUpper === 'START_REQUEST' || noteUpper === 'DELETE_REQUEST' || noteUpper === 'SILME_TALEBI')
-                            ? ''
-                            : transfer.approvalNote;
+                          const isDeleteRequest =
+                            !!transfer.deleteRequest ||
+                            noteUpper === 'DELETE_REQUEST' ||
+                            noteUpper === 'SILME_TALEBI';
+                          const sanitizedNote =
+                            noteUpper === 'START_REQUEST' ||
+                            noteUpper === 'DELETE_REQUEST' ||
+                            noteUpper === 'SILME_TALEBI'
+                              ? ''
+                              : transfer.approvalNote;
                           return (
                             <div key={transfer.id} className="my-requests-card card border-0">
                               <div className="card-body">
@@ -1322,10 +1539,12 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                                   <div>
                                     <div className="my-requests-card__title">Transfer #{transfer.id}</div>
                                     <small className="my-requests-card__meta">
-                                      {transfer.transferType === 'CUSTOMER_DELIVERY' ? 'Müşteri Sevkiyatı' : 'Depo - Depo'}
+                                      {transfer.transferType === 'CUSTOMER_DELIVERY'
+                                        ? 'Müşteri Sevkiyatı'
+                                        : 'Depo - Depo'}
                                     </small>
                                   </div>
-                                    <span className={`my-requests-pill badge bg-${statusMeta.className}`}>
+                                  <span className={`my-requests-pill badge bg-${statusMeta.className}`}>
                                     <i className={`fas ${statusMeta.icon} me-1`}></i>
                                     {statusMeta.label}
                                   </span>
@@ -1349,12 +1568,13 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                                     <i className="fas fa-calendar"></i>
                                     {formatDate(transfer.approvalRequestedAt || transfer.transferDate)}
                                   </div>
-                                  {transfer.transferType === 'CUSTOMER_DELIVERY' && transfer.customerPhone && (
-                                    <div className="my-requests-card__meta-row">
-                                      <i className="fas fa-phone"></i>
-                                      {transfer.customerPhone}
-                                    </div>
-                                  )}
+                                  {transfer.transferType === 'CUSTOMER_DELIVERY' &&
+                                    transfer.customerPhone && (
+                                      <div className="my-requests-card__meta-row">
+                                        <i className="fas fa-phone"></i>
+                                        {transfer.customerPhone}
+                                      </div>
+                                    )}
                                   {isDeleteRequest && (
                                     <div className="my-requests-card__meta-row">
                                       <i className="fas fa-trash text-muted"></i>
@@ -1365,26 +1585,37 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                                 {transfer.items && transfer.items.length > 0 && (
                                   <div className="mb-3">
                                     <div className="small text-muted mb-1">Ürünler</div>
-                                    {transfer.items.slice(0, 2).map(item => (
+                                    {transfer.items.slice(0, 2).map((item) => (
                                       <div
                                         key={`${transfer.id}-${item.id}`}
                                         className="d-flex justify-content-between align-items-center small bg-light rounded-pill px-3 py-1 mb-1"
                                       >
-                                        <span className="text-truncate me-2">{item.product?.name || 'Ürün'}</span>
-                                        <span className="badge bg-primary d-inline-flex align-items-center justify-content-center" style={{ minWidth: '3.25rem' }}>
+                                        <span className="text-truncate me-2">
+                                          {item.product?.name || 'Ürün'}
+                                        </span>
+                                        <span
+                                          className="badge bg-primary d-inline-flex align-items-center justify-content-center"
+                                          style={{ minWidth: '3.25rem' }}
+                                        >
                                           {item.quantity}
                                         </span>
                                       </div>
                                     ))}
                                     {transfer.items.length > 2 && (
-                                      <small className="text-muted">+ {transfer.items.length - 2} ürün daha</small>
+                                      <small className="text-muted">
+                                        + {transfer.items.length - 2} ürün daha
+                                      </small>
                                     )}
                                   </div>
                                 )}
                                 <button
                                   className="btn btn-outline-primary btn-sm w-100 mb-2"
                                   onClick={async () => {
-                                    setRequestDetailModal({ show: true, payload: transfer, context: 'transfer' });
+                                    setRequestDetailModal({
+                                      show: true,
+                                      payload: transfer,
+                                      context: 'transfer',
+                                    });
                                     try {
                                       const photos = {};
                                       if (Array.isArray(transfer.items)) {
@@ -1392,7 +1623,9 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                                           transfer.items.map(async (item) => {
                                             if (!item.id) return;
                                             try {
-                                              const resp = await axios.get(`/api/stock-transfer-items/${item.id}/photo`);
+                                              const resp = await axios.get(
+                                                `/api/stock-transfer-items/${item.id}/photo`
+                                              );
                                               photos[item.id] = resp.data;
                                             } catch {
                                               // ignore missing
@@ -1402,7 +1635,10 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                                       }
                                       setTransferDetailPhotos(photos);
                                     } catch (e) {
-                                      console.error('Error loading transfer photos for mobile approval detail', e);
+                                      console.error(
+                                        'Error loading transfer photos for mobile approval detail',
+                                        e
+                                      );
                                       setTransferDetailPhotos({});
                                     }
                                   }}
@@ -1415,7 +1651,13 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                                     <>
                                       <button
                                         className="btn btn-success btn-sm flex-fill"
-                                        onClick={() => handleApproveTransfer(transfer.id, transfer.approvalNote, transfer.deleteRequest)}
+                                        onClick={() =>
+                                          handleApproveTransfer(
+                                            transfer.id,
+                                            transfer.approvalNote,
+                                            transfer.deleteRequest
+                                          )
+                                        }
                                         disabled={transferProcessing === transfer.id}
                                       >
                                         {transferProcessing === transfer.id ? (
@@ -1429,7 +1671,14 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                                       </button>
                                       <button
                                         className="btn btn-outline-danger btn-sm flex-fill"
-                                        onClick={() => setRejectionModal({ show: true, id: transfer.id, reason: '', type: 'transfer' })}
+                                        onClick={() =>
+                                          setRejectionModal({
+                                            show: true,
+                                            id: transfer.id,
+                                            reason: '',
+                                            type: 'transfer',
+                                          })
+                                        }
                                         disabled={transferProcessing === transfer.id}
                                       >
                                         <i className="fas fa-times me-1"></i>
@@ -1444,9 +1693,13 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                                           onClick={() =>
                                             setNotesModal({
                                               show: true,
-                                              title: transfer.approvalStatus === 'REJECTED' ? 'Reddetme Nedeni' : 'Onay Notu',
+                                              title:
+                                                transfer.approvalStatus === 'REJECTED'
+                                                  ? 'Reddetme Nedeni'
+                                                  : 'Onay Notu',
                                               content: sanitizedNote,
-                                              type: transfer.approvalStatus === 'REJECTED' ? 'danger' : 'info'
+                                              type:
+                                                transfer.approvalStatus === 'REJECTED' ? 'danger' : 'info',
                                             })
                                           }
                                         >
@@ -1455,7 +1708,9 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                                         </button>
                                       )}
                                       {!sanitizedNote && (
-                                        <span className="text-muted small text-center d-block flex-fill">-</span>
+                                        <span className="text-muted small text-center d-block flex-fill">
+                                          -
+                                        </span>
                                       )}
                                     </>
                                   )}
@@ -1482,188 +1737,214 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
       </div>
 
       {requestDetailModal.show && requestDetailModal.payload && (
-        <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1065 }}>
+        <div
+          className="modal show d-block"
+          tabIndex="-1"
+          style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1065 }}
+        >
           <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable">
             <div className="modal-content border-0 shadow-lg rounded-4">
               <div className="modal-header bg-primary text-white">
                 <h5 className="modal-title">
                   <i className="fas fa-eye me-2"></i>
-                  {requestDetailModal.context === 'transfer' ? 'Transfer Talebi Detayı' : 'Stok Talebi Detayı'}
+                  {requestDetailModal.context === 'transfer'
+                    ? 'Transfer Talebi Detayı'
+                    : 'Stok Talebi Detayı'}
                 </h5>
-                <button type="button" className="btn-close btn-close-white" onClick={() => setRequestDetailModal({ show: false, payload: null, context: 'stock' })}></button>
+                <button
+                  type="button"
+                  className="btn-close btn-close-white"
+                  onClick={() => setRequestDetailModal({ show: false, payload: null, context: 'stock' })}
+                ></button>
               </div>
               <div className="modal-body">
-                {requestDetailModal.context === 'transfer' ? (
-                  (() => {
-                    const t = requestDetailModal.payload;
-                    const items = Array.isArray(t.items) ? t.items : [];
-                    const routeLabel =
-                      t.transferType === 'CUSTOMER_DELIVERY'
-                        ? `${t.sourceWarehouse?.name || '-'} → ${t.customerFullName || 'Müşteri'}`
-                        : `${t.sourceWarehouse?.name || '-'} → ${t.destinationWarehouse?.name || '-'}`;
-                    const sourceType = (t.sourceWarehouse?.warehouseType || '').toUpperCase();
-                    const isEmanetSource = sourceType.includes('EMANET');
-                    const statusMeta = getStatusMeta(t.approvalStatus || t.status);
-                    return (
-                      <>
-                        <div className="mb-3">
-                          <small className="text-muted text-uppercase d-block">Transfer</small>
-                          <div className="fw-semibold">Transfer {t.id} • {routeLabel}</div>
-                          <small className="text-muted">{formatDate(t.approvalRequestedAt || t.transferDate)}</small>
-                        </div>
-                        {t.transferType === 'CUSTOMER_DELIVERY' && t.customerAddress && (
+                {requestDetailModal.context === 'transfer'
+                  ? (() => {
+                      const t = requestDetailModal.payload;
+                      const items = Array.isArray(t.items) ? t.items : [];
+                      const routeLabel =
+                        t.transferType === 'CUSTOMER_DELIVERY'
+                          ? `${t.sourceWarehouse?.name || '-'} → ${t.customerFullName || 'Müşteri'}`
+                          : `${t.sourceWarehouse?.name || '-'} → ${t.destinationWarehouse?.name || '-'}`;
+                      const sourceType = (t.sourceWarehouse?.warehouseType || '').toUpperCase();
+                      const isEmanetSource = sourceType.includes('EMANET');
+                      const statusMeta = getStatusMeta(t.approvalStatus || t.status);
+                      return (
+                        <>
                           <div className="mb-3">
-                            <small className="text-muted text-uppercase d-block">Adres</small>
+                            <small className="text-muted text-uppercase d-block">Transfer</small>
                             <div className="fw-semibold">
-                              <i className="fas fa-map-marker-alt me-1 text-muted"></i>
-                              {t.customerAddress}
+                              Transfer {t.id} • {routeLabel}
                             </div>
+                            <small className="text-muted">
+                              {formatDate(t.approvalRequestedAt || t.transferDate)}
+                            </small>
                           </div>
-                        )}
-                        <div className="mb-3">
-                          <small className="text-muted text-uppercase d-block">Durum</small>
-                          <span className={`badge bg-${statusMeta.className}`}>
-                            <i className={`fas ${statusMeta.icon} me-1`}></i>
-                            {statusMeta.label}
-                          </span>
-                        </div>
-                        <div className="mb-3">
-                          <small className="text-muted text-uppercase d-block mb-1">Ürünler</small>
-                          {items.length === 0 ? (
-                            <span className="text-muted small">Ürün bilgisi bulunamadı</span>
-                          ) : (
-                            <ul className="list-group list-group-flush">
-                              {items.map((item, idx) => {
-                                const photoMeta = transferDetailPhotos[item.id];
-                                const thumbUrl = photoMeta?.thumbnailUrl || photoMeta?.viewUrl;
-                                const hasPhoto = !!thumbUrl;
-                                return (
-                                  <li
-                                    key={`${t.id}-detail-${item.id || idx}`}
-                                    className="list-group-item px-0 d-flex justify-content-between align-items-center"
-                                  >
-                                    <div className="d-flex align-items-center gap-2">
-                                      <div className="flex-shrink-0">
-                                        {hasPhoto ? (
-                                          <div
-                                            className="border rounded bg-white shadow-sm"
-                                            style={{
-                                              width: 40,
-                                              height: 40,
-                                              overflow: 'hidden',
-                                              cursor: 'pointer'
-                                            }}
-                                            title="Fotoğrafı büyüt"
-                                            onClick={() => openTransferLightbox(t, items, transferDetailPhotos, item.id)}
-                                          >
-                                            <img
-                                              src={thumbUrl}
-                                              alt="Ürün fotoğrafı"
-                                              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                            />
-                                          </div>
-                                        ) : (
-                                          <div
-                                            className="border rounded bg-light d-flex align-items-center justify-content-center text-muted"
-                                            style={{ width: 40, height: 40, fontSize: '0.65rem' }}
-                                          >
-                                            Yok
-                                          </div>
-                                        )}
-                                      </div>
-                                      <div>
-                                        <div className="fw-semibold small">{item.product?.name || '-'}</div>
-                                        <small className="text-muted d-block">{item.product?.sku || '-'}</small>
-                                        {isEmanetSource && item.customerName && (
-                                          <small className="badge text-bg-light border mt-1">
-                                            <i className="fas fa-user me-1"></i>
-                                            {item.customerName}
-                                            {item.customerPhone ? ` • ${item.customerPhone}` : ''}
-                                          </small>
-                                        )}
-                                      </div>
-                                    </div>
-                                    <span
-                                      className="badge bg-primary d-inline-flex align-items-center justify-content-center"
-                                      style={{ minWidth: '3.25rem' }}
-                                    >
-                                      {item.quantity}
-                                    </span>
-                                  </li>
-                                );
-                              })}
-                            </ul>
+                          {t.transferType === 'CUSTOMER_DELIVERY' && t.customerAddress && (
+                            <div className="mb-3">
+                              <small className="text-muted text-uppercase d-block">Adres</small>
+                              <div className="fw-semibold">
+                                <i className="fas fa-map-marker-alt me-1 text-muted"></i>
+                                {t.customerAddress}
+                              </div>
+                            </div>
                           )}
-                        </div>
-                        {t.approvalNote && (
-                          <div className="alert alert-info small mb-0">
-                            <i className="fas fa-sticky-note me-1"></i>
-                            {t.approvalNote}
-                          </div>
-                        )}
-                        {t.rejectionReason && (
-                          <div className="alert alert-danger small mt-2 mb-0">
-                            <i className="fas fa-exclamation-circle me-1"></i>
-                            {t.rejectionReason}
-                          </div>
-                        )}
-                      </>
-                    );
-                  })()
-                ) : (
-                  (() => {
-                    const r = requestDetailModal.payload;
-                    const statusMeta = getStatusMeta(r.status);
-                    return (
-                      <>
-                        <div className="mb-3">
-                          <small className="text-muted text-uppercase d-block">Ürün</small>
-                          <div className="fw-semibold">{r.stock?.product?.name || r.productName || '-'}</div>
-                          <small className="text-muted">{r.stock?.product?.sku || r.productSku || '-'}</small>
-                        </div>
-                        <div className="mb-3">
-                          <small className="text-muted text-uppercase d-block">Depo</small>
-                          <div className="fw-semibold">{r.stock?.warehouse?.name || r.warehouseName || '-'}</div>
-                        </div>
-                        <div className="row g-2 mb-3">
-                          <div className="col-6">
-                            <small className="text-muted text-uppercase d-block">Miktar</small>
-                            <div className="fw-semibold">{r.quantity}</div>
-                          </div>
-                          <div className="col-6">
+                          <div className="mb-3">
                             <small className="text-muted text-uppercase d-block">Durum</small>
                             <span className={`badge bg-${statusMeta.className}`}>
                               <i className={`fas ${statusMeta.icon} me-1`}></i>
                               {statusMeta.label}
                             </span>
                           </div>
-                        </div>
-                        <div className="mb-3">
-                          <small className="text-muted text-uppercase d-block">Talep Tarihi</small>
-                          <div className="fw-semibold">{formatDate(r.requestedAt || r.createdAt)}</div>
-                          {r.reviewedAt && (
-                            <small className="text-muted">Güncelleme: {formatDate(r.reviewedAt)}</small>
+                          <div className="mb-3">
+                            <small className="text-muted text-uppercase d-block mb-1">Ürünler</small>
+                            {items.length === 0 ? (
+                              <span className="text-muted small">Ürün bilgisi bulunamadı</span>
+                            ) : (
+                              <ul className="list-group list-group-flush">
+                                {items.map((item, idx) => {
+                                  const photoMeta = transferDetailPhotos[item.id];
+                                  const thumbUrl = photoMeta?.thumbnailUrl || photoMeta?.viewUrl;
+                                  const hasPhoto = !!thumbUrl;
+                                  return (
+                                    <li
+                                      key={`${t.id}-detail-${item.id || idx}`}
+                                      className="list-group-item px-0 d-flex justify-content-between align-items-center"
+                                    >
+                                      <div className="d-flex align-items-center gap-2">
+                                        <div className="flex-shrink-0">
+                                          {hasPhoto ? (
+                                            <div
+                                              className="border rounded bg-white shadow-sm"
+                                              style={{
+                                                width: 40,
+                                                height: 40,
+                                                overflow: 'hidden',
+                                                cursor: 'pointer',
+                                              }}
+                                              title="Fotoğrafı büyüt"
+                                              onClick={() =>
+                                                openTransferLightbox(t, items, transferDetailPhotos, item.id)
+                                              }
+                                            >
+                                              <img
+                                                src={thumbUrl}
+                                                alt="Ürün fotoğrafı"
+                                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                              />
+                                            </div>
+                                          ) : (
+                                            <div
+                                              className="border rounded bg-light d-flex align-items-center justify-content-center text-muted"
+                                              style={{ width: 40, height: 40, fontSize: '0.65rem' }}
+                                            >
+                                              Yok
+                                            </div>
+                                          )}
+                                        </div>
+                                        <div>
+                                          <div className="fw-semibold small">{item.product?.name || '-'}</div>
+                                          <small className="text-muted d-block">
+                                            {item.product?.sku || '-'}
+                                          </small>
+                                          {isEmanetSource && item.customerName && (
+                                            <small className="badge text-bg-light border mt-1">
+                                              <i className="fas fa-user me-1"></i>
+                                              {item.customerName}
+                                              {item.customerPhone ? ` • ${item.customerPhone}` : ''}
+                                            </small>
+                                          )}
+                                        </div>
+                                      </div>
+                                      <span
+                                        className="badge bg-primary d-inline-flex align-items-center justify-content-center"
+                                        style={{ minWidth: '3.25rem' }}
+                                      >
+                                        {item.quantity}
+                                      </span>
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            )}
+                          </div>
+                          {t.approvalNote && (
+                            <div className="alert alert-info small mb-0">
+                              <i className="fas fa-sticky-note me-1"></i>
+                              {t.approvalNote}
+                            </div>
                           )}
-                        </div>
-                        {r.notes && (
-                          <div className="alert alert-info small mb-0">
-                            <i className="fas fa-sticky-note me-1"></i>
-                            {r.notes}
+                          {t.rejectionReason && (
+                            <div className="alert alert-danger small mt-2 mb-0">
+                              <i className="fas fa-exclamation-circle me-1"></i>
+                              {t.rejectionReason}
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()
+                  : (() => {
+                      const r = requestDetailModal.payload;
+                      const statusMeta = getStatusMeta(r.status);
+                      return (
+                        <>
+                          <div className="mb-3">
+                            <small className="text-muted text-uppercase d-block">Ürün</small>
+                            <div className="fw-semibold">
+                              {r.stock?.product?.name || r.productName || '-'}
+                            </div>
+                            <small className="text-muted">
+                              {r.stock?.product?.sku || r.productSku || '-'}
+                            </small>
                           </div>
-                        )}
-                        {r.rejectionReason && (
-                          <div className="alert alert-danger small mt-2 mb-0">
-                            <i className="fas fa-times-circle me-1"></i>
-                            {r.rejectionReason}
+                          <div className="mb-3">
+                            <small className="text-muted text-uppercase d-block">Depo</small>
+                            <div className="fw-semibold">
+                              {r.stock?.warehouse?.name || r.warehouseName || '-'}
+                            </div>
                           </div>
-                        )}
-                      </>
-                    );
-                  })()
-                )}
+                          <div className="row g-2 mb-3">
+                            <div className="col-6">
+                              <small className="text-muted text-uppercase d-block">Miktar</small>
+                              <div className="fw-semibold">{r.quantity}</div>
+                            </div>
+                            <div className="col-6">
+                              <small className="text-muted text-uppercase d-block">Durum</small>
+                              <span className={`badge bg-${statusMeta.className}`}>
+                                <i className={`fas ${statusMeta.icon} me-1`}></i>
+                                {statusMeta.label}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="mb-3">
+                            <small className="text-muted text-uppercase d-block">Talep Tarihi</small>
+                            <div className="fw-semibold">{formatDate(r.requestedAt || r.createdAt)}</div>
+                            {r.reviewedAt && (
+                              <small className="text-muted">Güncelleme: {formatDate(r.reviewedAt)}</small>
+                            )}
+                          </div>
+                          {r.notes && (
+                            <div className="alert alert-info small mb-0">
+                              <i className="fas fa-sticky-note me-1"></i>
+                              {r.notes}
+                            </div>
+                          )}
+                          {r.rejectionReason && (
+                            <div className="alert alert-danger small mt-2 mb-0">
+                              <i className="fas fa-times-circle me-1"></i>
+                              {r.rejectionReason}
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
               </div>
               <div className="modal-footer bg-light">
-                <button type="button" className="btn btn-secondary" onClick={() => setRequestDetailModal({ show: false, payload: null, context: 'stock' })}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setRequestDetailModal({ show: false, payload: null, context: 'stock' })}
+                >
                   <i className="fas fa-times me-2"></i>
                   Kapat
                 </button>
@@ -1701,8 +1982,7 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                 onClick={() =>
                   setTransferLightbox((prev) => ({
                     ...prev,
-                    index:
-                      (prev.index - 1 + prev.images.length) % prev.images.length
+                    index: (prev.index - 1 + prev.images.length) % prev.images.length,
                   }))
                 }
               >
@@ -1713,7 +1993,7 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                 style={{
                   maxWidth: '90vw',
                   maxHeight: '80vh',
-                  overflow: 'hidden'
+                  overflow: 'hidden',
                 }}
               >
                 <img
@@ -1722,7 +2002,7 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                   style={{
                     maxWidth: '100%',
                     maxHeight: '80vh',
-                    objectFit: 'contain'
+                    objectFit: 'contain',
                   }}
                 />
               </div>
@@ -1732,7 +2012,7 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                 onClick={() =>
                   setTransferLightbox((prev) => ({
                     ...prev,
-                    index: (prev.index + 1) % prev.images.length
+                    index: (prev.index + 1) % prev.images.length,
                   }))
                 }
               >
@@ -1750,7 +2030,11 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
 
       {/* Rejection Reason Modal */}
       {rejectionModal.show && (
-        <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.7)', zIndex: 1060 }}>
+        <div
+          className="modal show d-block"
+          tabIndex="-1"
+          style={{ backgroundColor: 'rgba(0,0,0,0.7)', zIndex: 1060 }}
+        >
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content">
               <div className="modal-header bg-danger text-white">
@@ -1785,9 +2069,7 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                     placeholder="Reddetme nedenini buraya yazın..."
                     maxLength="500"
                   />
-                  <small className="text-muted">
-                    {rejectionModal.reason.length}/500 karakter
-                  </small>
+                  <small className="text-muted">{rejectionModal.reason.length}/500 karakter</small>
                 </div>
               </div>
               <div className="modal-footer">
@@ -1834,9 +2116,10 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
               <div
                 className={`modal-header text-white border-0`}
                 style={{
-                  background: notesModal.type === 'danger'
-                    ? 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)'
-                    : 'linear-gradient(135deg, #0dcaf0 0%, #0891b2 100%)'
+                  background:
+                    notesModal.type === 'danger'
+                      ? 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)'
+                      : 'linear-gradient(135deg, #0dcaf0 0%, #0891b2 100%)',
                 }}
               >
                 <h5 className="modal-title d-flex align-items-center">
@@ -1846,7 +2129,7 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                       width: '40px',
                       height: '40px',
                       background: 'rgba(255,255,255,0.2)',
-                      backdropFilter: 'blur(10px)'
+                      backdropFilter: 'blur(10px)',
                     }}
                   >
                     <i className={`fas ${notesModal.icon}`}></i>
@@ -1870,26 +2153,27 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
                 <div
                   className={`alert border-0 mb-0`}
                   style={{
-                    background: notesModal.type === 'danger'
-                      ? 'linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)'
-                      : 'linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%)',
-                    borderLeft: `4px solid ${notesModal.type === 'danger' ? '#dc3545' : '#0dcaf0'}`
+                    background:
+                      notesModal.type === 'danger'
+                        ? 'linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)'
+                        : 'linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%)',
+                    borderLeft: `4px solid ${notesModal.type === 'danger' ? '#dc3545' : '#0dcaf0'}`,
                   }}
                 >
                   <div className="d-flex">
-                    <div
-                      className="flex-shrink-0 me-3"
-                      style={{ fontSize: '1.5rem', opacity: 0.7 }}
-                    >
+                    <div className="flex-shrink-0 me-3" style={{ fontSize: '1.5rem', opacity: 0.7 }}>
                       <i className={`fas ${notesModal.icon}`}></i>
                     </div>
                     <div className="flex-grow-1">
-                      <p className="mb-0" style={{
-                        whiteSpace: 'pre-wrap',
-                        wordBreak: 'break-word',
-                        lineHeight: '1.6',
-                        color: '#1f2937'
-                      }}>
+                      <p
+                        className="mb-0"
+                        style={{
+                          whiteSpace: 'pre-wrap',
+                          wordBreak: 'break-word',
+                          lineHeight: '1.6',
+                          color: '#1f2937',
+                        }}
+                      >
                         {notesModal.content}
                       </p>
                     </div>
@@ -1915,4 +2199,3 @@ const StockRequestApprovalModal = ({ onClose, onApprove, initialTab = 'stock' })
 };
 
 export default StockRequestApprovalModal;
-
