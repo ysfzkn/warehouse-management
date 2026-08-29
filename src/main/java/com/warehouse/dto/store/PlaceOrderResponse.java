@@ -11,4 +11,11 @@ public class PlaceOrderResponse {
     private BigDecimal grandTotal;
     private String status;
     private String paymentUrl;
+
+    /**
+     * One-time proof of ownership for {@code POST /api/store/payment/initialize}.
+     * Returned only here, to the browser that placed the order; never readable from
+     * any other endpoint.
+     */
+    private String paymentToken;
 }

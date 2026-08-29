@@ -167,6 +167,10 @@ public class CategoryController {
     @PostMapping
     @org.springframework.transaction.annotation.Transactional
     public ResponseEntity<CategoryDto> createCategory(@Valid @RequestBody Category category) {
+        // Mass-assignment guard: the request body is bound straight onto the JPA
+        // entity, so a caller-supplied id would turn this insert into an update of
+        // whatever row that id points at. The path is the only source of identity.
+        category.setId(null);
         // Ensure this is always a main category (no parent)
         category.setParent(null);
         Category createdCategory = categoryService.createCategory(category);

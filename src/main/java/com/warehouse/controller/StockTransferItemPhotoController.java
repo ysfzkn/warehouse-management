@@ -1,5 +1,6 @@
 package com.warehouse.controller;
 
+import com.warehouse.security.UploadValidator;
 import com.warehouse.entity.StockTransferItem;
 import com.warehouse.entity.StockTransferItemPhoto;
 import com.warehouse.exception.ErrorCode;
@@ -52,10 +53,14 @@ public class StockTransferItemPhotoController {
             throw new WarehouseManagementException(ErrorCode.REQUIRED_FIELD_MISSING, "Fotoğraf dosyası boş olamaz");
         }
 
-        String contentType = file.getContentType();
-        if (contentType == null || !contentType.startsWith("image/")) {
-            throw new WarehouseManagementException(ErrorCode.INVALID_VALUE, "Sadece görüntü dosyalarına izin verilir");
+        // Magic-byte identification: the declared Content-Type is caller-controlled.
+        UploadValidator.ImageType imageType;
+        try {
+            imageType = UploadValidator.validateImage(file, 12L * 1024 * 1024);
+        } catch (UploadValidator.InvalidUploadException e) {
+            throw new WarehouseManagementException(ErrorCode.INVALID_VALUE, e.getMessage());
         }
+        String contentType = imageType.contentType;
 
         StockTransferItem item = findItemOrThrow(itemId);
 
@@ -78,7 +83,7 @@ public class StockTransferItemPhotoController {
             PhotoStorageService.StoredPhoto stored = photoStorageService.storeItemPhoto(
                     item.getTransfer().getId(),
                     item.getId(),
-                    file.getOriginalFilename(),
+                    "upload." + imageType.extension,
                     contentType,
                     is
             );

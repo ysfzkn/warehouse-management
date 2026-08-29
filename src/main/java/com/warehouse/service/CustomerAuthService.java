@@ -8,6 +8,9 @@ public interface CustomerAuthService {
     CustomerLoginResponse register(CustomerRegisterRequest request);
     CustomerLoginResponse login(CustomerLoginRequest request, String ipAddress);
     CustomerLoginResponse refreshToken(String refreshToken);
+
+    /** Marks a refresh token as revoked so it can no longer mint access tokens (logout). */
+    void revokeRefreshToken(String refreshToken);
     void verifyEmail(String token);
     CustomerLoginResponse loginWithGoogle(String code, String redirectUri, String ipAddress);
     void requestPasswordReset(String email);

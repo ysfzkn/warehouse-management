@@ -209,6 +209,23 @@ public class Order {
     @Column(name = "bank_transfer_deadline")
     private LocalDateTime bankTransferDeadline;
 
+    /**
+     * Proof of ownership for the public payment-initialisation endpoint.
+     *
+     * <p>Guests pay without an account, so that endpoint cannot require a session — but
+     * it also must not accept a bare, guessable {@code orderId}. Checkout mints a
+     * high-entropy token here and returns it once, to the browser that placed the order;
+     * initialising payment requires it (or an authenticated customer who owns the order).
+     * Never serialised: it is handed over in the checkout response only.</p>
+     */
+    @JsonIgnore
+    @Column(name = "payment_access_token", length = 64)
+    private String paymentAccessToken;
+
+    @JsonIgnore
+    @Column(name = "payment_access_token_expires_at")
+    private LocalDateTime paymentAccessTokenExpiresAt;
+
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @JsonIgnore
     private List<OrderItem> items;

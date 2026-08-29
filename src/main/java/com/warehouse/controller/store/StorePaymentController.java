@@ -8,6 +8,7 @@ import com.warehouse.service.payment.VirtualPosGateway;
 import com.warehouse.service.payment.protocol.BankPosProtocol;
 import com.warehouse.service.payment.protocol.BankPosProtocolFactory;
 import com.warehouse.security.JwtService;
+import com.warehouse.util.CustomerTokenExtractor;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
@@ -33,6 +34,7 @@ public class StorePaymentController {
     private final com.warehouse.service.PaymentConfigService paymentConfigService;
     private final com.warehouse.repository.OrderRepository orderRepository;
     private final com.warehouse.repository.PaymentTransactionRepository paymentRepository;
+    private final com.warehouse.security.ClientIpResolver clientIpResolver;
 
     @org.springframework.beans.factory.annotation.Value("${app.base-url:http://localhost:3000}")
     private String appBaseUrl;
@@ -43,7 +45,9 @@ public class StorePaymentController {
                                    com.warehouse.service.SiteSettingService siteSettingService,
                                    com.warehouse.service.PaymentConfigService paymentConfigService,
                                    com.warehouse.repository.OrderRepository orderRepository,
-                                   com.warehouse.repository.PaymentTransactionRepository paymentRepository) {
+                                   com.warehouse.repository.PaymentTransactionRepository paymentRepository,
+                                   com.warehouse.security.ClientIpResolver clientIpResolver) {
+        this.clientIpResolver = clientIpResolver;
         this.paymentService = paymentService;
         this.jwtService = jwtService;
         this.gatewayConfigRepo = gatewayConfigRepo;
@@ -88,9 +92,17 @@ public class StorePaymentController {
             }
         }
         String idempotencyKey = (String) body.get("idempotencyKey");
-        String ip = request.getRemoteAddr();
+        String ip = clientIpResolver.resolve(request);
 
-        return ResponseEntity.ok(paymentService.initializePayment(orderId, paymentMethod, installmentCount, ip, idempotencyKey));
+        // Ownership proof: the signed-in customer, or the one-time token checkout handed
+        // back to the browser that placed the order. One of the two must line up with the
+        // order or the request is refused — see PaymentServiceImpl#requireOrderAccess.
+        Long customerId = CustomerTokenExtractor.extractCustomerId(request, jwtService);
+        String paymentToken = body.get("paymentToken") instanceof String s ? s : null;
+        PaymentCaller caller = PaymentCaller.of(customerId, paymentToken);
+
+        return ResponseEntity.ok(paymentService.initializePayment(
+                orderId, paymentMethod, installmentCount, ip, idempotencyKey, caller));
     }
 
     @PostMapping("/callback")

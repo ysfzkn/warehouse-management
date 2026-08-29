@@ -11,6 +11,7 @@ import com.warehouse.repository.ProductRepository;
 import com.warehouse.repository.ReviewImageRepository;
 import com.warehouse.repository.ReviewRepository;
 import com.warehouse.security.JwtService;
+import com.warehouse.security.UploadValidator;
 import com.warehouse.service.PhotoStorageService;
 import com.warehouse.util.CustomerTokenExtractor;
 import jakarta.servlet.http.HttpServletRequest;
@@ -37,6 +38,8 @@ import java.util.stream.Collectors;
 public class StoreReviewController {
 
     private static final int MAX_IMAGES = 5;
+    /** Per-photo ceiling; the 20 MB multipart limit is a global backstop, not a per-file one. */
+    private static final long MAX_IMAGE_BYTES = 8L * 1024 * 1024;
 
     private final ReviewRepository reviewRepository;
     private final ReviewImageRepository reviewImageRepository;
@@ -216,19 +219,29 @@ public class StoreReviewController {
         if (customerId == null || r.getCustomer() == null || !customerId.equals(r.getCustomer().getId())) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Yetkiniz yok."));
         }
-        if (file == null || file.isEmpty() || file.getContentType() == null || !file.getContentType().startsWith("image/")) {
-            return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE).body(Map.of("error", "Sadece görsel yüklenebilir."));
+        // The declared Content-Type is a client-supplied header and proves nothing: a
+        // request claiming "image/svg+xml" used to be stored as .svg and served back with
+        // that type from this origin, i.e. a scriptable document — stored XSS. The bytes
+        // are what decide, and SVG is not on the list.
+        UploadValidator.ImageType imageType;
+        try {
+            imageType = UploadValidator.validateImage(file, MAX_IMAGE_BYTES);
+        } catch (UploadValidator.InvalidUploadException e) {
+            return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE).body(Map.of("error", e.getMessage()));
         }
         if (reviewImageRepository.countByReviewId(id) >= MAX_IMAGES) {
             return ResponseEntity.badRequest().body(Map.of("error", "En fazla " + MAX_IMAGES + " görsel ekleyebilirsiniz."));
         }
         try {
-            String key = photoStorageService.storeDocument("reviews/" + id, file.getOriginalFilename(), file.getContentType(), file.getInputStream());
+            // Extension and content type both come from the detected format, never from
+            // the uploader, so the stored object cannot masquerade as something else.
+            String key = photoStorageService.storeDocument("reviews/" + id,
+                    "upload." + imageType.extension, imageType.contentType, file.getInputStream());
             ReviewImage img = new ReviewImage();
             img.setReview(r);
-            img.setFileName(file.getOriginalFilename());
+            img.setFileName("upload." + imageType.extension);
             img.setStorageKey(key);
-            img.setContentType(file.getContentType());
+            img.setContentType(imageType.contentType);
             img.setSizeBytes(file.getSize());
             img.setSortOrder((int) reviewImageRepository.countByReviewId(id));
             ReviewImage savedImg = reviewImageRepository.save(img);
@@ -265,13 +278,21 @@ public class StoreReviewController {
         try (java.io.InputStream is = photoStorageService.openDocumentStream(img.getStorageKey())) {
             byte[] bytes = is.readAllBytes();
             HttpHeaders headers = new HttpHeaders();
+            // Derived from the stored key's extension rather than echoed from the row, so
+            // even a legacy record written before upload validation cannot be replayed as
+            // an active content type.
             try {
-                headers.setContentType(MediaType.parseMediaType(img.getContentType() != null ? img.getContentType() : "image/jpeg"));
+                headers.setContentType(MediaType.parseMediaType(
+                        UploadValidator.safeContentTypeFor(img.getStorageKey())));
             } catch (Exception ignored) {
                 headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
             }
             headers.setContentLength(bytes.length);
             headers.setCacheControl("public, max-age=86400");
+            // Belt and braces: even if a non-image somehow reaches this endpoint, the
+            // browser must not treat it as a document it can execute in our origin.
+            headers.set("X-Content-Type-Options", "nosniff");
+            headers.set("Content-Security-Policy", "default-src 'none'; sandbox");
             return new ResponseEntity<>(bytes, headers, HttpStatus.OK);
         } catch (Exception e) {
             return ResponseEntity.notFound().build();

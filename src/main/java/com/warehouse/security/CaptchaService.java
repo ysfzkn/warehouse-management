@@ -47,10 +47,23 @@ public class CaptchaService {
     @Value("${captcha.enabled:false}")
     private boolean enabled;
 
+    /** Behaviour when the CAPTCHA provider cannot be reached. Defaults to fail-closed. */
+    @Value("${captcha.fail-open:false}")
+    private boolean failOpen;
+
     /**
-     * Verifies the token with the provider. Returns true if the service is disabled or the
-     * secret is empty (no gating). Returns true on a network error — fail-open so it does
-     * not become an attack vector (the alternative, fail-close, causes production incidents).
+     * Verifies the token with the provider.
+     *
+     * <p>Returns true when CAPTCHA is switched off or unconfigured — it is a feature
+     * gate, not a hard dependency.</p>
+     *
+     * <p>On a provider outage the behaviour is controlled by {@code captcha.fail-open}.
+     * It used to be unconditionally fail-open, which handed an attacker a trivial bypass:
+     * make the verification call fail (or simply flood it until it times out) and every
+     * subsequent registration and password-reset request sails through unchecked. The
+     * default is now fail-closed, so an outage degrades into "please try again" rather
+     * than into "no CAPTCHA at all" — set {@code CAPTCHA_FAIL_OPEN=true} to trade that
+     * back for availability.</p>
      */
     public boolean verify(String token, String clientIp) {
         if (!enabled || secret == null || secret.isBlank()) {
@@ -79,8 +92,9 @@ public class CaptchaService {
             }
             return success;
         } catch (Exception e) {
-            log.error("[CAPTCHA] Doğrulama sırasında hata; fail-open (ip={}): {}", clientIp, e.getMessage());
-            return true; // fail-open
+            log.error("[CAPTCHA] Doğrulama sırasında hata (ip={}, failOpen={}): {}",
+                    clientIp, failOpen, e.getMessage());
+            return failOpen;
         }
     }
 }

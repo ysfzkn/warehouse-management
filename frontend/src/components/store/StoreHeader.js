@@ -194,6 +194,10 @@ export default function StoreHeader({ cart, settings }) {
   const fmtTRY = (v) => new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(v || 0);
 
   const handleLogout = () => {
+    // Revoke server-side first: the access token goes on the denylist and the refresh
+    // token is marked revoked in the database. Clearing localStorage alone left a
+    // 30-day refresh token usable by anyone who had copied it.
+    axios.post('/api/store/auth/logout').catch(() => {});
     localStorage.removeItem('customer_token');
     localStorage.removeItem('customer_refresh_token');
     localStorage.removeItem('customer_data');

@@ -14,11 +14,14 @@ import org.springframework.stereotype.Service;
 
 import java.security.Key;
 import java.security.MessageDigest;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.Objects;
 import java.time.OffsetDateTime;
 import java.util.Date;
+import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.UUID;
 
 @Service
 public class JwtService {
@@ -31,16 +34,22 @@ public class JwtService {
             "change-this-secret",
             "dev-secret",
             "dev-secret-change-in-production-min-32-chars!!",
+            "test-secret-change-in-production-min-32-chars!!",
             "secret",
             "your-secret-key",
-            "your-256-bit-secret"
+            "your-256-bit-secret",
+            "generate-a-random-64-char-string-here-use-openssl-rand"
     );
 
     private final SecurityProperties securityProperties;
+    private final TokenRevocationService revocationService;
     private final Key signingKey;
 
-    public JwtService(SecurityProperties securityProperties, Environment environment) {
+    public JwtService(SecurityProperties securityProperties,
+                      TokenRevocationService revocationService,
+                      Environment environment) {
         this.securityProperties = securityProperties;
+        this.revocationService = revocationService;
         byte[] keyBytes;
         String secret = Objects.toString(securityProperties.getJwtSecret(), "change-this-secret");
 
@@ -88,10 +97,16 @@ public class JwtService {
 
     public String generateToken(String username, String role) {
         OffsetDateTime now = OffsetDateTime.now();
-        OffsetDateTime exp = now.plusMinutes(securityProperties.getJwtExpirationMinutes());
+        OffsetDateTime exp = now.plusMinutes(securityProperties.resolvedJwtExpirationMinutes());
+        Map<String, Object> claims = new LinkedHashMap<>();
+        claims.put("role", role);
+        // Marks admin tokens explicitly so the filter can refuse to hand out admin
+        // authorities to anything that is not an admin token.
+        claims.put("userType", "admin");
         return Jwts.builder()
                 .setSubject(username)
-                .addClaims(Map.of("role", role))
+                .setId(UUID.randomUUID().toString())
+                .addClaims(claims)
                 .setIssuedAt(Date.from(now.toInstant()))
                 .setExpiration(Date.from(exp.toInstant()))
                 .signWith(signingKey, SignatureAlgorithm.HS256)
@@ -107,6 +122,7 @@ public class JwtService {
         OffsetDateTime exp = now.plusDays(securityProperties.getCustomerTokenExpirationDays());
         return Jwts.builder()
                 .setSubject(email)
+                .setId(UUID.randomUUID().toString())
                 .addClaims(Map.of(
                     "customerId", customerId,
                     "userType", "customer"
@@ -127,13 +143,44 @@ public class JwtService {
         } catch (Exception e) { return null; }
     }
 
+    /**
+     * Parse and validate a token. Beyond signature and expiry this also enforces the
+     * revocation denylist, so logout and post-password-reset invalidation actually
+     * terminate live sessions instead of waiting out the token's natural expiry.
+     *
+     * @throws io.jsonwebtoken.JwtException when the token is malformed, expired or revoked
+     */
     public Claims parseToken(String token) {
+        Claims claims = Jwts.parserBuilder()
+                .setSigningKey(signingKey)
+                .build()
+                .parseClaimsJws(token)
+                .getBody();
+        Instant issuedAt = claims.getIssuedAt() != null ? claims.getIssuedAt().toInstant() : null;
+        if (revocationService.isRevoked(claims.getId(), claims.getSubject(), issuedAt)) {
+            throw new io.jsonwebtoken.JwtException("Token revoked");
+        }
+        return claims;
+    }
+
+    /** Parses without the revocation check — used by logout to read the jti of the token it is revoking. */
+    public Claims parseIgnoringRevocation(String token) {
         return Jwts.parserBuilder()
                 .setSigningKey(signingKey)
                 .build()
                 .parseClaimsJws(token)
                 .getBody();
     }
+
+    /** Revoke the supplied token (logout). Silently ignores anything unparseable. */
+    public void revoke(String token) {
+        if (token == null || token.isBlank()) return;
+        try {
+            Claims claims = parseIgnoringRevocation(token);
+            Instant exp = claims.getExpiration() != null ? claims.getExpiration().toInstant() : null;
+            revocationService.revokeToken(claims.getId(), exp);
+        } catch (Exception ignored) {
+            // An unparseable token is already useless; nothing to revoke.
+        }
+    }
 }
-
-

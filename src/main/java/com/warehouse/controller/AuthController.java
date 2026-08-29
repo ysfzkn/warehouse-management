@@ -4,6 +4,8 @@ import com.warehouse.entity.User;
 import com.warehouse.security.AdminLoginAttemptTracker;
 import com.warehouse.security.JwtService;
 import com.warehouse.service.UserService;
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -64,5 +66,22 @@ public class AuthController {
                     return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                             .body(com.warehouse.constants.BusinessMessages.INVALID_CREDENTIALS);
                 });
+    }
+
+    /**
+     * Ends the session server-side.
+     *
+     * <p>Before this existed, "logging out" only deleted the token from the browser.
+     * A token copied beforehand — by an XSS payload, a shared machine, or a proxy log —
+     * stayed valid for its full lifetime with no way to stop it. The token is now added
+     * to a revocation denylist and rejected on the next request.</p>
+     */
+    @PostMapping("/logout")
+    public ResponseEntity<Map<String, String>> logout(HttpServletRequest request) {
+        String header = request.getHeader(HttpHeaders.AUTHORIZATION);
+        if (header != null && header.startsWith("Bearer ")) {
+            jwtService.revoke(header.substring(7));
+        }
+        return ResponseEntity.ok(Map.of("message", "Oturum kapatıldı."));
     }
 }

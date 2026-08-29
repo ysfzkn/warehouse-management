@@ -42,6 +42,7 @@ class PaymentServiceImplTest {
     @Mock private com.warehouse.service.InvoiceService invoiceService;
     @Mock private com.warehouse.service.notification.NotificationDispatchService notificationDispatchService;
     @Mock private org.springframework.context.ApplicationEventPublisher eventPublisher;
+    @Mock private com.warehouse.service.SiteSettingService siteSettingService;
 
     private PaymentServiceImpl paymentService;
 
@@ -49,7 +50,10 @@ class PaymentServiceImplTest {
     void setUp() {
         paymentService = new PaymentServiceImpl(paymentRepo, orderRepo, statusHistoryRepo,
             stockRepo, orderItemRepo, gatewayFactory, paymentProperties, gatewayConfigRepo, cartService, stockEventRepo,
-            invoiceService, notificationDispatchService, eventPublisher);
+            invoiceService, notificationDispatchService, eventPublisher, siteSettingService);
+
+        // Payment methods are enabled by default; individual tests can override.
+        lenient().when(siteSettingService.getBoolSetting(anyString(), anyBoolean())).thenReturn(true);
 
         PaymentProperties.IyzicoConfig iyzicoConfig = new PaymentProperties.IyzicoConfig();
         iyzicoConfig.setTimeoutMinutes(15);
@@ -86,7 +90,8 @@ class PaymentServiceImplTest {
             PaymentInitResult.builder().success(true).htmlContent("<html>form</html>").token("test-token").rawResponse(Map.of()).build()
         );
 
-        PaymentInitResult result = paymentService.initializePayment(order.getId(), "CREDIT_CARD", 1, "127.0.0.1", idempotencyKey);
+        PaymentInitResult result = paymentService.initializePayment(order.getId(), "CREDIT_CARD", 1, "127.0.0.1", idempotencyKey,
+            PaymentCaller.of(order.getCustomer().getId(), null));
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getHtmlContent()).contains("form");
@@ -110,7 +115,8 @@ class PaymentServiceImplTest {
         );
         when(orderRepo.save(any())).thenReturn(order);
 
-        PaymentInitResult result = paymentService.initializePayment(order.getId(), "BANK_TRANSFER", 1, "127.0.0.1", idempotencyKey);
+        PaymentInitResult result = paymentService.initializePayment(order.getId(), "BANK_TRANSFER", 1, "127.0.0.1", idempotencyKey,
+            PaymentCaller.of(order.getCustomer().getId(), null));
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getBankTransferReference()).startsWith("HVL");
@@ -130,7 +136,8 @@ class PaymentServiceImplTest {
         when(mockGateway.initializePayment(any())).thenReturn(PaymentInitResult.builder().success(true).rawResponse(Map.of()).build());
         when(orderRepo.save(any())).thenReturn(order);
 
-        paymentService.initializePayment(order.getId(), "DOOR_CASH", 1, "127.0.0.1", idempotencyKey);
+        paymentService.initializePayment(order.getId(), "DOOR_CASH", 1, "127.0.0.1", idempotencyKey,
+            PaymentCaller.of(order.getCustomer().getId(), null));
 
         verify(orderRepo).save(argThat(o -> o.getStatus() == OrderStatus.PREPARING));
         verify(statusHistoryRepo).save(any(OrderStatusHistory.class));
@@ -138,31 +145,164 @@ class PaymentServiceImplTest {
 
     @Test
     void should_return_existing_result_for_idempotent_success_key() {
+        Customer customer = TestDataFactory.createCustomer();
+        Order order = TestDataFactory.createOrder(customer);
         String key = "existing-key";
         PaymentTransaction existing = new PaymentTransaction();
         existing.setId(1L);
+        existing.setOrder(order);
         existing.setStatus(PaymentStatus.SUCCESS);
         existing.setToken("old-token");
 
+        when(orderRepo.findById(order.getId())).thenReturn(Optional.of(order));
         when(paymentRepo.findByIdempotencyKey(key)).thenReturn(Optional.of(existing));
 
-        PaymentInitResult result = paymentService.initializePayment(1L, "CREDIT_CARD", 1, "127.0.0.1", key);
+        PaymentInitResult result = paymentService.initializePayment(order.getId(), "CREDIT_CARD", 1, "127.0.0.1", key,
+            PaymentCaller.of(customer.getId(), null));
 
         assertThat(result.isSuccess()).isTrue();
-        verify(orderRepo, never()).findById(any());
+        assertThat(result.getToken()).isEqualTo("old-token");
+    }
+
+    /**
+     * The idempotency lookup is keyed only on a caller-supplied string. Replaying a key
+     * that belongs to somebody else's payment must not hand back their gateway token.
+     */
+    @Test
+    void should_reject_an_idempotency_key_belonging_to_another_order() {
+        Customer customer = TestDataFactory.createCustomer();
+        Order order = TestDataFactory.createOrder(customer);
+        Order someoneElsesOrder = TestDataFactory.createOrder(TestDataFactory.createCustomer());
+
+        String key = "guessed-key";
+        PaymentTransaction existing = new PaymentTransaction();
+        existing.setId(99L);
+        existing.setOrder(someoneElsesOrder);
+        existing.setStatus(PaymentStatus.SUCCESS);
+        existing.setToken("victim-gateway-token");
+
+        when(orderRepo.findById(order.getId())).thenReturn(Optional.of(order));
+        when(paymentRepo.findByIdempotencyKey(key)).thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> paymentService.initializePayment(order.getId(), "CREDIT_CARD", 1, "127.0.0.1", key,
+            PaymentCaller.of(customer.getId(), null)))
+            .isInstanceOf(WarehouseManagementException.class)
+            .satisfies(e -> assertThat(((WarehouseManagementException) e).getErrorCode())
+                .isEqualTo(ErrorCode.IDEMPOTENCY_CONFLICT));
     }
 
     @Test
     void should_throw_idempotency_conflict_for_failed_key() {
+        Customer customer = TestDataFactory.createCustomer();
+        Order order = TestDataFactory.createOrder(customer);
         String key = "failed-key";
         PaymentTransaction existing = new PaymentTransaction();
+        existing.setOrder(order);
         existing.setStatus(PaymentStatus.FAILED);
 
+        when(orderRepo.findById(order.getId())).thenReturn(Optional.of(order));
         when(paymentRepo.findByIdempotencyKey(key)).thenReturn(Optional.of(existing));
 
-        assertThatThrownBy(() -> paymentService.initializePayment(1L, "CREDIT_CARD", 1, "127.0.0.1", key))
+        assertThatThrownBy(() -> paymentService.initializePayment(order.getId(), "CREDIT_CARD", 1, "127.0.0.1", key,
+            PaymentCaller.of(customer.getId(), null)))
             .isInstanceOf(WarehouseManagementException.class)
             .satisfies(e -> assertThat(((WarehouseManagementException)e).getErrorCode()).isEqualTo(ErrorCode.IDEMPOTENCY_CONFLICT));
+    }
+
+    // ── Ownership: the endpoint is public, so this proof is the whole defence ──
+
+    @Test
+    void should_refuse_payment_for_an_order_the_caller_does_not_own() {
+        Customer owner = TestDataFactory.createCustomer();
+        Order order = TestDataFactory.createOrder(owner);
+        Customer attacker = TestDataFactory.createCustomer();
+
+        when(orderRepo.findById(order.getId())).thenReturn(Optional.of(order));
+
+        assertThatThrownBy(() -> paymentService.initializePayment(order.getId(), "DOOR_CASH", 1, "127.0.0.1",
+            UUID.randomUUID().toString(), PaymentCaller.of(attacker.getId(), null)))
+            .isInstanceOf(WarehouseManagementException.class)
+            .satisfies(e -> assertThat(((WarehouseManagementException) e).getErrorCode())
+                .isEqualTo(ErrorCode.UNAUTHORIZED_ACTION));
+
+        verify(paymentRepo, never()).save(any(PaymentTransaction.class));
+    }
+
+    @Test
+    void should_refuse_a_guest_payment_without_the_checkout_token() {
+        Customer owner = TestDataFactory.createCustomer();
+        Order order = TestDataFactory.createOrder(owner);
+        order.setPaymentAccessToken("the-real-token");
+        order.setPaymentAccessTokenExpiresAt(LocalDateTime.now().plusHours(1));
+
+        when(orderRepo.findById(order.getId())).thenReturn(Optional.of(order));
+
+        assertThatThrownBy(() -> paymentService.initializePayment(order.getId(), "DOOR_CASH", 1, "127.0.0.1",
+            UUID.randomUUID().toString(), PaymentCaller.of(null, "a-guessed-token")))
+            .isInstanceOf(WarehouseManagementException.class)
+            .satisfies(e -> assertThat(((WarehouseManagementException) e).getErrorCode())
+                .isEqualTo(ErrorCode.UNAUTHORIZED_ACTION));
+    }
+
+    @Test
+    void should_accept_a_guest_payment_with_the_checkout_token() {
+        Customer owner = TestDataFactory.createCustomer();
+        Order order = TestDataFactory.createOrder(owner);
+        order.setPaymentAccessToken("the-real-token");
+        order.setPaymentAccessTokenExpiresAt(LocalDateTime.now().plusHours(1));
+        String key = UUID.randomUUID().toString();
+
+        when(paymentRepo.findByIdempotencyKey(key)).thenReturn(Optional.empty());
+        when(orderRepo.findById(order.getId())).thenReturn(Optional.of(order));
+        when(gatewayFactory.getGateway(PaymentProvider.DOOR_PAYMENT)).thenReturn(mockGateway);
+        when(paymentRepo.save(any(PaymentTransaction.class))).thenAnswer(inv -> {
+            PaymentTransaction tx = inv.getArgument(0);
+            if (tx.getId() == null) tx.setId(1L);
+            return tx;
+        });
+        when(orderItemRepo.findByOrderId(order.getId())).thenReturn(List.of());
+        when(mockGateway.initializePayment(any()))
+            .thenReturn(PaymentInitResult.builder().success(true).rawResponse(Map.of()).build());
+
+        PaymentInitResult result = paymentService.initializePayment(order.getId(), "DOOR_CASH", 1, "127.0.0.1", key,
+            PaymentCaller.of(null, "the-real-token"));
+
+        assertThat(result.isSuccess()).isTrue();
+    }
+
+    @Test
+    void should_refuse_an_expired_checkout_token() {
+        Customer owner = TestDataFactory.createCustomer();
+        Order order = TestDataFactory.createOrder(owner);
+        order.setPaymentAccessToken("the-real-token");
+        order.setPaymentAccessTokenExpiresAt(LocalDateTime.now().minusMinutes(1));
+
+        when(orderRepo.findById(order.getId())).thenReturn(Optional.of(order));
+
+        assertThatThrownBy(() -> paymentService.initializePayment(order.getId(), "DOOR_CASH", 1, "127.0.0.1",
+            UUID.randomUUID().toString(), PaymentCaller.of(null, "the-real-token")))
+            .isInstanceOf(WarehouseManagementException.class)
+            .satisfies(e -> assertThat(((WarehouseManagementException) e).getErrorCode())
+                .isEqualTo(ErrorCode.UNAUTHORIZED_ACTION));
+    }
+
+    /**
+     * The admin toggles used to filter only the list the storefront rendered; a
+     * hand-crafted request could still choose cash on delivery and skip collection.
+     */
+    @Test
+    void should_refuse_a_payment_method_the_store_has_disabled() {
+        Customer owner = TestDataFactory.createCustomer();
+        Order order = TestDataFactory.createOrder(owner);
+
+        when(orderRepo.findById(order.getId())).thenReturn(Optional.of(order));
+        when(siteSettingService.getBoolSetting("payment_method_door_cash_enabled", true)).thenReturn(false);
+
+        assertThatThrownBy(() -> paymentService.initializePayment(order.getId(), "DOOR_CASH", 1, "127.0.0.1",
+            UUID.randomUUID().toString(), PaymentCaller.of(owner.getId(), null)))
+            .isInstanceOf(WarehouseManagementException.class);
+
+        verify(paymentRepo, never()).save(any(PaymentTransaction.class));
     }
 
     @Test
@@ -172,10 +312,12 @@ class PaymentServiceImplTest {
         order.setStatus(OrderStatus.PAID);
         String key = UUID.randomUUID().toString();
 
-        when(paymentRepo.findByIdempotencyKey(key)).thenReturn(Optional.empty());
+        // The order is now loaded and authorised before the idempotency lookup, so the
+        // status check short-circuits first and the key is never consulted.
         when(orderRepo.findById(order.getId())).thenReturn(Optional.of(order));
 
-        assertThatThrownBy(() -> paymentService.initializePayment(order.getId(), "CREDIT_CARD", 1, "127.0.0.1", key))
+        assertThatThrownBy(() -> paymentService.initializePayment(order.getId(), "CREDIT_CARD", 1, "127.0.0.1", key,
+            PaymentCaller.of(order.getCustomer().getId(), null)))
             .isInstanceOf(WarehouseManagementException.class)
             .satisfies(e -> assertThat(((WarehouseManagementException)e).getErrorCode()).isEqualTo(ErrorCode.PAYMENT_ALREADY_PROCESSED));
     }

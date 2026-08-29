@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -47,10 +48,35 @@ public class SiteSettingServiceImpl implements SiteSettingService {
         "private", "webhook", "credential", "username"
     );
 
+    /**
+     * Segment-level denylist for {@code GET /api/store/settings}, which is unauthenticated.
+     *
+     * <p>The substring check alone was too narrow: {@code logo_efatura_endpoint},
+     * {@code kargonomi_api_base_url}, {@code kargonomi_warehouse_id},
+     * {@code invoice_admin_digest_email} and {@code logo_company_bank_iban} matched none
+     * of its patterns and were served to anonymous visitors — internal integration
+     * endpoints, an administrator's address, and the company IBAN.</p>
+     *
+     * <p>Matching on underscore-delimited segments rather than raw substrings is what
+     * makes a wider list usable: {@code seo_local_keywords_extra} contains "key" but its
+     * segments are seo/local/keywords/extra, so it stays public, while
+     * {@code kargonomi_app_key} is blocked on the "key" segment.</p>
+     */
+    private static final Set<String> SENSITIVE_KEY_SEGMENTS = Set.of(
+            "password", "passwd", "pass", "secret", "token", "key", "apikey", "appkey",
+            "credential", "credentials", "username", "user", "iban", "merchant",
+            "private", "internal", "admin", "hash", "salt", "endpoint", "webhook",
+            "signature", "certificate", "cert"
+    );
+
     private static boolean isSensitiveKey(String key) {
         if (key == null || key.isBlank()) return true;
         String k = key.toLowerCase();
-        return SENSITIVE_KEY_PATTERNS.stream().anyMatch(k::contains);
+        if (SENSITIVE_KEY_PATTERNS.stream().anyMatch(k::contains)) return true;
+        for (String segment : k.split("[_.\\-]")) {
+            if (SENSITIVE_KEY_SEGMENTS.contains(segment)) return true;
+        }
+        return false;
     }
 
     @Override

@@ -2,6 +2,7 @@ package com.warehouse.entity;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
+import com.warehouse.security.EncryptedStringConverter;
 import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
@@ -42,19 +43,25 @@ public class PaymentGatewayConfig {
     // --- The admin response DTO (AdminGatewayConfigController) sends these as a masked
     // --- ("ABCD****WXYZ") manual field.
     // --- Service beans read Lombok @Data getters inside the JVM — the protection only applies at the HTTP boundary.
+    // Encrypted at rest — these four are the keys to the payment gateway; a stolen
+    // database backup must not be enough to charge cards in the merchant's name.
     @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
+    @Convert(converter = EncryptedStringConverter.class)
     @Column(name = "store_key", columnDefinition = "TEXT")
     private String storeKey;
 
     @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
+    @Convert(converter = EncryptedStringConverter.class)
     @Column(name = "provision_password", columnDefinition = "TEXT")
     private String provisionPassword;
 
     @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
+    @Convert(converter = EncryptedStringConverter.class)
     @Column(name = "api_key", columnDefinition = "TEXT")
     private String apiKey;
 
     @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
+    @Convert(converter = EncryptedStringConverter.class)
     @Column(name = "secret_key", columnDefinition = "TEXT")
     private String secretKey;
 

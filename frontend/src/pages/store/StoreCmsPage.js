@@ -8,6 +8,7 @@ import { useSiteSettings } from '../../hooks/useSiteSettings';
 import { buildArticleSchema, buildBreadcrumbSchema } from '../../utils/seo';
 import { FiPhone, FiMail, FiMapPin } from 'react-icons/fi';
 import { groupPhoneDirectory, telHref, waHref } from '../../utils/phones';
+import { sanitizeHtml } from '../../utils/sanitizeHtml';
 
 export default function StoreCmsPage() {
   const { slug } = useParams();
@@ -134,7 +135,7 @@ export default function StoreCmsPage() {
                   )}
                 </ul>
                 {/* CMS content */}
-                <div className="mt-3" dangerouslySetInnerHTML={{ __html: page.content }} />
+                <div className="mt-3" dangerouslySetInnerHTML={{ __html: sanitizeHtml(page.content) }} />
               </div>
             </div>
           </div>
@@ -178,7 +179,7 @@ export default function StoreCmsPage() {
       {SeoHeader}
       <Breadcrumb items={[{ label: page.title }]} />
       <h1 className="h3 fw-bold mb-4">{page.title}</h1>
-      <div className="cms-content" dangerouslySetInnerHTML={{ __html: page.content }} />
+      <div className="cms-content" dangerouslySetInnerHTML={{ __html: sanitizeHtml(page.content) }} />
     </div>
   );
 }

@@ -50,6 +50,10 @@ public class AdminVehicleController {
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'STOCK_IN', 'STOCK_OUT')")
     public ResponseEntity<Vehicle> create(@Valid @RequestBody Vehicle vehicle) {
+        // Mass-assignment guard: the request body is bound straight onto the JPA
+        // entity, so a caller-supplied id would turn this insert into an update of
+        // whatever row that id points at. The path is the only source of identity.
+        vehicle.setId(null);
         // Creation stays open to warehouse roles: a new vehicle usually shows up mid-transfer,
         // and forcing an admin round-trip would just push people back to free text.
         return ResponseEntity.ok(vehicleService.create(vehicle));

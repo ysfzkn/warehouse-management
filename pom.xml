@@ -6,7 +6,12 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.3.5</version>
+        <!-- 3.3.5 (Nov 2024) missed every patch released since, including the Spring
+             Security fix for CVE-2025-22228 (BCryptPasswordEncoder mis-comparing
+             passwords longer than 72 bytes) and the Tomcat advisories. Staying inside
+             3.3.x keeps this a drop-in patch upgrade; moving to 3.5.x is a separate,
+             larger step because Spring AI 1.0.0 is pinned against the older line. -->
+        <version>3.3.13</version>
         <relativePath/>
     </parent>
 

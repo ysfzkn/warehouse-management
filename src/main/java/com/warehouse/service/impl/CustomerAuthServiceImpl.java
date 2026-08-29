@@ -9,7 +9,9 @@ import com.warehouse.exception.WarehouseManagementException;
 import com.warehouse.exception.ErrorCode;
 import com.warehouse.repository.CustomerRepository;
 import com.warehouse.repository.CustomerRefreshTokenRepository;
+import com.warehouse.security.EncryptionService;
 import com.warehouse.security.JwtService;
+import com.warehouse.security.TokenRevocationService;
 import com.warehouse.service.CustomerAuthService;
 import com.warehouse.config.SecurityProperties;
 import com.warehouse.service.EmailService;
@@ -32,6 +34,9 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
 
     private static final Logger logger = LoggerFactory.getLogger(CustomerAuthServiceImpl.class);
 
+    /** Single message for every login failure — see login() for why. */
+    private static final String INVALID_CREDENTIALS_MESSAGE = "Geçersiz e-posta veya şifre.";
+
     private final CustomerRepository customerRepository;
     private final CustomerRefreshTokenRepository refreshTokenRepository;
     private final PasswordEncoder passwordEncoder;
@@ -39,6 +44,7 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
     private final GoogleOAuthService googleOAuthService;
     private final SecurityProperties securityProperties;
     private final EmailService emailService;
+    private final TokenRevocationService tokenRevocationService;
 
     public CustomerAuthServiceImpl(CustomerRepository customerRepository,
                                     CustomerRefreshTokenRepository refreshTokenRepository,
@@ -46,7 +52,8 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
                                     JwtService jwtService,
                                     GoogleOAuthService googleOAuthService,
                                     SecurityProperties securityProperties,
-                                    EmailService emailService) {
+                                    EmailService emailService,
+                                    TokenRevocationService tokenRevocationService) {
         this.customerRepository = customerRepository;
         this.refreshTokenRepository = refreshTokenRepository;
         this.passwordEncoder = passwordEncoder;
@@ -54,13 +61,17 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
         this.googleOAuthService = googleOAuthService;
         this.securityProperties = securityProperties;
         this.emailService = emailService;
+        this.tokenRevocationService = tokenRevocationService;
     }
 
     @Override
     public CustomerLoginResponse register(CustomerRegisterRequest request) {
         PasswordPolicyValidator.validate(request.getPassword());
 
-        if (customerRepository.existsByEmail(request.getEmail())) {
+        // Normalised once here so lookup, login and password reset all agree on the key.
+        String normalizedEmail = request.getEmail() == null ? "" : request.getEmail().trim().toLowerCase();
+
+        if (customerRepository.existsByEmail(normalizedEmail)) {
             throw new WarehouseManagementException(ErrorCode.DUPLICATE_KEY, "Bu e-posta adresi zaten kayıtlı.");
         }
 
@@ -69,7 +80,7 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
         }
 
         Customer customer = new Customer();
-        customer.setEmail(request.getEmail());
+        customer.setEmail(normalizedEmail);
         customer.setPasswordHash(passwordEncoder.encode(request.getPassword()));
         customer.setFirstName(request.getFirstName());
         customer.setLastName(request.getLastName());
@@ -80,7 +91,9 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
         if (request.isMarketingConsent()) {
             customer.setMarketingConsentAt(LocalDateTime.now());
         }
-        customer.setEmailVerifyToken(UUID.randomUUID().toString());
+        // Persist only the hash — the raw token travels in the email and nowhere else.
+        String emailVerifyToken = UUID.randomUUID().toString();
+        customer.setEmailVerifyToken(EncryptionService.hashToken(emailVerifyToken));
         customer.setEmailVerifySentAt(LocalDateTime.now());
         // Email verification required - will be verified via link
         customer.setEmailVerified(false);
@@ -89,7 +102,7 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
 
         // Send activation email (async — won't block registration)
         try {
-            emailService.sendEmailVerification(customer.getEmail(), customer.getFirstName(), customer.getEmailVerifyToken());
+            emailService.sendEmailVerification(customer.getEmail(), customer.getFirstName(), emailVerifyToken);
         } catch (Exception e) {
             logger.warn("Failed to send verification email to {}: {}", customer.getEmail(), e.getMessage());
         }
@@ -105,19 +118,23 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
 
     @Override
     public CustomerLoginResponse login(CustomerLoginRequest request, String ipAddress) {
-        Customer customer = customerRepository.findByEmail(request.getEmail())
-            .orElseThrow(() -> new WarehouseManagementException(ErrorCode.AUTH_ERROR, "Geçersiz e-posta veya şifre."));
+        // Registration lower-cases the address, so a login typed with different casing
+        // must be normalised the same way or it silently fails to find the account.
+        String email = request.getEmail() == null ? "" : request.getEmail().trim().toLowerCase();
 
-        if (!customer.isActive()) {
-            throw new WarehouseManagementException(ErrorCode.AUTH_ERROR, "Hesabınız devre dışı bırakılmıştır.");
-        }
+        // Every failure below returns the SAME message. Distinct wording ("account
+        // disabled", "account suspended") confirmed to an attacker that the address is
+        // registered, turning the login form into an account-enumeration oracle — which
+        // is exactly what the forgot-password endpoint already takes care to avoid.
+        Customer customer = customerRepository.findByEmail(email)
+            .orElseThrow(() -> new WarehouseManagementException(ErrorCode.AUTH_ERROR, INVALID_CREDENTIALS_MESSAGE));
 
-        if (customer.getStatus() == CustomerStatus.BLACKLISTED) {
-            throw new WarehouseManagementException(ErrorCode.AUTH_ERROR, "Hesabınız askıya alınmıştır. Lütfen müşteri hizmetleri ile iletişime geçin.");
+        if (!customer.isActive() || customer.getStatus() == CustomerStatus.BLACKLISTED) {
+            throw new WarehouseManagementException(ErrorCode.AUTH_ERROR, INVALID_CREDENTIALS_MESSAGE);
         }
 
         if (customer.getLockedUntil() != null && customer.getLockedUntil().isAfter(LocalDateTime.now())) {
-            throw new WarehouseManagementException(ErrorCode.AUTH_ERROR, "Hesap kilitli. Daha sonra tekrar deneyin.");
+            throw new WarehouseManagementException(ErrorCode.AUTH_ERROR, INVALID_CREDENTIALS_MESSAGE);
         }
 
         if (!passwordEncoder.matches(request.getPassword(), customer.getPasswordHash())) {
@@ -126,7 +143,7 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
                 customer.setLockedUntil(LocalDateTime.now().plusMinutes(securityProperties.getAccountLockoutMinutes()));
             }
             customerRepository.save(customer);
-            throw new WarehouseManagementException(ErrorCode.AUTH_ERROR, "Geçersiz e-posta veya şifre.");
+            throw new WarehouseManagementException(ErrorCode.AUTH_ERROR, INVALID_CREDENTIALS_MESSAGE);
         }
 
         // Successful login
@@ -147,7 +164,11 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
 
     @Override
     public CustomerLoginResponse refreshToken(String refreshTokenStr) {
-        CustomerRefreshToken refreshToken = refreshTokenRepository.findByTokenAndRevokedAtIsNull(refreshTokenStr)
+        if (refreshTokenStr == null || refreshTokenStr.isBlank()) {
+            throw new WarehouseManagementException(ErrorCode.AUTH_ERROR, "Oturum süresi dolmuş. Lütfen tekrar giriş yapın.");
+        }
+        CustomerRefreshToken refreshToken = refreshTokenRepository
+            .findByTokenAndRevokedAtIsNull(EncryptionService.hashToken(refreshTokenStr))
             .orElseThrow(() -> new WarehouseManagementException(ErrorCode.AUTH_ERROR, "Oturum süresi dolmuş. Lütfen tekrar giriş yapın."));
 
         if (!refreshToken.isValid()) {
@@ -174,7 +195,7 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
         if (token == null || token.isBlank()) {
             throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Doğrulama bağlantısı geçersiz.");
         }
-        var optCustomer = customerRepository.findByEmailVerifyToken(token);
+        var optCustomer = customerRepository.findByEmailVerifyToken(EncryptionService.hashToken(token));
         if (optCustomer.isEmpty()) {
             // Token not found — might be already verified
             throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Bu bağlantı daha önce kullanılmış veya süresi dolmuş. Hesabınız zaten doğrulanmış olabilir.");
@@ -245,13 +266,42 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
         );
     }
 
+    /**
+     * Issues a refresh token, storing only its SHA-256 hash.
+     *
+     * <p>A refresh token is a 30-day credential that mints access tokens on demand —
+     * the most valuable secret in the customer tables. Storing it verbatim meant anyone
+     * with read access to the database (a dump, a backup, a SQL injection elsewhere)
+     * could resume any customer's session. The raw value now exists only in the response
+     * that created it.</p>
+     */
     private String createRefreshToken(Customer customer) {
+        String raw = UUID.randomUUID().toString();
         CustomerRefreshToken refreshToken = new CustomerRefreshToken();
         refreshToken.setCustomer(customer);
-        refreshToken.setToken(UUID.randomUUID().toString());
+        refreshToken.setToken(EncryptionService.hashToken(raw));
         refreshToken.setExpiresAt(LocalDateTime.now().plusDays(securityProperties.getRefreshTokenExpirationDays()));
         refreshTokenRepository.save(refreshToken);
-        return refreshToken.getToken();
+        return raw;
+    }
+
+    /**
+     * Invalidates every live session for this customer: outstanding refresh tokens are
+     * revoked in the database and already-issued access tokens are denylisted by subject.
+     */
+    private void revokeAllSessions(Customer customer) {
+        tokenRevocationService.revokeAllForSubject(customer.getEmail());
+        refreshTokenRepository.revokeAllByCustomerId(customer.getId());
+    }
+
+    @Override
+    public void revokeRefreshToken(String refreshTokenStr) {
+        if (refreshTokenStr == null || refreshTokenStr.isBlank()) return;
+        refreshTokenRepository.findByTokenAndRevokedAtIsNull(EncryptionService.hashToken(refreshTokenStr))
+                .ifPresent(rt -> {
+                    rt.setRevokedAt(LocalDateTime.now());
+                    refreshTokenRepository.save(rt);
+                });
     }
 
     @Override
@@ -266,7 +316,9 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
                 return;
             }
             String token = UUID.randomUUID().toString();
-            customer.setPasswordResetToken(token);
+            // Only the hash is stored — this token can set a password, so it must not be
+            // recoverable from the database. The raw value goes out in the email only.
+            customer.setPasswordResetToken(EncryptionService.hashToken(token));
             customer.setPasswordResetSentAt(LocalDateTime.now());
             customerRepository.save(customer);
 
@@ -284,7 +336,7 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
         if (token == null || token.isBlank()) {
             throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Geçersiz sıfırlama bağlantısı.");
         }
-        Customer customer = customerRepository.findByPasswordResetToken(token)
+        Customer customer = customerRepository.findByPasswordResetToken(EncryptionService.hashToken(token))
             .orElseThrow(() -> new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
                 "Geçersiz veya süresi dolmuş sıfırlama bağlantısı."));
 
@@ -305,6 +357,12 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
         customer.setPasswordResetSentAt(null);
         customerRepository.save(customer);
 
+        // A password reset is usually a response to a compromise, so it has to end the
+        // sessions that existed before it. Previously the attacker's access token stayed
+        // valid for a week and their refresh token for a month, which meant resetting the
+        // password did not actually take the account back.
+        revokeAllSessions(customer);
+
         // Send confirmation email
         try {
             emailService.sendPasswordResetConfirmation(customer.getEmail(), customer.getFirstName());
@@ -320,7 +378,7 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
         if (token == null || token.isBlank()) {
             throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Geçersiz bağlantı.");
         }
-        Customer customer = customerRepository.findByPasswordResetToken(token)
+        Customer customer = customerRepository.findByPasswordResetToken(EncryptionService.hashToken(token))
             .orElseThrow(() -> new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
                 "Geçersiz veya süresi dolmuş hesap tamamlama bağlantısı."));
 

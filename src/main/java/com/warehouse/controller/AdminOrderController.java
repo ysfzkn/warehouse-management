@@ -1,5 +1,6 @@
 package com.warehouse.controller;
 
+import com.warehouse.security.UploadValidator;
 import com.warehouse.dto.PagedResponse;
 import com.warehouse.dto.admin.AdminOrderDto;
 import com.warehouse.dto.admin.AdminOrderDetailDto;
@@ -787,10 +788,14 @@ public class AdminOrderController {
         }
 
         try {
+            // Invoice attachments are downloaded later by staff; restrict to the document
+            // formats we actually accept and verify the bytes rather than the header, so
+            // an .html masquerading as a PDF can never be stored and served back.
+            String extension = UploadValidator.validateDocument(file, 20L * 1024 * 1024);
             String key = photoStorageService.storeDocument(
                     "invoices/" + order.getId(),
-                    file.getOriginalFilename(),
-                    file.getContentType(),
+                    "invoice." + extension,
+                    UploadValidator.documentContentType(extension),
                     file.getInputStream()
             );
 

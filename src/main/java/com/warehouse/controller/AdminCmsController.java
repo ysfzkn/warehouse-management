@@ -36,6 +36,10 @@ public class AdminCmsController {
 
     @PostMapping
     public ResponseEntity<CmsPage> create(@RequestBody CmsPage page) {
+        // Mass-assignment guard: the request body is bound straight onto the JPA
+        // entity, so a caller-supplied id would turn this insert into an update of
+        // whatever row that id points at. The path is the only source of identity.
+        page.setId(null);
         return ResponseEntity.status(HttpStatus.CREATED).body(cmsService.createPage(page));
     }
 

@@ -1,5 +1,6 @@
 package com.warehouse.controller;
 
+import com.warehouse.security.UploadValidator;
 import com.warehouse.entity.Product;
 import com.warehouse.entity.ProductType;
 import com.warehouse.repository.BundleItemRepository;
@@ -223,14 +224,18 @@ public class ProductController {
         if (file.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("message", "Dosya boş."));
         }
-        if (file.getContentType() == null || !file.getContentType().startsWith("image/")) {
-            return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE).body(Map.of("message", "Sadece görsel dosyaları yüklenebilir."));
+        // Identified by magic bytes; the declared Content-Type is caller input.
+        UploadValidator.ImageType imageType;
+        try {
+            imageType = UploadValidator.validateImage(file, 12L * 1024 * 1024);
+        } catch (UploadValidator.InvalidUploadException e) {
+            return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE).body(Map.of("message", e.getMessage()));
         }
         try {
             ProductImage image = productImageService.addImageToProduct(
                     id,
-                    file.getOriginalFilename(),
-                    file.getContentType(),
+                    "upload." + imageType.extension,
+                    imageType.contentType,
                     file.getInputStream(),
                     primary,
                     slot
@@ -425,6 +430,10 @@ public class ProductController {
 
     @PostMapping
     public ResponseEntity<ProductDto> createProduct(@Valid @RequestBody Product product) {
+        // Mass-assignment guard: the request body is bound straight onto the JPA
+        // entity, so a caller-supplied id would turn this insert into an update of
+        // whatever row that id points at. The path is the only source of identity.
+        product.setId(null);
         Product createdProduct = productService.createProduct(product);
         return ResponseEntity.status(HttpStatus.CREATED).body(toDto(createdProduct));
     }

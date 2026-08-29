@@ -9,7 +9,9 @@ export function useStoreAuth() {
     const token = localStorage.getItem('customer_token');
     const data = localStorage.getItem('customer_data');
     if (token && data) {
-      try { setCustomer(JSON.parse(data)); } catch {}
+      try {
+        setCustomer(JSON.parse(data));
+      } catch {}
     }
     setLoading(false);
   }, []);
@@ -33,6 +35,10 @@ export function useStoreAuth() {
   }, []);
 
   const logout = useCallback(() => {
+    // Revoke server-side first: the access token goes on the denylist and the refresh
+    // token is marked revoked in the database. Clearing localStorage alone left a
+    // 30-day refresh token usable by anyone who had copied it.
+    axios.post('/api/store/auth/logout').catch(() => {});
     localStorage.removeItem('customer_token');
     localStorage.removeItem('customer_refresh_token');
     localStorage.removeItem('customer_data');

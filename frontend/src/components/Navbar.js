@@ -168,6 +168,11 @@ const Navbar = () => {
   );
 
   const handleLogout = useCallback(() => {
+    // Tell the server first: clearing localStorage only hides the token from this tab.
+    // Any copy taken beforehand stayed valid for the token's full lifetime because
+    // there was no way to revoke it. Fire-and-forget — a failed call must never trap
+    // the user in a session they asked to leave.
+    axios.post('/api/admin/auth/logout').catch(() => {});
     localStorage.removeItem('auth_token');
     localStorage.removeItem('auth_user');
     localStorage.removeItem('auth_role');
@@ -182,9 +187,10 @@ const Navbar = () => {
       handleLogout();
       return;
     }
-    const es = new EventSource(`/api/admin/stream?token=${encodeURIComponent(token)}`);
-    sseRef.current = es;
+
+    let es = null;
     let closed = false;
+    let cancelled = false;
     const onMessage = async (ev) => {
       try {
         const data = typeof ev.data === 'string' ? JSON.parse(ev.data) : ev.data;
@@ -218,21 +224,37 @@ const Navbar = () => {
         }
       } catch {}
     };
-    es.addEventListener('snapshot', onMessage);
-    es.addEventListener('update', onMessage);
-    es.onerror = () => {
-      if (closed) return;
-      closed = true;
+    // EventSource cannot send an Authorization header, so the stream used to be opened
+    // with the admin JWT in the query string — where it lands in nginx access logs,
+    // browser history and Referer headers. Exchange it for a one-minute, single-use
+    // ticket over a normal authenticated POST instead.
+    (async () => {
       try {
-        es.close();
-      } catch {}
-      sseRef.current = null;
-      // Do not auto-logout on SSE errors to avoid interrupting active sessions
-    };
+        const { data } = await axios.post('/api/admin/stream/ticket');
+        if (cancelled || !data?.ticket) return;
+        es = new EventSource(`/api/admin/stream?ticket=${encodeURIComponent(data.ticket)}`);
+        sseRef.current = es;
+        es.addEventListener('snapshot', onMessage);
+        es.addEventListener('update', onMessage);
+        es.onerror = () => {
+          if (closed) return;
+          closed = true;
+          try {
+            es.close();
+          } catch {}
+          sseRef.current = null;
+          // Do not auto-logout on SSE errors to avoid interrupting active sessions
+        };
+      } catch {
+        // Live counters are a convenience; polling elsewhere still refreshes them.
+      }
+    })();
+
     return () => {
+      cancelled = true;
       closed = true;
       try {
-        es.close();
+        es?.close();
       } catch {}
       sseRef.current = null;
     };

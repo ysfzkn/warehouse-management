@@ -22,15 +22,25 @@ public class AdminSecurityServiceImpl implements AdminSecurityService {
 
     private static final Logger logger = LoggerFactory.getLogger(AdminSecurityServiceImpl.class);
 
+    /** Namespaces security-code attempts so they never collide with login attempts. */
+    private static final String SECURITY_CODE_ATTEMPT_PREFIX = "seccode:";
+
+    /** Minimum length for a new security code. Five digits is 100k guesses — not a factor. */
+    private static final int MIN_SECURITY_CODE_LENGTH = 8;
+
     private final AdminSecurityCodeRepository repository;
     private final PasswordEncoder passwordEncoder;
+    private final com.warehouse.security.AdminLoginAttemptTracker attemptTracker;
 
     @Value("${app.admin.security-code:}")
     private String initialSecurityCode;
 
-    public AdminSecurityServiceImpl(AdminSecurityCodeRepository repository, PasswordEncoder passwordEncoder) {
+    public AdminSecurityServiceImpl(AdminSecurityCodeRepository repository,
+                                    PasswordEncoder passwordEncoder,
+                                    com.warehouse.security.AdminLoginAttemptTracker attemptTracker) {
         this.repository = repository;
         this.passwordEncoder = passwordEncoder;
+        this.attemptTracker = attemptTracker;
     }
 
     @Override
@@ -49,9 +59,26 @@ public class AdminSecurityServiceImpl implements AdminSecurityService {
             throw new WarehouseManagementException(ErrorCode.ADMIN_SECURITY_CODE_REQUIRED, "Güvenlik şifresi zorunludur.");
         }
 
+        // The security code is the second factor guarding destructive admin actions, but
+        // it had no attempt limit at all — a caller already holding an admin token could
+        // grind a short numeric code offline-fast against this endpoint. It is now subject
+        // to the same 5-attempts-then-lock policy as the login form. The bcrypt comparison
+        // that follows is deliberately slow, so an unbounded loop was also a cheap way to
+        // saturate the CPU.
+        String attemptKey = SECURITY_CODE_ATTEMPT_PREFIX + CurrentUser.usernameOrSystem();
+        long lockedUntil = attemptTracker.lockedUntilMillis(attemptKey);
+        if (lockedUntil > 0) {
+            long minutes = Math.max(1, (lockedUntil - System.currentTimeMillis()) / 60_000);
+            throw new WarehouseManagementException(ErrorCode.INVALID_ADMIN_SECURITY_CODE,
+                    "Çok fazla hatalı güvenlik şifresi denemesi. " + minutes + " dakika sonra tekrar deneyin.");
+        }
+
         if (!passwordEncoder.matches(securityCode, code.getCodeHash())) {
+            attemptTracker.recordFailure(attemptKey);
+            logger.warn("Hatalı yönetici güvenlik şifresi denemesi: user={}", CurrentUser.usernameOrSystem());
             throw new WarehouseManagementException(ErrorCode.INVALID_ADMIN_SECURITY_CODE, "Güvenlik şifresi hatalı.");
         }
+        attemptTracker.recordSuccess(attemptKey);
     }
 
     @Override
@@ -70,7 +97,7 @@ public class AdminSecurityServiceImpl implements AdminSecurityService {
         if (!newCode.equals(confirmNewCode)) {
             throw new WarehouseManagementException(ErrorCode.ADMIN_SECURITY_CODE_MISMATCH);
         }
-        if (newCode.length() < 5) {
+        if (newCode.length() < MIN_SECURITY_CODE_LENGTH) {
             throw new WarehouseManagementException(ErrorCode.ADMIN_SECURITY_CODE_TOO_SHORT);
         }
 

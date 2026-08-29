@@ -1,5 +1,6 @@
 package com.warehouse.controller;
 
+import com.warehouse.security.UploadValidator;
 import com.warehouse.entity.SiteSetting;
 import com.warehouse.service.AdminSecurityService;
 import com.warehouse.service.PaymentConfigService;
@@ -66,10 +67,11 @@ public class AdminSiteSettingsController {
             @RequestHeader(value = "X-ADMIN-SECURITY-CODE", required = false) String securityCode) {
         adminSecurityService.requireSecurityCodeForAdmin(securityCode);
         try {
+            UploadValidator.ImageType type = UploadValidator.validateImage(file, 8L * 1024 * 1024);
             PhotoStorageService.StoredPhoto stored = photoStorageService.storeSiteAsset(
                     "logo",
-                    file.getOriginalFilename(),
-                    file.getContentType(),
+                    "upload." + type.extension,
+                    type.contentType,
                     file.getInputStream()
             );
             String logoUrl = "/api/store/settings/logo";
@@ -89,10 +91,11 @@ public class AdminSiteSettingsController {
             @RequestHeader(value = "X-ADMIN-SECURITY-CODE", required = false) String securityCode) {
         adminSecurityService.requireSecurityCodeForAdmin(securityCode);
         try {
+            UploadValidator.ImageType type = UploadValidator.validateImage(file, 8L * 1024 * 1024);
             PhotoStorageService.StoredPhoto stored = photoStorageService.storeSiteAsset(
                     "favicon",
-                    file.getOriginalFilename(),
-                    file.getContentType(),
+                    "upload." + type.extension,
+                    type.contentType,
                     file.getInputStream()
             );
             String faviconUrl = "/api/store/settings/favicon";
@@ -112,10 +115,14 @@ public class AdminSiteSettingsController {
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "name", defaultValue = "asset") String assetName) {
         try {
+            // Banner/asset uploads are served straight back to visitors, so the same
+            // magic-byte check applies here: an SVG or HTML file stored as a "banner"
+            // would be an active document on the store origin.
+            UploadValidator.ImageType type = UploadValidator.validateImage(file, 12L * 1024 * 1024);
             PhotoStorageService.StoredPhoto stored = photoStorageService.storeSiteAsset(
                     assetName,
-                    file.getOriginalFilename(),
-                    file.getContentType(),
+                    "upload." + type.extension,
+                    type.contentType,
                     file.getInputStream()
             );
             // Store the filename only (not full path) — view endpoint resolves it

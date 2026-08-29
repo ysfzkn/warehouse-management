@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
+import { sanitizeHtml } from '../../utils/sanitizeHtml';
 
 /**
  * Displays legal contracts (Distance Sales, Preliminary Information, KVKK) in an
@@ -35,17 +36,22 @@ export default function LegalContractModal({ slug, title, open, onClose, onConfi
     setError('');
     setScrolledToEnd(false);
     setContent('');
-    axios.get(`/api/store/pages/${slug}`)
-      .then(res => {
+    axios
+      .get(`/api/store/pages/${slug}`)
+      .then((res) => {
         if (cancelled) return;
         setContent(res.data?.content || '');
       })
-      .catch(err => {
+      .catch((err) => {
         if (cancelled) return;
         setError(err?.response?.data?.message || 'Sözleşme metni yüklenemedi.');
       })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [open, slug]);
 
   // Scroll-to-end detection: has the user finished the contract?
@@ -67,7 +73,9 @@ export default function LegalContractModal({ slug, title, open, onClose, onConfi
   // Close on ESC + body scroll lock
   useEffect(() => {
     if (!open) return;
-    const onKey = (e) => { if (e.key === 'Escape') onClose && onClose(); };
+    const onKey = (e) => {
+      if (e.key === 'Escape') onClose && onClose();
+    };
     document.addEventListener('keydown', onKey);
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -89,7 +97,9 @@ export default function LegalContractModal({ slug, title, open, onClose, onConfi
       tabIndex="-1"
       role="dialog"
       style={{ backgroundColor: 'rgba(0,0,0,0.55)', zIndex: 1060 }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose && onClose(); }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose && onClose();
+      }}
     >
       <div className="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable" role="document">
         <div className="modal-content">
@@ -113,11 +123,12 @@ export default function LegalContractModal({ slug, title, open, onClose, onConfi
             )}
             {error && (
               <div className="alert alert-danger" role="alert">
-                <i className="fas fa-exclamation-circle me-2" />{error}
+                <i className="fas fa-exclamation-circle me-2" />
+                {error}
               </div>
             )}
             {!loading && !error && (
-              <div className="legal-content" dangerouslySetInnerHTML={{ __html: content }} />
+              <div className="legal-content" dangerouslySetInnerHTML={{ __html: sanitizeHtml(content) }} />
             )}
           </div>
           <div className="modal-footer flex-column align-items-stretch">

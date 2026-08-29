@@ -5,8 +5,17 @@ import java.math.BigDecimal;
 import java.util.Map;
 
 public interface PaymentService {
+    /**
+     * Starts a payment for an order.
+     *
+     * @param caller proof that the requester is entitled to pay for this order — either
+     *               the authenticated customer who owns it, or the one-time token issued
+     *               at checkout. Required: the endpoint is public, so without this any
+     *               caller could act on any order id.
+     */
     PaymentInitResult initializePayment(Long orderId, String paymentMethod, int installmentCount,
-                                         String ipAddress, String idempotencyKey);
+                                         String ipAddress, String idempotencyKey,
+                                         PaymentCaller caller);
     PaymentCallbackResult handlePaymentCallback(Map<String, String> params);
     /**
      * Bank transfer confirmation — to prevent accidental confirmation with the wrong

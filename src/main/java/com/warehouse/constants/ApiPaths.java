@@ -26,7 +26,8 @@ public final class ApiPaths {
     // securityMatcher explicitly includes this path so the role check below
     // actually applies — prior to Cezeri v2 this rule was dead code.
     public static final String CEZERI = "/api/cezeri/**";
-    public static final String ADMIN_STREAM = API_ADMIN_BASE + "/stream";
+    /** SSE stream plus the single-use ticket endpoint used to open it. */
+    public static final String ADMIN_STREAM = API_ADMIN_BASE + "/stream/**";
     public static final String ADMIN_STOCKS = API_ADMIN_BASE + "/stocks/**";
     public static final String ADMIN_STOCK_TRANSFERS = API_ADMIN_BASE + "/stock-transfers/**";
     public static final String ADMIN_STOCK_IMPORTS = API_ADMIN_BASE + "/stock-imports/**";

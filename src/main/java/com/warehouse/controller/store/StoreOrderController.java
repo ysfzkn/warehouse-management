@@ -1,5 +1,6 @@
 package com.warehouse.controller.store;
 
+import com.warehouse.security.UploadValidator;
 import com.warehouse.dto.PagedResponse;
 import com.warehouse.entity.Order;
 import com.warehouse.entity.OrderItem;
@@ -196,12 +197,15 @@ public class StoreOrderController {
         Long customerId = extractCustomerId(request);
         if (customerId == null) return ResponseEntity.status(401).body(Map.of("message", "Giriş yapmanız gerekiyor."));
         if (file == null || file.isEmpty()) return ResponseEntity.badRequest().body(Map.of("message", "Dosya boş."));
-        if (file.getContentType() == null || !file.getContentType().startsWith("image/")) {
-            return ResponseEntity.status(415).body(Map.of("message", "Sadece görsel dosyaları yüklenebilir."));
+        UploadValidator.ImageType imageType;
+        try {
+            imageType = UploadValidator.validateImage(file, 12L * 1024 * 1024);
+        } catch (UploadValidator.InvalidUploadException e) {
+            return ResponseEntity.status(415).body(Map.of("message", e.getMessage()));
         }
         try {
             Long id = returnService.addPhoto(customerId, returnNumber,
-                    file.getOriginalFilename(), file.getContentType(), file.getInputStream());
+                    "upload." + imageType.extension, imageType.contentType, file.getInputStream());
             return ResponseEntity.ok(Map.of("id", id, "url", "/api/admin/returns/photos/" + id + "/view"));
         } catch (java.io.IOException e) {
             return ResponseEntity.status(500).body(Map.of("message", "Fotoğraf yüklenemedi."));

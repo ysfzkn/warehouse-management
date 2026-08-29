@@ -36,6 +36,10 @@ public class CheckoutServiceImpl implements CheckoutService {
 
     private static final Logger logger = LoggerFactory.getLogger(CheckoutServiceImpl.class);
 
+    private static final java.security.SecureRandom PAYMENT_TOKEN_RANDOM = new java.security.SecureRandom();
+    /** Comfortably longer than the payment-gateway timeout, short enough to be useless later. */
+    private static final int PAYMENT_TOKEN_TTL_HOURS = 6;
+
     private final com.warehouse.service.CouponService couponService;
     private final CartRepository cartRepository;
     private final CartItemRepository cartItemRepository;
@@ -214,9 +218,12 @@ public class CheckoutServiceImpl implements CheckoutService {
         customer.setEmailVerified(false);
         customer.setActive(true);
 
-        // Use the password reset token mechanism for "complete account" (valid for 7 days)
+        // Use the password reset token mechanism for "complete account" (valid for 7 days).
+        // Only the hash is persisted: this token is a bearer credential that can set a
+        // password, so a database dump must not contain anything usable. The raw value
+        // exists only in the email that is about to be sent.
         String setupToken = UUID.randomUUID().toString();
-        customer.setPasswordResetToken(setupToken);
+        customer.setPasswordResetToken(com.warehouse.security.EncryptionService.hashToken(setupToken));
         customer.setPasswordResetSentAt(LocalDateTime.now());
 
         customer.setKvkkConsent(request.isKvkkConsent());
@@ -471,6 +478,16 @@ public class CheckoutServiceImpl implements CheckoutService {
             oi.setOrder(order);
         }
         order.setItems(orderItems);
+
+        // Ownership proof for the public payment-initialisation endpoint. 256 bits from
+        // a CSPRNG, valid only as long as the order can still be paid for, so a leaked
+        // token from an old checkout is worthless.
+        byte[] tokenBytes = new byte[32];
+        PAYMENT_TOKEN_RANDOM.nextBytes(tokenBytes);
+        String paymentAccessToken = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(tokenBytes);
+        order.setPaymentAccessToken(paymentAccessToken);
+        order.setPaymentAccessTokenExpiresAt(LocalDateTime.now().plusHours(PAYMENT_TOKEN_TTL_HOURS));
+
         order = orderRepository.save(order);
 
         if (coupon != null) {
@@ -491,6 +508,7 @@ public class CheckoutServiceImpl implements CheckoutService {
             .orderNumber(order.getOrderNumber())
             .grandTotal(order.getGrandTotal())
             .status(order.getStatus().name())
+            .paymentToken(paymentAccessToken)
             .build();
     }
 

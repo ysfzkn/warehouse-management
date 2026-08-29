@@ -52,6 +52,10 @@ public class WarehouseController {
 
     @PostMapping
     public ResponseEntity<Warehouse> createWarehouse(@Valid @RequestBody Warehouse warehouse) {
+        // Mass-assignment guard: the request body is bound straight onto the JPA
+        // entity, so a caller-supplied id would turn this insert into an update of
+        // whatever row that id points at. The path is the only source of identity.
+        warehouse.setId(null);
         Warehouse createdWarehouse = warehouseService.createWarehouse(warehouse);
         return ResponseEntity.status(HttpStatus.CREATED).body(createdWarehouse);
     }

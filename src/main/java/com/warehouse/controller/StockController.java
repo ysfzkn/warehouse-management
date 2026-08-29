@@ -399,6 +399,10 @@ public class StockController {
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<StockDto> createStock(@Valid @RequestBody Stock stock) {
+        // Mass-assignment guard: the request body is bound straight onto the JPA
+        // entity, so a caller-supplied id would turn this insert into an update of
+        // whatever row that id points at. The path is the only source of identity.
+        stock.setId(null);
         Stock createdStock = stockService.createStock(stock);
         try {
             ssePushService.broadcastCounts();
@@ -415,6 +419,9 @@ public class StockController {
         if (stocks == null || stocks.isEmpty()) {
             return ResponseEntity.badRequest().build();
         }
+        // Same mass-assignment guard as the single create: a body-supplied id would
+        // silently overwrite an existing stock row instead of inserting a new one.
+        stocks.forEach(s -> s.setId(null));
         List<Stock> createdStocks = stockService.createStocks(stocks);
         try {
             ssePushService.broadcastCounts();

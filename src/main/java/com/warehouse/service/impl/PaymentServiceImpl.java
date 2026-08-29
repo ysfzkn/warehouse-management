@@ -39,6 +39,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final com.warehouse.service.InvoiceService invoiceService;
     private final com.warehouse.service.notification.NotificationDispatchService notificationDispatchService;
     private final org.springframework.context.ApplicationEventPublisher eventPublisher;
+    private final com.warehouse.service.SiteSettingService siteSettingService;
 
     public PaymentServiceImpl(PaymentTransactionRepository paymentRepo,
                                OrderRepository orderRepo,
@@ -52,7 +53,8 @@ public class PaymentServiceImpl implements PaymentService {
                                StockEventRepository stockEventRepo,
                                com.warehouse.service.InvoiceService invoiceService,
                                com.warehouse.service.notification.NotificationDispatchService notificationDispatchService,
-                               org.springframework.context.ApplicationEventPublisher eventPublisher) {
+                               org.springframework.context.ApplicationEventPublisher eventPublisher,
+                               com.warehouse.service.SiteSettingService siteSettingService) {
         this.paymentRepo = paymentRepo;
         this.orderRepo = orderRepo;
         this.stockEventRepo = stockEventRepo;
@@ -66,15 +68,37 @@ public class PaymentServiceImpl implements PaymentService {
         this.invoiceService = invoiceService;
         this.notificationDispatchService = notificationDispatchService;
         this.eventPublisher = eventPublisher;
+        this.siteSettingService = siteSettingService;
     }
 
     @Override
     public PaymentInitResult initializePayment(Long orderId, String paymentMethod, int installmentCount,
-                                                String ipAddress, String idempotencyKey) {
-        // 1. Idempotency check
+                                                String ipAddress, String idempotencyKey,
+                                                PaymentCaller caller) {
+        // 1. Load the order and prove the caller is entitled to pay for it.
+        //
+        // This endpoint is public by necessity (guests pay without an account) and used
+        // to act on whatever orderId it was handed. Order ids are sequential, so an
+        // attacker could walk pending orders and re-initialise a stranger's order as
+        // DOOR_CASH — which moves it straight to PREPARING and ships goods that were
+        // never paid for. Nothing below runs until access is established.
+        Order order = orderRepo.findById(orderId)
+            .orElseThrow(() -> new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Sipariş bulunamadı."));
+        requireOrderAccess(order, caller);
+
+        if (order.getStatus() != OrderStatus.PENDING_PAYMENT) {
+            throw new WarehouseManagementException(ErrorCode.PAYMENT_ALREADY_PROCESSED,
+                "Sipariş durumu ödeme için uygun değil: " + order.getStatus());
+        }
+
+        // 2. Idempotency check — scoped to this order, so a guessed key belonging to
+        // someone else's payment cannot be replayed to read back their gateway token.
         Optional<PaymentTransaction> existing = paymentRepo.findByIdempotencyKey(idempotencyKey);
         if (existing.isPresent()) {
             PaymentTransaction ex = existing.get();
+            if (ex.getOrder() == null || !orderId.equals(ex.getOrder().getId())) {
+                throw new WarehouseManagementException(ErrorCode.IDEMPOTENCY_CONFLICT);
+            }
             if (ex.getStatus() == PaymentStatus.SUCCESS) {
                 logger.info("Idempotent hit: payment {} already SUCCESS for key {}", ex.getId(), idempotencyKey);
                 return PaymentInitResult.builder().success(true).token(ex.getToken()).build();
@@ -87,16 +111,9 @@ public class PaymentServiceImpl implements PaymentService {
             throw new WarehouseManagementException(ErrorCode.IDEMPOTENCY_CONFLICT);
         }
 
-        // 2. Load and validate order
-        Order order = orderRepo.findById(orderId)
-            .orElseThrow(() -> new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Sipariş bulunamadı."));
-
-        if (order.getStatus() != OrderStatus.PENDING_PAYMENT) {
-            throw new WarehouseManagementException(ErrorCode.PAYMENT_ALREADY_PROCESSED,
-                "Sipariş durumu ödeme için uygun değil: " + order.getStatus());
-        }
-
-        // 3. Determine provider
+        // 3. Determine provider — after checking the method is actually offered, so a
+        // switched-off method (cash on delivery, bank transfer) cannot be forced by hand.
+        requirePaymentMethodEnabled(paymentMethod);
         PaymentProvider provider = resolveProvider(paymentMethod);
         PaymentGateway gateway = gatewayFactory.getGateway(provider);
 
@@ -579,6 +596,55 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     // ── Helpers ──────────────────────────────────────
+
+    /**
+     * Authorises the caller against the order: either the authenticated owner, or the
+     * bearer of the unexpired one-time token minted for this order at checkout.
+     * Comparison is constant time so the token cannot be recovered byte by byte.
+     */
+    private void requireOrderAccess(Order order, PaymentCaller caller) {
+        if (caller != null && caller.customerId() != null
+                && order.getCustomer() != null
+                && caller.customerId().equals(order.getCustomer().getId())) {
+            return;
+        }
+        String presented = caller != null ? caller.accessToken() : null;
+        String expected = order.getPaymentAccessToken();
+        LocalDateTime expiresAt = order.getPaymentAccessTokenExpiresAt();
+        if (presented != null && expected != null && expiresAt != null
+                && expiresAt.isAfter(LocalDateTime.now())
+                && java.security.MessageDigest.isEqual(
+                        presented.getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                        expected.getBytes(java.nio.charset.StandardCharsets.UTF_8))) {
+            return;
+        }
+        logger.warn("Yetkisiz odeme baslatma denemesi: orderId={}, customerId={}",
+                order.getId(), caller != null ? caller.customerId() : null);
+        throw new WarehouseManagementException(ErrorCode.UNAUTHORIZED_ACTION,
+                "Bu siparis icin odeme baslatma yetkiniz yok.");
+    }
+
+    /**
+     * Rejects payment methods the store has switched off. Without this the admin
+     * toggles were advisory: they filtered the list the storefront rendered, while a
+     * hand-crafted request could still pick DOOR_CASH and skip collection entirely.
+     */
+    private void requirePaymentMethodEnabled(String paymentMethod) {
+        String method = paymentMethod == null ? "" : paymentMethod.toUpperCase(java.util.Locale.ROOT);
+        String settingKey = switch (method) {
+            case "CREDIT_CARD", "VIRTUAL_POS" -> "payment_method_credit_card_enabled";
+            case "BANK_TRANSFER" -> "payment_method_bank_transfer_enabled";
+            case "DOOR_CASH", "DOOR_CARD" -> "payment_method_door_cash_enabled";
+            default -> null;
+        };
+        if (settingKey == null) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR, "Gecersiz odeme yontemi.");
+        }
+        if (!siteSettingService.getBoolSetting(settingKey, true)) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                    "Bu odeme yontemi su anda kullanilamiyor.");
+        }
+    }
 
     private PaymentProvider resolveProvider(String paymentMethod) {
         if (paymentMethod == null) return resolveDefaultCardProvider();

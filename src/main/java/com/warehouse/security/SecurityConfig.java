@@ -2,6 +2,8 @@ package com.warehouse.security;
 
 import com.warehouse.constants.ApiPaths;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
@@ -24,12 +26,15 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
 @Configuration
 @EnableMethodSecurity
 public class SecurityConfig {
+
+    private static final Logger log = LoggerFactory.getLogger(SecurityConfig.class);
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final RateLimitFilter rateLimitFilter;
@@ -58,8 +63,13 @@ public class SecurityConfig {
      *   <li><b>X-Frame-Options: DENY</b> — clickjacking protection (backup for CSP frame-ancestors)</li>
      *   <li><b>Referrer-Policy</b> — strict-origin-when-cross-origin (reduces default leakage)</li>
      *   <li><b>Permissions-Policy</b> — camera/microphone/geolocation and similar APIs disabled by default</li>
-     *   <li><b>CSP</b> — XSS defense; allows 'unsafe-inline' style for React needs, script-src self + analytics + iyzico/PayTR; can be migrated to nonce-based later.</li>
+     *   <li><b>CSP</b> — see {@link #contentSecurityPolicy()}</li>
      * </ul>
+     *
+     * <p>Note: these headers only cover responses produced by this application. The
+     * SPA's HTML document is served by nginx, so the identical policy is mirrored in
+     * {@code nginx/prod.conf} and {@code frontend/nginx.conf} — without that, the
+     * browser never receives a CSP for the page that actually executes scripts.</p>
      */
     private void applySecurityHeaders(HttpSecurity http) throws Exception {
         http.headers(headers -> headers
@@ -76,23 +86,44 @@ public class SecurityConfig {
                     // Permissions-Policy: aggressive default-deny (the e-commerce site does not need these APIs)
                     resp.setHeader("Permissions-Policy",
                             "geolocation=(), camera=(), microphone=(), payment=(self), usb=(), fullscreen=(self)");
-                    // Content-Security-Policy: a practical starting point compatible with both e-commerce and admin.
-                    // Inline style is required on the React side (CSS-in-JS, Helmet); script-src 'self' + analytics + payment gateways.
                     if (!resp.containsHeader("Content-Security-Policy")) {
-                        resp.setHeader("Content-Security-Policy",
-                                "default-src 'self'; " +
-                                "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://connect.facebook.net https://static.iyzipay.com https://www.iyzico.com https://www.paytr.com https://kargonomi.com.tr; " +
-                                "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; " +
-                                "font-src 'self' data: https://cdnjs.cloudflare.com https://fonts.gstatic.com; " +
-                                "img-src 'self' data: blob: https:; " +
-                                "connect-src 'self' https://www.google-analytics.com https://api.iyzipay.com https://api.kargonomi.com.tr; " +
-                                "frame-src 'self' https://www.iyzico.com https://static.iyzipay.com https://www.paytr.com; " +
-                                "frame-ancestors 'none'; " +
-                                "base-uri 'self'; " +
-                                "form-action 'self' https://www.iyzipay.com https://sandbox-api.iyzipay.com https://www.paytr.com;");
+                        resp.setHeader("Content-Security-Policy", contentSecurityPolicy());
                     }
                 })
         );
+    }
+
+    /**
+     * Content-Security-Policy shared by the API and the nginx-served SPA.
+     *
+     * <p>{@code script-src} still carries {@code 'unsafe-inline'} because the consent-gated
+     * analytics snippets (GA4, Meta Pixel, Hotjar, Clarity) and the payment HTML that
+     * iyzico/PayTR return are injected inline at runtime. Removing it requires migrating
+     * those to nonce or hash based loading, which cannot be done from the backend alone
+     * while the SPA is a static bundle. The previous policy also silently omitted
+     * {@code cdn.jsdelivr.net} — the host that serves Bootstrap's CSS and JS — so it was
+     * broken as well as permissive; the host lists below reflect what the app actually loads.
+     */
+    private static String contentSecurityPolicy() {
+        return "default-src 'self'; "
+                + "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://www.googletagmanager.com "
+                + "https://connect.facebook.net https://static.hotjar.com https://script.hotjar.com "
+                + "https://www.clarity.ms https://static.iyzipay.com https://www.iyzico.com "
+                + "https://www.paytr.com https://kargonomi.com.tr; "
+                + "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com; "
+                + "font-src 'self' data: https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.gstatic.com; "
+                + "img-src 'self' data: blob: https:; "
+                + "media-src 'self' https:; "
+                + "connect-src 'self' https://www.google-analytics.com https://region1.google-analytics.com "
+                + "https://connect.facebook.net https://*.hotjar.com https://*.hotjar.io wss://*.hotjar.com "
+                + "https://www.clarity.ms https://api.iyzipay.com https://api.kargonomi.com.tr; "
+                + "frame-src 'self' https://www.iyzico.com https://static.iyzipay.com https://www.paytr.com https://www.google.com; "
+                // object/embed can execute script in some browsers and nothing here uses them.
+                + "object-src 'none'; "
+                + "frame-ancestors 'none'; "
+                + "base-uri 'self'; "
+                + "form-action 'self' https://www.iyzipay.com https://sandbox-api.iyzipay.com https://www.paytr.com; "
+                + "upgrade-insecure-requests";
     }
 
     /**
@@ -108,12 +139,14 @@ public class SecurityConfig {
                 // admin auth pipeline (rate limits, JWT parsing, role check).
                 // The controller URL is preserved from v1 for frontend compat.
                 .securityMatcher("/api/admin/**", "/api/cezeri/**")
+                // CSRF is not needed: the admin panel authenticates with a Bearer
+                // header, which a cross-site form or image tag cannot set.
                 .csrf(csrf -> csrf.disable())
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(ApiPaths.ADMIN_AUTH).permitAll()
-                        // SSE stream available to authenticated warehouse roles
+                        // SSE stream + its single-use ticket endpoint
                         .requestMatchers(ApiPaths.ADMIN_STREAM).hasAnyRole("ADMIN", "STOCK_IN", "STOCK_OUT")
                         // Cezeri WMS AI assistant
                         .requestMatchers(ApiPaths.CEZERI).hasAnyRole("ADMIN", "STOCK_IN", "STOCK_OUT")
@@ -138,6 +171,10 @@ public class SecurityConfig {
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/admin/products/images/*/view").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/admin/returns/photos/*/view").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/admin/settings/site/asset/view/**").permitAll()
+                        // Cargo and e-invoice provider webhooks: server-to-server, authenticated
+                        // by HMAC signature inside the controller rather than by a session.
+                        .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/admin/cargo/webhook/**").permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/admin/invoice/webhook/**").permitAll()
                         // Stock transfer item photo operations
                         .requestMatchers(ApiPaths.ADMIN_STOCK_TRANSFER_ITEMS).hasAnyRole("ADMIN", "STOCK_IN", "STOCK_OUT")
                         // Excel operations only for ADMIN
@@ -166,6 +203,7 @@ public class SecurityConfig {
                         ).hasAnyRole("ADMIN", "STOCK_IN", "STOCK_OUT")
                         // Everything else admin-only
                         .requestMatchers(ApiPaths.ADMIN_ANY).hasRole("ADMIN")
+                        .anyRequest().denyAll()
                 )
                 .exceptionHandling(exceptions -> exceptions
                         .accessDeniedHandler(new SilentAccessDeniedHandler())
@@ -188,6 +226,9 @@ public class SecurityConfig {
         applySecurityHeaders(http);
         http
                 .securityMatcher("/api/store/**")
+                // The storefront cookie is SameSite=Lax, so a cross-site POST never
+                // carries it; combined with the Bearer fallback this leaves no CSRF
+                // surface for state-changing calls.
                 .csrf(csrf -> csrf.disable())
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -207,7 +248,9 @@ public class SecurityConfig {
                         .requestMatchers(org.springframework.http.HttpMethod.GET, ApiPaths.STORE_CARGO_PROVIDERS).permitAll()
                         // Guest checkout: public (guest users can place an order without signing up)
                         .requestMatchers(org.springframework.http.HttpMethod.POST, ApiPaths.STORE_GUEST_CHECKOUT).permitAll()
-                        // Guest order payment initialization: public (protected by orderId + idempotencyKey)
+                        // Guest order payment initialization: public, but the caller must prove
+                        // ownership of the order with the payment token issued at checkout
+                        // (see PaymentServiceImpl#initializePayment).
                         .requestMatchers(org.springframework.http.HttpMethod.POST, ApiPaths.STORE_PAYMENT_INITIALIZE).permitAll()
                         // Public order tracking: protected by orderNumber + email combination
                         .requestMatchers(org.springframework.http.HttpMethod.POST, ApiPaths.STORE_PUBLIC_ORDER_TRACK).permitAll()
@@ -220,14 +263,25 @@ public class SecurityConfig {
                         .requestMatchers(org.springframework.http.HttpMethod.POST, ApiPaths.STORE_NEWSLETTER).permitAll()
                         // Public settings and banners
                         .requestMatchers(org.springframework.http.HttpMethod.GET, ApiPaths.STORE_SETTINGS).permitAll()
-                        // Cart: GET is public (guest carts via session), mutations require customer or session
+                        // Review photos are shown on public product pages, so the image
+                        // view must not require a session (the list itself is already
+                        // public via GET /api/store/products/**). Writing stays gated.
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/store/reviews/images/*/view").permitAll()
+                        // Cart: guest carts are keyed by X-Session-Id, so they cannot require auth
                         .requestMatchers(ApiPaths.STORE_CART).permitAll()
+                        // Contact form: guests must be able to submit it. It carries a
+                        // honeypot field and a dedicated rate-limit bucket, both of which
+                        // only make sense for an unauthenticated endpoint — but the rule
+                        // was missing, so every guest submission fell through to the
+                        // CUSTOMER rule below and was rejected.
+                        .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/store/contact-messages").permitAll()
                         // Store assistant (Cezeri v2): guest + customer. Rate limits + guard
                         // handle abuse. Authentication is resolved inside the controller via
                         // the JWT filter + StoreAssistantGuard cookie flow.
                         .requestMatchers(ApiPaths.STORE_ASSISTANT).permitAll()
                         // Everything else requires CUSTOMER role
                         .requestMatchers(ApiPaths.STORE_ANY).hasRole("CUSTOMER")
+                        .anyRequest().denyAll()
                 )
                 .exceptionHandling(exceptions -> exceptions
                         .accessDeniedHandler(new SilentAccessDeniedHandler())
@@ -240,7 +294,15 @@ public class SecurityConfig {
     }
 
     /**
-     * Public filter chain — health checks, info, static assets.
+     * Catch-all chain for everything outside {@code /api/admin}, {@code /api/store} and
+     * {@code /api/cezeri}.
+     *
+     * <p>This used to end in {@code anyRequest().permitAll()}, which made the default
+     * for any newly mounted controller "world readable" — that is exactly how the
+     * Kargonomi cargo webhook ended up reachable by anyone on the internet. It now ends
+     * in {@code denyAll()}: a new endpoint is unreachable until it is deliberately
+     * listed here, so the failure mode is a 403 during development rather than an open
+     * door in production. The rate-limit and host-validation filters run here too.</p>
      */
     @Bean
     @Order(3)
@@ -252,15 +314,29 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        // /actuator/health, /actuator/info, /info, /error → public
-                        .requestMatchers(ApiPaths.ACTUATOR, ApiPaths.INFO, ApiPaths.ERROR).permitAll()
-                        // All other actuator endpoints (env, configprops, loggers, beans, metrics, prometheus)
-                        // are ADMIN only — to avoid leaking secrets and internal state.
+                        // Liveness/readiness + build info + Spring's error dispatch
+                        .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info",
+                                ApiPaths.INFO, ApiPaths.ERROR).permitAll()
+                        // SEO endpoints
+                        .requestMatchers("/sitemap.xml", "/sitemap-*.xml", "/robots.txt", "/favicon.ico").permitAll()
+                        // Assistant feature flags consumed by both storefront and admin shells
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/assistant/flags/**").permitAll()
+                        // Cargo provider webhook — authenticated by HMAC signature in the controller
+                        .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/public/cargo/**").permitAll()
+                        // CORS preflight must never require credentials
+                        .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
+                        // All other actuator endpoints (env, configprops, loggers, beans, metrics,
+                        // prometheus) are ADMIN only — to avoid leaking secrets and internal state.
                         .requestMatchers("/actuator/**").hasRole("ADMIN")
                         // Swagger UI + OpenAPI docs — ADMIN only
                         .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").hasRole("ADMIN")
-                        .anyRequest().permitAll()
+                        .anyRequest().denyAll()
                 )
+                .exceptionHandling(exceptions -> exceptions
+                        .accessDeniedHandler(new SilentAccessDeniedHandler())
+                )
+                .addFilterBefore(hostValidationFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(rateLimitFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
@@ -286,10 +362,10 @@ public class SecurityConfig {
 
         // Regular API endpoints: restricted origins
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOriginPatterns(Arrays.asList(corsAllowedOrigins.split(",")));
+        config.setAllowedOriginPatterns(sanitizedAllowedOrigins());
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         config.setAllowedHeaders(List.of("Content-Type", "Authorization", "X-Session-Id",
-                "X-ADMIN-SECURITY-CODE", "X-Requested-With", "Idempotency-Key"));
+                "X-ADMIN-SECURITY-CODE", "X-Requested-With", "Idempotency-Key", "X-Captcha-Token"));
         config.setAllowCredentials(true);
         config.setMaxAge(3600L);
 
@@ -300,9 +376,42 @@ public class SecurityConfig {
         // Webhooks (Kargonomi, Logo): behave like callbacks
         source.registerCorsConfiguration("/api/admin/cargo/webhook/**", callbackConfig);
         source.registerCorsConfiguration("/api/admin/invoice/webhook/**", callbackConfig);
+        source.registerCorsConfiguration("/api/public/cargo/**", callbackConfig);
         // Then general API paths
         source.registerCorsConfiguration("/api/**", config);
         return source;
+    }
+
+    /**
+     * Parses {@code CORS_ALLOWED_ORIGINS}, rejecting wildcards.
+     *
+     * <p>{@code allowedOriginPatterns} combined with {@code allowCredentials(true)} will
+     * happily echo back any origin that matches {@code *}. A single mistyped environment
+     * variable would therefore let every website on the internet make authenticated
+     * requests on behalf of a logged-in customer or administrator. A wildcard entry is
+     * dropped with a loud warning rather than honoured.</p>
+     */
+    private List<String> sanitizedAllowedOrigins() {
+        List<String> result = new ArrayList<>();
+        for (String raw : Arrays.asList(corsAllowedOrigins.split(","))) {
+            String origin = raw.trim();
+            if (origin.isEmpty()) continue;
+            if ("*".equals(origin) || "*/*".equals(origin) || "https://*".equals(origin)
+                    || "http://*".equals(origin)) {
+                log.error("CORS_ALLOWED_ORIGINS içinde joker (\"{}\") bulundu ve YOK SAYILDI. "
+                        + "allowCredentials=true ile birlikte bu, her siteye kimlikli istek izni vermek demektir. "
+                        + "Lütfen tam origin listesi verin (örn: https://www.example.com).", origin);
+                continue;
+            }
+            result.add(origin);
+        }
+        if (result.isEmpty()) {
+            log.error("CORS_ALLOWED_ORIGINS boş/geçersiz — tarayıcıdan gelen çapraz origin istekleri reddedilecek.");
+            // An empty list means "no cross-origin browser access", which is the safe
+            // failure mode: same-origin calls (the normal deployment) still work.
+            result.add("https://localhost");
+        }
+        return result;
     }
 
     private static class SilentAccessDeniedHandler implements AccessDeniedHandler {

@@ -2,6 +2,7 @@ package com.warehouse.entity;
 
 import com.warehouse.enums.AddressType;
 import jakarta.persistence.*;
+import com.warehouse.security.EncryptedStringConverter;
 import jakarta.validation.constraints.*;
 import lombok.*;
 import java.time.LocalDateTime;
@@ -53,7 +54,8 @@ public class CustomerAddress {
     @Column(name = "is_default", nullable = false)
     private boolean isDefault = false;
 
-    @Column(name = "tc_kimlik_no", length = 11)
+    @Convert(converter = EncryptedStringConverter.class)
+    @Column(name = "tc_kimlik_no", length = 255)
     private String tcKimlikNo;
 
     @Column(name = "company_name", length = 200)

@@ -1,5 +1,6 @@
 package com.warehouse.controller.store;
 
+import com.warehouse.security.ClientIpResolver;
 import com.warehouse.dto.store.ContactFormRequest;
 import com.warehouse.entity.ContactMessage;
 import com.warehouse.enums.ContactMessageStatus;
@@ -32,10 +33,13 @@ public class StoreContactController {
     private final ContactMessageRepository contactMessageRepository;
     private final SiteSettingService siteSettingService;
     private final EmailService emailService;
+    private final ClientIpResolver clientIpResolver;
 
     public StoreContactController(ContactMessageRepository contactMessageRepository,
                                   SiteSettingService siteSettingService,
-                                  EmailService emailService) {
+                                  EmailService emailService,
+                                  ClientIpResolver clientIpResolver) {
+        this.clientIpResolver = clientIpResolver;
         this.contactMessageRepository = contactMessageRepository;
         this.siteSettingService = siteSettingService;
         this.emailService = emailService;
@@ -97,10 +101,12 @@ public class StoreContactController {
         try { return siteSettingService.getSetting(key); } catch (Exception e) { return null; }
     }
 
-    private static String clientIp(HttpServletRequest req) {
-        String xff = req.getHeader("X-Forwarded-For");
-        if (xff != null && !xff.isBlank()) return xff.split(",")[0].trim();
-        return req.getRemoteAddr();
+    /**
+     * Delegates to {@link ClientIpResolver}: reading the left-most X-Forwarded-For entry
+     * meant the address recorded here was whatever the sender typed.
+     */
+    private String clientIp(HttpServletRequest req) {
+        return clientIpResolver.resolve(req);
     }
 
     private static String truncate(String s, int max) {

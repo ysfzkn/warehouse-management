@@ -35,6 +35,12 @@ import java.util.UUID;
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class RequestIdFilter extends OncePerRequestFilter {
 
+    private final ClientIpResolver clientIpResolver;
+
+    public RequestIdFilter(ClientIpResolver clientIpResolver) {
+        this.clientIpResolver = clientIpResolver;
+    }
+
     private static final String HEADER_NAME = "X-Request-Id";
     private static final String MDC_REQUEST_ID = "requestId";
     private static final String MDC_REMOTE_IP = "remoteIp";
@@ -62,16 +68,8 @@ public class RequestIdFilter extends OncePerRequestFilter {
         }
     }
 
+    /** Trusted-proxy aware, so the IP written into every log line is not caller input. */
     private String resolveClientIp(HttpServletRequest request) {
-        // If behind a reverse proxy, use X-Forwarded-For; otherwise remoteAddr
-        String xff = request.getHeader("X-Forwarded-For");
-        if (xff != null && !xff.isBlank()) {
-            return xff.split(",")[0].trim();
-        }
-        String real = request.getHeader("X-Real-IP");
-        if (real != null && !real.isBlank()) {
-            return real;
-        }
-        return request.getRemoteAddr();
+        return clientIpResolver.resolve(request);
     }
 }

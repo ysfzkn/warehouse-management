@@ -1,5 +1,6 @@
 package com.warehouse.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -23,6 +24,12 @@ public class User {
     @Column(nullable = false, unique = true, length = 100)
     private String username;
 
+    /**
+     * Never serialised. {@code GET /api/admin/users} returned this entity directly,
+     * so every bcrypt hash in the system — including other administrators' — was
+     * handed to anyone holding an admin token, ready for offline cracking.
+     */
+    @JsonIgnore
     @Column(name = "password_hash", nullable = false, length = 120)
     private String passwordHash;
 

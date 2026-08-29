@@ -47,6 +47,14 @@ public class HostValidationFilter extends OncePerRequestFilter {
         // Enable in production if hosts are defined. Otherwise no-op (dev/test runs freely).
         boolean isProd = Arrays.asList(env.getActiveProfiles()).contains("prod");
         this.enabled = isProd && !allowedAdminHosts.isEmpty();
+        if (isProd && allowedAdminHosts.isEmpty()) {
+            // Silently disabling itself is how this protection went missing: APP_HOSTS_ADMIN
+            // was never added to the deployment, so the filter logged "enabled=false" once at
+            // boot and nobody noticed the store-to-admin barrier was not actually there.
+            log.error("HostValidationFilter DEVRE DISI: production'da APP_HOSTS_ADMIN tanımlı değil. "
+                    + "Admin endpoint'leri store domaininden de çağrılabilir durumda. "
+                    + "Örnek: APP_HOSTS_ADMIN=admin.example.com, APP_HOSTS_STORE=example.com,www.example.com");
+        }
         log.info("HostValidationFilter: enabled={}, adminHosts={}, storeHosts={}",
                 enabled, allowedAdminHosts, allowedStoreHosts);
     }

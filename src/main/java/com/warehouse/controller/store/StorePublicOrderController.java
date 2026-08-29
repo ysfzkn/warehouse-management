@@ -38,6 +38,7 @@ public class StorePublicOrderController {
     private final OrderItemRepository orderItemRepository;
     private final CargoProviderRepository cargoProviderRepository;
     private final com.warehouse.service.ManualOrderService manualOrderService;
+    private final com.warehouse.security.ClientIpResolver clientIpResolver;
 
     @GetMapping("/confirm/{token}")
     public ResponseEntity<?> confirmationPreview(@PathVariable String token) {
@@ -53,7 +54,8 @@ public class StorePublicOrderController {
         if (rawHashes instanceof Map<?, ?> map) {
             map.forEach((key, value) -> hashes.put(String.valueOf(key), String.valueOf(value)));
         }
-        Order order = manualOrderService.confirm(token, hashes, request.getRemoteAddr(), request.getHeader("User-Agent"));
+        Order order = manualOrderService.confirm(token, hashes,
+                clientIpResolver.resolve(request), request.getHeader("User-Agent"));
         return ResponseEntity.ok(Map.of("message", "Siparişiniz onaylandı.", "orderNumber", order.getOrderNumber()));
     }
 
@@ -75,8 +77,12 @@ public class StorePublicOrderController {
                 orderNumber.trim(), email.trim().toLowerCase());
 
         if (orderOpt.isEmpty()) {
-            // Security: don't give details, prevent enumeration attacks
-            logger.info("Sipariş takip başarısız: orderNumber={}, email={}", orderNumber, email);
+            // Security: don't give details, prevent enumeration attacks.
+            // The address is masked before it reaches the log — application logs are
+            // shipped to a third-party aggregator and a customer's e-mail is personal
+            // data under KVKK, so it has no business appearing there in the clear.
+            logger.info("Sipariş takip başarısız: orderNumber={}, email={}",
+                    orderNumber, maskEmail(email));
             return ResponseEntity.status(404).body(Map.of(
                 "error", "Bu bilgilere ait sipariş bulunamadı. Sipariş numarası ve e-posta adresinizi kontrol edin."
             ));
@@ -160,6 +166,14 @@ public class StorePublicOrderController {
         } catch (Exception e) {
             return "";
         }
+    }
+
+    /** {@code ahmet@example.com} becomes {@code a***@example.com}. */
+    private static String maskEmail(String email) {
+        if (email == null || email.isBlank()) return "";
+        int at = email.indexOf('@');
+        if (at <= 0) return "***";
+        return email.charAt(0) + "***" + email.substring(at);
     }
 
     private String statusLabel(String status) {

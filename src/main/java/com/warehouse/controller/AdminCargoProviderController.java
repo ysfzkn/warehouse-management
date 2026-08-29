@@ -38,6 +38,10 @@ public class AdminCargoProviderController {
 
     @PostMapping
     public ResponseEntity<?> create(@Valid @RequestBody CargoProvider provider) {
+        // Mass-assignment guard: the request body is bound straight onto the JPA
+        // entity, so a caller-supplied id would turn this insert into an update of
+        // whatever row that id points at. The path is the only source of identity.
+        provider.setId(null);
         if (cargoRepo.existsByCode(provider.getCode())) {
             return ResponseEntity.badRequest().body(Map.of("message", "Bu kargo kodu zaten kullanılıyor: " + provider.getCode()));
         }

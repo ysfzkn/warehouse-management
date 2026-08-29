@@ -64,16 +64,23 @@ public class KargonomiWebhookController {
     public ResponseEntity<Map<String, Object>> receive(
             @RequestHeader(value = "X-Webhook-Signature", required = false) String signature,
             @RequestBody String rawBody) {
-        // 1) HMAC verification
+        // 1) HMAC verification — fail CLOSED.
+        //
+        // This endpoint sits under /api/public/** and is reachable by anyone on the
+        // internet; the signature is the only thing that distinguishes the carrier
+        // from an attacker. Previously a missing secret meant the check was skipped
+        // with nothing but a log line, so any unauthenticated POST could move an
+        // order to "delivered". A webhook we cannot authenticate is refused.
         String secret = settingService.getSetting("kargonomi_webhook_secret");
-        if (secret != null && !secret.isBlank()) {
-            String expected = hmacSha256Hex(secret, rawBody);
-            if (signature == null || !constantTimeEquals(expected, signature.trim())) {
-                log.warn("[KargonomiWebhook] imza reddedildi — beklenen != gelen");
-                return ResponseEntity.status(401).body(Map.of("error", "invalid signature"));
-            }
-        } else {
-            log.warn("[KargonomiWebhook] kargonomi_webhook_secret tanımsız — imza doğrulaması atlanıyor (GÜVENSİZ)");
+        if (secret == null || secret.isBlank()) {
+            log.error("[KargonomiWebhook] kargonomi_webhook_secret tanımsız — webhook REDDEDİLDİ. "
+                    + "Ayarlar ekranından secret tanımlanana kadar kargo bildirimleri işlenmeyecek.");
+            return ResponseEntity.status(503).body(Map.of("error", "webhook secret not configured"));
+        }
+        String expected = hmacSha256Hex(secret, rawBody);
+        if (signature == null || !constantTimeEquals(expected, signature.trim())) {
+            log.warn("[KargonomiWebhook] imza reddedildi — beklenen != gelen");
+            return ResponseEntity.status(401).body(Map.of("error", "invalid signature"));
         }
 
         // 2) JSON parsing

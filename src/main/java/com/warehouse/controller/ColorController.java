@@ -47,6 +47,10 @@ public class ColorController {
 
     @PostMapping
     public ResponseEntity<Color> createColor(@Valid @RequestBody Color color) {
+        // Mass-assignment guard: the request body is bound straight onto the JPA
+        // entity, so a caller-supplied id would turn this insert into an update of
+        // whatever row that id points at. The path is the only source of identity.
+        color.setId(null);
         Color createdColor = colorService.createColor(color);
         return ResponseEntity.status(HttpStatus.CREATED).body(createdColor);
     }

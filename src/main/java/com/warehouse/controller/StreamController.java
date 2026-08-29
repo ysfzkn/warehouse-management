@@ -1,41 +1,50 @@
 package com.warehouse.controller;
 
+import com.warehouse.security.StreamTicketService;
 import com.warehouse.service.SsePushService;
+import com.warehouse.util.CurrentUser;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.util.Map;
+
 /**
- * Exposes a Server-Sent Events endpoint for pushing lightweight updates
- * (such as unread notification count and low stock count) to connected clients.
+ * Server-Sent Events endpoint for pushing lightweight updates (unread notification
+ * count, low stock count) to connected clients.
  *
- * Clients should connect with: GET /api/stream?token=JWT
- * The JWT token is validated by the security filter. On connect, an initial
- * snapshot event is sent, and subsequent updates are broadcast on changes.
+ * <p>Connection flow: {@code POST /api/admin/stream/ticket} with the normal Bearer
+ * token returns a single-use ticket, then the client opens
+ * {@code GET /api/admin/stream?ticket=...}. Putting the JWT itself in the query string
+ * — as the previous {@code ?token=} contract did — leaked a full-lifetime admin
+ * credential into access logs, browser history and {@code Referer} headers.</p>
  */
 @RestController
-@RequestMapping(value = "/api/admin/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+@RequestMapping(value = "/api/admin/stream")
 public class StreamController {
 
     private final SsePushService ssePushService;
+    private final StreamTicketService streamTicketService;
 
-    public StreamController(SsePushService ssePushService) {
+    public StreamController(SsePushService ssePushService, StreamTicketService streamTicketService) {
         this.ssePushService = ssePushService;
+        this.streamTicketService = streamTicketService;
     }
 
-    @GetMapping
+    @PostMapping(value = "/ticket", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<Map<String, Object>> ticket() {
+        String ticket = streamTicketService.issue(CurrentUser.usernameOrSystem(), CurrentUser.getRole());
+        return ResponseEntity.ok(Map.of(
+                "ticket", ticket,
+                "expiresInSeconds", streamTicketService.ttlSeconds()));
+    }
+
+    @GetMapping(produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter subscribe() {
         return ssePushService.subscribe();
     }
 }
-
-
-
-
-
-
-
-
-

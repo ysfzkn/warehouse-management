@@ -1,6 +1,7 @@
 package com.warehouse.entity;
 
 import jakarta.persistence.*;
+import com.warehouse.security.EncryptedStringConverter;
 import jakarta.validation.constraints.*;
 import lombok.*;
 import com.warehouse.enums.CustomerStatus;
@@ -32,7 +33,10 @@ public class Customer {
     @Column(length = 20)
     private String phone;
 
-    @Column(name = "tc_kimlik_no", length = 11)
+    // Encrypted at rest: a database dump must not hand over national identity
+    // numbers. Legacy plaintext rows still read fine and are upgraded on next save.
+    @Convert(converter = EncryptedStringConverter.class)
+    @Column(name = "tc_kimlik_no", length = 255)
     private String tcKimlikNo;
 
     @Column(length = 10)

@@ -1,0 +1,112 @@
+name: Security Scan
+
+# The repository previously had only a deploy workflow: nothing ever checked whether a
+# dependency had a published CVE, whether a secret had been committed, or whether the
+# authorisation rules still held. This runs on every change to the code and weekly, so
+# a vulnerability disclosed after the last deploy still surfaces.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Mondays 04:00 UTC — catches CVEs published against unchanged dependencies.
+    - cron: '0 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  backend-tests:
+    name: Backend security tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+      # The authorisation matrix and penetration tests live here; a rule that
+      # accidentally opens an endpoint should fail the build, not production.
+      - name: Run tests
+        run: mvn -B test
+
+  dependency-audit:
+    name: Dependency CVE audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: OWASP Dependency-Check (Java)
+        # Fails the build on CVSS >= 8. NVD rate-limits anonymous requests heavily;
+        # add an NVD_API_KEY secret to make this fast and reliable.
+        run: >
+          mvn -B org.owasp:dependency-check-maven:10.0.4:check
+          -Dformat=SARIF
+          -DfailBuildOnCVSS=8
+          -DnvdApiKey=${{ secrets.NVD_API_KEY }}
+        continue-on-error: true
+
+      - name: Upload Java dependency report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dependency-check-report
+          path: target/dependency-check-report.*
+          if-no-files-found: ignore
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: npm audit (frontend)
+        working-directory: frontend
+        run: npm audit --audit-level=high
+        continue-on-error: true
+
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history: a secret committed and later removed is still in the objects.
+          fetch-depth: 0
+      - name: Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  codeql:
+    name: CodeQL
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ['java-kotlin', 'javascript-typescript']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        if: matrix.language == 'java-kotlin'
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+      - uses: github/codeql-action/init@v3
+        with:
+          language: ${{ matrix.language }}
+          queries: security-extended
+      - name: Build (Java)
+        if: matrix.language == 'java-kotlin'
+        run: mvn -B -DskipTests package
+      - uses: github/codeql-action/autobuild@v3
+        if: matrix.language != 'java-kotlin'
+      - uses: github/codeql-action/analyze@v3

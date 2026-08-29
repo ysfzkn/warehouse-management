@@ -28,7 +28,14 @@ RUN apk add --no-cache curl libwebp-tools
 # Copy the built jar
 COPY --from=build /app/target/warehouse-management-*.jar app.jar
 
-# Railway runs as root for volume access
+# Run as an unprivileged user. A remote-code-execution bug in a container running as
+# root gives the attacker root inside it — including write access to every mounted
+# volume. The uploads/data directory is chowned so the app can still write to it.
+RUN addgroup -S app && adduser -S -G app app \
+    && mkdir -p /data/uploads \
+    && chown -R app:app /app /data
+USER app
+
 EXPOSE 8080
 
 # Healthcheck for Railway

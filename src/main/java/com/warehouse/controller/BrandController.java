@@ -47,6 +47,10 @@ public class BrandController {
 
     @PostMapping
     public ResponseEntity<Brand> createBrand(@Valid @RequestBody Brand brand) {
+        // Mass-assignment guard: the request body is bound straight onto the JPA
+        // entity, so a caller-supplied id would turn this insert into an update of
+        // whatever row that id points at. The path is the only source of identity.
+        brand.setId(null);
         Brand createdBrand = brandService.createBrand(brand);
         return ResponseEntity.status(HttpStatus.CREATED).body(createdBrand);
     }

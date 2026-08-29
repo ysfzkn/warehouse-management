@@ -14,9 +14,11 @@ import java.io.IOException;
 public class RateLimitFilter extends OncePerRequestFilter {
 
     private final RateLimitService rateLimitService;
+    private final ClientIpResolver clientIpResolver;
 
-    public RateLimitFilter(RateLimitService rateLimitService) {
+    public RateLimitFilter(RateLimitService rateLimitService, ClientIpResolver clientIpResolver) {
         this.rateLimitService = rateLimitService;
+        this.clientIpResolver = clientIpResolver;
     }
 
     @Override
@@ -24,23 +26,25 @@ public class RateLimitFilter extends OncePerRequestFilter {
                                      @NonNull HttpServletResponse response,
                                      @NonNull FilterChain filterChain) throws ServletException, IOException {
 
-        if (!"POST".equalsIgnoreCase(request.getMethod())) {
+        // Preflight requests carry no credentials and must never be throttled, or the
+        // browser will report a CORS failure instead of a rate limit.
+        if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        String uri = request.getRequestURI();
-        String matchedPath = rateLimitService.findMatchingPath(uri);
-
-        if (matchedPath != null) {
-            String clientIp = getClientIp(request);
-            if (rateLimitService.isRateLimited(matchedPath, clientIp)) {
-                long retryAfter = rateLimitService.getRetryAfterSeconds(matchedPath);
+        String ruleId = rateLimitService.findMatchingRule(request.getRequestURI(), request.getMethod());
+        if (ruleId != null) {
+            // Resolved through the trusted-proxy chain: a client-supplied
+            // X-Forwarded-For can no longer mint itself a fresh bucket per request.
+            String clientIp = clientIpResolver.resolve(request);
+            if (rateLimitService.isRateLimited(ruleId, clientIp)) {
+                long retryAfter = rateLimitService.getRetryAfterSeconds(ruleId);
                 response.setStatus(429);
                 response.setHeader("Retry-After", String.valueOf(retryAfter));
-                response.setContentType("application/json");
+                response.setContentType("application/json;charset=UTF-8");
                 response.getWriter().write(
-                    "{\"error\":\"TOO_MANY_REQUESTS\",\"message\":\"Cok fazla istek gonderdiniz. Lutfen " +
+                    "{\"error\":\"TOO_MANY_REQUESTS\",\"message\":\"Çok fazla istek gönderdiniz. Lütfen " +
                     retryAfter + " saniye sonra tekrar deneyin.\",\"retryAfter\":" + retryAfter + "}"
                 );
                 return;
@@ -48,17 +52,5 @@ public class RateLimitFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
-    }
-
-    private String getClientIp(HttpServletRequest request) {
-        String xForwardedFor = request.getHeader("X-Forwarded-For");
-        if (xForwardedFor != null && !xForwardedFor.isEmpty()) {
-            return xForwardedFor.split(",")[0].trim();
-        }
-        String xRealIp = request.getHeader("X-Real-IP");
-        if (xRealIp != null && !xRealIp.isEmpty()) {
-            return xRealIp;
-        }
-        return request.getRemoteAddr();
     }
 }

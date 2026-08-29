@@ -19,7 +19,7 @@ const CrudTable = ({
   onToggleAll,
   searchPlaceholder = 'Ara...',
   searchTerm,
-  onSearchChange
+  onSearchChange,
 }) => (
   <div className="card mb-4">
     <div className="card-header">
@@ -27,9 +27,7 @@ const CrudTable = ({
         <div className="d-flex align-items-center gap-2">
           <h5 className="mb-0">{title}</h5>
           {enableSelection && selectedCount > 0 && (
-            <span className="badge bg-primary rounded-pill">
-              {selectedCount} seçili
-            </span>
+            <span className="badge bg-primary rounded-pill">{selectedCount} seçili</span>
           )}
         </div>
         <div className="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center gap-2 w-100 w-md-auto">
@@ -39,7 +37,7 @@ const CrudTable = ({
               className="form-control form-control-sm ps-5"
               placeholder={searchPlaceholder}
               value={searchTerm || ''}
-              onChange={e => onSearchChange && onSearchChange(e.target.value)}
+              onChange={(e) => onSearchChange && onSearchChange(e.target.value)}
             />
             <span
               className="position-absolute top-50 start-0 translate-middle-y ms-3 text-muted"
@@ -75,12 +73,14 @@ const CrudTable = ({
                   <input
                     type="checkbox"
                     className="form-check-input"
-                    checked={items.length > 0 && items.every(it => it.__selected)}
-                    onChange={e => onToggleAll && onToggleAll(e.target.checked, items)}
+                    checked={items.length > 0 && items.every((it) => it.__selected)}
+                    onChange={(e) => onToggleAll && onToggleAll(e.target.checked, items)}
                   />
                 </th>
               )}
-              {columns.map(c => <th key={c.key}>{c.title}</th>)}
+              {columns.map((c) => (
+                <th key={c.key}>{c.title}</th>
+              ))}
               <th style={{ width: 120 }}>İşlemler</th>
             </tr>
           </thead>
@@ -94,38 +94,44 @@ const CrudTable = ({
             )}
             {!loading && items.length === 0 && (
               <tr>
-                <td colSpan={columns.length + (enableSelection ? 2 : 1)} className="text-center py-4 text-muted">Kayıt bulunamadı</td>
-              </tr>
-            )}
-            {!loading && items.map(item => (
-              <tr key={item.id}>
-                {enableSelection && (
-                  <td>
-                    <input
-                      type="checkbox"
-                      className="form-check-input"
-                      checked={!!item.__selected}
-                      onChange={() => item.__onToggle && item.__onToggle(item)}
-                    />
-                  </td>
-                )}
-                {columns.map(c => (
-                  <td key={c.key}>
-                    {typeof c.render === 'function' ? c.render(item[c.key], item) : item[c.key]}
-                  </td>
-                ))}
-                <td>
-                  <div className="btn-group btn-group-sm">
-                    <button className="btn btn-outline-secondary" onClick={() => onEdit(item)}>
-                      <i className="fas fa-edit"></i>
-                    </button>
-                    <button className="btn btn-outline-danger" onClick={() => onDelete(item)}>
-                      <i className="fas fa-trash"></i>
-                    </button>
-                  </div>
+                <td
+                  colSpan={columns.length + (enableSelection ? 2 : 1)}
+                  className="text-center py-4 text-muted"
+                >
+                  Kayıt bulunamadı
                 </td>
               </tr>
-            ))}
+            )}
+            {!loading &&
+              items.map((item) => (
+                <tr key={item.id}>
+                  {enableSelection && (
+                    <td>
+                      <input
+                        type="checkbox"
+                        className="form-check-input"
+                        checked={!!item.__selected}
+                        onChange={() => item.__onToggle && item.__onToggle(item)}
+                      />
+                    </td>
+                  )}
+                  {columns.map((c) => (
+                    <td key={c.key}>
+                      {typeof c.render === 'function' ? c.render(item[c.key], item) : item[c.key]}
+                    </td>
+                  ))}
+                  <td>
+                    <div className="btn-group btn-group-sm">
+                      <button className="btn btn-outline-secondary" onClick={() => onEdit(item)}>
+                        <i className="fas fa-edit"></i>
+                      </button>
+                      <button className="btn btn-outline-danger" onClick={() => onDelete(item)}>
+                        <i className="fas fa-trash"></i>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
           </tbody>
         </table>
       </div>
@@ -142,7 +148,7 @@ const EditModal = ({ title, fields, item, onClose, onSave, saving, error }) => {
         name: item.name || '',
         description: item.description || '',
         active: item.active !== false,
-        hexCode: item.hexCode || ''
+        hexCode: item.hexCode || '',
       });
     } else {
       setForm({ name: '', description: '', active: true, hexCode: '' });
@@ -158,17 +164,25 @@ const EditModal = ({ title, fields, item, onClose, onSave, saving, error }) => {
             <button type="button" className="btn-close" onClick={onClose}></button>
           </div>
           <div className="modal-body">
-            {error && <div className="alert alert-danger" dangerouslySetInnerHTML={{ __html: error }} />}
+            {error && <div className="alert alert-danger">{error}</div>}
             {fields.includes('name') && (
               <div className="mb-3">
                 <label className="form-label">İsim</label>
-                <input className="form-control" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
+                <input
+                  className="form-control"
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                />
               </div>
             )}
             {fields.includes('description') && (
               <div className="mb-3">
                 <label className="form-label">Açıklama</label>
-                <input className="form-control" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
+                <input
+                  className="form-control"
+                  value={form.description}
+                  onChange={(e) => setForm({ ...form, description: e.target.value })}
+                />
               </div>
             )}
             {fields.includes('hexCode') && (
@@ -187,7 +201,7 @@ const EditModal = ({ title, fields, item, onClose, onSave, saving, error }) => {
                     { name: 'Pembe', hex: '#FFC0CB' },
                     { name: 'Kahverengi', hex: '#8B4513' },
                     { name: 'Gri', hex: '#808080' },
-                    { name: 'Camgöbeği', hex: '#00FFFF' }
+                    { name: 'Camgöbeği', hex: '#00FFFF' },
                   ].map((c) => (
                     <button
                       type="button"
@@ -196,7 +210,7 @@ const EditModal = ({ title, fields, item, onClose, onSave, saving, error }) => {
                       style={{
                         border: form.hexCode === c.hex ? '2px solid var(--bs-primary)' : '1px solid #ddd',
                         padding: 6,
-                        borderRadius: 8
+                        borderRadius: 8,
                       }}
                       onClick={() => setForm({ ...form, hexCode: c.hex })}
                       title={c.name}
@@ -208,7 +222,7 @@ const EditModal = ({ title, fields, item, onClose, onSave, saving, error }) => {
                           height: 24,
                           borderRadius: 4,
                           backgroundColor: c.hex,
-                          border: '1px solid rgba(0,0,0,0.15)'
+                          border: '1px solid rgba(0,0,0,0.15)',
                         }}
                       />
                     </button>
@@ -228,13 +242,23 @@ const EditModal = ({ title, fields, item, onClose, onSave, saving, error }) => {
             )}
             {fields.includes('active') && (
               <div className="form-check">
-                <input type="checkbox" className="form-check-input" id="active" checked={form.active} onChange={e => setForm({ ...form, active: e.target.checked })} />
-                <label className="form-check-label" htmlFor="active">Aktif</label>
+                <input
+                  type="checkbox"
+                  className="form-check-input"
+                  id="active"
+                  checked={form.active}
+                  onChange={(e) => setForm({ ...form, active: e.target.checked })}
+                />
+                <label className="form-check-label" htmlFor="active">
+                  Aktif
+                </label>
               </div>
             )}
           </div>
           <div className="modal-footer">
-            <button className="btn btn-secondary" onClick={onClose} disabled={saving}>İptal</button>
+            <button className="btn btn-secondary" onClick={onClose} disabled={saving}>
+              İptal
+            </button>
             <button className="btn btn-primary" onClick={() => onSave(form)} disabled={saving}>
               {saving ? <span className="spinner-border spinner-border-sm" /> : 'Kaydet'}
             </button>
@@ -253,7 +277,12 @@ const UserModal = ({ user, onClose, onSave, saving, error }) => {
 
   useEffect(() => {
     if (user) {
-      setForm({ username: user.username || '', password: '', confirmPassword: '', role: user.role || 'STOCK_IN' });
+      setForm({
+        username: user.username || '',
+        password: '',
+        confirmPassword: '',
+        role: user.role || 'STOCK_IN',
+      });
     } else {
       setForm({ username: '', password: '', confirmPassword: '', role: 'STOCK_IN' });
     }
@@ -264,7 +293,8 @@ const UserModal = ({ user, onClose, onSave, saving, error }) => {
   const passwordTooShort = passwordRequired && (!form.password || form.password.length < 5);
   const passwordsMismatch = passwordRequired && form.password !== form.confirmPassword;
   const usernameEmpty = !form.username || form.username.trim().length === 0;
-  const canSave = !usernameEmpty && !passwordTooShort && !passwordsMismatch && (!passwordRequired || !!form.password);
+  const canSave =
+    !usernameEmpty && !passwordTooShort && !passwordsMismatch && (!passwordRequired || !!form.password);
 
   const currentValidationMessage = (() => {
     if (usernameEmpty) return 'Kullanıcı adı zorunludur.';
@@ -289,21 +319,27 @@ const UserModal = ({ user, onClose, onSave, saving, error }) => {
             <button type="button" className="btn-close" onClick={onClose}></button>
           </div>
           <div className="modal-body">
-            {(error || localError) && (
-              <div className="alert alert-danger" dangerouslySetInnerHTML={{ __html: error || localError }} />
-            )}
+            {(error || localError) && <div className="alert alert-danger">{error || localError}</div>}
             <div className="mb-3">
               <label className="form-label">Kullanıcı Adı</label>
-              <input className="form-control" value={form.username} onChange={e => setForm({ ...form, username: e.target.value })} disabled={!!user} />
+              <input
+                className="form-control"
+                value={form.username}
+                onChange={(e) => setForm({ ...form, username: e.target.value })}
+                disabled={!!user}
+              />
             </div>
             <div className="mb-3">
-              <label className="form-label">Parola {user && <small className="text-muted">(değiştirmek istemiyorsanız boş bırakın)</small>}</label>
+              <label className="form-label">
+                Parola{' '}
+                {user && <small className="text-muted">(değiştirmek istemiyorsanız boş bırakın)</small>}
+              </label>
               <div className="input-group">
                 <input
                   type={showPassword ? 'text' : 'password'}
                   className="form-control"
                   value={form.password}
-                  onChange={e => setForm({ ...form, password: e.target.value })}
+                  onChange={(e) => setForm({ ...form, password: e.target.value })}
                   autoComplete="new-password"
                   name="new-user-password"
                   aria-invalid={passwordTooShort || passwordsMismatch ? 'true' : 'false'}
@@ -311,7 +347,7 @@ const UserModal = ({ user, onClose, onSave, saving, error }) => {
                 <button
                   type="button"
                   className="btn btn-outline-secondary"
-                  onClick={() => setShowPassword(prev => !prev)}
+                  onClick={() => setShowPassword((prev) => !prev)}
                 >
                   <i className={`fas fa-eye${showPassword ? '-slash' : ''}`}></i>
                 </button>
@@ -324,7 +360,7 @@ const UserModal = ({ user, onClose, onSave, saving, error }) => {
                   type={showConfirm ? 'text' : 'password'}
                   className="form-control"
                   value={form.confirmPassword}
-                  onChange={e => setForm({ ...form, confirmPassword: e.target.value })}
+                  onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
                   autoComplete="new-password"
                   name="new-user-password-confirm"
                   aria-invalid={passwordTooShort || passwordsMismatch ? 'true' : 'false'}
@@ -332,7 +368,7 @@ const UserModal = ({ user, onClose, onSave, saving, error }) => {
                 <button
                   type="button"
                   className="btn btn-outline-secondary"
-                  onClick={() => setShowConfirm(prev => !prev)}
+                  onClick={() => setShowConfirm((prev) => !prev)}
                 >
                   <i className={`fas fa-eye${showConfirm ? '-slash' : ''}`}></i>
                 </button>
@@ -347,20 +383,28 @@ const UserModal = ({ user, onClose, onSave, saving, error }) => {
             </div>
             <div className="mb-3">
               <label className="form-label">Yetki</label>
-              <select className="form-select" value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}>
+              <select
+                className="form-select"
+                value={form.role}
+                onChange={(e) => setForm({ ...form, role: e.target.value })}
+              >
                 <option value="ADMIN">Yönetici (Tam Yetki)</option>
                 <option value="STOCK_IN">Stok Giriş Sorumlusu</option>
                 <option value="STOCK_OUT">Stok Çıkış Sorumlusu</option>
               </select>
               <small className="text-muted d-block mt-1">
                 {form.role === 'ADMIN' && '✓ Tüm işlemleri yapabilir, Excel ile stok yükleyebilir'}
-                {form.role === 'STOCK_IN' && '✓ Sadece stok ekleme talebi oluşturabilir (Yönetici onayı gerekir)'}
-                {form.role === 'STOCK_OUT' && '✓ Sadece stok çıkarma talebi oluşturabilir (Yönetici onayı gerekir)'}
+                {form.role === 'STOCK_IN' &&
+                  '✓ Sadece stok ekleme talebi oluşturabilir (Yönetici onayı gerekir)'}
+                {form.role === 'STOCK_OUT' &&
+                  '✓ Sadece stok çıkarma talebi oluşturabilir (Yönetici onayı gerekir)'}
               </small>
             </div>
           </div>
           <div className="modal-footer">
-            <button className="btn btn-secondary" onClick={onClose} disabled={saving}>İptal</button>
+            <button className="btn btn-secondary" onClick={onClose} disabled={saving}>
+              İptal
+            </button>
             <button className="btn btn-primary" onClick={handleSaveClick} disabled={saving || !canSave}>
               {saving ? <span className="spinner-border spinner-border-sm" /> : 'Kaydet'}
             </button>
@@ -375,7 +419,10 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
   const location = useLocation();
   const allowedTabsKey = useMemo(() => JSON.stringify(allowedTabsProp ?? []), [allowedTabsProp]);
   const allowedTabs = useMemo(
-    () => (Array.isArray(allowedTabsProp) && allowedTabsProp.length ? [...allowedTabsProp] : ['brand', 'color', 'users']),
+    () =>
+      Array.isArray(allowedTabsProp) && allowedTabsProp.length
+        ? [...allowedTabsProp]
+        : ['brand', 'color', 'users'],
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [allowedTabsKey]
   );
@@ -399,11 +446,7 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
   const showToast = (message, type = 'success') => {
     const toast = document.createElement('div');
     const bgClass =
-      type === 'success'
-        ? 'text-bg-success'
-        : type === 'warning'
-          ? 'text-bg-warning'
-          : 'text-bg-danger';
+      type === 'success' ? 'text-bg-success' : type === 'warning' ? 'text-bg-warning' : 'text-bg-danger';
     const icon =
       type === 'success'
         ? 'fa-check-circle'
@@ -419,27 +462,30 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
           <i class="fas ${icon} me-2 mt-1"></i>
           <div class="flex-grow-1">${message}</div>
         </div>
-        <button type="button" class="btn-close ${type === 'success' ? 'btn-close-white' : ''
-      } me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button>
+        <button type="button" class="btn-close ${
+          type === 'success' ? 'btn-close-white' : ''
+        } me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button>
       </div>
     `;
     document.body.appendChild(toast);
-    setTimeout(() => {
-      try {
-        toast.classList.remove('show');
-        setTimeout(() => {
-          try {
-            document.body.removeChild(toast);
-          } catch { }
-        }, 300);
-      } catch { }
-    }, type === 'success' ? 4000 : 7000);
+    setTimeout(
+      () => {
+        try {
+          toast.classList.remove('show');
+          setTimeout(() => {
+            try {
+              document.body.removeChild(toast);
+            } catch {}
+          }, 300);
+        } catch {}
+      },
+      type === 'success' ? 4000 : 7000
+    );
   };
-
 
   // Helper to safely extract the error message from the backend along with its details
   const buildErrorMessage = (rawError, fallbackMessage) => {
-    console.log(rawError)
+    console.log(rawError);
     if (!rawError) {
       return fallbackMessage;
     }
@@ -457,17 +503,17 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
     }
 
     // From here on we assume it's an object
-    const backendMessage =
-      apiError && typeof apiError.message === 'string'
-        ? apiError.message.trim()
-        : null;
+    const backendMessage = apiError && typeof apiError.message === 'string' ? apiError.message.trim() : null;
 
     // details may be either an array or a string
     let details = [];
     if (Array.isArray(apiError?.details)) {
       details = apiError.details;
     } else if (typeof apiError?.details === 'string') {
-      details = apiError.details.split('\n').map(d => d.trim()).filter(Boolean);
+      details = apiError.details
+        .split('\n')
+        .map((d) => d.trim())
+        .filter(Boolean);
     }
 
     // Base message
@@ -478,9 +524,7 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
     }
 
     // List the details as HTML
-    const listHtml = details
-      .map(d => `• ${String(d).trim()}`)
-      .join('<br/>');
+    const listHtml = details.map((d) => `• ${String(d).trim()}`).join('<br/>');
 
     return `${base}<br/><br/><strong>İlgili ürünler:</strong><br/>${listHtml}`;
   };
@@ -497,13 +541,24 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
   const [showSecurityPassword, setShowSecurityPassword] = useState({
     current: false,
     new: false,
-    confirm: false
+    confirm: false,
   });
   const usersRef = useRef([]);
-  const { askCode: askSecurityCode, SecurityCodePrompt, closePrompt: closeSecurityPrompt } = useSecurityCodePrompt();
+  const {
+    askCode: askSecurityCode,
+    SecurityCodePrompt,
+    closePrompt: closeSecurityPrompt,
+  } = useSecurityCodePrompt();
   const adminSecurityErrorCodes = new Set([
-    'AUTH_002', 'AUTH_003', 'AUTH_004', 'AUTH_005', 'AUTH_006', 'AUTH_007',
-    'ADMIN_SECURITY_CODE_REQUIRED', 'INVALID_ADMIN_SECURITY_CODE', 'ADMIN_SECURITY_CODE_MISMATCH'
+    'AUTH_002',
+    'AUTH_003',
+    'AUTH_004',
+    'AUTH_005',
+    'AUTH_006',
+    'AUTH_007',
+    'ADMIN_SECURITY_CODE_REQUIRED',
+    'INVALID_ADMIN_SECURITY_CODE',
+    'ADMIN_SECURITY_CODE_MISMATCH',
   ]);
   const parseSecurityError = (error) => {
     const data = error?.response?.data;
@@ -518,24 +573,30 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
       const tasks = [];
       if (fetchBrands) {
         tasks.push(
-          axios.get('/api/brands')
-            .then(res => setBrands(res.data || []))
-            .catch(() => { }) // keep the previous state
+          axios
+            .get('/api/brands')
+            .then((res) => setBrands(res.data || []))
+            .catch(() => {}) // keep the previous state
         );
       }
       if (fetchColors) {
         tasks.push(
-          axios.get('/api/colors')
-            .then(res => setColors(res.data || []))
-            .catch(() => { })
+          axios
+            .get('/api/colors')
+            .then((res) => setColors(res.data || []))
+            .catch(() => {})
         );
       }
       if (fetchUsers) {
         tasks.push(
-          axios.get('/api/users')
-            .then(res => {
+          axios
+            .get('/api/users')
+            .then((res) => {
               const incoming = Array.isArray(res.data) ? res.data : usersRef.current;
-              console.log('[AdminSettings] users fetched', { next: incoming.length, prev: usersRef.current.length });
+              console.log('[AdminSettings] users fetched', {
+                next: incoming.length,
+                prev: usersRef.current.length,
+              });
               // Guard: keep the old list on an unexpected drop from the current list's count
               if (incoming.length === 0 && usersRef.current.length > 0) {
                 console.warn('[AdminSettings] empty users response, keeping previous list');
@@ -587,7 +648,6 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
     }
   }, [users]);
 
-
   useEffect(() => {
     load({
       fetchBrands: allowedTabs.includes('brand'),
@@ -601,7 +661,7 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
   useEffect(() => {
     const fetchSecurityStatus = async () => {
       try {
-        setSecurityStatus(s => ({ ...s, loading: true }));
+        setSecurityStatus((s) => ({ ...s, loading: true }));
         const { data } = await axios.get('/api/admin/security-code/status');
         setSecurityStatus({ configured: !!data?.configured, loading: false });
       } catch {
@@ -656,7 +716,7 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
         activeTab === 'brand'
           ? 'Marka kaydedilirken bir hata oluştu. Lütfen bilgileri kontrol edin.'
           : 'Renk kaydedilirken bir hata oluştu. Lütfen bilgileri kontrol edin.';
-      console.log(e.response)
+      console.log(e.response);
       const finalMessage = buildErrorMessage(e.response?.data, fallback);
       setError(finalMessage);
       showToast(finalMessage, 'error');
@@ -684,7 +744,7 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
           const code = await askSecurityCode({
             prefill: lastCode,
             errorMessage: lastErrorMsg || (lastCode ? 'Güvenlik şifresi hatalı, tekrar deneyin.' : ''),
-            persistOnResolve: true
+            persistOnResolve: true,
           });
           if (code === null) {
             closeSecurityPrompt();
@@ -697,18 +757,14 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
             await axios.delete(url, { headers: { 'X-ADMIN-SECURITY-CODE': code } });
             closeSecurityPrompt();
             await load();
-            showToast(
-              `"${item.name}" ${itemType.toLowerCase()}ı başarıyla silindi.`,
-              'success'
-            );
+            showToast(`"${item.name}" ${itemType.toLowerCase()}ı başarıyla silindi.`, 'success');
             break;
           } catch (e) {
             const { code: errCode, msg } = parseSecurityError(e);
             lastErrorMsg = msg;
             if (!adminSecurityErrorCodes.has(errCode)) {
               closeSecurityPrompt();
-              const fallbackMsg =
-                `"${item.name}" ${itemType.toLowerCase()} silinirken bir hata oluştu. Bu öğe başka kayıtlar tarafından kullanılıyor olabilir.`;
+              const fallbackMsg = `"${item.name}" ${itemType.toLowerCase()} silinirken bir hata oluştu. Bu öğe başka kayıtlar tarafından kullanılıyor olabilir.`;
               const finalMessage = buildErrorMessage(e.response?.data, fallbackMsg);
               showToast(finalMessage, 'error');
               break;
@@ -717,7 +773,7 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
             // security error -> retry with same modal
           }
         }
-      }
+      },
     });
   };
 
@@ -744,7 +800,7 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
           const code = await askSecurityCode({
             prefill: lastCode,
             errorMessage: lastErrorMsg || (lastCode ? 'Güvenlik şifresi hatalı, tekrar deneyin.' : ''),
-            persistOnResolve: true
+            persistOnResolve: true,
           });
           if (code === null) {
             closeSecurityPrompt();
@@ -772,8 +828,7 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
             lastErrorMsg = msg;
             if (!adminSecurityErrorCodes.has(errCode)) {
               closeSecurityPrompt();
-              const fallbackMsg =
-                'Toplu silme sırasında bir hata oluştu. Lütfen daha sonra tekrar deneyin.';
+              const fallbackMsg = 'Toplu silme sırasında bir hata oluştu. Lütfen daha sonra tekrar deneyin.';
               const finalMessage = buildErrorMessage(e.response?.data, fallbackMsg);
               showToast(finalMessage, 'error');
               break;
@@ -782,7 +837,7 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
             // security error -> retry with same modal
           }
         }
-      }
+      },
     });
   };
 
@@ -803,7 +858,7 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
           const code = await askSecurityCode({
             prefill: lastCode,
             errorMessage: lastErrorMsg || (lastCode ? 'Güvenlik şifresi hatalı, tekrar deneyin.' : ''),
-            persistOnResolve: true
+            persistOnResolve: true,
           });
           if (code === null) {
             closeSecurityPrompt();
@@ -823,8 +878,7 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
             lastErrorMsg = msg;
             if (!adminSecurityErrorCodes.has(errCode)) {
               closeSecurityPrompt();
-              const fallbackMsg =
-                `"${user.username}" kullanıcısı silinirken bir hata oluştu. Kullanıcıya ait başka kayıtlar olabilir.`;
+              const fallbackMsg = `"${user.username}" kullanıcısı silinirken bir hata oluştu. Kullanıcıya ait başka kayıtlar olabilir.`;
               const finalMessage = buildErrorMessage(e.response?.data, fallbackMsg);
               showToast(finalMessage, 'error');
               break;
@@ -832,7 +886,7 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
             // security error -> retry same modal
           }
         }
-      }
+      },
     });
   };
 
@@ -891,17 +945,32 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
         <ul className="nav nav-pills flex-wrap">
           {allowedTabs.includes('brand') && (
             <li className="nav-item mb-1">
-              <button className={`nav-link ${activeTab === 'brand' ? 'active' : ''}`} onClick={() => setActiveTab('brand')}>Marka</button>
+              <button
+                className={`nav-link ${activeTab === 'brand' ? 'active' : ''}`}
+                onClick={() => setActiveTab('brand')}
+              >
+                Marka
+              </button>
             </li>
           )}
           {allowedTabs.includes('color') && (
             <li className="nav-item ms-0 ms-md-2 mb-1">
-              <button className={`nav-link ${activeTab === 'color' ? 'active' : ''}`} onClick={() => setActiveTab('color')}>Renk</button>
+              <button
+                className={`nav-link ${activeTab === 'color' ? 'active' : ''}`}
+                onClick={() => setActiveTab('color')}
+              >
+                Renk
+              </button>
             </li>
           )}
           {allowedTabs.includes('users') && (
             <li className="nav-item ms-0 ms-md-2 mb-1">
-              <button className={`nav-link ${activeTab === 'users' ? 'active' : ''}`} onClick={() => setActiveTab('users')}>Kullanıcılar</button>
+              <button
+                className={`nav-link ${activeTab === 'users' ? 'active' : ''}`}
+                onClick={() => setActiveTab('users')}
+              >
+                Kullanıcılar
+              </button>
             </li>
           )}
         </ul>
@@ -913,35 +982,40 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
           columns={[
             { key: 'name', title: 'Ad' },
             { key: 'description', title: 'Açıklama' },
-            { key: 'active', title: 'Durum', render: (v) => v ? 'Aktif' : 'Pasif' }
+            { key: 'active', title: 'Durum', render: (v) => (v ? 'Aktif' : 'Pasif') },
           ]}
           items={brands
-            .filter(b => !brandSearch || (b.name || '').toLowerCase().includes(brandSearch.toLowerCase()))
-            .map(b => ({
+            .filter((b) => !brandSearch || (b.name || '').toLowerCase().includes(brandSearch.toLowerCase()))
+            .map((b) => ({
               ...b,
               __selected: selectedBrandIds.includes(b.id),
               __onToggle: () => {
-                setSelectedBrandIds(prev =>
-                  prev.includes(b.id) ? prev.filter(id => id !== b.id) : [...prev, b.id]
+                setSelectedBrandIds((prev) =>
+                  prev.includes(b.id) ? prev.filter((id) => id !== b.id) : [...prev, b.id]
                 );
-              }
-            }))
-          }
+              },
+            }))}
           loading={loading}
-          onCreate={() => { setError(''); setEditing(null); }}
-          onEdit={(it) => { setError(''); setEditing(it); }}
+          onCreate={() => {
+            setError('');
+            setEditing(null);
+          }}
+          onEdit={(it) => {
+            setError('');
+            setEditing(it);
+          }}
           onDelete={handleDelete}
           enableSelection
           onBulkDelete={handleBulkDelete}
           hasSelection={selectedBrandIds.length > 0}
           selectedCount={selectedBrandIds.length}
           onToggleAll={(checked, visibleItems) => {
-            const visibleIds = visibleItems.map(it => it.id);
-            setSelectedBrandIds(prev => {
+            const visibleIds = visibleItems.map((it) => it.id);
+            setSelectedBrandIds((prev) => {
               if (checked) {
                 return Array.from(new Set([...prev, ...visibleIds]));
               }
-              return prev.filter(id => !visibleIds.includes(id));
+              return prev.filter((id) => !visibleIds.includes(id));
             });
           }}
           searchPlaceholder="Marka ara..."
@@ -958,51 +1032,59 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
             {
               key: 'hexCode',
               title: 'Renk Kodu',
-              render: (v) => v ? (
-                <span className="d-inline-flex align-items-center gap-2">
-                  <span
-                    style={{
-                      display: 'inline-block',
-                      width: 16,
-                      height: 16,
-                      borderRadius: 3,
-                      backgroundColor: v,
-                      border: '1px solid rgba(0,0,0,0.15)'
-                    }}
-                  />
-                  <span>{v}</span>
-                </span>
-              ) : '-'
+              render: (v) =>
+                v ? (
+                  <span className="d-inline-flex align-items-center gap-2">
+                    <span
+                      style={{
+                        display: 'inline-block',
+                        width: 16,
+                        height: 16,
+                        borderRadius: 3,
+                        backgroundColor: v,
+                        border: '1px solid rgba(0,0,0,0.15)',
+                      }}
+                    />
+                    <span>{v}</span>
+                  </span>
+                ) : (
+                  '-'
+                ),
             },
-            { key: 'active', title: 'Durum', render: (v) => v ? 'Aktif' : 'Pasif' }
+            { key: 'active', title: 'Durum', render: (v) => (v ? 'Aktif' : 'Pasif') },
           ]}
           items={colors
-            .filter(c => !colorSearch || (c.name || '').toLowerCase().includes(colorSearch.toLowerCase()))
-            .map(c => ({
+            .filter((c) => !colorSearch || (c.name || '').toLowerCase().includes(colorSearch.toLowerCase()))
+            .map((c) => ({
               ...c,
               __selected: selectedColorIds.includes(c.id),
               __onToggle: () => {
-                setSelectedColorIds(prev =>
-                  prev.includes(c.id) ? prev.filter(id => id !== c.id) : [...prev, c.id]
+                setSelectedColorIds((prev) =>
+                  prev.includes(c.id) ? prev.filter((id) => id !== c.id) : [...prev, c.id]
                 );
-              }
-            }))
-          }
+              },
+            }))}
           loading={loading}
-          onCreate={() => { setError(''); setEditing(null); }}
-          onEdit={(it) => { setError(''); setEditing(it); }}
+          onCreate={() => {
+            setError('');
+            setEditing(null);
+          }}
+          onEdit={(it) => {
+            setError('');
+            setEditing(it);
+          }}
           onDelete={handleDelete}
           enableSelection
           onBulkDelete={handleBulkDelete}
           hasSelection={selectedColorIds.length > 0}
           selectedCount={selectedColorIds.length}
           onToggleAll={(checked, visibleItems) => {
-            const visibleIds = visibleItems.map(it => it.id);
-            setSelectedColorIds(prev => {
+            const visibleIds = visibleItems.map((it) => it.id);
+            setSelectedColorIds((prev) => {
               if (checked) {
                 return Array.from(new Set([...prev, ...visibleIds]));
               }
-              return prev.filter(id => !visibleIds.includes(id));
+              return prev.filter((id) => !visibleIds.includes(id));
             });
           }}
           searchPlaceholder="Renk ara..."
@@ -1024,7 +1106,7 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
                       className="form-control form-control-sm ps-5"
                       placeholder="Kullanıcı ara..."
                       value={userSearch}
-                      onChange={e => setUserSearch(e.target.value)}
+                      onChange={(e) => setUserSearch(e.target.value)}
                       autoComplete="new-password"
                       name="user-search"
                     />
@@ -1046,7 +1128,13 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
                   <i className="fas fa-shield-alt me-2"></i>
                   Yönetici Güvenlik Şifresi
                 </button>
-                <button className="btn btn-primary btn-sm" onClick={() => { setError(''); setEditing({ __create: true }); }}>
+                <button
+                  className="btn btn-primary btn-sm"
+                  onClick={() => {
+                    setError('');
+                    setEditing({ __create: true });
+                  }}
+                >
                   <i className="fas fa-user-plus me-2"></i>Yeni Kullanıcı
                 </button>
               </div>
@@ -1064,39 +1152,57 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
                 </thead>
                 <tbody>
                   {loading && (
-                    <tr><td colSpan={3} className="text-center py-4"><span className="spinner-border"></span></td></tr>
+                    <tr>
+                      <td colSpan={3} className="text-center py-4">
+                        <span className="spinner-border"></span>
+                      </td>
+                    </tr>
                   )}
-                  {!loading && users.filter(u =>
-                    !userSearch ||
-                    (u.username || '').toLowerCase().includes(userSearch.toLowerCase())
-                  ).length === 0 && (
-                      <tr><td colSpan={3} className="text-center py-4 text-muted">Kayıt bulunamadı</td></tr>
-                    )}
-                  {!loading && users
-                    .filter(u =>
-                      !userSearch ||
-                      (u.username || '').toLowerCase().includes(userSearch.toLowerCase())
-                    )
-                    .map(u => (
-                      <tr key={u.id}>
-                        <td>{u.username}</td>
-                        <td>
-                          <span className={`badge ${u.role === 'ADMIN' ? 'bg-danger' : u.role === 'STOCK_IN' ? 'bg-success' : 'bg-warning'}`}>
-                            {roleLabel(u.role)}
-                          </span>
-                        </td>
-                        <td>
-                          <div className="btn-group btn-group-sm">
-                            <button className="btn btn-outline-secondary" onClick={() => { setError(''); setEditing(u); }}>
-                              <i className="fas fa-edit"></i>
-                            </button>
-                            <button className="btn btn-outline-danger" onClick={() => handleDeleteUser(u)}>
-                              <i className="fas fa-trash"></i>
-                            </button>
-                          </div>
+                  {!loading &&
+                    users.filter(
+                      (u) =>
+                        !userSearch || (u.username || '').toLowerCase().includes(userSearch.toLowerCase())
+                    ).length === 0 && (
+                      <tr>
+                        <td colSpan={3} className="text-center py-4 text-muted">
+                          Kayıt bulunamadı
                         </td>
                       </tr>
-                    ))}
+                    )}
+                  {!loading &&
+                    users
+                      .filter(
+                        (u) =>
+                          !userSearch || (u.username || '').toLowerCase().includes(userSearch.toLowerCase())
+                      )
+                      .map((u) => (
+                        <tr key={u.id}>
+                          <td>{u.username}</td>
+                          <td>
+                            <span
+                              className={`badge ${u.role === 'ADMIN' ? 'bg-danger' : u.role === 'STOCK_IN' ? 'bg-success' : 'bg-warning'}`}
+                            >
+                              {roleLabel(u.role)}
+                            </span>
+                          </td>
+                          <td>
+                            <div className="btn-group btn-group-sm">
+                              <button
+                                className="btn btn-outline-secondary"
+                                onClick={() => {
+                                  setError('');
+                                  setEditing(u);
+                                }}
+                              >
+                                <i className="fas fa-edit"></i>
+                              </button>
+                              <button className="btn btn-outline-danger" onClick={() => handleDeleteUser(u)}>
+                                <i className="fas fa-trash"></i>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
                 </tbody>
               </table>
             </div>
@@ -1106,7 +1212,15 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
 
       {(activeTab === 'brand' || activeTab === 'color') && editing !== undefined && (
         <EditModal
-          title={activeTab === 'brand' ? (editing ? 'Marka Düzenle' : 'Yeni Marka') : (editing ? 'Renk Düzenle' : 'Yeni Renk')}
+          title={
+            activeTab === 'brand'
+              ? editing
+                ? 'Marka Düzenle'
+                : 'Yeni Marka'
+              : editing
+                ? 'Renk Düzenle'
+                : 'Yeni Renk'
+          }
           fields={activeTab === 'brand' ? ['name', 'description', 'active'] : ['name', 'hexCode', 'active']}
           item={editing || undefined}
           onClose={() => setEditing(undefined)}
@@ -1136,8 +1250,9 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
                   while (true) {
                     const code = await askSecurityCode({
                       prefill: lastCode,
-                      errorMessage: lastErrorMsg || (lastCode ? 'Güvenlik şifresi hatalı, tekrar deneyin.' : ''),
-                      persistOnResolve: true
+                      errorMessage:
+                        lastErrorMsg || (lastCode ? 'Güvenlik şifresi hatalı, tekrar deneyin.' : ''),
+                      persistOnResolve: true,
                     });
                     if (code === null) {
                       closeSecurityPrompt();
@@ -1152,11 +1267,15 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
                   closeSecurityPrompt();
                 }
 
-                await axios.post('/api/users', {
-                  username: form.username,
-                  password: form.password,
-                  role: form.role
-                }, { headers: adminHeader });
+                await axios.post(
+                  '/api/users',
+                  {
+                    username: form.username,
+                    password: form.password,
+                    role: form.role,
+                  },
+                  { headers: adminHeader }
+                );
                 showToast('Kullanıcı başarıyla oluşturuldu.', 'success');
               } else {
                 if (form.role && form.role !== editing.role) {
@@ -1169,8 +1288,9 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
                     while (true) {
                       const code = await askSecurityCode({
                         prefill: lastCode,
-                        errorMessage: lastErrorMsg || (lastCode ? 'Güvenlik şifresi hatalı, tekrar deneyin.' : ''),
-                        persistOnResolve: true
+                        errorMessage:
+                          lastErrorMsg || (lastCode ? 'Güvenlik şifresi hatalı, tekrar deneyin.' : ''),
+                        persistOnResolve: true,
                       });
                       if (code === null) {
                         closeSecurityPrompt();
@@ -1184,11 +1304,15 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
                     }
                     closeSecurityPrompt();
                   }
-                  await axios.put(`/api/users/${editing.id}/role`, { role: form.role }, { headers: adminHeader });
+                  await axios.put(
+                    `/api/users/${editing.id}/role`,
+                    { role: form.role },
+                    { headers: adminHeader }
+                  );
                 }
                 if (form.password) {
                   await axios.put(`/api/users/${editing.id}/password`, {
-                    password: form.password
+                    password: form.password,
                   });
                 }
                 showToast('Kullanıcı bilgileri başarıyla güncellendi.', 'success');
@@ -1225,16 +1349,25 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
       />
 
       {showSecurityModal && (
-        <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 4000 }}>
+        <div
+          className="modal show d-block"
+          tabIndex="-1"
+          style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 4000 }}
+        >
           <div className="modal-dialog">
             <div className="modal-content">
               <div className="modal-header">
                 <h5 className="modal-title">Yönetici Güvenlik Şifresi</h5>
-                <button type="button" className="btn-close" onClick={() => setShowSecurityModal(false)}></button>
+                <button
+                  type="button"
+                  className="btn-close"
+                  onClick={() => setShowSecurityModal(false)}
+                ></button>
               </div>
               <div className="modal-body">
                 <p className="text-muted mb-3">
-                  Silme işlemleri için yönetici güvenlik şifresi gereklidir. Değiştirmek için mevcut şifreyi doğrulayın.
+                  Silme işlemleri için yönetici güvenlik şifresi gereklidir. Değiştirmek için mevcut şifreyi
+                  doğrulayın.
                 </p>
                 <div className="mb-3">
                   <label className="form-label">Mevcut Şifre</label>
@@ -1245,7 +1378,9 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
                         className="form-control"
                         value={securityForm.currentCode}
                         onChange={(e) => setSecurityForm({ ...securityForm, currentCode: e.target.value })}
-                        placeholder={securityStatus.configured ? 'Mevcut şifreyi girin' : 'İlk kez şifre tanımlayın'}
+                        placeholder={
+                          securityStatus.configured ? 'Mevcut şifreyi girin' : 'İlk kez şifre tanımlayın'
+                        }
                         disabled={securitySaving}
                         autoComplete="new-password"
                         name="current-security-code"
@@ -1253,7 +1388,9 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
                       <button
                         type="button"
                         className="btn btn-outline-secondary"
-                        onClick={() => setShowSecurityPassword(prev => ({ ...prev, current: !prev.current }))}
+                        onClick={() =>
+                          setShowSecurityPassword((prev) => ({ ...prev, current: !prev.current }))
+                        }
                       >
                         <i className={`fas fa-eye${showSecurityPassword.current ? '-slash' : ''}`}></i>
                       </button>
@@ -1276,7 +1413,7 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
                       <button
                         type="button"
                         className="btn btn-outline-secondary"
-                        onClick={() => setShowSecurityPassword(prev => ({ ...prev, new: !prev.new }))}
+                        onClick={() => setShowSecurityPassword((prev) => ({ ...prev, new: !prev.new }))}
                       >
                         <i className={`fas fa-eye${showSecurityPassword.new ? '-slash' : ''}`}></i>
                       </button>
@@ -1299,7 +1436,9 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
                       <button
                         type="button"
                         className="btn btn-outline-secondary"
-                        onClick={() => setShowSecurityPassword(prev => ({ ...prev, confirm: !prev.confirm }))}
+                        onClick={() =>
+                          setShowSecurityPassword((prev) => ({ ...prev, confirm: !prev.confirm }))
+                        }
                       >
                         <i className={`fas fa-eye${showSecurityPassword.confirm ? '-slash' : ''}`}></i>
                       </button>
@@ -1307,15 +1446,31 @@ const AdminSettings = ({ allowedTabs: allowedTabsProp }) => {
                   </form>
                 </div>
                 <span className={`badge ${securityStatus.configured ? 'bg-success' : 'bg-secondary'}`}>
-                  {securityStatus.loading ? 'Durum kontrol ediliyor...' : securityStatus.configured ? 'Şifre tanımlı' : 'Şifre henüz tanımlı değil'}
+                  {securityStatus.loading
+                    ? 'Durum kontrol ediliyor...'
+                    : securityStatus.configured
+                      ? 'Şifre tanımlı'
+                      : 'Şifre henüz tanımlı değil'}
                 </span>
               </div>
               <div className="modal-footer">
-                <button className="btn btn-secondary" onClick={() => setShowSecurityModal(false)} disabled={securitySaving}>
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => setShowSecurityModal(false)}
+                  disabled={securitySaving}
+                >
                   Kapat
                 </button>
-                <button className="btn btn-primary" onClick={handleSecurityCodeSave} disabled={securitySaving}>
-                  {securitySaving ? <span className="spinner-border spinner-border-sm" /> : 'Şifreyi Güncelle'}
+                <button
+                  className="btn btn-primary"
+                  onClick={handleSecurityCodeSave}
+                  disabled={securitySaving}
+                >
+                  {securitySaving ? (
+                    <span className="spinner-border spinner-border-sm" />
+                  ) : (
+                    'Şifreyi Güncelle'
+                  )}
                 </button>
               </div>
             </div>

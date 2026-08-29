@@ -34,10 +34,13 @@ public class StoreAssistantGuard {
 
     private final JwtService jwtService;
     private final AssistantRateLimiter rateLimiter;
+    private final com.warehouse.security.ClientIpResolver clientIpResolver;
 
-    public StoreAssistantGuard(JwtService jwtService, AssistantRateLimiter rateLimiter) {
+    public StoreAssistantGuard(JwtService jwtService, AssistantRateLimiter rateLimiter,
+                               com.warehouse.security.ClientIpResolver clientIpResolver) {
         this.jwtService = jwtService;
         this.rateLimiter = rateLimiter;
+        this.clientIpResolver = clientIpResolver;
     }
 
     // -------------------------------------------------------------------------
@@ -65,25 +68,22 @@ public class StoreAssistantGuard {
             }
         }
         String fresh = UUID.randomUUID().toString();
-        Cookie cookie = new Cookie(GUEST_COOKIE, fresh);
-        cookie.setHttpOnly(true);
-        cookie.setMaxAge(GUEST_COOKIE_MAX_AGE_SECONDS);
-        cookie.setPath("/");
-        // SameSite=Lax is the default on modern Tomcat; explicitly set for safety
+        // Secure as well as HttpOnly: without it the cookie is also sent over plain HTTP,
+        // where anyone on the path can read (and then reuse) the guest session id.
         response.addHeader("Set-Cookie",
-                "%s=%s; Path=/; Max-Age=%d; HttpOnly; SameSite=Lax".formatted(
+                "%s=%s; Path=/; Max-Age=%d; HttpOnly; Secure; SameSite=Lax".formatted(
                         GUEST_COOKIE, fresh, GUEST_COOKIE_MAX_AGE_SECONDS));
         return fresh;
     }
 
+    /**
+     * Trusted-proxy aware. The guest IP bucket is the only ceiling on assistant usage
+     * for a caller who keeps discarding the session cookie, and reading the left-most
+     * X-Forwarded-For entry let that caller pick a fresh bucket on every request — an
+     * unbounded LLM bill.
+     */
     private String clientIp(HttpServletRequest request) {
-        String xff = request.getHeader("X-Forwarded-For");
-        if (xff != null && !xff.isBlank()) {
-            int comma = xff.indexOf(',');
-            return comma > 0 ? xff.substring(0, comma).trim() : xff.trim();
-        }
-        String realIp = request.getHeader("X-Real-IP");
-        return realIp != null && !realIp.isBlank() ? realIp : request.getRemoteAddr();
+        return clientIpResolver.resolve(request);
     }
 
     // -------------------------------------------------------------------------

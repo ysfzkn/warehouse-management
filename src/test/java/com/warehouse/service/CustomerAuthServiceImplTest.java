@@ -45,7 +45,7 @@ class CustomerAuthServiceImplTest {
     @BeforeEach
     void setUp() {
         securityProperties = new SecurityProperties();
-        authService = new CustomerAuthServiceImpl(customerRepo, refreshTokenRepo, passwordEncoder, jwtService, googleOAuthService, securityProperties, emailService);
+        authService = new CustomerAuthServiceImpl(customerRepo, refreshTokenRepo, passwordEncoder, jwtService, googleOAuthService, securityProperties, emailService, new com.warehouse.security.TokenRevocationService());
     }
 
     @Test
@@ -201,11 +201,15 @@ class CustomerAuthServiceImplTest {
         Customer customer = TestDataFactory.createCustomer();
         CustomerRefreshToken oldToken = TestDataFactory.createRefreshToken(customer);
 
-        when(refreshTokenRepo.findByTokenAndRevokedAtIsNull(oldToken.getToken())).thenReturn(Optional.of(oldToken));
+        // Stored hashed: the lookup key is SHA-256(raw token), not the raw token.
+        String rawToken = oldToken.getToken();
+        oldToken.setToken(com.warehouse.security.EncryptionService.hashToken(rawToken));
+        when(refreshTokenRepo.findByTokenAndRevokedAtIsNull(
+                com.warehouse.security.EncryptionService.hashToken(rawToken))).thenReturn(Optional.of(oldToken));
         when(jwtService.generateCustomerToken(anyLong(), anyString())).thenReturn("new-jwt");
         when(refreshTokenRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        CustomerLoginResponse result = authService.refreshToken(oldToken.getToken());
+        CustomerLoginResponse result = authService.refreshToken(rawToken);
 
         assertThat(result.getToken()).isEqualTo("new-jwt");
         assertThat(oldToken.getRevokedAt()).isNotNull();
@@ -217,9 +221,12 @@ class CustomerAuthServiceImplTest {
         CustomerRefreshToken token = TestDataFactory.createRefreshToken(customer);
         token.setExpiresAt(LocalDateTime.now().minusDays(1));
 
-        when(refreshTokenRepo.findByTokenAndRevokedAtIsNull(token.getToken())).thenReturn(Optional.of(token));
+        String rawExpired = token.getToken();
+        token.setToken(com.warehouse.security.EncryptionService.hashToken(rawExpired));
+        when(refreshTokenRepo.findByTokenAndRevokedAtIsNull(
+                com.warehouse.security.EncryptionService.hashToken(rawExpired))).thenReturn(Optional.of(token));
 
-        assertThatThrownBy(() -> authService.refreshToken(token.getToken()))
+        assertThatThrownBy(() -> authService.refreshToken(rawExpired))
             .isInstanceOf(WarehouseManagementException.class);
     }
 

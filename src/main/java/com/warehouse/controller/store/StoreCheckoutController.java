@@ -29,14 +29,17 @@ public class StoreCheckoutController {
     private final JwtService jwtService;
     private final CargoProviderRepository cargoProviderRepository;
     private final IdempotencyStore idempotencyStore;
+    private final com.warehouse.security.ClientIpResolver clientIpResolver;
 
     public StoreCheckoutController(CheckoutService checkoutService, JwtService jwtService,
                                     CargoProviderRepository cargoProviderRepository,
-                                    IdempotencyStore idempotencyStore) {
+                                    IdempotencyStore idempotencyStore,
+                                    com.warehouse.security.ClientIpResolver clientIpResolver) {
         this.checkoutService = checkoutService;
         this.jwtService = jwtService;
         this.cargoProviderRepository = cargoProviderRepository;
         this.idempotencyStore = idempotencyStore;
+        this.clientIpResolver = clientIpResolver;
     }
 
     /**
@@ -77,7 +80,7 @@ public class StoreCheckoutController {
                                          HttpServletRequest request) {
         Long customerId = CustomerTokenExtractor.extractCustomerId(request, jwtService);
         return processWithIdempotency(NS_AUTH_CHECKOUT, idempotencyKey,
-                () -> serializeOrder(checkoutService.placeOrder(customerId, body, request.getRemoteAddr(), request.getHeader("User-Agent"))));
+                () -> serializeOrder(checkoutService.placeOrder(customerId, body, clientIpResolver.resolve(request), request.getHeader("User-Agent"))));
     }
 
     /**
@@ -88,7 +91,7 @@ public class StoreCheckoutController {
                                             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
                                             HttpServletRequest request) {
         return processWithIdempotency(NS_GUEST_CHECKOUT, idempotencyKey,
-                () -> serializeOrder(checkoutService.placeGuestOrder(body, request.getRemoteAddr(), request.getHeader("User-Agent"))));
+                () -> serializeOrder(checkoutService.placeGuestOrder(body, clientIpResolver.resolve(request), request.getHeader("User-Agent"))));
     }
 
     /**
@@ -131,6 +134,10 @@ public class StoreCheckoutController {
         m.put("status", r.getStatus());
         m.put("grandTotal", r.getGrandTotal());
         m.put("paymentUrl", r.getPaymentUrl());
+        // Handed to the browser that placed the order and required by
+        // POST /api/store/payment/initialize. This is the only response that ever
+        // carries it, which is what makes it a proof of ownership.
+        m.put("paymentToken", r.getPaymentToken());
         return m;
     }
 }

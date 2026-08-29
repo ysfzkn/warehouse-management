@@ -251,6 +251,10 @@ export default function CheckoutPage() {
       }
 
       const orderId = orderRes.data.orderId;
+      // One-time proof that this browser is the one that placed the order. The payment
+      // endpoint has to stay open to guests, so it authorises on this token instead of
+      // trusting the order id alone.
+      const paymentToken = orderRes.data.paymentToken;
 
       // Phase 2: Initialize payment
       const idempotencyKey = generateIdempotencyKey();
@@ -258,6 +262,7 @@ export default function CheckoutPage() {
         '/api/store/payment/initialize',
         {
           orderId,
+          paymentToken,
           paymentMethod,
           installmentCount: 1,
           idempotencyKey,
