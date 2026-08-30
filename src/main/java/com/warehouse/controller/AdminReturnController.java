@@ -30,6 +30,9 @@ import java.util.stream.Collectors;
 @PreAuthorize("hasRole('ADMIN')")
 public class AdminReturnController {
 
+    /** Label bound into the signature so it cannot be replayed against another endpoint. */
+    private static final String SIGNED_RESOURCE = "return-photo";
+
     private final ReturnRequestService returnService;
 
     public AdminReturnController(ReturnRequestService returnService) {
@@ -114,13 +117,22 @@ public class AdminReturnController {
     }
 
     /**
-     * Streams a customer-uploaded return photo. {@code permitAll} (like product
-     * image views) so {@code <img>} tags render it without an auth header — the id
-     * is non-enumerable-sensitive and carries no PII.
+     * Streams a customer-uploaded return photo.
+     *
+     * <p>Still reachable without a session, because an {@code <img>} tag cannot send the
+     * Bearer token — but no longer by id alone. These are photographs a customer took of
+     * a returned product, and the ids are sequential, so the previous {@code permitAll}
+     * let anyone enumerate every return in the system. The URL now has to carry a
+     * signature this server issued for that photo, and it expires.</p>
      */
     @GetMapping("/photos/{photoId}/view")
     @PreAuthorize("permitAll()")
-    public ResponseEntity<byte[]> viewPhoto(@PathVariable Long photoId) {
+    public ResponseEntity<byte[]> viewPhoto(@PathVariable Long photoId,
+                                            @RequestParam(value = "exp", required = false) String exp,
+                                            @RequestParam(value = "sig", required = false) String sig) {
+        if (!com.warehouse.security.SignedUrlService.valid(SIGNED_RESOURCE, photoId, exp, sig)) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN).build();
+        }
         ReturnRequestService.PhotoData data = returnService.getPhoto(photoId);
         org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
         try {

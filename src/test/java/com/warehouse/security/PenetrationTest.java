@@ -267,6 +267,26 @@ class PenetrationTest {
         assertThat(csp).contains("base-uri 'self'");
     }
 
+    /**
+     * Return-evidence photos and warehouse delivery photos are reachable without a
+     * session (an {@code <img>} tag cannot send a Bearer token), but the sequential id
+     * alone used to be enough to walk the whole archive.
+     */
+    @Test
+    @Order(14)
+    void mediaEndpointsRequireASignedUrl() {
+        for (String path : new String[]{
+                "/api/admin/returns/photos/1/view",
+                "/api/admin/stock-transfer-items/1/photo/view"}) {
+            assertThat(rest.getForEntity(path, String.class).getStatusCode())
+                    .as("%s must refuse an unsigned request", path)
+                    .isEqualTo(HttpStatus.FORBIDDEN);
+            assertThat(rest.getForEntity(path + "?exp=9999999999&sig=forged", String.class).getStatusCode())
+                    .as("%s must refuse a forged signature", path)
+                    .isEqualTo(HttpStatus.FORBIDDEN);
+        }
+    }
+
     // ─────────────────────────── Rate limiting ───────────────────────────
 
     /**

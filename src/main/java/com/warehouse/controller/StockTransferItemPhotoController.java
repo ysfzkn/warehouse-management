@@ -30,6 +30,9 @@ import java.util.Optional;
 @Slf4j
 public class StockTransferItemPhotoController {
 
+    /** Label bound into the signature so it cannot be replayed against another endpoint. */
+    private static final String SIGNED_RESOURCE = "transfer-item-photo";
+
     private final StockTransferItemPhotoRepository photoRepository;
     private final StockTransferItemRepository itemRepository;
     private final PhotoStorageService photoStorageService;
@@ -158,10 +161,23 @@ public class StockTransferItemPhotoController {
         return ResponseEntity.ok(body);
     }
 
+    /**
+     * Streams a warehouse delivery photo.
+     *
+     * <p>Reachable without a session because {@code <img>} cannot send the Bearer token,
+     * but the URL must carry a signature this server issued for this item. Previously the
+     * endpoint was {@code permitAll} and keyed on a sequential item id, so the whole
+     * archive of transfer photos could be walked from outside.</p>
+     */
     @GetMapping("/{itemId}/photo/view")
     @Transactional(readOnly = true)
     public ResponseEntity<byte[]> viewPhoto(@PathVariable Long itemId,
-                                            @RequestParam(name = "thumbnail", defaultValue = "false") boolean thumbnail) {
+                                            @RequestParam(name = "thumbnail", defaultValue = "false") boolean thumbnail,
+                                            @RequestParam(value = "exp", required = false) String exp,
+                                            @RequestParam(value = "sig", required = false) String sig) {
+        if (!com.warehouse.security.SignedUrlService.valid(SIGNED_RESOURCE, itemId, exp, sig)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
         StockTransferItem item = findItemOrThrow(itemId);
         StockTransferItemPhoto photo = photoRepository.findByItem(item)
                 .orElseThrow(() -> new WarehouseManagementException(ErrorCode.TRANSFER_NOT_FOUND, "Fotoğraf bulunamadı"));
@@ -214,8 +230,16 @@ public class StockTransferItemPhotoController {
                 .orElseThrow(() -> new WarehouseManagementException(ErrorCode.TRANSFER_NOT_FOUND, "Transfer satırı bulunamadı"));
     }
 
+    /**
+     * Warehouse delivery photos are served to {@code <img>} tags without an auth header,
+     * so the URL itself carries the authorisation: a signature this server issued for
+     * this item, valid for a few hours. Without it the sequential item ids let anyone
+     * page through every transfer photo in the system.
+     */
     private String buildViewUrl(Long itemId, boolean thumbnail) {
-        return "/api/stock-transfer-items/" + itemId + "/photo/view" + (thumbnail ? "?thumbnail=true" : "");
+        return "/api/stock-transfer-items/" + itemId + "/photo/view"
+                + com.warehouse.security.SignedUrlService.query(SIGNED_RESOURCE, itemId)
+                + (thumbnail ? "&thumbnail=true" : "");
     }
 }
 

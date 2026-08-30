@@ -47,6 +47,9 @@ public class AssistantDocumentService {
     private static final Logger log = LoggerFactory.getLogger(AssistantDocumentService.class);
     private static final String STORAGE_PREFIX = "assistant-documents";
 
+    /** Knowledge-base documents are text; the global 20 MB multipart cap is far too generous here. */
+    private static final long MAX_DOCUMENT_BYTES = 15L * 1024 * 1024;
+
     private final AssistantDocumentRepository documentRepository;
     private final AssistantDocumentChunkRepository chunkRepository;
     private final DocumentChunker chunker;
@@ -90,14 +93,19 @@ public class AssistantDocumentService {
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("Yüklenecek dosya boş olamaz.");
         }
-        String fileName = file.getOriginalFilename() != null ? file.getOriginalFilename() : "document";
+        // Restrict to the document formats Tika is asked to parse here, verified by their
+        // bytes rather than by the client's Content-Type. Feeding an arbitrary file into a
+        // parser stack is a large attack surface for no benefit, and the stored object was
+        // previously named and typed entirely from attacker-supplied values.
+        String extension = com.warehouse.security.UploadValidator.validateDocument(file, MAX_DOCUMENT_BYTES);
+        String fileName = "document." + extension;
         // Save via the storage abstraction → local fs in dev, S3/MinIO in prod.
         String storageKey;
         try (InputStream in = file.getInputStream()) {
             storageKey = photoStorageService.storeDocument(
                     STORAGE_PREFIX,
                     fileName,
-                    file.getContentType(),
+                    com.warehouse.security.UploadValidator.documentContentType(extension),
                     in
             );
         }

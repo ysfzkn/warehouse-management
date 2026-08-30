@@ -129,6 +129,32 @@ zamanlanmıştır (deploy sonrası yayınlanan CVE'ler için).
 
 ---
 
-## 8. Açık bildirimi
+## 8. OWASP Top 10 (2021) durumu
+
+OWASP Top 10 çalıştırılabilir bir test paketi değil, risk kategorisi listesidir. Kod
+tabanı kategori kategori geçirildi; her satır bu depodaki karşılığını gösterir.
+
+| Kategori | Durum | Notlar |
+|---|---|---|
+| **A01 Broken Access Control** | ✅ | Üç filter chain de `denyAll` ile biter. Ödeme başlatmada sahiplik kanıtı; sepet/adres/sipariş/talep/iade uçlarında ownership kontrolü doğrulandı. Kimliksiz erişilen medya uçları (iade fotoğrafı, transfer fotoğrafı) imzalı URL'ye taşındı — sıralı id ile arşiv taranamaz. Kalan: `products/images`, `reviews/images`, site asset'leri bilerek public (katalog içeriği). |
+| **A02 Cryptographic Failures** | ✅ | Parolalar bcrypt(12); TC kimlik no ve ödeme gateway sırları AES-256-GCM; refresh / e-posta doğrulama / şifre sıfırlama token'ları SHA-256 hash. HSTS + `upgrade-insecure-requests`. Zayıf `JWT_SECRET` ile prod boot etmez. |
+| **A03 Injection** | ✅ | SQL: her yerde parametreli (native sorgular dâhil, `AssistantDiagnosticsController` kontrol edildi). Komut: tek `ProcessBuilder` çağrısı (`dwebp`) sabit argüman + sunucu üretimi geçici dosya yolu, shell yok. XSS: jsoup allowlist + DOMPurify. Şablon enjeksiyonu: kullanıcı girdisiyle şablon derlenmiyor. |
+| **A04 Insecure Design** | ⚠️ | Rate limit, idempotency, stok rezervasyonu ve kupon kullanım sayacı yerinde. Sayaçlar süreç içi — çok instance'ta zayıflar (Redis maddesi). |
+| **A05 Security Misconfiguration** | ✅ | Actuator/Swagger admin'e kapalı, `info.env` kapalı, varsayılan-deny, güvenlik başlıkları hem uygulamada hem nginx'te, container non-root, hata mesajları DB detayı sızdırmıyor. |
+| **A06 Vulnerable Components** | ✅ | Spring Boot 3.3.13. CI'da OWASP Dependency-Check + `npm audit` + haftalık zamanlama. |
+| **A07 Auth Failures** | ⚠️ | Kilitleme, oturum iptali, logout, enumerasyon giderildi, yaygın parola reddi eklendi. **Admin için 2FA yok** (bilinçli, madde 6). |
+| **A08 Integrity Failures** | ✅ | CDN'den yüklenen Bootstrap ve Font Awesome'a SRI eklendi — daha önce yoktu, yani ele geçirilen bir CDN admin panelinde kod çalıştırabilirdi. Jackson polymorphic typing kullanılmıyor. Yüklenen dosyalar magic byte ile doğrulanıyor. |
+| **A09 Logging & Monitoring** | ⚠️ | Yapılandırılmış log + audit trail + `SECURITY ALERT` kayıtları var, PII maskeleniyor. **Alarm/uyarı yok** — başarısız admin girişi ve imza doğrulama hatası için bir hedefe (Sentry/Slack) bağlanmalı. |
+| **A10 SSRF** | ✅ | Crawler `SsrfGuard`'a taşındı: tüm A kayıtları, IPv6 ULA ve IPv4-mapped, tam 100.64.0.0/10, ve **her redirect hop'u yeniden doğrulanıyor** (önce sadece ilk URL kontrol ediliyordu). DNS rebinding bilinçli olarak açık bırakıldı (sınıf javadoc'unda gerekçesiyle). |
+
+Çalışan siteye karşı DAST için OWASP ZAP baseline scan:
+
+```bash
+docker run --rm -t ghcr.io/zaproxy/zaproxy:stable zap-baseline.py -t https://siteniz.com -r zap-report.html
+```
+
+---
+
+## 9. Açık bildirimi
 
 Güvenlik açığı bildirimi için issue açmayın; doğrudan sistem yöneticisine ulaşın.

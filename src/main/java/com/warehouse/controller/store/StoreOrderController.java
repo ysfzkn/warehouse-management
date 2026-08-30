@@ -206,7 +206,9 @@ public class StoreOrderController {
         try {
             Long id = returnService.addPhoto(customerId, returnNumber,
                     "upload." + imageType.extension, imageType.contentType, file.getInputStream());
-            return ResponseEntity.ok(Map.of("id", id, "url", "/api/admin/returns/photos/" + id + "/view"));
+            return ResponseEntity.ok(Map.of("id", id, "url",
+                    "/api/admin/returns/photos/" + id + "/view"
+                            + com.warehouse.security.SignedUrlService.query("return-photo", id)));
         } catch (java.io.IOException e) {
             return ResponseEntity.status(500).body(Map.of("message", "Fotoğraf yüklenemedi."));
         }

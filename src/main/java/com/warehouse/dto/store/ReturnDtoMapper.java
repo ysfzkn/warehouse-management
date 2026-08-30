@@ -80,7 +80,8 @@ public final class ReturnDtoMapper {
                 for (ReturnRequestPhoto ph : rr.getPhotos()) {
                     Map<String, Object> pm = new LinkedHashMap<>();
                     pm.put("id", ph.getId());
-                    pm.put("url", "/api/admin/returns/photos/" + ph.getId() + "/view");
+                    pm.put("url", "/api/admin/returns/photos/" + ph.getId() + "/view"
+                            + com.warehouse.security.SignedUrlService.query("return-photo", ph.getId()));
                     photos.add(pm);
                 }
             }

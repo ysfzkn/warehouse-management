@@ -1,5 +1,6 @@
 package com.warehouse.service.crawler;
 
+import com.warehouse.security.SsrfGuard;
 import com.warehouse.entity.Product;
 import com.warehouse.entity.ProductImage;
 import com.warehouse.repository.ProductImageRepository;
@@ -187,15 +188,31 @@ public class ProductImageCrawlerService {
         final int maxAttempts = 2;
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
-                org.jsoup.Connection.Response resp = Jsoup.connect(pageUrl)
-                        .userAgent(USER_AGENT)
-                        .timeout(FETCH_TIMEOUT_MS)
-                        .followRedirects(true)
-                        .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-                        .header("Accept-Language", "tr-TR,tr;q=0.9,en;q=0.8")
-                        .ignoreHttpErrors(true) // inspect the status ourselves instead of throwing raw
-                        .execute();
-                int code = resp.statusCode();
+                // Redirects are followed by hand so every hop passes the SSRF check.
+                // With followRedirects(true) only the first URL was ever validated, and a
+                // supplier page answering "302 -> http://169.254.169.254/" would have been
+                // fetched from inside the network without a second look.
+                java.net.URI current = SsrfGuard.validate(pageUrl);
+                org.jsoup.Connection.Response resp = null;
+                int code = 0;
+                for (int hop = 0; hop <= SsrfGuard.MAX_REDIRECTS; hop++) {
+                    resp = Jsoup.connect(current.toString())
+                            .userAgent(USER_AGENT)
+                            .timeout(FETCH_TIMEOUT_MS)
+                            .followRedirects(false)
+                            .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+                            .header("Accept-Language", "tr-TR,tr;q=0.9,en;q=0.8")
+                            .ignoreHttpErrors(true) // inspect the status ourselves instead of throwing raw
+                            .execute();
+                    code = resp.statusCode();
+                    if (code < 300 || code >= 400) break;
+                    String location = resp.header("Location");
+                    if (location == null || location.isBlank()) break;
+                    if (hop == SsrfGuard.MAX_REDIRECTS) {
+                        throw new CrawlException("Çok fazla yönlendirme.");
+                    }
+                    current = SsrfGuard.validateRedirect(current, location);
+                }
                 if (code == 404 || code == 410) {
                     throw new CrawlException("Ürün sayfası bulunamadı (" + code
                             + "). URL eksik veya hatalı olabilir — tarayıcıdan açıp tam adresi kopyalayın.");
@@ -1266,21 +1283,31 @@ public class ProductImageCrawlerService {
         // The image host may or may not be in the allowlist, or it may be a CDN — be flexible.
         // Still do a scheme + IP check for SSRF.
         try {
-            URI uri = URI.create(url);
-            if (!"https".equalsIgnoreCase(uri.getScheme()) && !"http".equalsIgnoreCase(uri.getScheme())) return null;
-            assertNotPrivateIp(uri.getHost());
+            // The image host does not have to be on the allowlist (CDNs vary), but the
+            // destination must still be a public address — on the first request AND on
+            // every redirect. setInstanceFollowRedirects(true) used to hand a 302 the
+            // right to point anywhere, including the container's own network.
+            URI current = SsrfGuard.validate(url);
+            HttpURLConnection conn = null;
+            int code = 0;
+            for (int hop = 0; hop <= SsrfGuard.MAX_REDIRECTS; hop++) {
+                conn = (HttpURLConnection) current.toURL().openConnection();
+                conn.setRequestProperty("User-Agent", USER_AGENT);
+                conn.setRequestProperty("Accept", "image/avif,image/webp,image/png,image/jpeg,image/*,*/*;q=0.8");
+                if (referer != null && !referer.isBlank()) {
+                    conn.setRequestProperty("Referer", referer);
+                }
+                conn.setConnectTimeout(IMAGE_DOWNLOAD_TIMEOUT_MS);
+                conn.setReadTimeout(IMAGE_DOWNLOAD_TIMEOUT_MS);
+                conn.setInstanceFollowRedirects(false);
 
-            HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
-            conn.setRequestProperty("User-Agent", USER_AGENT);
-            conn.setRequestProperty("Accept", "image/avif,image/webp,image/png,image/jpeg,image/*,*/*;q=0.8");
-            if (referer != null && !referer.isBlank()) {
-                conn.setRequestProperty("Referer", referer);
+                code = conn.getResponseCode();
+                if (code < 300 || code >= 400) break;
+                String location = conn.getHeaderField("Location");
+                conn.disconnect();
+                if (location == null || location.isBlank() || hop == SsrfGuard.MAX_REDIRECTS) return null;
+                current = SsrfGuard.validateRedirect(current, location);
             }
-            conn.setConnectTimeout(IMAGE_DOWNLOAD_TIMEOUT_MS);
-            conn.setReadTimeout(IMAGE_DOWNLOAD_TIMEOUT_MS);
-            conn.setInstanceFollowRedirects(true);
-
-            int code = conn.getResponseCode();
             if (code < 200 || code >= 300) return null;
 
             String contentType = conn.getContentType();
@@ -1376,24 +1403,21 @@ public class ProductImageCrawlerService {
         if (!allowed) {
             throw new CrawlException("Bu domain destek dışında. Desteklenen: " + String.join(", ", ALLOWED_HOSTS));
         }
+        // The allowlist is a business rule ("which suppliers do we support"); the
+        // address check below is the SSRF control, and both have to hold.
         assertNotPrivateIp(host);
     }
 
+    /**
+     * Delegates to {@link SsrfGuard}, which checks every address the host resolves to
+     * (not just the first), understands IPv6 unique-local and IPv4-mapped addresses, and
+     * covers the whole 100.64.0.0/10 CGNAT block rather than a single /24 of it.
+     */
     private void assertNotPrivateIp(String host) {
         try {
-            InetAddress addr = InetAddress.getByName(host);
-            if (addr.isLoopbackAddress() || addr.isLinkLocalAddress()
-                    || addr.isSiteLocalAddress() || addr.isAnyLocalAddress()
-                    || addr.isMulticastAddress()) {
-                throw new CrawlException("Yerel/özel IP'ler engelli (SSRF koruması)");
-            }
-            // Extra protection for ranges like 169.254/16, 100.64/10 (CGNAT)
-            String ip = addr.getHostAddress();
-            if (ip.startsWith("169.254.") || ip.startsWith("100.64.")) {
-                throw new CrawlException("Bu IP aralığı engelli");
-            }
-        } catch (UnknownHostException e) {
-            throw new CrawlException("Host çözülemedi: " + host);
+            SsrfGuard.assertPublicAddress(host);
+        } catch (SsrfGuard.BlockedTargetException e) {
+            throw new CrawlException(e.getMessage());
         }
     }
 
