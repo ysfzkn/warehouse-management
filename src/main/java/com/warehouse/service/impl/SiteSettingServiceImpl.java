@@ -69,6 +69,25 @@ public class SiteSettingServiceImpl implements SiteSettingService {
             "signature", "certificate", "cert"
     );
 
+    /**
+     * Back-office integration settings. Not secrets — the values are provider names,
+     * feature flags and vendor base URLs — but they describe how the business is wired
+     * up (which cargo provider, whether the integration is live or in MOCK mode, which
+     * e-invoice endpoint) and the storefront never reads any of them. A live scan of the
+     * public settings endpoint surfaced them, so they are withheld: the admin panel gets
+     * them from /api/admin/settings/site, which is authenticated.
+     */
+    private static final List<String> ADMIN_ONLY_PREFIXES = List.of(
+        "cargo_api", "kargonomi_", "invoice_", "logo_efatura", "logo_company",
+        "netgsm", "sms_", "payment_gateway", "smtp_"
+    );
+
+    private static boolean isAdminOnlyKey(String key) {
+        if (key == null) return true;
+        String k = key.toLowerCase();
+        return ADMIN_ONLY_PREFIXES.stream().anyMatch(k::startsWith);
+    }
+
     private static boolean isSensitiveKey(String key) {
         if (key == null || key.isBlank()) return true;
         String k = key.toLowerCase();
@@ -84,6 +103,7 @@ public class SiteSettingServiceImpl implements SiteSettingService {
     public Map<String, String> getPublicSettings() {
         return repository.findAll().stream()
             .filter(s -> !isSensitiveKey(s.getSettingKey()))
+            .filter(s -> !isAdminOnlyKey(s.getSettingKey()))
             .filter(s -> s.getSettingValue() != null)
             .collect(Collectors.toMap(SiteSetting::getSettingKey, SiteSetting::getSettingValue));
     }

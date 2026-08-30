@@ -287,6 +287,26 @@ class PenetrationTest {
         }
     }
 
+    /**
+     * A live scan of the deployed site found back-office integration settings in the
+     * public payload: which cargo provider is configured, whether that integration is
+     * live or in MOCK mode, the e-invoice endpoint. Not secrets, but they describe how
+     * the business is wired up and the storefront reads none of them.
+     */
+    @Test
+    @Order(15)
+    void publicSettingsDoNotExposeBackOfficeIntegrationConfig() {
+        ResponseEntity<String> response = rest.getForEntity("/api/store/settings", String.class);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        String body = response.getBody() == null ? "" : response.getBody().toLowerCase();
+        for (String key : new String[]{"cargo_api", "kargonomi_", "invoice_", "logo_efatura",
+                "netgsm", "sms_", "payment_gateway", "smtp_"}) {
+            assertThat(body)
+                    .as("public ayarlar %s ile baslayan anahtar icermemeli", key)
+                    .doesNotContain(key);
+        }
+    }
+
     // ─────────────────────────── Rate limiting ───────────────────────────
 
     /**

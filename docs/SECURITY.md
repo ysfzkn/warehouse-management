@@ -166,6 +166,27 @@ yansıması ve kimliksiz erişim. **Bulgu yok.**
    okunuyor. Loopback bilinçli olarak hariç — orada proxy yoktur, header sadece
    çağıranın yazdığı şeydir.
 
+### Production taramasi (atsdtm.com.tr)
+
+Canli siteye karsi salt-okuma pasif tarama yapildi (GET/HEAD/OPTIONS; giris denemesi ve
+durum degistiren istek yok — basarisiz bir admin girisi gercek yoneticiyi 15 dakika
+kilitlerdi, odeme ucu ise gercek bir siparisi etkileyebilirdi).
+
+Dogrulanan: HTTP->HTTPS 301 (uc host), HSTS/CSP/X-Frame-Options/nosniff/Referrer-Policy/
+Permissions-Policy hem HTML dokumaninda hem API yanitinda, CDN kaynaklarinda SRI,
+kimliksiz `/api/admin/**` -> 403, store host uzerinden admin API -> 403, imzali medya
+URL'leri imzasiz ve sahte imzada 403, CORS yabanci origin'i yansitmiyor.
+
+Tek bulgu: public ayar ucunda back-office entegrasyon anahtarlari (kargo saglayici,
+entegrasyonun MOCK modda olup olmadigi, e-fatura endpoint'i). Sir degil ama isin nasil
+kuruldugunu anlatiyor ve storefront hicbirini okumuyor — `ADMIN_ONLY_PREFIXES` ile
+public payload'dan cikarildi.
+
+> Tarama notu: `/actuator/env`, `/v3/api-docs`, `/.git/config` gibi yollar 200 doner
+> ama govde SPA'nin `index.html`'idir — nginx yalnizca `/api/**` isteklerini backend'e
+> yonlendirir, geri kalan her sey SPA fallback'ine duser. Bir tarayici bunlari
+> "erisilebilir" olarak isaretlerse govdeyi kontrol edin.
+
 Gerçek ZAP'ı çalıştırmak isterseniz (Windows Defender ZAP arşivini false-positive
 olarak karantinaya alıyor; ya bir istisna tanımlayın ya da Docker'dan çalıştırın):
 
