@@ -43,8 +43,30 @@ public class ClientIpResolver {
     public String resolve(HttpServletRequest request) {
         if (request == null) return "unknown";
         String peer = request.getRemoteAddr();
-        if (trustedProxyCount == 0) {
-            return peer != null ? peer : "unknown";
+
+        // How many entries to count in from the right. An explicit configured value wins;
+        // otherwise infer it.
+        int hopsToSkip = trustedProxyCount;
+        if (hopsToSkip == 0) {
+            // Normally getRemoteAddr() is already the real client, because Tomcat's
+            // RemoteIpValve rewrote it. But if the valve did not recognise the edge proxy
+            // — an IPv6-only private network missing from internal-proxies, say — the peer
+            // is left as the proxy's own private address and every visitor in the world
+            // would share that single value: one rate-limit bucket for the entire site.
+            //
+            // A private peer address plus a forwarded header is exactly that situation, so
+            // read the entry the proxy appended instead. This cannot be abused: a client
+            // on the internet cannot make its peer address private.
+            //
+            // Loopback is deliberately excluded. A proxy always reaches the app over a
+            // real network interface — a bridge network or the platform's private range —
+            // never over loopback. A loopback peer therefore means nothing is in front of
+            // us and the header is just something the caller typed.
+            if (isProxyPeer(peer) && hasForwardedHeader(request)) {
+                hopsToSkip = 1;
+            } else {
+                return peer != null ? peer : "unknown";
+            }
         }
 
         String xff = request.getHeader("X-Forwarded-For");
@@ -54,7 +76,7 @@ public class ClientIpResolver {
             // one before it, and so on. With N trusted proxies the client sits at
             // length - N. Clamp to 0 so a short header degrades to the left-most entry
             // rather than throwing.
-            int idx = Math.max(0, hops.length - trustedProxyCount);
+            int idx = Math.max(0, hops.length - hopsToSkip);
             String candidate = hops[idx].trim();
             if (isValidIp(candidate)) {
                 return candidate;
@@ -68,6 +90,31 @@ public class ClientIpResolver {
             return realIp.trim();
         }
         return peer != null ? peer : "unknown";
+    }
+
+    private static boolean hasForwardedHeader(HttpServletRequest request) {
+        String xff = request.getHeader("X-Forwarded-For");
+        return xff != null && !xff.isBlank();
+    }
+
+    /**
+     * True when the address is one an edge proxy or sibling container could be connecting
+     * from — RFC1918, link-local, IPv6 unique-local — but <em>not</em> loopback, which
+     * means the request never crossed a network interface and no proxy is involved.
+     */
+    private static boolean isProxyPeer(String value) {
+        if (value == null || value.isBlank()) return false;
+        try {
+            InetAddress address = InetAddress.getByName(value);
+            if (address.isLoopbackAddress() || address.isAnyLocalAddress()) return false;
+            byte[] bytes = address.getAddress();
+            return address.isSiteLocalAddress()
+                    || address.isLinkLocalAddress()
+                    // fc00::/7 unique local, which isSiteLocalAddress() does not cover for IPv6.
+                    || (bytes.length == 16 && (bytes[0] & 0xFE) == 0xFC);
+        } catch (UnknownHostException e) {
+            return false;
+        }
     }
 
     private static boolean isValidIp(String value) {

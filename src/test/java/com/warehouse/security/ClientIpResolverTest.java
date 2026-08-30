@@ -28,8 +28,55 @@ class ClientIpResolverTest {
     @Test
     void withNoProxyTheHeaderIsIgnoredCompletely() {
         ClientIpResolver resolver = new ClientIpResolver(0);
+        // A public peer address means nothing is in front of us: the header is noise.
         assertThat(resolver.resolve(request("198.51.100.5", "1.2.3.4")))
                 .isEqualTo("198.51.100.5");
+    }
+
+    /**
+     * Safety net for a misconfigured proxy list. Tomcat's RemoteIpValve leaves the peer
+     * address untouched when it does not recognise the proxy — which happened for real
+     * with an IPv4-only internal-proxies regex on Railway's IPv6 private network. Every
+     * visitor then shares the proxy's address, i.e. one rate-limit bucket for the whole
+     * site. A private peer plus a forwarded header is that situation, and reading the
+     * appended entry is safe because a client cannot give itself a private peer address.
+     */
+    @Test
+    void aPrivatePeerWithAForwardedHeaderFallsBackToTheAppendedEntry() {
+        ClientIpResolver resolver = new ClientIpResolver(0);
+        assertThat(resolver.resolve(request("10.0.0.7", "1.2.3.4, 198.51.100.5")))
+                .isEqualTo("198.51.100.5");
+        assertThat(resolver.resolve(request("fd00::1", "198.51.100.9")))
+                .isEqualTo("198.51.100.9");
+    }
+
+    /**
+     * Loopback is not a proxy. A request that never crossed a network interface has
+     * nothing in front of it, so its forwarded header is just caller input — and this is
+     * the shape the penetration test uses to prove spoofing cannot buy a fresh bucket.
+     */
+    @Test
+    void aLoopbackPeerNeverTriggersTheFallback() {
+        ClientIpResolver resolver = new ClientIpResolver(0);
+        assertThat(resolver.resolve(request("127.0.0.1", "203.0.113.7")))
+                .isEqualTo("127.0.0.1");
+        assertThat(resolver.resolve(request("0:0:0:0:0:0:0:1", "203.0.113.8")))
+                .isEqualTo("0:0:0:0:0:0:0:1");
+    }
+
+    @Test
+    void thatFallbackStillCannotBeSpoofedIntoSeparateBuckets() {
+        ClientIpResolver resolver = new ClientIpResolver(0);
+        String a = resolver.resolve(request("10.0.0.7", "203.0.113.1, 198.51.100.5"));
+        String b = resolver.resolve(request("10.0.0.7", "203.0.113.2, 198.51.100.5"));
+        String c = resolver.resolve(request("10.0.0.7", "203.0.113.3, 203.0.113.4, 198.51.100.5"));
+        assertThat(a).isEqualTo(b).isEqualTo(c).isEqualTo("198.51.100.5");
+    }
+
+    @Test
+    void aPrivatePeerWithoutAForwardedHeaderKeepsThePeerAddress() {
+        ClientIpResolver resolver = new ClientIpResolver(0);
+        assertThat(resolver.resolve(request("10.0.0.7", null))).isEqualTo("10.0.0.7");
     }
 
     @Test

@@ -147,7 +147,27 @@ tabanı kategori kategori geçirildi; her satır bu depodaki karşılığını g
 | **A09 Logging & Monitoring** | ⚠️ | Yapılandırılmış log + audit trail + `SECURITY ALERT` kayıtları var, PII maskeleniyor. **Alarm/uyarı yok** — başarısız admin girişi ve imza doğrulama hatası için bir hedefe (Sentry/Slack) bağlanmalı. |
 | **A10 SSRF** | ✅ | Crawler `SsrfGuard`'a taşındı: tüm A kayıtları, IPv6 ULA ve IPv4-mapped, tam 100.64.0.0/10, ve **her redirect hop'u yeniden doğrulanıyor** (önce sadece ilk URL kontrol ediliyordu). DNS rebinding bilinçli olarak açık bırakıldı (sınıf javadoc'unda gerekçesiyle). |
 
-Çalışan siteye karşı DAST için OWASP ZAP baseline scan:
+### DAST (pasif tarama)
+
+ZAP baseline'ın uyguladığı pasif kuralların tamamı, H2 üzerinde yerel olarak ayağa
+kaldırılan bir örneğe karşı koşuldu: güvenlik başlıkları, çerez bayrakları, teknoloji/sürüm
+sızıntısı, hata/stack trace sızıntısı, tehlikeli HTTP metotları, kaynak-config dosyası
+erişimi (`.git`, `.env`, `heapdump`, `h2-console`, ...), host header enjeksiyonu, girdi
+yansıması ve kimliksiz erişim. **Bulgu yok.**
+
+İki nokta bu tarama sırasında ortaya çıktı ve düzeltildi:
+
+1. `internal-proxies` regex'i yalnızca IPv4 içeriyordu. Railway'in private ağı IPv6
+   tabanlı olduğundan valve edge proxy'yi tanımayacak, dolayısıyla istek "secure"
+   işaretlenmeyecek (HSTS gitmez, üretilen linkler `http://` olur) ve **tüm ziyaretçiler
+   tek bir rate-limit bucket'ına** düşecekti. IPv6 loopback/ULA/link-local eklendi.
+2. `ClientIpResolver` artık kendini düzeltiyor: peer adresi özel bir aralıktaysa
+   (yani önde sınıflandırılmamış bir proxy var) forwarded header'ın en sağdaki girdisi
+   okunuyor. Loopback bilinçli olarak hariç — orada proxy yoktur, header sadece
+   çağıranın yazdığı şeydir.
+
+Gerçek ZAP'ı çalıştırmak isterseniz (Windows Defender ZAP arşivini false-positive
+olarak karantinaya alıyor; ya bir istisna tanımlayın ya da Docker'dan çalıştırın):
 
 ```bash
 docker run --rm -t ghcr.io/zaproxy/zaproxy:stable zap-baseline.py -t https://siteniz.com -r zap-report.html
