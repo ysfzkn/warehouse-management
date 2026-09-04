@@ -10,6 +10,7 @@ import QuickStockAdjustModal from '../components/QuickStockAdjustModal';
 import StockRemoveSearchModal from '../components/StockRemoveSearchModal';
 import StockSettingsModal from '../components/StockSettingsModal';
 import StockTransferModal from '../components/StockTransferModal';
+import DeliveryReceiptPanel from '../components/DeliveryReceiptPanel';
 import CustomerLinkPicker from '../components/CustomerLinkPicker';
 import StockRequestApprovalModal from '../components/StockRequestApprovalModal';
 import SearchableSelect from '../components/SearchableSelect';
@@ -977,6 +978,12 @@ const Stock = () => {
   const [showTransferHistory, setShowTransferHistory] = useState(false);
   const [transferDetailModal, setTransferDetailModal] = useState({ show: false, transfer: null });
   const [transferDetailPhotos, setTransferDetailPhotos] = useState({});
+  // Görünen transferlerin makbuz durumu: transfer id -> makbuz özeti. Satır başına
+  // istek atmak yerine sayfa başına tek istekle doldurulur.
+  const [transferReceipts, setTransferReceipts] = useState({});
+  // Detay panelinde makbuz değiştiğinde listedeki rozeti tazelemek için sayaç.
+  const [transferReceiptsVersion, setTransferReceiptsVersion] = useState(0);
+  const [bulkReceiptBusy, setBulkReceiptBusy] = useState(false);
   const [photoUpdateTimestamps, setPhotoUpdateTimestamps] = useState({});
   const [transferLightbox, setTransferLightbox] = useState({ show: false, images: [], index: 0 });
   const [selectedStock, setSelectedStock] = useState(null);
@@ -2026,6 +2033,28 @@ const Stock = () => {
     );
   };
 
+  // Transfer listesi (veya bir makbuz) değiştiğinde rozetleri tazele.
+  useEffect(() => {
+    const ids = transfers.map((t) => t.id).filter(Boolean);
+    if (!ids.length) {
+      setTransferReceipts({});
+      return undefined;
+    }
+    let cancelled = false;
+    axios
+      .post('/api/admin/stock-transfers/receipts/by-transfers', { transferIds: ids })
+      .then((res) => {
+        if (!cancelled) setTransferReceipts(res.data || {});
+      })
+      .catch(() => {
+        // Rozet ikincil bilgi; alınamazsa liste yine de kullanılabilir kalmalı.
+        if (!cancelled) setTransferReceipts({});
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [transfers, transferReceiptsVersion]);
+
   const clearSelectedStocks = () => setSelectedStocks([]);
   const clearSelectedTransfers = () => setSelectedTransfers([]);
 
@@ -2097,6 +2126,59 @@ const Stock = () => {
       } catch {}
     }, displayDuration);
   };
+
+  // Makbuz indirme yardımcıları. showToast'tan sonra tanımlı olmaları gerekiyor.
+  const downloadTransferReceiptPdf = useCallback(async (transferId, receiptNo) => {
+    try {
+      const res = await axios.get(`/api/admin/stock-transfers/${transferId}/receipt/pdf`, {
+        responseType: 'blob',
+      });
+      const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `makbuz-${receiptNo || transferId}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      showToast(e?.response?.data?.message || 'Makbuz indirilemedi.', 'error');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const downloadSelectedReceipts = useCallback(async (ids) => {
+    if (!ids || !ids.length) return;
+    setBulkReceiptBusy(true);
+    try {
+      const res = await axios.post(
+        '/api/admin/stock-transfers/receipts/bulk-pdf',
+        { transferIds: ids },
+        { responseType: 'blob' }
+      );
+      const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `makbuzlar-${ids.length}-adet.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      // responseType blob olduğu için hata gövdesi de blob geliyor; okunabilir hâle getir.
+      let message = 'Makbuzlar indirilemedi.';
+      try {
+        const text = await e?.response?.data?.text?.();
+        if (text) message = JSON.parse(text).message || message;
+      } catch {
+        /* gövde okunamadıysa genel mesaj kalsın */
+      }
+      showToast(message, 'error');
+    } finally {
+      setBulkReceiptBusy(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const {
     askCode: askSecurityCode,
@@ -4483,6 +4565,11 @@ const Stock = () => {
                           )}
                         </div>
                       )}
+                      <DeliveryReceiptPanel
+                        transfer={t}
+                        isAdmin={isAdmin}
+                        onChanged={() => setTransferReceiptsVersion((v) => v + 1)}
+                      />
                     </>
                   );
                 })()}
@@ -5056,6 +5143,18 @@ const Stock = () => {
                     <>
                       <button
                         type="button"
+                        className="btn btn-sm btn-primary"
+                        disabled={bulkReceiptBusy}
+                        onClick={() => downloadSelectedReceipts([...selectedTransfers])}
+                        title="Seçili sevkiyatların makbuzlarını tek PDF olarak indirir"
+                      >
+                        <i
+                          className={`fas ${bulkReceiptBusy ? 'fa-spinner fa-spin' : 'fa-file-pdf'} me-1`}
+                        ></i>
+                        Makbuzları İndir
+                      </button>
+                      <button
+                        type="button"
                         className="btn btn-sm btn-outline-secondary"
                         onClick={clearSelectedTransfers}
                       >
@@ -5094,6 +5193,16 @@ const Stock = () => {
                   {selectedTransferCount} transfer seçildi
                 </div>
                 <div className="d-flex gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-primary"
+                    disabled={bulkReceiptBusy}
+                    onClick={() => downloadSelectedReceipts([...selectedTransfers])}
+                    title="Seçili sevkiyatların makbuzlarını tek PDF olarak indirir"
+                  >
+                    <i className={`fas ${bulkReceiptBusy ? 'fa-spinner fa-spin' : 'fa-file-pdf'} me-1`}></i>
+                    Makbuzları İndir
+                  </button>
                   <button
                     type="button"
                     className="btn btn-sm btn-outline-secondary"
@@ -5538,6 +5647,58 @@ const Stock = () => {
                               </td>
                               <td className="text-center align-middle" style={{ padding: '6px' }}>
                                 <div className="d-flex flex-column gap-1">
+                                  {/* Teslimat makbuzu: makbuz varsa listeden doğrudan PDF
+                                      iner, yoksa düzenlemek için detay açılır. */}
+                                  {(() => {
+                                    const receipt = transferReceipts[transfer.id];
+                                    if (!receipt) {
+                                      return (
+                                        <button
+                                          className="btn btn-sm btn-outline-secondary w-100 py-1 px-2"
+                                          style={{
+                                            fontSize: 'clamp(0.7rem, 2vw, 0.8rem)',
+                                            whiteSpace: 'nowrap',
+                                          }}
+                                          onClick={() => openTransferDetailModal(transfer)}
+                                          title="Bu sevkiyat için makbuz düzenlenmemiş — detaydan düzenleyin"
+                                        >
+                                          <i className="fas fa-file-circle-plus me-1"></i>
+                                          Makbuz
+                                        </button>
+                                      );
+                                    }
+                                    return (
+                                      <button
+                                        className="btn btn-sm btn-outline-primary w-100 py-1 px-2 position-relative"
+                                        style={{
+                                          fontSize: 'clamp(0.7rem, 2vw, 0.8rem)',
+                                          whiteSpace: 'nowrap',
+                                        }}
+                                        onClick={() =>
+                                          downloadTransferReceiptPdf(transfer.id, receipt.receiptNo)
+                                        }
+                                        title={`${receipt.receiptNo} — PDF indir${
+                                          receipt.signedCopyOnFile
+                                            ? ' (imzalı nüsha yüklendi)'
+                                            : ' (imzalı nüsha bekleniyor)'
+                                        }`}
+                                      >
+                                        <i className="fas fa-file-pdf me-1"></i>
+                                        Makbuz
+                                        <span
+                                          className={`position-absolute top-0 start-100 translate-middle p-1 border border-light rounded-circle ${
+                                            receipt.signedCopyOnFile ? 'bg-success' : 'bg-warning'
+                                          }`}
+                                        >
+                                          <span className="visually-hidden">
+                                            {receipt.signedCopyOnFile
+                                              ? 'İmzalı nüsha var'
+                                              : 'İmzalı nüsha bekleniyor'}
+                                          </span>
+                                        </span>
+                                      </button>
+                                    );
+                                  })()}
                                   {transfer.status === 'PENDING' &&
                                     (awaitingApproval ? (
                                       <div className="d-flex flex-column gap-2">

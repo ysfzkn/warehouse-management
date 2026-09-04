@@ -277,7 +277,9 @@ class PenetrationTest {
     void mediaEndpointsRequireASignedUrl() {
         for (String path : new String[]{
                 "/api/admin/returns/photos/1/view",
-                "/api/admin/stock-transfer-items/1/photo/view"}) {
+                "/api/admin/stock-transfer-items/1/photo/view",
+                // Signed delivery receipts: a customer's signed delivery note.
+                "/api/admin/delivery-receipts/attachments/1/view"}) {
             assertThat(rest.getForEntity(path, String.class).getStatusCode())
                     .as("%s must refuse an unsigned request", path)
                     .isEqualTo(HttpStatus.FORBIDDEN);

@@ -124,6 +124,43 @@ public final class UploadValidator {
         return ext;
     }
 
+    /**
+     * A scan or photograph of a signed paper document — an image or a PDF.
+     *
+     * <p>Warehouse staff upload whatever their phone or the office scanner produced, so
+     * both families have to be accepted at one endpoint. The verdict still comes from the
+     * bytes: a {@code .pdf} that is really HTML would otherwise be stored and later served
+     * as {@code application/pdf} from our own origin.</p>
+     *
+     * @return the canonical extension and the content type to serve the file with
+     */
+    public static ScannedDocument validateScan(MultipartFile file, long maxBytes) {
+        if (file == null || file.isEmpty()) {
+            throw new InvalidUploadException("Dosya boş.");
+        }
+        if (file.getSize() > maxBytes) {
+            throw new InvalidUploadException(
+                    "Dosya çok büyük. En fazla " + (maxBytes / (1024 * 1024)) + " MB yükleyebilirsiniz.");
+        }
+        byte[] header = readHeader(file);
+        ImageType image = detectImage(header);
+        if (image != null) {
+            return new ScannedDocument(image.extension, image.contentType);
+        }
+        if (startsWith(header, new byte[]{0x25, 0x50, 0x44, 0x46})) { // %PDF
+            return new ScannedDocument("pdf", "application/pdf");
+        }
+        throw new InvalidUploadException(
+                "Sadece JPG, PNG, WEBP görseli veya PDF yükleyebilirsiniz.");
+    }
+
+    /** Result of {@link #validateScan}: what the bytes actually are. */
+    public record ScannedDocument(String extension, String contentType) {
+        public boolean isPdf() {
+            return "pdf".equals(extension);
+        }
+    }
+
     /** Content type to serve a stored document with. Never echoes the uploader's header. */
     public static String documentContentType(String extension) {
         return DOCUMENT_CONTENT_TYPES.getOrDefault(

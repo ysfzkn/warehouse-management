@@ -170,6 +170,10 @@ public class SecurityConfig {
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/admin/stock-transfer-items/*/photo/view").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/admin/products/images/*/view").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/admin/returns/photos/*/view").permitAll()
+                        // Signed delivery-receipt scans: rendered in <img>/<iframe>, so the
+                        // signature in the URL is the authorisation (see SignedUrlService).
+                        .requestMatchers(org.springframework.http.HttpMethod.GET,
+                                "/api/admin/delivery-receipts/attachments/*/view").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/admin/settings/site/asset/view/**").permitAll()
                         // Cargo and e-invoice provider webhooks: server-to-server, authenticated
                         // by HMAC signature inside the controller rather than by a session.

@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<!--
+  Teslimat makbuzu — tek şablon, iki çıktı.
+
+  Aynı dosya hem tarayıcıda yazdırılabilir HTML olarak hem de openhtmltopdf ile PDF
+  olarak render edilir; ikisinin ayrışması mümkün değil çünkü kaynak tek.
+
+  CSS kısıtı: openhtmltopdf flexbox ve grid desteklemez. Yerleşim bilerek tablo ve
+  float ile kurulmuştur — "modern CSS'e çevirelim" demeden önce PDF çıktısını kontrol
+  edin, ekranda düzgün görünen flex kutular PDF'te üst üste biner.
+-->
+<html xmlns:th="http://www.thymeleaf.org" lang="tr">
+<head>
+    <meta charset="UTF-8" />
+    <title th:text="'Teslimat Makbuzu ' + ${receipt.receiptNo}">Teslimat Makbuzu</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 11mm 10mm 9mm 10mm;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: "Noto Sans", sans-serif;
+            font-size: 9.2pt;
+            color: #101418;
+            margin: 0;
+            padding: 0;
+            line-height: 1.35;
+        }
+
+        .sheet { page-break-after: always; }
+        .sheet.last { page-break-after: auto; }
+
+        /* ── Başlık ─────────────────────────────────────────────── */
+        .head { width: 100%; border-collapse: collapse; border: 1.4pt solid #101418; }
+        .head td { vertical-align: middle; padding: 5mm 4mm; }
+        .head .logo-cell { width: 46%; border-right: 1pt solid #101418; text-align: center; }
+        .head .logo-cell img { max-width: 58mm; max-height: 20mm; }
+        .head .logo-fallback { font-size: 13pt; font-weight: 700; letter-spacing: .4pt; color: #17439b; }
+        .head .company-line { font-size: 7.4pt; color: #55606d; margin-top: 1.5mm; line-height: 1.3; }
+
+        .head .title-cell { text-align: right; }
+        .doc-title { font-size: 14pt; font-weight: 700; letter-spacing: .6pt; margin: 0 0 2mm 0; }
+        .doc-meta { font-size: 8.4pt; color: #33404f; }
+        .doc-meta b { color: #101418; }
+        .copy-badge {
+            display: inline-block; margin-top: 2.5mm; padding: 1mm 3mm;
+            border: 1pt solid #17439b; color: #17439b;
+            font-size: 8pt; font-weight: 700; letter-spacing: .5pt;
+            /* Kutuya sığmayınca "FİRMA / NÜSHASI" diye ikiye bölünüyordu. */
+            white-space: nowrap;
+        }
+
+        /* ── Taraflar ───────────────────────────────────────────── */
+        .parties { width: 100%; border-collapse: collapse; border: 1.4pt solid #101418; border-top: none; }
+        .parties > tbody > tr > td { width: 50%; vertical-align: top; padding: 0; }
+        .parties > tbody > tr > td.left { border-right: 1pt solid #101418; }
+        .block-title {
+            background: #eef2f8; border-bottom: 1pt solid #101418;
+            padding: 1.6mm 3mm; font-size: 8pt; font-weight: 700; letter-spacing: .5pt;
+        }
+        .kv { width: 100%; border-collapse: collapse; }
+        .kv td { padding: 1.5mm 3mm; font-size: 8.6pt; vertical-align: top; }
+        .kv td.k { width: 32mm; color: #55606d; }
+        .kv td.v { font-weight: 700; }
+
+        /* ── Kalemler ───────────────────────────────────────────── */
+        .items { width: 100%; border-collapse: collapse; border: 1.4pt solid #101418; border-top: none; }
+        .items th {
+            background: #eef2f8; border: 1pt solid #101418;
+            padding: 2mm 2mm; font-size: 7.8pt; font-weight: 700;
+            letter-spacing: .3pt; text-align: center;
+        }
+        .items td { border: 1pt solid #6b7683; padding: 1.8mm 2mm; font-size: 8.6pt; }
+        .items td.c { text-align: center; }
+        .items td.sku { font-size: 8pt; }
+        /* Elle kalem eklenebilsin diye bırakılan boş satırlar. openhtmltopdf td
+           üzerindeki height'ı yok sayıyor, satırlar ince şeritlere dönüyordu;
+           padding hem PDF'te hem tarayıcıda güvenilir çalışıyor. */
+        .items tr.filler td { padding: 2.9mm 2mm; }
+        .items tfoot td {
+            border: 1pt solid #101418; background: #f6f8fb;
+            font-weight: 700; padding: 2mm; font-size: 8.8pt;
+        }
+
+        .notes {
+            width: 100%; border: 1.4pt solid #101418; border-top: none;
+            padding: 2mm 3mm; font-size: 8.4pt; min-height: 10mm;
+        }
+        .notes .lbl { font-weight: 700; font-size: 7.8pt; letter-spacing: .3pt; }
+
+        /* ── İmza ───────────────────────────────────────────────── */
+        .sign { width: 100%; border-collapse: collapse; border: 1.4pt solid #101418; border-top: none; }
+        .sign td { width: 50%; vertical-align: top; padding: 0; }
+        .sign td.left { border-right: 1pt solid #101418; }
+        .sign .sign-title {
+            background: #eef2f8; border-bottom: 1pt solid #101418;
+            text-align: center; padding: 1.8mm; font-size: 8.4pt;
+            font-weight: 700; letter-spacing: .5pt;
+        }
+        .sign .row { padding: 2mm 3mm; font-size: 8.4pt; }
+        .sign .row .lbl { color: #55606d; font-size: 7.6pt; letter-spacing: .3pt; }
+        .sign .filled { font-weight: 700; font-size: 9pt; }
+        .sign .line { border-bottom: .8pt solid #55606d; height: 5mm; margin-top: 1mm; }
+        .sign .sign-area { height: 20mm; }
+
+        /* ── Alt bilgi ──────────────────────────────────────────── */
+        .foot {
+            width: 100%; border-collapse: collapse;
+            border: 1.4pt solid #101418; border-top: none;
+        }
+        .foot td {
+            padding: 1.4mm 3mm; font-size: 6.8pt; color: #55606d;
+            border-right: 1pt solid #9aa4b0;
+        }
+        .foot td.last { border-right: none; text-align: right; }
+
+        .legal { margin-top: 2mm; font-size: 6.6pt; color: #6b7683; line-height: 1.4; }
+
+        /* Ekranda yazdırma butonu; PDF'e girmez. */
+        .print-bar {
+            margin: 0 0 6mm 0; padding: 3mm; background: #eef2f8;
+            border: 1pt solid #c3ccd8; font-size: 9pt;
+        }
+        .print-bar button {
+            background: #17439b; color: #fff; border: none;
+            padding: 2mm 5mm; font-size: 9pt; cursor: pointer; border-radius: 3px;
+        }
+        @media print { .print-bar { display: none; } }
+    </style>
+</head>
+<body>
+
+<div class="print-bar" th:if="${showPrintBar}">
+    <button type="button" onclick="window.print()">Yazdır</button>
+    <span style="margin-left:4mm;">Yazdırma penceresinden &quot;PDF olarak kaydet&quot;i de seçebilirsiniz.</span>
+</div>
+
+<!-- Firma ve müşteri nüshası: şoför birini bırakır, imzalı olanı geri getirir. -->
+<div class="sheet" th:each="copy,cs : ${copies}" th:classappend="${cs.last} ? 'last' : ''">
+
+    <table class="head">
+        <tr>
+            <td class="logo-cell">
+                <img th:if="${logoDataUri}" th:src="${logoDataUri}" alt="" />
+                <div th:unless="${logoDataUri}" class="logo-fallback"
+                     th:text="${receipt.companyName} ?: 'FİRMA'">FİRMA</div>
+                <div class="company-line">
+                    <!-- Logo varsa firma adı altında tekrar yazılır; logo yoksa zaten
+                         üstteki fallback'te görünüyor. SpEL'de `and` boolean ister,
+                         String'i doğrudan veremeyiz. -->
+                    <span th:if="${logoDataUri != null and receipt.companyName != null}"
+                          th:text="${receipt.companyName}">Firma</span>
+                    <span th:if="${receipt.companyAddress}" th:text="' · ' + ${receipt.companyAddress}"></span>
+                    <span th:if="${receipt.companyPhone}" th:text="' · Tel: ' + ${receipt.companyPhone}"></span>
+                </div>
+            </td>
+            <td class="title-cell">
+                <div class="doc-title">TESLİMAT MAKBUZU</div>
+                <div class="doc-meta">
+                    <div>Makbuz No: <b th:text="${receipt.receiptNo}">TM-2026-000001</b></div>
+                    <div>Düzenleme: <b th:text="${issuedAtText}">01.01.2026 10:00</b></div>
+                    <div th:if="${receipt.revision != null and receipt.revision > 1}">
+                        Basım: <b th:text="${receipt.revision} + '. nüsha'">2. nüsha</b>
+                    </div>
+                </div>
+                <div class="copy-badge" th:text="${copy}">FİRMA NÜSHASI</div>
+            </td>
+        </tr>
+    </table>
+
+    <table class="parties">
+        <tr>
+            <td class="left">
+                <div class="block-title">TESLİM EDİLECEK MÜŞTERİ</div>
+                <table class="kv">
+                    <tr>
+                        <td class="k">Adı Soyadı / Ünvan</td>
+                        <td class="v" th:text="${receipt.customerFullName} ?: '-'">-</td>
+                    </tr>
+                    <tr>
+                        <td class="k">Telefon</td>
+                        <td class="v" th:text="${receipt.customerPhone} ?: '-'">-</td>
+                    </tr>
+                    <tr>
+                        <td class="k">Adres</td>
+                        <td class="v" th:text="${receipt.customerAddress} ?: '-'">-</td>
+                    </tr>
+                    <tr th:if="${receipt.orderNumber}">
+                        <td class="k">Sipariş No</td>
+                        <td class="v" th:text="${receipt.orderNumber}">-</td>
+                    </tr>
+                </table>
+            </td>
+            <td>
+                <div class="block-title">SEVKİYAT BİLGİLERİ</div>
+                <table class="kv">
+                    <tr>
+                        <td class="k">Çıkış Deposu</td>
+                        <td class="v" th:text="${receipt.sourceWarehouseName} ?: '-'">-</td>
+                    </tr>
+                    <tr>
+                        <td class="k">Sevk Tarihi</td>
+                        <td class="v" th:text="${transferDateText} ?: '-'">-</td>
+                    </tr>
+                    <tr>
+                        <td class="k">Şoför</td>
+                        <td class="v">
+                            <span th:text="${receipt.driverName} ?: '-'">-</span>
+                            <span th:if="${receipt.driverPhone}" th:text="' (' + ${receipt.driverPhone} + ')'"></span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="k">Araç Plakası</td>
+                        <td class="v" th:text="${receipt.vehiclePlate} ?: '-'">-</td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+
+    <table class="items">
+        <thead>
+        <tr>
+            <th style="width:9mm;">SIRA</th>
+            <th style="width:32mm;">STOK KODU</th>
+            <th>MALZEMENİN ADI</th>
+            <th style="width:17mm;">ADET</th>
+            <th style="width:45mm;">AÇIKLAMA</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="item,it : ${items}">
+            <td class="c" th:text="${it.count}">1</td>
+            <td class="sku" th:text="${item.sku} ?: '-'">-</td>
+            <td th:text="${item.name} ?: '-'">-</td>
+            <td class="c" th:text="${item.quantity}">0</td>
+            <td th:text="${item.targetNote} ?: ''"></td>
+        </tr>
+        <!-- Boş satırlar: kâğıt üzerinde elle kalem eklenebilsin ve tablo tam görünsün. -->
+        <tr class="filler" th:each="f : ${fillerRows}">
+            <td class="c"></td><td></td><td></td><td class="c"></td><td></td>
+        </tr>
+        </tbody>
+        <tfoot>
+        <tr>
+            <td colspan="3" style="text-align:right;">TOPLAM</td>
+            <td class="c" th:text="${totalQuantity}">0</td>
+            <td th:text="${uniqueProductCount} + ' kalem'">0 kalem</td>
+        </tr>
+        </tfoot>
+    </table>
+
+    <div class="notes">
+        <span class="lbl">AÇIKLAMA / NOT:</span>
+        <span th:text="${receipt.notes} ?: ''"></span>
+    </div>
+
+    <table class="sign">
+        <tr>
+            <td class="left">
+                <div class="sign-title">TESLİM EDEN</div>
+                <div class="row">
+                    <div class="lbl">ADI SOYADI</div>
+                    <div th:if="${receipt.deliveredByName}" class="filled"
+                         th:text="${receipt.deliveredByName}">-</div>
+                    <div th:unless="${receipt.deliveredByName}" class="line"></div>
+                </div>
+                <div class="row">
+                    <div class="lbl">TESLİM TARİHİ</div>
+                    <div th:if="${deliveredAtText}" class="filled" th:text="${deliveredAtText}">-</div>
+                    <div th:unless="${deliveredAtText}" class="line"></div>
+                </div>
+                <div class="row">
+                    <div class="lbl">İMZA</div>
+                    <div class="sign-area"></div>
+                </div>
+            </td>
+            <td>
+                <div class="sign-title">TESLİM ALAN</div>
+                <div class="row">
+                    <div class="lbl">ADI SOYADI</div>
+                    <div th:if="${receipt.receivedByName}" class="filled"
+                         th:text="${receipt.receivedByName}">-</div>
+                    <div th:unless="${receipt.receivedByName}" class="line"></div>
+                </div>
+                <div class="row">
+                    <div class="lbl">TESLİM TARİHİ</div>
+                    <div th:if="${deliveredAtText}" class="filled" th:text="${deliveredAtText}">-</div>
+                    <div th:unless="${deliveredAtText}" class="line"></div>
+                </div>
+                <div class="row">
+                    <div class="lbl">İMZA</div>
+                    <div class="sign-area"></div>
+                </div>
+            </td>
+        </tr>
+    </table>
+
+    <table class="foot">
+        <tr>
+            <td>FORM NO: TM-01</td>
+            <td th:text="'REV. NO: ' + ${receipt.revision}">REV. NO: 1</td>
+            <td th:text="'DÜZENLEYEN: ' + (${receipt.issuedBy} ?: '-')">DÜZENLEYEN: -</td>
+            <td class="last" th:text="'Sayfa ' + ${cs.count} + '/' + ${cs.size}">Sayfa 1/2</td>
+        </tr>
+    </table>
+
+    <div class="legal">
+        Yukarıda dökümü yapılan malzemeler eksiksiz ve hasarsız olarak teslim alınmıştır.
+        İmzalı nüsha firmaya iade edilir. Bu belge <span th:text="${receipt.receiptNo}">-</span>
+        numarası ile sistemde kayıtlıdır.
+    </div>
+</div>
+
+</body>
+</html>

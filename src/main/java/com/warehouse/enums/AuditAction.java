@@ -15,7 +15,16 @@ public enum AuditAction {
     TRANSFER_UPDATE,
     TRANSFER_DELETE,
     TRANSFER_APPROVE,
-    TRANSFER_REJECT
+    TRANSFER_REJECT,
+
+    // Teslimat makbuzu. Kâğıdın hayat döngüsü denetim kaydında görünmeli: kim bastı,
+    // kim yeniden bastı, teslimatı kim onayladı, imzalı nüshayı kim yükledi.
+    RECEIPT_ISSUE,
+    RECEIPT_REISSUE,
+    RECEIPT_DOWNLOAD,
+    RECEIPT_DELIVERY_CONFIRM,
+    RECEIPT_ATTACHMENT_UPLOAD,
+    RECEIPT_ATTACHMENT_DELETE
 }
 
 

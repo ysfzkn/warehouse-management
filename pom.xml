@@ -242,6 +242,22 @@
              EmailServiceImpl mevcut string-builder mantığıyla çalışmaya devam ediyor,
              ileride templates/email/*.html dosyaları üzerinden Thymeleaf render'a geçişle
              tekrar kullanılabilir hale getirilecek. -->
+        <!-- HTML -> PDF (teslimat makbuzu). Thymeleaf ile uretilen tek sablon hem
+             tarayicida yazdirilabilir HTML hem de arsivlenen PDF olarak servis edilir;
+             boylece imzalanan kagit ile sistemdeki kopya birebir ayni kalir. -->
+        <dependency>
+            <groupId>com.openhtmltopdf</groupId>
+            <artifactId>openhtmltopdf-pdfbox</artifactId>
+            <version>1.0.10</version>
+        </dependency>
+        <!-- PDF birlestirme: liste ekranindan secilen transferlerin makbuzlari tek
+             dosyada indirilebiliyor. -->
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>2.0.31</version>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-thymeleaf</artifactId>

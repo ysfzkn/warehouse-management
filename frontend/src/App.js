@@ -33,6 +33,9 @@ const AdminNotifications = lazy(() => import(/* webpackChunkName: "admin" */ './
 const WarehouseActivity = lazy(() => import(/* webpackChunkName: "admin" */ './pages/WarehouseActivity'));
 const AdminOrders = lazy(() => import(/* webpackChunkName: "admin" */ './pages/AdminOrders'));
 const AdminReturns = lazy(() => import(/* webpackChunkName: "admin" */ './pages/AdminReturns'));
+const AdminDeliveryReceipts = lazy(
+  () => import(/* webpackChunkName: "admin" */ './pages/AdminDeliveryReceipts')
+);
 const AdminCms = lazy(() => import(/* webpackChunkName: "admin" */ './pages/AdminCms'));
 const AdminSiteSettings = lazy(() => import(/* webpackChunkName: "admin" */ './pages/AdminSiteSettings'));
 const AdminCustomers = lazy(() => import(/* webpackChunkName: "admin" */ './pages/AdminCustomers'));
@@ -434,6 +437,16 @@ function AdminRoutes({ authed, role }) {
             element={
               authed && role === 'ADMIN' ? (
                 <AdminReturns />
+              ) : (
+                <Navigate to={authed ? '/stock' : '/login'} replace />
+              )
+            }
+          />
+          <Route
+            path="admin/delivery-receipts"
+            element={
+              authed && role === 'ADMIN' ? (
+                <AdminDeliveryReceipts />
               ) : (
                 <Navigate to={authed ? '/stock' : '/login'} replace />
               )

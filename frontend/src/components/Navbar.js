@@ -1114,6 +1114,21 @@ const Navbar = () => {
                 </li>
               )}
 
+              {/* Teslimat makbuzu arşivi: imzalı nüshası dönmemiş sevkiyatların takibi
+                  yöneticide, makbuzu basma/yükleme işi sevkiyat ekranında. */}
+              {role === 'ADMIN' && (
+                <li className="nav-item">
+                  <Link
+                    className="nav-link nav-link-custom text-white"
+                    to="/admin/delivery-receipts"
+                    style={navLinkStyle('/admin/delivery-receipts')}
+                  >
+                    <i className="fas fa-file-invoice me-2"></i>
+                    Teslimat Makbuzları
+                  </Link>
+                </li>
+              )}
+
               {/* ── E-COMMERCE DROPDOWN ── */}
               {role === 'ADMIN' && isEcom && (
                 <li className="nav-item dropdown">
