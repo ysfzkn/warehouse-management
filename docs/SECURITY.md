@@ -5,6 +5,26 @@ bilinçli olarak ertelenen maddeleri anlatır.
 
 ---
 
+## 0. ACİL — veritabanı şifresi rotasyonu
+
+`GET /api/info` kimlik doğrulaması olmadan Railway'in `DATABASE_URL` değerini **ham
+hâlde** yayınlıyordu: bağlantı dizesi, kullanıcı adı ve **şifre** açık metin olarak.
+Uç kaldırıldı (2026-09-04), ama **kaldırmak sızıntıyı geri almaz** — değer internete
+açıktı ve kopyalanmış olabilir.
+
+Yapılması gereken:
+
+1. Railway → Postgres → **şifreyi döndürün** (yeni credential üretin).
+2. `DATABASE_URL` / `DB_PASSWORD` değişkenlerini güncelleyip uygulamayı yeniden başlatın.
+3. Railway erişim loglarında `/api/info` isteklerini gözden geçirin.
+
+Uç, "dbPassword" alanını `SET` diye maskeliyordu; bu maskeleme uca bakan herkese
+güvenli olduğu izlenimi veriyordu, oysa aynı şifre yanındaki `databaseUrl` içinde
+bütün hâlde gidiyordu. `PenetrationTest.publicEndpointsLeakNoCredentials` artık tüm
+public uçların **gövdesini** tarıyor; 200 dönmesine bakmak yetmiyor.
+
+---
+
 ## 1. Deploy öncesi zorunlu adımlar
 
 Aşağıdakiler ayarlanmadan production'a çıkmayın. Hiçbiri uygulamayı boot ederken

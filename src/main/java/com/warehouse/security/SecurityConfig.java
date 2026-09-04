@@ -319,8 +319,10 @@ public class SecurityConfig {
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         // Liveness/readiness + build info + Spring's error dispatch
+                        // /api/info kasıtlı olarak yok: bağlantı bilgilerini döken bir
+                        // debug ucuydu ve DATABASE_URL'i ham hâlde yayınlıyordu.
                         .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info",
-                                ApiPaths.INFO, ApiPaths.ERROR).permitAll()
+                                ApiPaths.ERROR).permitAll()
                         // SEO endpoints
                         .requestMatchers("/sitemap.xml", "/sitemap-*.xml", "/robots.txt", "/favicon.ico").permitAll()
                         // Assistant feature flags consumed by both storefront and admin shells

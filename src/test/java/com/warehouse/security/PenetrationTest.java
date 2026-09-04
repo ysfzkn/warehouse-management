@@ -309,6 +309,49 @@ class PenetrationTest {
         }
     }
 
+    /**
+     * No unauthenticated response may contain credential material.
+     *
+     * <p>Written after {@code GET /api/info} was found publishing Railway's
+     * {@code DATABASE_URL} — connection string, username and password in clear text — to
+     * anyone on the internet. The endpoint masked a separate {@code dbPassword} field as
+     * "SET", which made it look deliberate and safe while the same password went out in
+     * full inside the URL beside it. Checking that a public path returns 200 is not
+     * enough; what it returns has to be read.</p>
+     */
+    @Test
+    @Order(16)
+    void publicEndpointsLeakNoCredentials() {
+        String[] publicPaths = {
+                "/actuator/health",
+                "/actuator/info",
+                "/api/info",
+                "/api/store/settings",
+                "/api/store/products",
+                "/sitemap.xml",
+                "/robots.txt",
+                "/error",
+        };
+        // Anything that looks like a connection string, a key or a secret.
+        String[] forbidden = {
+                "postgresql://", "postgres://", "jdbc:", "mysql://", "mongodb://", "redis://",
+                "password=", "passwd=", "secret=", "apikey=", "api_key",
+                "-----begin", "aws_secret", "bearer ey",
+        };
+
+        for (String path : publicPaths) {
+            ResponseEntity<String> response = rest.getForEntity(path, String.class);
+            String body = response.getBody();
+            if (body == null || body.isBlank()) continue;
+            String lower = body.toLowerCase();
+            for (String needle : forbidden) {
+                assertThat(lower)
+                        .as("%s yanıtı kimlik bilgisi sızdırmamalı (\"%s\" geçiyor)", path, needle)
+                        .doesNotContain(needle);
+            }
+        }
+    }
+
     // ─────────────────────────── Rate limiting ───────────────────────────
 
     /**

@@ -15,6 +15,12 @@ public final class ApiPaths {
     public static final String API_STORE_BASE = API_BASE + "/store";
 
     // ── Public (no auth) ─────────────────────────────
+    /**
+     * Artık hiçbir controller bu yolu karşılamıyor. Sabit, yanlışlıkla yeniden
+     * açılmasın diye kaldırıldı: burada duran InfoController Railway'in DATABASE_URL'ini
+     * (içinde veritabanı şifresiyle birlikte) kimlik doğrulaması olmadan yayınlıyordu.
+     */
+    @Deprecated
     public static final String INFO = API_BASE + "/info";
     public static final String ACTUATOR = "/actuator/**";
     public static final String ERROR = "/error";
