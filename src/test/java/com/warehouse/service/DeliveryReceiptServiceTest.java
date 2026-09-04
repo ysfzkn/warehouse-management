@@ -369,15 +369,13 @@ class DeliveryReceiptServiceTest {
     /**
      * PDFBox can only embed JPEG and PNG. A WebP logo displays perfectly on the site and
      * then leaves the receipt's letterhead blank — no error, just a missing logo. The
-     * repository's own {@code company-logo.png} is in fact a WebP, so this is the shape a
-     * real upload takes.
+     * WebP is a routine format for a logo export, so this is the shape a real upload takes.
      */
     @Test
     @DisplayName("WebP logo PDF'e gömülebilir formata çevrilir")
     void webpLogoIsTranscodedForThePdf() throws Exception {
         byte[] webp = webpBytes();
-        org.junit.jupiter.api.Assumptions.assumeTrue(webp != null,
-                "ImageIO WebP yazamıyor; bu ortamda örnek üretilemedi");
+        assertThat(webp).as("WebP fixture bulunamadı").isNotNull();
 
         var stored = photoStorageService.storeSiteAsset(
                 "logo", "logo.webp", "image/webp", new java.io.ByteArrayInputStream(webp));
@@ -415,20 +413,15 @@ class DeliveryReceiptServiceTest {
     }
 
     /**
-     * A real WebP file. Read from the frontend's bundled company logo rather than
-     * generated, because ImageIO has no WebP writer — which is the very asymmetry this
-     * test exists to cover.
+     * A real WebP file, kept as a test fixture rather than generated: ImageIO has no WebP
+     * writer, which is precisely the asymmetry this test exists to cover. It also must not
+     * read a frontend asset — those get rebranded, and the test would then quietly skip
+     * forever instead of guarding anything.
      */
     private static byte[] webpBytes() {
-        try {
-            java.nio.file.Path candidate =
-                    java.nio.file.Path.of("frontend", "public", "company-logo.png");
-            if (!java.nio.file.Files.exists(candidate)) return null;
-            byte[] bytes = java.nio.file.Files.readAllBytes(candidate);
-            boolean isWebp = bytes.length > 12
-                    && bytes[0] == 'R' && bytes[1] == 'I' && bytes[2] == 'F' && bytes[3] == 'F'
-                    && bytes[8] == 'W' && bytes[9] == 'E' && bytes[10] == 'B' && bytes[11] == 'P';
-            return isWebp ? bytes : null;
+        try (java.io.InputStream in = DeliveryReceiptServiceTest.class
+                .getResourceAsStream("/fixtures/sample-logo.webp")) {
+            return in == null ? null : in.readAllBytes();
         } catch (Exception e) {
             return null;
         }
