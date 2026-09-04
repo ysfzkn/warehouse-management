@@ -35,6 +35,27 @@ yeşil = geldi, sarı = bekleniyor.
 
 ---
 
+## 1b. Geriye dönük makbuz
+
+Makbuz **istendiği zaman**, geçmiş sevkiyatlar için de kesilebilir. Tek engel iptal
+edilmiş sevkiyatlar; `PENDING`, `IN_TRANSIT` ve `COMPLETED` hepsi uygundur.
+
+Geriye dönük kullanım için iki nokta özellikle ele alındı:
+
+- **Teslim tarihi sevkiyattan gelir.** Tamamlanmış bir sevkiyata sonradan makbuz
+  kesilince teslim tarihi `completed_date`'ten önerilir. Aksi hâlde form bugünü
+  önerirdi ve malın ne zaman el değiştirdiğini kaydetmek için var olan belge yanlış
+  tarihle imzalanırdı. Durum yine `ISSUED` kalır — teslim alanın kim olduğu hâlâ
+  bilinmediği için otomatik `DELIVERED` sayılmaz.
+- **Eski tek ürünlü transferler.** Çok kalemli modelden önce oluşturulmuş kayıtlarda
+  ürün transfer satırının kendisinde durur; makbuz bunları da listeler, kalem tablosu
+  boş çıkmaz. Geriye dönük evrak tamamlarken en çok karşılaşılan kayıt tipi budur.
+
+Toplu **basım** (seçili sevkiyatların makbuzlarını tek PDF olarak indirme) var; toplu
+**kesme** yok — makbuzlar tek tek düzenlenir.
+
+---
+
 ## 2. Neden alanlar kopyalanıyor
 
 `delivery_receipts` tablosundaki müşteri, şoför, plaka ve kalem bilgileri

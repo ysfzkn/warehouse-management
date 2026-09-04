@@ -174,10 +174,15 @@ export default function DeliveryReceiptPanel({ transfer, isAdmin = false, onChan
     });
 
   const openConfirmForm = () => {
+    // Geriye dönük makbuzlarda tarih önemli: sevkiyat geçen ay çıktıysa formun bugünü
+    // önermesi, tam da malın ne zaman el değiştirdiğini kaydetmek için var olan belgeye
+    // yanlış tarih yazdırır. Sırayla: daha önce girilmiş tarih, sevkiyatın tamamlanma
+    // tarihi, en son bugün.
+    const existing = receipt?.deliveredAt || transfer?.completedDate || null;
     setConfirmForm({
       deliveredByName: receipt?.deliveredByName || transfer?.driverName || '',
       receivedByName: receipt?.receivedByName || '',
-      deliveredAt: toLocalInput(receipt?.deliveredAt ? new Date(receipt.deliveredAt) : new Date()),
+      deliveredAt: toLocalInput(existing ? new Date(existing) : new Date()),
       note: receipt?.receivedByNote || '',
     });
     setShowConfirmForm(true);

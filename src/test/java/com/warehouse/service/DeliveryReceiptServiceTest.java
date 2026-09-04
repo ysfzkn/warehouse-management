@@ -387,6 +387,56 @@ class DeliveryReceiptServiceTest {
                 .isGreaterThan(0);
     }
 
+    /**
+     * Receipts get issued after the fact — a delivery went out last month and only now
+     * needs paperwork. The delivery date must come from the shipment, not from the day
+     * somebody happened to press the button.
+     */
+    @Test
+    @DisplayName("Tamamlanmış sevkiyata sonradan kesilen makbuz teslim tarihini sevkiyattan alır")
+    void retroactiveReceiptTakesTheDeliveryDateFromTheShipment() {
+        LocalDateTime completedLastMonth = LocalDateTime.now().minusDays(34).withNano(0);
+        transfer.setStatus(TransferStatus.COMPLETED);
+        transfer.setCompletedDate(completedLastMonth);
+        transferRepository.save(transfer);
+
+        DeliveryReceiptDto dto = receiptService.issue(transfer.getId(), "admin");
+
+        assertThat(dto.getStatus())
+                .as("teslim alan hâlâ bilinmiyor, otomatik DELIVERED sayılmamalı")
+                .isEqualTo(DeliveryReceiptStatus.ISSUED);
+        assertThat(dto.getDeliveredAt()).isEqualTo(completedLastMonth);
+    }
+
+    @Test
+    @DisplayName("Tamamlanmış sevkiyata makbuz kesilebilir, sadece iptal edilenler engelli")
+    void completedTransfersCanStillBeIssued() {
+        transfer.setStatus(TransferStatus.COMPLETED);
+        transfer.setCompletedDate(LocalDateTime.now().minusDays(5));
+        transferRepository.save(transfer);
+
+        assertThat(receiptService.issue(transfer.getId(), "admin").getReceiptNo())
+                .matches("TM-\\d{4}-\\d{6}");
+    }
+
+    /**
+     * Transfers predating the multi-item model carry a single product on the transfer
+     * row itself. Those are exactly the old deliveries someone reaches for when
+     * backfilling paperwork, so the receipt must not come out with an empty item table.
+     */
+    @Test
+    @DisplayName("Çok kalemli modelden önceki tek ürünlü transferlerde kalem boş kalmaz")
+    void legacySingleProductTransfersStillListTheirItem() {
+        transfer.getItems().clear();
+        transferRepository.save(transfer);
+
+        DeliveryReceiptDto dto = receiptService.issue(transfer.getId(), "admin");
+
+        assertThat(dto.getItems()).hasSize(1);
+        assertThat(dto.getItems().get(0).getSku()).isEqualTo("BZD-001");
+        assertThat(dto.getItems().get(0).getQuantity()).isEqualTo(3);
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────
 
     private static String extractText(byte[] pdf) throws Exception {

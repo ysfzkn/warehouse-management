@@ -191,6 +191,15 @@ public class DeliveryReceiptServiceImpl implements DeliveryReceiptService {
         if (receipt.getDeliveredByName() == null) {
             receipt.setDeliveredByName(transfer.getDriverName());
         }
+
+        // Receipts are routinely issued after the fact — for a delivery that went out
+        // last month and now needs paperwork. Without this the confirmation form would
+        // offer today's date, and a document whose whole purpose is to record when the
+        // goods changed hands would quietly carry the wrong one. The shipment already
+        // knows when it completed.
+        if (receipt.getDeliveredAt() == null && transfer.getStatus() == TransferStatus.COMPLETED) {
+            receipt.setDeliveredAt(transfer.getCompletedDate());
+        }
     }
 
     private String serialiseItems(StockTransfer transfer) {
