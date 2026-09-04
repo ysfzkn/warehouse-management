@@ -66,6 +66,14 @@ font içermediği için font uygulamayla birlikte gelmek zorunda.
 `DeliveryReceiptServiceTest.pdfContainsTurkishCharacters` PDF'ten metni geri çıkarıp
 kontrol eder; font kaldırılırsa test kırmızı olur.
 
+**Logo.** Antetteki logo `site_logo` ayarından okunur ve PDF'e **data URI olarak
+gömülür** — dışarıdan çekilseydi her PDF üretimi sunucudan giden bir HTTP isteğine
+dönerdi. Medya tipi dosya adından değil **baytlardan** tespit edilir: içerik doğrulaması
+eklenmeden önce yüklenen logolar çoğunlukla `.png` yolunda duran JPEG baytlarıdır
+(production'daki logo şu an tam olarak böyle). Tarayıcı bunu sniff'leyip geçiyor ama
+`data:image/png` altına JPEG gömmek PDF'te logoyu **sessizce yok eder**.
+`logoIsEmbeddedEvenWhenTheExtensionLies` testi bu durumu sabitler.
+
 **CSS.** openhtmltopdf **flexbox ve grid desteklemez**. Yerleşim bilerek tablo ile
 kurulmuştur. Şablonu "modernleştirmeden" önce PDF çıktısına bakın: ekranda düzgün
 görünen flex kutular PDF'te üst üste biner. `height` de td üzerinde yok sayılır,

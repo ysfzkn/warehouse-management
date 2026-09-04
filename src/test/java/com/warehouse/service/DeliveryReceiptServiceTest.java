@@ -54,6 +54,8 @@ class DeliveryReceiptServiceTest {
     @Autowired private ProductRepository productRepository;
     @Autowired private CategoryRepository categoryRepository;
     @Autowired private AuditLogRepository auditLogRepository;
+    @Autowired private com.warehouse.service.PhotoStorageService photoStorageService;
+    @Autowired private com.warehouse.service.SiteSettingService siteSettingService;
 
     private StockTransfer transfer;
 
@@ -338,6 +340,32 @@ class DeliveryReceiptServiceTest {
                 .getContent()).hasSize(1);
     }
 
+    /**
+     * The site logo is stored under whatever path it was uploaded with, and logos
+     * uploaded before content validation existed are routinely JPEG bytes sitting at a
+     * {@code .png} path — the browser sniffs its way through that, so nobody notices.
+     * Deriving the data URI's media type from the file name would embed JPEG bytes as
+     * {@code data:image/png} and the letterhead would silently vanish from the PDF, which
+     * is exactly what production's logo looks like today.
+     */
+    @Test
+    @DisplayName("Uzantısı yanlış olan logo (jpeg içerik, .png ad) yine de PDF'e gömülür")
+    void logoIsEmbeddedEvenWhenTheExtensionLies() throws Exception {
+        byte[] jpeg = jpegBytes();
+        assertThat(jpeg[0] & 0xFF).isEqualTo(0xFF);  // JPEG magic, not PNG
+
+        var stored = photoStorageService.storeSiteAsset(
+                "logo", "logo.png", "image/png", new java.io.ByteArrayInputStream(jpeg));
+        siteSettingService.updateSettings(java.util.Map.of("site_logo", stored.relativePath()), "test");
+
+        receiptService.issue(transfer.getId(), "admin");
+        byte[] pdf = receiptService.renderPdf(transfer.getId(), "admin");
+
+        assertThat(countEmbeddedImages(pdf))
+                .as("makbuzun antetinde logo görseli bulunmalı")
+                .isGreaterThan(0);
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────
 
     private static String extractText(byte[] pdf) throws Exception {
@@ -345,6 +373,33 @@ class DeliveryReceiptServiceTest {
             PDFTextStripper stripper = new PDFTextStripper();
             stripper.setSortByPosition(true);
             return stripper.getText(document);
+        }
+    }
+
+    /** Counts image XObjects across all pages — proof the logo actually made it in. */
+    private static int countEmbeddedImages(byte[] pdf) throws Exception {
+        int count = 0;
+        try (PDDocument document = PDDocument.load(pdf)) {
+            for (var page : document.getPages()) {
+                var resources = page.getResources();
+                if (resources == null) continue;
+                for (var name : resources.getXObjectNames()) {
+                    if (resources.isImageXObject(name)) count++;
+                }
+            }
+        }
+        return count;
+    }
+
+    private static byte[] jpegBytes() {
+        try {
+            java.awt.image.BufferedImage image =
+                    new java.awt.image.BufferedImage(64, 24, java.awt.image.BufferedImage.TYPE_INT_RGB);
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            javax.imageio.ImageIO.write(image, "jpg", out);
+            return out.toByteArray();
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
         }
     }
 

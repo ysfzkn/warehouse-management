@@ -410,9 +410,17 @@ public class DeliveryReceiptServiceImpl implements DeliveryReceiptService {
         try (InputStream in = photoStorageService.openPhotoStream(path)) {
             byte[] bytes = in.readAllBytes();
             if (bytes.length == 0 || bytes.length > 2 * 1024 * 1024) return null;
-            String contentType = UploadValidator.safeContentTypeFor(path);
-            if (!contentType.startsWith("image/")) return null;
-            return "data:" + contentType + ";base64," + Base64.getEncoder().encodeToString(bytes);
+            // The media type comes from the bytes, not the file name. Logos uploaded
+            // before content validation existed are commonly stored under a .png path
+            // with JPEG content — the browser sniffs its way through that, but a
+            // data:image/png URI carrying JPEG bytes renders as nothing in the PDF, and
+            // the failure is silent: a receipt with no letterhead.
+            UploadValidator.ImageType type = UploadValidator.detectImageType(bytes);
+            if (type == null) {
+                log.warn("Makbuz logosu tanınmayan formatta ({}), atlanıyor.", path);
+                return null;
+            }
+            return "data:" + type.contentType + ";base64," + Base64.getEncoder().encodeToString(bytes);
         } catch (Exception e) {
             // A missing logo must not stop a delivery: the header falls back to the
             // company name in text.

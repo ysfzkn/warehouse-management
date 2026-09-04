@@ -161,6 +161,20 @@ public final class UploadValidator {
         }
     }
 
+    /**
+     * Identifies an image from its leading bytes, ignoring whatever the file is called.
+     *
+     * <p>Needed wherever a stored file has to be re-encoded rather than merely streamed:
+     * the site logo, for instance, is stored under a {@code .png} path but the bytes are
+     * often a JPEG the browser sniffed its way through. Embedding those bytes under a
+     * {@code data:image/png} URI produces a PDF with no logo at all.</p>
+     *
+     * @return the detected type, or null when the bytes are not a supported image
+     */
+    public static ImageType detectImageType(byte[] header) {
+        return detectImage(header);
+    }
+
     /** Content type to serve a stored document with. Never echoes the uploader's header. */
     public static String documentContentType(String extension) {
         return DOCUMENT_CONTENT_TYPES.getOrDefault(
