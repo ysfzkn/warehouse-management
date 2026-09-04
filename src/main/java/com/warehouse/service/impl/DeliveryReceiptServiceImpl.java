@@ -420,11 +420,41 @@ public class DeliveryReceiptServiceImpl implements DeliveryReceiptService {
                 log.warn("Makbuz logosu tanınmayan formatta ({}), atlanıyor.", path);
                 return null;
             }
+            // PDFBox can only embed JPEG and PNG. A WebP logo renders perfectly on the
+            // site and then leaves the receipt's letterhead blank — again with no error.
+            // ImageIO reads WebP through the twelvemonkeys plugin, so re-encode instead
+            // of dropping the logo.
+            if (type != UploadValidator.ImageType.JPEG && type != UploadValidator.ImageType.PNG) {
+                bytes = transcodeToPng(bytes, path);
+                if (bytes == null) return null;
+                type = UploadValidator.ImageType.PNG;
+            }
             return "data:" + type.contentType + ";base64," + Base64.getEncoder().encodeToString(bytes);
         } catch (Exception e) {
             // A missing logo must not stop a delivery: the header falls back to the
             // company name in text.
             log.warn("Makbuz logosu okunamadı ({}): {}", path, e.getMessage());
+            return null;
+        }
+    }
+
+    /** Re-encodes an image PDFBox cannot embed (WebP, GIF) as PNG. Null if undecodable. */
+    private byte[] transcodeToPng(byte[] bytes, String path) {
+        try {
+            java.awt.image.BufferedImage image =
+                    javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(bytes));
+            if (image == null) {
+                log.warn("Makbuz logosu çözülemedi ({}), atlanıyor.", path);
+                return null;
+            }
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            if (!javax.imageio.ImageIO.write(image, "png", out)) {
+                log.warn("Makbuz logosu PNG'ye çevrilemedi ({}), atlanıyor.", path);
+                return null;
+            }
+            return out.toByteArray();
+        } catch (Exception e) {
+            log.warn("Makbuz logosu dönüştürülemedi ({}): {}", path, e.getMessage());
             return null;
         }
     }

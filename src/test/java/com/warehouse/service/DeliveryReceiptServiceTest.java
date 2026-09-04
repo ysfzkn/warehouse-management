@@ -366,6 +366,29 @@ class DeliveryReceiptServiceTest {
                 .isGreaterThan(0);
     }
 
+    /**
+     * PDFBox can only embed JPEG and PNG. A WebP logo displays perfectly on the site and
+     * then leaves the receipt's letterhead blank — no error, just a missing logo. The
+     * repository's own {@code company-logo.png} is in fact a WebP, so this is the shape a
+     * real upload takes.
+     */
+    @Test
+    @DisplayName("WebP logo PDF'e gömülebilir formata çevrilir")
+    void webpLogoIsTranscodedForThePdf() throws Exception {
+        byte[] webp = webpBytes();
+        org.junit.jupiter.api.Assumptions.assumeTrue(webp != null,
+                "ImageIO WebP yazamıyor; bu ortamda örnek üretilemedi");
+
+        var stored = photoStorageService.storeSiteAsset(
+                "logo", "logo.webp", "image/webp", new java.io.ByteArrayInputStream(webp));
+        siteSettingService.updateSettings(java.util.Map.of("site_logo", stored.relativePath()), "test");
+
+        receiptService.issue(transfer.getId(), "admin");
+        assertThat(countEmbeddedImages(receiptService.renderPdf(transfer.getId(), "admin")))
+                .as("WebP logo PNG'ye çevrilip antete gömülmeli")
+                .isGreaterThan(0);
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────
 
     private static String extractText(byte[] pdf) throws Exception {
@@ -389,6 +412,26 @@ class DeliveryReceiptServiceTest {
             }
         }
         return count;
+    }
+
+    /**
+     * A real WebP file. Read from the frontend's bundled company logo rather than
+     * generated, because ImageIO has no WebP writer — which is the very asymmetry this
+     * test exists to cover.
+     */
+    private static byte[] webpBytes() {
+        try {
+            java.nio.file.Path candidate =
+                    java.nio.file.Path.of("frontend", "public", "company-logo.png");
+            if (!java.nio.file.Files.exists(candidate)) return null;
+            byte[] bytes = java.nio.file.Files.readAllBytes(candidate);
+            boolean isWebp = bytes.length > 12
+                    && bytes[0] == 'R' && bytes[1] == 'I' && bytes[2] == 'F' && bytes[3] == 'F'
+                    && bytes[8] == 'W' && bytes[9] == 'E' && bytes[10] == 'B' && bytes[11] == 'P';
+            return isWebp ? bytes : null;
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private static byte[] jpegBytes() {

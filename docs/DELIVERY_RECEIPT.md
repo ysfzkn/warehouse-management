@@ -74,6 +74,14 @@ eklenmeden önce yüklenen logolar çoğunlukla `.png` yolunda duran JPEG baytla
 `data:image/png` altına JPEG gömmek PDF'te logoyu **sessizce yok eder**.
 `logoIsEmbeddedEvenWhenTheExtensionLies` testi bu durumu sabitler.
 
+PDFBox yalnızca JPEG ve PNG gömebilir. **WebP logo** sitede kusursuz görünüp makbuzun
+antetini boş bırakıyordu — yine hatasız, sadece logosuz. Gömmeden önce PNG'ye
+çevriliyor (ImageIO WebP'yi twelvemonkeys eklentisiyle okuyabiliyor).
+`webpLogoIsTranscodedForThePdf` bunu sabitler.
+
+Antet kutusu geniş lockup logolar için 74×26 mm; ~700×300 px ve üzeri bir görsel
+baskıda net çıkar.
+
 **CSS.** openhtmltopdf **flexbox ve grid desteklemez**. Yerleşim bilerek tablo ile
 kurulmuştur. Şablonu "modernleştirmeden" önce PDF çıktısına bakın: ekranda düzgün
 görünen flex kutular PDF'te üst üste biner. `height` de td üzerinde yok sayılır,

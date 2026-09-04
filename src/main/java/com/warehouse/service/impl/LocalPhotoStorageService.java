@@ -283,14 +283,22 @@ public class LocalPhotoStorageService implements PhotoStorageService {
 
             // Try to optimize via ImageIO (works for JPEG/PNG)
             BufferedImage sourceImage = ImageIO.read(new ByteArrayInputStream(originalBytes));
-            if (sourceImage != null) {
+            // Readable is not the same as writable. The twelvemonkeys plugin gives ImageIO a
+            // WebP *reader* but no writer, so a WebP logo used to decode fine and then write
+            // nothing at all — ImageIO.write() returns false rather than throwing, and the
+            // failure only surfaced afterwards as NoSuchFileException on the missing file,
+            // reported to the operator as an opaque "Failed to store site asset". Any WebP
+            // logo or favicon was simply impossible to upload.
+            boolean canEncode = ImageIO.getImageWritersByFormatName(
+                    extension.equalsIgnoreCase("jpg") ? "jpeg" : extension.toLowerCase()).hasNext();
+            if (sourceImage != null && canEncode) {
                 BufferedImage optimized = resizeIfNeeded(sourceImage,
                         properties.getMaxWidth(), properties.getMaxHeight());
                 writeCompressedImage(optimized, extension, savedPath, properties.getQuality());
             } else {
-                // ImageIO can't read this format (SVG, ICO, some WebP, CMYK JPEG)
-                // Save raw bytes directly — still valid for browser rendering
-                log.info("ImageIO cannot process format, saving raw file: {}", originalFileName);
+                // ImageIO can't read (SVG, ICO, CMYK JPEG) or can't write (WebP) this format.
+                // Save raw bytes directly — still valid for browser rendering.
+                log.info("ImageIO cannot re-encode {}, saving raw file: {}", extension, originalFileName);
                 Files.write(savedPath, originalBytes);
             }
 
