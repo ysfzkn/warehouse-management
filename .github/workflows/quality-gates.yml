@@ -1,13 +1,15 @@
-name: Deploy to Railway
+name: Quality Gates
 
-# Production deploy pipeline with quality gates.
+# Test + lint + bundle bütçesi. Deploy YOK.
 #
-# - PR'lerde: test + lint + flyway validate (deploy yok)
-# - main/master push'larında: gates geçtiyse Railway'e deploy
+# Deploy'u Railway kendi GitHub entegrasyonuyla yapıyor. Buradaki `railway up` adımı
+# quality gate'i hiç geçemediği için bugüne dek çalışmamıştı; gate düzeltilince ilk kez
+# çalıştı ve RAILWAY_TOKEN olmadığı için düştü. İki ayrı deploy yolu tutmak aynı commit'i
+# iki kez deploy etme riski demek, o yüzden bu adım kaldırıldı — kapılar (test, lint,
+# bundle bütçesi) aynen duruyor.
 #
-# Gerekli secrets:
-#   RAILWAY_TOKEN  — Railway API token
-#   (opsiyonel)    SLACK_WEBHOOK, SENTRY_AUTH_TOKEN sonraki adımlar için
+# CI üzerinden deploy'a dönmek isterseniz: RAILWAY_TOKEN secret'ını ekleyip bir deploy
+# job'ı geri koyun ve Railway tarafındaki otomatik deploy'u kapatın.
 
 on:
   push:
@@ -99,51 +101,3 @@ jobs:
             exit 1
           fi
           echo "✅ Bundle budget OK"
-
-  # ────────────────────────────────────────────────────────────────
-  # Deploy — yalnız main push'unda + quality başarılı olunca.
-  # ────────────────────────────────────────────────────────────────
-  deploy:
-    needs: quality
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          java-version: '21'
-          distribution: 'temurin'
-          cache: maven
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: 'frontend/package-lock.json'
-
-      - name: Build backend (skip tests, already validated)
-        run: mvn -B -Dmaven.wagon.http.retryHandler.count=5 -Dmaven.wagon.httpconnectionManager.ttlSeconds=120 clean package -DskipTests
-
-      - name: Build frontend
-        run: |
-          cd frontend
-          npm ci
-          CI=false npm run build
-
-      - name: Install Railway CLI
-        run: npm install -g @railway/cli
-
-      - name: Deploy to Railway
-        run: railway up --detach
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-
-      - name: Notify deployment status
-        run: |
-          echo "✅ Deployment completed successfully!"
-          echo "🌐 Frontend: https://warehouse-management.up.railway.app"
-          echo "🔗 API: https://warehouse-management.up.railway.app/api"
