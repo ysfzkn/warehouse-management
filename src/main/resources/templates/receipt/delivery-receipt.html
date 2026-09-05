@@ -129,6 +129,15 @@
 
         .legal { margin-top: 2mm; font-size: 6.6pt; color: #6b7683; line-height: 1.4; }
 
+        /* İade uyarısı. Sayfadaki diğer her şey imzalandığı gibi donmuş durumda; bu satır
+           yeniden basıma düşülen canlı bir not. Malı geri gelmiş bir sevkiyatın makbuzu,
+           uyarı olmadan gerçekleşmemiş bir teslimatın temiz kanıtı gibi görünürdü. */
+        .returned-note {
+            width: 100%; border: 1.4pt solid #b42318; border-top: none;
+            background: #fef3f2; color: #b42318;
+            padding: 1.4mm 3mm; font-size: 7.8pt; font-weight: 700; letter-spacing: .2pt;
+        }
+
         /* Ekranda yazdırma butonu; PDF'e girmez. */
         .print-bar {
             margin: 0 0 6mm 0; padding: 3mm; background: #eef2f8;
@@ -286,6 +295,13 @@
     <div class="notes">
         <span class="lbl">AÇIKLAMA / NOT:</span>
         <span th:text="${receipt.notes} ?: ''"></span>
+    </div>
+
+    <div class="returned-note" th:if="${returnedQuantity > 0}">
+        <span th:if="${fullyReturned}">DİKKAT: Bu sevkiyatın tamamı depoya iade alınmıştır.</span>
+        <span th:unless="${fullyReturned}"
+              th:text="'DİKKAT: Bu sevkiyattan ' + ${returnedQuantity} + ' adet depoya iade alınmıştır.'"></span>
+        <span style="font-weight:400;">Belge yalnızca çıkış kaydı olarak geçerlidir.</span>
     </div>
 
     <table class="sign">

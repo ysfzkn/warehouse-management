@@ -8,10 +8,14 @@ import com.warehouse.dto.NotificationRequest;
 import com.warehouse.dto.StockTransferFilter;
 import com.warehouse.dto.StockTransferSummary;
 import com.warehouse.dto.StockTransferDeletionResult;
+import com.warehouse.dto.TransferReturnDto;
+import com.warehouse.dto.TransferReturnRequest;
 import com.warehouse.entity.Product;
 import com.warehouse.entity.Stock;
 import com.warehouse.entity.StockTransfer;
 import com.warehouse.entity.StockTransferItem;
+import com.warehouse.entity.TransferReturn;
+import com.warehouse.entity.TransferReturnItem;
 import com.warehouse.entity.Warehouse;
 import com.warehouse.enums.AuditAction;
 import com.warehouse.enums.TransferStatus;
@@ -21,6 +25,7 @@ import com.warehouse.enums.WarehouseType;
 import com.warehouse.exception.ErrorCode;
 import com.warehouse.exception.WarehouseManagementException;
 import com.warehouse.repository.StockTransferRepository;
+import com.warehouse.repository.TransferReturnRepository;
 import com.warehouse.repository.StockRepository;
 import com.warehouse.repository.ProductRepository;
 import com.warehouse.repository.WarehouseRepository;
@@ -68,6 +73,7 @@ public class StockTransferServiceImpl implements StockTransferService {
     private static final Logger logger = LoggerFactory.getLogger(StockTransferServiceImpl.class);
 
     private final StockTransferRepository stockTransferRepository;
+    private final TransferReturnRepository transferReturnRepository;
     private final StockRepository stockRepository;
     private final ProductRepository productRepository;
     private final StockService stockService;
@@ -95,8 +101,10 @@ public class StockTransferServiceImpl implements StockTransferService {
                                     OrderStatusHistoryRepository orderStatusHistoryRepository,
                                     CustomerRepository customerRepository,
                                     com.warehouse.service.DriverService driverService,
-                                    com.warehouse.service.VehicleService vehicleService) {
+                                    com.warehouse.service.VehicleService vehicleService,
+                                    TransferReturnRepository transferReturnRepository) {
         this.stockTransferRepository = stockTransferRepository;
+        this.transferReturnRepository = transferReturnRepository;
         this.stockRepository = stockRepository;
         this.productRepository = productRepository;
         this.warehouseRepository = warehouseRepository;
@@ -489,6 +497,221 @@ public class StockTransferServiceImpl implements StockTransferService {
         logger.info("Carrier assigned to transfer id: {}", saved.getId());
 
         return stockTransferRepository.findByIdWithRelations(saved.getId()).orElse(saved);
+    }
+
+    @Override
+    public TransferReturnDto recordReturn(Long transferId, TransferReturnRequest request) {
+        if (!isCurrentUserAdmin()) {
+            throw new WarehouseManagementException(ErrorCode.UNAUTHORIZED_ACTION,
+                    "İade kaydı yalnızca yönetici tarafından girilebilir.");
+        }
+        StockTransfer transfer = getTransferByIdOrThrow(transferId);
+
+        if (transfer.getStatus() != TransferStatus.COMPLETED) {
+            // Nothing has left the warehouse yet on a PENDING or IN_TRANSIT shipment, so
+            // there is nothing to bring back — cancelling it is the right move and already
+            // releases whatever was reserved.
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                    "Yalnızca tamamlanmış sevkiyatlar için iade kaydedilebilir. "
+                            + "Henüz tamamlanmamış sevkiyatı iptal edin.");
+        }
+        if (transfer.getTransferType() != TransferType.CUSTOMER_DELIVERY) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                    "Depolar arası transferin iadesi ters yönde bir transferdir; iade kaydı "
+                            + "müşteri sevkiyatları içindir.");
+        }
+        if (transfer.getOrderId() != null) {
+            // Completing an order-linked shipment marks the order DELIVERED. Undoing that
+            // properly means deciding the order status and the refund, which is exactly what
+            // the storefront return flow exists for — quietly restocking here would leave a
+            // delivered order whose goods are back on our shelves.
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                    "Bu sevkiyat " + transfer.getOrderNumber() + " siparişine bağlı. "
+                            + "İadeyi e-ticaret iade akışından yürütün.");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime returnedAt = request.getReturnedAt() != null ? request.getReturnedAt() : now;
+        if (returnedAt.isAfter(now.plusMinutes(5))) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                    "İade tarihi ileri bir tarih olamaz.");
+        }
+        if (transfer.getCompletedDate() != null && returnedAt.isBefore(transfer.getCompletedDate())) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                    "İade tarihi sevkiyatın çıkış tarihinden önce olamaz.");
+        }
+
+        List<StockTransferItem> shippedItems = transfer.getItems();
+        if (shippedItems == null || shippedItems.isEmpty()) {
+            // Transfers predating the multi-item model carry a single product on the header
+            // and have no line rows to return against.
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                    "Bu sevkiyatın kalem kaydı bulunmuyor; iade kaydedilemiyor.");
+        }
+        Map<Long, StockTransferItem> itemsById = shippedItems.stream()
+                .filter(item -> item.getId() != null)
+                .collect(Collectors.toMap(StockTransferItem::getId, item -> item, (a, b) -> a));
+
+        // The same line may arrive twice in one request; fold them together before checking
+        // the limit, otherwise two halves could each pass and together exceed what went out.
+        Map<Long, Integer> requested = new LinkedHashMap<>();
+        for (TransferReturnRequest.Item line : request.getItems()) {
+            if (line.getQuantity() == null || line.getQuantity() < 1) {
+                throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                        "İade adedi en az 1 olmalıdır.");
+            }
+            requested.merge(line.getTransferItemId(), line.getQuantity(), Integer::sum);
+        }
+
+        List<StockTransferItem> affected = new ArrayList<>();
+        for (Map.Entry<Long, Integer> entry : requested.entrySet()) {
+            StockTransferItem item = itemsById.get(entry.getKey());
+            if (item == null) {
+                throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                        "İade edilmek istenen kalem bu sevkiyata ait değil.");
+            }
+            int alreadyReturned = item.getReturnedQuantity() == null ? 0 : item.getReturnedQuantity();
+            int remaining = item.getQuantity() - alreadyReturned;
+            if (entry.getValue() > remaining) {
+                String productName = item.getProduct() != null ? item.getProduct().getName() : "Ürün";
+                throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                        String.format("%s için iade edilebilecek en fazla adet: %d.",
+                                productName, remaining));
+            }
+            affected.add(item);
+        }
+
+        Map<String, Stock> sourceStocks = loadSourceStocks(transfer.getSourceWarehouse(), affected);
+
+        TransferReturn transferReturn = new TransferReturn();
+        transferReturn.setTransfer(transfer);
+        transferReturn.setReturnedAt(returnedAt);
+        transferReturn.setReason(request.getReason());
+        transferReturn.setNote(trimToNull(request.getNote()));
+        transferReturn.setRecordedBy(CurrentUser.usernameOrSystem());
+
+        int total = 0;
+        for (StockTransferItem item : affected) {
+            int quantity = requested.get(item.getId());
+            Stock stock = sourceStocks.get(stockKey(item));
+
+            // The goods are physically back on the shelf, so the count goes back up — even
+            // when they came back damaged. Writing them off is a separate, deliberate stock
+            // removal; skipping the restock here would leave goods on the floor that the system
+            // says do not exist.
+            stock.setQuantity(stock.getQuantity() + quantity);
+            Stock saved = stockRepository.save(stock);
+            logStockReturnForTransfer(saved, quantity, transfer, transferReturn);
+
+            item.setReturnedQuantity(
+                    (item.getReturnedQuantity() == null ? 0 : item.getReturnedQuantity()) + quantity);
+
+            TransferReturnItem returnItem = new TransferReturnItem();
+            returnItem.setTransferItem(item);
+            returnItem.setProductId(item.getProduct() != null ? item.getProduct().getId() : null);
+            returnItem.setQuantity(quantity);
+            transferReturn.addItem(returnItem);
+            total += quantity;
+        }
+        transferReturn.setTotalQuantity(total);
+
+        transfer.setReturnedQuantity(
+                (transfer.getReturnedQuantity() == null ? 0 : transfer.getReturnedQuantity()) + total);
+        stockTransferRepository.save(transfer);
+        TransferReturn savedReturn = transferReturnRepository.save(transferReturn);
+
+        String username = CurrentUser.usernameOrSystem();
+        auditService.log(AuditAction.TRANSFER_RETURN, DomainEntityType.StockTransfer.name(),
+                transfer.getId(), username,
+                String.format("Sevkiyat iadesi alındı: %d adet (%s) | %s | Sebep=%s",
+                        total, describeReturnItems(transferReturn), describeRoute(transfer),
+                        request.getReason()),
+                buildTransferMetadata(transfer));
+        notificationService.create(buildTransferNotification(
+                "Sevkiyat iadesi alındı",
+                String.format("#%d numaralı sevkiyattan %d adet ürün depoya geri alındı (%s).",
+                        transfer.getId(), total, request.getReason()),
+                transfer));
+        logger.info("Recorded return of {} units for transfer id: {}", total, transfer.getId());
+
+        return toReturnDto(savedReturn);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<TransferReturnDto> getReturns(Long transferId) {
+        return transferReturnRepository.findByTransferId(transferId).stream()
+                .map(this::toReturnDto)
+                .toList();
+    }
+
+    private TransferReturnDto toReturnDto(TransferReturn source) {
+        List<TransferReturnDto.Line> lines = new ArrayList<>();
+        for (TransferReturnItem item : source.getItems()) {
+            Product product = item.getTransferItem() != null ? item.getTransferItem().getProduct() : null;
+            lines.add(TransferReturnDto.Line.builder()
+                    .transferItemId(item.getTransferItem() != null ? item.getTransferItem().getId() : null)
+                    .productId(item.getProductId())
+                    .productName(product != null ? product.getName() : null)
+                    .productSku(product != null ? product.getSku() : null)
+                    .quantity(item.getQuantity())
+                    .build());
+        }
+        return TransferReturnDto.builder()
+                .id(source.getId())
+                .transferId(source.getTransfer() != null ? source.getTransfer().getId() : null)
+                .returnedAt(source.getReturnedAt())
+                .reason(source.getReason())
+                .note(source.getNote())
+                .totalQuantity(source.getTotalQuantity())
+                .recordedBy(source.getRecordedBy())
+                .createdAt(source.getCreatedAt())
+                .items(lines)
+                .build();
+    }
+
+    private String describeReturnItems(TransferReturn source) {
+        return source.getItems().stream()
+                .map(item -> {
+                    Product product = item.getTransferItem() != null
+                            ? item.getTransferItem().getProduct() : null;
+                    return (product != null ? product.getName() : "Ürün") + " x" + item.getQuantity();
+                })
+                .collect(Collectors.joining(", "));
+    }
+
+    /**
+     * Mirrors {@code logStockRemovalForTransfer} so a shipment and its return read as one
+     * pair in the movement history. A return that logged nothing would look like stock
+     * appearing out of nowhere.
+     */
+    private void logStockReturnForTransfer(Stock stock, Integer quantity, StockTransfer transfer,
+                                           TransferReturn transferReturn) {
+        String username = CurrentUser.usernameOrSystem();
+        Warehouse warehouse = stock.getWarehouse();
+        Product product = stock.getProduct();
+
+        AuditMetadata metadata = AuditMetadata.builder()
+                .warehouseId(warehouse != null ? warehouse.getId() : null)
+                .warehouseName(warehouse != null ? warehouse.getName() : null)
+                .productId(product != null ? product.getId() : null)
+                .productName(product != null ? product.getName() : null)
+                .productSku(product != null ? product.getSku() : null)
+                .quantity(quantity)
+                .customerName(transfer.getCustomerFullName())
+                .customerPhone(transfer.getCustomerPhone())
+                .transferId(transfer.getId())
+                .build();
+
+        String detailsMessage = String.format(
+                "Sevkiyat iadesiyle stok artırıldı: +%s adet → Yeni=%s | Transfer #%d | "
+                        + "Sebep=%s | Depo=%s, Ürün=%s",
+                quantity, stock.getQuantity(), transfer.getId(), transferReturn.getReason(),
+                warehouse != null ? warehouse.getName() : "N/A",
+                product != null ? product.getName() : "N/A");
+
+        auditService.log(AuditAction.STOCK_ADD, DomainEntityType.Stock.name(), stock.getId(),
+                username, detailsMessage, metadata);
     }
 
     private static String trimToNull(String value) {

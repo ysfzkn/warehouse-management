@@ -417,7 +417,7 @@ public class DeliveryReceiptServiceImpl implements DeliveryReceiptService {
         context.setVariable("totalQuantity", total);
         context.setVariable("uniqueProductCount", items.size());
         context.setVariable("fillerRows",
-                Collections.nCopies(Math.max(0, MIN_TABLE_ROWS - items.size()), ""));
+                Collections.nCopies(Math.max(0, minTableRows(receipt) - items.size()), ""));
         context.setVariable("issuedAtText", format(receipt.getIssuedAt()));
         context.setVariable("transferDateText", format(receipt.getTransferDate()));
         context.setVariable("deliveredAtText", format(receipt.getDeliveredAt()));
@@ -428,6 +428,16 @@ public class DeliveryReceiptServiceImpl implements DeliveryReceiptService {
         // the goods and stays with us, and there is no second party yet to leave a copy with.
         boolean handover = receipt.getKind() == DeliveryReceiptKind.SERVICE_HANDOVER;
         context.setVariable("handover", handover);
+
+        // Live, not snapshotted, and deliberately so. Everything else on this page is frozen
+        // as it was signed; this is an annotation on the reprint. A receipt for goods that
+        // came back would otherwise keep printing as clean proof of a delivery that failed.
+        StockTransfer transfer = receipt.getTransfer();
+        int returned = transfer != null && transfer.getReturnedQuantity() != null
+                ? transfer.getReturnedQuantity() : 0;
+        context.setVariable("returnedQuantity", returned);
+        context.setVariable("fullyReturned", returned > 0 && transfer != null
+                && transfer.getQuantity() != null && returned >= transfer.getQuantity());
         context.setVariable("copies", handover
                 ? List.of("TEK NÜSHA")
                 : List.of("FİRMA NÜSHASI", "MÜŞTERİ NÜSHASI"));
@@ -471,6 +481,24 @@ public class DeliveryReceiptServiceImpl implements DeliveryReceiptService {
             log.warn("Makbuz logosu okunamadı ({}): {}", path, e.getMessage());
             return null;
         }
+    }
+
+    /**
+     * How many rows the items table is padded out to.
+     *
+     * <p>The blank rows are there so the form can be completed by hand, and twelve of them
+     * fill an A4 page to the millimetre — which means anything else added to the sheet pushes
+     * the closing paragraph onto a second, near-empty page. The return notice is the one thing
+     * that does, so it costs two filler rows rather than a page. The figure is empirical:
+     * openhtmltopdf's box heights do not match the browser's, so change it only against a
+     * rendered PDF, never by arithmetic.</p>
+     */
+    private int minTableRows(DeliveryReceipt receipt) {
+        StockTransfer transfer = receipt.getTransfer();
+        boolean hasReturn = transfer != null
+                && transfer.getReturnedQuantity() != null
+                && transfer.getReturnedQuantity() > 0;
+        return hasReturn ? MIN_TABLE_ROWS - 2 : MIN_TABLE_ROWS;
     }
 
     /** Re-encodes an image PDFBox cannot embed (WebP, GIF) as PNG. Null if undecodable. */

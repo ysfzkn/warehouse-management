@@ -233,6 +233,24 @@ class ReceiptPreviewDumpTest {
         Files.write(dir.resolve("depo-cikis-tasiyicili.pdf"), withCarrier);
         render(withCarrier, dir, "depo-cikis-tasiyicili");
 
+        // Ve bir de malın geri geldiği hâli. Uyarı satırı olmasa bu kâğıt, gerçekleşmemiş bir
+        // teslimatın temiz kanıtı gibi yeniden basılabilirdi.
+        com.warehouse.dto.TransferReturnRequest returnRequest =
+                new com.warehouse.dto.TransferReturnRequest();
+        returnRequest.setReason(com.warehouse.enums.TransferReturnReason.UNDELIVERED);
+        returnRequest.setNote("Adres bulunamadı, iki kalem geri getirildi.");
+        com.warehouse.dto.TransferReturnRequest.Item returnLine =
+                new com.warehouse.dto.TransferReturnRequest.Item();
+        returnLine.setTransferItemId(result.transfer().getItems().get(0).getId());
+        returnLine.setQuantity(1);
+        returnRequest.setItems(java.util.List.of(returnLine));
+        transferService.recordReturn(transferId, returnRequest);
+        receiptService.issue(transferId, "yusuf");
+
+        byte[] returned = receiptService.renderPdf(transferId, "yusuf");
+        Files.write(dir.resolve("depo-cikis-iadeli.pdf"), returned);
+        render(returned, dir, "depo-cikis-iadeli");
+
         SecurityContextHolder.clearContext();
     }
 

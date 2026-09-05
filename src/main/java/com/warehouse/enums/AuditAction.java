@@ -16,6 +16,8 @@ public enum AuditAction {
     TRANSFER_DELETE,
     TRANSFER_APPROVE,
     TRANSFER_REJECT,
+    /** Depodan çıkan malın geri gelmesi. Sevkiyat iptali değil, üzerine yazılan olay. */
+    TRANSFER_RETURN,
 
     // Teslimat makbuzu. Kâğıdın hayat döngüsü denetim kaydında görünmeli: kim bastı,
     // kim yeniden bastı, teslimatı kim onayladı, imzalı nüshayı kim yükledi.

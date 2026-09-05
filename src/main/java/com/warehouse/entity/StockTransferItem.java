@@ -40,6 +40,10 @@ public class StockTransferItem {
     @Column(nullable = false)
     private Integer quantity;
 
+    /** Returned against this line so far; never more than {@link #quantity}. */
+    @Column(name = "returned_quantity", nullable = false)
+    private Integer returnedQuantity = 0;
+
     @OneToOne(mappedBy = "item", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private StockTransferItemPhoto photo;
 

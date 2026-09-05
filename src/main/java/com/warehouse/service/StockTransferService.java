@@ -3,6 +3,8 @@ package com.warehouse.service;
 import com.warehouse.dto.BulkDeleteResponse;
 import com.warehouse.dto.CarrierAssignmentRequest;
 import com.warehouse.dto.ServiceHandoverRequest;
+import com.warehouse.dto.TransferReturnDto;
+import com.warehouse.dto.TransferReturnRequest;
 import com.warehouse.dto.StockTransferFilter;
 import com.warehouse.dto.StockTransferSummary;
 import com.warehouse.dto.StockTransferDeletionResult;
@@ -63,6 +65,22 @@ public interface StockTransferService {
      * Reprinting is a separate, explicit action.</p>
      */
     StockTransfer assignCarrier(Long transferId, CarrierAssignmentRequest request);
+
+    /**
+     * Records goods from a completed shipment arriving back at the warehouse.
+     *
+     * <p>Does not undo the shipment. The goods left — that is history, the signed receipt says
+     * so, and the transfer stays COMPLETED. A return is a separate event written on top of it,
+     * and there can be several: a failed delivery comes back a piece at a time.</p>
+     *
+     * <p>Returned quantities go back onto the stock rows they left from, damaged or not.
+     * Whether to then write them off is a separate, deliberate stock removal; withholding the
+     * restock here would leave goods on the floor that the system says do not exist.</p>
+     */
+    TransferReturnDto recordReturn(Long transferId, TransferReturnRequest request);
+
+    /** Return history of one shipment, newest first. */
+    List<TransferReturnDto> getReturns(Long transferId);
 
     StockTransfer startTransfer(Long transferId);
 

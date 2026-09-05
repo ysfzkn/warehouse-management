@@ -25,6 +25,8 @@ public class StockTransferDto {
     private String vehiclePlate;
     /** Goods are out, carrier not recorded yet — the list renders a badge off this. */
     private boolean carrierPending;
+    /** Sum of everything that came back; drives the "kısmen iade / iade edildi" badge. */
+    private Integer returnedQuantity;
     private String handoverToName;
     private String handoverToPhone;
     private String handedOverBy;
@@ -96,6 +98,8 @@ public class StockTransferDto {
         private Long stockId;
         private SimpleProductDto product;
         private Integer quantity;
+        /** Already returned against this line — the return form caps its input on it. */
+        private Integer returnedQuantity;
         private String customerName;
         private String customerPhone;
     }

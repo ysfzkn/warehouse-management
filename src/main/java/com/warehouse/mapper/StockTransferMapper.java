@@ -45,6 +45,7 @@ public class StockTransferMapper {
         dto.setDriverPhone(entity.getDriverPhone());
         dto.setVehiclePlate(entity.getVehiclePlate());
         dto.setCarrierPending(entity.isCarrierPending());
+        dto.setReturnedQuantity(entity.getReturnedQuantity());
         dto.setHandoverToName(entity.getHandoverToName());
         dto.setHandoverToPhone(entity.getHandoverToPhone());
         dto.setHandedOverBy(entity.getHandedOverBy());
@@ -152,6 +153,7 @@ public class StockTransferMapper {
                         dtoItem.setId(item.getId());
                         dtoItem.setStockId(item.getStockId());
                         dtoItem.setQuantity(item.getQuantity());
+                        dtoItem.setReturnedQuantity(item.getReturnedQuantity());
                     if (item.getStockId() != null) {
                         stockService.getStockById(item.getStockId()).ifPresent(stock -> {
                             dtoItem.setCustomerName(stock.getCustomerName());

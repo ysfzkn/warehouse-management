@@ -257,6 +257,16 @@ public class StockTransfer {
     private boolean deleteRequest = false;
 
     /**
+     * How much of this shipment has come back, summed across its returns.
+     *
+     * <p>Kept here rather than summed on read because every listing needs it — the row has
+     * to show whether a shipment came back in part or in whole, and a shipment that is fully
+     * returned should not read as a plain completed delivery.</p>
+     */
+    @Column(name = "returned_quantity", nullable = false)
+    private Integer returnedQuantity = 0;
+
+    /**
      * Derived here rather than in a service so no write path can forget: an out-of-date search
      * column silently drops the record out of the customer / driver filters.
      */

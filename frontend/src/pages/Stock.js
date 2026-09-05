@@ -12,6 +12,7 @@ import StockSettingsModal from '../components/StockSettingsModal';
 import StockTransferModal from '../components/StockTransferModal';
 import ServiceHandoverModal from '../components/ServiceHandoverModal';
 import DeliveryReceiptPanel from '../components/DeliveryReceiptPanel';
+import TransferReturnPanel from '../components/TransferReturnPanel';
 import CustomerLinkPicker from '../components/CustomerLinkPicker';
 import StockRequestApprovalModal from '../components/StockRequestApprovalModal';
 import SearchableSelect from '../components/SearchableSelect';
@@ -4511,6 +4512,13 @@ const Stock = () => {
                         onChanged={() => setTransferReceiptsVersion((v) => v + 1)}
                         onTransferChanged={applyTransferUpdate}
                       />
+                      {/* Makbuzun hemen altında: iade, kâğıdın değil sevkiyatın olayı ama
+                          ikisine de aynı sebeple bakılıyor — mal ne oldu? */}
+                      <TransferReturnPanel
+                        transfer={t}
+                        isAdmin={isAdmin}
+                        onTransferChanged={applyTransferUpdate}
+                      />
                       <h6 className="fw-bold mb-2 mt-4 d-flex align-items-center justify-content-between">
                         <span>
                           <i className="fas fa-box me-2"></i>
@@ -5705,6 +5713,26 @@ const Stock = () => {
                                   <i className={`fas fa-${status.icon} me-1`}></i>
                                   <span className="small">{status.label}</span>
                                 </span>
+                                {/* İade sevkiyatı iptal etmiyor; durum COMPLETED kalıyor.
+                                    Rozet olmasa tamamı geri gelmiş bir sevkiyat listede
+                                    başarıyla teslim edilmiş gibi okunurdu. */}
+                                {transfer.returnedQuantity > 0 && (
+                                  <span
+                                    className={`badge rounded-pill d-block mb-1 ${
+                                      transfer.returnedQuantity >= totalQuantity
+                                        ? 'bg-danger-subtle text-danger-emphasis border border-danger-subtle'
+                                        : 'bg-warning-subtle text-warning-emphasis border border-warning-subtle'
+                                    }`}
+                                    title={`${transfer.returnedQuantity} / ${totalQuantity} adet depoya geri alındı`}
+                                  >
+                                    <i className="fas fa-rotate-left me-1"></i>
+                                    <span className="small">
+                                      {transfer.returnedQuantity >= totalQuantity
+                                        ? 'İade edildi'
+                                        : `Kısmen iade (${transfer.returnedQuantity})`}
+                                    </span>
+                                  </span>
+                                )}
                                 {transfer.completedDate && (
                                   <small
                                     className="d-block text-success mt-1"
@@ -6225,6 +6253,23 @@ const Stock = () => {
                                   </div>
                                 </div>
                               </div>
+
+                              {transfer.returnedQuantity > 0 && (
+                                <div className="mb-3">
+                                  <span
+                                    className={`badge rounded-pill ${
+                                      transfer.returnedQuantity >= totalQuantity
+                                        ? 'bg-danger-subtle text-danger-emphasis border border-danger-subtle'
+                                        : 'bg-warning-subtle text-warning-emphasis border border-warning-subtle'
+                                    }`}
+                                  >
+                                    <i className="fas fa-rotate-left me-1"></i>
+                                    {transfer.returnedQuantity >= totalQuantity
+                                      ? 'Tamamı iade edildi'
+                                      : `Kısmen iade edildi (${transfer.returnedQuantity}/${totalQuantity})`}
+                                  </span>
+                                </div>
+                              )}
 
                               {transfer.carrierPending && (
                                 <div className="mb-3">

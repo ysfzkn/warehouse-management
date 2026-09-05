@@ -3,6 +3,8 @@ package com.warehouse.controller;
 import com.warehouse.dto.BulkDeleteResponse;
 import com.warehouse.dto.CarrierAssignmentRequest;
 import com.warehouse.dto.ServiceHandoverRequest;
+import com.warehouse.dto.TransferReturnDto;
+import com.warehouse.dto.TransferReturnRequest;
 import com.warehouse.dto.PagedResponse;
 import com.warehouse.dto.StockTransferCreateRequest;
 import com.warehouse.dto.StockTransferDto;
@@ -213,6 +215,27 @@ public class StockTransferController {
     public ResponseEntity<StockTransferDto> assignCarrier(@PathVariable Long id,
                                                           @Valid @RequestBody CarrierAssignmentRequest request) {
         return ResponseEntity.ok(transferMapper.toDto(stockTransferService.assignCarrier(id, request)));
+    }
+
+    /**
+     * Records goods coming back from a completed shipment.
+     *
+     * <p>Admin only, and it moves stock, so it is not a shop-floor action. Returns the saved
+     * return rather than the shipment: the caller already holds the shipment and the panel
+     * needs the new entry to render its history.</p>
+     */
+    @PostMapping("/{id}/returns")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<TransferReturnDto> recordReturn(@PathVariable Long id,
+                                                          @Valid @RequestBody TransferReturnRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(stockTransferService.recordReturn(id, request));
+    }
+
+    /** Return history of one shipment, newest first. */
+    @GetMapping("/{id}/returns")
+    public ResponseEntity<List<TransferReturnDto>> getReturns(@PathVariable Long id) {
+        return ResponseEntity.ok(stockTransferService.getReturns(id));
     }
 
     /**
