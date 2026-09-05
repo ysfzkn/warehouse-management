@@ -1005,7 +1005,10 @@ const Navbar = () => {
               {role === 'ADMIN' && (
                 <li className="nav-item dropdown">
                   <button
-                    className="nav-link nav-link-custom dropdown-toggle text-white border-0 bg-transparent w-100 text-start"
+                    // bg-transparent Bootstrap'te background-color:transparent !important; inline
+                    // stili eziyordu, dolayısıyla açılır menüler aktif sayfadayken hiç
+                    // vurgulanmıyordu. Arka planı zaten aşağıdaki inline stil belirliyor.
+                    className="nav-link nav-link-custom dropdown-toggle text-white border-0 w-100 text-start"
                     type="button"
                     data-bs-toggle="dropdown"
                     style={{
@@ -1073,21 +1076,64 @@ const Navbar = () => {
                 </li>
               )}
 
+              {/* ── SEVKİYAT ──
+                  Depolar, Şoförler ve Araçlar, Makbuzlar tek menüde toplandı. Üçü ayrı
+                  üst seviye bağlantıyken 1366px'lik ekranda (yaygın dizüstü genişliği)
+                  navbar 156px taşıyordu ve sağdaki bildirim/kullanıcı alanı ekran dışında
+                  kalıyordu. Bu üçü 358px kaplıyordu, menü ~110px.
+
+                  Stok Yönetimi bilerek dışarıda: günlük çalışılan ekran ve düşük stok
+                  rozetini taşıyor, menü içine gömülürse hem bir tık uzaklaşır hem rozet
+                  görünmez olur. */}
               {role === 'ADMIN' && isWms && (
-                <li className="nav-item">
-                  <Link
-                    className="nav-link nav-link-custom text-white"
-                    to="/warehouses"
-                    style={navLinkStyle('/warehouses')}
+                <li className="nav-item dropdown">
+                  <button
+                    // bg-transparent Bootstrap'te background-color:transparent !important; inline
+                    // stili eziyordu, dolayısıyla açılır menüler aktif sayfadayken hiç
+                    // vurgulanmıyordu. Arka planı zaten aşağıdaki inline stil belirliyor.
+                    className="nav-link nav-link-custom dropdown-toggle text-white border-0 w-100 text-start"
+                    type="button"
+                    data-bs-toggle="dropdown"
+                    style={{
+                      ...navLinkStyle(null),
+                      background: ['/warehouses', '/drivers', '/admin/delivery-receipts'].some((path) =>
+                        location.pathname.startsWith(path)
+                      )
+                        ? 'rgba(255,255,255,0.2)'
+                        : 'transparent',
+                    }}
                   >
-                    <i className="fas fa-building me-2"></i>
-                    Depolar
-                  </Link>
+                    <i className="fas fa-truck-fast me-2"></i>Sevkiyat
+                  </button>
+                  <ul
+                    className="dropdown-menu border-0 shadow-lg"
+                    style={{ borderRadius: '12px', marginTop: '0.5rem' }}
+                  >
+                    <li>
+                      <Link className="dropdown-item" to="/warehouses">
+                        <i className="fas fa-building me-2 text-primary"></i>Depolar
+                      </Link>
+                    </li>
+                    <li>
+                      <Link className="dropdown-item" to="/drivers">
+                        <i className="fas fa-truck-fast me-2 text-success"></i>Şoförler ve Araçlar
+                      </Link>
+                    </li>
+                    <li>
+                      <hr className="dropdown-divider" />
+                    </li>
+                    <li>
+                      <Link className="dropdown-item" to="/admin/delivery-receipts">
+                        <i className="fas fa-file-invoice me-2 text-info"></i>Teslimat Makbuzları
+                      </Link>
+                    </li>
+                  </ul>
                 </li>
               )}
 
-              {/* Warehouse roles fill in transfers, so they need the driver directory too. */}
-              {isWms && (
+              {/* Depo rolleri transferi dolduran taraf, şoför rehberine erişmeleri gerekiyor.
+                  Onlarda menüyü dolduracak başka madde olmadığı için tek bağlantı kalıyor. */}
+              {isWms && role !== 'ADMIN' && (
                 <li className="nav-item">
                   <Link
                     className="nav-link nav-link-custom text-white"
@@ -1114,30 +1160,14 @@ const Navbar = () => {
                 </li>
               )}
 
-              {/* Teslimat makbuzu arşivi: imzalı nüshası dönmemiş sevkiyatların takibi
-                  yöneticide, makbuzu basma/yükleme işi sevkiyat ekranında. */}
-              {role === 'ADMIN' && (
-                <li className="nav-item">
-                  <Link
-                    className="nav-link nav-link-custom text-white"
-                    to="/admin/delivery-receipts"
-                    style={navLinkStyle('/admin/delivery-receipts')}
-                  >
-                    <i className="fas fa-file-invoice me-2"></i>
-                    {/* Kısa etiket: navbar 1385px viewport'ta zaten taşıyor ve
-                        "Teslimat Makbuzları" tek başına 193px yer kaplıyordu.
-                        Panelde başka makbuz türü yok, kısaltma belirsizlik yaratmıyor;
-                        sayfanın kendi başlığı tam adı taşıyor. */}
-                    Makbuzlar
-                  </Link>
-                </li>
-              )}
-
               {/* ── E-COMMERCE DROPDOWN ── */}
               {role === 'ADMIN' && isEcom && (
                 <li className="nav-item dropdown">
                   <button
-                    className="nav-link nav-link-custom dropdown-toggle text-white border-0 bg-transparent w-100 text-start"
+                    // bg-transparent Bootstrap'te background-color:transparent !important; inline
+                    // stili eziyordu, dolayısıyla açılır menüler aktif sayfadayken hiç
+                    // vurgulanmıyordu. Arka planı zaten aşağıdaki inline stil belirliyor.
+                    className="nav-link nav-link-custom dropdown-toggle text-white border-0 w-100 text-start"
                     type="button"
                     data-bs-toggle="dropdown"
                     style={{
@@ -1251,7 +1281,10 @@ const Navbar = () => {
               {role === 'ADMIN' && (
                 <li className="nav-item dropdown">
                   <button
-                    className="nav-link nav-link-custom dropdown-toggle text-white border-0 bg-transparent w-100 text-start"
+                    // bg-transparent Bootstrap'te background-color:transparent !important; inline
+                    // stili eziyordu, dolayısıyla açılır menüler aktif sayfadayken hiç
+                    // vurgulanmıyordu. Arka planı zaten aşağıdaki inline stil belirliyor.
+                    className="nav-link nav-link-custom dropdown-toggle text-white border-0 w-100 text-start"
                     type="button"
                     data-bs-toggle="dropdown"
                     style={{
