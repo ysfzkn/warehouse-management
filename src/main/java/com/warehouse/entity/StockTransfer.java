@@ -2,7 +2,6 @@ package com.warehouse.entity;
 
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
@@ -76,25 +75,60 @@ public class StockTransfer {
     @JsonIgnoreProperties({"transfer", "hibernateLazyInitializer", "handler"})
     private List<StockTransferItem> items = new ArrayList<>();
 
-    @NotBlank(message = "Driver name is required")
+    /*
+     * The carrier is nullable, but only one path may leave it empty.
+     *
+     * Goods are routinely handed to a service company before anyone knows which driver
+     * will carry them onward, and the paperwork is signed at that moment — so a shipment
+     * has to be recordable without a carrier. What must not happen is the ordinary
+     * transfer form quietly accepting a blank driver: the constraint moved to
+     * StockTransferCreateRequest and to StockTransferServiceImpl.validateTransferCreation,
+     * which exempt only carrierPending shipments. The @Size/@Pattern rules stay here and
+     * still apply the moment a value is present — Bean Validation passes them over nulls.
+     */
     @Size(min = 3, max = 100, message = "Driver name must be between 3 and 100 characters")
-    @Column(name = "driver_name", nullable = false, length = 100)
+    @Column(name = "driver_name", length = 100)
     private String driverName;
 
-    @NotBlank(message = "Driver TC ID is required")
     @Pattern(regexp = "^[0-9]{11}$", message = "Driver TC ID must be 11 digits")
-    @Column(name = "driver_tc_id", nullable = false, length = 11)
+    @Column(name = "driver_tc_id", length = 11)
     private String driverTcId;
 
-    @NotBlank(message = "Driver phone is required")
     @Size(min = 10, max = 20, message = "Driver phone must be between 10 and 20 characters")
-    @Column(name = "driver_phone", nullable = false, length = 20)
+    @Column(name = "driver_phone", length = 20)
     private String driverPhone;
 
-    @NotBlank(message = "Vehicle plate is required")
     @Size(min = 2, max = 20, message = "Vehicle plate must be between 2 and 20 characters")
-    @Column(name = "vehicle_plate", nullable = false, length = 20)
+    @Column(name = "vehicle_plate", length = 20)
     private String vehiclePlate;
+
+    /**
+     * The goods have left, but the carrier has not been recorded yet — set by the depot
+     * exit receipt and cleared once someone fills the driver in.
+     *
+     * <p>Surfaced as a badge and a filter on the transfer list on purpose. A shipment
+     * nobody can see is incomplete is a shipment nobody completes.</p>
+     */
+    @Column(name = "carrier_pending", nullable = false)
+    private boolean carrierPending = false;
+
+    /**
+     * The service company or person who physically collected the goods from the warehouse.
+     * Distinct from {@link #customerFullName}, which stays the party the goods are
+     * ultimately for, and from {@link #driverName}, which is whoever ends up driving.
+     */
+    @Size(max = 150, message = "Handover recipient cannot exceed 150 characters")
+    @Column(name = "handover_to_name", length = 150)
+    private String handoverToName;
+
+    @Size(max = 30, message = "Handover recipient phone cannot exceed 30 characters")
+    @Column(name = "handover_to_phone", length = 30)
+    private String handoverToPhone;
+
+    /** Our own person who handed the goods over — the signature on the left of the paper. */
+    @Size(max = 150, message = "Handed over by cannot exceed 150 characters")
+    @Column(name = "handed_over_by", length = 150)
+    private String handedOverBy;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)

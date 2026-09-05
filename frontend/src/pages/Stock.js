@@ -10,6 +10,7 @@ import QuickStockAdjustModal from '../components/QuickStockAdjustModal';
 import StockRemoveSearchModal from '../components/StockRemoveSearchModal';
 import StockSettingsModal from '../components/StockSettingsModal';
 import StockTransferModal from '../components/StockTransferModal';
+import ServiceHandoverModal from '../components/ServiceHandoverModal';
 import DeliveryReceiptPanel from '../components/DeliveryReceiptPanel';
 import CustomerLinkPicker from '../components/CustomerLinkPicker';
 import StockRequestApprovalModal from '../components/StockRequestApprovalModal';
@@ -975,6 +976,7 @@ const Stock = () => {
   const [showStockRemoveSearch, setShowStockRemoveSearch] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showTransferModal, setShowTransferModal] = useState(false);
+  const [showHandoverModal, setShowHandoverModal] = useState(false);
   const [showTransferHistory, setShowTransferHistory] = useState(false);
   const [transferDetailModal, setTransferDetailModal] = useState({ show: false, transfer: null });
   const [transferDetailPhotos, setTransferDetailPhotos] = useState({});
@@ -1613,6 +1615,23 @@ const Stock = () => {
    * down before anyone knows whether the customer has an account, so this stays available
    * long after the shipment was created.
    */
+  /**
+   * Folds a server-returned transfer back into the open detail modal and the list row.
+   *
+   * Refetching instead would be simpler but unusable here: fetchAllData raises the
+   * page-level loading flag, and this component then renders a bare spinner in place of
+   * everything — including the modal the user is still working in.
+   */
+  const applyTransferUpdate = useCallback((updated) => {
+    if (!updated?.id) return;
+    setTransferDetailModal((prev) =>
+      prev.transfer && prev.transfer.id === updated.id
+        ? { ...prev, transfer: { ...prev.transfer, ...updated } }
+        : prev
+    );
+    setTransfers((prev) => prev.map((t) => (t.id === updated.id ? { ...t, ...updated } : t)));
+  }, []);
+
   const linkTransferCustomer = async (transferId, customer) => {
     try {
       const response = await axios.put(`/api/stock-transfers/${transferId}/customer`, {
@@ -3190,14 +3209,56 @@ const Stock = () => {
                 )}
               </button>
               {canTransfer && (
-                <button
-                  className="btn btn-primary"
-                  onClick={() => handleStockTransfer(null, role === 'STOCK_OUT')}
-                  style={{ minWidth: 160 }}
-                >
-                  <i className="fas fa-play me-2"></i>
-                  Transfer Başlat
-                </button>
+                /* Bölünmüş düğme, çünkü ikisi aynı fiziksel olayın iki hâli: mal depodan
+                   çıkıyor. Ayıran tek şey taşıyıcının o an belli olup olmadığı, ve bu seçimi
+                   tam karar anında yan yana göstermek hem doğru olanı seçtiriyor hem de
+                   zaten dolu olan bu satıra dokuzuncu bir düğme eklemiyor. */
+                <div className="btn-group" role="group">
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => handleStockTransfer(null, role === 'STOCK_OUT')}
+                    style={{ minWidth: 160 }}
+                  >
+                    <i className="fas fa-play me-2"></i>
+                    Transfer Başlat
+                  </button>
+                  {role === 'ADMIN' && (
+                    <>
+                      <button
+                        type="button"
+                        className="btn btn-primary dropdown-toggle dropdown-toggle-split"
+                        data-bs-toggle="dropdown"
+                        aria-expanded="false"
+                      >
+                        <span className="visually-hidden">Diğer çıkış seçenekleri</span>
+                      </button>
+                      <ul
+                        className="dropdown-menu dropdown-menu-end shadow"
+                        style={{ minWidth: 340, maxWidth: 340 }}
+                      >
+                        <li>
+                          <button
+                            type="button"
+                            className="dropdown-item py-2"
+                            onClick={() => setShowHandoverModal(true)}
+                          >
+                            <div className="fw-semibold">
+                              <i
+                                className="fas fa-file-export me-2 text-teal"
+                                style={{ color: '#0f766e' }}
+                              ></i>
+                              Depo Çıkış Makbuzu
+                            </div>
+                            <small className="text-muted d-block ps-4 text-wrap">
+                              Mal servise teslim ediliyor, taşıyıcı henüz belli değil. Stoktan düşer, tek
+                              nüshalık makbuz basar.
+                            </small>
+                          </button>
+                        </li>
+                      </ul>
+                    </>
+                  )}
+                </div>
               )}
               <button className="btn btn-outline-primary" onClick={handleCreateStock}>
                 <i className="fas fa-plus me-2"></i>
@@ -4305,6 +4366,20 @@ const Stock = () => {
         />
       )}
 
+      {showHandoverModal && (
+        <ServiceHandoverModal
+          onClose={() => {
+            setShowHandoverModal(false);
+            // Yenileme kapanışta, kayıt anında değil: fetchAllData sayfa seviyesindeki
+            // loading bayrağını kaldırıyor ve Stock.js o sırada tüm ağacı tek bir
+            // spinner'la değiştiriyor. Kayıttan hemen sonra çağrılırsa modal daha
+            // makbuz numarasını ve yazdır düğmesini gösteremeden sökülüyor.
+            fetchAllData();
+            fetchStocks(stockPage);
+          }}
+        />
+      )}
+
       {transferDetailModal.show && transferDetailModal.transfer && (
         <div
           className="modal show d-block"
@@ -4434,6 +4509,7 @@ const Stock = () => {
                         isAdmin={isAdmin}
                         autoFocus={transferDetailModal.focusReceipt}
                         onChanged={() => setTransferReceiptsVersion((v) => v + 1)}
+                        onTransferChanged={applyTransferUpdate}
                       />
                       <h6 className="fw-bold mb-2 mt-4 d-flex align-items-center justify-content-between">
                         <span>
@@ -5571,33 +5647,58 @@ const Stock = () => {
                               </td>
                               {/* Driver column - show on tablet and above */}
                               <td className="align-middle d-none d-md-table-cell">
-                                <div className="small overflow-hidden text-break" style={wrapTextStyle}>
-                                  <div
-                                    className="fw-bold text-break"
-                                    style={wrapTextStyle}
-                                    title={transfer.driverName}
-                                  >
-                                    {transfer.driverName}
+                                {/* Taşıyıcısı girilmemiş çıkışlar burada görünmezse hiç
+                                    tamamlanmazlar: bu sütun zaten şoföre bakılan yer. */}
+                                {transfer.carrierPending ? (
+                                  <div className="small">
+                                    <span className="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle">
+                                      <i className="fas fa-user-clock me-1"></i>
+                                      Taşıyıcı bekliyor
+                                    </span>
+                                    {transfer.handoverToName && (
+                                      <div
+                                        className="text-muted mt-1 text-break"
+                                        style={wrapTextStyle}
+                                        title={`Servise teslim: ${transfer.handoverToName}`}
+                                      >
+                                        <i className="fas fa-truck-ramp-box me-1"></i>
+                                        {transfer.handoverToName}
+                                      </div>
+                                    )}
                                   </div>
-                                  <div
-                                    className="text-muted text-break"
-                                    style={wrapTextStyle}
-                                    title={transfer.driverPhone}
-                                  >
-                                    <i className="fas fa-phone me-1"></i>
-                                    {transfer.driverPhone}
+                                ) : (
+                                  <div className="small overflow-hidden text-break" style={wrapTextStyle}>
+                                    <div
+                                      className="fw-bold text-break"
+                                      style={wrapTextStyle}
+                                      title={transfer.driverName}
+                                    >
+                                      {transfer.driverName}
+                                    </div>
+                                    <div
+                                      className="text-muted text-break"
+                                      style={wrapTextStyle}
+                                      title={transfer.driverPhone}
+                                    >
+                                      <i className="fas fa-phone me-1"></i>
+                                      {transfer.driverPhone}
+                                    </div>
                                   </div>
-                                </div>
+                                )}
                               </td>
                               {/* Plate column - show on desktop */}
                               <td className="text-center align-middle d-none d-lg-table-cell">
-                                <span
-                                  className="badge bg-secondary text-truncate d-block mx-auto"
-                                  style={{ maxWidth: '100%' }}
-                                  title={transfer.vehiclePlate}
-                                >
-                                  {transfer.vehiclePlate}
-                                </span>
+                                {transfer.carrierPending ? (
+                                  <span className="text-muted small">—</span>
+                                ) : (
+                                  <span
+                                    className="badge bg-secondary text-truncate d-block mx-auto"
+                                    style={{ maxWidth: '100%' }}
+                                    title={transfer.vehiclePlate}
+                                  >
+                                    {transfer.vehiclePlate}
+                                  </span>
+                                )}
                               </td>
                               <td className="text-center align-middle">
                                 <span className={`badge bg-${status.class} d-block py-2 mb-1`}>
@@ -6124,6 +6225,21 @@ const Stock = () => {
                                   </div>
                                 </div>
                               </div>
+
+                              {transfer.carrierPending && (
+                                <div className="mb-3">
+                                  <span className="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle">
+                                    <i className="fas fa-user-clock me-1"></i>
+                                    Taşıyıcı bekliyor
+                                  </span>
+                                  {transfer.handoverToName && (
+                                    <div className="small text-muted mt-1">
+                                      <i className="fas fa-truck-ramp-box me-1"></i>
+                                      Servise teslim: {transfer.handoverToName}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
 
                               {(transfer.driverName || transfer.vehiclePlate) && (
                                 <div className="row g-2 mb-3 mobile-stat-grid">

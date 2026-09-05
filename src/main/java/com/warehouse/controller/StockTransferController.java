@@ -1,6 +1,8 @@
 package com.warehouse.controller;
 
 import com.warehouse.dto.BulkDeleteResponse;
+import com.warehouse.dto.CarrierAssignmentRequest;
+import com.warehouse.dto.ServiceHandoverRequest;
 import com.warehouse.dto.PagedResponse;
 import com.warehouse.dto.StockTransferCreateRequest;
 import com.warehouse.dto.StockTransferDto;
@@ -17,6 +19,8 @@ import com.warehouse.enums.TransferApprovalStatus;
 import com.warehouse.mapper.StockTransferMapper;
 import com.warehouse.service.StockTransferService;
 import com.warehouse.service.AdminSecurityService;
+import com.warehouse.service.ServiceHandoverService;
+import com.warehouse.util.CurrentUser;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -43,12 +47,17 @@ public class StockTransferController {
     private final StockTransferService stockTransferService;
     private final StockTransferMapper transferMapper;
     private final AdminSecurityService adminSecurityService;
+    private final ServiceHandoverService serviceHandoverService;
 
     @Autowired
-    public StockTransferController(StockTransferService stockTransferService, StockTransferMapper transferMapper, AdminSecurityService adminSecurityService) {
+    public StockTransferController(StockTransferService stockTransferService,
+                                   StockTransferMapper transferMapper,
+                                   AdminSecurityService adminSecurityService,
+                                   ServiceHandoverService serviceHandoverService) {
         this.stockTransferService = stockTransferService;
         this.transferMapper = transferMapper;
         this.adminSecurityService = adminSecurityService;
+        this.serviceHandoverService = serviceHandoverService;
     }
 
     @GetMapping
@@ -173,6 +182,37 @@ public class StockTransferController {
         StockTransfer createdTransfer = stockTransferService.createTransfer(transfer);
         StockTransferDto dto = transferMapper.toDto(createdTransfer);
         return ResponseEntity.status(HttpStatus.CREATED).body(dto);
+    }
+
+    /**
+     * Depo çıkış makbuzu — goods handed to a service company before the carrier is known.
+     *
+     * <p>Admin only. This is the one path that writes a shipment with no driver on it, and
+     * it takes the stock down on the spot, so it is not something a warehouse account should
+     * be able to reach. Returns the receipt alongside the shipment so the caller can print
+     * immediately: the paper is signed at the counter while the courier is still standing
+     * there, and a second round trip to fetch it is a second chance to fail.</p>
+     */
+    @PostMapping("/service-handover")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ServiceHandoverService.Result> createServiceHandover(
+            @Valid @RequestBody ServiceHandoverRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(serviceHandoverService.handOver(request, CurrentUser.usernameOrSystem()));
+    }
+
+    /**
+     * Fills in the carrier of a shipment that went out on a depot exit receipt.
+     *
+     * <p>Does not move stock — the goods left when the receipt was issued. Anyone reaching
+     * for "create a transfer now that I know the driver" would deduct the same goods twice;
+     * this endpoint is what that impulse is meant to land on instead.</p>
+     */
+    @PutMapping("/{id}/carrier")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<StockTransferDto> assignCarrier(@PathVariable Long id,
+                                                          @Valid @RequestBody CarrierAssignmentRequest request) {
+        return ResponseEntity.ok(transferMapper.toDto(stockTransferService.assignCarrier(id, request)));
     }
 
     /**

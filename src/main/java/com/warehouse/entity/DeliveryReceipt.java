@@ -1,6 +1,7 @@
 package com.warehouse.entity;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.warehouse.enums.DeliveryReceiptKind;
 import com.warehouse.enums.DeliveryReceiptStatus;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -45,6 +46,14 @@ public class DeliveryReceipt {
     /** Human-facing number printed on the paper, e.g. {@code TM-2026-000042}. */
     @Column(name = "receipt_no", nullable = false, length = 30, unique = true)
     private String receiptNo;
+
+    /**
+     * Which paper this is. Drives the title, the number series and — the reason it exists
+     * at all — how many copies get printed.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 30)
+    private DeliveryReceiptKind kind = DeliveryReceiptKind.DELIVERY;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
@@ -125,6 +134,25 @@ public class DeliveryReceipt {
 
     @Column(name = "confirmed_by", length = 100)
     private String confirmedBy;
+
+    // ── Depo çıkışı: malı devralan servis ve devreden görevli ─────────────────
+    //
+    // Kept apart from deliveredByName / receivedByName above rather than reusing them.
+    // Those two belong to the "delivery confirmed" step and are filled in later, possibly
+    // months later; writing both events into one pair of columns would mean a reprint of
+    // the depot exit receipt showing the customer's name where the service company's
+    // signature actually sits on the signed page.
+
+    /** The service company or person who collected the goods from the warehouse. */
+    @Column(name = "handover_to_name", length = 150)
+    private String handoverToName;
+
+    @Column(name = "handover_to_phone", length = 30)
+    private String handoverToPhone;
+
+    /** Our own person who handed them over. */
+    @Column(name = "handed_over_by_name", length = 150)
+    private String handedOverByName;
 
     // ── Bookkeeping ───────────────────────────────────────────────────────────
     @Column(name = "issued_at", nullable = false)

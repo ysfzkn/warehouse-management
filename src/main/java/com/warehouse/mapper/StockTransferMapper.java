@@ -44,6 +44,10 @@ public class StockTransferMapper {
         dto.setDriverTcId(entity.getDriverTcId());
         dto.setDriverPhone(entity.getDriverPhone());
         dto.setVehiclePlate(entity.getVehiclePlate());
+        dto.setCarrierPending(entity.isCarrierPending());
+        dto.setHandoverToName(entity.getHandoverToName());
+        dto.setHandoverToPhone(entity.getHandoverToPhone());
+        dto.setHandedOverBy(entity.getHandedOverBy());
         dto.setStatus(entity.getStatus());
         dto.setTransferType(entity.getTransferType());
         dto.setTransferDate(entity.getTransferDate());

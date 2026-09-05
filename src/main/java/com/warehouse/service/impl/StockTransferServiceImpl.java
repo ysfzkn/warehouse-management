@@ -2,6 +2,8 @@ package com.warehouse.service.impl;
 
 import com.warehouse.dto.AuditMetadata;
 import com.warehouse.dto.BulkDeleteResponse;
+import com.warehouse.dto.CarrierAssignmentRequest;
+import com.warehouse.dto.ServiceHandoverRequest;
 import com.warehouse.dto.NotificationRequest;
 import com.warehouse.dto.StockTransferFilter;
 import com.warehouse.dto.StockTransferSummary;
@@ -33,6 +35,7 @@ import com.warehouse.service.StockService;
 import com.warehouse.service.AdminSecurityService;
 import com.warehouse.util.CurrentUser;
 import com.warehouse.util.EntityValidator;
+import com.warehouse.util.TurkishText;
 import com.warehouse.util.ValidationUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -332,31 +335,7 @@ public class StockTransferServiceImpl implements StockTransferService {
             transfer.setApprovalStatus(TransferApprovalStatus.NONE);
         }
 
-        StockTransfer saved = stockTransferRepository.save(transfer);
-        // Files the driver into the directory so the next transfer can offer them back instead
-        // of making the operator retype name, TC, phone and plate. The link lets duplicates be
-        // merged later without touching this transfer's own record of who drove.
-        com.warehouse.entity.Driver directoryEntry = driverService.recordUsage(
-                saved.getDriverName(), saved.getDriverTcId(),
-                saved.getDriverPhone(), saved.getVehiclePlate());
-        com.warehouse.entity.Vehicle vehicleEntry = vehicleService.recordUsage(saved.getVehiclePlate());
-        boolean linksChanged = false;
-        if (directoryEntry != null && saved.getDriverId() == null) {
-            saved.setDriverId(directoryEntry.getId());
-            linksChanged = true;
-        }
-        if (vehicleEntry != null && saved.getVehicleId() == null) {
-            saved.setVehicleId(vehicleEntry.getId());
-            linksChanged = true;
-        }
-        if (linksChanged) {
-            saved = stockTransferRepository.save(saved);
-        }
-        // Driving a vehicle is what assigns it: the pairing the operator actually used becomes
-        // the pairing the transfer form offers next time.
-        if (directoryEntry != null && vehicleEntry != null) {
-            vehicleService.linkQuietly(directoryEntry.getId(), vehicleEntry.getId());
-        }
+        StockTransfer saved = recordCarrierInDirectory(stockTransferRepository.save(transfer));
         AuditMetadata metadata = buildTransferMetadata(saved);
         auditService.log(AuditAction.TRANSFER_CREATE, DomainEntityType.StockTransfer.name(), saved.getId(), username,
                 String.format("Transfer oluşturuldu: %s | Ürünler=%s",
@@ -384,6 +363,138 @@ public class StockTransferServiceImpl implements StockTransferService {
         // Fetch with relations again to avoid LazyInitializationException in mapper
         return stockTransferRepository.findByIdWithRelations(saved.getId())
                 .orElse(saved);
+    }
+
+    /**
+     * Files the carrier into the driver and vehicle directories so the next transfer can
+     * offer them back instead of making the operator retype name, TC, phone and plate. The
+     * directory links let duplicates be merged later without touching this transfer's own
+     * record of who drove.
+     *
+     * <p>Both {@code recordUsage} calls ignore blanks, so a depot exit with no carrier yet
+     * passes through untouched and gets filed the moment {@link #assignCarrier} runs.</p>
+     */
+    private StockTransfer recordCarrierInDirectory(StockTransfer saved) {
+        com.warehouse.entity.Driver directoryEntry = driverService.recordUsage(
+                saved.getDriverName(), saved.getDriverTcId(),
+                saved.getDriverPhone(), saved.getVehiclePlate());
+        com.warehouse.entity.Vehicle vehicleEntry = vehicleService.recordUsage(saved.getVehiclePlate());
+        boolean linksChanged = false;
+        if (directoryEntry != null && saved.getDriverId() == null) {
+            saved.setDriverId(directoryEntry.getId());
+            linksChanged = true;
+        }
+        if (vehicleEntry != null && saved.getVehicleId() == null) {
+            saved.setVehicleId(vehicleEntry.getId());
+            linksChanged = true;
+        }
+        if (linksChanged) {
+            saved = stockTransferRepository.save(saved);
+        }
+        // Driving a vehicle is what assigns it: the pairing the operator actually used becomes
+        // the pairing the transfer form offers next time.
+        if (directoryEntry != null && vehicleEntry != null) {
+            vehicleService.linkQuietly(directoryEntry.getId(), vehicleEntry.getId());
+        }
+        return saved;
+    }
+
+    @Override
+    public StockTransfer createServiceHandover(ServiceHandoverRequest request) {
+        // Admin-only at the controller as well; repeated here because this is the one path
+        // that may write a shipment with no carrier, and it should not become reachable by
+        // accident from anywhere else in the service layer.
+        if (!isCurrentUserAdmin()) {
+            throw new WarehouseManagementException(ErrorCode.UNAUTHORIZED_ACTION,
+                    "Depo çıkış makbuzu yalnızca yönetici tarafından düzenlenebilir.");
+        }
+
+        LocalDateTime handedOverAt = request.getHandedOverAt() != null
+                ? request.getHandedOverAt()
+                : LocalDateTime.now();
+        if (handedOverAt.isAfter(LocalDateTime.now().plusMinutes(5))) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                    "Teslim tarihi ileri bir tarih olamaz.");
+        }
+
+        StockTransfer transfer = new StockTransfer();
+        Warehouse source = new Warehouse();
+        source.setId(request.getSourceWarehouseId());
+        transfer.setSourceWarehouse(source);
+        transfer.setTransferType(TransferType.CUSTOMER_DELIVERY);
+        transfer.setCarrierPending(true);
+
+        transfer.setHandoverToName(TurkishText.toTitleCase(request.getHandoverToName()));
+        transfer.setHandoverToPhone(trimToNull(request.getHandoverToPhone()));
+        transfer.setHandedOverBy(TurkishText.toTitleCase(request.getHandedOverBy()));
+
+        transfer.setCustomerFullName(TurkishText.toTitleCase(request.getCustomerFullName()));
+        transfer.setCustomerPhone(request.getCustomerPhone().trim());
+        transfer.setCustomerAddress(request.getCustomerAddress().trim());
+        transfer.setOrderId(request.getOrderId());
+        transfer.setCustomerId(request.getCustomerId());
+        transfer.setNotes(trimToNull(request.getNotes()));
+        transfer.setTransferDate(handedOverAt);
+
+        List<StockTransferItem> items = new ArrayList<>();
+        for (ServiceHandoverRequest.Item line : request.getItems()) {
+            StockTransferItem item = new StockTransferItem();
+            item.setStockId(line.getStockId());
+            Product product = new Product();
+            product.setId(line.getProductId());
+            item.setProduct(product);
+            item.setQuantity(line.getQuantity());
+            item.setTransfer(transfer);
+            items.add(item);
+        }
+        transfer.setItems(items);
+
+        // Created and completed in one go. The goods are physically out of the building the
+        // moment the paper is signed, so leaving the shipment PENDING or IN_TRANSIT would put
+        // the warehouse count above what is on the shelves. completeTransfer runs the same
+        // deduction and audit path as any other shipment — there is no second way for stock to
+        // leave, and therefore no way for these goods to be deducted twice when the carrier is
+        // filled in later.
+        StockTransfer created = createTransfer(transfer);
+        return completeTransfer(created.getId(),
+                "Servise teslim edildi — taşıyıcı sonradan belirlenecek");
+    }
+
+    @Override
+    public StockTransfer assignCarrier(Long transferId, CarrierAssignmentRequest request) {
+        StockTransfer transfer = getTransferByIdOrThrow(transferId);
+        if (!transfer.isCarrierPending()) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                    "Bu sevkiyatın taşıyıcı bilgisi zaten girilmiş.");
+        }
+        if (transfer.getStatus() == TransferStatus.CANCELLED) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                    "İptal edilmiş sevkiyata taşıyıcı atanamaz.");
+        }
+
+        transfer.setDriverName(request.getDriverName().trim());
+        transfer.setDriverTcId(request.getDriverTcId().trim());
+        transfer.setDriverPhone(request.getDriverPhone().trim());
+        transfer.setVehiclePlate(request.getVehiclePlate().trim()
+                .toUpperCase(java.util.Locale.forLanguageTag("tr-TR")));
+        transfer.setCarrierPending(false);
+
+        StockTransfer saved = recordCarrierInDirectory(stockTransferRepository.save(transfer));
+        String username = CurrentUser.usernameOrSystem();
+        auditService.log(AuditAction.TRANSFER_UPDATE, DomainEntityType.StockTransfer.name(),
+                saved.getId(), username,
+                String.format("Taşıyıcı bilgisi girildi: %s / %s (#%d)",
+                        saved.getDriverName(), saved.getVehiclePlate(), saved.getId()),
+                buildTransferMetadata(saved));
+        logger.info("Carrier assigned to transfer id: {}", saved.getId());
+
+        return stockTransferRepository.findByIdWithRelations(saved.getId()).orElse(saved);
+    }
+
+    private static String trimToNull(String value) {
+        if (value == null) return null;
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     @Override
@@ -904,6 +1015,24 @@ public class StockTransferServiceImpl implements StockTransferService {
             ValidationUtil.requireNotBlank(transfer.getCustomerPhone(), "Customer phone");
             ValidationUtil.requireNotBlank(transfer.getCustomerAddress(), "Customer address");
         }
+
+        // The carrier columns are nullable so a depot exit can be recorded before the driver
+        // is known, but that is the only shipment allowed to leave them empty. Checked here
+        // rather than only on the request DTO so the rule holds for every caller — a blank
+        // carrier must not be able to reach the database through some other entry point.
+        if (transfer.isCarrierPending()) {
+            if (transferType != TransferType.CUSTOMER_DELIVERY) {
+                throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                        "Taşıyıcısı belirlenmemiş çıkış yalnızca müşteri sevkiyatı olabilir.");
+            }
+            ValidationUtil.requireNotBlank(transfer.getHandoverToName(), "Handover recipient");
+            ValidationUtil.requireNotBlank(transfer.getHandedOverBy(), "Handed over by");
+        } else {
+            ValidationUtil.requireNotBlank(transfer.getDriverName(), "Driver name");
+            ValidationUtil.requireNotBlank(transfer.getDriverTcId(), "Driver TC ID");
+            ValidationUtil.requireNotBlank(transfer.getDriverPhone(), "Driver phone");
+            ValidationUtil.requireNotBlank(transfer.getVehiclePlate(), "Vehicle plate");
+        }
         return transferType;
     }
 
@@ -1166,17 +1295,21 @@ public class StockTransferServiceImpl implements StockTransferService {
     }
 
     private void updateTransferFields(StockTransfer transfer, StockTransfer updatedTransfer) {
-        if (updatedTransfer.getDriverName() != null) {
-            transfer.setDriverName(updatedTransfer.getDriverName());
+        // Blank is skipped here, not just null. The entity used to reject an empty driver name
+        // with @NotBlank; that annotation had to go so depot exits could be recorded before the
+        // carrier is known, which would otherwise have left this method able to erase a known
+        // driver by sending "".
+        if (trimToNull(updatedTransfer.getDriverName()) != null) {
+            transfer.setDriverName(updatedTransfer.getDriverName().trim());
         }
-        if (updatedTransfer.getDriverTcId() != null) {
-            transfer.setDriverTcId(updatedTransfer.getDriverTcId());
+        if (trimToNull(updatedTransfer.getDriverTcId()) != null) {
+            transfer.setDriverTcId(updatedTransfer.getDriverTcId().trim());
         }
-        if (updatedTransfer.getDriverPhone() != null) {
-            transfer.setDriverPhone(updatedTransfer.getDriverPhone());
+        if (trimToNull(updatedTransfer.getDriverPhone()) != null) {
+            transfer.setDriverPhone(updatedTransfer.getDriverPhone().trim());
         }
-        if (updatedTransfer.getVehiclePlate() != null) {
-            transfer.setVehiclePlate(updatedTransfer.getVehiclePlate());
+        if (trimToNull(updatedTransfer.getVehiclePlate()) != null) {
+            transfer.setVehiclePlate(updatedTransfer.getVehiclePlate().trim());
         }
         if (updatedTransfer.getNotes() != null) {
             transfer.setNotes(updatedTransfer.getNotes());

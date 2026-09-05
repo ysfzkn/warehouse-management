@@ -104,6 +104,19 @@ class TurkishTextTest {
     }
 
     @Test
+    void should_keep_turkish_conjunctions_lower_case_inside_a_name() {
+        // Firm names carry these constantly and print on signed paperwork, where "Ve" reads
+        // as a typo. Only mid-value: a value that opens with the word is not using it as one.
+        assertThat(TurkishText.toTitleCase("yıldız kargo ve nakliyat ltd."))
+                .isEqualTo("Yıldız Kargo ve Nakliyat Ltd.");
+        assertThat(TurkishText.toTitleCase("ATS DTM TARIM VE TİCARET"))
+                .isEqualTo("Ats Dtm Tarım ve Ticaret");
+        assertThat(TurkishText.toTitleCase("ahmet ile mehmet")).isEqualTo("Ahmet ile Mehmet");
+        assertThat(TurkishText.toTitleCase("veysel veli")).isEqualTo("Veysel Veli");
+        assertThat(TurkishText.toTitleCase("ve tic. ltd.")).isEqualTo("Ve Tic. Ltd.");
+    }
+
+    @Test
     void title_case_should_survive_blank_and_null_input() {
         assertThat(TurkishText.toTitleCase("   ")).isEmpty();
         assertThat(TurkishText.toTitleCase(null)).isNull();

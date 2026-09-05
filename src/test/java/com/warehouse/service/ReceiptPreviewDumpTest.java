@@ -50,6 +50,9 @@ class ReceiptPreviewDumpTest {
     @Autowired private CategoryRepository categoryRepository;
     @Autowired private com.warehouse.service.PhotoStorageService photoStorageService;
     @Autowired private com.warehouse.service.SiteSettingService siteSettingService;
+    @Autowired private com.warehouse.repository.StockRepository stockRepository;
+    @Autowired private ServiceHandoverService handoverService;
+    @Autowired private StockTransferService transferService;
 
     /**
      * Optionally installs a logo and company details so the preview shows the real
@@ -142,13 +145,104 @@ class ReceiptPreviewDumpTest {
         Files.writeString(dir.resolve("makbuz.html"),
                 receiptService.renderHtml(transfer.getId(), true));
 
+        render(pdf, dir, "makbuz");
+        SecurityContextHolder.clearContext();
+    }
+
+    /** The single-copy depot exit receipt, with the carrier still unknown. */
+    @Test
+    void dumpHandoverPreview() throws Exception {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("yusuf", "pw",
+                        List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
+
+        installBranding();
+
+        Category category = new Category();
+        category.setName("Beyaz Eşya");
+        category.setSlug("beyaz-esya-dc-" + System.nanoTime());
+        category = categoryRepository.save(category);
+
+        Warehouse warehouse = new Warehouse();
+        warehouse.setName("Merkez Depo — Kale Mah.");
+        warehouse.setLocation("Niğde");
+        warehouse = warehouseRepository.save(warehouse);
+
+        com.warehouse.dto.ServiceHandoverRequest request = new com.warehouse.dto.ServiceHandoverRequest();
+        request.setSourceWarehouseId(warehouse.getId());
+        request.setHandoverToName("Yıldız Kargo ve Nakliyat Ltd. Şti.");
+        request.setHandoverToPhone("0388 213 44 55");
+        request.setHandedOverBy("Mehmet Güneş");
+        request.setCustomerFullName("Işık Şahin Mobilya Ltd. Şti.");
+        request.setCustomerPhone("0553 999 33 03");
+        request.setCustomerAddress("Selçuk Mah. Dr. Sami Yağız Cad. No: 53, Merkez / NİĞDE");
+        request.setNotes("Sevkiyat servise teslim edildi, taşıyıcı araç bildirilecek.");
+
+        String[][] rows = {
+                {"PRF-BZD-4820", "Profilo BD3086 Çift Kapılı No-Frost Buzdolabı", "1"},
+                {"SMF-ANK-9012", "Simfer Ankastre Fırın Seti (Fırın + Ocak + Davlumbaz)", "2"},
+                {"FKR-SUP-3311", "Fakir Veyron Turbo XL Dikey Süpürge", "3"},
+        };
+        java.util.List<com.warehouse.dto.ServiceHandoverRequest.Item> items = new java.util.ArrayList<>();
+        for (String[] row : rows) {
+            Product product = new Product();
+            product.setName(row[1]);
+            product.setSku(row[0]);
+            product.setSlug(row[0].toLowerCase() + "-dc-" + System.nanoTime());
+            product.setCategory(category);
+            product = productRepository.save(product);
+
+            com.warehouse.entity.Stock stock = new com.warehouse.entity.Stock();
+            stock.setProduct(product);
+            stock.setWarehouse(warehouse);
+            stock.setQuantity(50);
+            stockRepository.save(stock);
+
+            com.warehouse.dto.ServiceHandoverRequest.Item item =
+                    new com.warehouse.dto.ServiceHandoverRequest.Item();
+            item.setProductId(product.getId());
+            item.setQuantity(Integer.parseInt(row[2]));
+            items.add(item);
+        }
+        request.setItems(items);
+
+        var result = handoverService.handOver(request, "yusuf");
+        Long transferId = result.transfer().getId();
+
+        Path dir = Path.of(System.getProperty("receipt.dump"));
+        Files.createDirectories(dir);
+
+        byte[] pdf = receiptService.renderPdf(transferId, "yusuf");
+        Files.write(dir.resolve("depo-cikis.pdf"), pdf);
+        Files.writeString(dir.resolve("depo-cikis.html"),
+                receiptService.renderHtml(transferId, true));
+        render(pdf, dir, "depo-cikis");
+
+        // And again once the carrier has been named, so the "before / after" pair can be
+        // compared side by side.
+        com.warehouse.dto.CarrierAssignmentRequest carrier =
+                new com.warehouse.dto.CarrierAssignmentRequest();
+        carrier.setDriverName("Ahmet Yılmaz");
+        carrier.setDriverTcId("12345678901");
+        carrier.setDriverPhone("0553 261 33 03");
+        carrier.setVehiclePlate("51 ATS 303");
+        transferService.assignCarrier(transferId, carrier);
+        receiptService.issue(transferId, "yusuf");
+
+        byte[] withCarrier = receiptService.renderPdf(transferId, "yusuf");
+        Files.write(dir.resolve("depo-cikis-tasiyicili.pdf"), withCarrier);
+        render(withCarrier, dir, "depo-cikis-tasiyicili");
+
+        SecurityContextHolder.clearContext();
+    }
+
+    private void render(byte[] pdf, Path dir, String prefix) throws Exception {
         try (PDDocument document = PDDocument.load(pdf)) {
             PDFRenderer renderer = new PDFRenderer(document);
             for (int page = 0; page < document.getNumberOfPages(); page++) {
                 BufferedImage image = renderer.renderImageWithDPI(page, 110);
-                ImageIO.write(image, "png", dir.resolve("makbuz-s" + (page + 1) + ".png").toFile());
+                ImageIO.write(image, "png", dir.resolve(prefix + "-s" + (page + 1) + ".png").toFile());
             }
         }
-        SecurityContextHolder.clearContext();
     }
 }

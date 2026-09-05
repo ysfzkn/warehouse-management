@@ -9,6 +9,7 @@ import com.warehouse.entity.DeliveryReceiptAttachment;
 import com.warehouse.entity.StockTransfer;
 import com.warehouse.entity.StockTransferItem;
 import com.warehouse.enums.AuditAction;
+import com.warehouse.enums.DeliveryReceiptKind;
 import com.warehouse.enums.DeliveryReceiptStatus;
 import com.warehouse.enums.DomainEntityType;
 import com.warehouse.enums.TransferStatus;
@@ -116,6 +117,13 @@ public class DeliveryReceiptServiceImpl implements DeliveryReceiptService {
             receipt.setRevision(1);
             receipt.setIssuedAt(LocalDateTime.now());
             receipt.setIssuedBy(username);
+            // Fixed at first issue and never revisited. A shipment that went out on a depot
+            // exit receipt keeps printing as one even after the carrier is filled in — the
+            // page that was signed is a depot exit receipt, and a reprint that changed its
+            // title and number series would no longer match the paper in the folder.
+            receipt.setKind(transfer.getHandoverToName() != null
+                    ? DeliveryReceiptKind.SERVICE_HANDOVER
+                    : DeliveryReceiptKind.DELIVERY);
         } else {
             // The number stays; only the print count moves. Two different numbers for one
             // shipment would make the signed page impossible to match back.
@@ -137,14 +145,19 @@ public class DeliveryReceiptServiceImpl implements DeliveryReceiptService {
         receipt = receiptRepository.saveAndFlush(receipt);
 
         if (needsNumber) {
-            receipt.setReceiptNo(String.format("TM-%d-%06d",
-                    receipt.getIssuedAt().getYear(), receipt.getId()));
+            // Separate series per kind so a number read out over the phone says which paper
+            // it is. Both derive from the same primary key, so they can never collide.
+            String prefix = receipt.getKind() == DeliveryReceiptKind.SERVICE_HANDOVER ? "DC" : "TM";
+            receipt.setReceiptNo(String.format("%s-%d-%06d",
+                    prefix, receipt.getIssuedAt().getYear(), receipt.getId()));
             receipt = receiptRepository.saveAndFlush(receipt);
         }
 
+        String label = receipt.getKind() == DeliveryReceiptKind.SERVICE_HANDOVER
+                ? "Depo çıkış makbuzu" : "Teslimat makbuzu";
         auditService.log(reissue ? AuditAction.RECEIPT_REISSUE : AuditAction.RECEIPT_ISSUE,
                 DomainEntityType.StockTransfer.name(), transferId, username,
-                (reissue ? "Teslimat makbuzu yeniden basıldı" : "Teslimat makbuzu düzenlendi")
+                label + (reissue ? " yeniden basıldı" : " düzenlendi")
                         + " (" + receipt.getReceiptNo() + ", " + receipt.getRevision() + ". basım)",
                 metadata(transfer));
 
@@ -179,6 +192,9 @@ public class DeliveryReceiptServiceImpl implements DeliveryReceiptService {
         }
 
         receipt.setOrderNumber(transfer.getOrderNumber());
+        receipt.setHandoverToName(transfer.getHandoverToName());
+        receipt.setHandoverToPhone(transfer.getHandoverToPhone());
+        receipt.setHandedOverByName(transfer.getHandedOverBy());
         receipt.setDriverName(transfer.getDriverName());
         receipt.setDriverPhone(transfer.getDriverPhone());
         receipt.setVehiclePlate(transfer.getVehiclePlate());
@@ -187,9 +203,12 @@ public class DeliveryReceiptServiceImpl implements DeliveryReceiptService {
         receipt.setItemsJson(serialiseItems(transfer));
 
         // The driver on the paperwork is the obvious default for "handed over by"; the
-        // panel can still overwrite it when someone else made the drop.
+        // panel can still overwrite it when someone else made the drop. A depot exit has no
+        // driver yet, so the warehouse hand who signed the page stands in.
         if (receipt.getDeliveredByName() == null) {
-            receipt.setDeliveredByName(transfer.getDriverName());
+            receipt.setDeliveredByName(transfer.getDriverName() != null
+                    ? transfer.getDriverName()
+                    : transfer.getHandedOverBy());
         }
 
         // Receipts are routinely issued after the fact — for a delivery that went out
@@ -404,7 +423,14 @@ public class DeliveryReceiptServiceImpl implements DeliveryReceiptService {
         context.setVariable("deliveredAtText", format(receipt.getDeliveredAt()));
         context.setVariable("logoDataUri", logoDataUri());
         context.setVariable("showPrintBar", showPrintBar);
-        context.setVariable("copies", List.of("FİRMA NÜSHASI", "MÜŞTERİ NÜSHASI"));
+        // A customer delivery prints twice — the driver leaves one copy and brings the signed
+        // one back. A depot exit prints once: it is signed on the spot by whoever collected
+        // the goods and stays with us, and there is no second party yet to leave a copy with.
+        boolean handover = receipt.getKind() == DeliveryReceiptKind.SERVICE_HANDOVER;
+        context.setVariable("handover", handover);
+        context.setVariable("copies", handover
+                ? List.of("TEK NÜSHA")
+                : List.of("FİRMA NÜSHASI", "MÜŞTERİ NÜSHASI"));
         return templateEngine.process("receipt/delivery-receipt", context);
     }
 
@@ -609,6 +635,7 @@ public class DeliveryReceiptServiceImpl implements DeliveryReceiptService {
                 .transferId(receipt.getTransfer() != null ? receipt.getTransfer().getId() : null)
                 .receiptNo(receipt.getReceiptNo())
                 .status(receipt.getStatus())
+                .kind(receipt.getKind())
                 .revision(receipt.getRevision())
                 .sourceWarehouseName(receipt.getSourceWarehouseName())
                 .customerFullName(receipt.getCustomerFullName())
@@ -626,6 +653,9 @@ public class DeliveryReceiptServiceImpl implements DeliveryReceiptService {
                 .receivedByNote(receipt.getReceivedByNote())
                 .confirmedAt(receipt.getConfirmedAt())
                 .confirmedBy(receipt.getConfirmedBy())
+                .handoverToName(receipt.getHandoverToName())
+                .handoverToPhone(receipt.getHandoverToPhone())
+                .handedOverByName(receipt.getHandedOverByName())
                 .issuedAt(receipt.getIssuedAt())
                 .issuedBy(receipt.getIssuedBy())
                 .items(deserialiseItems(receipt))

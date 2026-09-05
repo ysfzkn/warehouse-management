@@ -169,7 +169,8 @@ public final class TurkishText {
         if (collapsed.isEmpty()) return "";
         StringBuilder out = new StringBuilder(collapsed.length());
         boolean startOfWord = true;
-        for (char c : collapsed.toCharArray()) {
+        for (int i = 0; i < collapsed.length(); i++) {
+            char c = collapsed.charAt(i);
             if (c == ' ' || c == '-' || c == '\'' || c == '’') {
                 out.append(c);
                 startOfWord = true;
@@ -177,13 +178,28 @@ public final class TurkishText {
             }
             String single = String.valueOf(c);
             if (startOfWord) {
-                out.append(c == 'i' ? 'İ' : c == 'ı' ? 'I' : single.toUpperCase(TR).charAt(0));
+                // Turkish keeps its conjunctions lower case inside a name: a firm writes itself
+                // "Yıldız Kargo ve Nakliyat", never "Ve". Only mid-value — a name that starts
+                // with one of these words is not using it as a conjunction.
+                if (i > 0 && isConjunctionAt(collapsed, i)) {
+                    out.append(single.toLowerCase(TR));
+                } else {
+                    out.append(c == 'i' ? 'İ' : c == 'ı' ? 'I' : single.toUpperCase(TR).charAt(0));
+                }
                 startOfWord = false;
             } else {
                 out.append(single.toLowerCase(TR));
             }
         }
         return out.toString();
+    }
+
+    /** Whether the whole word beginning at {@code from} is a Turkish conjunction. */
+    private static boolean isConjunctionAt(String text, int from) {
+        int end = from;
+        while (end < text.length() && " -'’".indexOf(text.charAt(end)) < 0) end++;
+        String word = text.substring(from, end).toLowerCase(TR);
+        return "ve".equals(word) || "ile".equals(word) || "veya".equals(word);
     }
 
     /**

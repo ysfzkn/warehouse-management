@@ -307,6 +307,17 @@ export default function AdminDeliveryReceipts() {
                     <tr key={r.id}>
                       <td>
                         <div className="fw-semibold small">{r.receiptNo}</div>
+                        {/* Numara zaten seriyi ele veriyor (DC-/TM-), ama arşivde iki belge
+                            yan yana duruyor ve ön eki okumak bir rozetten yavaş. */}
+                        {r.kind === 'SERVICE_HANDOVER' && (
+                          <span
+                            className="badge rounded-pill bg-info-subtle text-info-emphasis border border-info-subtle"
+                            style={{ fontSize: '0.66rem' }}
+                          >
+                            <i className="fas fa-file-export me-1"></i>
+                            Depo çıkışı
+                          </span>
+                        )}
                         <div className="text-muted" style={{ fontSize: '0.72rem' }}>
                           {formatDateTime(r.issuedAt)}
                           {r.revision > 1 && ` · ${r.revision}. basım`}
@@ -320,13 +331,38 @@ export default function AdminDeliveryReceipts() {
                         </div>
                       </td>
                       <td className="d-none d-lg-table-cell">
-                        <div className="small">{r.driverName || '—'}</div>
-                        <div className="text-muted" style={{ fontSize: '0.72rem' }}>
-                          {r.vehiclePlate || ''}
-                        </div>
+                        {/* Bu sütun kâğıdın üzerinde ne yazdığını gösterir, sevkiyatın
+                            bugünkü durumunu değil: taşıyıcı sonradan girilmiş olabilir ama
+                            makbuz yeniden basılmadıysa imzalı nüshada hâlâ yoktur.
+                            "Taşıyıcı bekliyor" demek burada fazla iddialı olurdu. */}
+                        {r.kind === 'SERVICE_HANDOVER' && !r.driverName ? (
+                          <span
+                            className="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle"
+                            title="Bu makbuz basıldığında taşıyıcı henüz belli değildi."
+                          >
+                            <i className="fas fa-user-clock me-1"></i>
+                            Basımda yoktu
+                          </span>
+                        ) : (
+                          <>
+                            <div className="small">{r.driverName || '—'}</div>
+                            <div className="text-muted" style={{ fontSize: '0.72rem' }}>
+                              {r.vehiclePlate || ''}
+                            </div>
+                          </>
+                        )}
                       </td>
-                      <td className="small">{r.receivedByName || '—'}</td>
-                      <td className="small d-none d-md-table-cell">{formatDateTime(r.deliveredAt)}</td>
+                      {/* Depo çıkışında kâğıdı imzalayan, müşteri değil malı devralan
+                          servistir; sütun başlığı ikisini de kapsayacak şekilde "Teslim
+                          Alan" kalıyor. */}
+                      <td className="small">
+                        {(r.kind === 'SERVICE_HANDOVER' ? r.handoverToName : r.receivedByName) || '—'}
+                      </td>
+                      <td className="small d-none d-md-table-cell">
+                        {formatDateTime(
+                          r.kind === 'SERVICE_HANDOVER' && !r.deliveredAt ? r.transferDate : r.deliveredAt
+                        )}
+                      </td>
                       <td className="text-center">
                         <span className={`badge rounded-pill ${status.cls}`}>{status.label}</span>
                       </td>

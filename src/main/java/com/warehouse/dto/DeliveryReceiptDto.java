@@ -1,5 +1,6 @@
 package com.warehouse.dto;
 
+import com.warehouse.enums.DeliveryReceiptKind;
 import com.warehouse.enums.DeliveryReceiptStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -22,6 +23,8 @@ public class DeliveryReceiptDto {
     private Long transferId;
     private String receiptNo;
     private DeliveryReceiptStatus status;
+    /** DELIVERY or SERVICE_HANDOVER — the panel labels and its actions differ. */
+    private DeliveryReceiptKind kind;
     private Integer revision;
 
     private String sourceWarehouseName;
@@ -41,6 +44,11 @@ public class DeliveryReceiptDto {
     private String receivedByNote;
     private LocalDateTime confirmedAt;
     private String confirmedBy;
+
+    /** Depot exit only: who collected the goods, and who handed them over. */
+    private String handoverToName;
+    private String handoverToPhone;
+    private String handedOverByName;
 
     private LocalDateTime issuedAt;
     private String issuedBy;

@@ -1,6 +1,14 @@
 <!DOCTYPE html>
 <!--
-  Teslimat makbuzu — tek şablon, iki çıktı.
+  Teslimat makbuzu ve depo çıkış makbuzu — tek şablon, iki belge, iki çıktı biçimi.
+
+  İki belge aynı olguları taşıyor (kim, neyi, kime, kaç adet), sadece kâğıdın basıldığı an
+  ve dolayısıyla imzalayan taraf farklı. Bu yüzden ayrı şablon değil, `handover` bayrağıyla
+  dallanan tek şablon: ortak yerleşimin iki kopyası zamanla birbirinden ayrışırdı.
+
+  handover = false → TESLİMAT MAKBUZU, iki nüsha, şoför/plaka ve müşteri imzası.
+  handover = true  → DEPO ÇIKIŞ MAKBUZU, tek nüsha, malı devralan servis imzalar,
+                     taşıyıcı henüz belli değildir.
 
   Aynı dosya hem tarayıcıda yazdırılabilir HTML olarak hem de openhtmltopdf ile PDF
   olarak render edilir; ikisinin ayrışması mümkün değil çünkü kaynak tek.
@@ -12,7 +20,7 @@
 <html xmlns:th="http://www.thymeleaf.org" lang="tr">
 <head>
     <meta charset="UTF-8" />
-    <title th:text="'Teslimat Makbuzu ' + ${receipt.receiptNo}">Teslimat Makbuzu</title>
+    <title th:text="(${handover} ? 'Depo Çıkış Makbuzu ' : 'Teslimat Makbuzu ') + ${receipt.receiptNo}">Makbuz</title>
     <style>
         @page {
             size: A4;
@@ -140,7 +148,8 @@
     <span style="margin-left:4mm;">Yazdırma penceresinden &quot;PDF olarak kaydet&quot;i de seçebilirsiniz.</span>
 </div>
 
-<!-- Firma ve müşteri nüshası: şoför birini bırakır, imzalı olanı geri getirir. -->
+<!-- Teslimat makbuzunda firma ve müşteri nüshası: şoför birini bırakır, imzalı olanı geri
+     getirir. Depo çıkışında tek nüsha: servis yerinde imzalar, kâğıt bizde kalır. -->
 <div class="sheet" th:each="copy,cs : ${copies}" th:classappend="${cs.last} ? 'last' : ''">
 
     <table class="head">
@@ -160,7 +169,7 @@
                 </div>
             </td>
             <td class="title-cell">
-                <div class="doc-title">TESLİMAT MAKBUZU</div>
+                <div class="doc-title" th:text="${handover} ? 'DEPO ÇIKIŞ MAKBUZU' : 'TESLİMAT MAKBUZU'">TESLİMAT MAKBUZU</div>
                 <div class="doc-meta">
                     <div>Makbuz No: <b th:text="${receipt.receiptNo}">TM-2026-000001</b></div>
                     <div>Düzenleme: <b th:text="${issuedAtText}">01.01.2026 10:00</b></div>
@@ -177,6 +186,8 @@
         <tr>
             <td class="left">
                 <div class="block-title">TESLİM EDİLECEK MÜŞTERİ</div>
+                <!-- Depo çıkışında da müşteri yazılır: malın kime gideceği belli, sadece
+                     kimin götüreceği belli değil. -->
                 <table class="kv">
                     <tr>
                         <td class="k">Adı Soyadı / Ünvan</td>
@@ -197,26 +208,43 @@
                 </table>
             </td>
             <td>
-                <div class="block-title">SEVKİYAT BİLGİLERİ</div>
+                <div class="block-title" th:text="${handover} ? 'ÇIKIŞ BİLGİLERİ' : 'SEVKİYAT BİLGİLERİ'">SEVKİYAT BİLGİLERİ</div>
                 <table class="kv">
                     <tr>
                         <td class="k">Çıkış Deposu</td>
                         <td class="v" th:text="${receipt.sourceWarehouseName} ?: '-'">-</td>
                     </tr>
                     <tr>
-                        <td class="k">Sevk Tarihi</td>
+                        <td class="k" th:text="${handover} ? 'Çıkış Tarihi' : 'Sevk Tarihi'">Sevk Tarihi</td>
                         <td class="v" th:text="${transferDateText} ?: '-'">-</td>
+                    </tr>
+                    <!-- Depo çıkışında malı devralan servis, sevkiyat bilgisinin kendisidir:
+                         o an bilinen tek taşıma tarafı odur. -->
+                    <tr th:if="${handover}">
+                        <td class="k">Teslim Alan Servis</td>
+                        <td class="v">
+                            <span th:text="${receipt.handoverToName} ?: '-'">-</span>
+                            <span th:if="${receipt.handoverToPhone}"
+                                  th:text="' (' + ${receipt.handoverToPhone} + ')'"></span>
+                        </td>
                     </tr>
                     <tr>
                         <td class="k">Şoför</td>
-                        <td class="v">
+                        <!-- Taşıyıcı sonradan belirleniyor. Boş bir "-" eksik veri gibi
+                             görünürdü; burada eksiklik değil, sürecin kendisi. -->
+                        <td class="v" th:if="${handover and receipt.driverName == null}"
+                            style="font-weight:400;color:#55606d;">Sonradan belirlenecek</td>
+                        <td class="v" th:unless="${handover and receipt.driverName == null}">
                             <span th:text="${receipt.driverName} ?: '-'">-</span>
                             <span th:if="${receipt.driverPhone}" th:text="' (' + ${receipt.driverPhone} + ')'"></span>
                         </td>
                     </tr>
                     <tr>
                         <td class="k">Araç Plakası</td>
-                        <td class="v" th:text="${receipt.vehiclePlate} ?: '-'">-</td>
+                        <td class="v" th:if="${handover and receipt.vehiclePlate == null}"
+                            style="font-weight:400;color:#55606d;">Sonradan belirlenecek</td>
+                        <td class="v" th:unless="${handover and receipt.vehiclePlate == null}"
+                            th:text="${receipt.vehiclePlate} ?: '-'">-</td>
                     </tr>
                 </table>
             </td>
@@ -262,18 +290,31 @@
 
     <table class="sign">
         <tr>
+            <!-- İmzalayan taraflar belgeye göre değişiyor.
+
+                 Teslimat makbuzunda müşteriye teslim onayından gelen deliveredByName /
+                 receivedByName basılır; bunlar sonradan da doldurulabilir.
+
+                 Depo çıkışında imzalar kâğıdın basıldığı anda zaten atılıyor: malı devreden
+                 depo görevlisi ve devralan servis. Ayrı alanlarda tutulmalarının sebebi bu —
+                 aynı sütunlara yazılsalardı, aylar sonra müşteri teslimi onaylandığında bu
+                 kâğıdın yeniden basımı imzada duran servis görevlisi yerine müşteriyi
+                 gösterirdi. -->
             <td class="left">
                 <div class="sign-title">TESLİM EDEN</div>
                 <div class="row">
                     <div class="lbl">ADI SOYADI</div>
-                    <div th:if="${receipt.deliveredByName}" class="filled"
-                         th:text="${receipt.deliveredByName}">-</div>
-                    <div th:unless="${receipt.deliveredByName}" class="line"></div>
+                    <div th:with="name=${handover} ? ${receipt.handedOverByName} : ${receipt.deliveredByName}">
+                        <div th:if="${name}" class="filled" th:text="${name}">-</div>
+                        <div th:unless="${name}" class="line"></div>
+                    </div>
                 </div>
                 <div class="row">
-                    <div class="lbl">TESLİM TARİHİ</div>
-                    <div th:if="${deliveredAtText}" class="filled" th:text="${deliveredAtText}">-</div>
-                    <div th:unless="${deliveredAtText}" class="line"></div>
+                    <div class="lbl" th:text="${handover} ? 'ÇIKIŞ TARİHİ' : 'TESLİM TARİHİ'">TESLİM TARİHİ</div>
+                    <div th:with="when=${handover} ? ${transferDateText} : ${deliveredAtText}">
+                        <div th:if="${when}" class="filled" th:text="${when}">-</div>
+                        <div th:unless="${when}" class="line"></div>
+                    </div>
                 </div>
                 <div class="row">
                     <div class="lbl">İMZA</div>
@@ -283,15 +324,18 @@
             <td>
                 <div class="sign-title">TESLİM ALAN</div>
                 <div class="row">
-                    <div class="lbl">ADI SOYADI</div>
-                    <div th:if="${receipt.receivedByName}" class="filled"
-                         th:text="${receipt.receivedByName}">-</div>
-                    <div th:unless="${receipt.receivedByName}" class="line"></div>
+                    <div class="lbl" th:text="${handover} ? 'SERVİS / ADI SOYADI' : 'ADI SOYADI'">ADI SOYADI</div>
+                    <div th:with="name=${handover} ? ${receipt.handoverToName} : ${receipt.receivedByName}">
+                        <div th:if="${name}" class="filled" th:text="${name}">-</div>
+                        <div th:unless="${name}" class="line"></div>
+                    </div>
                 </div>
                 <div class="row">
-                    <div class="lbl">TESLİM TARİHİ</div>
-                    <div th:if="${deliveredAtText}" class="filled" th:text="${deliveredAtText}">-</div>
-                    <div th:unless="${deliveredAtText}" class="line"></div>
+                    <div class="lbl" th:text="${handover} ? 'ÇIKIŞ TARİHİ' : 'TESLİM TARİHİ'">TESLİM TARİHİ</div>
+                    <div th:with="when=${handover} ? ${transferDateText} : ${deliveredAtText}">
+                        <div th:if="${when}" class="filled" th:text="${when}">-</div>
+                        <div th:unless="${when}" class="line"></div>
+                    </div>
                 </div>
                 <div class="row">
                     <div class="lbl">İMZA</div>
@@ -303,14 +347,20 @@
 
     <table class="foot">
         <tr>
-            <td>FORM NO: TM-01</td>
+            <td th:text="${handover} ? 'FORM NO: DC-01' : 'FORM NO: TM-01'">FORM NO: TM-01</td>
             <td th:text="'REV. NO: ' + ${receipt.revision}">REV. NO: 1</td>
             <td th:text="'DÜZENLEYEN: ' + (${receipt.issuedBy} ?: '-')">DÜZENLEYEN: -</td>
             <td class="last" th:text="'Sayfa ' + ${cs.count} + '/' + ${cs.size}">Sayfa 1/2</td>
         </tr>
     </table>
 
-    <div class="legal">
+    <div class="legal" th:if="${handover}">
+        Yukarıda dökümü yapılan malzemeler eksiksiz ve hasarsız olarak, belirtilen müşteriye
+        ulaştırılmak üzere teslim alınmıştır. Taşıyıcı araç ve sürücü bilgisi belirlendiğinde
+        bu belgenin kaydına işlenir. Tek nüsha düzenlenmiştir ve imzalı hâli firmada kalır.
+        Bu belge <span th:text="${receipt.receiptNo}">-</span> numarası ile sistemde kayıtlıdır.
+    </div>
+    <div class="legal" th:unless="${handover}">
         Yukarıda dökümü yapılan malzemeler eksiksiz ve hasarsız olarak teslim alınmıştır.
         İmzalı nüsha firmaya iade edilir. Bu belge <span th:text="${receipt.receiptNo}">-</span>
         numarası ile sistemde kayıtlıdır.

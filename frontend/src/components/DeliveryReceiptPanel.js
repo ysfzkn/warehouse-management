@@ -7,6 +7,11 @@ import axios from 'axios';
  * Covers the whole paper trail: issue the receipt, print or download it, record who
  * took delivery, and file the photograph of the signed page that comes back with the
  * driver.
+ *
+ * Handles both kinds of paper. A depot exit receipt (kind SERVICE_HANDOVER) was printed
+ * when the goods were handed to a service company, before the driver was known, so its
+ * signatories are the warehouse hand and the courier rather than the driver and the
+ * customer — and it carries one more action: naming the carrier once that is settled.
  */
 
 const STATUS_META = {
@@ -55,7 +60,13 @@ const toLocalInput = (date) => {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 };
 
-export default function DeliveryReceiptPanel({ transfer, isAdmin = false, autoFocus = false, onChanged }) {
+export default function DeliveryReceiptPanel({
+  transfer,
+  isAdmin = false,
+  autoFocus = false,
+  onChanged,
+  onTransferChanged,
+}) {
   const transferId = transfer?.id;
 
   const [receipt, setReceipt] = useState(null);
@@ -69,6 +80,16 @@ export default function DeliveryReceiptPanel({ transfer, isAdmin = false, autoFo
     receivedByName: '',
     deliveredAt: toLocalInput(new Date()),
     note: '',
+  });
+  const [showCarrierForm, setShowCarrierForm] = useState(false);
+  // The transfer prop comes from the list and is not re-fetched while this modal is open,
+  // so after a successful assignment it would still claim the carrier is missing.
+  const [carrierJustAssigned, setCarrierJustAssigned] = useState(false);
+  const [carrierForm, setCarrierForm] = useState({
+    driverName: '',
+    driverTcId: '',
+    driverPhone: '',
+    vehiclePlate: '',
   });
   const fileInputRef = useRef(null);
   const panelRef = useRef(null);
@@ -230,6 +251,48 @@ export default function DeliveryReceiptPanel({ transfer, isAdmin = false, autoFo
     if (saved) setShowConfirmForm(false);
   };
 
+  /**
+   * Records the carrier of a shipment that went out on a depot exit receipt.
+   *
+   * Does not move stock — the goods left when the receipt was issued. This is the button
+   * that "now I know who is driving" has to land on; creating a fresh transfer instead
+   * would take the same goods off the shelf a second time.
+   */
+  const handleAssignCarrier = async (event) => {
+    event.preventDefault();
+    const { driverName, driverTcId, driverPhone, vehiclePlate } = carrierForm;
+    if (!driverName.trim() || !driverTcId.trim() || !driverPhone.trim() || !vehiclePlate.trim()) {
+      setError('Şoför adı, TC kimlik no, telefon ve plaka zorunludur.');
+      return;
+    }
+    if (!/^[0-9]{11}$/.test(driverTcId.trim())) {
+      setError('TC kimlik no 11 haneli olmalıdır.');
+      return;
+    }
+    const saved = await runAction(
+      'carrier',
+      async () => {
+        const res = await axios.put(`/api/admin/stock-transfers/${transferId}/carrier`, {
+          driverName: driverName.trim(),
+          driverTcId: driverTcId.trim(),
+          driverPhone: driverPhone.trim(),
+          vehiclePlate: vehiclePlate.trim().toLocaleUpperCase('tr-TR'),
+        });
+        return res.data;
+      },
+      'Taşıyıcı bilgisi kaydedildi. Makbuzu güncel bilgilerle basmak için “Yeniden Bas”.'
+    );
+    if (saved) {
+      setShowCarrierForm(false);
+      setCarrierJustAssigned(true);
+      // Hand the updated shipment back so the list row and the modal's own copy stop
+      // claiming the carrier is missing. Passing the DTO rather than asking the caller to
+      // refetch is deliberate: a refetch that re-renders the page would take this panel
+      // with it, mid-conversation.
+      if (onTransferChanged) onTransferChanged(saved);
+    }
+  };
+
   const handleUpload = (file) => {
     if (!file) return;
     const form = new FormData();
@@ -262,12 +325,17 @@ export default function DeliveryReceiptPanel({ transfer, isAdmin = false, autoFo
 
   const status = STATUS_META[receipt?.status] || STATUS_META.ISSUED;
   const anyBusy = Boolean(busy);
+  // A depot exit receipt: printed when the goods were handed to a service company, before
+  // the carrier was known. Different title, different signatories, one copy.
+  const isHandover = receipt?.kind === 'SERVICE_HANDOVER';
+  const carrierPending = Boolean(transfer?.carrierPending) && !carrierJustAssigned;
+  const documentLabel = isHandover ? 'Depo Çıkış Makbuzu' : 'Teslimat Makbuzu';
 
   return (
     <div className="border rounded-3 p-3 mt-3" ref={panelRef}>
       <div className="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
         <div>
-          <small className="text-muted text-uppercase d-block">Teslimat Makbuzu</small>
+          <small className="text-muted text-uppercase d-block">{documentLabel}</small>
           {receipt ? (
             <div className="d-flex align-items-center gap-2 flex-wrap mt-1">
               <span className="fw-bold">{receipt.receiptNo}</span>
@@ -275,6 +343,18 @@ export default function DeliveryReceiptPanel({ transfer, isAdmin = false, autoFo
                 <i className={`fas ${status.icon} me-1`}></i>
                 {status.label}
               </span>
+              {isHandover && (
+                <span className="badge rounded-pill bg-info-subtle text-info-emphasis border border-info-subtle">
+                  <i className="fas fa-file-export me-1"></i>
+                  Tek nüsha
+                </span>
+              )}
+              {carrierPending && (
+                <span className="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle">
+                  <i className="fas fa-user-clock me-1"></i>
+                  Taşıyıcı bekliyor
+                </span>
+              )}
               {receipt.revision > 1 && (
                 <span className="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle">
                   {receipt.revision}. basım
@@ -375,16 +455,25 @@ export default function DeliveryReceiptPanel({ transfer, isAdmin = false, autoFo
               <div className="text-muted">{formatDateTime(receipt.issuedAt)}</div>
             </div>
             <div className="col-sm-6 col-lg-3">
-              <div className="text-muted">Teslim Eden</div>
-              <div className="fw-semibold">{receipt.deliveredByName || '-'}</div>
+              <div className="text-muted">{isHandover ? 'Depodan Veren' : 'Teslim Eden'}</div>
+              <div className="fw-semibold">
+                {(isHandover ? receipt.handedOverByName : receipt.deliveredByName) || '-'}
+              </div>
             </div>
             <div className="col-sm-6 col-lg-3">
-              <div className="text-muted">Teslim Alan</div>
-              <div className="fw-semibold">{receipt.receivedByName || '—'}</div>
+              <div className="text-muted">{isHandover ? 'Devralan Servis' : 'Teslim Alan'}</div>
+              <div className="fw-semibold">
+                {(isHandover ? receipt.handoverToName : receipt.receivedByName) || '—'}
+              </div>
+              {isHandover && receipt.handoverToPhone && (
+                <div className="text-muted">{receipt.handoverToPhone}</div>
+              )}
             </div>
             <div className="col-sm-6 col-lg-3">
-              <div className="text-muted">Teslim Tarihi</div>
-              <div className="fw-semibold">{formatDateTime(receipt.deliveredAt)}</div>
+              <div className="text-muted">{isHandover ? 'Çıkış Tarihi' : 'Teslim Tarihi'}</div>
+              <div className="fw-semibold">
+                {formatDateTime(isHandover ? receipt.transferDate : receipt.deliveredAt)}
+              </div>
             </div>
           </div>
 
@@ -392,6 +481,107 @@ export default function DeliveryReceiptPanel({ transfer, isAdmin = false, autoFo
             <div className="small text-muted mt-2">
               <i className="fas fa-comment-dots me-1"></i>
               {receipt.receivedByNote}
+            </div>
+          )}
+
+          {/* ── Taşıyıcı bilgisi ──
+              Sadece taşıyıcısı eksik çıkışlarda ve yalnızca yöneticide görünür; uç nokta da
+              yönetici korumalı. Teslim onayının üstünde, çünkü sıradaki adım bu. */}
+          {carrierPending && isAdmin && (
+            <div className="mt-3">
+              {!showCarrierForm ? (
+                <div className="alert alert-warning py-2 px-3 mb-0 d-flex flex-wrap align-items-center justify-content-between gap-2">
+                  <span className="small">
+                    <i className="fas fa-user-clock me-1"></i>
+                    Bu çıkışın şoför ve plaka bilgisi henüz girilmedi.
+                  </span>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-warning"
+                    disabled={anyBusy}
+                    onClick={() => {
+                      setCarrierForm({
+                        driverName: '',
+                        driverTcId: '',
+                        driverPhone: '',
+                        vehiclePlate: '',
+                      });
+                      setShowCarrierForm(true);
+                    }}
+                  >
+                    <i className="fas fa-truck-fast me-1"></i>
+                    Taşıyıcı Bilgisi Gir
+                  </button>
+                </div>
+              ) : (
+                <form className="border rounded-3 p-3 bg-light" onSubmit={handleAssignCarrier}>
+                  <div className="small text-muted mb-2">
+                    <i className="fas fa-circle-info me-1"></i>
+                    Bu bilgi mevcut çıkışa işlenir; stok yeniden düşmez.
+                  </div>
+                  <div className="row g-2">
+                    <div className="col-md-6">
+                      <label className="form-label small mb-1">Şoför Adı Soyadı</label>
+                      <input
+                        type="text"
+                        className="form-control form-control-sm"
+                        value={carrierForm.driverName}
+                        onChange={(e) => setCarrierForm((prev) => ({ ...prev, driverName: e.target.value }))}
+                      />
+                    </div>
+                    <div className="col-md-6">
+                      <label className="form-label small mb-1">TC Kimlik No</label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={11}
+                        className="form-control form-control-sm"
+                        value={carrierForm.driverTcId}
+                        onChange={(e) =>
+                          setCarrierForm((prev) => ({
+                            ...prev,
+                            driverTcId: e.target.value.replace(/\D/g, ''),
+                          }))
+                        }
+                      />
+                    </div>
+                    <div className="col-md-6">
+                      <label className="form-label small mb-1">Şoför Telefonu</label>
+                      <input
+                        type="tel"
+                        className="form-control form-control-sm"
+                        value={carrierForm.driverPhone}
+                        onChange={(e) => setCarrierForm((prev) => ({ ...prev, driverPhone: e.target.value }))}
+                      />
+                    </div>
+                    <div className="col-md-6">
+                      <label className="form-label small mb-1">Araç Plakası</label>
+                      <input
+                        type="text"
+                        className="form-control form-control-sm text-uppercase"
+                        value={carrierForm.vehiclePlate}
+                        onChange={(e) =>
+                          setCarrierForm((prev) => ({ ...prev, vehiclePlate: e.target.value }))
+                        }
+                      />
+                    </div>
+                  </div>
+                  <div className="d-flex gap-2 mt-3">
+                    <button type="submit" className="btn btn-sm btn-warning" disabled={anyBusy}>
+                      <i className={`fas ${busy === 'carrier' ? 'fa-spinner fa-spin' : 'fa-check'} me-1`}></i>
+                      Kaydet
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-light"
+                      disabled={anyBusy}
+                      onClick={() => setShowCarrierForm(false)}
+                    >
+                      Vazgeç
+                    </button>
+                  </div>
+                </form>
+              )}
             </div>
           )}
 

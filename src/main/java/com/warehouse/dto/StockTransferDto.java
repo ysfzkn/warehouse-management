@@ -23,6 +23,11 @@ public class StockTransferDto {
     private String driverTcId;
     private String driverPhone;
     private String vehiclePlate;
+    /** Goods are out, carrier not recorded yet — the list renders a badge off this. */
+    private boolean carrierPending;
+    private String handoverToName;
+    private String handoverToPhone;
+    private String handedOverBy;
     private TransferStatus status;
     private TransferType transferType;
     private LocalDateTime transferDate;
