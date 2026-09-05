@@ -12,15 +12,19 @@ import axios from 'axios';
 const STATUS_META = {
   ISSUED: {
     label: 'Düzenlendi',
-    cls: 'bg-primary-subtle text-primary border border-primary',
+    cls: 'bg-primary-subtle text-primary-emphasis border border-primary-subtle',
     icon: 'fa-file-invoice',
   },
   DELIVERED: {
     label: 'Teslim Edildi',
-    cls: 'bg-success-subtle text-success border border-success',
+    cls: 'bg-success-subtle text-success-emphasis border border-success-subtle',
     icon: 'fa-circle-check',
   },
-  CANCELLED: { label: 'İptal', cls: 'bg-danger-subtle text-danger border border-danger', icon: 'fa-ban' },
+  CANCELLED: {
+    label: 'İptal',
+    cls: 'bg-danger-subtle text-danger-emphasis border border-danger-subtle',
+    icon: 'fa-ban',
+  },
 };
 
 const formatDateTime = (value) => {
@@ -272,17 +276,17 @@ export default function DeliveryReceiptPanel({ transfer, isAdmin = false, autoFo
                 {status.label}
               </span>
               {receipt.revision > 1 && (
-                <span className="badge rounded-pill bg-warning-subtle text-warning border border-warning">
+                <span className="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle">
                   {receipt.revision}. basım
                 </span>
               )}
               {receipt.signedCopyOnFile ? (
-                <span className="badge rounded-pill bg-success-subtle text-success border border-success">
+                <span className="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle">
                   <i className="fas fa-paperclip me-1"></i>
                   İmzalı nüsha var
                 </span>
               ) : (
-                <span className="badge rounded-pill bg-secondary-subtle text-secondary border border-secondary">
+                <span className="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle">
                   <i className="fas fa-hourglass-half me-1"></i>
                   İmzalı nüsha bekleniyor
                 </span>

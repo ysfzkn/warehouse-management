@@ -1124,7 +1124,11 @@ const Navbar = () => {
                     style={navLinkStyle('/admin/delivery-receipts')}
                   >
                     <i className="fas fa-file-invoice me-2"></i>
-                    Teslimat Makbuzları
+                    {/* Kısa etiket: navbar 1385px viewport'ta zaten taşıyor ve
+                        "Teslimat Makbuzları" tek başına 193px yer kaplıyordu.
+                        Panelde başka makbuz türü yok, kısaltma belirsizlik yaratmıyor;
+                        sayfanın kendi başlığı tam adı taşıyor. */}
+                    Makbuzlar
                   </Link>
                 </li>
               )}

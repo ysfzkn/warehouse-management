@@ -12,9 +12,15 @@ import axios from 'axios';
  */
 
 const STATUS_META = {
-  ISSUED: { label: 'Düzenlendi', cls: 'bg-primary-subtle text-primary border border-primary' },
-  DELIVERED: { label: 'Teslim Edildi', cls: 'bg-success-subtle text-success border border-success' },
-  CANCELLED: { label: 'İptal', cls: 'bg-danger-subtle text-danger border border-danger' },
+  ISSUED: {
+    label: 'Düzenlendi',
+    cls: 'bg-primary-subtle text-primary-emphasis border border-primary-subtle',
+  },
+  DELIVERED: {
+    label: 'Teslim Edildi',
+    cls: 'bg-success-subtle text-success-emphasis border border-success-subtle',
+  },
+  CANCELLED: { label: 'İptal', cls: 'bg-danger-subtle text-danger-emphasis border border-danger-subtle' },
 };
 
 const formatDateTime = (value) => {
@@ -326,12 +332,12 @@ export default function AdminDeliveryReceipts() {
                       </td>
                       <td className="text-center">
                         {r.signedCopyOnFile ? (
-                          <span className="badge rounded-pill bg-success-subtle text-success border border-success">
+                          <span className="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle">
                             <i className="fas fa-paperclip me-1"></i>
                             {r.attachments?.length || 1}
                           </span>
                         ) : (
-                          <span className="badge rounded-pill bg-warning-subtle text-warning border border-warning">
+                          <span className="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle">
                             Bekleniyor
                           </span>
                         )}
