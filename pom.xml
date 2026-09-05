@@ -309,6 +309,24 @@
 
     <build>
         <plugins>
+            <!-- Testler uygulamanin calistigi saat diliminde kossun.
+                 WarehouseManagementApplication JVM varsayilanini @PostConstruct icinde
+                 Europe/Istanbul'a cekiyor, yani calisan uygulama her zaman bu zonda. Ama
+                 @DataJpaTest gibi slice testlerinde o bean hic olusmuyor ve JVM makinenin
+                 zonunda kaliyor: gelistirici makinesinde zaten Istanbul oldugu icin yesil,
+                 UTC calisan CI runner'inda ise DATE degerleri bir gun kayarak
+                 StockIrsaliyeFilterTest'i kirmizi yapiyordu.
+                 Olculen davranis: testin sonucunu belirleyen tek sey JVM zonu
+                 (hibernate.jdbc.time_zone'un etkisi yok). Zonu burada sabitlemek test
+                 ortamini production'la ayni hale getirir ve makineye bagimliligi bitirir. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <argLine>-Duser.timezone=Europe/Istanbul</argLine>
+                </configuration>
+            </plugin>
+
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>

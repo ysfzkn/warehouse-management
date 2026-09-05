@@ -36,6 +36,9 @@ class StockIrsaliyeFilterTest {
     private static final Pageable PAGE = PageRequest.of(0, 20);
 
     @Autowired
+    private jakarta.persistence.EntityManager entityManager;
+
+    @Autowired
     private StockRepository stockRepository;
 
     @Autowired
@@ -154,6 +157,36 @@ class StockIrsaliyeFilterTest {
 
     private List<StockRepository.IrsaliyeSummary> summarize(String pattern) {
         return stockRepository.summarizeIrsaliye(pattern, PAGE);
+    }
+
+    /**
+     * The waybill date must reach the database as the date that was typed.
+     *
+     * <p>It did not, on any JVM running outside Europe/Istanbul: the day came back one
+     * earlier. Reading the entity back applied the same shift in reverse, so nothing
+     * looked wrong until an aggregate ({@code MAX}) returned the raw column.</p>
+     *
+     * <p>The reason it only bit CI: this is a slice test, and {@code @DataJpaTest} never
+     * creates the application bean, so the {@code TimeZone.setDefault(Europe/Istanbul)}
+     * in {@code WarehouseManagementApplication} does not run and the JVM keeps the
+     * machine's zone — Istanbul on the developer's box, UTC on the runner. The fix pins
+     * the zone for the test JVM in the Surefire configuration; this assertion reads the
+     * stored value directly so a drift fails here rather than in a distant aggregate.</p>
+     */
+    @Test
+    void theWaybillDateIsStoredAsTheDayItWasEntered() {
+        Stock saved = stockWith("SKU-TZ", "TZ-2026-1", LocalDate.of(2026, 3, 1));
+        stockRepository.flush();
+
+        Object raw = entityManager
+                .createNativeQuery("SELECT irsaliye_date FROM stocks WHERE id = :id")
+                .setParameter("id", saved.getId())
+                .getSingleResult();
+
+        assertThat(raw.toString())
+                .as("veritabanindaki ham deger, girilen gunle ayni olmali "
+                        + "(JVM zonu ile hibernate.jdbc.time_zone ayrisirsa kayar)")
+                .startsWith("2026-03-01");
     }
 
     @Test
