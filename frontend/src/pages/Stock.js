@@ -1566,8 +1566,11 @@ const Stock = () => {
     }
   };
 
-  const openTransferDetailModal = (transfer) => {
-    setTransferDetailModal({ show: true, transfer });
+  const openTransferDetailModal = (transfer, options = {}) => {
+    // focusReceipt: listedeki Makbuz düğmesinden gelindiğinde panel kendiliğinden
+    // görünür olsun. Panel bilgi kartlarının altında kalıyor ve makbuz için detayı
+    // açan kişinin her seferinde aşağı kaydırması gerekiyordu.
+    setTransferDetailModal({ show: true, transfer, focusReceipt: !!options.focusReceipt });
     loadTransferDetailPhotos(transfer);
   };
 
@@ -4422,7 +4425,17 @@ const Stock = () => {
                           />
                         </div>
                       )}
-                      <h6 className="fw-bold mb-2 d-flex align-items-center justify-content-between">
+                      {/* Makbuz paneli ürün listesinin ÜSTÜNDE duruyor. Sonda dururken
+                          modalin ~1500px altında kalıyordu: makbuz basmak veya imzalı
+                          nüsha yüklemek için detayı açan kişi her seferinde birkaç ekran
+                          kaydırmak zorundaydı — oysa detayı açmasının başlıca sebebi bu. */}
+                      <DeliveryReceiptPanel
+                        transfer={t}
+                        isAdmin={isAdmin}
+                        autoFocus={transferDetailModal.focusReceipt}
+                        onChanged={() => setTransferReceiptsVersion((v) => v + 1)}
+                      />
+                      <h6 className="fw-bold mb-2 mt-4 d-flex align-items-center justify-content-between">
                         <span>
                           <i className="fas fa-box me-2"></i>
                           Ürünler
@@ -4565,11 +4578,6 @@ const Stock = () => {
                           )}
                         </div>
                       )}
-                      <DeliveryReceiptPanel
-                        transfer={t}
-                        isAdmin={isAdmin}
-                        onChanged={() => setTransferReceiptsVersion((v) => v + 1)}
-                      />
                     </>
                   );
                 })()}
@@ -5659,7 +5667,9 @@ const Stock = () => {
                                             fontSize: 'clamp(0.7rem, 2vw, 0.8rem)',
                                             whiteSpace: 'nowrap',
                                           }}
-                                          onClick={() => openTransferDetailModal(transfer)}
+                                          onClick={() =>
+                                            openTransferDetailModal(transfer, { focusReceipt: true })
+                                          }
                                           title="Bu sevkiyat için makbuz düzenlenmemiş — detaydan düzenleyin"
                                         >
                                           <i className="fas fa-file-circle-plus me-1"></i>
@@ -5667,9 +5677,18 @@ const Stock = () => {
                                         </button>
                                       );
                                     }
+                                    // İmzalı nüshası dönmemiş makbuz uyarı renginde durur.
+                                    // Tek ayırt edici işaret küçücük bir renk noktasıydı,
+                                    // yani hangi teslimatın evrağı eksik olduğunu görmek
+                                    // için satırları tek tek hover'lamak gerekiyordu —
+                                    // oysa takip edilen şey tam olarak bu.
                                     return (
                                       <button
-                                        className="btn btn-sm btn-outline-primary w-100 py-1 px-2 position-relative"
+                                        className={`btn btn-sm w-100 py-1 px-2 position-relative ${
+                                          receipt.signedCopyOnFile
+                                            ? 'btn-outline-primary'
+                                            : 'btn-outline-warning'
+                                        }`}
                                         style={{
                                           fontSize: 'clamp(0.7rem, 2vw, 0.8rem)',
                                           whiteSpace: 'nowrap',

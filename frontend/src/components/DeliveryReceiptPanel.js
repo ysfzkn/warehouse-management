@@ -10,13 +10,17 @@ import axios from 'axios';
  */
 
 const STATUS_META = {
-  ISSUED: { label: 'Düzenlendi', cls: 'bg-primary-subtle text-primary-emphasis', icon: 'fa-file-invoice' },
+  ISSUED: {
+    label: 'Düzenlendi',
+    cls: 'bg-primary-subtle text-primary border border-primary',
+    icon: 'fa-file-invoice',
+  },
   DELIVERED: {
     label: 'Teslim Edildi',
-    cls: 'bg-success-subtle text-success-emphasis',
+    cls: 'bg-success-subtle text-success border border-success',
     icon: 'fa-circle-check',
   },
-  CANCELLED: { label: 'İptal', cls: 'bg-danger-subtle text-danger-emphasis', icon: 'fa-ban' },
+  CANCELLED: { label: 'İptal', cls: 'bg-danger-subtle text-danger border border-danger', icon: 'fa-ban' },
 };
 
 const formatDateTime = (value) => {
@@ -47,7 +51,7 @@ const toLocalInput = (date) => {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 };
 
-export default function DeliveryReceiptPanel({ transfer, isAdmin = false, onChanged }) {
+export default function DeliveryReceiptPanel({ transfer, isAdmin = false, autoFocus = false, onChanged }) {
   const transferId = transfer?.id;
 
   const [receipt, setReceipt] = useState(null);
@@ -63,6 +67,7 @@ export default function DeliveryReceiptPanel({ transfer, isAdmin = false, onChan
     note: '',
   });
   const fileInputRef = useRef(null);
+  const panelRef = useRef(null);
 
   const load = useCallback(async () => {
     if (!transferId) return;
@@ -82,6 +87,16 @@ export default function DeliveryReceiptPanel({ transfer, isAdmin = false, onChan
   useEffect(() => {
     load();
   }, [load]);
+
+  // Makbuz düğmesinden açıldıysa paneli görünür yap. Veri geldikten sonra kaydırıyoruz,
+  // aksi hâlde panel henüz tek satırken kaydırıp sonra büyüyor ve hedefi kaçırıyor.
+  useEffect(() => {
+    if (!autoFocus || loading || !panelRef.current) return undefined;
+    const timer = setTimeout(() => {
+      panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [autoFocus, loading]);
 
   useEffect(() => {
     if (!notice) return undefined;
@@ -245,7 +260,7 @@ export default function DeliveryReceiptPanel({ transfer, isAdmin = false, onChan
   const anyBusy = Boolean(busy);
 
   return (
-    <div className="border rounded-3 p-3 mt-3">
+    <div className="border rounded-3 p-3 mt-3" ref={panelRef}>
       <div className="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
         <div>
           <small className="text-muted text-uppercase d-block">Teslimat Makbuzu</small>
@@ -257,17 +272,17 @@ export default function DeliveryReceiptPanel({ transfer, isAdmin = false, onChan
                 {status.label}
               </span>
               {receipt.revision > 1 && (
-                <span className="badge rounded-pill bg-warning-subtle text-warning-emphasis">
+                <span className="badge rounded-pill bg-warning-subtle text-warning border border-warning">
                   {receipt.revision}. basım
                 </span>
               )}
               {receipt.signedCopyOnFile ? (
-                <span className="badge rounded-pill bg-success-subtle text-success-emphasis">
+                <span className="badge rounded-pill bg-success-subtle text-success border border-success">
                   <i className="fas fa-paperclip me-1"></i>
                   İmzalı nüsha var
                 </span>
               ) : (
-                <span className="badge rounded-pill bg-secondary-subtle text-secondary-emphasis">
+                <span className="badge rounded-pill bg-secondary-subtle text-secondary border border-secondary">
                   <i className="fas fa-hourglass-half me-1"></i>
                   İmzalı nüsha bekleniyor
                 </span>

@@ -12,9 +12,9 @@ import axios from 'axios';
  */
 
 const STATUS_META = {
-  ISSUED: { label: 'Düzenlendi', cls: 'bg-primary-subtle text-primary-emphasis' },
-  DELIVERED: { label: 'Teslim Edildi', cls: 'bg-success-subtle text-success-emphasis' },
-  CANCELLED: { label: 'İptal', cls: 'bg-danger-subtle text-danger-emphasis' },
+  ISSUED: { label: 'Düzenlendi', cls: 'bg-primary-subtle text-primary border border-primary' },
+  DELIVERED: { label: 'Teslim Edildi', cls: 'bg-success-subtle text-success border border-success' },
+  CANCELLED: { label: 'İptal', cls: 'bg-danger-subtle text-danger border border-danger' },
 };
 
 const formatDateTime = (value) => {
@@ -158,17 +158,24 @@ export default function AdminDeliveryReceipts() {
             </div>
           ))}
           <div className="col-6 col-lg-3">
+            {/* Dört kartın görünüşü aynıyken bunun tıklanabilir olduğunu kimse denemez;
+                sayfanın asıl işi de bu filtre. Kenarlık ve alttaki ipucu satırı onu
+                diğer üçünden ayırıyor. */}
             <button
               type="button"
-              className="card border-0 shadow-sm h-100 w-100 text-start"
+              className="card h-100 w-100 text-start shadow-sm border border-warning border-2"
               onClick={showAwaitingSignedCopy}
               title="Sadece imzalı nüshası gelmemiş makbuzları listele"
             >
               <div className="card-body py-3">
                 <div className="small text-muted">İmzalı Nüsha Bekleyen</div>
-                <div className="h4 mb-0 text-warning">
+                <div className="h4 mb-1 text-warning">
                   <i className="fas fa-hourglass-half me-2"></i>
                   {stats.awaitingSignedCopy ?? 0}
+                </div>
+                <div className="small text-warning">
+                  <i className="fas fa-filter me-1"></i>
+                  Listelemek için tıklayın
                 </div>
               </div>
             </button>
@@ -319,12 +326,12 @@ export default function AdminDeliveryReceipts() {
                       </td>
                       <td className="text-center">
                         {r.signedCopyOnFile ? (
-                          <span className="badge rounded-pill bg-success-subtle text-success-emphasis">
+                          <span className="badge rounded-pill bg-success-subtle text-success border border-success">
                             <i className="fas fa-paperclip me-1"></i>
                             {r.attachments?.length || 1}
                           </span>
                         ) : (
-                          <span className="badge rounded-pill bg-warning-subtle text-warning-emphasis">
+                          <span className="badge rounded-pill bg-warning-subtle text-warning border border-warning">
                             Bekleniyor
                           </span>
                         )}
