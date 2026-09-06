@@ -69,8 +69,8 @@ public class DeliveryReceiptServiceImpl implements DeliveryReceiptService {
     private static final long MAX_ATTACHMENT_BYTES = 15L * 1024 * 1024;
     private static final int MAX_ATTACHMENTS = 10;
     /** Blank rows printed under the items so the form can be completed by hand. */
-    private static final int MIN_TABLE_ROWS = 12;
-    private static final String PACKAGED_LETTERHEAD = "/receipt/company-logo.png";
+    private static final int MIN_TABLE_ROWS = 8;
+    private static final String PACKAGED_LETTERHEAD = "/receipt/company-logo.jpg";
 
     /** {@link #packagedLetterheadDataUri()} için tembel önbellek; "" = dosya yok. */
     private volatile String packagedLetterhead;
@@ -613,7 +613,16 @@ public class DeliveryReceiptServiceImpl implements DeliveryReceiptService {
                 log.warn("Paketlenmiş makbuz anteti bulunamadı: {}", PACKAGED_LETTERHEAD);
             } else {
                 byte[] bytes = in.readAllBytes();
-                value = "data:image/png;base64," + Base64.getEncoder().encodeToString(bytes);
+                // Biçim dosya adından değil baytlardan okunuyor: PDF'e yanlış medya tipiyle
+                // gömülen bir görsel hata vermeden, sessizce bomboş basılır.
+                UploadValidator.ImageType type = UploadValidator.detectImageType(bytes);
+                if (type == null) {
+                    log.warn("Paketlenmiş makbuz anteti tanınmayan formatta: {}",
+                            PACKAGED_LETTERHEAD);
+                } else {
+                    value = "data:" + type.contentType + ";base64,"
+                            + Base64.getEncoder().encodeToString(bytes);
+                }
             }
         } catch (Exception e) {
             log.warn("Paketlenmiş makbuz anteti okunamadı: {}", e.getMessage());
@@ -625,9 +634,11 @@ public class DeliveryReceiptServiceImpl implements DeliveryReceiptService {
     /**
      * How many rows the items table is padded out to.
      *
-     * <p>The blank rows are there so the form can be completed by hand, and twelve of them
+     * <p>The blank rows are there so the form can be completed by hand, and eight of them
      * fill an A4 page to the millimetre — which means anything else added to the sheet pushes
-     * the closing paragraph onto a second, near-empty page. Two things add to the sheet, and
+     * the closing paragraph onto a second, near-empty page. It was twelve until the letterhead
+     * became the full company card, which is roughly twice as tall as a plain wordmark and
+     * costs four of them; a shorter logo would win them back. Two things add to the sheet, and
      * each costs two filler rows rather than a page: the return notice, and the depot exit's
      * hand-filled plate / TC line under the receiving party. The figures are empirical:
      * openhtmltopdf's box heights do not match the browser's, so change them only against a

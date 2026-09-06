@@ -45,9 +45,11 @@
         .head { width: 100%; border-collapse: collapse; border: 1.4pt solid #101418; }
         .head td { vertical-align: middle; padding: 5mm 4mm; }
         .head .logo-cell { width: 46%; border-right: 1pt solid #101418; text-align: center; }
-        /* Geniş lockup logolar (ör. 2.3:1) yükseklik sınırına takılıp küçük
-           kalıyordu; kutuda yer var, sınırı kutuya göre verdik. */
-        .head .logo-cell img { max-width: 74mm; max-height: 26mm; }
+        /* Antet kartvizit oranında (yaklaşık 1.5:1). Yükseklik sınırı 26mm iken görsel
+           genişliğin yarısına düşüyor ve üzerindeki adres satırları okunmaz hâle geliyordu;
+           sınırı kutuya göre verdik. Değiştirmeden önce PDF'e basıp sayfa sayısına bakın:
+           başlık büyüdükçe kapanış paragrafı ikinci sayfaya taşar. */
+        .head .logo-cell img { max-width: 74mm; max-height: 52mm; }
         .head .logo-fallback { font-size: 13pt; font-weight: 700; letter-spacing: .4pt; color: #17439b; }
         .head .company-line { font-size: 7.4pt; color: #55606d; margin-top: 1.5mm; line-height: 1.3; }
 
