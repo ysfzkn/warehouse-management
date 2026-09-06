@@ -196,7 +196,7 @@ public class StockTransferController {
      * there, and a second round trip to fetch it is a second chance to fail.</p>
      */
     @PostMapping("/service-handover")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'STOCK_OUT')")
     public ResponseEntity<ServiceHandoverService.Result> createServiceHandover(
             @Valid @RequestBody ServiceHandoverRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)

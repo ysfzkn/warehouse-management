@@ -114,6 +114,12 @@
         .sign .row .lbl { color: #55606d; font-size: 7.6pt; letter-spacing: .3pt; }
         .sign .filled { font-weight: 700; font-size: 9pt; }
         .sign .line { border-bottom: .8pt solid #55606d; height: 5mm; margin-top: 1mm; }
+        /* Plaka ve TC yan yana: alt alta konsalardı imza alanını aşağı itip kapanış
+           paragrafını ikinci sayfaya taşırlardı. İkisi de kısa alanlar, yarım sütuna
+           rahat sığıyor. openhtmltopdf'te float yerine tablo — bkz. dosya başı notu. */
+        .sign .pair { width: 100%; border-collapse: collapse; }
+        .sign .pair td { width: 50%; padding: 0; vertical-align: top; }
+        .sign .pair td.first { padding-right: 3mm; }
         .sign .sign-area { height: 20mm; }
 
         /* ── Alt bilgi ──────────────────────────────────────────── */
@@ -347,6 +353,31 @@
                         <div th:if="${name}" class="filled" th:text="${name}">-</div>
                         <div th:unless="${name}" class="line"></div>
                     </div>
+                </div>
+                <!-- Malı devralan kişinin plakası ve kimlik numarası.
+
+                     Depo çıkışında bu iki bilgi sistemde yok: makbuz, taşıyıcı belli olmadan
+                     basılıyor. Ama kâğıdı imzalayan kişi tezgâhın başında duruyor ve elle
+                     yazabiliyor — sonradan taşıyıcı kaydına geçirilebilsin diye alan burada
+                     boş bırakılıyor. Taşıyıcı sonradan sisteme girildiyse ve makbuz yeniden
+                     basılıyorsa plaka artık biliniyor, o zaman boş çizgi yerine kendisi
+                     yazılıyor. Kimlik numarasının karşılığı makbuz kaydında hiç tutulmuyor,
+                     bu yüzden her zaman boş. -->
+                <div class="row" th:if="${handover}">
+                    <table class="pair">
+                        <tr>
+                            <td class="first">
+                                <div class="lbl">ARAÇ PLAKASI</div>
+                                <div th:if="${receipt.vehiclePlate}" class="filled"
+                                     th:text="${receipt.vehiclePlate}">-</div>
+                                <div th:unless="${receipt.vehiclePlate}" class="line"></div>
+                            </td>
+                            <td>
+                                <div class="lbl">T.C. KİMLİK NO</div>
+                                <div class="line"></div>
+                            </td>
+                        </tr>
+                    </table>
                 </div>
                 <div class="row">
                     <div class="lbl" th:text="${handover} ? 'ÇIKIŞ TARİHİ' : 'TESLİM TARİHİ'">TESLİM TARİHİ</div>

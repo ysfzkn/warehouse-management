@@ -8,6 +8,7 @@ import com.warehouse.entity.Stock;
 import com.warehouse.entity.StockTransfer;
 import com.warehouse.entity.Warehouse;
 import com.warehouse.enums.DeliveryReceiptKind;
+import com.warehouse.enums.TransferApprovalStatus;
 import com.warehouse.enums.TransferStatus;
 import com.warehouse.enums.TransferType;
 import com.warehouse.exception.WarehouseManagementException;
@@ -96,6 +97,13 @@ class ServiceHandoverTest {
     @AfterEach
     void tearDown() {
         SecurityContextHolder.clearContext();
+    }
+
+    /** Oturumu verilen rolle yeniden kurar; setUp admin ile açıyor. */
+    private void loginAs(String username, String role) {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(username, "pw",
+                        List.of(new SimpleGrantedAuthority("ROLE_" + role))));
     }
 
     private ServiceHandoverRequest request(int quantity) {
@@ -253,6 +261,59 @@ class ServiceHandoverTest {
             // Boş servis satırı hiç basılmıyor: "-" eksik veri izlenimi verirdi.
             assertThat(text).doesNotContain("Teslim Alan Servis");
         }
+    }
+
+    @Test
+    @DisplayName("Stok çıkış rolündeki kullanıcı da depo çıkış makbuzu düzenleyebilir")
+    void stockOutUserCanIssueADepotExit() {
+        // Kâğıdı imzalatan kişi çoğunlukla yönetici değil, tezgâhın başındaki depo
+        // görevlisi. Yetki oraya açılmasaydı her çıkış için yöneticinin hesabıyla
+        // giriş yapılırdı — sistemdeki her kaydın altında yanlış isim kalırdı.
+        loginAs("depocu", "STOCK_OUT");
+
+        var result = handoverService.handOver(request(3), "depocu");
+
+        assertThat(result.transfer().getStatus()).isEqualTo(TransferStatus.COMPLETED);
+        assertThat(stockRepository.findById(stock.getId()).orElseThrow().getQuantity())
+                .as("mal fiziken çıktı, rol ne olursa olsun stok düşmeli")
+                .isEqualTo(37);
+        assertThat(result.transfer().getCreatedBy()).isEqualTo("depocu");
+    }
+
+    @Test
+    @DisplayName("Yönetici olmayanın depo çıkışı onay kuyruğunda asılı kalmaz")
+    void stockOutHandoverDoesNotSitInTheApprovalQueue() {
+        // createTransfer, yönetici olmayan her transferi onay kuyruğuna koyuyor. Depo
+        // çıkışı hemen tamamlandığı için o satır kuyrukta kalsaydı yönetici onayladığında
+        // startTransfer tamamlanmış bir transferi başlatmaya çalışır, hata verir ve işlem
+        // geri sarıldığı için satır kuyruktan hiç düşmezdi.
+        loginAs("depocu", "STOCK_OUT");
+
+        var result = handoverService.handOver(request(3), "depocu");
+
+        assertThat(result.transfer().getApprovalStatus())
+                .as("onaylanacak bir şey yok: mal çıktı, kâğıt imzalandı")
+                .isEqualTo(TransferApprovalStatus.NONE);
+        assertThat(result.transfer().getApprovalNote()).isNull();
+        assertThat(transferService.getTransferApprovals(TransferApprovalStatus.PENDING))
+                .extracting(StockTransfer::getId)
+                .doesNotContain(result.transfer().getId());
+    }
+
+    @Test
+    @DisplayName("Stok giriş rolü depo çıkış makbuzu düzenleyemez")
+    void stockInUserCannotIssueADepotExit() {
+        // Stok girişi malı içeri alan roldür. Depodan mal çıkaran, stoğu anında düşüren
+        // ve karşılığında imzalı evrak üreten bu yol ona açık olmamalı.
+        loginAs("giriscisi", "STOCK_IN");
+
+        assertThatThrownBy(() -> handoverService.handOver(request(3), "giriscisi"))
+                .isInstanceOf(WarehouseManagementException.class)
+                .hasMessageContaining("stok çıkış");
+
+        assertThat(stockRepository.findById(stock.getId()).orElseThrow().getQuantity())
+                .as("reddedilen istek stoğa dokunmamalı")
+                .isEqualTo(40);
     }
 
     @Test

@@ -413,12 +413,16 @@ public class StockTransferServiceImpl implements StockTransferService {
 
     @Override
     public StockTransfer createServiceHandover(ServiceHandoverRequest request) {
-        // Admin-only at the controller as well; repeated here because this is the one path
-        // that may write a shipment with no carrier, and it should not become reachable by
-        // accident from anywhere else in the service layer.
-        if (!isCurrentUserAdmin()) {
+        // Yönetici ve stok çıkış rolü. Kapı controller'da da var; burada tekrarlanıyor çünkü
+        // taşıyıcısı olmayan bir sevkiyat yazan tek yol bu ve servis katmanının başka bir
+        // yerinden kazara çağrılabilir hâle gelmemeli.
+        //
+        // Stok çıkış rolünün burada olmasının sebebi rol adının kendisi: makbuz, mal depodan
+        // fiziken çıkarken tezgâhta imzalanıyor ve bunu yapan kişi çoğunlukla depo görevlisi.
+        if (!isCurrentUserAdmin() && !isCurrentUserStockOut()) {
             throw new WarehouseManagementException(ErrorCode.UNAUTHORIZED_ACTION,
-                    "Depo çıkış makbuzu yalnızca yönetici tarafından düzenlenebilir.");
+                    "Depo çıkış makbuzu yalnızca yönetici veya stok çıkış yetkisi olan "
+                            + "kullanıcı tarafından düzenlenebilir.");
         }
 
         LocalDateTime handedOverAt = request.getHandedOverAt() != null
@@ -467,7 +471,7 @@ public class StockTransferServiceImpl implements StockTransferService {
         // deduction and audit path as any other shipment — there is no second way for stock to
         // leave, and therefore no way for these goods to be deducted twice when the carrier is
         // filled in later.
-        StockTransfer created = createTransfer(transfer);
+        StockTransfer created = clearStartApprovalForHandover(createTransfer(transfer));
         return completeTransfer(created.getId(),
                 "Servise teslim edildi — taşıyıcı sonradan belirlenecek");
     }
@@ -1478,6 +1482,39 @@ public class StockTransferServiceImpl implements StockTransferService {
 
     private boolean isCurrentUserAdmin() {
         return RoleName.ADMIN.name().equalsIgnoreCase(CurrentUser.getRole());
+    }
+
+    private boolean isCurrentUserStockOut() {
+        return RoleName.STOCK_OUT.name().equalsIgnoreCase(CurrentUser.getRole());
+    }
+
+    /**
+     * Depo çıkışında onay kuyruğunda işi olmayan satırı kuyruktan çıkarır.
+     *
+     * <p>{@code createTransfer}, yönetici olmayan her transferi onay kuyruğuna koyuyor
+     * (approvalStatus = PENDING, not = "START_REQUEST"): normal bir sevkiyatta mal henüz
+     * depoda durur ve stoğun düşmesi yöneticinin onayına bağlıdır.</p>
+     *
+     * <p>Depo çıkışında onaylanacak bir şey yok. Kâğıt, mal binadan çıkarken imzalanıyor;
+     * bu yüzden çağıran metot hemen ardından {@code completeTransfer} çağırıp stoğu düşüyor.
+     * Satır kuyrukta bırakılsaydı yönetici onayladığında {@code approveTransferStart}
+     * {@code startTransfer}'i çağırır, tamamlanmış bir transferi başlatmaya çalışıp
+     * ONLY_PENDING_CAN_BE_STARTED ile patlardı — üstelik işlem geri sarıldığı için satır
+     * kuyruktan hiç düşmez, yönetici o kaydı hiçbir zaman temizleyemezdi.</p>
+     *
+     * <p>Denetim kaybolmuyor: {@code completeTransfer} içindeki {@code notifyAdminIfNonAdmin}
+     * yöneticiye bildirim düşürüyor ve işlem TRANSFER_CREATE / TRANSFER_COMPLETE olarak audit
+     * log'a yazılıyor. Değişen tek şey, olmuş bir işin onay bekliyormuş gibi görünmemesi.</p>
+     */
+    private StockTransfer clearStartApprovalForHandover(StockTransfer created) {
+        if (created.getApprovalStatus() != TransferApprovalStatus.PENDING) {
+            return created;
+        }
+        created.setApprovalStatus(TransferApprovalStatus.NONE);
+        created.setApprovalRequestedBy(null);
+        created.setApprovalRequestedAt(null);
+        created.setApprovalNote(null);
+        return stockTransferRepository.save(created);
     }
 
     private void validateSufficientAvailableStock(Stock stock, Integer quantity) {

@@ -3221,8 +3221,13 @@ const Stock = () => {
               )}
               {/* Kendi düğmesi. Açılır menünün içindeyken günlük bir işlem iki tıka ve bir
                   keşfe bağlıydı; bu ekranda depodan mal çıkarmanın iki yolundan biri ve
-                  diğeriyle aynı görünürlüğü hak ediyor. */}
-              {canTransfer && role === 'ADMIN' && (
+                  diğeriyle aynı görünürlüğü hak ediyor.
+
+                  Yönetici ve stok çıkış rolü görüyor: kâğıt, mal binadan çıkarken tezgâhta
+                  imzalanıyor ve bunu yapan kişi çoğunlukla depo görevlisi. Stok giriş rolü
+                  görmüyor; sunucu da aynı iki rolü kabul ediyor (service-handover uç noktası),
+                  burası yalnızca aynı kuralın ekrandaki karşılığı. */}
+              {(role === 'ADMIN' || role === 'STOCK_OUT') && (
                 <button
                   className="btn btn-outline-primary"
                   onClick={() => setShowHandoverModal(true)}

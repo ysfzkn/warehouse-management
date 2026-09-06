@@ -70,6 +70,10 @@ public class DeliveryReceiptServiceImpl implements DeliveryReceiptService {
     private static final int MAX_ATTACHMENTS = 10;
     /** Blank rows printed under the items so the form can be completed by hand. */
     private static final int MIN_TABLE_ROWS = 12;
+    private static final String PACKAGED_LETTERHEAD = "/receipt/company-logo.png";
+
+    /** {@link #packagedLetterheadDataUri()} için tembel önbellek; "" = dosya yok. */
+    private volatile String packagedLetterhead;
 
     private final DeliveryReceiptRepository receiptRepository;
     private final DeliveryReceiptAttachmentRepository attachmentRepository;
@@ -546,13 +550,23 @@ public class DeliveryReceiptServiceImpl implements DeliveryReceiptService {
      * The logo is inlined rather than linked. A {@code <img src="https://...">} would make
      * every PDF render an outbound HTTP request from the server, which is both a failure
      * mode (slow or unreachable host stalls the download) and an SSRF-shaped hole.
+     *
+     * <p>Kaynak sırası: {@code receipt_logo} ayarı, yoksa uygulamayla birlikte paketlenen
+     * antet. Makbuz bilerek {@code site_logo}'yu okumuyor — o ayar vitrinin logosu ve
+     * vitrin tasarımı değiştiğinde evrakın anteti kendiliğinden değişmemeli. Antetli
+     * kâğıt paketin içinde geldiği için makbuz, hiçbir ayar girilmemiş bir kurulumda da
+     * doğru logoyla basılıyor.</p>
      */
     private String logoDataUri() {
-        String path = siteSettingService.getSetting("site_logo");
-        if (path == null || path.isBlank()) return null;
+        String path = siteSettingService.getSetting("receipt_logo");
+        if (path == null || path.isBlank()) {
+            return packagedLetterheadDataUri();
+        }
         try (InputStream in = photoStorageService.openPhotoStream(path)) {
             byte[] bytes = in.readAllBytes();
-            if (bytes.length == 0 || bytes.length > 2 * 1024 * 1024) return null;
+            if (bytes.length == 0 || bytes.length > 2 * 1024 * 1024) {
+                return packagedLetterheadDataUri();
+            }
             // The media type comes from the bytes, not the file name. Logos uploaded
             // before content validation existed are commonly stored under a .png path
             // with JPEG content — the browser sniffs its way through that, but a
@@ -560,8 +574,8 @@ public class DeliveryReceiptServiceImpl implements DeliveryReceiptService {
             // the failure is silent: a receipt with no letterhead.
             UploadValidator.ImageType type = UploadValidator.detectImageType(bytes);
             if (type == null) {
-                log.warn("Makbuz logosu tanınmayan formatta ({}), atlanıyor.", path);
-                return null;
+                log.warn("Makbuz logosu tanınmayan formatta ({}), pakete düşülüyor.", path);
+                return packagedLetterheadDataUri();
             }
             // PDFBox can only embed JPEG and PNG. A WebP logo renders perfectly on the
             // site and then leaves the receipt's letterhead blank — again with no error.
@@ -569,16 +583,43 @@ public class DeliveryReceiptServiceImpl implements DeliveryReceiptService {
             // of dropping the logo.
             if (type != UploadValidator.ImageType.JPEG && type != UploadValidator.ImageType.PNG) {
                 bytes = transcodeToPng(bytes, path);
-                if (bytes == null) return null;
+                if (bytes == null) return packagedLetterheadDataUri();
                 type = UploadValidator.ImageType.PNG;
             }
             return "data:" + type.contentType + ";base64," + Base64.getEncoder().encodeToString(bytes);
         } catch (Exception e) {
             // A missing logo must not stop a delivery: the header falls back to the
-            // company name in text.
+            // packaged letterhead, and failing that to the company name in text.
             log.warn("Makbuz logosu okunamadı ({}): {}", path, e.getMessage());
-            return null;
+            return packagedLetterheadDataUri();
         }
+    }
+
+    /**
+     * Uygulamayla birlikte gelen antet ({@code classpath:receipt/company-logo.png}).
+     *
+     * <p>Her makbuzda diskten okunup base64'e çevrilmemesi için ilk okumada saklanıyor;
+     * dosya jar'ın içinde, çalışırken değişmesi mümkün değil. Dosya hiç yoksa {@code null}
+     * dönüyor ve şablon firma adını yazıya döküyor — bu yol makbuz basımını durdurmamalı.</p>
+     */
+    private String packagedLetterheadDataUri() {
+        String cached = packagedLetterhead;
+        if (cached != null) {
+            return cached.isEmpty() ? null : cached;
+        }
+        String value = "";
+        try (InputStream in = getClass().getResourceAsStream(PACKAGED_LETTERHEAD)) {
+            if (in == null) {
+                log.warn("Paketlenmiş makbuz anteti bulunamadı: {}", PACKAGED_LETTERHEAD);
+            } else {
+                byte[] bytes = in.readAllBytes();
+                value = "data:image/png;base64," + Base64.getEncoder().encodeToString(bytes);
+            }
+        } catch (Exception e) {
+            log.warn("Paketlenmiş makbuz anteti okunamadı: {}", e.getMessage());
+        }
+        packagedLetterhead = value;
+        return value.isEmpty() ? null : value;
     }
 
     /**
@@ -586,17 +627,26 @@ public class DeliveryReceiptServiceImpl implements DeliveryReceiptService {
      *
      * <p>The blank rows are there so the form can be completed by hand, and twelve of them
      * fill an A4 page to the millimetre — which means anything else added to the sheet pushes
-     * the closing paragraph onto a second, near-empty page. The return notice is the one thing
-     * that does, so it costs two filler rows rather than a page. The figure is empirical:
-     * openhtmltopdf's box heights do not match the browser's, so change it only against a
-     * rendered PDF, never by arithmetic.</p>
+     * the closing paragraph onto a second, near-empty page. Two things add to the sheet, and
+     * each costs two filler rows rather than a page: the return notice, and the depot exit's
+     * hand-filled plate / TC line under the receiving party. The figures are empirical:
+     * openhtmltopdf's box heights do not match the browser's, so change them only against a
+     * rendered PDF, never by arithmetic — and check the single-item receipt, which is the
+     * tallest one because it has the most filler rows.</p>
      */
     private int minTableRows(DeliveryReceipt receipt) {
         StockTransfer transfer = receipt.getTransfer();
         boolean hasReturn = transfer != null
                 && transfer.getReturnedQuantity() != null
                 && transfer.getReturnedQuantity() > 0;
-        return hasReturn ? MIN_TABLE_ROWS - 2 : MIN_TABLE_ROWS;
+        int rows = MIN_TABLE_ROWS;
+        if (hasReturn) {
+            rows -= 2;
+        }
+        if (receipt.getKind() == DeliveryReceiptKind.SERVICE_HANDOVER) {
+            rows -= 2;
+        }
+        return rows;
     }
 
     /** Re-encodes an image PDFBox cannot embed (WebP, GIF) as PNG. Null if undecodable. */
