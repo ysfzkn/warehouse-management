@@ -30,7 +30,7 @@ public interface StockTransferService {
 
     StockTransfer getTransferByIdOrThrow(Long id);
 
-    List<StockTransfer> getTransfersByWarehouse(Long warehouseId);
+    List<StockTransfer> getTransfersByWarehouse(Long warehouseId, int limit);
 
     List<StockTransfer> getTransfersByProduct(Long productId);
 

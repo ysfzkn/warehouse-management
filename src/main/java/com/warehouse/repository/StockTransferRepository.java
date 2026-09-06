@@ -117,15 +117,19 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, Lo
 
     long countByApprovalStatus(TransferApprovalStatus status);
 
-    @Query("SELECT DISTINCT st FROM StockTransfer st " +
-           "LEFT JOIN FETCH st.sourceWarehouse " +
-           "LEFT JOIN FETCH st.destinationWarehouse " +
-           "LEFT JOIN FETCH st.product " +
-           "LEFT JOIN FETCH st.items items " +
-           "LEFT JOIN FETCH items.product " +
+    /**
+     * Bir depoya giren veya çıkan sevkiyatların kimlikleri, en yenisi başta.
+     *
+     * <p>Eski hâli koleksiyonu da fetch ederek tüm sevkiyatları tek listede döndürüyordu.
+     * Otuz bin sevkiyatlık veritabanında bir depo için 3.750 kayıt, kalemleriyle birlikte
+     * 13 MB gövde ve 16 saniye demekti — üstelik istek boyunca bir sunucu iş parçacığı
+     * bloke oluyordu. Çağıran taraf artık kimlikleri sınırlı sayıda alıp
+     * {@link #findAllWithRelationsByIdIn} ile yüklüyor.</p>
+     */
+    @Query("SELECT st.id FROM StockTransfer st " +
            "WHERE st.sourceWarehouse = :warehouse OR st.destinationWarehouse = :warehouse " +
            "ORDER BY st.transferDate DESC")
-    List<StockTransfer> findByWarehouse(@Param("warehouse") Warehouse warehouse);
+    List<Long> findIdsByWarehouse(@Param("warehouse") Warehouse warehouse, Pageable pageable);
 
     @Query("SELECT DISTINCT st FROM StockTransfer st " +
            "LEFT JOIN FETCH st.sourceWarehouse " +
@@ -194,9 +198,22 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, Lo
            "ORDER BY st.transferDate DESC")
     List<StockTransfer> findAllByCreatedByOrderByTransferDateDesc(@Param("createdBy") String createdBy);
 
-    @EntityGraph(value = StockTransfer.GRAPH_WITH_RELATIONS, type = EntityGraph.EntityGraphType.LOAD)
-    @Query("""
-        SELECT st FROM StockTransfer st
+    /**
+     * Filtrelere uyan sevkiyatların yalnızca kimlikleri, sayfalanmış.
+     *
+     * <p>Burada bilerek koleksiyon çekilmiyor. Sorgu {@code items} koleksiyonunu da fetch
+     * ettiğinde Hibernate LIMIT/OFFSET kullanamıyor: bir satır JOIN sonucunda birden çok
+     * satıra dönüştüğü için SQL'de "20 kayıt" demek "20 sevkiyat" demek değil. Hibernate bu
+     * durumda tüm sonucu belleğe çekip sayfalamayı Java'da yapıyor ve bunu yalnızca bir
+     * uyarı satırıyla bildiriyor (HHH90003004). Otuz bin sevkiyatlık bir veritabanında tek
+     * sayfa isteği 68 saniye sürüyordu; kayıt sayısı arttıkça doğrusal olarak kötüleşiyor.</p>
+     *
+     * <p>İki aşamalı çözüm: burada gerçek LIMIT/OFFSET ile sayfanın kimlikleri alınıyor,
+     * ardından {@link #findAllWithRelationsByIdIn} o yirmi kimliği ilişkileriyle birlikte
+     * tek sorguda yüklüyor. Sonuç aynı, N+1 yok, bellekte sayfalama yok.</p>
+     */
+    @Query(value = """
+        SELECT st.id FROM StockTransfer st
         LEFT JOIN st.product directProduct
         WHERE (:createdBy IS NULL OR st.createdBy = :createdBy)
           AND (:status IS NULL OR st.status = :status)
@@ -253,8 +270,67 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, Lo
           AND st.createdAt >= :createdAtFrom
           AND st.createdAt <= :createdAtTo
         ORDER BY st.transferDate DESC
+    """,
+           countQuery = """
+        SELECT COUNT(st.id) FROM StockTransfer st
+        LEFT JOIN st.product directProduct
+        WHERE (:createdBy IS NULL OR st.createdBy = :createdBy)
+          AND (:status IS NULL OR st.status = :status)
+          AND (:transferType IS NULL OR st.transferType = :transferType)
+          AND (:sourceWarehouseId IS NULL OR st.sourceWarehouse.id = :sourceWarehouseId)
+          AND (:destinationWarehouseId IS NULL OR st.destinationWarehouse.id = :destinationWarehouseId)
+          AND (st.transferDate >= COALESCE(:startDate, st.transferDate))
+          AND (st.transferDate <= COALESCE(:endDate, st.transferDate))
+          AND (:driverProvided = false OR COALESCE(st.driverSearch, '') LIKE :driverPattern)
+          AND (
+                :productNameProvided = false
+                OR LOWER(COALESCE(directProduct.name, '')) LIKE :productNamePattern
+                OR EXISTS (
+                    SELECT 1 FROM StockTransferItem item
+                    WHERE item.transfer = st
+                      AND LOWER(COALESCE(item.product.name, '')) LIKE :productNamePattern
+                )
+          )
+          AND (
+                :skuProvided = false
+                OR LOWER(COALESCE(st.product.sku, '')) LIKE :skuPattern
+                OR EXISTS (
+                    SELECT 1 FROM StockTransferItem itemSku
+                    WHERE itemSku.transfer = st
+                      AND LOWER(COALESCE(itemSku.product.sku, '')) LIKE :skuPattern
+                )
+          )
+          AND (
+                :notesProvided = false
+                OR LOWER(COALESCE(st.notes, '')) LIKE :notesPattern
+          )
+          AND (
+                :customerProvided = false
+                OR COALESCE(st.customerSearch, '') LIKE :customerNamePattern
+                OR COALESCE(st.customerSearch, '') LIKE :customerPhonePattern
+                OR COALESCE(st.driverSearch, '') LIKE :customerNamePattern
+                OR LOWER(COALESCE(st.createdBy, '')) LIKE :customerNamePattern
+                OR EXISTS (
+                    SELECT 1 FROM StockTransferItem itemCustomer
+                    WHERE itemCustomer.transfer = st
+                      AND itemCustomer.stockId IS NOT NULL
+                      AND EXISTS (
+                          SELECT 1 FROM Stock s
+                          WHERE s.id = itemCustomer.stockId
+                            AND (
+                                COALESCE(s.customerSearch, '') LIKE :customerNamePattern
+                                OR COALESCE(s.customerSearch, '') LIKE :customerPhonePattern
+                            )
+                      )
+                )
+          )
+          AND st.transferDate >= :transferDateFrom
+          AND st.transferDate <= :transferDateTo
+          AND st.createdAt >= :createdAtFrom
+          AND st.createdAt <= :createdAtTo
     """)
-    Page<StockTransfer> findByFilters(@Param("createdBy") String createdBy,
+
+    Page<Long> findIdsByFilters(@Param("createdBy") String createdBy,
                                       @Param("status") TransferStatus status,
                                       @Param("transferType") TransferType transferType,
                                       @Param("sourceWarehouseId") Long sourceWarehouseId,
@@ -277,6 +353,17 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, Lo
                                       @Param("createdAtFrom") java.time.LocalDateTime createdAtFrom,
                                       @Param("createdAtTo") java.time.LocalDateTime createdAtTo,
                                       Pageable pageable);
+
+    /**
+     * Verilen kimliklerin ilişkileriyle birlikte yüklenmesi.
+     *
+     * <p>{@code IN} listesi sıralamayı korumuyor; çağıran taraf kimlik sırasına göre yeniden
+     * diziyor. Sıralama sorgunun kendisine bırakılsaydı, sayfa içindeki sıra sessizce
+     * değişirdi.</p>
+     */
+    @EntityGraph(value = StockTransfer.GRAPH_WITH_RELATIONS, type = EntityGraph.EntityGraphType.LOAD)
+    @Query("SELECT DISTINCT st FROM StockTransfer st WHERE st.id IN :ids")
+    List<StockTransfer> findAllWithRelationsByIdIn(@Param("ids") List<Long> ids);
 
     @Query("""
         SELECT st.status AS status, COUNT(DISTINCT st.id) AS count FROM StockTransfer st

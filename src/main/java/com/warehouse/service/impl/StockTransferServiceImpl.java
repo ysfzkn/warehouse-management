@@ -141,7 +141,7 @@ public class StockTransferServiceImpl implements StockTransferService {
         LocalDateTime transferDateTo = filter != null && filter.getTransferDateTo() != null ? filter.getTransferDateTo() : LocalDateTime.of(2099, 12, 31, 23, 59, 59);
         LocalDateTime createdAtFrom = filter != null && filter.getCreatedAtFrom() != null ? filter.getCreatedAtFrom() : LocalDateTime.of(1970, 1, 1, 0, 0);
         LocalDateTime createdAtTo = filter != null && filter.getCreatedAtTo() != null ? filter.getCreatedAtTo() : LocalDateTime.of(2099, 12, 31, 23, 59, 59);
-        return stockTransferRepository.findByFilters(
+        return loadPage(stockTransferRepository.findIdsByFilters(
                 null,
                 params.status,
                 params.transferType,
@@ -164,7 +164,27 @@ public class StockTransferServiceImpl implements StockTransferService {
                 transferDateTo,
                 createdAtFrom,
                 createdAtTo,
-                pageable);
+                pageable), pageable);
+    }
+
+    /**
+     * Kimlik sayfasını ilişkileriyle birlikte gerçek sayfaya çevirir.
+     *
+     * <p>Sayfalamanın neden iki aşamalı yapıldığı {@code findIdsByFilters} üzerinde
+     * anlatılıyor. Burada dikkat edilecek tek şey sıra: {@code IN} yan tümcesi kimlik
+     * sırasını korumuyor, veritabanı satırları istediği düzende döndürebiliyor. Sıralama
+     * ilk aşamada (transferDate DESC) belirlendiği için sonuç o sıraya göre yeniden
+     * diziliyor; yoksa liste ekranındaki sıra sessizce bozulurdu.</p>
+     */
+    private Page<StockTransfer> loadPage(Page<Long> idPage, Pageable pageable) {
+        List<Long> ids = idPage.getContent();
+        if (ids.isEmpty()) {
+            return new org.springframework.data.domain.PageImpl<>(List.of(), pageable, idPage.getTotalElements());
+        }
+        Map<Long, StockTransfer> byId = stockTransferRepository.findAllWithRelationsByIdIn(ids).stream()
+                .collect(Collectors.toMap(StockTransfer::getId, t -> t, (a, b) -> a));
+        List<StockTransfer> ordered = ids.stream().map(byId::get).filter(Objects::nonNull).toList();
+        return new org.springframework.data.domain.PageImpl<>(ordered, pageable, idPage.getTotalElements());
     }
 
     @Override
@@ -187,10 +207,19 @@ public class StockTransferServiceImpl implements StockTransferService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<StockTransfer> getTransfersByWarehouse(Long warehouseId) {
-        logger.debug("Fetching transfers by warehouse id: {}", warehouseId);
+    public List<StockTransfer> getTransfersByWarehouse(Long warehouseId, int limit) {
+        logger.debug("Fetching transfers by warehouse id: {} (limit {})", warehouseId, limit);
         Warehouse warehouse = findWarehouseOrThrow(warehouseId);
-        return stockTransferRepository.findByWarehouse(warehouse);
+        // Kimlikler önce, ilişkiler sonra: koleksiyonu da fetch eden tek bir sorguda
+        // LIMIT çalışmıyor (bkz. findIdsByFilters üzerindeki not).
+        List<Long> ids = stockTransferRepository.findIdsByWarehouse(
+                warehouse, org.springframework.data.domain.PageRequest.of(0, limit));
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, StockTransfer> byId = stockTransferRepository.findAllWithRelationsByIdIn(ids).stream()
+                .collect(Collectors.toMap(StockTransfer::getId, t -> t, (a, b) -> a));
+        return ids.stream().map(byId::get).filter(Objects::nonNull).toList();
     }
 
     @Override
@@ -226,7 +255,7 @@ public class StockTransferServiceImpl implements StockTransferService {
         LocalDateTime transferDateTo = filter != null && filter.getTransferDateTo() != null ? filter.getTransferDateTo() : LocalDateTime.of(2099, 12, 31, 23, 59, 59);
         LocalDateTime createdAtFrom = filter != null && filter.getCreatedAtFrom() != null ? filter.getCreatedAtFrom() : LocalDateTime.of(1970, 1, 1, 0, 0);
         LocalDateTime createdAtTo = filter != null && filter.getCreatedAtTo() != null ? filter.getCreatedAtTo() : LocalDateTime.of(2099, 12, 31, 23, 59, 59);
-        return stockTransferRepository.findByFilters(
+        return loadPage(stockTransferRepository.findIdsByFilters(
                 username,
                 params.status,
                 params.transferType,
@@ -249,7 +278,7 @@ public class StockTransferServiceImpl implements StockTransferService {
                 transferDateTo,
                 createdAtFrom,
                 createdAtTo,
-                pageable);
+                pageable), pageable);
     }
 
     @Override

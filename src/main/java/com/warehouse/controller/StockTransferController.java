@@ -109,8 +109,15 @@ public class StockTransferController {
     }
 
     @GetMapping("/warehouse/{warehouseId}")
-    public ResponseEntity<List<StockTransferDto>> getTransfersByWarehouse(@PathVariable Long warehouseId) {
-        List<StockTransfer> transfers = stockTransferService.getTransfersByWarehouse(warehouseId);
+    public ResponseEntity<List<StockTransferDto>> getTransfersByWarehouse(
+            @PathVariable Long warehouseId,
+            @RequestParam(required = false, defaultValue = "200") int limit) {
+        // Yanıt biçimi değişmiyor (yine düz dizi), yalnızca sınır geliyor: sınırsız hâli
+        // tek istekte 13 MB gövde üretip on altı saniye boyunca bir iş parçacığını
+        // bloke ediyordu. En yeni kayıtlar başta; daha fazlası gerekiyorsa sayfalanmış
+        // /api/admin/stock-transfers ucu var.
+        int safeLimit = Math.max(1, Math.min(limit, 1000));
+        List<StockTransfer> transfers = stockTransferService.getTransfersByWarehouse(warehouseId, safeLimit);
         List<StockTransferDto> dtos = transferMapper.toDtoList(transfers);
         return ResponseEntity.ok(dtos);
     }
