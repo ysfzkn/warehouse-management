@@ -38,6 +38,30 @@ public interface CategoryRepository extends JpaRepository<Category, Long> {
     @Query("SELECT p.category.id AS categoryId, COUNT(p.id) AS productCount FROM Product p WHERE p.category IS NOT NULL GROUP BY p.category.id")
     List<CategoryProductCount> fetchCategoryProductCounts();
 
+    /**
+     * Vitrinde görünen ürünlerin kategori bazında sayısı.
+     *
+     * <p>Yukarıdaki sayımdan ayrı durmasının sebebi, müşteriye gösterilen rakamın
+     * tıkladığında karşısına çıkacak listeyle birebir aynı olması gerektiği. Mağaza
+     * listesi {@code ProductRepository.findActiveByFilters} ile geliyor ve oradaki
+     * görünürlük kuralı isActive + ecommerceVisible; yönetim panelindeki sayım ise
+     * pasif ve vitrine kapalı ürünleri de kapsıyor. İkisi karıştırılırsa çipte "12"
+     * yazan kategori üç ürünlük bir sayfa açar.</p>
+     *
+     * <p>Sayı doğrudan o kategoriye bağlı ürünleri veriyor; bir üst kategorinin toplamı
+     * çağıran tarafta çocuklarınkiyle toplanarak bulunuyor, çünkü mağaza listesi de üst
+     * kategoriye tıklandığında alt kategori ürünlerini gösteriyor.</p>
+     */
+    @Query("""
+        SELECT p.category.id AS categoryId, COUNT(p.id) AS productCount
+          FROM Product p
+         WHERE p.category IS NOT NULL
+           AND p.isActive = true
+           AND p.ecommerceVisible = true
+         GROUP BY p.category.id
+    """)
+    List<CategoryProductCount> fetchStorefrontCategoryProductCounts();
+
     @Query("SELECT c FROM Category c JOIN FETCH c.parent WHERE c.parent.id IN :parentIds ORDER BY c.parent.id, c.name")
     List<Category> findByParentIdIn(@org.springframework.data.repository.query.Param("parentIds") Collection<Long> parentIds);
 

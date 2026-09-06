@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
 import axios from 'axios';
 import HeroBanner from '../../components/store/HeroBanner';
@@ -13,8 +13,27 @@ import {
   buildHomeLocalKeywords,
   getLocalCity,
 } from '../../utils/seo';
-import { FiShoppingBag, FiArrowRight, FiStar, FiZap, FiTrendingUp, FiPackage, FiClock } from 'react-icons/fi';
+import {
+  FiShoppingBag,
+  FiArrowRight,
+  FiStar,
+  FiZap,
+  FiTrendingUp,
+  FiPackage,
+  FiClock,
+  FiChevronDown,
+  FiChevronUp,
+} from 'react-icons/fi';
 import { getRecentlyViewedIds } from '../../utils/recentlyViewed';
+
+/**
+ * İlk anda kaç kategori çipi gösterilecek.
+ *
+ * Otuz küsur kategorinin tamamı basılınca blok dört satır tutuyor, "Öne Çıkan Setler"i
+ * ekranın altına itiyor ve hiçbir çip diğerinden ayrılmıyordu — filtre kılığında bir menü.
+ * On tane bir satırda duruyor; gerisi düğmenin arkasında, tek tıkla ulaşılabilir.
+ */
+const CATEGORY_CHIP_LIMIT = 10;
 
 export default function HomePage() {
   const { cart } = useOutletContext();
@@ -26,6 +45,7 @@ export default function HomePage() {
   const [sets, setSets] = useState([]);
   const [categories, setCategories] = useState([]);
   const [recentlyViewed, setRecentlyViewed] = useState([]);
+  const [showAllCategories, setShowAllCategories] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -68,6 +88,31 @@ export default function HomePage() {
       .then((res) => setRecentlyViewed(res.data || []))
       .catch(() => setRecentlyViewed([]));
   }, []);
+
+  /**
+   * Çiplerin sırası.
+   *
+   * Sunucu kategorileri sortOrder, ardından ada göre gönderiyor. Kimse sıralamayı elle
+   * kurmadıysa — yani her kategorinin sortOrder'ı 0 ise — bu sıra düz alfabetik oluyor ve
+   * ilk satırı "Ankastre Fırın" gibi rastgele bir kategori kapıyor. O durumda ürünü çok
+   * olanı öne alıyoruz: hiç ürünü olmayan kategori de kendiliğinden dibe iniyor.
+   *
+   * Yönetici tek bir kategoriye sıra numarası verdiği anda sunucunun sırası olduğu gibi
+   * korunuyor; elle kurulmuş bir sıralamayı ürün sayısıyla ezmek, ayarı sessizce
+   * çalışmıyormuş gibi gösterirdi.
+   */
+  const orderedCategories = useMemo(() => {
+    const curated = categories.some((cat) => (cat.sortOrder || 0) !== 0);
+    if (curated) return categories;
+    return [...categories].sort(
+      (a, b) =>
+        (b.productCount || 0) - (a.productCount || 0) || (a.name || '').localeCompare(b.name || '', 'tr')
+    );
+  }, [categories]);
+
+  const visibleCategories = showAllCategories
+    ? orderedCategories
+    : orderedCategories.slice(0, CATEGORY_CHIP_LIMIT);
 
   const handleAddToCart = async (id) => {
     try {
@@ -149,18 +194,39 @@ export default function HomePage() {
       )}
 
       {/* Categories — Compact chips */}
-      {categories.length > 0 && (
+      {orderedCategories.length > 0 && (
         <section className="store-section">
           <div className="container">
-            <div className="d-flex flex-wrap gap-2 justify-content-center">
+            <div className="store-cat-chips">
               <Link to="/kategori/tumu" className="store-cat-chip store-cat-chip-all">
                 <FiShoppingBag size={15} /> Tüm Ürünler
               </Link>
-              {categories.map((cat) => (
+              {visibleCategories.map((cat) => (
                 <Link key={cat.id} to={`/kategori/${cat.slug}`} className="store-cat-chip">
                   {cat.name}
+                  {/* Sayı yoksa rozet de yok: "0" yazan bir çip, boş bir sayfaya
+                      götürdüğünü söylemekten başka bir şey yapmıyor. */}
+                  {cat.productCount > 0 && <span className="store-cat-chip-count">{cat.productCount}</span>}
                 </Link>
               ))}
+              {orderedCategories.length > CATEGORY_CHIP_LIMIT && (
+                <button
+                  type="button"
+                  className="store-cat-chip store-cat-chip-more"
+                  onClick={() => setShowAllCategories((open) => !open)}
+                  aria-expanded={showAllCategories}
+                >
+                  {showAllCategories ? (
+                    <>
+                      Daha az <FiChevronUp size={14} />
+                    </>
+                  ) : (
+                    <>
+                      +{orderedCategories.length - CATEGORY_CHIP_LIMIT} kategori <FiChevronDown size={14} />
+                    </>
+                  )}
+                </button>
+              )}
             </div>
           </div>
         </section>

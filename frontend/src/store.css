@@ -198,6 +198,56 @@
 }
 
 /* Category Chips */
+
+/* Çip satırı.
+   Ortalanmış sarma her satıra farklı bir sol kenar veriyordu; göz aşağı doğru tarayacak
+   bir sütun bulamıyor ve otuz küsur çip bir kelime bulutuna dönüşüyordu. Sola yaslı. */
+.store-cat-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-start;
+}
+
+/* "Daha fazla" düğmesi çiplerle aynı biçimde ama kesikli çerçeveli: bir kategoriye değil,
+   listenin geri kalanına götürüyor ve bu ayrımın görünür olması gerekiyor. */
+.store-cat-chip-more {
+  background: transparent;
+  border-style: dashed;
+  font-family: inherit;
+  cursor: pointer;
+}
+.store-cat-chip-more:hover {
+  background: var(--store-primary, #2563eb);
+  border-style: solid;
+}
+
+/* Dar ekranda sarmak yerine tek satır yatay kaydırma: on çip telefonda dört satıra
+   çıkıp sayfanın ilk ekranını yiyordu. Satır kabın içinde kaydığı için son çip sağ
+   kenarda yarım kalıyor — kaydırılabildiğini söyleyen en ucuz işaret.
+
+   Satırı ekran kenarına taşırmak (negatif margin) daha şık dururdu ama kabın yatay
+   dolgusu temaya göre değiştiğinden çipler hero kartıyla hizasını kaybediyordu;
+   hizasızlık, kazanılan birkaç pikselden daha çok göze batıyor. */
+@media (max-width: 767.98px) {
+  .store-cat-chips {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    /* Çipin hover'daki 2px yukarı kayması kaydırma kutusunda kırpılmasın. */
+    padding-bottom: 6px;
+  }
+  .store-cat-chips::-webkit-scrollbar {
+    display: none;
+  }
+  .store-cat-chips > * {
+    flex: 0 0 auto;
+    scroll-snap-align: start;
+  }
+}
+
 .store-cat-chip {
   display: inline-flex;
   align-items: center;
