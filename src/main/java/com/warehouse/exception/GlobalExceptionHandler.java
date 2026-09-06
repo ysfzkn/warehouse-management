@@ -257,6 +257,40 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(errorResponse, HttpStatus.FORBIDDEN);
     }
 
+    /**
+     * İstemcinin yanlış yazdığı istekler: eksik zorunlu parametre, sayı beklenen yerde
+     * metin, tanınmayan sıralama alanı, okunamayan gövde.
+     *
+     * <p>Bunlar catch-all'a düşünce 500 dönüyordu. İki ayrı zararı vardı. Birincisi, çağıran
+     * tarafa yalan söylemesi: "Beklenmeyen bir hata oluştu" diyen bir 500, aslında isteği
+     * düzeltmesi gereken istemciye sorunun sunucuda olduğunu söylüyor. İkincisi ve daha
+     * sinsisi, izlemeyi kirletmesi: {@code ?page=abc} yazan bir bot 500 üretebildiği sürece
+     * hata grafiği sürekli kırmızı kalıyor ve gerçek bir arıza o gürültünün içinde
+     * kayboluyor. Bu uygulamada tam olarak öyle oldu — gerçek bir üretim kesintisi, aynı
+     * grafikte aynı görünen onlarca istemci hatasının arasında fark edilmedi.</p>
+     *
+     * <p>Gövde bilerek ayrıntısız: hangi alanın tipinin tutmadığını yazmak, saldırgana
+     * modelin iç yapısını okutur.</p>
+     */
+    @ExceptionHandler({
+            org.springframework.web.bind.MissingServletRequestParameterException.class,
+            org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class,
+            org.springframework.http.converter.HttpMessageNotReadableException.class,
+            org.springframework.data.mapping.PropertyReferenceException.class
+    })
+    public ResponseEntity<ErrorResponse> handleBadRequest(Exception ex, HttpServletRequest request) {
+        ErrorResponse errorResponse = new ErrorResponse(
+                ErrorCode.VALIDATION_ERROR.getCode(),
+                HttpStatus.BAD_REQUEST.value(),
+                HttpStatus.BAD_REQUEST.name(),
+                "İstek geçersiz. Lütfen gönderilen parametreleri kontrol edin.",
+                request.getRequestURI()
+        );
+        logger.warn("Bad request at path={} : {}: {}", request.getRequestURI(),
+                ex.getClass().getSimpleName(), ex.getMessage());
+        return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGenericException(
             Exception ex, HttpServletRequest request) {

@@ -51,6 +51,12 @@ public class CartServiceImpl implements CartService {
 
     @Override
     public CartDto getCart(Long customerId, String sessionId) {
+        // Okuma isteği hata vermemeli: sahibi belli olmayan bir istek için sepet zaten
+        // boştur. Yazma yollarında (addItem vb.) aynı durum hata olarak dönüyor, çünkü
+        // orada kullanıcının bir beklentisi var ve sessizce kaybolmamalı.
+        if (customerId == null && (sessionId == null || sessionId.isBlank())) {
+            return emptyCart();
+        }
         Cart cart = findOrCreateCart(customerId, sessionId);
         return toCartDto(cart);
     }
@@ -147,6 +153,15 @@ public class CartServiceImpl implements CartService {
     }
 
     private Cart findOrCreateCart(Long customerId, String sessionId) {
+        // Ne oturum açmış müşteri ne de tarayıcı oturumu var: kimin olduğu belli olmayan
+        // bir sepet yazılamaz (carts.chk_cart_owner). Eskiden yine de INSERT deneniyor,
+        // veritabanı reddediyor ve istek her seferinde ERROR seviyesinde log bırakıp
+        // "veri bütünlüğü hatası" diye anlamsız bir mesajla dönüyordu. Oysa bu bir veri
+        // bütünlüğü sorunu değil, eksik istek başlığı.
+        if (customerId == null && (sessionId == null || sessionId.isBlank())) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                    "Sepet oturumu bulunamadı. Sayfayı yenileyip tekrar deneyin.");
+        }
         Cart cart = findCart(customerId, sessionId);
         if (cart == null) {
             cart = new Cart();
@@ -188,6 +203,24 @@ public class CartServiceImpl implements CartService {
             cartRepository.save(cart);
         }
         return toCartDtoWithCoupon(cart, coupon);
+    }
+
+    /**
+     * Henüz kimseye ait olmayan sepet: kaydı yok, kalemi yok, tutarı sıfır.
+     *
+     * <p>Kargo ücreti bile hesaplanmıyor — boş sepette gösterilecek bir kargo ücreti yok
+     * ve ayarları okumak bu yolda gereksiz iş demek.</p>
+     */
+    private CartDto emptyCart() {
+        return CartDto.builder()
+            .items(List.of())
+            .itemCount(0)
+            .subtotal(BigDecimal.ZERO)
+            .shippingCost(BigDecimal.ZERO)
+            .discountAmount(BigDecimal.ZERO)
+            .total(BigDecimal.ZERO)
+            .vatBreakdown(new java.util.LinkedHashMap<>())
+            .build();
     }
 
     private CartDto toCartDtoWithCoupon(Cart cart, Coupon coupon) {

@@ -99,7 +99,7 @@ public class AdminSalesDashboardController {
             LocalDateTime prevStart = startDate.minus(duration);
             LocalDateTime prevEnd = startDate;
 
-            Object[] prev = orderRepo.aggregateBetween(prevStart, prevEnd);
+            Object[] prev = firstRow(orderRepo.aggregateBetween(prevStart, prevEnd));
             long prevOrders = prev == null ? 0 : ((Number) prev[0]).longValue();
             BigDecimal prevRevenue = prev == null ? BigDecimal.ZERO : toAmount(prev[1]);
 
@@ -148,13 +148,23 @@ public class AdminSalesDashboardController {
         return ResponseEntity.ok(result);
     }
 
+    /**
+     * Tek satır dönen toplama sorgularının ilk satırı; sonuç boşsa {@code null}.
+     *
+     * <p>COUNT/SUM sorguları her zaman bir satır döndürür, ama sorgu değişip GROUP BY
+     * eklenirse boş da dönebilir; çağıran taraf zaten null'a hazır.</p>
+     */
+    private static Object[] firstRow(java.util.List<Object[]> rows) {
+        return rows == null || rows.isEmpty() ? null : rows.get(0);
+    }
+
     @GetMapping("/live")
     public ResponseEntity<Map<String, Object>> getLiveStats() {
         LocalDateTime todayStart = LocalDate.now().atStartOfDay();
         Map<String, Object> live = new LinkedHashMap<>();
 
         // Polled every 30s by the dashboard — must stay a single aggregate query.
-        Object[] today = orderRepo.aggregateBetween(todayStart, todayStart.plusDays(1));
+        Object[] today = firstRow(orderRepo.aggregateBetween(todayStart, todayStart.plusDays(1)));
         long todayCount = today == null ? 0 : ((Number) today[0]).longValue();
         BigDecimal todayRevenue = today == null ? BigDecimal.ZERO : toAmount(today[1]);
 

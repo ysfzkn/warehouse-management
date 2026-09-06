@@ -110,10 +110,18 @@ public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecific
            "WHERE o.createdAt >= :from GROUP BY o.status")
     List<Object[]> aggregateByStatusSince(@Param("from") LocalDateTime from);
 
-    /** {@code [orderCount, revenueSum]} for non-cancelled orders inside a half-open window. */
+    /**
+     * {@code [orderCount, revenueSum]} for non-cancelled orders inside a half-open window.
+     *
+     * <p>Dönüş tipi bilerek {@code List<Object[]>}. Doğrudan {@code Object[]} yazıldığında
+     * Spring Data bunu "sütunlardan oluşan tek satır" değil "satırlardan oluşan dizi" diye
+     * yorumluyor ve tek satırlık sonucu bir kat daha sarmalıyor: {@code sonuc[0]} beklenen
+     * sayı yerine iç dizinin kendisi oluyor, {@code (Number) sonuc[0]} de ClassCastException
+     * atıyor. Derleme sırasında hiçbir uyarı yok, hata yalnızca çalışırken çıkıyor.</p>
+     */
     @Query("SELECT COUNT(o), COALESCE(SUM(o.grandTotal), 0) FROM Order o " +
            "WHERE o.createdAt >= :from AND o.createdAt < :to AND o.status <> com.warehouse.enums.OrderStatus.CANCELLED")
-    Object[] aggregateBetween(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+    List<Object[]> aggregateBetween(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 
     /**
      * {@code [createdAt, grandTotal]} of non-cancelled orders since {@code from} — two scalar

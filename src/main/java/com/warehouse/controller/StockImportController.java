@@ -92,7 +92,9 @@ public class StockImportController {
                                                     @RequestHeader(value = "X-ADMIN-SECURITY-CODE", required = false) String adminSecurityCode) throws IOException {
         adminSecurityService.requireSecurityCodeForAdmin(adminSecurityCode);
         StockImportHistory history = historyRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Record not found: " + id));
+                .orElseThrow(() -> new com.warehouse.exception.WarehouseManagementException(
+                        com.warehouse.exception.ErrorCode.STOCK_NOT_FOUND,
+                        "İçe aktarım kaydı bulunamadı: " + id));
         
         // Delete the stored file if it exists
         Path storageDir = Path.of(importProperties.getStorageDir());
@@ -122,7 +124,9 @@ public class StockImportController {
         for (Long id : ids) {
             try {
                 StockImportHistory history = historyRepository.findById(id)
-                        .orElseThrow(() -> new IllegalArgumentException("Record not found: " + id));
+                        .orElseThrow(() -> new com.warehouse.exception.WarehouseManagementException(
+                        com.warehouse.exception.ErrorCode.STOCK_NOT_FOUND,
+                        "İçe aktarım kaydı bulunamadı: " + id));
                 
                 // Delete the stored file if it exists
                 Path filePath = storageDir.resolve(history.getStoredFilename());
@@ -158,7 +162,9 @@ public class StockImportController {
     @GetMapping("/{id}/file")
     public ResponseEntity<Resource> downloadFile(@PathVariable Long id) throws IOException {
         StockImportHistory history = historyRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Record not found: " + id));
+                .orElseThrow(() -> new com.warehouse.exception.WarehouseManagementException(
+                        com.warehouse.exception.ErrorCode.STOCK_NOT_FOUND,
+                        "İçe aktarım kaydı bulunamadı: " + id));
 
         String storageKey = history.getStoredFilename();
         if (storageKey == null || storageKey.isBlank()) {

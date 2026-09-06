@@ -94,6 +94,16 @@ public class StoreProductController {
         }
     }
 
+    /** Vitrindeki sıralama menüsünün ürettiği alanlar; başka bir değer varsayılana döner. */
+    private static final java.util.Set<String> ALLOWED_SORT_FIELDS =
+            java.util.Set.of("createdAt", "price", "name", "viewCount", "updatedAt");
+
+    /** Tek istekte dönebilecek en fazla ürün. Vitrin en çok 24 istiyor; buradaki pay geniş. */
+    private static final int MAX_PAGE_SIZE = 100;
+
+    /** Erişilebilir en yüksek sayfa. Bunun ötesi zaten boş; amaç offset taşmasını kesmek. */
+    private static final int MAX_PAGE = 10_000;
+
     @GetMapping
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<PagedResponse<StoreProductDto>> listProducts(
@@ -111,8 +121,25 @@ public class StoreProductController {
             @RequestParam(defaultValue = "desc") String sortDir,
             @RequestParam(required = false) String productType) {
 
-        Sort sort = sortDir.equalsIgnoreCase("asc") ? Sort.by(sortBy).ascending() : Sort.by(sortBy).descending();
-        Pageable pageable = PageRequest.of(page, size, sort);
+        // Bu uç nokta kimlik doğrulamasız. Üç parametre doğrudan sorguya gidiyordu:
+        //
+        //   size  — sınırsızdı. ?size=200000 tek istekte tüm katalog ürünlerini ilişkileriyle
+        //           birlikte belleğe çekiyordu; giriş yapmadan tekrarlanabilir bir yük.
+        //   page  — sınırsızdı. ?page=999999999 offset hesabında taşıp 500 üretiyordu.
+        //   sortBy— doğrudan Sort.by'a giriyordu. Var olmayan bir alan adı (?sortBy=;DROP)
+        //           PropertyReferenceException ile yine 500 demekti. SQL enjeksiyonu değil
+        //           (JPA alan adını doğruluyor) ama isteyen herkesin sunucu hatası
+        //           üretebilmesi ve bunun izlemeyi kirletmesi başlı başına sorun.
+        //
+        // Beyaz liste vitrindeki sıralama menüsünün gönderdiği değerlerden oluşuyor;
+        // tanınmayan bir değer hata değil, varsayılana dönüş — eski bağlantılar kırılmasın.
+        String sortField = ALLOWED_SORT_FIELDS.contains(sortBy) ? sortBy : "createdAt";
+        int safePage = Math.max(0, Math.min(page, MAX_PAGE));
+        int safeSize = Math.max(1, Math.min(size, MAX_PAGE_SIZE));
+
+        Sort sort = sortDir.equalsIgnoreCase("asc")
+                ? Sort.by(sortField).ascending() : Sort.by(sortField).descending();
+        Pageable pageable = PageRequest.of(safePage, safeSize, sort);
 
         // Optional product-type filter (e.g. ?productType=BUNDLE for sets only)
         ProductType typeFilter = null;
