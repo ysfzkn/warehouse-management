@@ -228,6 +228,74 @@ class ServiceHandoverTest {
     }
 
     @Test
+    @DisplayName("Çok kalemli makbuz taşar; her sayfa antetli ve sütun başlıklı basılır")
+    void overflowPagesKeepTheSameFormat() throws Exception {
+        // Bir sayfaya sığmayan makbuz kaçınılmaz. Kaçınılmaz olmayan, taşan sayfanın
+        // antetsiz ve sütun başlıksız bir kalem listesi olarak basılması: o kâğıt tek
+        // başına eline geçen kişiye hangi belgenin devamı olduğunu söylemez.
+        Category category = new Category();
+        category.setName("Taşma Kategori");
+        category.setSlug("tasma-" + System.nanoTime());
+        category = categoryRepository.save(category);
+
+        ServiceHandoverRequest request = request(1);
+        List<ServiceHandoverRequest.Item> lines = new java.util.ArrayList<>();
+        for (int i = 1; i <= 20; i++) {
+            Product line = new Product();
+            line.setName("Ankastre Set " + i + " — Fırın, Ocak ve Davlumbaz Üçlüsü");
+            line.setSku(String.format("TSM-%04d", i));
+            line.setSlug("tsm-" + i + "-" + System.nanoTime());
+            line.setCategory(category);
+            line = productRepository.save(line);
+
+            Stock available = new Stock();
+            available.setProduct(line);
+            available.setWarehouse(warehouse);
+            available.setQuantity(50);
+            stockRepository.save(available);
+
+            ServiceHandoverRequest.Item item = new ServiceHandoverRequest.Item();
+            item.setProductId(line.getId());
+            item.setQuantity(1);
+            lines.add(item);
+        }
+        request.setItems(lines);
+
+        var result = handoverService.handOver(request, "admin");
+        String receiptNo = result.receipt().getReceiptNo();
+
+        byte[] pdf = receiptService.renderPdf(result.transfer().getId(), "admin");
+        try (PDDocument document = PDDocument.load(new ByteArrayInputStream(pdf))) {
+            int pages = document.getNumberOfPages();
+            assertThat(pages).as("yirmi kalem tek sayfaya sığmaz").isGreaterThan(1);
+
+            for (int page = 1; page <= pages; page++) {
+                PDFTextStripper stripper = new PDFTextStripper();
+                stripper.setStartPage(page);
+                stripper.setEndPage(page);
+                String text = stripper.getText(document);
+
+                assertThat(text)
+                        .as("%d. sayfa antetsiz basılmış", page)
+                        .contains("DEPO ÇIKIŞ MAKBUZU")
+                        .contains(receiptNo);
+                // Kalem satırı taşıyan her sayfa sütun başlıklarını da taşımalı; son sayfa
+                // yalnızca imza bloğu olabilir, orada tablo hiç yok.
+                if (text.contains("TSM-")) {
+                    assertThat(text)
+                            .as("%d. sayfada kalemler sütun başlıksız", page)
+                            .contains("STOK KODU");
+                }
+            }
+
+            // İmza yalnızca bir kez: her sayfada tekrarlansaydı hangisinin ıslak imzalı
+            // asıl nüsha olduğu belirsizleşirdi.
+            String whole = new PDFTextStripper().getText(document);
+            assertThat(whole.split("TESLİM ALAN", -1).length - 1).isEqualTo(1);
+        }
+    }
+
+    @Test
     @DisplayName("Stok yetmiyorsa çıkış yapılamaz")
     void handoverRespectsAvailableStock() {
         assertThatThrownBy(() -> handoverService.handOver(request(999), "admin"))

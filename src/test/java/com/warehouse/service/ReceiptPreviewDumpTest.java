@@ -149,6 +149,67 @@ class ReceiptPreviewDumpTest {
         SecurityContextHolder.clearContext();
     }
 
+    /** Çok kalemli depo çıkışı: ikinci sayfanın anteti ve sütun başlıkları görülsün. */
+    @Test
+    void dumpOverflowPreview() throws Exception {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("yusuf", "pw",
+                        List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
+
+        installBranding();
+
+        Category category = new Category();
+        category.setName("Beyaz Eşya");
+        category.setSlug("beyaz-esya-tasma-" + System.nanoTime());
+        category = categoryRepository.save(category);
+
+        Warehouse warehouse = new Warehouse();
+        warehouse.setName("Merkez Depo — Kale Mah.");
+        warehouse.setLocation("Niğde");
+        warehouse = warehouseRepository.save(warehouse);
+
+        com.warehouse.dto.ServiceHandoverRequest request = new com.warehouse.dto.ServiceHandoverRequest();
+        request.setSourceWarehouseId(warehouse.getId());
+        request.setHandoverToName("Yıldız Kargo ve Nakliyat Ltd. Şti.");
+        request.setHandedOverBy("Mehmet Güneş");
+        request.setCustomerFullName("Işık Şahin Mobilya Ltd. Şti.");
+        request.setCustomerPhone("0553 999 33 03");
+        request.setCustomerAddress("Selçuk Mah. Dr. Sami Yağız Cad. No: 53, Merkez / NİĞDE");
+        request.setNotes("Tek seferde yirmi kalem; ikinci sayfaya taşıyor.");
+
+        java.util.List<com.warehouse.dto.ServiceHandoverRequest.Item> lines = new java.util.ArrayList<>();
+        for (int i = 1; i <= 20; i++) {
+            Product product = new Product();
+            product.setName("Ankastre Set " + i + " — Fırın, Ocak ve Davlumbaz Üçlüsü");
+            product.setSku(String.format("TSM-%04d", i));
+            product.setSlug("tsm-" + i + "-" + System.nanoTime());
+            product.setCategory(category);
+            product = productRepository.save(product);
+
+            com.warehouse.entity.Stock stock = new com.warehouse.entity.Stock();
+            stock.setProduct(product);
+            stock.setWarehouse(warehouse);
+            stock.setQuantity(50);
+            stockRepository.save(stock);
+
+            com.warehouse.dto.ServiceHandoverRequest.Item line =
+                    new com.warehouse.dto.ServiceHandoverRequest.Item();
+            line.setProductId(product.getId());
+            line.setQuantity(i);
+            lines.add(line);
+        }
+        request.setItems(lines);
+
+        var result = handoverService.handOver(request, "yusuf");
+
+        Path dir = Path.of(System.getProperty("receipt.dump"));
+        Files.createDirectories(dir);
+        byte[] pdf = receiptService.renderPdf(result.transfer().getId(), "yusuf");
+        Files.write(dir.resolve("depo-cikis-tasan.pdf"), pdf);
+        render(pdf, dir, "depo-cikis-tasan");
+        SecurityContextHolder.clearContext();
+    }
+
     /** The single-copy depot exit receipt, with the carrier still unknown. */
     @Test
     void dumpHandoverPreview() throws Exception {

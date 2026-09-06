@@ -41,6 +41,20 @@
         .sheet { page-break-after: always; }
         .sheet.last { page-break-after: auto; }
 
+        /* Nüshanın tamamı bir dış tablonun içinde ve antet onun thead'i. Sebebi tek:
+           çok kalemli bir makbuz ikinci sayfaya taştığında o sayfa da antetle başlasın.
+           thead'in her sayfada tekrarlanması hem openhtmltopdf'te hem tarayıcının
+           yazdırma çıktısında çalışan tek yöntem; position: running() yalnızca PDF'te
+           çalışır ve tarayıcıda anteti sessizce yok ederdi — bu dosyanın iki çıktısı
+           ayrışmamalı (bkz. dosya başı notu).
+
+           -fs-table-paginate openhtmltopdf'e özgü: onsuz tablo bölünmek yerine olduğu
+           gibi sonraki sayfaya itiliyor ve ilk sayfa bomboş kalıyor. */
+        .page { width: 100%; border-collapse: collapse; -fs-table-paginate: paginate; }
+        .page > thead { display: table-header-group; }
+        .page > thead > tr > td,
+        .page > tbody > tr > td { padding: 0; }
+
         /* ── Başlık ─────────────────────────────────────────────── */
         .head { width: 100%; border-collapse: collapse; border: 1.4pt solid #101418; }
         .head td { vertical-align: middle; padding: 5mm 4mm; }
@@ -79,7 +93,13 @@
         .kv td.v { font-weight: 700; }
 
         /* ── Kalemler ───────────────────────────────────────────── */
-        .items { width: 100%; border-collapse: collapse; border: 1.4pt solid #101418; border-top: none; }
+        /* Devam sayfasında sütun başlıksız bir kalem listesi okunamaz; thead tekrarlanıyor. */
+        .items {
+            width: 100%; border-collapse: collapse;
+            border: 1.4pt solid #101418; border-top: none;
+            -fs-table-paginate: paginate;
+        }
+        .items thead { display: table-header-group; }
         .items th {
             background: #eef2f8; border: 1pt solid #101418;
             padding: 2mm 2mm; font-size: 7.8pt; font-weight: 700;
@@ -104,7 +124,17 @@
         .notes .lbl { font-weight: 700; font-size: 7.8pt; letter-spacing: .3pt; }
 
         /* ── İmza ───────────────────────────────────────────────── */
-        .sign { width: 100%; border-collapse: collapse; border: 1.4pt solid #101418; border-top: none; }
+        /* Kapanış: iade uyarısı, imza bloğu, alt bilgi şeridi ve hukuki paragraf tek
+           parça. Ayrı ayrı bırakıldığında sayfa sonu aralarına düşüyor ve son sayfada
+           tek başına duran bir paragraf ya da altında şeridi olmayan bir imza alanı
+           kalıyordu. Sığmazsa hepsi birlikte sonraki sayfaya geçiyor; o sayfa da antetle
+           başladığı için başlı başına okunabilir bir imza sayfası oluyor. */
+        .closing { page-break-inside: avoid; }
+
+        .sign {
+            width: 100%; border-collapse: collapse;
+            border: 1.4pt solid #101418; border-top: none;
+        }
         .sign td { width: 50%; vertical-align: top; padding: 0; }
         .sign td.left { border-right: 1pt solid #101418; }
         .sign .sign-title {
@@ -168,6 +198,9 @@
 <!-- Teslimat makbuzunda firma ve müşteri nüshası: şoför birini bırakır, imzalı olanı geri
      getirir. Depo çıkışında tek nüsha: servis yerinde imzalar, kâğıt bizde kalır. -->
 <div class="sheet" th:each="copy,cs : ${copies}" th:classappend="${cs.last} ? 'last' : ''">
+<table class="page">
+<thead>
+<tr><td>
 
     <table class="head">
         <tr>
@@ -203,6 +236,11 @@
             </td>
         </tr>
     </table>
+
+</td></tr>
+</thead>
+<tbody>
+<tr><td>
 
     <table class="parties">
         <tr>
@@ -312,6 +350,8 @@
         <span th:text="${receipt.notes} ?: ''"></span>
     </div>
 
+    <div class="closing">
+
     <div class="returned-note" th:if="${returnedQuantity > 0}">
         <span th:if="${fullyReturned}">DİKKAT: Bu sevkiyatın tamamı depoya iade alınmıştır.</span>
         <span th:unless="${fullyReturned}"
@@ -406,7 +446,10 @@
             <td th:text="${handover} ? 'FORM NO: DC-01' : 'FORM NO: TM-01'">FORM NO: TM-01</td>
             <td th:text="'REV. NO: ' + ${receipt.revision}">REV. NO: 1</td>
             <td th:text="'DÜZENLEYEN: ' + (${receipt.issuedBy} ?: '-')">DÜZENLEYEN: -</td>
-            <td class="last" th:text="'Sayfa ' + ${cs.count} + '/' + ${cs.size}">Sayfa 1/2</td>
+            <!-- Bu sayaç nüshaları sayıyor, sayfaları değil: teslimat makbuzu firma ve
+                 müşteri nüshası olarak iki kez basılıyor. Çok kalemli bir makbuz ikinci
+                 sayfaya taşabildiği için "Sayfa" demek yanlış olurdu. -->
+            <td class="last" th:text="'NÜSHA ' + ${cs.count} + '/' + ${cs.size}">NÜSHA 1/2</td>
         </tr>
     </table>
 
@@ -421,6 +464,12 @@
         İmzalı nüsha firmaya iade edilir. Bu belge <span th:text="${receipt.receiptNo}">-</span>
         numarası ile sistemde kayıtlıdır.
     </div>
+
+    </div>
+
+</td></tr>
+</tbody>
+</table>
 </div>
 
 </body>
