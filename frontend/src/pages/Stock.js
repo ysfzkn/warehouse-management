@@ -3721,12 +3721,18 @@ const Stock = () => {
                     <th className="d-none d-md-table-cell">Stok Kodu</th>
                     <th>Miktar</th>
                     <th className="d-none d-lg-table-cell">Kullanılabilir</th>
-                    <th className="d-none d-xl-table-cell">Rezerve</th>
-                    <th className="d-none d-xl-table-cell">Emanet</th>
+                    {/* Rezerve, Emanet ve Min. Stok xxl'e (≥1400px) taşındı, xl'e (≥1200px)
+                        değil. 14" dizüstülerin çoğu 1200-1399 aralığında ve orada on üç
+                        sütun sığmıyordu: tablo yana kayıyor, İşlemler düğmeleri ekranın
+                        dışında kalıyordu. Bu üçü en az bakılanlar — çoğu depoda hepsi sıfır
+                        — ve zaten kaydırmadan görülemiyorlardı. 1400px üstü hiç değişmedi,
+                        1155px altı da değişmedi (orada kart görünümü devreye giriyor). */}
+                    <th className="d-none d-xxl-table-cell">Rezerve</th>
+                    <th className="d-none d-xxl-table-cell">Emanet</th>
                     <th className="d-none d-md-table-cell" style={{ minWidth: '120px' }}>
                       Müşteri
                     </th>
-                    <th className="d-none d-xl-table-cell">Min. Stok</th>
+                    <th className="d-none d-xxl-table-cell">Min. Stok</th>
                     <th>Durum</th>
                     <th className="text-center d-none d-md-table-cell">
                       <button
@@ -3865,7 +3871,7 @@ const Stock = () => {
                             {stock.availableQuantity}
                           </span>
                         </td>
-                        <td className="d-none d-xl-table-cell">
+                        <td className="d-none d-xxl-table-cell">
                           <span
                             className={stock.reservedQuantity > 0 ? 'text-warning fw-bold' : 'text-muted'}
                           >
@@ -3873,7 +3879,7 @@ const Stock = () => {
                             {stock.reservedQuantity || 0}
                           </span>
                         </td>
-                        <td className="d-none d-xl-table-cell">{stock.consignedQuantity || 0}</td>
+                        <td className="d-none d-xxl-table-cell">{stock.consignedQuantity || 0}</td>
                         <td className="d-none d-md-table-cell">
                           {stock.customerName ? (
                             <div style={{ maxWidth: '150px' }}>
@@ -3910,7 +3916,7 @@ const Stock = () => {
                             <span className="text-muted">-</span>
                           )}
                         </td>
-                        <td className="d-none d-xl-table-cell">{stock.minStockLevel}</td>
+                        <td className="d-none d-xxl-table-cell">{stock.minStockLevel}</td>
                         <td>
                           <span className={`badge bg-${stockStatus.class}`}>{stockStatus.label}</span>
                         </td>
