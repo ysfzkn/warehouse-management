@@ -182,27 +182,62 @@ class DeliveryReceiptSearchTest {
         assertThat(search(null, null, null, null, "51 ATS")).hasSize(1);
         assertThat(search(null, null, null, null, "TM-")).hasSize(2);
         assertThat(search(null, null, null, null, "bulunmayan")).isEmpty();
+        // Noktalama katlamada ayırıcıya dönüşüyor, yani "TM-" ile "TM " aynı şey.
+        assertThat(search(null, null, null, null, "tm")).hasSize(2);
     }
 
     @Test
-    @DisplayName("Arama büyük/küçük harf ayırt etmez; Türkçe harfler kayıttaki gibi yazılmalı")
-    void searchCasingBehaviour() {
-        // Aranan metni Türkçe locale ile küçültmek sessiz bir hataya yol açardı: Java "I"yı
-        // "ı" yapar, veritabanının lower()'ı ise "i" yapar; iki taraf hiç buluşmazdı. Bu
-        // yüzden Locale.ROOT kullanılıyor ve kayıttaki gibi yazılan arama çalışıyor.
+    @DisplayName("Arama Türkçe harfe ve büyük/küçük harfe takılmaz")
+    void searchFoldsTurkishLetters() {
+        // Doğrudan LIKE ile bunların hiçbiri çalışmıyordu. Türkçe'de küçültme geri
+        // döndürülemez: "I" hem "ı" hem "i"nin büyüğü, "İ" küçülünce birleşik noktalı bir
+        // diziye dönüşüyor. Kayıt da arama da ASCII'ye katlandığı için artık hepsi aynı
+        // satıra düşüyor.
         assertThat(search(null, null, null, null, "Işık")).hasSize(1);
-        assertThat(search(null, null, null, null, "şahin")).hasSize(1);
-        assertThat(search(null, null, null, null, "mobilya")).hasSize(1);
-        assertThat(search(null, null, null, null, "LTD")).hasSize(1);
+        assertThat(search(null, null, null, null, "IŞIK")).hasSize(1);
+        assertThat(search(null, null, null, null, "ışık")).hasSize(1);
+        assertThat(search(null, null, null, null, "isik")).hasSize(1);
 
-        // Bilinen sınır — bu değişiklikle gelmedi, sorgu küçültmeyi veritabanına yaptırırken
-        // de vardı. Türkçe'de büyük harften küçüğe geçiş geri döndürülemez:
-        //   "I" hem "ı" hem "i"nin büyüğü  → "IŞIK" küçülünce "işik", kayıttaki "işık" değil
-        //   "İ" küçülünce birleşik noktalı "i̇" → kayıttaki düz "i" ile eşleşmiyor
-        // Kalıcı çözümü ayrı bir normalleştirilmiş arama sütunu olur; stock_transfers zaten
-        // bunu customer_search ile yapıyor.
-        assertThat(search(null, null, null, null, "IŞIK")).isEmpty();
-        assertThat(search(null, null, null, null, "ŞAHİN")).isEmpty();
+        assertThat(search(null, null, null, null, "şahin")).hasSize(1);
+        assertThat(search(null, null, null, null, "ŞAHİN")).hasSize(1);
+        assertThat(search(null, null, null, null, "sahin")).hasSize(1);
+
+        // Türkçe klavyesi olmayan biri de bulabilmeli.
+        assertThat(search(null, null, null, null, "AYSE")).hasSize(1);
+        assertThat(search(null, null, null, null, "Ayşe")).hasSize(1);
+        assertThat(search(null, null, null, null, "gultekin")).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("Arama; makbuz no, plaka ve bitişik yazılmış telefonu da bulur")
+    void searchCoversTheAdvertisedFields() {
+        assertThat(search(null, null, null, null, "TM-")).hasSize(2);
+        assertThat(search(null, null, null, null, "51 ATS")).hasSize(1);
+        assertThat(search(null, null, null, null, "ats 303")).hasSize(1);
+        assertThat(search(null, null, null, null, "05551234567")).hasSize(2);
+    }
+
+    @Test
+    @DisplayName("Kelimeler ayrı ayrı aranır: araya kelime girse de, sıra değişse de bulur")
+    void searchMatchesTokensInAnyOrder() {
+        // Bitişik arama olsaydı hiçbiri eşleşmezdi; kayıt "Işık Şahin Mobilya Ltd. Şti.".
+        assertThat(search(null, null, null, null, "Işık Mobilya")).hasSize(1);   // araya kelime giriyor
+        assertThat(search(null, null, null, null, "mobilya isik")).hasSize(1);   // sıra ters
+        assertThat(search(null, null, null, null, "sti isik mobilya")).hasSize(1);
+
+        // Her kelime bulunmak zorunda: ikisi ayrı kayıtlarda geçiyor, birlikte hiçbirinde.
+        assertThat(search(null, null, null, null, "Işık Ayşe")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Telefon hangi biçimde yazılırsa yazılsın bulunur")
+    void searchNormalisesPhoneFormatting() {
+        // Kayıtta "05551234567" duruyor. Kullanıcı ekrandaki hâliyle, boşluklu ya da ülke
+        // koduyla yazabilir; karşılaştırma hepsinde ortak olan son on hane üzerinden.
+        assertThat(search(null, null, null, null, "05551234567")).hasSize(2);
+        assertThat(search(null, null, null, null, "0555 123 45 67")).hasSize(2);
+        assertThat(search(null, null, null, null, "+90 555 123 45 67")).hasSize(2);
+        assertThat(search(null, null, null, null, "5551234567")).hasSize(2);
     }
 
     @Test

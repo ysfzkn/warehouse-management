@@ -339,21 +339,37 @@ public class DeliveryReceiptServiceImpl implements DeliveryReceiptService {
                 predicates.add(cb.lessThanOrEqualTo(root.get("issuedAt"), to));
             }
 
-            String needle = search == null ? null : search.trim();
-            if (needle != null && !needle.isEmpty()) {
-                // Locale.ROOT, Türkçe locale değil. Sütun tarafını veritabanının lower()'ı
-                // küçültüyor ve o "I" harfini "i" yapıyor; Türkçe locale ise "ı" yapardı.
-                // İki taraf farklı kurala göre küçültülünce "Işık" araması hiçbir zaman
-                // "Işık Şahin"i bulamazdı — eski sorgu her iki tarafı da veritabanına
-                // küçülttürdüğü için bu sorun yoktu, buraya taşırken doğmuş olurdu.
-                String like = "%" + needle.toLowerCase(Locale.ROOT) + "%";
-                predicates.add(cb.or(
-                        cb.like(cb.lower(root.get("receiptNo")), like),
-                        cb.like(cb.lower(root.get("customerFullName")), like),
-                        cb.like(cb.lower(root.get("customerPhone")), like),
-                        cb.like(cb.lower(root.get("driverName")), like),
-                        cb.like(cb.lower(root.get("vehiclePlate")), like),
-                        cb.like(cb.lower(root.get("orderNumber")), like)));
+            // Arama, sütunları tek tek taramak yerine ASCII'ye katlanmış searchText üzerinden
+            // yapılıyor. Türkçe'de küçültme geri döndürülemez olduğu için doğrudan
+            // karşılaştırma güvenilir değil: "I" hem "ı" hem "i"nin büyüğü, "İ" küçülünce
+            // birleşik bir diziye dönüşüyor — "IŞIK" hiçbir zaman "Işık"ı bulamazdı.
+            String normalized = com.warehouse.util.TurkishText.normalize(search);
+            String digits = search == null ? "" : search.replaceAll("\\D", "");
+            List<jakarta.persistence.criteria.Predicate> anyOf = new ArrayList<>();
+
+            if (!normalized.isEmpty()) {
+                // Kelimeler ayrı ayrı aranıp VE'leniyor, tek parça olarak değil. "Yıldız
+                // Nakliyat" yazan biri "Yıldız Kargo ve Nakliyat"ı bulabilmeli; bitişik
+                // arama araya giren kelime yüzünden bulamazdı. Sıra da önemsizleşiyor.
+                List<jakarta.persistence.criteria.Predicate> allTokens = new ArrayList<>();
+                for (String token : normalized.split(" ")) {
+                    allTokens.add(cb.like(root.get("searchText"), "%" + token + "%"));
+                }
+                anyOf.add(cb.and(allTokens.toArray(new jakarta.persistence.criteria.Predicate[0])));
+            }
+
+            if (digits.length() >= 7) {
+                // Telefon her biçimde yazılabiliyor: "0553 999 33 03", "05539993303",
+                // "+90 553 999 33 03". Kayıtta da bazen başında sıfırla bazen ülke koduyla
+                // duruyor. Son on hane hepsinde ortak olan parça, o yüzden karşılaştırma
+                // onun üzerinden yapılıyor. (On hane Türkiye'ye özgü, uygulama da öyle.)
+                String tail = digits.length() > 10 ? digits.substring(digits.length() - 10) : digits;
+                anyOf.add(cb.like(root.get("searchText"), "%" + tail + "%"));
+            }
+
+            if (!anyOf.isEmpty()) {
+                predicates.add(anyOf.size() == 1 ? anyOf.get(0)
+                        : cb.or(anyOf.toArray(new jakarta.persistence.criteria.Predicate[0])));
             }
 
             if (hasSignedCopy != null) {

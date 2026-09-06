@@ -154,6 +154,22 @@ public class DeliveryReceipt {
     @Column(name = "handed_over_by_name", length = 150)
     private String handedOverByName;
 
+    /**
+     * Everything searchable about this receipt, folded onto ASCII.
+     *
+     * <p>The screen's search box compares against this instead of the individual columns.
+     * Turkish makes the direct comparison unreliable in a way no amount of care at the call
+     * site fixes: lower-casing is not reversible — "I" is the capital of both "ı" and "i",
+     * and "İ" lower-cases to a combining sequence — so "IŞIK" could never find "Işık".
+     * Folding both the stored value and the query to plain ASCII makes "AYSE", "ayşe" and
+     * "Ayşe" the same string.</p>
+     *
+     * <p>Maintained here rather than by a caller so no write path can forget: a receipt with
+     * a stale search column silently drops out of the list.</p>
+     */
+    @Column(name = "search_text", length = 500)
+    private String searchText;
+
     // ── Bookkeeping ───────────────────────────────────────────────────────────
     @Column(name = "issued_at", nullable = false)
     private LocalDateTime issuedAt;
@@ -171,6 +187,17 @@ public class DeliveryReceipt {
     @JsonIgnore
     private List<DeliveryReceiptAttachment> attachments = new ArrayList<>();
 
+    /**
+     * Rebuilds {@link #searchText}. The parts are the ones the screen's search box advertises
+     * — receipt number, customer, order, driver, plate — plus the two parties the archive now
+     * shows in its "Teslim Alan" column.
+     */
+    private void refreshSearchText() {
+        this.searchText = com.warehouse.util.TurkishText.normalizeForSearch(
+                receiptNo, customerFullName, customerPhone, orderNumber,
+                driverName, vehiclePlate, handoverToName, handoverToPhone, receivedByName);
+    }
+
     @PrePersist
     protected void onCreate() {
         LocalDateTime now = LocalDateTime.now();
@@ -179,11 +206,13 @@ public class DeliveryReceipt {
         if (this.issuedAt == null) {
             this.issuedAt = now;
         }
+        refreshSearchText();
     }
 
     @PreUpdate
     protected void onUpdate() {
         this.updatedAt = LocalDateTime.now();
+        refreshSearchText();
     }
 
     public void addAttachment(DeliveryReceiptAttachment attachment) {
