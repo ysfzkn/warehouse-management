@@ -10,6 +10,12 @@ import React, { useEffect, useMemo, useState } from 'react';
  * Liste bilerek kırpılıyor: eşleşen her satırı basmak, arama kutusuna her harf
  * yazıldığında yüzlerce satırı yeniden çizmek demek — kutu takılıyor. Aranan ürün zaten
  * ilk satırlarda çıkıyor, gerisi "daha fazla göster" ile geliyor.
+ *
+ * SIRALAMA SUNUCUDAN GELİYOR ve burada yeniden sıralanmıyor. Stoğu olanlar üstte, biteni
+ * altta — bunu StockRepository.findByWarehouse yapıyor. Buradaki "Kalan" ise rafta kalanı
+ * değil, sepete eklediklerinizi de düşülmüş hâlini gösteriyor; ona göre sıralamak, her
+ * ekleyişte satırların yer değiştirmesi demek olurdu. Aynı ürüne ikinci kez tıklamak
+ * isteyen kişi bir başkasına basardı. Sıra sabit kalmalı.
  */
 
 const INITIAL_VISIBLE = 25;

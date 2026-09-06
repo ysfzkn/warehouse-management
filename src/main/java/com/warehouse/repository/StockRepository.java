@@ -46,7 +46,30 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
            "FROM Stock s WHERE s.product.id IN :productIds GROUP BY s.product.id")
     List<Object[]> sumAvailableByProductIds(@Param("productIds") List<Long> productIds);
 
-    @Query("SELECT s FROM Stock s WHERE s.warehouse = :warehouse ORDER BY s.product.name")
+    /**
+     * Stock of one warehouse, with everything that can still be shipped first.
+     *
+     * <p>The product pickers on the transfer, depot-exit and stock screens all read this list
+     * and the operator scans it by eye. Rows with nothing left are not selectable, so leaving
+     * them mixed in alphabetically means scrolling past dead entries to reach a usable one.
+     * The CASE only splits the list in two; the name keeps each half browsable.</p>
+     *
+     * <p>Availability is deliberately {@code quantity - reserved}, matching what the picker
+     * prints in its "Kalan" column. Any other formula here and a row could read "Kalan 3"
+     * while sitting in the out-of-stock half.</p>
+     *
+     * <p>Ordering belongs here rather than in a caller: the database is already reading and
+     * sorting these rows, and doing it again in the JVM would be the same work twice. Callers
+     * must not re-sort — see the note in WarehouseStockPicker for why that would make rows
+     * jump under the operator's cursor.</p>
+     */
+    @Query("""
+        SELECT s FROM Stock s
+         WHERE s.warehouse = :warehouse
+         ORDER BY CASE WHEN COALESCE(s.quantity, 0) - COALESCE(s.reservedQuantity, 0) > 0
+                       THEN 0 ELSE 1 END,
+                  s.product.name
+    """)
     @EntityGraph(value = Stock.GRAPH_WITH_PRODUCT_AND_WAREHOUSE, type = EntityGraph.EntityGraphType.LOAD)
     List<Stock> findByWarehouse(@Param("warehouse") Warehouse warehouse);
 
