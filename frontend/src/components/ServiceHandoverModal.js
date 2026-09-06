@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { PastCustomerPicker } from './TransferPeoplePicker';
+import WarehouseStockPicker from './WarehouseStockPicker';
 import {
   extractPhoneDigits,
   formatPhoneForSubmit,
@@ -49,7 +50,6 @@ export default function ServiceHandoverModal({ onClose }) {
   const [stocks, setStocks] = useState([]);
   const [stockLoading, setStockLoading] = useState(false);
   const [items, setItems] = useState([]);
-  const [itemDraft, setItemDraft] = useState({ stockId: '', quantity: '' });
   const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
   const [error, setError] = useState('');
@@ -98,7 +98,6 @@ export default function ServiceHandoverModal({ onClose }) {
     // Changing the warehouse invalidates every line: the same product in another depot is
     // a different stock row with a different quantity on hand.
     setItems([]);
-    setItemDraft({ stockId: '', quantity: '' });
   }, [form.sourceWarehouseId, loadStocks]);
 
   const stockById = useMemo(() => {
@@ -123,22 +122,8 @@ export default function ServiceHandoverModal({ onClose }) {
     [items, stockById]
   );
 
-  const addItem = () => {
-    const stock = stockById.get(String(itemDraft.stockId));
-    const quantity = parseInt(itemDraft.quantity, 10);
-    if (!stock) {
-      setError('Ürün seçmelisiniz.');
-      return;
-    }
-    if (!quantity || quantity < 1) {
-      setError('Adet en az 1 olmalıdır.');
-      return;
-    }
-    const free = availableFor(itemDraft.stockId);
-    if (quantity > free) {
-      setError(`Bu üründen çıkılabilecek en fazla adet: ${free}.`);
-      return;
-    }
+  /** Seçici doğrulamayı kendi yapıyor; burada sadece sepete katılıyor. */
+  const addItem = (stock, quantity) => {
     setError('');
     setItems((prev) => {
       const existing = prev.findIndex((i) => String(i.stockId) === String(stock.id));
@@ -158,7 +143,6 @@ export default function ServiceHandoverModal({ onClose }) {
         },
       ];
     });
-    setItemDraft({ stockId: '', quantity: '' });
   };
 
   const removeItem = (index) => setItems((prev) => prev.filter((_, i) => i !== index));
@@ -168,8 +152,9 @@ export default function ServiceHandoverModal({ onClose }) {
   const validate = () => {
     const errors = {};
     if (!form.sourceWarehouseId) errors.sourceWarehouseId = 'Çıkış deposu seçin.';
-    if (!form.handoverToName.trim()) errors.handoverToName = 'Teslim alan servis/kişi zorunlu.';
-    if (!form.handedOverBy.trim()) errors.handedOverBy = 'Teslim eden kişi zorunlu.';
+    // Teslim eden ve teslim alan bilerek zorunlu değil: kâğıt tezgâhta, kurye beklerken
+    // basılıyor ve iki imza bloğu çoğu zaman elle dolduruluyor. Boş bırakılırsa makbuz
+    // o alanlara yazmak için çizgi basıyor.
     if (!form.customerFullName.trim()) errors.customerFullName = 'Müşteri adı zorunlu.';
     if (!isPhoneComplete(form.customerPhone)) errors.customerPhone = 'Geçerli bir telefon girin.';
     if (!form.customerAddress.trim()) errors.customerAddress = 'Müşteri adresi zorunlu.';
@@ -196,9 +181,12 @@ export default function ServiceHandoverModal({ onClose }) {
     try {
       const res = await axios.post('/api/stock-transfers/service-handover', {
         sourceWarehouseId: form.sourceWarehouseId,
-        handoverToName: form.handoverToName.trim(),
+        // Boş alanlar null gidiyor, boş metin değil: makbuz "değer yok" ile "boş metin"i
+        // ayırt ediyor — ilkinde imza satırı çizgili basılıyor, ikincisi veriymiş gibi
+        // kaydediliyor ve yeniden basımda o alanı boş ama "dolu" gösteriyordu.
+        handoverToName: form.handoverToName.trim() || null,
         handoverToPhone: form.handoverToPhone ? formatPhoneForSubmit(form.handoverToPhone) : null,
-        handedOverBy: form.handedOverBy.trim(),
+        handedOverBy: form.handedOverBy.trim() || null,
         customerFullName: form.customerFullName.trim(),
         customerPhone: formatPhoneForSubmit(form.customerPhone),
         customerAddress: form.customerAddress.trim(),
@@ -427,10 +415,15 @@ export default function ServiceHandoverModal({ onClose }) {
                 <h6 className="text-uppercase text-muted small fw-bold mt-4 mb-2">
                   Teslim Eden / Teslim Alan
                 </h6>
+                <div className="small text-muted mb-2">
+                  <i className="fas fa-pen me-1"></i>
+                  Boş bırakırsanız makbuzda imza alanları çizgili olarak basılır, elle doldurulabilir.
+                </div>
                 <div className="row g-3">
                   <div className="col-md-6">
                     <label className="form-label small mb-1">
-                      Teslim Eden (depo görevlisi) <span className="text-danger">*</span>
+                      Teslim Eden (depo görevlisi)
+                      <span className="text-muted fw-normal"> — opsiyonel</span>
                     </label>
                     <input
                       type="text"
@@ -444,7 +437,8 @@ export default function ServiceHandoverModal({ onClose }) {
                   </div>
                   <div className="col-md-6">
                     <label className="form-label small mb-1">
-                      Teslim Alan Servis / Kişi <span className="text-danger">*</span>
+                      Teslim Alan Servis / Kişi
+                      <span className="text-muted fw-normal"> — opsiyonel</span>
                     </label>
                     <input
                       type="text"
@@ -526,94 +520,59 @@ export default function ServiceHandoverModal({ onClose }) {
 
                 {/* ── Ürünler ── */}
                 <h6 className="text-uppercase text-muted small fw-bold mt-4 mb-2">Ürünler</h6>
-                {!form.sourceWarehouseId ? (
-                  <div className="text-muted small">Önce çıkış deposunu seçin.</div>
-                ) : (
-                  <>
-                    <div className="row g-2 align-items-end">
-                      <div className="col-md-7">
-                        <label className="form-label small mb-1">Ürün</label>
-                        <select
-                          className="form-select"
-                          value={itemDraft.stockId}
-                          disabled={stockLoading}
-                          onChange={(e) => setItemDraft((prev) => ({ ...prev, stockId: e.target.value }))}
-                        >
-                          <option value="">{stockLoading ? 'Stoklar yükleniyor…' : 'Ürün seçiniz…'}</option>
-                          {stocks.map((s) => {
-                            const free = availableFor(s.id);
-                            return (
-                              <option key={s.id} value={s.id} disabled={free <= 0}>
-                                {s.product?.name}
-                                {s.product?.sku ? ` (${s.product.sku})` : ''} — kalan {free}
-                              </option>
-                            );
-                          })}
-                        </select>
-                      </div>
-                      <div className="col-md-3">
-                        <label className="form-label small mb-1">Adet</label>
-                        <input
-                          type="number"
-                          min="1"
-                          className="form-control"
-                          value={itemDraft.quantity}
-                          onChange={(e) => setItemDraft((prev) => ({ ...prev, quantity: e.target.value }))}
-                        />
-                      </div>
-                      <div className="col-md-2 d-grid">
-                        <button type="button" className="btn btn-outline-primary" onClick={addItem}>
-                          <i className="fas fa-plus me-1"></i>
-                          Ekle
-                        </button>
-                      </div>
-                    </div>
+                <>
+                  <WarehouseStockPicker
+                    stocks={stocks}
+                    loading={stockLoading}
+                    disabled={!form.sourceWarehouseId}
+                    availableFor={(stock) => availableFor(stock.id)}
+                    onAdd={addItem}
+                  />
 
-                    {items.length > 0 && (
-                      <div className="table-responsive mt-3">
-                        <table className="table table-sm align-middle mb-0">
-                          <thead className="table-light">
-                            <tr>
-                              <th>Ürün</th>
-                              <th className="text-center" style={{ width: 90 }}>
-                                Adet
-                              </th>
-                              <th style={{ width: 50 }}></th>
+                  {items.length > 0 && (
+                    <div className="table-responsive mt-3">
+                      <table className="table table-sm align-middle mb-0">
+                        <thead className="table-light">
+                          <tr>
+                            <th>Ürün</th>
+                            <th className="text-center" style={{ width: 90 }}>
+                              Adet
+                            </th>
+                            <th style={{ width: 50 }}></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {items.map((item, index) => (
+                            <tr key={item.stockId}>
+                              <td>
+                                <div className="fw-semibold">{item.name}</div>
+                                {item.sku && <small className="text-muted">{item.sku}</small>}
+                              </td>
+                              <td className="text-center">{item.quantity}</td>
+                              <td className="text-end">
+                                <button
+                                  type="button"
+                                  className="btn btn-sm btn-outline-danger border-0"
+                                  onClick={() => removeItem(index)}
+                                  aria-label="Kaldır"
+                                >
+                                  <i className="fas fa-trash"></i>
+                                </button>
+                              </td>
                             </tr>
-                          </thead>
-                          <tbody>
-                            {items.map((item, index) => (
-                              <tr key={item.stockId}>
-                                <td>
-                                  <div className="fw-semibold">{item.name}</div>
-                                  {item.sku && <small className="text-muted">{item.sku}</small>}
-                                </td>
-                                <td className="text-center">{item.quantity}</td>
-                                <td className="text-end">
-                                  <button
-                                    type="button"
-                                    className="btn btn-sm btn-outline-danger border-0"
-                                    onClick={() => removeItem(index)}
-                                    aria-label="Kaldır"
-                                  >
-                                    <i className="fas fa-trash"></i>
-                                  </button>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                          <tfoot className="table-light">
-                            <tr>
-                              <th className="text-end">Toplam</th>
-                              <th className="text-center">{totalQuantity}</th>
-                              <th></th>
-                            </tr>
-                          </tfoot>
-                        </table>
-                      </div>
-                    )}
-                  </>
-                )}
+                          ))}
+                        </tbody>
+                        <tfoot className="table-light">
+                          <tr>
+                            <th className="text-end">Toplam</th>
+                            <th className="text-center">{totalQuantity}</th>
+                            <th></th>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  )}
+                </>
 
                 <div className="mt-3">
                   <label className="form-label small mb-1">Açıklama / Not</label>

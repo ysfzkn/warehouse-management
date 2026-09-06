@@ -102,6 +102,11 @@ public class DeliveryReceiptServiceImpl implements DeliveryReceiptService {
 
     @Override
     public DeliveryReceiptDto issue(Long transferId, String username) {
+        return issue(transferId, username, null);
+    }
+
+    @Override
+    public DeliveryReceiptDto issue(Long transferId, String username, DeliveryReceiptKind kindWhenNew) {
         StockTransfer transfer = loadTransfer(transferId);
         if (transfer.getStatus() == TransferStatus.CANCELLED) {
             throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
@@ -121,9 +126,12 @@ public class DeliveryReceiptServiceImpl implements DeliveryReceiptService {
             // exit receipt keeps printing as one even after the carrier is filled in — the
             // page that was signed is a depot exit receipt, and a reprint that changed its
             // title and number series would no longer match the paper in the folder.
-            receipt.setKind(transfer.getHandoverToName() != null
-                    ? DeliveryReceiptKind.SERVICE_HANDOVER
-                    : DeliveryReceiptKind.DELIVERY);
+            //
+            // The caller normally says which paper this is. The fallback is for a receipt
+            // issued later from the panel on a shipment that already went out as a depot
+            // exit: carrierPending is the mark left by that flow, and the two parties are
+            // only a hint since both are optional on the form.
+            receipt.setKind(kindWhenNew != null ? kindWhenNew : inferKind(transfer));
         } else {
             // The number stays; only the print count moves. Two different numbers for one
             // shipment would make the signed page impossible to match back.
@@ -162,6 +170,14 @@ public class DeliveryReceiptServiceImpl implements DeliveryReceiptService {
                 metadata(transfer));
 
         return toDto(receipt);
+    }
+
+    /** Which paper a shipment would print as, when the caller did not say. */
+    private DeliveryReceiptKind inferKind(StockTransfer transfer) {
+        boolean depotExit = transfer.isCarrierPending()
+                || transfer.getHandoverToName() != null
+                || transfer.getHandedOverBy() != null;
+        return depotExit ? DeliveryReceiptKind.SERVICE_HANDOVER : DeliveryReceiptKind.DELIVERY;
     }
 
     /**

@@ -3210,56 +3210,32 @@ const Stock = () => {
                 )}
               </button>
               {canTransfer && (
-                /* Bölünmüş düğme, çünkü ikisi aynı fiziksel olayın iki hâli: mal depodan
-                   çıkıyor. Ayıran tek şey taşıyıcının o an belli olup olmadığı, ve bu seçimi
-                   tam karar anında yan yana göstermek hem doğru olanı seçtiriyor hem de
-                   zaten dolu olan bu satıra dokuzuncu bir düğme eklemiyor. */
-                <div className="btn-group" role="group">
-                  <button
-                    className="btn btn-primary"
-                    onClick={() => handleStockTransfer(null, role === 'STOCK_OUT')}
-                    style={{ minWidth: 160 }}
-                  >
-                    <i className="fas fa-play me-2"></i>
-                    Transfer Başlat
-                  </button>
-                  {role === 'ADMIN' && (
-                    <>
-                      <button
-                        type="button"
-                        className="btn btn-primary dropdown-toggle dropdown-toggle-split"
-                        data-bs-toggle="dropdown"
-                        aria-expanded="false"
-                      >
-                        <span className="visually-hidden">Diğer çıkış seçenekleri</span>
-                      </button>
-                      <ul
-                        className="dropdown-menu dropdown-menu-end shadow"
-                        style={{ minWidth: 340, maxWidth: 340 }}
-                      >
-                        <li>
-                          <button
-                            type="button"
-                            className="dropdown-item py-2"
-                            onClick={() => setShowHandoverModal(true)}
-                          >
-                            <div className="fw-semibold">
-                              <i
-                                className="fas fa-file-export me-2 text-teal"
-                                style={{ color: '#0f766e' }}
-                              ></i>
-                              Depo Çıkış Makbuzu
-                            </div>
-                            <small className="text-muted d-block ps-4 text-wrap">
-                              Mal servise teslim ediliyor, taşıyıcı henüz belli değil. Stoktan düşer, tek
-                              nüshalık makbuz basar.
-                            </small>
-                          </button>
-                        </li>
-                      </ul>
-                    </>
-                  )}
-                </div>
+                <button
+                  className="btn btn-primary"
+                  onClick={() => handleStockTransfer(null, role === 'STOCK_OUT')}
+                  style={{ minWidth: 160 }}
+                >
+                  <i className="fas fa-play me-2"></i>
+                  Transfer Başlat
+                </button>
+              )}
+              {/* Kendi düğmesi. Açılır menünün içindeyken günlük bir işlem iki tıka ve bir
+                  keşfe bağlıydı; bu ekranda depodan mal çıkarmanın iki yolundan biri ve
+                  diğeriyle aynı görünürlüğü hak ediyor. */}
+              {canTransfer && role === 'ADMIN' && (
+                <button
+                  className="btn btn-outline-primary"
+                  onClick={() => setShowHandoverModal(true)}
+                  title="Mal servise teslim ediliyor, taşıyıcı henüz belli değil. Stoktan düşer, tek nüshalık makbuz basar."
+                  /* title tek başına bırakılınca tarayıcı düğmenin erişilebilir adını ondan
+                     türetiyor: ekran okuyucu ve sesle kontrol "Depo Çıkış Makbuzu" yerine
+                     tüm açıklamayı okuyor. Görünen etiket ile duyulan etiket aynı olmalı. */
+                  aria-label="Depo Çıkış Makbuzu"
+                  style={{ minWidth: 190 }}
+                >
+                  <i className="fas fa-file-export me-2"></i>
+                  Depo Çıkış Makbuzu
+                </button>
               )}
               <button className="btn btn-outline-primary" onClick={handleCreateStock}>
                 <i className="fas fa-plus me-2"></i>
@@ -5349,18 +5325,26 @@ const Stock = () => {
                   <div className="breakpoint-1155-desktop table-responsive" style={{ overflowX: 'auto' }}>
                     <table className="table table-hover table-sm mb-0 align-middle transfer-table-compact">
                       {/* Fixed layout for desktop - on wide screens */}
+                      {/* Sütun genişlikleri, sırasıyla: seçim, no, tarih, ürün, kaynak,
+                          hedef, adet, şoför, plaka, durum, işlemler.
+
+                          Açıklamalar <col /> ile aynı satırda durunca aradaki boşluk bir
+                          metin düğümü oluyor ve React her render'da "whitespace text nodes
+                          cannot appear as a child of colgroup" uyarısı basıyordu. Satır
+                          sonundaki boşluk JSX tarafından atılıyor, satır ortasındaki
+                          atılmıyor — bu yüzden açıklama tek blokta yukarıda. */}
                       <colgroup className="d-none d-xl-table-column-group">
-                        {isAdmin && <col style={{ width: '40px' }} />} {/* Checkbox */}
-                        <col style={{ width: '60px' }} /> {/* No */}
-                        <col style={{ width: '110px' }} /> {/* Date */}
-                        <col style={{ width: '140px' }} /> {/* Product */}
-                        <col style={{ width: '140px' }} /> {/* Source */}
-                        <col style={{ width: '140px' }} /> {/* Destination */}
-                        <col style={{ width: '70px' }} /> {/* Quantity */}
-                        <col style={{ width: '110px' }} /> {/* Driver */}
-                        <col style={{ width: '70px' }} /> {/* Plate */}
-                        <col style={{ width: '90px' }} /> {/* Status */}
-                        <col style={{ width: '140px' }} /> {/* Actions */}
+                        {isAdmin && <col style={{ width: '40px' }} />}
+                        <col style={{ width: '60px' }} />
+                        <col style={{ width: '110px' }} />
+                        <col style={{ width: '140px' }} />
+                        <col style={{ width: '140px' }} />
+                        <col style={{ width: '140px' }} />
+                        <col style={{ width: '70px' }} />
+                        <col style={{ width: '110px' }} />
+                        <col style={{ width: '70px' }} />
+                        <col style={{ width: '90px' }} />
+                        <col style={{ width: '140px' }} />
                       </colgroup>
                       <thead
                         className="table-light sticky-top"

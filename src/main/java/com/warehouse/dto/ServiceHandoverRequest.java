@@ -30,15 +30,21 @@ public class ServiceHandoverRequest {
 
     // ── Malı devralan taraf ───────────────────────────────────────────────────
 
-    @NotBlank(message = "Teslim alan servis/kişi adı zorunludur")
-    @Size(min = 2, max = 150, message = "Teslim alan adı 2-150 karakter olmalıdır")
+    /*
+     * Both parties are optional, and that is the point of the paper.
+     *
+     * The receipt is printed at the counter while the courier waits, and often nobody has
+     * time to type who is standing there — the two signature blocks get filled in by hand.
+     * Leaving them empty here prints ruled lines to write on; filling them in prints the
+     * names. What must not happen is the form refusing to print because a name is missing.
+     */
+    @Size(max = 150, message = "Teslim alan adı 150 karakteri aşamaz")
     private String handoverToName;
 
     @Size(max = 30, message = "Teslim alan telefonu 30 karakteri aşamaz")
     private String handoverToPhone;
 
-    @NotBlank(message = "Teslim eden kişinin adı zorunludur")
-    @Size(min = 2, max = 150, message = "Teslim eden adı 2-150 karakter olmalıdır")
+    @Size(max = 150, message = "Teslim eden adı 150 karakteri aşamaz")
     private String handedOverBy;
 
     // ── Malın gideceği müşteri ────────────────────────────────────────────────

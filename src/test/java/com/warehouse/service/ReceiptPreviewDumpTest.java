@@ -170,9 +170,11 @@ class ReceiptPreviewDumpTest {
 
         com.warehouse.dto.ServiceHandoverRequest request = new com.warehouse.dto.ServiceHandoverRequest();
         request.setSourceWarehouseId(warehouse.getId());
-        request.setHandoverToName("Yıldız Kargo ve Nakliyat Ltd. Şti.");
-        request.setHandoverToPhone("0388 213 44 55");
-        request.setHandedOverBy("Mehmet Güneş");
+        // Taraflar bilerek boş: kâğıdın imza blokları çizgili basılmalı ve elle
+        // doldurulabilmeli. Dolu hâli depo-cikis-tasiyicili görüntüsünde zaten var.
+        request.setHandoverToName(null);
+        request.setHandoverToPhone(null);
+        request.setHandedOverBy(null);
         request.setCustomerFullName("Işık Şahin Mobilya Ltd. Şti.");
         request.setCustomerPhone("0553 999 33 03");
         request.setCustomerAddress("Selçuk Mah. Dr. Sami Yağız Cad. No: 53, Merkez / NİĞDE");

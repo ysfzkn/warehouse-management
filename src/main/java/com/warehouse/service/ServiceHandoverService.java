@@ -35,7 +35,8 @@ public class ServiceHandoverService {
     @Transactional
     public Result handOver(ServiceHandoverRequest request, String username) {
         StockTransfer transfer = transferService.createServiceHandover(request);
-        DeliveryReceiptDto receipt = receiptService.issue(transfer.getId(), username);
+        DeliveryReceiptDto receipt = receiptService.issue(transfer.getId(), username,
+                com.warehouse.enums.DeliveryReceiptKind.SERVICE_HANDOVER);
         return new Result(transferMapper.toDto(transfer), receipt);
     }
 

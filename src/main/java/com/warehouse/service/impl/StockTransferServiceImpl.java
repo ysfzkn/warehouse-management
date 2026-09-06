@@ -1379,8 +1379,9 @@ public class StockTransferServiceImpl implements StockTransferService {
                 throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
                         "Taşıyıcısı belirlenmemiş çıkış yalnızca müşteri sevkiyatı olabilir.");
             }
-            ValidationUtil.requireNotBlank(transfer.getHandoverToName(), "Handover recipient");
-            ValidationUtil.requireNotBlank(transfer.getHandedOverBy(), "Handed over by");
+            // The two parties are deliberately not required: the depot exit receipt is meant
+            // to be printable with its signature blocks blank and completed by hand at the
+            // counter. What identifies this as a depot exit is carrierPending, not a name.
         } else {
             ValidationUtil.requireNotBlank(transfer.getDriverName(), "Driver name");
             ValidationUtil.requireNotBlank(transfer.getDriverTcId(), "Driver TC ID");

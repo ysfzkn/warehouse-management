@@ -1,6 +1,7 @@
 package com.warehouse.service;
 
 import com.warehouse.dto.DeliveryReceiptDto;
+import com.warehouse.enums.DeliveryReceiptKind;
 import com.warehouse.enums.DeliveryReceiptStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -21,6 +22,17 @@ public interface DeliveryReceiptService {
      * you want after the driver or the address was corrected.
      */
     DeliveryReceiptDto issue(Long transferId, String username);
+
+    /**
+     * Issues a receipt of a known kind, for callers that already know which paper this is.
+     *
+     * <p>{@link #issue(Long, String)} infers the kind from the shipment, which works but has
+     * to guess — and since the depot exit's own parties are optional, a shipment can be a
+     * depot exit while carrying nothing that says so. The one flow that creates these says it
+     * outright instead. The kind is only used when the receipt is new; a reprint keeps the
+     * identity of the paper that was signed.</p>
+     */
+    DeliveryReceiptDto issue(Long transferId, String username, DeliveryReceiptKind kindWhenNew);
 
     /** The receipt for a transfer, or null when none has been issued yet. */
     DeliveryReceiptDto findByTransfer(Long transferId);

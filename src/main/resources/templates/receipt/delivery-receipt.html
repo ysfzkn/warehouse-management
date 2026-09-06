@@ -228,11 +228,13 @@
                         <td class="v" th:text="${transferDateText} ?: '-'">-</td>
                     </tr>
                     <!-- Depo çıkışında malı devralan servis, sevkiyat bilgisinin kendisidir:
-                         o an bilinen tek taşıma tarafı odur. -->
-                    <tr th:if="${handover}">
+                         o an bilinen tek taşıma tarafı odur. Girilmediyse satır hiç
+                         basılmıyor: "-" yazmak eksik veri izlenimi verirdi, oysa bu bilgi
+                         çoğu zaman kâğıt tezgâhta imzalanırken elle yazılıyor. -->
+                    <tr th:if="${handover and receipt.handoverToName != null}">
                         <td class="k">Teslim Alan Servis</td>
                         <td class="v">
-                            <span th:text="${receipt.handoverToName} ?: '-'">-</span>
+                            <span th:text="${receipt.handoverToName}">-</span>
                             <span th:if="${receipt.handoverToPhone}"
                                   th:text="' (' + ${receipt.handoverToPhone} + ')'"></span>
                         </td>

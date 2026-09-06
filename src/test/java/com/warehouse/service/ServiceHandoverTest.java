@@ -227,6 +227,35 @@ class ServiceHandoverTest {
     }
 
     @Test
+    @DisplayName("Teslim eden ve teslim alan boş bırakılabilir; makbuz imza çizgisiyle basılır")
+    void handoverPartiesAreOptional() throws Exception {
+        ServiceHandoverRequest request = request(2);
+        request.setHandoverToName(null);
+        request.setHandoverToPhone(null);
+        request.setHandedOverBy(null);
+
+        var result = handoverService.handOver(request, "admin");
+
+        // Kâğıt tezgâhta imzalanıyor; isimleri yazacak vakit olmadığında form yine de
+        // basılabilmeli ve imza blokları elle doldurulmalı.
+        assertThat(result.receipt().getKind()).isEqualTo(DeliveryReceiptKind.SERVICE_HANDOVER);
+        assertThat(result.receipt().getReceiptNo()).startsWith("DC-");
+        assertThat(result.receipt().getHandoverToName()).isNull();
+        assertThat(result.receipt().getHandedOverByName()).isNull();
+
+        byte[] pdf = receiptService.renderPdf(result.transfer().getId(), "admin");
+        try (PDDocument document = PDDocument.load(new ByteArrayInputStream(pdf))) {
+            assertThat(document.getNumberOfPages()).isEqualTo(1);
+            String text = new PDFTextStripper().getText(document);
+            assertThat(text).contains("DEPO ÇIKIŞ MAKBUZU");
+            assertThat(text).contains("TESLİM EDEN");
+            assertThat(text).contains("TESLİM ALAN");
+            // Boş servis satırı hiç basılmıyor: "-" eksik veri izlenimi verirdi.
+            assertThat(text).doesNotContain("Teslim Alan Servis");
+        }
+    }
+
+    @Test
     @DisplayName("Normal transfer hâlâ şoför bilgisi olmadan oluşturulamaz")
     void ordinaryTransferStillRequiresACarrier() {
         // The carrier columns became nullable for the depot exit. This is the test that keeps
