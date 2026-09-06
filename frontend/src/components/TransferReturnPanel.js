@@ -22,6 +22,28 @@ const REASONS = [
 
 const REASON_LABELS = REASONS.reduce((acc, r) => ({ ...acc, [r.value]: r.label }), {});
 
+/**
+ * Siparişe bağlı sevkiyatlarda malın yanında verilmesi gereken ikinci karar.
+ *
+ * Depoda ikisi de aynı görünüyor — mal geri geldi — ama sipariş defterinde tam tersi
+ * şeyler: biri "tekrar deneyeceğiz", diğeri "bu iş bitti". Seçim rezervasyonu da
+ * belirliyor, o yüzden varsayılan bırakılmıyor, sorulur.
+ */
+const ORDER_OUTCOMES = [
+  {
+    value: 'KEEP_ORDER',
+    label: 'Sipariş açık kalsın',
+    hint: 'Teslimat denemesi tutmadı, yeniden gönderilecek. Dönen adet sipariş için yeniden rezerve edilir.',
+  },
+  {
+    value: 'RETURN_ORDER',
+    label: 'Sipariş iade edildi',
+    hint: 'Sipariş "İade Edildi" olur ve mal serbest kalır. Para iadesi ayrı bir adım. Sevkiyatın tamamı geri gelmiş olmalı.',
+  },
+];
+
+const ORDER_OUTCOME_LABELS = ORDER_OUTCOMES.reduce((acc, o) => ({ ...acc, [o.value]: o.label }), {});
+
 const formatDateTime = (value) => {
   if (!value) return '-';
   try {
@@ -51,10 +73,16 @@ export default function TransferReturnPanel({ transfer, isAdmin = false, onTrans
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ reason: 'UNDELIVERED', note: '', returnedAt: '' });
+  const [form, setForm] = useState({
+    reason: 'UNDELIVERED',
+    note: '',
+    returnedAt: '',
+    orderOutcome: 'KEEP_ORDER',
+  });
   const [quantities, setQuantities] = useState({});
 
   const items = useMemo(() => (Array.isArray(transfer?.items) ? transfer.items : []), [transfer]);
+  const orderLinked = Boolean(transfer?.orderId);
 
   /** What is still out for each line, after everything already returned against it. */
   const remainingFor = useCallback(
@@ -90,7 +118,14 @@ export default function TransferReturnPanel({ transfer, isAdmin = false, onTrans
   }, [notice]);
 
   const openForm = () => {
-    setForm({ reason: 'UNDELIVERED', note: '', returnedAt: toLocalInput(new Date()) });
+    setForm({
+      reason: 'UNDELIVERED',
+      note: '',
+      returnedAt: toLocalInput(new Date()),
+      // Açık kalması varsayılan: geri gelen malın çoğu yeniden gönderiliyor, ve yanlış
+      // seçilirse geri alması zor olan taraf siparişi kapatmak.
+      orderOutcome: 'KEEP_ORDER',
+    });
     // Boş başlıyor: hangi kalemin döndüğünü kullanıcı seçmeli. Kalan adetlerle ön doldurmak,
     // tek kalemi dönen bir sevkiyatta tamamını iade etmeyi bir tıka indirirdi.
     setQuantities({});
@@ -112,6 +147,8 @@ export default function TransferReturnPanel({ transfer, isAdmin = false, onTrans
   };
 
   const draftTotal = Object.values(quantities).reduce((sum, q) => sum + q, 0);
+  /** Sevkiyatta hâlâ dışarıda olan toplam; siparişin kapatılabilmesi için hepsi girilmeli. */
+  const remainingTotal = items.reduce((sum, item) => sum + remainingFor(item), 0);
 
   const submit = async (event) => {
     event.preventDefault();
@@ -123,6 +160,13 @@ export default function TransferReturnPanel({ transfer, isAdmin = false, onTrans
       setError('En az bir kalem için iade adedi girin.');
       return;
     }
+    // Adetler düşürülünce "sipariş iade edildi" seçeneği geçersizleşebiliyor; radyo devre dışı
+    // kalıyor ama seçili kalıyordu ve sunucudan hata dönüyordu.
+    const outcome =
+      orderLinked && form.orderOutcome === 'RETURN_ORDER' && draftTotal < remainingTotal
+        ? 'KEEP_ORDER'
+        : form.orderOutcome;
+
     setBusy(true);
     setError('');
     try {
@@ -130,6 +174,7 @@ export default function TransferReturnPanel({ transfer, isAdmin = false, onTrans
         returnedAt: form.returnedAt ? `${form.returnedAt}:00` : null,
         reason: form.reason,
         note: form.note.trim() || null,
+        orderOutcome: orderLinked ? outcome : null,
         items: lines,
       });
       // Sevkiyatı yeniden çekiyoruz: kalem bazındaki returnedQuantity değerleri de değişti ve
@@ -154,7 +199,6 @@ export default function TransferReturnPanel({ transfer, isAdmin = false, onTrans
     transfer?.status === 'COMPLETED' && (transfer?.transferType || 'WAREHOUSE') === 'CUSTOMER_DELIVERY';
   if (!eligible && returns.length === 0) return null;
 
-  const orderLinked = Boolean(transfer?.orderId);
   const fullyReturned = shippedTotal > 0 && returnedTotal >= shippedTotal;
 
   return (
@@ -187,14 +231,8 @@ export default function TransferReturnPanel({ transfer, isAdmin = false, onTrans
           <button
             type="button"
             className="btn btn-sm btn-outline-danger"
-            disabled={busy || loading || !anythingLeftToReturn || orderLinked}
-            title={
-              orderLinked
-                ? 'Bu sevkiyat bir siparişe bağlı; iadeyi e-ticaret iade akışından yürütün.'
-                : !anythingLeftToReturn
-                  ? 'Bu sevkiyatın tamamı zaten iade edildi.'
-                  : undefined
-            }
+            disabled={busy || loading || !anythingLeftToReturn}
+            title={!anythingLeftToReturn ? 'Bu sevkiyatın tamamı zaten iade edildi.' : undefined}
             onClick={openForm}
           >
             <i className="fas fa-rotate-left me-1"></i>
@@ -202,14 +240,6 @@ export default function TransferReturnPanel({ transfer, isAdmin = false, onTrans
           </button>
         )}
       </div>
-
-      {orderLinked && eligible && (
-        <div className="alert alert-info py-2 px-3 small mb-2">
-          <i className="fas fa-circle-info me-1"></i>
-          Bu sevkiyat <strong>{transfer.orderNumber}</strong> siparişine bağlı. Sipariş durumu ve para iadesi
-          birlikte yürüdüğü için iadeyi e-ticaret iade akışından kaydedin.
-        </div>
-      )}
 
       {error && (
         <div className="alert alert-danger py-2 px-3 small mb-2">
@@ -285,6 +315,42 @@ export default function TransferReturnPanel({ transfer, isAdmin = false, onTrans
               </tfoot>
             </table>
           </div>
+
+          {orderLinked && (
+            <div className="border rounded-3 p-2 mb-3 bg-white">
+              <div className="small fw-semibold mb-1">
+                <i className="fas fa-receipt me-1 text-primary"></i>
+                {transfer.orderNumber} siparişi ne olacak?
+              </div>
+              {/* Sorulmak zorunda: mal geri geldi diye sipariş bitmiş olmuyor, ve iki seçenek
+                  rezervasyonu ters yönde etkiliyor. Sunucu da kararsız isteği reddediyor. */}
+              {ORDER_OUTCOMES.map((option) => (
+                <div className="form-check" key={option.value}>
+                  <input
+                    className="form-check-input"
+                    type="radio"
+                    name="orderOutcome"
+                    id={`outcome-${option.value}`}
+                    checked={form.orderOutcome === option.value}
+                    disabled={option.value === 'RETURN_ORDER' && draftTotal < remainingTotal}
+                    onChange={() => setForm((prev) => ({ ...prev, orderOutcome: option.value }))}
+                  />
+                  <label className="form-check-label" htmlFor={`outcome-${option.value}`}>
+                    <span className="small fw-semibold">{option.label}</span>
+                    <span className="d-block text-muted" style={{ fontSize: '0.72rem' }}>
+                      {option.hint}
+                    </span>
+                  </label>
+                </div>
+              ))}
+              {draftTotal < remainingTotal && (
+                <div className="text-muted mt-1" style={{ fontSize: '0.72rem' }}>
+                  <i className="fas fa-circle-info me-1"></i>
+                  Sevkiyatın tamamı girilmediği için sipariş kapatılamaz.
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="row g-2">
             <div className="col-md-6">
@@ -366,6 +432,19 @@ export default function TransferReturnPanel({ transfer, isAdmin = false, onTrans
                     <td className="small">{formatDateTime(entry.returnedAt)}</td>
                     <td className="small">
                       {REASON_LABELS[entry.reason] || entry.reason}
+                      {entry.orderOutcome && (
+                        <div
+                          className={`badge rounded-pill mt-1 ${
+                            entry.orderOutcome === 'RETURN_ORDER'
+                              ? 'bg-danger-subtle text-danger-emphasis border border-danger-subtle'
+                              : 'bg-info-subtle text-info-emphasis border border-info-subtle'
+                          }`}
+                          style={{ fontSize: '0.66rem' }}
+                        >
+                          <i className="fas fa-receipt me-1"></i>
+                          {ORDER_OUTCOME_LABELS[entry.orderOutcome] || entry.orderOutcome}
+                        </div>
+                      )}
                       {entry.note && (
                         <div className="text-muted" style={{ fontSize: '0.72rem' }}>
                           <i className="fas fa-comment-dots me-1"></i>

@@ -10,6 +10,7 @@ import com.warehouse.dto.StockTransferSummary;
 import com.warehouse.dto.StockTransferDeletionResult;
 import com.warehouse.dto.TransferReturnDto;
 import com.warehouse.dto.TransferReturnRequest;
+import com.warehouse.enums.TransferReturnOrderOutcome;
 import com.warehouse.entity.Product;
 import com.warehouse.entity.Stock;
 import com.warehouse.entity.StockTransfer;
@@ -74,6 +75,7 @@ public class StockTransferServiceImpl implements StockTransferService {
 
     private final StockTransferRepository stockTransferRepository;
     private final TransferReturnRepository transferReturnRepository;
+    private final com.warehouse.repository.ReturnRequestRepository returnRequestRepository;
     private final StockRepository stockRepository;
     private final ProductRepository productRepository;
     private final StockService stockService;
@@ -102,9 +104,11 @@ public class StockTransferServiceImpl implements StockTransferService {
                                     CustomerRepository customerRepository,
                                     com.warehouse.service.DriverService driverService,
                                     com.warehouse.service.VehicleService vehicleService,
-                                    TransferReturnRepository transferReturnRepository) {
+                                    TransferReturnRepository transferReturnRepository,
+                                    com.warehouse.repository.ReturnRequestRepository returnRequestRepository) {
         this.stockTransferRepository = stockTransferRepository;
         this.transferReturnRepository = transferReturnRepository;
+        this.returnRequestRepository = returnRequestRepository;
         this.stockRepository = stockRepository;
         this.productRepository = productRepository;
         this.warehouseRepository = warehouseRepository;
@@ -520,14 +524,23 @@ public class StockTransferServiceImpl implements StockTransferService {
                     "Depolar arası transferin iadesi ters yönde bir transferdir; iade kaydı "
                             + "müşteri sevkiyatları içindir.");
         }
-        if (transfer.getOrderId() != null) {
-            // Completing an order-linked shipment marks the order DELIVERED. Undoing that
-            // properly means deciding the order status and the refund, which is exactly what
-            // the storefront return flow exists for — quietly restocking here would leave a
-            // delivered order whose goods are back on our shelves.
+        boolean orderLinked = transfer.getOrderId() != null;
+        TransferReturnOrderOutcome outcome = request.getOrderOutcome();
+        if (orderLinked) {
+            if (outcome == null) {
+                // Completing an order-linked shipment marks the order DELIVERED, and that is
+                // now untrue. Restocking without saying what became of the order would leave a
+                // delivered order whose goods are back on our shelves — the caller has to
+                // choose, because a failed delivery attempt and a dead order are identical in
+                // the warehouse and opposite in the order book.
+                throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                        "Bu sevkiyat " + transfer.getOrderNumber() + " siparişine bağlı. "
+                                + "Siparişin ne olacağını da belirtmelisiniz.");
+            }
+            requireNoSettledStorefrontReturn(transfer);
+        } else if (outcome != null) {
             throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
-                    "Bu sevkiyat " + transfer.getOrderNumber() + " siparişine bağlı. "
-                            + "İadeyi e-ticaret iade akışından yürütün.");
+                    "Siparişe bağlı olmayan sevkiyatta sipariş kararı verilemez.");
         }
 
         LocalDateTime now = LocalDateTime.now();
@@ -581,6 +594,18 @@ public class StockTransferServiceImpl implements StockTransferService {
             affected.add(item);
         }
 
+        // Every check happens before anything moves. The order-level decision used to be
+        // validated after the stock had already gone back on the shelf, which only looked
+        // harmless because the surrounding transaction rolled it back — a rejected request
+        // must not depend on rollback to leave the warehouse untouched.
+        int total = requested.values().stream().mapToInt(Integer::intValue).sum();
+        int shipped = transfer.getQuantity() == null ? 0 : transfer.getQuantity();
+        int returnedAfter =
+                (transfer.getReturnedQuantity() == null ? 0 : transfer.getReturnedQuantity()) + total;
+        if (outcome == TransferReturnOrderOutcome.RETURN_ORDER) {
+            requireOrderFullyBack(transfer, returnedAfter >= shipped);
+        }
+
         Map<String, Stock> sourceStocks = loadSourceStocks(transfer.getSourceWarehouse(), affected);
 
         TransferReturn transferReturn = new TransferReturn();
@@ -588,9 +613,17 @@ public class StockTransferServiceImpl implements StockTransferService {
         transferReturn.setReturnedAt(returnedAt);
         transferReturn.setReason(request.getReason());
         transferReturn.setNote(trimToNull(request.getNote()));
+        transferReturn.setOrderOutcome(outcome);
         transferReturn.setRecordedBy(CurrentUser.usernameOrSystem());
 
-        int total = 0;
+        // What the order still claims on each stock row. Completion consumed part of the
+        // reservation and deducted the rest directly, so putting the units back has to follow
+        // the same split — reserving everything that comes back would lock away more than the
+        // order ever asked for, and those units would look unavailable to everyone else.
+        boolean restoreReservation = outcome == TransferReturnOrderOutcome.KEEP_ORDER;
+        Map<Long, Integer> orderReservations =
+                restoreReservation ? reservedForOrder(transfer.getOrderId()) : Map.of();
+
         for (StockTransferItem item : affected) {
             int quantity = requested.get(item.getId());
             Stock stock = sourceStocks.get(stockKey(item));
@@ -600,32 +633,68 @@ public class StockTransferServiceImpl implements StockTransferService {
             // removal; skipping the restock here would leave goods on the floor that the system
             // says do not exist.
             stock.setQuantity(stock.getQuantity() + quantity);
-            Stock saved = stockRepository.save(stock);
-            logStockReturnForTransfer(saved, quantity, transfer, transferReturn);
 
-            item.setReturnedQuantity(
-                    (item.getReturnedQuantity() == null ? 0 : item.getReturnedQuantity()) + quantity);
+            // Completing the shipment consumed the order's reservation on these units. If the
+            // order is still alive they have to go back to being spoken for, or the next
+            // customer can buy goods already promised to this one. When the order is being
+            // returned there is nothing waiting on them and they come back free.
+            //
+            // Only the reserved share goes back. Completion took min(line, claim) out of the
+            // reservation and the remainder straight off the shelf; the mirror of that has to
+            // subtract what earlier partial returns already put back, or a line shipped above
+            // its reserved share would over-restore on the second return.
+            int alreadyReturned = item.getReturnedQuantity() == null ? 0 : item.getReturnedQuantity();
+            int reservedShare = restoreReservation
+                    ? reservationShare(orderReservations, stock, item.getQuantity()) : 0;
+            int restoreNow = Math.min(alreadyReturned + quantity, reservedShare)
+                    - Math.min(alreadyReturned, reservedShare);
+            if (restoreNow > 0) {
+                stock.setReservedQuantity(
+                        (stock.getReservedQuantity() == null ? 0 : stock.getReservedQuantity())
+                                + restoreNow);
+            }
+            Stock saved = stockRepository.save(stock);
+            logStockReturnForTransfer(saved, quantity, transfer, transferReturn, restoreNow);
+
+            item.setReturnedQuantity(alreadyReturned + quantity);
 
             TransferReturnItem returnItem = new TransferReturnItem();
             returnItem.setTransferItem(item);
             returnItem.setProductId(item.getProduct() != null ? item.getProduct().getId() : null);
             returnItem.setQuantity(quantity);
             transferReturn.addItem(returnItem);
-            total += quantity;
         }
         transferReturn.setTotalQuantity(total);
 
-        transfer.setReturnedQuantity(
-                (transfer.getReturnedQuantity() == null ? 0 : transfer.getReturnedQuantity()) + total);
+        transfer.setReturnedQuantity(returnedAfter);
         stockTransferRepository.save(transfer);
         TransferReturn savedReturn = transferReturnRepository.save(transferReturn);
+
+        if (outcome == TransferReturnOrderOutcome.RETURN_ORDER) {
+            // Walks DELIVERED → RETURN_REQUESTED → RETURNED through the state machine, leaving
+            // a history entry for each step. Refunding is deliberately not automatic: money
+            // leaving the company is its own decision, and RETURNED → REFUNDED is where it is
+            // made.
+            syncLinkedOrderStatus(transfer, com.warehouse.enums.OrderStatus.RETURNED,
+                    String.format("Sevkiyat #%d iadesi: %d adet depoya geri alındı (%s)",
+                            transfer.getId(), total, request.getReason()));
+        } else if (outcome == TransferReturnOrderOutcome.KEEP_ORDER) {
+            // The status does not move — the order is still to be delivered — but the attempt
+            // has to be visible on the order, or its history shows a delivery that silently
+            // came undone.
+            noteOnLinkedOrder(transfer,
+                    String.format("Sevkiyat #%d iadesi: %d adet depoya geri alındı (%s). "
+                                    + "Sipariş açık, yeniden gönderilecek.",
+                            transfer.getId(), total, request.getReason()));
+        }
 
         String username = CurrentUser.usernameOrSystem();
         auditService.log(AuditAction.TRANSFER_RETURN, DomainEntityType.StockTransfer.name(),
                 transfer.getId(), username,
-                String.format("Sevkiyat iadesi alındı: %d adet (%s) | %s | Sebep=%s",
+                String.format("Sevkiyat iadesi alındı: %d adet (%s) | %s | Sebep=%s%s",
                         total, describeReturnItems(transferReturn), describeRoute(transfer),
-                        request.getReason()),
+                        request.getReason(),
+                        outcome == null ? "" : " | Sipariş=" + outcome),
                 buildTransferMetadata(transfer));
         notificationService.create(buildTransferNotification(
                 "Sevkiyat iadesi alındı",
@@ -643,6 +712,64 @@ public class StockTransferServiceImpl implements StockTransferService {
         return transferReturnRepository.findByTransferId(transferId).stream()
                 .map(this::toReturnDto)
                 .toList();
+    }
+
+    /**
+     * Refuses a return when the storefront flow has already taken these goods back in.
+     *
+     * <p>{@code ReturnRequestServiceImpl.markReceived} restocks on its own. If a customer
+     * return for this order has reached that point, recording a shipment return too would add
+     * the same units twice — and nothing downstream would notice, because both writes look
+     * perfectly ordinary on their own.</p>
+     */
+    private void requireNoSettledStorefrontReturn(StockTransfer transfer) {
+        List<com.warehouse.entity.ReturnRequest> settled =
+                returnRequestRepository.findByOrderIdAndStatusIn(transfer.getOrderId(),
+                        List.of(com.warehouse.enums.ReturnStatus.RECEIVED,
+                                com.warehouse.enums.ReturnStatus.REFUND_PROCESSING,
+                                com.warehouse.enums.ReturnStatus.REFUNDED));
+        if (!settled.isEmpty()) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                    "Bu siparişin e-ticaret iadesi (" + settled.get(0).getReturnNumber()
+                            + ") zaten teslim alınmış ve ürünler stoğa eklenmiş. "
+                            + "Aynı mal ikinci kez iade edilemez.");
+        }
+    }
+
+    /**
+     * Guards the order-level {@code RETURNED} decision.
+     *
+     * <p>Marking an order returned is a claim about the whole order, so it only holds when
+     * nothing is still out: this shipment fully back, and no other live shipment on the same
+     * order carrying goods that never came home.</p>
+     */
+    private void requireOrderFullyBack(StockTransfer transfer, boolean thisShipmentFullyBack) {
+        if (!thisShipmentFullyBack) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                    "Sipariş iade edildi olarak işaretlenemez: bu sevkiyatın tamamı geri "
+                            + "gelmedi. Kısmi iadede siparişi açık bırakın.");
+        }
+        for (StockTransfer other : stockTransferRepository.findByOrderId(transfer.getOrderId())) {
+            if (Objects.equals(other.getId(), transfer.getId())) continue;
+            if (other.getStatus() == TransferStatus.CANCELLED) continue;
+            int otherShipped = other.getQuantity() == null ? 0 : other.getQuantity();
+            int otherReturned = other.getReturnedQuantity() == null ? 0 : other.getReturnedQuantity();
+            if (otherReturned < otherShipped) {
+                throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                        String.format("Sipariş iade edildi olarak işaretlenemez: #%d numaralı "
+                                        + "sevkiyatın %d adedi hâlâ dışarıda.",
+                                other.getId(), otherShipped - otherReturned));
+            }
+        }
+    }
+
+    /** Writes a history line on the linked order without moving its status. */
+    private void noteOnLinkedOrder(StockTransfer transfer, String note) {
+        if (transfer.getOrderId() == null) return;
+        orderRepository.findById(transfer.getOrderId()).ifPresent(order ->
+                orderStatusHistoryRepository.save(com.warehouse.util.OrderStatusHistoryFactory.create(
+                        order, order.getStatus(), order.getStatus(),
+                        CurrentUser.usernameOrSystem(), "STOCK_TRANSFER", note)));
     }
 
     private TransferReturnDto toReturnDto(TransferReturn source) {
@@ -663,6 +790,7 @@ public class StockTransferServiceImpl implements StockTransferService {
                 .returnedAt(source.getReturnedAt())
                 .reason(source.getReason())
                 .note(source.getNote())
+                .orderOutcome(source.getOrderOutcome())
                 .totalQuantity(source.getTotalQuantity())
                 .recordedBy(source.getRecordedBy())
                 .createdAt(source.getCreatedAt())
@@ -686,7 +814,7 @@ public class StockTransferServiceImpl implements StockTransferService {
      * appearing out of nowhere.
      */
     private void logStockReturnForTransfer(Stock stock, Integer quantity, StockTransfer transfer,
-                                           TransferReturn transferReturn) {
+                                           TransferReturn transferReturn, int reReserved) {
         String username = CurrentUser.usernameOrSystem();
         Warehouse warehouse = stock.getWarehouse();
         Product product = stock.getProduct();
@@ -704,9 +832,12 @@ public class StockTransferServiceImpl implements StockTransferService {
                 .build();
 
         String detailsMessage = String.format(
-                "Sevkiyat iadesiyle stok artırıldı: +%s adet → Yeni=%s | Transfer #%d | "
+                "Sevkiyat iadesiyle stok artırıldı: +%s adet → Yeni=%s%s | Transfer #%d | "
                         + "Sebep=%s | Depo=%s, Ürün=%s",
-                quantity, stock.getQuantity(), transfer.getId(), transferReturn.getReason(),
+                quantity, stock.getQuantity(),
+                reReserved > 0 ? String.format(" (%d adet sipariş için yeniden rezerve edildi)",
+                        reReserved) : "",
+                transfer.getId(), transferReturn.getReason(),
                 warehouse != null ? warehouse.getName() : "N/A",
                 product != null ? product.getName() : "N/A");
 

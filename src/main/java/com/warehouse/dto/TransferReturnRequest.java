@@ -1,6 +1,7 @@
 package com.warehouse.dto;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.warehouse.enums.TransferReturnOrderOutcome;
 import com.warehouse.enums.TransferReturnReason;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
@@ -25,6 +26,13 @@ public class TransferReturnRequest {
 
     @Size(max = 1000, message = "Not 1000 karakteri aşamaz")
     private String note;
+
+    /**
+     * What happens to the linked order. Required when the shipment has one, rejected when it
+     * does not — the two cases have different consequences for both the order book and the
+     * stock reservation, and neither can be guessed from the goods coming back.
+     */
+    private TransferReturnOrderOutcome orderOutcome;
 
     @Valid
     @NotEmpty(message = "En az bir kalem iade edilmelidir")

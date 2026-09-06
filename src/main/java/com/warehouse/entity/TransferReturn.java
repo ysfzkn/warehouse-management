@@ -1,6 +1,7 @@
 package com.warehouse.entity;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.warehouse.enums.TransferReturnOrderOutcome;
 import com.warehouse.enums.TransferReturnReason;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -55,6 +56,14 @@ public class TransferReturn {
     /** Sum of the line quantities, so listings need no join. */
     @Column(name = "total_quantity", nullable = false)
     private Integer totalQuantity;
+
+    /**
+     * What was decided about the linked order. Null when the shipment carries no order —
+     * there is no decision to make there.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "order_outcome", length = 30)
+    private TransferReturnOrderOutcome orderOutcome;
 
     @Column(name = "recorded_by", length = 100)
     private String recordedBy;

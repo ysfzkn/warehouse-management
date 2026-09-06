@@ -1,5 +1,6 @@
 package com.warehouse.dto;
 
+import com.warehouse.enums.TransferReturnOrderOutcome;
 import com.warehouse.enums.TransferReturnReason;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -21,6 +22,8 @@ public class TransferReturnDto {
     private LocalDateTime returnedAt;
     private TransferReturnReason reason;
     private String note;
+    /** Order decision, when the shipment had a linked order. */
+    private TransferReturnOrderOutcome orderOutcome;
     private Integer totalQuantity;
     private String recordedBy;
     private LocalDateTime createdAt;
