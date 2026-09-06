@@ -192,7 +192,12 @@
                         Basım: <b th:text="${receipt.revision} + '. nüsha'">2. nüsha</b>
                     </div>
                 </div>
-                <div class="copy-badge" th:text="${copy}">FİRMA NÜSHASI</div>
+                <!-- Rozet iki nüshayı birbirinden ayırmak için var: şoför müşteri nüshasını
+                     bırakır, firma nüshasını imzalı getirir. Depo çıkışında ayrılacak bir şey
+                     yok, tek kâğıt basılıyor; "TEK NÜSHA" rozeti bir ayrım değil, kendi
+                     kendini tekrar eden bir etiketti. copies listesi yine tek elemanlı
+                     kalıyor, sayfa sayısını o belirliyor. -->
+                <div class="copy-badge" th:unless="${handover}" th:text="${copy}">FİRMA NÜSHASI</div>
             </td>
         </tr>
     </table>
@@ -245,12 +250,13 @@
                                   th:text="' (' + ${receipt.handoverToPhone} + ')'"></span>
                         </td>
                     </tr>
+                    <!-- Depo çıkışında taşıyıcı henüz belli değil: alanlar boş kalıyor,
+                         elle ya da sonradan sisteme girildiğinde yeniden basımla doluyor.
+                         Ne "-" ne de açıklama yazısı — ikisi de kâğıdı okuyana bir şey
+                         söylemiyor, boş satır zaten "doldurulacak" demek. -->
                     <tr>
                         <td class="k">Şoför</td>
-                        <!-- Taşıyıcı sonradan belirleniyor. Boş bir "-" eksik veri gibi
-                             görünürdü; burada eksiklik değil, sürecin kendisi. -->
-                        <td class="v" th:if="${handover and receipt.driverName == null}"
-                            style="font-weight:400;color:#55606d;">Sonradan belirlenecek</td>
+                        <td class="v" th:if="${handover and receipt.driverName == null}"></td>
                         <td class="v" th:unless="${handover and receipt.driverName == null}">
                             <span th:text="${receipt.driverName} ?: '-'">-</span>
                             <span th:if="${receipt.driverPhone}" th:text="' (' + ${receipt.driverPhone} + ')'"></span>
@@ -258,8 +264,7 @@
                     </tr>
                     <tr>
                         <td class="k">Araç Plakası</td>
-                        <td class="v" th:if="${handover and receipt.vehiclePlate == null}"
-                            style="font-weight:400;color:#55606d;">Sonradan belirlenecek</td>
+                        <td class="v" th:if="${handover and receipt.vehiclePlate == null}"></td>
                         <td class="v" th:unless="${handover and receipt.vehiclePlate == null}"
                             th:text="${receipt.vehiclePlate} ?: '-'">-</td>
                     </tr>

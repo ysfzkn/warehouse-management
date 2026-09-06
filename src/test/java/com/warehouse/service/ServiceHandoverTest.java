@@ -162,8 +162,11 @@ class ServiceHandoverTest {
             String text = new PDFTextStripper().getText(document);
             assertThat(text).contains("DEPO ÇIKIŞ MAKBUZU");
             assertThat(text).contains("Nakliyat");          // Turkish letters survived
-            assertThat(text).contains("Sonradan belirlenecek");
             assertThat(text).doesNotContain("MÜŞTERİ NÜSHASI");
+            // Tek kâğıt basıldığı için ayırt edici rozete gerek yok; taşıyıcı alanları da
+            // açıklama yazısı yerine boş kalıyor.
+            assertThat(text).doesNotContain("TEK NÜSHA");
+            assertThat(text).doesNotContain("Sonradan belirlenecek");
         }
     }
 
