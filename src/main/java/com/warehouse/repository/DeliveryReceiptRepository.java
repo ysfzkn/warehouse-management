@@ -2,51 +2,36 @@ package com.warehouse.repository;
 
 import com.warehouse.entity.DeliveryReceipt;
 import com.warehouse.enums.DeliveryReceiptStatus;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
-public interface DeliveryReceiptRepository extends JpaRepository<DeliveryReceipt, Long> {
+/**
+ * Note the absence of a filtering query here.
+ *
+ * <p>The receipts screen used to be backed by one JPQL statement with a
+ * {@code (:param IS NULL OR ...)} branch per filter. That runs on H2 and fails on
+ * PostgreSQL: a bare parameter in {@code $n IS NULL} has no type context, so the server
+ * rejects the whole statement with {@code 42P18 could not determine data type of
+ * parameter}. Every test passed and the page was blank in production.</p>
+ *
+ * <p>The filters are built as a {@link org.springframework.data.jpa.domain.Specification}
+ * in {@code DeliveryReceiptServiceImpl} instead — a predicate is only added when the
+ * caller actually supplied that filter, so no null-typed parameter ever reaches the
+ * database and the statement carries only the conditions in use.</p>
+ */
+public interface DeliveryReceiptRepository
+        extends JpaRepository<DeliveryReceipt, Long>,
+                JpaSpecificationExecutor<DeliveryReceipt> {
 
     Optional<DeliveryReceipt> findByTransferId(Long transferId);
 
     Optional<DeliveryReceipt> findByReceiptNo(String receiptNo);
 
     List<DeliveryReceipt> findByTransferIdIn(List<Long> transferIds);
-
-    /**
-     * Backing query for the receipts screen. {@code attachmentCount} is projected here
-     * rather than counted per row in the service, so listing 50 receipts stays one query
-     * instead of 51.
-     */
-    @Query("""
-            SELECT r FROM DeliveryReceipt r
-            WHERE (:status IS NULL OR r.status = :status)
-              AND (:hasSignedCopy IS NULL
-                   OR (:hasSignedCopy = TRUE  AND SIZE(r.attachments) > 0)
-                   OR (:hasSignedCopy = FALSE AND SIZE(r.attachments) = 0))
-              AND (:from IS NULL OR r.issuedAt >= :from)
-              AND (:to   IS NULL OR r.issuedAt <= :to)
-              AND (:search IS NULL OR :search = '' OR
-                   LOWER(r.receiptNo)         LIKE LOWER(CONCAT('%', :search, '%')) OR
-                   LOWER(r.customerFullName)  LIKE LOWER(CONCAT('%', :search, '%')) OR
-                   LOWER(r.customerPhone)     LIKE LOWER(CONCAT('%', :search, '%')) OR
-                   LOWER(r.driverName)        LIKE LOWER(CONCAT('%', :search, '%')) OR
-                   LOWER(r.vehiclePlate)      LIKE LOWER(CONCAT('%', :search, '%')) OR
-                   LOWER(r.orderNumber)       LIKE LOWER(CONCAT('%', :search, '%')))
-            """)
-    Page<DeliveryReceipt> search(@Param("status") DeliveryReceiptStatus status,
-                                 @Param("hasSignedCopy") Boolean hasSignedCopy,
-                                 @Param("from") LocalDateTime from,
-                                 @Param("to") LocalDateTime to,
-                                 @Param("search") String search,
-                                 Pageable pageable);
 
     long countByStatus(DeliveryReceiptStatus status);
 

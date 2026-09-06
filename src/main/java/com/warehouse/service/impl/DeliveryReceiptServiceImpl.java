@@ -31,6 +31,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -302,8 +303,73 @@ public class DeliveryReceiptServiceImpl implements DeliveryReceiptService {
                                            LocalDateTime to,
                                            String search,
                                            Pageable pageable) {
-        return receiptRepository.search(status, hasSignedCopy, from, to,
-                search == null ? null : search.trim(), pageable).map(this::toDto);
+        return receiptRepository.findAll(
+                filter(status, hasSignedCopy, from, to, search), pageable).map(this::toDto);
+    }
+
+    /**
+     * Builds only the predicates the caller actually asked for.
+     *
+     * <p>The obvious alternative — one JPQL statement with a {@code (:param IS NULL OR ...)}
+     * branch per filter — is what this replaced. It ran on H2 and failed on PostgreSQL with
+     * {@code 42P18 could not determine data type of parameter}: a bare parameter compared
+     * only against NULL has no type for the server to infer, so it refuses the statement
+     * before looking at a single row. The receipts screen came up empty in production while
+     * every test passed.</p>
+     *
+     * <p>A specification has no such hole. An absent filter contributes no predicate and
+     * therefore no parameter, and the statement that reaches the database carries only the
+     * conditions in use.</p>
+     */
+    private static Specification<DeliveryReceipt> filter(DeliveryReceiptStatus status,
+                                                         Boolean hasSignedCopy,
+                                                         LocalDateTime from,
+                                                         LocalDateTime to,
+                                                         String search) {
+        return (root, query, cb) -> {
+            List<jakarta.persistence.criteria.Predicate> predicates = new ArrayList<>();
+
+            if (status != null) {
+                predicates.add(cb.equal(root.get("status"), status));
+            }
+            if (from != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("issuedAt"), from));
+            }
+            if (to != null) {
+                predicates.add(cb.lessThanOrEqualTo(root.get("issuedAt"), to));
+            }
+
+            String needle = search == null ? null : search.trim();
+            if (needle != null && !needle.isEmpty()) {
+                // Locale.ROOT, Türkçe locale değil. Sütun tarafını veritabanının lower()'ı
+                // küçültüyor ve o "I" harfini "i" yapıyor; Türkçe locale ise "ı" yapardı.
+                // İki taraf farklı kurala göre küçültülünce "Işık" araması hiçbir zaman
+                // "Işık Şahin"i bulamazdı — eski sorgu her iki tarafı da veritabanına
+                // küçülttürdüğü için bu sorun yoktu, buraya taşırken doğmuş olurdu.
+                String like = "%" + needle.toLowerCase(Locale.ROOT) + "%";
+                predicates.add(cb.or(
+                        cb.like(cb.lower(root.get("receiptNo")), like),
+                        cb.like(cb.lower(root.get("customerFullName")), like),
+                        cb.like(cb.lower(root.get("customerPhone")), like),
+                        cb.like(cb.lower(root.get("driverName")), like),
+                        cb.like(cb.lower(root.get("vehiclePlate")), like),
+                        cb.like(cb.lower(root.get("orderNumber")), like)));
+            }
+
+            if (hasSignedCopy != null) {
+                // EXISTS rather than a count: the question is only whether the receipt has
+                // any attachment at all, and the server can stop at the first row.
+                jakarta.persistence.criteria.Subquery<Integer> signed = query.subquery(Integer.class);
+                var attachment = signed.from(DeliveryReceiptAttachment.class);
+                signed.select(cb.literal(1))
+                      .where(cb.equal(attachment.get("receipt"), root));
+                predicates.add(hasSignedCopy ? cb.exists(signed) : cb.not(cb.exists(signed)));
+            }
+
+            return predicates.isEmpty()
+                    ? cb.conjunction()
+                    : cb.and(predicates.toArray(new jakarta.persistence.criteria.Predicate[0]));
+        };
     }
 
     @Override
