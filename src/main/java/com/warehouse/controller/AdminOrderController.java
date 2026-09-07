@@ -614,7 +614,25 @@ public class AdminOrderController {
     public ResponseEntity<Map<String, String>> refundOrder(@PathVariable Long id,
                                                             @RequestBody Map<String, Object> body,
                                                             jakarta.servlet.http.HttpServletRequest request) {
-        java.math.BigDecimal amount = new java.math.BigDecimal(body.get("amount").toString());
+        // Tutar gövdeden serbestçe okunuyordu: alan yoksa NullPointerException, sayı
+        // değilse NumberFormatException — ikisi de 500 dönüyordu. Para iade eden bir uçta
+        // "beklenmeyen hata" demek, işlemin yapılıp yapılmadığını da belirsiz bırakır.
+        Object rawAmount = body != null ? body.get("amount") : null;
+        if (rawAmount == null || rawAmount.toString().isBlank()) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                    "İade tutarı belirtilmeli.");
+        }
+        java.math.BigDecimal amount;
+        try {
+            amount = new java.math.BigDecimal(rawAmount.toString().trim());
+        } catch (NumberFormatException e) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                    "İade tutarı sayı olmalı.");
+        }
+        if (amount.signum() <= 0) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                    "İade tutarı sıfırdan büyük olmalı.");
+        }
         String reason = (String) body.getOrDefault("reason", "Admin iade");
         paymentService.initiateRefund(id, amount, reason, request.getRemoteAddr());
         return ResponseEntity.ok(Map.of("message", "İade işlemi başlatıldı."));

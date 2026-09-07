@@ -89,6 +89,12 @@ public class AdminInvoiceController {
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<InvoiceDto> createInvoice(@RequestBody InvoiceCreateRequest request) {
+        // orderId boş geldiğinde findById(null) çağrılıyor ve Spring Data
+        // "The given id must not be null" ile patlıyordu; istemciye 500 dönüyordu.
+        if (request == null || request.getOrderId() == null) {
+            throw new com.warehouse.exception.WarehouseManagementException(
+                    com.warehouse.exception.ErrorCode.VALIDATION_ERROR, "Sipariş kimliği zorunlu.");
+        }
         logger.info("Manuel fatura oluşturma: siparisId={}", request.getOrderId());
         InvoiceDto invoice = invoiceService.createInvoice(request);
         return ResponseEntity.ok(invoice);

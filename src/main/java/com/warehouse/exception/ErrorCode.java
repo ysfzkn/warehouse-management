@@ -14,6 +14,8 @@ public enum ErrorCode {
     COLOR_NOT_FOUND("COLOR_001", "Renk bulunamadı", HttpStatus.NOT_FOUND),
     STOCK_NOT_FOUND("STOCK_001", "Stok kaydı bulunamadı", HttpStatus.NOT_FOUND),
     TRANSFER_NOT_FOUND("TRANSFER_001", "Transfer kaydı bulunamadı", HttpStatus.NOT_FOUND),
+    /** Kendi koduna sahip olmayan kayıtlar için genel 404. */
+    RESOURCE_NOT_FOUND("RESOURCE_001", "Kayıt bulunamadı", HttpStatus.NOT_FOUND),
     
     // Duplicate Record (409)
     PRODUCT_SKU_ALREADY_EXISTS("PRODUCT_002", "Bu stok kodu (SKU) zaten başka bir üründe kullanılıyor. Lütfen farklı bir SKU girin.", HttpStatus.CONFLICT),

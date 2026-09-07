@@ -276,7 +276,11 @@ public class GlobalExceptionHandler {
             org.springframework.web.bind.MissingServletRequestParameterException.class,
             org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class,
             org.springframework.http.converter.HttpMessageNotReadableException.class,
-            org.springframework.data.mapping.PropertyReferenceException.class
+            org.springframework.data.mapping.PropertyReferenceException.class,
+            // Dosya yükleme uçlarına düz JSON gönderildiğinde. İstemcinin yanlış
+            // Content-Type ile geldiğini söylüyor; sunucuda arıza yok.
+            org.springframework.web.multipart.MultipartException.class,
+            org.springframework.web.multipart.support.MissingServletRequestPartException.class
     })
     public ResponseEntity<ErrorResponse> handleBadRequest(Exception ex, HttpServletRequest request) {
         ErrorResponse errorResponse = new ErrorResponse(

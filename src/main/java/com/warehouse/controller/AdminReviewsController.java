@@ -57,7 +57,7 @@ public class AdminReviewsController {
     /** Admin reply to a review (shown publicly under the review). */
     @PutMapping("/{id}/reply")
     public ResponseEntity<?> reply(@PathVariable Long id, @RequestBody Map<String, Object> body) {
-        Review r = reviewRepo.findById(id).orElseThrow();
+        Review r = findReviewOrThrow(id);
         Object reply = body.get("reply");
         String text = reply != null ? reply.toString().trim() : null;
         r.setAdminReply(text == null || text.isEmpty() ? null : (text.length() > 1000 ? text.substring(0, 1000) : text));
@@ -90,7 +90,7 @@ public class AdminReviewsController {
 
     @PostMapping("/{id}/approve")
     public ResponseEntity<?> approve(@PathVariable Long id) {
-        Review r = reviewRepo.findById(id).orElseThrow();
+        Review r = findReviewOrThrow(id);
         r.setApproved(true);
         reviewRepo.save(r);
         log.info("[Reviews] Approved id={}, product={}, rating={}",
@@ -109,11 +109,25 @@ public class AdminReviewsController {
             method = { org.springframework.web.bind.annotation.RequestMethod.POST,
                        org.springframework.web.bind.annotation.RequestMethod.DELETE })
     public ResponseEntity<?> reject(@PathVariable Long id, @RequestParam(required = false) String reason) {
-        Review r = reviewRepo.findById(id).orElseThrow();
+        Review r = findReviewOrThrow(id);
         log.info("[Reviews] Rejected/deleted id={}, product={}, reason={}",
                 r.getId(), r.getProduct() != null ? r.getProduct().getId() : null, reason);
         reviewRepo.delete(r);
         return ResponseEntity.ok(Map.of("message", "Yorum silindi"));
+    }
+
+    /**
+     * Yorumu getirir, yoksa 404.
+     *
+     * <p>Üç uç da {@code orElseThrow()} kullanıyordu; argümansız hâli
+     * {@code NoSuchElementException} atıyor ve o da catch-all'a düşüp 500 dönüyordu.
+     * Silinmiş bir yoruma tıklamak sunucu arızası değil, yönetici o kaydın gittiğini
+     * görmeli.</p>
+     */
+    private Review findReviewOrThrow(Long id) {
+        return reviewRepo.findById(id)
+                .orElseThrow(() -> new com.warehouse.exception.WarehouseManagementException(
+                        com.warehouse.exception.ErrorCode.RESOURCE_NOT_FOUND, "Yorum bulunamadı: " + id));
     }
 
     private Map<String, Object> toDto(Review r) {

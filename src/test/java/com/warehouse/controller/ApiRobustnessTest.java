@@ -8,6 +8,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,6 +17,8 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -106,6 +109,70 @@ class ApiRobustnessTest {
         assertThat(row).hasSize(2);
         assertThat(row[0]).isInstanceOf(Number.class);
         assertThat(row[1]).isInstanceOf(Number.class);
+    }
+
+    @Test
+    @DisplayName("Dosya bekleyen uca JSON gelirse 400")
+    @WithMockUser(roles = "ADMIN")
+    void multipartEndpointRejectsJsonBody() throws Exception {
+        // Yanlış Content-Type istemcinin hatası; sunucuda arıza yok.
+        mvc.perform(post("/api/admin/settings/site/logo")
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("Olmayan yoruma yanıt/onay 404")
+    @WithMockUser(roles = "ADMIN")
+    void missingReviewIsNotFound() throws Exception {
+        // Üç uç da argümansız orElseThrow() kullanıyordu: NoSuchElementException catch-all'a
+        // düşüp 500 dönüyordu. Silinmiş bir yoruma tıklamak sunucu arızası değil.
+        mvc.perform(put("/api/admin/reviews/999999999/reply")
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"reply\":\"deneme\"}"))
+                .andExpect(status().isNotFound());
+        mvc.perform(post("/api/admin/reviews/999999999/approve"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("İade tutarı eksik ya da sayı değilse 400")
+    @WithMockUser(roles = "ADMIN")
+    void refundValidatesAmount() throws Exception {
+        // Tutar gövdeden doğrudan okunuyordu: alan yoksa NullPointerException, sayı değilse
+        // NumberFormatException — ikisi de 500. Para iade eden bir uçta "beklenmeyen hata"
+        // demek, işlemin yapılıp yapılmadığını da belirsiz bırakır.
+        mvc.perform(put("/api/admin/orders/999999999/refund")
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(put("/api/admin/orders/999999999/refund")
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"amount\":\"abc\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("Fatura oluşturmada sipariş kimliği zorunlu")
+    @WithMockUser(roles = "ADMIN")
+    void invoiceRequiresOrderId() throws Exception {
+        // orderId boşken findById(null) çağrılıyor ve Spring Data patlıyordu.
+        mvc.perform(post("/api/admin/invoices")
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("Depo rolleri yönetici uçlarında yazma yapamaz")
+    @WithMockUser(roles = "STOCK_IN")
+    void warehouseRoleCannotMutateAdminResources() throws Exception {
+        // Yetki taraması 194 mutasyon ucunun tamamında temiz çıktı; buradaki birkaç örnek
+        // o taramanın yerini tutmuyor, yalnızca kuralın kazara gevşemesini yakalıyor.
+        mvc.perform(post("/api/admin/invoices")
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(put("/api/admin/orders/999999999/refund")
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(post("/api/admin/reviews/999999999/approve"))
+                .andExpect(status().isForbidden());
     }
 
     @Test
