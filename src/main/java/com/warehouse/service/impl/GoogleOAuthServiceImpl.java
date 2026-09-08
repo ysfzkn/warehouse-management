@@ -99,6 +99,23 @@ public class GoogleOAuthServiceImpl implements GoogleOAuthService {
                 "Google hesabindan email bilgisi alinamadi.");
         }
 
+        // Google hands back email_verified=false for accounts whose address it never
+        // confirmed — some Workspace-managed and legacy consumer accounts. The caller
+        // signs whoever holds that address straight into the existing customer record
+        // that owns it, so an unverified address is an account-takeover primitive:
+        // register a Google account claiming someone else's e-mail, sign in, inherit
+        // their orders and addresses. Only a confirmed address may stand in for a
+        // password. Accepts the boolean and the string form, since the field's JSON
+        // type is not something to bet a login path on.
+        Object verifiedClaim = userInfo.get("email_verified");
+        boolean emailVerified = Boolean.TRUE.equals(verifiedClaim)
+            || "true".equalsIgnoreCase(String.valueOf(verifiedClaim));
+        if (!emailVerified) {
+            logger.warn("Google OAuth rejected: unverified email {}", userInfo.get("email"));
+            throw new WarehouseManagementException(ErrorCode.AUTH_ERROR,
+                "Google hesabınızın e-posta adresi doğrulanmamış. Lütfen e-posta ve şifrenizle giriş yapın.");
+        }
+
         logger.info("Google OAuth successful for email: {}", userInfo.get("email"));
         return userInfo;
     }

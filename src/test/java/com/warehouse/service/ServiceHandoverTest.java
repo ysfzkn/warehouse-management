@@ -228,6 +228,64 @@ class ServiceHandoverTest {
     }
 
     @Test
+    @DisplayName("Taşıyıcı girilince makbuz kaydına da işlenir; yeniden basım gerekmez")
+    void assigningCarrierUpdatesTheReceiptRecord() {
+        // Kâğıdın kapanış paragrafı bunu taahhüt ediyor: "Taşıyıcı araç ve sürücü bilgisi
+        // belirlendiğinde bu belgenin kaydına işlenir." Kod bunu yapmıyordu — sevkiyat
+        // güncelleniyor, makbuz kaydı boş kalıyordu ve makbuz listesi şoför girilmiş
+        // olmasına rağmen kalıcı olarak "basımda yoktu" gösteriyordu.
+        var result = handoverService.handOver(request(1), "admin");
+        assertThat(result.receipt().getDriverName())
+                .as("depo çıkışı basıldığında taşıyıcı henüz belli değil")
+                .isNull();
+        int revisionBefore = result.receipt().getRevision();
+
+        CarrierAssignmentRequest carrier = new CarrierAssignmentRequest();
+        carrier.setDriverName("Ahmet Yılmaz");
+        carrier.setDriverTcId("12345678901");
+        carrier.setDriverPhone("05551234567");
+        carrier.setVehiclePlate("51 ATS 303");
+        transferService.assignCarrier(result.transfer().getId(), carrier);
+
+        // Yeniden basmadan, doğrudan kayıttan okunuyor.
+        var stored = receiptService.findByTransfer(result.transfer().getId());
+        assertThat(stored.getDriverName()).isEqualTo("Ahmet Yılmaz");
+        assertThat(stored.getDriverPhone()).isEqualTo("05551234567");
+        assertThat(stored.getVehiclePlate()).isEqualTo("51 ATS 303");
+
+        // Basım sayacı artmamalı: bu bir yeniden basım değil, kaydın tamamlanması.
+        assertThat(stored.getRevision()).isEqualTo(revisionBefore);
+        // İmza tarafları kâğıdın imzalandığı andaki kişileri göstermeye devam etmeli.
+        assertThat(stored.getHandedOverByName()).isEqualTo("Mehmet Güneş");
+    }
+
+    @Test
+    @DisplayName("Taşıyıcı girilince makbuz yeni plakayla da aranabilir")
+    void carrierBecomesSearchable() {
+        // Arama normalleştirilmiş sütun üzerinden yapılıyor ve o sütun şoför ile plakayı da
+        // kapsıyor. Kayıt güncellenirken sütun tazelenmezse plaka aramada bulunamazdı.
+        var result = handoverService.handOver(request(1), "admin");
+
+        CarrierAssignmentRequest carrier = new CarrierAssignmentRequest();
+        // Fikstürdeki servis adı da "Işık" ile başlıyor; şoförü ona benzemeyen bir adla
+        // arıyoruz, yoksa test taşıyıcı hiç işlenmese bile geçerdi.
+        carrier.setDriverName("Ahmet Yılmaz");
+        carrier.setDriverTcId("12345678901");
+        carrier.setDriverPhone("05551234567");
+        carrier.setVehiclePlate("51 ATS 303");
+        transferService.assignCarrier(result.transfer().getId(), carrier);
+
+        for (String term : new String[]{"YILMAZ", "ats 303"}) {
+            var page = receiptService.search(null, null, null, null, term,
+                    org.springframework.data.domain.PageRequest.of(0, 20));
+            assertThat(page.getContent())
+                    .as("'%s' aramasi makbuzu bulmali", term)
+                    .extracting(com.warehouse.dto.DeliveryReceiptDto::getReceiptNo)
+                    .contains(result.receipt().getReceiptNo());
+        }
+    }
+
+    @Test
     @DisplayName("Çok kalemli makbuz taşar; her sayfa antetli ve sütun başlıklı basılır")
     void overflowPagesKeepTheSameFormat() throws Exception {
         // Bir sayfaya sığmayan makbuz kaçınılmaz. Kaçınılmaz olmayan, taşan sayfanın

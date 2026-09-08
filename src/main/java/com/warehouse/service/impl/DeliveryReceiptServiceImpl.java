@@ -546,6 +546,31 @@ public class DeliveryReceiptServiceImpl implements DeliveryReceiptService {
         return templateEngine.process("receipt/delivery-receipt", context);
     }
 
+    @Override
+    @Transactional
+    public DeliveryReceiptDto noteCarrier(Long transferId) {
+        StockTransfer transfer = transferRepository.findById(transferId).orElse(null);
+        if (transfer == null) {
+            return null;
+        }
+        DeliveryReceipt receipt = receiptRepository.findByTransferId(transferId).orElse(null);
+        if (receipt == null) {
+            // Makbuz hiç basılmamış: basıldığında zaten sevkiyattan güncel bilgiyle
+            // anlık görüntü alınacak, burada yapacak bir şey yok.
+            return null;
+        }
+
+        receipt.setDriverName(transfer.getDriverName());
+        receipt.setDriverPhone(transfer.getDriverPhone());
+        receipt.setVehiclePlate(transfer.getVehiclePlate());
+        // search_text @PreUpdate ile kendiliğinden tazeleniyor; yeni plaka aramada da bulunur.
+        DeliveryReceipt saved = receiptRepository.save(receipt);
+
+        log.info("Makbuz {} taşıyıcı bilgisiyle güncellendi: {} / {}",
+                saved.getReceiptNo(), saved.getDriverName(), saved.getVehiclePlate());
+        return toDto(saved);
+    }
+
     /**
      * The logo is inlined rather than linked. A {@code <img src="https://...">} would make
      * every PDF render an outbound HTTP request from the server, which is both a failure

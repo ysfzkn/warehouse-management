@@ -89,6 +89,7 @@ public class StockTransferServiceImpl implements StockTransferService {
     private final CustomerRepository customerRepository;
     private final com.warehouse.service.DriverService driverService;
     private final com.warehouse.service.VehicleService vehicleService;
+    private final com.warehouse.service.DeliveryReceiptService deliveryReceiptService;
 
     public StockTransferServiceImpl(StockTransferRepository stockTransferRepository,
                                     StockRepository stockRepository,
@@ -105,7 +106,8 @@ public class StockTransferServiceImpl implements StockTransferService {
                                     com.warehouse.service.DriverService driverService,
                                     com.warehouse.service.VehicleService vehicleService,
                                     TransferReturnRepository transferReturnRepository,
-                                    com.warehouse.repository.ReturnRequestRepository returnRequestRepository) {
+                                    com.warehouse.repository.ReturnRequestRepository returnRequestRepository,
+                                    com.warehouse.service.DeliveryReceiptService deliveryReceiptService) {
         this.stockTransferRepository = stockTransferRepository;
         this.transferReturnRepository = transferReturnRepository;
         this.returnRequestRepository = returnRequestRepository;
@@ -122,6 +124,7 @@ public class StockTransferServiceImpl implements StockTransferService {
         this.customerRepository = customerRepository;
         this.driverService = driverService;
         this.vehicleService = vehicleService;
+        this.deliveryReceiptService = deliveryReceiptService;
     }
 
     @Override
@@ -531,6 +534,11 @@ public class StockTransferServiceImpl implements StockTransferService {
                 String.format("Taşıyıcı bilgisi girildi: %s / %s (#%d)",
                         saved.getDriverName(), saved.getVehiclePlate(), saved.getId()),
                 buildTransferMetadata(saved));
+        // Kâğıdın kapanış paragrafı "taşıyıcı belirlendiğinde bu belgenin kaydına işlenir"
+        // diyor; kaydı burada tamamlıyoruz. Makbuz henüz basılmamışsa yapacak bir şey yok,
+        // basıldığında sevkiyattan güncel anlık görüntü zaten alınıyor.
+        deliveryReceiptService.noteCarrier(saved.getId());
+
         logger.info("Carrier assigned to transfer id: {}", saved.getId());
 
         return stockTransferRepository.findByIdWithRelations(saved.getId()).orElse(saved);

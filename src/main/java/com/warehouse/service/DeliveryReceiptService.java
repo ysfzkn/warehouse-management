@@ -35,6 +35,23 @@ public interface DeliveryReceiptService {
     DeliveryReceiptDto issue(Long transferId, String username, DeliveryReceiptKind kindWhenNew);
 
     /** The receipt for a transfer, or null when none has been issued yet. */
+    /**
+     * Taşıyıcı sonradan belirlendiğinde makbuz kaydına işler.
+     *
+     * <p>Depo çıkış makbuzu taşıyıcı belli olmadan basılıyor ve kâğıdın kapanış paragrafı
+     * bunu açıkça taahhüt ediyor: "Taşıyıcı araç ve sürücü bilgisi belirlendiğinde bu
+     * belgenin kaydına işlenir." Kod bunu yapmıyordu — sevkiyat güncelleniyor, makbuz
+     * kaydı boş kalıyordu ve liste ekranı şoför girilmiş olmasına rağmen kalıcı olarak
+     * "basımda yoktu" gösteriyordu.</p>
+     *
+     * <p>Basım sayacı (revision) bilerek artırılmıyor: bu bir yeniden basım değil, kaydın
+     * tamamlanması. İmza tarafları da elle sürülmüyor — onlar kâğıdın imzalandığı andaki
+     * kişileri gösteriyor ve sonradan değişmemeli.</p>
+     *
+     * @return güncellenen makbuz; sevkiyatın makbuzu yoksa {@code null}
+     */
+    DeliveryReceiptDto noteCarrier(Long transferId);
+
     DeliveryReceiptDto findByTransfer(Long transferId);
 
     /** Receipt existence per transfer id — lets the transfer list render its column in one query. */

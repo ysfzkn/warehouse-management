@@ -12,6 +12,17 @@ RUN npm ci --omit=dev || npm install --omit=dev
 # Copy source code
 COPY . .
 
+# Create React App inlines every REACT_APP_* variable at BUILD time — there is no
+# runtime lookup, so a value supplied only to the running container never reaches the
+# bundle. The local .env is git-ignored and absent from a CI build context, which is
+# why a production image built without these args shipped an empty client id and a
+# "Google ile giriş şu an kullanılamıyor" button. Pass them with --build-arg.
+ARG REACT_APP_GOOGLE_CLIENT_ID=""
+ARG REACT_APP_API_URL=""
+ARG REACT_APP_SENTRY_DSN=""
+ARG REACT_APP_SENTRY_ENV=""
+ENV REACT_APP_GOOGLE_CLIENT_ID=$REACT_APP_GOOGLE_CLIENT_ID     REACT_APP_API_URL=$REACT_APP_API_URL     REACT_APP_SENTRY_DSN=$REACT_APP_SENTRY_DSN     REACT_APP_SENTRY_ENV=$REACT_APP_SENTRY_ENV
+
 # Build the application
 RUN npm run build
 

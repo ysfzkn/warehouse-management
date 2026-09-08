@@ -331,17 +331,22 @@ export default function AdminDeliveryReceipts() {
                         </div>
                       </td>
                       <td className="d-none d-lg-table-cell">
-                        {/* Bu sütun kâğıdın üzerinde ne yazdığını gösterir, sevkiyatın
-                            bugünkü durumunu değil: taşıyıcı sonradan girilmiş olabilir ama
-                            makbuz yeniden basılmadıysa imzalı nüshada hâlâ yoktur.
-                            "Taşıyıcı bekliyor" demek burada fazla iddialı olurdu. */}
+                        {/* Taşıyıcı sonradan girildiğinde makbuz kaydına da işleniyor
+                            (DeliveryReceiptService.noteCarrier), yani bu sütun boşsa
+                            taşıyıcı gerçekten henüz belli değil. Eskiden kayıt
+                            güncellenmediği için burada kalıcı olarak "basımda yoktu"
+                            yazıyordu — şoför girilmiş sevkiyatlarda bile.
+
+                            İmzalı kâğıtta taşıyıcının yazmadığı durum ayrı bir bilgi ve
+                            makbuzun kendi kapanış paragrafı bunu zaten söylüyor: taşıyıcı
+                            sonradan belirlenirse belgenin kaydına işlenir. */}
                         {r.kind === 'SERVICE_HANDOVER' && !r.driverName ? (
                           <span
                             className="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle"
-                            title="Bu makbuz basıldığında taşıyıcı henüz belli değildi."
+                            title="Bu depo çıkışında taşıyıcı henüz belirlenmedi."
                           >
                             <i className="fas fa-user-clock me-1"></i>
-                            Basımda yoktu
+                            Taşıyıcı bekliyor
                           </span>
                         ) : (
                           <>
