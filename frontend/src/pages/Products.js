@@ -1495,7 +1495,7 @@ const Products = () => {
               </div>
             </div>
             <div className="table-responsive">
-              <table className="table table-hover align-middle">
+              <table className="products-table table table-hover align-middle">
                 <thead className="table-light">
                   <tr>
                     <th className="text-center" style={{ width: '40px' }}>
