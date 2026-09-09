@@ -343,6 +343,47 @@ label,
   }
 }
 
+/* Mobile density.
+
+   The base --density-modifier is 0.8, tuned for packing admin data tables onto a wide
+   desktop, and the only breakpoints that touch it (1400px / 1680px) raise it for even
+   wider screens. Phones therefore inherited the base and ended up with the smallest
+   type on the entire site — a 12.8px root, 12.8px form controls and 32px buttons.
+
+   Two of those are outright bugs rather than taste:
+
+   1. iOS Safari zooms the whole viewport when a focused input's font-size is under
+      16px, and does not zoom back out. Tapping the e-mail field on the login page
+      threw the layout off and left the user pinching to recover. Form controls are
+      pinned to a literal 16px here, which is the documented threshold — the density
+      variable cannot express it, since it scales with the root that is the problem.
+   2. Primary buttons landed at 32px, below every touch-target guideline (44pt on iOS,
+      48dp on Android). The Bootstrap py-* utilities these buttons carry are !important
+      and beat the density padding variable, so the floor is set with min-height.
+
+   Scoped to the storefront for the touch targets: a 44px floor on every button would
+   also stretch the rows of the admin panel's dense tables, which are driven by a
+   pointer far more often than a thumb. */
+@media (max-width: 767.98px) {
+  :root {
+    --density-modifier: 0.95;
+    --density-control-padding-y: 0.7rem;
+    --density-btn-padding-y: 0.75rem;
+  }
+
+  .form-control,
+  .form-select,
+  .input-group-text,
+  .form-control-plaintext,
+  input[type='search'] {
+    font-size: 16px;
+  }
+
+  .store-layout .btn {
+    min-height: 44px;
+  }
+}
+
 /* Responsive tweaks */
 @media (max-width: 576px) {
   .card .btn-group {
