@@ -1505,7 +1505,7 @@ const Products = () => {
               </div>
             </div>
             <div className="table-responsive">
-              <table className="products-table table table-hover align-middle">
+              <table className="table table-hover align-middle">
                 <thead className="table-light">
                   <tr>
                     <th className="text-center" style={{ width: '40px' }}>
@@ -1528,7 +1528,7 @@ const Products = () => {
                     <th className="text-end">Fiyat</th>
                     <th className="text-center">Stok</th>
                     <th className="text-center">Durum</th>
-                    <th className="text-center" style={{ width: '280px' }}>
+                    <th className="text-center" style={{ width: '190px' }}>
                       İşlemler
                     </th>
                   </tr>
@@ -1696,7 +1696,7 @@ const Products = () => {
                                 className="btn btn-outline-secondary"
                                 onClick={() => handleEdit(product)}
                                 title="Düzenle"
-                                style={{ minWidth: '45px', padding: '0.5rem 0.75rem' }}
+                                style={{ minWidth: '38px', padding: '0.4rem 0.55rem' }}
                               >
                                 <i className="fas fa-edit"></i>
                               </button>
@@ -1706,7 +1706,7 @@ const Products = () => {
                                   handleToggleActive(product.id, product.active === false ? false : true)
                                 }
                                 title={product.active === false ? 'Aktifleştir' : 'Pasifleştir'}
-                                style={{ minWidth: '45px', padding: '0.5rem 0.75rem' }}
+                                style={{ minWidth: '38px', padding: '0.4rem 0.55rem' }}
                               >
                                 <i className={`fas ${product.active === false ? 'fa-play' : 'fa-pause'}`}></i>
                               </button>
@@ -1714,7 +1714,7 @@ const Products = () => {
                                 className="btn btn-outline-primary"
                                 onClick={() => window.location.assign(`/desi?productId=${product.id}`)}
                                 title="Desi Hesapla"
-                                style={{ minWidth: '45px', padding: '0.5rem 0.75rem' }}
+                                style={{ minWidth: '38px', padding: '0.4rem 0.55rem' }}
                               >
                                 <i className="fas fa-calculator"></i>
                               </button>
@@ -1722,7 +1722,7 @@ const Products = () => {
                                 className="btn btn-outline-danger"
                                 onClick={() => handleDelete(product.id)}
                                 title="Sil"
-                                style={{ minWidth: '45px', padding: '0.5rem 0.75rem' }}
+                                style={{ minWidth: '38px', padding: '0.4rem 0.55rem' }}
                               >
                                 <i className="fas fa-trash"></i>
                               </button>

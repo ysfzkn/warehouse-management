@@ -441,34 +441,6 @@ label,
   }
 }
 
-/* Admin product table: keep the actions column reachable.
-
-   The table carries ten columns and the actions cell alone is 280px wide. On a 14"
-   laptop the row is wider than its .table-responsive viewport, so "İşlemler" — edit,
-   pause, delete — sat past the right edge and had to be chased with a horizontal
-   scroll on every single row.
-
-   Pinning the last column to the right keeps those buttons in place while the rest of
-   the row still scrolls under it. The cells need an opaque background of their own,
-   or the scrolling columns show through them. Bootstrap paints hover and striping as
-   an inset box-shadow over that background, so the row states keep working by
-   themselves — which is also why no box-shadow is set here; one would replace
-   Bootstrap's and kill the hover. The pinned edge is drawn with a border instead.
-
-   The table only renders at lg and up (mobile gets cards), so this needs no query. */
-.products-table th:last-child,
-.products-table td:last-child {
-  position: sticky;
-  right: 0;
-  z-index: 2;
-  background-color: #fff;
-  border-left: 1px solid var(--border);
-}
-
-.products-table thead th:last-child {
-  background-color: #f8f9fa;
-}
-
 /* Responsive tweaks */
 @media (max-width: 576px) {
   .card .btn-group {
