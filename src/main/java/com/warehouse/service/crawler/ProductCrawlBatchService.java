@@ -311,9 +311,10 @@ public class ProductCrawlBatchService {
                 applied++;
             } catch (Exception e) {
                 log.warn("[CrawlBatch] apply failed for {}: {}", req.url, e.toString());
-                errors.add(label(item) + ": " + e.getMessage());
+                String reason = readable(e.getMessage());
+                errors.add(label(item) + ": " + reason);
                 item.status = "APPLY_ERROR";
-                item.message = e.getMessage();
+                item.message = reason;
             }
         }
         return new ApplySummary(applied, photos, errors);
@@ -345,6 +346,21 @@ public class ProductCrawlBatchService {
         String t = item.title;
         if (t == null || t.isBlank()) return item.url;
         return t.length() > 60 ? t.substring(0, 60) : t;
+    }
+
+    /**
+     * Turns an exception message into something safe to show an admin.
+     *
+     * <p>The message travels from here to the browser, and a failure deep in an HTTP
+     * client can carry an entire error page in its text. Rendering that put a screenful
+     * of "&lt;!DOCTYPE html&gt;… nginx" markup in place of a sentence, so tags are
+     * stripped and the result is capped.
+     */
+    private static String readable(String raw) {
+        if (raw == null || raw.isBlank()) return "Bilinmeyen hata.";
+        String text = raw.replaceAll("<[^>]*>", " ").replaceAll("\\s+", " ").trim();
+        if (text.isEmpty()) return "Bilinmeyen hata.";
+        return trim(text, 160);
     }
 
     private static boolean isFilled(String s) {

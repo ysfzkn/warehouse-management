@@ -157,6 +157,12 @@ public class AdminProductCrawlerController {
         }
     }
 
+    /** The supplier hosts the crawler will read, so the UI can list them once. */
+    @GetMapping("/crawl-images/supported-hosts")
+    public ResponseEntity<?> supportedHosts() {
+        return ResponseEntity.ok(Map.of("hosts", ProductImageCrawlerService.allowedHosts()));
+    }
+
     /** Progress and per-row results for a running or finished batch. */
     @GetMapping("/crawl-images/batch/{jobId}")
     public ResponseEntity<?> batchStatus(@PathVariable String jobId) {

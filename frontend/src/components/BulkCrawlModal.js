@@ -13,6 +13,31 @@ import axios from 'axios';
 
 const POLL_INTERVAL_MS = 1200;
 const MAX_URLS = 50;
+const MAX_MESSAGE_CHARS = 240;
+
+/**
+ * Anything shown to the admin passes through here first.
+ *
+ * A failing supplier — or our own proxy — can answer with a whole HTML error page, and
+ * axios hands that body straight to the error handler. Rendering it dumped a wall of
+ * "<!DOCTYPE html>… nginx" markup into the alert box. Tags are stripped, whitespace
+ * collapsed and the result capped, so a message stays a sentence no matter what the
+ * far end sent.
+ */
+function cleanMessage(value, fallback) {
+  if (value == null) return fallback;
+  const text = String(value)
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!text) return fallback;
+  return text.length > MAX_MESSAGE_CHARS ? `${text.slice(0, MAX_MESSAGE_CHARS)}…` : text;
+}
+
+/** Pulls a readable sentence out of an axios failure, whatever shape it arrived in. */
+function errorText(e, fallback) {
+  return cleanMessage(e?.response?.data?.message ?? e?.message, fallback);
+}
 
 const STEP = {
   INPUT: 'input',
@@ -30,6 +55,7 @@ export default function BulkCrawlModal({ open, onClose, onApplied }) {
   // url -> productId (null means "do not import this row")
   const [choices, setChoices] = useState({});
   const [summary, setSummary] = useState(null);
+  const [hosts, setHosts] = useState([]);
 
   const pollTimer = useRef(null);
   const jobIdRef = useRef(null);
@@ -45,6 +71,25 @@ export default function BulkCrawlModal({ open, onClose, onApplied }) {
   // unmount as well as on close — otherwise closing mid-crawl leaves a timer setting
   // state on a component that no longer exists.
   useEffect(() => stopPolling, [stopPolling]);
+
+  // The supported supplier list is shown once, next to the box the links go into. It
+  // used to arrive as part of every rejected row's error text, which buried the actual
+  // reason under twenty-five domains of red.
+  useEffect(() => {
+    if (!open || hosts.length > 0) return;
+    let cancelled = false;
+    axios
+      .get('/api/admin/products/crawl-images/supported-hosts')
+      .then((res) => {
+        if (!cancelled) setHosts(res.data?.hosts || []);
+      })
+      .catch(() => {
+        /* The list is a convenience; the server rejects unsupported hosts regardless. */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, hosts.length]);
 
   const reset = useCallback(() => {
     stopPolling();
@@ -73,7 +118,7 @@ export default function BulkCrawlModal({ open, onClose, onApplied }) {
         return;
       }
       if (res.data.state === 'FAILED') {
-        setError(res.data.error || 'Toplu işlem başarısız oldu.');
+        setError(cleanMessage(res.data.error, 'Toplu işlem başarısız oldu.'));
         setStep(STEP.INPUT);
         return;
       }
@@ -86,7 +131,7 @@ export default function BulkCrawlModal({ open, onClose, onApplied }) {
       setChoices(picked);
       setStep(STEP.REVIEW);
     } catch (e) {
-      setError(e.response?.data?.message || 'Durum alınamadı.');
+      setError(errorText(e, 'Durum alınamadı.'));
       setStep(STEP.INPUT);
     }
   }, []);
@@ -106,7 +151,7 @@ export default function BulkCrawlModal({ open, onClose, onApplied }) {
       jobIdRef.current = res.data.jobId;
       poll();
     } catch (e) {
-      setError(e.response?.data?.message || 'Toplu işlem başlatılamadı.');
+      setError(errorText(e, 'Toplu işlem başlatılamadı.'));
       setStep(STEP.INPUT);
     }
   };
@@ -129,7 +174,7 @@ export default function BulkCrawlModal({ open, onClose, onApplied }) {
       setStep(STEP.DONE);
       if (onApplied) onApplied();
     } catch (e) {
-      setError(e.response?.data?.message || 'Aktarım başarısız oldu.');
+      setError(errorText(e, 'Aktarım başarısız oldu.'));
       setStep(STEP.REVIEW);
     }
   };
@@ -203,6 +248,24 @@ export default function BulkCrawlModal({ open, onClose, onApplied }) {
                       En fazla {MAX_URLS}
                     </span>
                   </div>
+                  {hosts.length > 0 && (
+                    <details className="mt-3">
+                      <summary className="small text-muted" style={{ cursor: 'pointer' }}>
+                        Desteklenen siteler ({hosts.length})
+                      </summary>
+                      <div className="d-flex flex-wrap gap-1 mt-2">
+                        {hosts.map((h) => (
+                          <span key={h} className="badge bg-light text-dark border fw-normal">
+                            {h}
+                          </span>
+                        ))}
+                      </div>
+                      <p className="text-muted mt-2 mb-0" style={{ fontSize: 11 }}>
+                        Listede olmayan siteler otomatik okunamıyor; bu sayfaların detayını ürün ekranından
+                        elle girmeniz gerekir.
+                      </p>
+                    </details>
+                  )}
                 </>
               )}
 
@@ -277,6 +340,44 @@ export default function BulkCrawlModal({ open, onClose, onApplied }) {
         </div>
       </div>
     </>
+  );
+}
+
+/**
+ * Row thumbnail. The image comes through our proxy because supplier CDNs check the
+ * Referer, and it can still fail — a hotlink block, an expired signed URL, a page whose
+ * first "image" was never really one. Without a fallback the browser painted its own
+ * broken-image glyph, which reads as a bug in the table rather than one missing photo.
+ */
+function Thumb({ url, referer }) {
+  const [broken, setBroken] = useState(false);
+  const box = {
+    width: 44,
+    height: 44,
+    objectFit: 'contain',
+    background: '#f8fafc',
+    borderRadius: 8,
+  };
+  if (!url || broken) {
+    return (
+      <div
+        className="d-flex align-items-center justify-content-center text-muted"
+        style={box}
+        title={broken ? 'Görsel önizlenemedi' : 'Görsel yok'}
+      >
+        <i className="fas fa-image" />
+      </div>
+    );
+  }
+  return (
+    <img
+      src={`/api/admin/products/crawl-images/proxy?url=${encodeURIComponent(
+        url
+      )}&referer=${encodeURIComponent(referer)}`}
+      alt=""
+      style={box}
+      onError={() => setBroken(true)}
+    />
   );
 }
 
@@ -374,28 +475,7 @@ function ReviewTable({ items, choices, disabled, onChange }) {
                   />
                 </td>
                 <td>
-                  {item.thumbnail ? (
-                    <img
-                      src={`/api/admin/products/crawl-images/proxy?url=${encodeURIComponent(
-                        item.thumbnail
-                      )}&referer=${encodeURIComponent(item.url)}`}
-                      alt=""
-                      style={{
-                        width: 44,
-                        height: 44,
-                        objectFit: 'contain',
-                        background: '#f8fafc',
-                        borderRadius: 8,
-                      }}
-                    />
-                  ) : (
-                    <div
-                      className="d-flex align-items-center justify-content-center text-muted"
-                      style={{ width: 44, height: 44, background: '#f8fafc', borderRadius: 8 }}
-                    >
-                      <i className="fas fa-image" />
-                    </div>
-                  )}
+                  <Thumb url={item.thumbnail} referer={item.url} />
                 </td>
                 <td style={{ minWidth: 220 }}>
                   <div className="fw-semibold small text-truncate" style={{ maxWidth: 320 }}>
@@ -411,7 +491,9 @@ function ReviewTable({ items, choices, disabled, onChange }) {
                     {item.url}
                   </a>
                   {item.message && (
-                    <div className={`small ${failed ? 'text-danger' : 'text-warning'}`}>{item.message}</div>
+                    <div className={`small ${failed ? 'text-danger' : 'text-warning'}`}>
+                      {cleanMessage(item.message, '')}
+                    </div>
                   )}
                 </td>
                 <td>

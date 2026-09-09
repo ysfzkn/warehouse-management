@@ -99,6 +99,11 @@ public class ProductImageCrawlerService {
             // ("Just a moment...", cf-mitigated: challenge) instead of the page.
     );
 
+    /** The supported supplier hosts, for the UI to show once instead of per error. */
+    public static List<String> allowedHosts() {
+        return ALLOWED_HOSTS;
+    }
+
     private static final int MAX_IMAGES = 20;
     private static final long MAX_IMAGE_BYTES = 10L * 1024 * 1024;   // 10 MB
     private static final int FETCH_TIMEOUT_MS = 15_000;
@@ -1408,7 +1413,11 @@ public class ProductImageCrawlerService {
         final String host = rawHost.toLowerCase(Locale.ROOT);
         boolean allowed = ALLOWED_HOSTS.stream().anyMatch(h -> host.equals(h) || host.endsWith("." + h));
         if (!allowed) {
-            throw new CrawlException("Bu domain destek dışında. Desteklenen: " + String.join(", ", ALLOWED_HOSTS));
+            // Naming just the offending host keeps the row readable. The full supported
+            // list used to be pasted in here, which put twenty-five domains of red text
+            // into every unsupported row of a bulk run; the UI shows the list once
+            // instead, from allowedHosts().
+            throw new CrawlException(host + " desteklenmiyor.");
         }
         // The allowlist is a business rule ("which suppliers do we support"); the
         // address check below is the SSRF control, and both have to hold.
