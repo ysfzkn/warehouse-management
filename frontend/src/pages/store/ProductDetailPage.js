@@ -456,7 +456,7 @@ export default function ProductDetailPage() {
           )}
 
           {/* Quantity + Add to Cart */}
-          <div className="d-flex align-items-center gap-3 mb-3">
+          <div className="store-pdp-actions d-flex align-items-center gap-3 mb-3">
             <div className="store-qty-selector">
               <button onClick={() => setQuantity(Math.max(1, quantity - 1))}>−</button>
               <input
@@ -469,7 +469,7 @@ export default function ProductDetailPage() {
             </div>
             {product.stockStatus === 'OUT_OF_STOCK' ? (
               <button
-                className="btn btn-warning btn-lg flex-grow-1 d-flex align-items-center justify-content-center gap-2"
+                className="store-pdp-cta btn btn-warning btn-lg flex-grow-1 d-flex align-items-center justify-content-center gap-2"
                 onClick={() => {
                   setNotifySubmitted(false);
                   // Auto-fill email from customer token if logged in
@@ -485,7 +485,7 @@ export default function ProductDetailPage() {
               </button>
             ) : (
               <button
-                className="btn btn-primary btn-lg flex-grow-1 d-flex align-items-center justify-content-center gap-2"
+                className="store-pdp-cta btn btn-primary btn-lg flex-grow-1 d-flex align-items-center justify-content-center gap-2"
                 onClick={async () => {
                   try {
                     await cart.addItem(product.id, quantity);

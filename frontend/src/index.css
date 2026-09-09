@@ -418,6 +418,29 @@ label,
   }
 }
 
+/* Product detail: the add-to-cart row on a narrow screen.
+
+   The row holds a fixed 135px quantity selector, the call to action, and a 50px
+   wishlist button on one non-wrapping line. On a 375px screen that leaves the CTA
+   about 138px, which is not enough for "Sepete Ekle" beside its cart icon — the label
+   broke onto a second line, and onto a third once the mobile density above raised the
+   root font. The out-of-stock variant carries "Stoklara Gelince Haber Ver" and fares
+   worse still.
+
+   The CTA gets the full width on its own line, with the quantity selector and the
+   wishlist button sharing the line above it — order:1 moves it below the wishlist
+   button that follows it in the markup. */
+@media (max-width: 767.98px) {
+  .store-pdp-actions {
+    flex-wrap: wrap;
+  }
+
+  .store-pdp-cta {
+    flex: 1 0 100%;
+    order: 1;
+  }
+}
+
 /* Responsive tweaks */
 @media (max-width: 576px) {
   .card .btn-group {
