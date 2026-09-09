@@ -68,7 +68,7 @@ export default function CartPage() {
             const effectivePrice = hasDiscount ? item.salePrice : item.unitPrice;
             return (
               <div key={item.id} className="card border-0 shadow-sm mb-3" style={{ borderRadius: 14 }}>
-                <div className="card-body d-flex gap-3 align-items-center p-3">
+                <div className="card-body store-cart-item d-flex gap-3 align-items-center p-3">
                   {/* Image */}
                   <Link to={`/urun/${item.productSlug}`} className="flex-shrink-0 position-relative">
                     <div
@@ -105,7 +105,7 @@ export default function CartPage() {
                   </Link>
 
                   {/* Product info */}
-                  <div className="flex-grow-1 min-w-0">
+                  <div className="store-cart-item-info flex-grow-1 min-w-0">
                     <Link to={`/urun/${item.productSlug}`} className="text-decoration-none">
                       <div className="fw-semibold text-truncate mb-1">{item.productName}</div>
                     </Link>
@@ -176,7 +176,7 @@ export default function CartPage() {
                   </div>
 
                   {/* Total price — right-aligned */}
-                  <div className="text-end flex-shrink-0" style={{ minWidth: 90 }}>
+                  <div className="store-cart-item-total text-end flex-shrink-0" style={{ minWidth: 90 }}>
                     <div className="fw-bold">{formatPrice(effectivePrice * item.quantity)}</div>
                     {item.quantity > 1 && (
                       <small className="text-muted">

@@ -384,6 +384,40 @@ label,
   }
 }
 
+/* Cart line items on a narrow screen.
+
+   The row lays out five children in one non-wrapping flex line: image (80px), product
+   info, quantity stepper (100px), line total (90px) and a remove button (44px). Only
+   the info column can give — it carries min-width:0 — so once the fixed siblings and
+   the four gaps exceed the viewport it collapses to literally 0px wide. At 375px that
+   left the product name invisible, the unit price spilling 68px out of a zero-width
+   box and straight under the quantity stepper, and the remove button pushed 52px past
+   the right edge of the screen where no thumb could reach it.
+
+   Wrapping onto two rows fixes it: the info column is given an explicit basis of the
+   line minus the image and its gap, which pins image and info to the first row no
+   matter how long the product name is, and pushes stepper, total and remove onto the
+   second. Auto left margin on the total keeps the money right-aligned there.
+
+   Applied out to the same 768px edge as the density block above. The collapse only
+   turns into overlap below roughly 460px, but the single row is already down to an
+   85px product column at 576px, which truncates the name to a few characters. */
+@media (max-width: 767.98px) {
+  .store-cart-item {
+    flex-wrap: wrap;
+  }
+
+  /* 80px image + 1rem gap. A basis rather than a min-width, so the line break does not
+     depend on how wide the product name happens to render. */
+  .store-cart-item-info {
+    flex: 1 1 calc(100% - 80px - 1rem);
+  }
+
+  .store-cart-item-total {
+    margin-left: auto;
+  }
+}
+
 /* Responsive tweaks */
 @media (max-width: 576px) {
   .card .btn-group {
