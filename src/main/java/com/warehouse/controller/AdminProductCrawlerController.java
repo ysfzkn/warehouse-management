@@ -40,11 +40,14 @@ public class AdminProductCrawlerController {
     private static final Logger log = LoggerFactory.getLogger(AdminProductCrawlerController.class);
 
     private final ProductImageCrawlerService crawler;
+    private final com.warehouse.service.crawler.ProductCrawlBatchService batchCrawler;
     private final ConcurrentHashMap<String, Long> rateLimitWindow = new ConcurrentHashMap<>();
     private static final long RATE_LIMIT_WINDOW_MS = 1000;
 
-    public AdminProductCrawlerController(ProductImageCrawlerService crawler) {
+    public AdminProductCrawlerController(ProductImageCrawlerService crawler,
+                                          com.warehouse.service.crawler.ProductCrawlBatchService batchCrawler) {
         this.crawler = crawler;
+        this.batchCrawler = batchCrawler;
     }
 
     @PostMapping("/{id}/crawl-images/preview")
@@ -132,6 +135,84 @@ public class AdminProductCrawlerController {
         }
     }
 
+    // ─────────────────────────────────────────────────────────────
+    //  Bulk import: paste many URLs, match them to products, apply
+    // ─────────────────────────────────────────────────────────────
+
+    /**
+     * Starts the crawl-and-match run. Returns a job id rather than the result: every URL
+     * has to be fetched before it can be matched, and a long list would outlive any
+     * proxy timeout. The client polls {@link #batchStatus}.
+     */
+    @PostMapping("/crawl-images/batch/match")
+    public ResponseEntity<?> batchMatch(@RequestBody BatchMatchRequest req) {
+        try {
+            String jobId = batchCrawler.startMatch(req == null ? null : req.urls);
+            return ResponseEntity.ok(Map.of("jobId", jobId));
+        } catch (CrawlException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        } catch (Exception e) {
+            log.error("[CrawlBatch] match start failed", e);
+            return ResponseEntity.internalServerError().body(Map.of("message", "Beklenmedik hata: " + e.getMessage()));
+        }
+    }
+
+    /** Progress and per-row results for a running or finished batch. */
+    @GetMapping("/crawl-images/batch/{jobId}")
+    public ResponseEntity<?> batchStatus(@PathVariable String jobId) {
+        try {
+            var job = batchCrawler.getJob(jobId);
+            List<Map<String, Object>> items = new java.util.ArrayList<>();
+            for (var item : job.items) {
+                Map<String, Object> row = new java.util.LinkedHashMap<>();
+                row.put("url", item.url);
+                row.put("status", item.status);
+                row.put("message", item.message);
+                row.put("title", item.title);
+                row.put("brand", item.brand);
+                row.put("productId", item.productId);
+                row.put("imageCount", item.images.size());
+                // First image only: the confirmation list shows a thumbnail, not a gallery.
+                row.put("thumbnail", item.images.isEmpty() ? null : item.images.get(0));
+                row.put("hasDescription", item.description != null && !item.description.isBlank());
+                row.put("specGroupCount", item.specGroups == null ? 0 : item.specGroups.size());
+                row.put("candidates", item.candidates);
+                items.add(row);
+            }
+            Map<String, Object> body = new java.util.LinkedHashMap<>();
+            body.put("jobId", job.id);
+            body.put("state", job.state);
+            body.put("error", job.error);
+            body.put("total", job.total());
+            body.put("processed", job.processed.get());
+            body.put("items", items);
+            return ResponseEntity.ok(body);
+        } catch (CrawlException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        }
+    }
+
+    /** Applies the rows the admin confirmed: photos appended, copy and specs written. */
+    @PostMapping("/crawl-images/batch/{jobId}/apply")
+    public ResponseEntity<?> batchApply(@PathVariable String jobId,
+                                         @RequestBody BatchApplyRequest req) {
+        try {
+            var summary = batchCrawler.apply(jobId, req == null ? null : req.items);
+            log.info("[CrawlBatch] applied job={} products={} photos={} errors={}",
+                    jobId, summary.applied(), summary.photos(), summary.errors().size());
+            return ResponseEntity.ok(Map.of(
+                    "applied", summary.applied(),
+                    "photos", summary.photos(),
+                    "errors", summary.errors()
+            ));
+        } catch (CrawlException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        } catch (Exception e) {
+            log.error("[CrawlBatch] apply unexpected error", e);
+            return ResponseEntity.internalServerError().body(Map.of("message", "Beklenmedik hata: " + e.getMessage()));
+        }
+    }
+
     /** 1-request-per-second limit (simple, in-memory). */
     private boolean rateLimited(String key) {
         long now = System.currentTimeMillis();
@@ -149,5 +230,12 @@ public class AdminProductCrawlerController {
         public Boolean markFirstAsPrimary;
         /** Original page URL to use as the Referer for hotlink-protected CDNs (WitCDN/Fakir etc.). */
         public String pageUrl;
+    }
+    public static class BatchMatchRequest {
+        /** Raw pasted text or one entry per link; both are split server-side. */
+        public List<String> urls;
+    }
+    public static class BatchApplyRequest {
+        public List<com.warehouse.service.crawler.ProductCrawlBatchService.ApplyRequestItem> items;
     }
 }

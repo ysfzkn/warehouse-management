@@ -6,6 +6,7 @@ import ProductForm from '../components/ProductForm';
 import SearchableSelect from '../components/SearchableSelect';
 import ConfirmModal from '../components/ConfirmModal';
 import PaginationControls from '../components/PaginationControls';
+import BulkCrawlModal from '../components/BulkCrawlModal';
 import ExpandableText from '../components/ExpandableText';
 
 const normalizeText = (text) => (text || '').toLocaleLowerCase('tr-TR');
@@ -36,6 +37,7 @@ const Products = () => {
   const [errorDetailsModal, setErrorDetailsModal] = useState({ show: false, title: '', errors: [] });
   const [showDetailedPrice, setShowDetailedPrice] = useState(true);
   const [showBulkModal, setShowBulkModal] = useState(false);
+  const [showBulkCrawl, setShowBulkCrawl] = useState(false);
   const [bulkMode, setBulkMode] = useState('PERCENTAGE');
   const [bulkDirection, setBulkDirection] = useState('INCREASE');
   const [bulkValue, setBulkValue] = useState('');
@@ -995,6 +997,14 @@ const Products = () => {
           >
             <i className="fas fa-percent me-2"></i>
             Toplu Fiyat
+          </button>
+          <button
+            className="btn btn-outline-secondary btn-sm"
+            onClick={() => setShowBulkCrawl(true)}
+            title="Tedarikçi bağlantılarını toplu yapıştırıp fotoğraf ve açıklamaları aktarın"
+          >
+            <i className="fas fa-link me-2"></i>
+            Toplu Link
           </button>
           <button
             className={`btn btn-sm ${showDetailedPrice ? 'btn-primary' : 'btn-outline-primary'}`}
@@ -2210,6 +2220,12 @@ const Products = () => {
           </div>
         </div>
       )}
+
+      <BulkCrawlModal
+        open={showBulkCrawl}
+        onClose={() => setShowBulkCrawl(false)}
+        onApplied={() => fetchProducts(productPage, productPageSize)}
+      />
 
       {SecurityCodePrompt}
     </div>
