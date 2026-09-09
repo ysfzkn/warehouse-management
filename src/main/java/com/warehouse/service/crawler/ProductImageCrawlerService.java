@@ -86,10 +86,17 @@ public class ProductImageCrawlerService {
             "tefal.com.tr",         "tefal.com",
             "braunshop.com.tr",
             "philips.com.tr",       "philips.com",
-            "rotaclimate.com"
+            "rotaclimate.com",
+            "hoover-home.com"
             // Removed (not needed): arcelik, beko, vestel, samsung.
             // NOTE: altus.com.tr does TLS fingerprinting with Akamai Bot Manager;
             // it cannot be bypassed with server-side HTTP clients (Jsoup/HttpURLConnection).
+            // Re-verified 2026-09-09: curl clears it with a full browser header set, but
+            // Jsoup still gets 403 "Access Denied" with those same headers — the block is
+            // below HTTP, so no header work fixes it. Sec-Fetch-*/Accept tweaks were tried
+            // and changed nothing for any host, so they were not kept.
+            // NOT addable: akakce.com — Cloudflare serves an interactive JS challenge
+            // ("Just a moment...", cf-mitigated: challenge) instead of the page.
     );
 
     private static final int MAX_IMAGES = 20;
