@@ -17,11 +17,12 @@ COPY . .
 # bundle. The local .env is git-ignored and absent from a CI build context, which is
 # why a production image built without these args shipped an empty client id and a
 # "Google ile giriş şu an kullanılamıyor" button. Pass them with --build-arg.
+# Any further REACT_APP_* value needs the same ARG/ENV pair added here. Declare them
+# only when actually used: an ENV set to the empty string SHADOWS the same key in a
+# .env file, because CRA's dotenv loader refuses to overwrite a key already present
+# in the environment.
 ARG REACT_APP_GOOGLE_CLIENT_ID=""
-ARG REACT_APP_API_URL=""
-ARG REACT_APP_SENTRY_DSN=""
-ARG REACT_APP_SENTRY_ENV=""
-ENV REACT_APP_GOOGLE_CLIENT_ID=$REACT_APP_GOOGLE_CLIENT_ID     REACT_APP_API_URL=$REACT_APP_API_URL     REACT_APP_SENTRY_DSN=$REACT_APP_SENTRY_DSN     REACT_APP_SENTRY_ENV=$REACT_APP_SENTRY_ENV
+ENV REACT_APP_GOOGLE_CLIENT_ID=$REACT_APP_GOOGLE_CLIENT_ID
 
 # Build the application
 RUN npm run build
