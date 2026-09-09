@@ -350,4 +350,15 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
                                            @Param("brandIds") java.util.List<Long> brandIds,
                                            @Param("colorIds") java.util.List<Long> colorIds,
                                            Pageable pageable);
+
+    /**
+     * Storefront products that carry no photo at all — the ones a customer sees as an
+     * empty grey box. Brand is fetched with them because the supplier link finder needs
+     * it to pick which catalogue to search.
+     */
+    @Query("SELECT p FROM Product p LEFT JOIN FETCH p.brand "
+            + "WHERE p.ecommerceVisible = true AND p.isActive = true "
+            + "AND NOT EXISTS (SELECT 1 FROM ProductImage i WHERE i.product = p) "
+            + "ORDER BY p.name")
+    List<Product> findEcommerceProductsWithoutImages();
 }

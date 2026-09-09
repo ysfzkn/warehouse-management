@@ -136,6 +136,26 @@ export default function BulkCrawlModal({ open, onClose, onApplied }) {
     }
   }, []);
 
+  /**
+   * The other way in: instead of pasting links, let the server find the storefront
+   * products that have no photo and look each one up on its manufacturer's site. From
+   * the first progress bar onwards it is the same job, the same confirmation table and
+   * the same apply step.
+   */
+  const startDiscovery = async () => {
+    setError('');
+    setStep(STEP.MATCHING);
+    setJob(null);
+    try {
+      const res = await axios.post('/api/admin/products/crawl-images/batch/discover', {});
+      jobIdRef.current = res.data.jobId;
+      poll();
+    } catch (e) {
+      setError(errorText(e, 'Tarama başlatılamadı.'));
+      setStep(STEP.INPUT);
+    }
+  };
+
   const startMatch = async () => {
     setError('');
     if (!text.trim()) {
@@ -223,6 +243,30 @@ export default function BulkCrawlModal({ open, onClose, onApplied }) {
 
               {step === STEP.INPUT && (
                 <>
+                  <div className="border rounded-3 p-3 mb-3 d-flex align-items-center gap-3 flex-wrap bg-light">
+                    <div className="flex-grow-1" style={{ minWidth: 220 }}>
+                      <div className="fw-semibold mb-1">
+                        <i className="fas fa-wand-magic-sparkles text-primary me-2" />
+                        Fotoğrafsız ürünleri otomatik bul
+                      </div>
+                      <div className="text-muted small">
+                        Mağazada görünen ama hiç fotoğrafı olmayan ürünleri tarar, her birini markasının kendi
+                        sitesinde stok koduna göre arar ve bulduğu sayfaları buraya getirir. Bağlantı
+                        yapıştırmanıza gerek kalmaz.
+                      </div>
+                    </div>
+                    <button className="btn btn-primary" onClick={startDiscovery}>
+                      <i className="fas fa-magnifying-glass me-2" />
+                      Taramayı başlat
+                    </button>
+                  </div>
+
+                  <div className="d-flex align-items-center gap-3 mb-3">
+                    <hr className="flex-grow-1" />
+                    <span className="text-muted small">veya bağlantıları kendiniz yapıştırın</span>
+                    <hr className="flex-grow-1" />
+                  </div>
+
                   <label className="form-label small fw-semibold">Ürün sayfası bağlantıları</label>
                   <textarea
                     className="form-control font-monospace"
@@ -418,12 +462,20 @@ function Progress({ job }) {
   const total = job?.total || 0;
   const processed = job?.processed || 0;
   const pct = total ? Math.round((processed / total) * 100) : 0;
+  // A discovery run has two halves — looking links up, then reading the pages it found
+  // — and they take visibly different amounts of time. Naming the current one keeps a
+  // long wait legible instead of looking stuck.
+  const discovering = job?.phase === 'DISCOVER';
+  const found = job?.items?.length || 0;
   return (
     <div className="py-3">
       <div className="d-flex justify-content-between small mb-2">
-        <span className="fw-semibold">Sayfalar okunuyor…</span>
+        <span className="fw-semibold">
+          {discovering ? 'Fotoğrafsız ürünler için bağlantı aranıyor…' : 'Sayfalar okunuyor…'}
+        </span>
         <span className="text-muted">
           {processed} / {total}
+          {discovering && found > 0 ? ` · ${found} bağlantı bulundu` : ''}
         </span>
       </div>
       <div className="progress" style={{ height: 10, borderRadius: 999 }}>
@@ -459,9 +511,12 @@ function ReviewTable({ items, choices, disabled, onChange }) {
         <tbody>
           {items.map((item) => {
             const failed = item.status === 'ERROR';
+            // The page a lookup found names a different product than the one it was
+            // looked up for. Nothing is pre-ticked; the row asks to be looked at.
+            const conflict = item.status === 'CONFLICT';
             const chosen = choices[item.url] ?? '';
             return (
-              <tr key={item.url} className={failed ? 'table-danger' : undefined}>
+              <tr key={item.url} className={failed ? 'table-danger' : conflict ? 'table-warning' : undefined}>
                 <td className="text-center">
                   <input
                     type="checkbox"
@@ -481,6 +536,12 @@ function ReviewTable({ items, choices, disabled, onChange }) {
                   <div className="fw-semibold small text-truncate" style={{ maxWidth: 320 }}>
                     {item.title || '(başlık okunamadı)'}
                   </div>
+                  {item.discoveredFor && (
+                    <div className="small text-primary">
+                      <i className="fas fa-wand-magic-sparkles me-1" />
+                      {item.discoveredFor} için bulundu
+                    </div>
+                  )}
                   <a
                     href={item.url}
                     target="_blank"

@@ -157,6 +157,24 @@ public class AdminProductCrawlerController {
         }
     }
 
+    /**
+     * Finds storefront products with no photo, looks each one up on its manufacturer's
+     * site and crawls what it finds. Same job shape as a pasted list, so the UI polls
+     * and confirms it through exactly the same screens.
+     */
+    @PostMapping("/crawl-images/batch/discover")
+    public ResponseEntity<?> batchDiscover(@RequestBody(required = false) BatchDiscoverRequest req) {
+        try {
+            int limit = req != null && req.limit != null ? req.limit : 0;
+            return ResponseEntity.ok(Map.of("jobId", batchCrawler.startDiscovery(limit)));
+        } catch (CrawlException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        } catch (Exception e) {
+            log.error("[CrawlBatch] discovery start failed", e);
+            return ResponseEntity.internalServerError().body(Map.of("message", "Beklenmedik hata: " + e.getMessage()));
+        }
+    }
+
     /** The supplier hosts the crawler will read, so the UI can list them once. */
     @GetMapping("/crawl-images/supported-hosts")
     public ResponseEntity<?> supportedHosts() {
@@ -183,11 +201,13 @@ public class AdminProductCrawlerController {
                 row.put("hasDescription", item.description != null && !item.description.isBlank());
                 row.put("specGroupCount", item.specGroups == null ? 0 : item.specGroups.size());
                 row.put("candidates", item.candidates);
+                row.put("discoveredFor", item.discoveredForProductName);
                 items.add(row);
             }
             Map<String, Object> body = new java.util.LinkedHashMap<>();
             body.put("jobId", job.id);
             body.put("state", job.state);
+            body.put("phase", job.phase);
             body.put("error", job.error);
             body.put("total", job.total());
             body.put("processed", job.processed.get());
@@ -240,6 +260,10 @@ public class AdminProductCrawlerController {
     public static class BatchMatchRequest {
         /** Raw pasted text or one entry per link; both are split server-side. */
         public List<String> urls;
+    }
+    public static class BatchDiscoverRequest {
+        /** Optional cap on how many photoless products to look up in one run. */
+        public Integer limit;
     }
     public static class BatchApplyRequest {
         public List<com.warehouse.service.crawler.ProductCrawlBatchService.ApplyRequestItem> items;

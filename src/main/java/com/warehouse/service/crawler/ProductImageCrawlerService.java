@@ -104,6 +104,11 @@ public class ProductImageCrawlerService {
         return ALLOWED_HOSTS;
     }
 
+    /** The browser identity every outbound crawl request uses, shared with the finder. */
+    public static String userAgent() {
+        return USER_AGENT;
+    }
+
     private static final int MAX_IMAGES = 20;
     private static final long MAX_IMAGE_BYTES = 10L * 1024 * 1024;   // 10 MB
     private static final int FETCH_TIMEOUT_MS = 15_000;

@@ -14,7 +14,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class ProductCrawlBatchServiceTest {
 
-    private final ProductCrawlBatchService service = new ProductCrawlBatchService(null, null);
+    private final ProductCrawlBatchService service = new ProductCrawlBatchService(null, null, null);
 
     private static Product product(long id, String name, String sku) {
         Product p = new Product();

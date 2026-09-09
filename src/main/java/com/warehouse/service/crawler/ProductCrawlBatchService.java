@@ -60,6 +60,7 @@ public class ProductCrawlBatchService {
 
     private final ProductImageCrawlerService crawler;
     private final ProductRepository productRepository;
+    private final SupplierLinkFinder linkFinder;
 
     private final Map<String, BatchJob> jobs = new ConcurrentHashMap<>();
     private final ExecutorService worker = Executors.newSingleThreadExecutor(r -> {
@@ -69,9 +70,11 @@ public class ProductCrawlBatchService {
     });
 
     public ProductCrawlBatchService(ProductImageCrawlerService crawler,
-                                    ProductRepository productRepository) {
+                                    ProductRepository productRepository,
+                                    SupplierLinkFinder linkFinder) {
         this.crawler = crawler;
         this.productRepository = productRepository;
+        this.linkFinder = linkFinder;
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -123,6 +126,70 @@ public class ProductCrawlBatchService {
 
     private static final String TRAILING_JUNK = ")]}>,.;\"'";
 
+    // ─────────────────────────────────────────────────────────────
+    //  Discovery: find the links instead of being handed them
+    // ─────────────────────────────────────────────────────────────
+
+    /**
+     * Scans the storefront for products with no photo at all and looks each one up on
+     * its manufacturer's site, then crawls whatever it found.
+     *
+     * <p>The empty grey box on a product page is the thing being fixed here, so the
+     * search set is exactly "visible in the shop, zero images". Everything after the
+     * lookup is the ordinary pasted-link flow, which means the crawl still has to agree
+     * that the page belongs to that product before anything is written.
+     */
+    public String startDiscovery(int limit) {
+        sweep();
+        String jobId = UUID.randomUUID().toString();
+        BatchJob job = new BatchJob(jobId);
+        job.phase = "DISCOVER";
+        jobs.put(jobId, job);
+        int capped = limit > 0 ? Math.min(limit, MAX_URLS) : MAX_URLS;
+        worker.submit(() -> runDiscovery(job, capped));
+        return jobId;
+    }
+
+    private void runDiscovery(BatchJob job, int limit) {
+        List<Product> targets;
+        try {
+            targets = productRepository.findEcommerceProductsWithoutImages();
+        } catch (Exception e) {
+            log.error("[CrawlBatch] photoless product scan failed", e);
+            job.state = "FAILED";
+            job.error = "Fotoğrafsız ürünler okunamadı.";
+            return;
+        }
+        if (targets.size() > limit) targets = targets.subList(0, limit);
+        job.plannedTotal = targets.size();
+
+        for (Product p : targets) {
+            try {
+                String url = linkFinder.find(p);
+                if (url != null) {
+                    BatchItem item = new BatchItem(url);
+                    item.discoveredForProductId = p.getId();
+                    item.discoveredForProductName = p.getName();
+                    item.discoveredForProductSku = p.getSku();
+                    job.items.add(item);
+                }
+            } catch (Exception e) {
+                log.warn("[CrawlBatch] link lookup failed for {}: {}", p.getSku(), e.toString());
+            } finally {
+                job.processed.incrementAndGet();
+            }
+        }
+
+        // Second half of the run reuses the pasted-link pipeline verbatim.
+        job.phase = "CRAWL";
+        job.processed.set(0);
+        if (job.items.isEmpty()) {
+            job.state = "DONE";
+            return;
+        }
+        runMatch(job);
+    }
+
     private void runMatch(BatchJob job) {
         List<Product> catalogue;
         try {
@@ -145,10 +212,18 @@ public class ProductCrawlBatchService {
                 item.description = preview.description();
                 item.shortDescription = preview.shortDescription();
                 item.specGroups = toSpecMaps(preview.specGroups());
-                item.candidates = match(preview.title(), catalogue);
+                List<Candidate> titleMatches = match(preview.title(), catalogue);
+                item.candidates = withDiscovered(item, titleMatches);
                 if (item.candidates.isEmpty()) {
                     item.status = "NO_MATCH";
                     item.message = "Bu sayfa hiçbir ürünle eşleşmedi — ürünü elle seçin.";
+                } else if (contradicts(item, titleMatches)) {
+                    // The link was found from this product's stock code, but the page
+                    // itself identifies a different product by its own code. One of the
+                    // two is wrong and nothing is pre-ticked until a human says which.
+                    item.status = "CONFLICT";
+                    item.message = "Otomatik bulunan sayfa başka bir ürüne işaret ediyor — kontrol edin.";
+                    item.productId = null;
                 } else {
                     item.status = "OK";
                     item.productId = item.candidates.get(0).productId();
@@ -205,6 +280,42 @@ public class ProductCrawlBatchService {
         return found.size() > MAX_CANDIDATES
                 ? new ArrayList<>(found.subList(0, MAX_CANDIDATES))
                 : found;
+    }
+
+    /**
+     * True when a discovered link's page names a different product by its stock code.
+     *
+     * <p>Only a stock-code hit counts as contradiction. Name overlap is far too loose to
+     * overrule a discovery: supplier titles routinely read "Bulaşık makineleri | Hoover",
+     * which resembles half the catalogue and would flag every row.
+     */
+    private static boolean contradicts(BatchItem item, List<Candidate> titleMatches) {
+        if (item.discoveredForProductId == null) return false;
+        for (Candidate c : titleMatches) {
+            if (c.score() == 100 && !c.productId().equals(item.discoveredForProductId)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Puts the product a discovered link was looked up for at the head of the list.
+     *
+     * <p>The link was found *because* this product's stock code is in its URL, which is
+     * stronger evidence than anything the page title can offer — supplier titles often
+     * read "Bulaşık makineleri | Hoover" and match nothing. The title-based candidates
+     * are kept behind it so the admin can still overrule the choice.
+     */
+    private static List<Candidate> withDiscovered(BatchItem item, List<Candidate> titleMatches) {
+        if (item.discoveredForProductId == null) return titleMatches;
+        List<Candidate> out = new ArrayList<>();
+        out.add(new Candidate(item.discoveredForProductId, item.discoveredForProductName,
+                item.discoveredForProductSku, 95, "Otomatik bulundu"));
+        for (Candidate c : titleMatches) {
+            if (!c.productId().equals(item.discoveredForProductId)) out.add(c);
+        }
+        return out;
     }
 
     /** Fraction of the product name's meaningful tokens that occur in the page title. */
@@ -394,23 +505,40 @@ public class ProductCrawlBatchService {
     public static class BatchJob {
         public final String id;
         public final Instant createdAt = Instant.now();
-        public final List<BatchItem> items = new ArrayList<>();
+        /**
+         * Copy-on-write because a discovery run appends to this list from the worker
+         * thread while the UI is polling it from request threads.
+         */
+        public final List<BatchItem> items = new java.util.concurrent.CopyOnWriteArrayList<>();
         public final AtomicInteger processed = new AtomicInteger();
         public volatile String state = "RUNNING";
+        /** DISCOVER while links are being looked up, CRAWL while pages are read. */
+        public volatile String phase = "CRAWL";
+        /** Known up front for discovery, where items appear as they are found. */
+        public volatile int plannedTotal;
         public volatile String error;
 
         BatchJob(String id, List<String> urls) {
             this.id = id;
             for (String u : urls) items.add(new BatchItem(u));
+            this.plannedTotal = items.size();
+        }
+
+        BatchJob(String id) {
+            this.id = id;
         }
 
         public int total() {
-            return items.size();
+            return "DISCOVER".equals(phase) ? plannedTotal : items.size();
         }
     }
 
     public static class BatchItem {
         public final String url;
+        /** Set when the link was found for a known product rather than pasted by hand. */
+        public volatile Long discoveredForProductId;
+        public volatile String discoveredForProductName;
+        public volatile String discoveredForProductSku;
         public volatile String status = "PENDING";
         public volatile String message;
         public volatile String title;
