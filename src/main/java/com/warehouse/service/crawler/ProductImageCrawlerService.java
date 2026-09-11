@@ -1171,12 +1171,69 @@ public class ProductImageCrawlerService {
         }
 
         // Filters
-        return urls.stream()
+        List<String> kept = urls.stream()
                 .filter(this::isImageUrl)
                 .filter(u -> !isProbablyJunkUrl(u))
                 .distinct()
+                .toList();
+
+        return keepThisProductsImages(kept, baseUrl).stream()
                 .limit(MAX_IMAGES)
                 .toList();
+    }
+
+    /**
+     * Narrows a page's images to the ones that belong to the product being read.
+     *
+     * <p>A retailer product page is mostly other products: a "similar items" carousel,
+     * the store's own furniture, app-store badges. Reading one thermos on a live listing
+     * returned twenty images of which one was the thermos, ten were the ten neighbouring
+     * models and nine were menu icons — importing that would have put nineteen wrong
+     * pictures on the product.
+     *
+     * <p>The signal is that such sites put the product's own id in both its address and
+     * its image filenames ({@code …-866mnz1911942-…}). So any id-shaped token in the page
+     * URL is looked for in the image URLs, and when it matches anything the rest is
+     * dropped. When it matches nothing the original list is returned untouched — many
+     * manufacturer sites name images by an internal code unrelated to the URL (Profilo
+     * serves {@code 16991718_Template_Product_Shot…} for {@code /product/FRGA103B}), and
+     * those pages must keep working exactly as before.
+     */
+    static List<String> keepThisProductsImages(List<String> images, String pageUrl) {
+        if (images.size() < 2 || pageUrl == null) return images;
+
+        List<String> ids = idTokensOf(pageUrl);
+        if (ids.isEmpty()) return images;
+
+        List<String> owned = images.stream()
+                .filter(u -> {
+                    String lower = u.toLowerCase(Locale.ROOT);
+                    return ids.stream().anyMatch(lower::contains);
+                })
+                .toList();
+
+        return owned.isEmpty() ? images : owned;
+    }
+
+    /**
+     * Id-shaped tokens in a URL path: at least six characters, carrying a digit, so a
+     * word like "thermos" or "product" is never mistaken for an identifier.
+     */
+    private static List<String> idTokensOf(String pageUrl) {
+        String path;
+        try {
+            path = URI.create(pageUrl).getPath();
+        } catch (Exception e) {
+            return List.of();
+        }
+        if (path == null) return List.of();
+
+        List<String> ids = new ArrayList<>();
+        for (String token : path.toLowerCase(Locale.ROOT).split("[^a-z0-9]+")) {
+            if (token.length() < 6) continue;
+            if (token.chars().anyMatch(Character::isDigit)) ids.add(token);
+        }
+        return ids;
     }
 
     /** Extracts the Product.image field from JSON-LD (simple pattern; an alternative to full LD-JSON parsing). */
@@ -1251,7 +1308,16 @@ public class ProductImageCrawlerService {
                 || lower.contains("favicon")
                 || lower.contains("/banner/")
                 || lower.contains("placeholder")
-                || lower.contains("blank.gif");
+                || lower.contains("blank.gif")
+                // Shop furniture that sits in the markup of every page on a storefront:
+                // navigation artwork, CMS-uploaded decoration, and the app-store badges
+                // in the footer. All of these came back as candidate product photos from
+                // a live retailer listing.
+                || lower.contains("/menu_item/")
+                || lower.contains("/editorfiles/")
+                || lower.contains("googleplay")
+                || lower.contains("applestore")
+                || lower.contains("appstore");
     }
 
     private boolean isImageUrl(String url) {
