@@ -28,6 +28,11 @@ class SupplierLinkFinderLiveTest {
             {"Hoover", "HF 3E53E0W-17", "Bulaşık Makinesi"},
             {"Kumtel", "KF-6420", "Fırın"},
             {"Profilo", "42PA300E", "Televizyon"},
+            {"Profilo", "FRGA103B", "Ankastre elektrikli fırın"},
+            {"Profilo", "FRIAT8AB", "Ankastre Mikrodalga"},
+            {"Profilo", "BM4381EG", "Bulasik Makineleri 60 cm solo"},
+            // Regression: this proposed the MF-42 oven's page before the digit rule.
+            {"Ferre", "Ferre 35 Beyaz", "Beyaz Mini Fırın 35 L"},
         };
         for (Object[] c : cases) {
             Product p = product((String) c[0], (String) c[1], (String) c[2]);

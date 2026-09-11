@@ -78,6 +78,11 @@ public class SupplierLinkFinder {
         List<String> tokens = codeTokens(product);
         if (tokens.isEmpty()) return null;
 
+        // A site that addresses products by model code answers exactly, so it is tried
+        // first and its answer is verified rather than guessed at.
+        String direct = findByUrlPattern(host, tokens);
+        if (direct != null) return direct;
+
         List<String> urls = urlsFor(host);
         if (urls.isEmpty()) return null;
 
@@ -98,6 +103,52 @@ public class SupplierLinkFinder {
             log.debug("[LinkFinder] {} -> {}", product.getSku(), best);
         }
         return best;
+    }
+
+    /**
+     * Sites whose product URL is the model code, so the address can be built instead of
+     * searched for. Profilo (the BSH platform) answers
+     * {@code /tr/tr/product/FRGA103B} with exactly that oven — verified live against
+     * FRGA103B, FRIAT8AB, BM4381EG, 42PA300E and FXSA344C.
+     *
+     * <p>This matters because a sitemap only lists what the vendor chose to publish:
+     * Simfer's carries 274 products and none of the ones missing photos here, and
+     * Profilo's is mostly spare parts. A constructed URL has no such gap.
+     */
+    private static final Map<String, String> URL_PATTERNS = Map.of(
+            "profilo.com", "https://www.profilo.com/tr/tr/product/%s");
+
+    /**
+     * Builds the address from the model code and keeps it only if the page that comes
+     * back names that same code.
+     *
+     * <p>The confirmation is what makes this safe: a wrong guess lands on a 404 or on
+     * some other product, and either way the title will not contain the code, so the
+     * candidate is dropped instead of being offered.
+     */
+    private String findByUrlPattern(String host, List<String> tokens) {
+        String pattern = URL_PATTERNS.get(host);
+        if (pattern == null) return null;
+
+        for (String token : tokens) {
+            String url = String.format(pattern, token);
+            String body = fetch(url);
+            if (body == null) continue;
+            String title = titleOf(body);
+            if (title != null && normalise(title).contains(token)) {
+                log.debug("[LinkFinder] pattern hit {} -> {}", token, url);
+                return url;
+            }
+        }
+        return null;
+    }
+
+    private static final Pattern TITLE = Pattern.compile("<title[^>]*>(.*?)</title>",
+            Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+
+    static String titleOf(String html) {
+        Matcher m = TITLE.matcher(html);
+        return m.find() ? m.group(1).trim() : null;
     }
 
     /** Which supported site, if any, hosts this brand's catalogue. */
@@ -142,8 +193,26 @@ public class SupplierLinkFinder {
         return tokens;
     }
 
+    /**
+     * Keeps a token only if it could be a model code.
+     *
+     * <p>The digit requirement is the important half. Stock codes here are written as
+     * "Ferre 35 Beyaz" — brand, number, colour — and the colour survived every length
+     * rule, so "BEYAZ" was offered as evidence and matched the first white appliance in
+     * the catalogue: a live run proposed the MF-42 oven's photos for the 35 L one. A
+     * model code effectively always carries a digit; a Turkish colour or category word
+     * never does.
+     */
     private static void addToken(Set<String> out, String token) {
-        if (token != null && token.length() >= MIN_TOKEN_LENGTH) out.add(token);
+        if (token == null || token.length() < MIN_TOKEN_LENGTH) return;
+        boolean hasDigit = false;
+        for (int i = 0; i < token.length(); i++) {
+            if (Character.isDigit(token.charAt(i))) {
+                hasDigit = true;
+                break;
+            }
+        }
+        if (hasDigit) out.add(token);
     }
 
     private static String brandName(Product p) {
@@ -228,7 +297,8 @@ public class SupplierLinkFinder {
             URI uri = SsrfGuard.validate(url);
             HttpURLConnection conn = (HttpURLConnection) uri.toURL().openConnection();
             conn.setRequestProperty("User-Agent", ProductImageCrawlerService.userAgent());
-            conn.setRequestProperty("Accept", "application/xml,text/xml,*/*;q=0.8");
+            // Sitemaps and product pages both come through here.
+            conn.setRequestProperty("Accept", "text/html,application/xhtml+xml,application/xml,*/*;q=0.8");
             conn.setRequestProperty("Accept-Encoding", "gzip");
             conn.setConnectTimeout(FETCH_TIMEOUT_MS);
             conn.setReadTimeout(FETCH_TIMEOUT_MS);

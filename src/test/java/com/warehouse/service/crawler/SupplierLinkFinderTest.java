@@ -88,6 +88,33 @@ class SupplierLinkFinderTest {
     }
 
     @Test
+    void refusesColourAndCategoryWordsThatCarryNoModel() {
+        // Live regression: "Ferre 35 Beyaz" offered BEYAZ as evidence, which matched the
+        // first white appliance on the site and proposed an MF-42 oven's photos for the
+        // 35 L one. A model code carries a digit; a colour word does not.
+        var tokens = finder.codeTokens(product("Ferre", "Ferre 35 Beyaz"));
+
+        assertThat(tokens).doesNotContain("BEYAZ");
+        assertThat(tokens).allMatch(t -> t.chars().anyMatch(Character::isDigit));
+    }
+
+    @Test
+    void keepsTheDigitBearingPartOfAColouredCode() {
+        var tokens = finder.codeTokens(product("Simfer", "Simfer 8688 Beyaz"));
+
+        assertThat(tokens).contains("8688BEYAZ");
+        assertThat(tokens).doesNotContain("BEYAZ");
+    }
+
+    @Test
+    void readsThePageTitleForPatternVerification() {
+        assertThat(SupplierLinkFinder.titleOf(
+                "<html><head><title>FRGA103B Ankastre Fırın | PROFILO TR</title></head>"))
+                .isEqualTo("FRGA103B Ankastre Fırın | PROFILO TR");
+        assertThat(SupplierLinkFinder.titleOf("<html><body>yok</body></html>")).isNull();
+    }
+
+    @Test
     void handlesAMissingBrandOrCode() {
         assertThat(finder.codeTokens(product(null, "SR-2515"))).contains("SR2515");
         assertThat(finder.codeTokens(product("Simfer", null))).isEmpty();
