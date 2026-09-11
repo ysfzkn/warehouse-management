@@ -87,7 +87,20 @@ public class ProductImageCrawlerService {
             "braunshop.com.tr",
             "philips.com.tr",       "philips.com",
             "rotaclimate.com",
-            "hoover-home.com"
+            "hoover-home.com",
+            // Retailers rather than manufacturers. Several brands the shop carries
+            // publish no usable catalogue of their own — Tanq's own site lists five
+            // products against the twelve thermoses here, Marsstar's sitemap is four
+            // static pages, Awox and Evo have nothing — so a retailer listing is the
+            // only place those products exist with photographs.
+            //
+            // These three were chosen because a server can actually read them: each
+            // returns the product page with an og:image to a plain request. Trendyol and
+            // Teknosa answer 403 and Hepsiburada renders its content in the browser, so
+            // none of them are usable here however good their catalogues are.
+            "evcenter.com.tr",
+            "carsi24.com",
+            "idefix.com"
             // Removed (not needed): arcelik, beko, vestel, samsung.
             // NOTE: altus.com.tr does TLS fingerprinting with Akamai Bot Manager;
             // it cannot be bypassed with server-side HTTP clients (Jsoup/HttpURLConnection).
