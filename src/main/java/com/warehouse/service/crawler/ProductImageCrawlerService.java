@@ -21,6 +21,9 @@ import java.net.InetAddress;
 import java.net.URI;
 import java.net.URL;
 import java.net.UnknownHostException;
+import java.util.Map;
+import java.util.LinkedHashMap;
+import java.util.Arrays;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -1217,18 +1220,86 @@ public class ProductImageCrawlerService {
     static List<String> keepThisProductsImages(List<String> images, String pageUrl) {
         if (images.size() < 2 || pageUrl == null) return images;
 
-        List<String> ids = idTokensOf(pageUrl);
-        if (ids.isEmpty()) return images;
+        List<String> keys = ownershipKeysOf(pageUrl);
+        if (keys.isEmpty()) return images;
 
         List<String> owned = images.stream()
                 .filter(u -> {
                     String lower = u.toLowerCase(Locale.ROOT);
-                    return ids.stream().anyMatch(lower::contains);
+                    return keys.stream().anyMatch(lower::contains);
                 })
                 .toList();
 
-        return owned.isEmpty() ? images : owned;
+        return owned.isEmpty() ? images : dropSizeVariants(owned);
     }
+
+    /**
+     * Strings that, found in an image's address, mean the image belongs to this page.
+     *
+     * <p>Two kinds. An id-shaped token is the stronger one where a site has it. Where it
+     * does not, the slug works just as well, because these shop platforms name the file
+     * after the product: /atomic-rondo-rosie is illustrated by
+     * atomic-rondo-rosie-fakir-9005-30-O.jpg, while the red sibling in the "similar
+     * items" strip is atomic-rondo-rouge and drops out.
+     *
+     * <p>The slug is also offered with its leading words removed, one at a time, because
+     * a file is often named after the tail of it: Simfer's
+     * /70-lt-pro-beyaz-turbo-cift-cam-mekanik-saat-lamba serves
+     * ...turbo-cift-cam-mekanik-saat-lamba-2158325-10-O.jpg. Each candidate has to stay
+     * long enough to identify one product rather than a category.
+     */
+    private static List<String> ownershipKeysOf(String pageUrl) {
+        List<String> keys = new ArrayList<>(idTokensOf(pageUrl));
+
+        String path;
+        try {
+            path = URI.create(pageUrl).getPath();
+        } catch (Exception e) {
+            return keys;
+        }
+        if (path == null || path.isBlank()) return keys;
+
+        String slug = path.substring(path.lastIndexOf('/') + 1).toLowerCase(Locale.ROOT);
+        slug = slug.replaceAll("\\.(html?|php|aspx)$", "");
+        String[] words = slug.split("-");
+        for (int start = 0; start < words.length; start++) {
+            String candidate = String.join("-", Arrays.copyOfRange(words, start, words.length));
+            if (candidate.length() >= MIN_SLUG_KEY_LENGTH) keys.add(candidate);
+        }
+        return keys;
+    }
+
+    /** A slug shorter than this names a category or a colour, not one product. */
+    private static final int MIN_SLUG_KEY_LENGTH = 16;
+
+    /**
+     * Collapses the same photograph offered at several sizes.
+     *
+     * <p>These shops publish every picture three times — {@code …-9005-30-O.jpg},
+     * {@code -B}, {@code -K} for original, big and small — so a product with five
+     * photographs arrives as fifteen. Only the largest of each set is kept; the rest are
+     * the same image again at a size the storefront would have to upscale.
+     */
+    private static List<String> dropSizeVariants(List<String> images) {
+        Map<String, String> bestPerPhoto = new LinkedHashMap<>();
+        for (String url : images) {
+            Matcher m = SIZE_VARIANT.matcher(url);
+            if (!m.find()) {
+                bestPerPhoto.put(url, url);
+                continue;
+            }
+            String photo = m.group(1) + m.group(3);
+            String existing = bestPerPhoto.get(photo);
+            // "O" is the original; anything else is a downscale of it.
+            if (existing == null || "-O".equalsIgnoreCase(m.group(2))) {
+                bestPerPhoto.put(photo, url);
+            }
+        }
+        return new ArrayList<>(bestPerPhoto.values());
+    }
+
+    private static final Pattern SIZE_VARIANT =
+            Pattern.compile("^(.*?)(-[OBK])(\\.[a-z]{3,4})$", Pattern.CASE_INSENSITIVE);
 
     /**
      * Id-shaped tokens in a URL path: at least six characters, carrying a digit, so a
