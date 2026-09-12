@@ -58,6 +58,25 @@ class ProductImageOwnershipTest {
     }
 
     @Test
+    void shopFurnitureIsNotAProductPhoto() {
+        // A Simfer page listed eleven category-strip icons among its images; carsi24
+        // added menu artwork and the app-store badges from its footer.
+        for (String junk : new String[] {
+                "https://simfer.com.tr/Data/img/category/3/tr_img_1_233.png",
+                "https://carsi24.witcdn.net/Data/img/menu_item/6/tr_img_1_6.png",
+                "https://witcdn.carsi24.com/Data/EditorFiles/googleplay.webp",
+                "https://witcdn.carsi24.com/Data/EditorFiles/applestore.webp" }) {
+            assertThat(ProductImageCrawlerService.isProbablyJunkUrl(junk)).as(junk).isTrue();
+        }
+    }
+
+    @Test
+    void aRealProductPhotoIsNotFilteredOut() {
+        assertThat(ProductImageCrawlerService.isProbablyJunkUrl(
+                "https://simfer.com.tr/Data/Product/70-lt-pro-beyaz-2158325-10-O.jpg")).isFalse();
+    }
+
+    @Test
     void doesNothingToASingleImageOrAMissingUrl() {
         List<String> one = List.of("https://cdn.example.com/x-999999.jpg");
 

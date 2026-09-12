@@ -1315,7 +1315,7 @@ public class ProductImageCrawlerService {
         return false;
     }
 
-    private boolean isProbablyJunkUrl(String url) {
+    static boolean isProbablyJunkUrl(String url) {
         String lower = url.toLowerCase();
         return lower.contains("/logo")
                 || lower.contains("/sprite")
@@ -1329,6 +1329,10 @@ public class ProductImageCrawlerService {
                 // in the footer. All of these came back as candidate product photos from
                 // a live retailer listing.
                 || lower.contains("/menu_item/")
+                // Sibling of /menu_item/ on the same shop platform: the category strip's
+                // artwork. A Simfer product page offered eleven of these alongside its
+                // nine real photographs.
+                || lower.contains("/img/category/")
                 || lower.contains("/editorfiles/")
                 || lower.contains("googleplay")
                 || lower.contains("applestore")
