@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams, useOutletContext, useSearchParams } from 'react-router-dom';
+import { useParams, useOutletContext, useSearchParams, useNavigationType } from 'react-router-dom';
 import axios from 'axios';
 import ProductCard from '../../components/store/ProductCard';
 import Breadcrumb from '../../components/store/Breadcrumb';
@@ -12,6 +12,7 @@ import {
   withCity,
 } from '../../utils/seo';
 import { useToast } from '../../components/store/Toast';
+import { readListPosition, saveListPosition } from '../../utils/listPosition';
 import {
   FiFilter,
   FiGrid,
@@ -81,18 +82,34 @@ function toggleSet(set, id) {
   return next;
 }
 
+/** Products fetched per infinite-scroll step; also the unit the saved position counts in. */
+const PAGE_SIZE = 24;
+
 export default function CategoryPage() {
   const { slug } = useParams();
   const { cart } = useOutletContext();
   const [searchParams] = useSearchParams();
   const toast = useToast();
   const { settings } = useSiteSettings();
+  const navigationType = useNavigationType();
+  // Identifies this exact list: a different category or filter is a different list and
+  // must not inherit another one's position.
+  const listKey = `${window.location.pathname}${window.location.search}`;
+  // Read once, at mount: the effect below consumes it on the first fetch.
+  const restoreRef = useRef(readListPosition(listKey, navigationType === 'POP'));
+  const scrollYRef = useRef(0);
+
   const [products, setProducts] = useState([]);
   const [category, setCategory] = useState(null);
   const [categories, setCategories] = useState([]);
   const [brands, setBrands] = useState([]);
   const [colors, setColors] = useState([]);
-  const [page, setPage] = useState(0);
+  // Starting further in keeps the infinite-scroll sentinel counting from where the
+  // visitor actually was; the fetch below asks for all of those pages at once.
+  const [page, setPage] = useState(() => {
+    const saved = readListPosition(listKey, navigationType === 'POP');
+    return saved ? saved.pages - 1 : 0;
+  });
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
   const [categoryId, setCategoryId] = useState(null);
@@ -173,10 +190,15 @@ export default function CategoryPage() {
   // Fetch products
   const fetchProducts = useCallback(() => {
     if (!categoryReady) return;
+    // Coming back from a product: ask for every page the visitor had already loaded in
+    // one request, rather than replaying the scroll that fetched them one by one.
+    const restore = restoreRef.current;
     // page 0 = fresh load (skeleton); page > 0 = infinite-scroll append (spinner)
-    if (page === 0) setLoading(true);
+    if (page === 0 || restore) setLoading(true);
     else setLoadingMore(true);
-    const params = { page, size: 24, sortBy, sortDir };
+    const params = restore
+      ? { page: 0, size: PAGE_SIZE * restore.pages, sortBy, sortDir }
+      : { page, size: PAGE_SIZE, sortBy, sortDir };
     if (categoryId) params.categoryId = categoryId;
     if (selectedBrands.size > 0) params.brandIds = Array.from(selectedBrands).join(',');
     if (selectedColors.size > 0) params.colorIds = Array.from(selectedColors).join(',');
@@ -188,9 +210,21 @@ export default function CategoryPage() {
       .get('/api/store/products', { params })
       .then((r) => {
         const content = r.data?.content || [];
-        setProducts((prev) => (page === 0 ? content : [...prev, ...content]));
-        setTotalPages(r.data?.totalPages || 0);
+        setProducts((prev) => (page === 0 || restore ? content : [...prev, ...content]));
+        // A restore request asked for several pages at once, so the page count it
+        // reports is not the one the sentinel counts in. The list already knows how far
+        // it got; only a normal request may update it.
+        if (!restore) {
+          setTotalPages(r.data?.totalPages || 0);
+        } else if (r.data?.totalElements) {
+          setTotalPages(Math.ceil(r.data.totalElements / PAGE_SIZE));
+        }
         setTotalElements(r.data?.totalElements || 0);
+        if (restore) {
+          restoreRef.current = null;
+          // Wait for the rows to exist before moving to them.
+          requestAnimationFrame(() => requestAnimationFrame(() => window.scrollTo(0, restore.scrollY)));
+        }
       })
       .catch(() => {})
       .finally(() => {
@@ -228,6 +262,29 @@ export default function CategoryPage() {
       window.removeEventListener('keydown', onKey);
     };
   }, [filtersOpen]);
+
+  // Remember where the visitor is, so opening a product and pressing back returns them
+  // here rather than to the top of a freshly reloaded first page. Written on scroll
+  // rather than on unmount: by the time this component tears down the window may
+  // already have been scrolled elsewhere.
+  useEffect(() => {
+    let frame = 0;
+    const onScroll = () => {
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        scrollYRef.current = window.scrollY;
+        saveListPosition(listKey, page + 1, window.scrollY);
+      });
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      if (frame) cancelAnimationFrame(frame);
+      // A page loaded without any further scrolling still counts as progress.
+      saveListPosition(listKey, page + 1, scrollYRef.current);
+    };
+  }, [listKey, page]);
 
   // Infinite scroll — auto-load the next page when the sentinel nears the viewport.
   useEffect(() => {

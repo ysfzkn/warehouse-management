@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigationType } from 'react-router-dom';
 
 /**
  * Automatically scrolls to the top when the page route changes.
@@ -13,17 +13,26 @@ import { useLocation } from 'react-router-dom';
  * Behavior:
  *   - On pathname change, scroll Y → 0
  *   - Scroll is NOT affected by search/hash changes (filter change, anchor link)
- *   - Scroll is preserved when state.preserveScroll === true (back button, modal close)
+ *   - Scroll is preserved when state.preserveScroll === true (modal close)
+ *   - Scroll is preserved on back/forward, where the visitor expects to land where
+ *     they left rather than at the top of a page they have already read
  *   - Instant if reduced-motion is preferred; otherwise smooth scroll
  *
  * Usage: a single instance inside <BrowserRouter>, before <Routes>.
  */
 export default function ScrollToTop() {
   const { pathname, state } = useLocation();
+  const navigationType = useNavigationType();
 
   useEffect(() => {
-    // Preserve scroll for cases like closing a modal, back button, etc.
+    // Preserve scroll for cases like closing a modal.
     if (state && state.preserveScroll) return;
+
+    // Back and forward. The comment above promised this case was handled, but it only
+    // ever worked when the app had pushed preserveScroll itself — a browser back button
+    // carries whatever state the entry was pushed with, which for a product list is
+    // nothing. So every "back" from a product landed at the top of the list.
+    if (navigationType === 'POP') return;
 
     // Respect the reduced-motion preference
     const reducedMotion =
@@ -44,7 +53,7 @@ export default function ScrollToTop() {
         window.scrollTo(0, 0);
       }
     });
-  }, [pathname, state]);
+  }, [pathname, state, navigationType]);
 
   return null;
 }
