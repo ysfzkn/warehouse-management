@@ -286,7 +286,14 @@ public class ProductImageCrawlerService {
                 || title.startsWith("error-") || title.startsWith("error—")) {
             return true;
         }
-        if (!doc.select("html#__next_error__, #__next_error__").isEmpty()) {
+        // Next.js marks its error shell with this id, but a site can serve it while still
+        // rendering the product: philips.com.tr answers /c-p/BG3017_01 with
+        // <html id="__next_error__"> around 269KB of real content — correct title,
+        // canonical link and og:image all present. Treating the marker alone as failure
+        // rejected every Philips product page. Open Graph tags are the tell: a genuine
+        // error shell has no product to describe.
+        if (!doc.select("html#__next_error__, #__next_error__").isEmpty()
+                && !hasProductMetadata(doc)) {
             return true;
         }
         String body = doc.body() != null ? doc.body().text().toLowerCase() : "";
@@ -295,6 +302,14 @@ public class ProductImageCrawlerService {
                 && (body.contains("nginx") || body.contains("try again later"));
         boolean unavailable = body.contains("currently unavailable") && body.contains("try again later");
         return nginxError || unavailable;
+    }
+
+    /** Open Graph tags naming a picture or a title — something an error shell never has. */
+    static boolean hasProductMetadata(Document doc) {
+        if (doc == null) return false;
+        String image = doc.select("meta[property=og:image], meta[name=og:image]").attr("content");
+        String title = doc.select("meta[property=og:title], meta[name=og:title]").attr("content");
+        return !image.isBlank() || !title.isBlank();
     }
 
     private void sleepQuietly(long ms) {
