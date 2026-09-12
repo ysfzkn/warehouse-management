@@ -212,7 +212,7 @@ public class ProductCrawlBatchService {
                 item.description = preview.description();
                 item.shortDescription = preview.shortDescription();
                 item.specGroups = toSpecMaps(preview.specGroups());
-                List<Candidate> titleMatches = match(preview.title(), catalogue);
+                List<Candidate> titleMatches = match(preview.title(), item.url, catalogue);
                 item.candidates = withDiscovered(item, titleMatches);
                 if (item.candidates.isEmpty()) {
                     item.status = "NO_MATCH";
@@ -260,14 +260,33 @@ public class ProductCrawlBatchService {
      * fallback for products whose stock code is internal and appears nowhere upstream.
      */
     List<Candidate> match(String pageTitle, List<Product> catalogue) {
+        return match(pageTitle, null, catalogue);
+    }
+
+    /**
+     * @param pageUrl the address the page was read from, searched alongside the title
+     */
+    List<Candidate> match(String pageTitle, String pageUrl, List<Product> catalogue) {
         String haystack = normalise(pageTitle);
-        if (haystack.isEmpty()) return List.of();
+        String address = normalise(pageUrl);
+        if (haystack.isEmpty() && address.isEmpty()) return List.of();
 
         List<Candidate> found = new ArrayList<>();
         for (Product p : catalogue) {
             String sku = normalise(p.getSku());
             if (sku.length() >= MIN_SKU_LENGTH && haystack.contains(sku)) {
                 found.add(new Candidate(p.getId(), p.getName(), p.getSku(), 100, "Stok kodu"));
+                continue;
+            }
+            // Stock codes are written "Philips BG3017", so the full string almost never
+            // appears anywhere upstream — the brand sits elsewhere in the title, or the
+            // model lives only in the address (philips.com.tr titles a page "Airfryer"
+            // and serves it at /c-p/HD9285_96). Searching the brand-stripped code in
+            // both places is what actually identifies these products. The token rules
+            // are the link finder's: at least four characters and a digit, so a colour
+            // or category word can never match here.
+            if (matchingCode(p, haystack, address) != null) {
+                found.add(new Candidate(p.getId(), p.getName(), p.getSku(), 95, "Model kodu"));
                 continue;
             }
             double ratio = nameOverlap(p.getName(), haystack);
@@ -316,6 +335,22 @@ public class ProductCrawlBatchService {
             if (!c.productId().equals(item.discoveredForProductId)) out.add(c);
         }
         return out;
+    }
+
+    /**
+     * The product's model code if the title or the address contains it, else null.
+     *
+     * <p>Uses the same token rules as the supplier link finder, so "Philips BG3017"
+     * offers BG3017 and never the brand on its own. Tokens come longest first: on a page
+     * served at /c-p/43PUS8007_62 both "43PUS800762" and a bare "8007" would hit, and
+     * the more specific one should decide.
+     */
+    private String matchingCode(Product product, String title, String address) {
+        if (linkFinder == null) return null;
+        for (String token : linkFinder.codeTokens(product)) {
+            if (title.contains(token) || address.contains(token)) return token;
+        }
+        return null;
     }
 
     /** Fraction of the product name's meaningful tokens that occur in the page title. */

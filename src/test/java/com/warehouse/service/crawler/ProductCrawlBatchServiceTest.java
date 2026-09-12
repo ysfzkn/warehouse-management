@@ -14,7 +14,16 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class ProductCrawlBatchServiceTest {
 
-    private final ProductCrawlBatchService service = new ProductCrawlBatchService(null, null, null);
+    private final ProductCrawlBatchService service =
+            new ProductCrawlBatchService(null, null, new SupplierLinkFinder());
+
+    private static Product branded(long id, String name, String sku, String brand) {
+        Product p = product(id, name, sku);
+        com.warehouse.entity.Brand b = new com.warehouse.entity.Brand();
+        b.setName(brand);
+        p.setBrand(b);
+        return p;
+    }
 
     private static Product product(long id, String name, String sku) {
         Product p = new Product();
@@ -112,6 +121,50 @@ class ProductCrawlBatchServiceTest {
         assertThat(hits.get(0).productId()).isEqualTo(2L);
         assertThat(hits).isSortedAccordingTo(
                 (a, b) -> Integer.compare(b.score(), a.score()));
+    }
+
+    // ── Matching on the address ──
+
+    @Test
+    void findsTheModelInTheAddressWhenTheTitleOmitsIt() {
+        // philips.com.tr titles this page "Airfryer" and nothing else; the model only
+        // exists in the URL it was served from.
+        var catalogue = List.of(branded(1, "5000 Serisi XXL Connected", "Philips 9285", "Philips"));
+
+        var hits = service.match("Airfryer", "https://www.philips.com.tr/c-p/HD9285_96", catalogue);
+
+        assertThat(hits).hasSize(1);
+        assertThat(hits.get(0).reason()).isEqualTo("Model kodu");
+    }
+
+    @Test
+    void findsABrandPrefixedCodeInTheTitleToo() {
+        // "Philips BG3017" never appears verbatim upstream — the brand sits at the other
+        // end of the title — so the brand-stripped code is what has to be looked for.
+        var catalogue = List.of(branded(1, "Bir Ürün", "Philips BG3017", "Philips"));
+
+        var hits = service.match("BG3017/00 Bodygroom series 3000 | Philips", null, catalogue);
+
+        assertThat(hits).hasSize(1);
+        assertThat(hits.get(0).reason()).isEqualTo("Model kodu");
+    }
+
+    @Test
+    void aVerbatimStockCodeInTheTitleStillScoresHighest() {
+        var catalogue = List.of(product(1, "Bir Ürün", "HF3E53E0W-17"));
+
+        var hits = service.match("HF 3E53E0W-17 | Hoover", null, catalogue);
+
+        assertThat(hits.get(0).reason()).isEqualTo("Stok kodu");
+        assertThat(hits.get(0).score()).isEqualTo(100);
+    }
+
+    @Test
+    void theBrandNameInTheAddressIsNotAMatch() {
+        // Every page on philips.com.tr contains "philips"; only the model may decide.
+        var catalogue = List.of(branded(1, "Rastgele Ürün", "Philips", "Philips"));
+
+        assertThat(service.match("", "https://www.philips.com.tr/c-p/HD9285_96", catalogue)).isEmpty();
     }
 
     @Test
