@@ -8,9 +8,13 @@ Bu doküman lokalde Kargonomi entegrasyonunu uçtan uca test etmek için adımla
 
 1. **https://www.kargonomi.com.tr** üzerinden hesap aç (ticari)
 2. Panel → Ayarlar → **API Anahtarları** sekmesinden:
-   - `API Token` (Bearer)
-   - `X-App-Key` (partner identifier)
-   kopyala
+   - `API Token` (Bearer) — **zorunlu olan tek kimlik bilgisi budur**
+   - `X-App-Key` (partner identifier) — **opsiyonel.** Resmî API dokümanında
+     geçmiyor; hesabına böyle bir anahtar verilmediyse boş bırak, entegrasyon
+     yine çalışır (boşken bu header hiç gönderilmez).
+
+   > Müşteri kodu / müşteri numarası API token'ı **değildir**. Panelde API
+   > anahtarı görmüyorsan Kargonomi'den API erişimi talep etmen gerekir.
 3. Hesabına **bakiye yükle** (test gönderileri için ~50-100 TL yeterli)
 4. Panel → Depolar → en az 1 depo oluştur. Bu depo ID'sini panelden al
    (veya `POST /warehouses` ile API'den oluşturup ID'yi otomatik al — adım 4'e bak)
@@ -32,6 +36,7 @@ UPDATE site_settings SET setting_value = 'true'        WHERE setting_key = 'carg
 UPDATE site_settings SET setting_value = 'KARGONOMI'   WHERE setting_key = 'cargo_api_provider';
 UPDATE site_settings SET setting_value = 'true'        WHERE setting_key = 'cargo_api_auto_create';
 UPDATE site_settings SET setting_value = '<TOKEN>'     WHERE setting_key = 'kargonomi_api_token';
+-- app_key opsiyonel; hesabinda yoksa bu satiri atla
 UPDATE site_settings SET setting_value = '<APP_KEY>'   WHERE setting_key = 'kargonomi_app_key';
 UPDATE site_settings SET setting_value = '<WAREHOUSE_ID>' WHERE setting_key = 'kargonomi_warehouse_id';
 UPDATE site_settings SET setting_value = '<RANDOM_HMAC_SECRET>' WHERE setting_key = 'kargonomi_webhook_secret';
@@ -197,7 +202,7 @@ curl -s -X POST http://localhost:8080/api/admin/cargo/webhook/register \
   -H "X-ADMIN-SECURITY-CODE: 12345" \
   -H "Content-Type: application/json" \
   -d '{
-    "callbackUrl": "https://abc123.ngrok-free.app/api/admin/cargo/webhook/kargonomi",
+    "callbackUrl": "https://abc123.ngrok-free.app/api/public/cargo/kargonomi/webhook",
     "secret": "your-hmac-secret-here"
   }' | jq
 ```
@@ -225,7 +230,7 @@ print(sig)
 # Sonuç: a1b2c3...
 
 # Webhook'a POST et
-curl -X POST https://abc123.ngrok-free.app/api/admin/cargo/webhook/kargonomi \
+curl -X POST https://abc123.ngrok-free.app/api/public/cargo/kargonomi/webhook \
   -H "Content-Type: application/json" \
   -H "X-Webhook-Signature: <yukarıdaki sig>" \
   -d '{"shipment_id":98765,"status":"webservice_shipment_started","tracking_number":"TRK123"}'
@@ -302,14 +307,55 @@ Log: `[Kargonomi Webhook] HMAC mismatch — reddedildi.`
 
 ## 10. Production'a Geçiş Öncesi Checklist
 
-- [ ] `kargonomi_api_token` ve `kargonomi_app_key` env'den geliyor (DB'de plain text TUTMA, encrypt et veya Railway secret kullan)
+- [ ] `kargonomi_api_token` env'den geliyor (DB'de plain text TUTMA, encrypt et veya Railway secret kullan). `kargonomi_app_key` opsiyonel
 - [ ] `kargonomi_webhook_secret` üretildi (`openssl rand -hex 32`) ve hem Kargonomi panelinde hem bizim setting'de aynı
-- [ ] Webhook URL `https://api.siteniz.com/api/admin/cargo/webhook/kargonomi` (public, HTTPS zorunlu)
+- [ ] Webhook URL `https://api.siteniz.com/api/public/cargo/kargonomi/webhook` (public, HTTPS zorunlu)
 - [ ] `cargo_api_auto_create=true` (otomatik gönderi oluşumu aktif)
 - [ ] `kargonomi_warehouse_id` doğru ID ile dolu
 - [ ] Yük testi: 10 paralel sipariş → tüm kargo gönderileri oluşmalı, çakışma yok (ShedLock devrede)
 - [ ] CargoTrackingJob loglarda her 30 dk çalışıyor
 - [ ] Backup: en az 1 manuel oluşturulmuş kargo etiketi PDF'i indirildi ve doğrulandı
+- [ ] Kargolanacak ürünlerde ağırlık + en/boy/yükseklik dolu (desi bunlardan hesaplanıyor)
+- [ ] Kendi başına taşınan ürünlerde `products.packages_per_unit` işaretli (mobilya, beyaz eşya)
+- [ ] `cargo_max_desi_per_package` mağazaya uygun (varsayılan 30 desi)
+- [ ] `/api/admin/cargo/outbox` boş — bekleyen ya da düşmüş gönderi yok
+
+---
+
+## 10.1 Kargo Tablolarını İzleme
+
+Entegrasyon canlıdayken bakılacak üç yer:
+
+| Ne | Nerede |
+|---|---|
+| Bir siparişin kargo hareketleri | `GET /api/admin/cargo/orders/{orderId}/events` — admin sipariş detayında da görünür |
+| Oluşturulamamış gönderiler | `GET /api/admin/cargo/outbox` — `PENDING` yeniden denenecek, `ABANDONED` elle açılmalı |
+| Ham webhook günlüğü | `cargo_webhook_deliveries` tablosu (30 gün saklanır) — imza/parse sorunlarını burada ayıklarsın |
+
+```sql
+-- Son gelen webhook'lar ve sonuçları
+SELECT received_at, status, order_number, error_message
+FROM cargo_webhook_deliveries ORDER BY received_at DESC LIMIT 20;
+
+-- Takılmış gönderiler
+SELECT order_number, attempts, next_attempt_at, last_error
+FROM cargo_shipment_outbox WHERE status <> 'SUCCEEDED';
+```
+
+---
+
+## 10.2 Kargonomi'den Cevap Bekleyen Iki Ayar
+
+Bu iki ozellik yazildi ama **varsayilan kapali**; acmadan once Kargonomi'ye sorulmasi gerekenler var.
+
+| Ayar | Ne yapar | Acmadan once sorulacak |
+|---|---|---|
+| `cargo_checkout_live_pricing` | Checkout'ta Kargonomi'nin gercek fiyatlarini gosterir ve o fiyati tahsil eder | Her fiyat sorgusu bir taslak gonderi acip siler. Taslak kotasi/ucreti var mi? |
+| `cargo_return_label_enabled` | Iade onaylaninca musteri adina iade kargosu acar, takip no'yu mail atar | Iade gonderisi `is_return` alaniyla mi isaretleniyor? Dokumanda gecmiyor. |
+
+Canli fiyat acilirsa: fiyatlar ilce + desi dilimi bazinda `cargo_price_cache_minutes`
+(varsayilan 720 dk) boyunca onbellekte tutulur; musteri bilgisi taslaga yazilmaz,
+yer tutucu alici kullanilir.
 
 ---
 

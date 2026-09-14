@@ -81,6 +81,7 @@ public class AdminOrderController {
     private final com.warehouse.repository.StockTransferRepository stockTransferRepository;
     private final com.warehouse.mapper.StockTransferMapper stockTransferMapper;
     private final com.warehouse.service.CouponService couponService;
+    private final com.warehouse.service.OrderDeliveryService orderDeliveryService;
 
     public AdminOrderController(OrderRepository orderRepository,
                                  OrderItemRepository orderItemRepository,
@@ -98,7 +99,8 @@ public class AdminOrderController {
                                  com.warehouse.service.ManualOrderService manualOrderService,
                                  com.warehouse.repository.StockTransferRepository stockTransferRepository,
                                  com.warehouse.mapper.StockTransferMapper stockTransferMapper,
-                                 com.warehouse.service.CouponService couponService) {
+                                 com.warehouse.service.CouponService couponService,
+                                 com.warehouse.service.OrderDeliveryService orderDeliveryService) {
         this.orderRepository = orderRepository;
         this.orderItemRepository = orderItemRepository;
         this.statusHistoryRepository = statusHistoryRepository;
@@ -116,6 +118,7 @@ public class AdminOrderController {
         this.stockTransferRepository = stockTransferRepository;
         this.stockTransferMapper = stockTransferMapper;
         this.couponService = couponService;
+        this.orderDeliveryService = orderDeliveryService;
     }
 
     @GetMapping
@@ -285,6 +288,7 @@ public class AdminOrderController {
             .cargoCompany(order.getCargoCompany() != null ? order.getCargoCompany().name() : null)
             .cargoProviderName(order.getCargoProviderName())
             .cargoTrackingNo(order.getCargoTrackingNo())
+            .cargoStatus(com.warehouse.service.cargo.KargonomiCargoProvider.statusLabel(order.getCargoStatus()))
             .estimatedDeliveryDate(order.getEstimatedDeliveryDate())
             .customerNote(order.getCustomerNote())
             .adminNote(order.getAdminNote())
@@ -391,65 +395,25 @@ public class AdminOrderController {
             }
         }
 
-        // If DELIVERED → deduct reserved stock (convert reservation to actual sale) + log StockEvent
+        // If DELIVERED → deduct reserved stock (convert reservation to actual sale) + log StockEvent,
+        // and settle door payments. Shared with the cargo webhook / tracking job, which reach
+        // DELIVERED without passing through this controller.
         if (newStatus == OrderStatus.DELIVERED) {
-            {
-                var items = orderItemRepository.findByOrderId(order.getId());
-                for (var item : items) {
-                    Long productId = item.getProduct() != null ? item.getProduct().getId() : null;
-
-                    if (item.getStockId() != null) {
-                        stockRepository.findById(item.getStockId()).ifPresent(stock -> {
-                            int qty = item.getQuantity();
-                            int oldQty = stock.getQuantity();
-                            stock.setQuantity(Math.max(0, oldQty - qty));
-                            stock.setReservedQuantity(Math.max(0, stock.getReservedQuantity() - qty));
-                            stockRepository.save(stock);
-
-                            StockEvent event = new StockEvent();
-                            event.setStockId(stock.getId());
-                            event.setProductId(item.getProduct() != null ? item.getProduct().getId() : null);
-                            event.setEventType(StockEventType.QUANTITY_CHANGED);
-                            event.setOldValue(oldQty);
-                            event.setNewValue(stock.getQuantity());
-                            event.setSource(StockEventSource.ORDER);
-                            event.setSourceDetail("Sipariş #" + order.getOrderNumber() + " teslim edildi (" + qty + " adet)");
-                            event.setOrderNumber(order.getOrderNumber());
-                            stockEventRepository.save(event);
-                        });
-                    } else {
-                        // StockId is null but still log the event (traceability)
-                        StockEvent event = new StockEvent();
-                        event.setProductId(productId);
-                        event.setEventType(StockEventType.QUANTITY_CHANGED);
-                        event.setOldValue(item.getQuantity());
-                        event.setNewValue(0);
-                        event.setSource(StockEventSource.ORDER);
-                        event.setSourceDetail("Sipariş #" + order.getOrderNumber() + " teslim edildi (" + item.getQuantity() + " adet, stok kaydı yok)");
-                        event.setOrderNumber(order.getOrderNumber());
-                        stockEventRepository.save(event);
-                    }
-                }
-            }
-
-            // Door payment → auto-complete payment with audit trail
-            if (com.warehouse.util.OrderStatusMachine.isDoorPayment(order.getPaymentMethod())) {
-                var tx = paymentRepo.findByOrderIdAndStatus(order.getId(), com.warehouse.enums.PaymentStatus.INITIATED);
-                if (tx.isPresent()) {
-                    var payment = tx.get();
-                    payment.setStatus(com.warehouse.enums.PaymentStatus.SUCCESS);
-                    payment.setPaidAt(java.time.LocalDateTime.now());
-                    payment.setPaidAmount(order.getGrandTotal());
-                    paymentRepo.save(payment);
-                    statusHistoryRepository.save(OrderStatusHistoryFactory.create(
-                        order, "PAYMENT_INITIATED", "PAYMENT_SUCCESS",
-                        CurrentUser.usernameOrSystem(), "ADMIN", "Kapıda ödeme tahsil edildi"));
-                }
-            }
+            orderDeliveryService.applyDeliveredEffects(order, CurrentUser.usernameOrSystem(), "ADMIN");
         }
 
         // If CANCELLED → release reserved stock + the coupon use + log StockEvent
         if (newStatus == OrderStatus.CANCELLED) {
+            // Withdraw the shipment too, or the carrier still comes to collect a parcel for an
+            // order that no longer exists. Never let a carrier problem block the cancellation.
+            if (order.getCargoProviderShipmentId() != null && cargoApiService.isEnabled()) {
+                try {
+                    cargoApiService.withdrawShipment(order);
+                } catch (Exception e) {
+                    org.slf4j.LoggerFactory.getLogger(getClass())
+                        .warn("Kargo geri çekilemedi (sipariş {}): {}", order.getOrderNumber(), e.toString());
+                }
+            }
             couponService.release(order.getId());
             {
                 var items = orderItemRepository.findByOrderId(order.getId());
@@ -531,6 +495,11 @@ public class AdminOrderController {
             order.setCargoCompany(parseCargoCompany(body.getCargoCompany()));
         }
         order.setCargoTrackingNo(body.getCargoTrackingNo());
+
+        // 0 or negative means "forget my override and use the packing plan again".
+        Integer packageCount = body.getCargoPackageCount();
+        order.setCargoPackageCount(packageCount != null && packageCount >= 1 ? packageCount : null);
+
         orderRepository.save(order);
 
         return ResponseEntity.ok(Map.of("message", "Kargo bilgisi güncellendi."));

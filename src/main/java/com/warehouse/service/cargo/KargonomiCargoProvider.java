@@ -65,14 +65,19 @@ public class KargonomiCargoProvider implements CargoApiProvider {
         return "KARGONOMI";
     }
 
+    /**
+     * Kargonomi's documentation asks for exactly one credential: {@code Authorization: Bearer}.
+     * The app key is kept as an optional extra header (it is not in the official spec) — requiring
+     * it here used to leave the provider permanently disabled for accounts that were never issued
+     * one, and a disabled provider means shipments are quietly never created.
+     */
     @Override
     public boolean isEnabled() {
         if (!"KARGONOMI".equalsIgnoreCase(settingService.getSetting("cargo_api_provider"))) {
             return false;
         }
         String token = settingService.getSetting("kargonomi_api_token");
-        String appKey = settingService.getSetting("kargonomi_app_key");
-        return token != null && !token.isBlank() && appKey != null && !appKey.isBlank();
+        return token != null && !token.isBlank();
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -205,6 +210,87 @@ public class KargonomiCargoProvider implements CargoApiProvider {
         }
     }
 
+    /** One carrier's offer for a shipment: what Kargonomi would charge and how long it would take. */
+    public record CarrierQuote(int providerId, String slug, String name,
+                                BigDecimal price, Integer estimatedDays) {}
+
+    /**
+     * What each carrier would charge for this shipment.
+     *
+     * <p>Kargonomi only prices a shipment that exists, so the caller must create a draft first;
+     * this reads the comparison for that draft. The prices were already being fetched to resolve
+     * a carrier id and then discarded — this exposes them so a real price can reach the customer
+     * instead of a flat rate from our own table.
+     */
+    @SuppressWarnings("unchecked")
+    public List<CarrierQuote> fetchPriceComparison(String shipmentId) {
+        if (!isEnabled() || shipmentId == null || shipmentId.isBlank()) return List.of();
+        try {
+            String url = getBaseUrl() + "/shipment-price-comparison/" + shipmentId;
+            HttpEntity<Void> entity = new HttpEntity<>(buildAuthHeaders());
+            ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.GET, entity, Map.class);
+            Map<String, Object> body = unwrapData(response.getBody());
+
+            Object providers = body.get("shipping_provider_with_price");
+            if (!(providers instanceof List<?> list)) return List.of();
+
+            List<CarrierQuote> quotes = new ArrayList<>();
+            for (Object o : list) {
+                if (!(o instanceof Map<?, ?> m)) continue;
+                Object id = m.get("id");
+                if (!(id instanceof Number providerId)) continue;
+
+                BigDecimal price = toDecimal(m.get("price"));
+                if (price == null) price = toDecimal(m.get("amount"));
+                if (price == null) continue;   // an offer with no price is not an offer
+
+                quotes.add(new CarrierQuote(
+                        providerId.intValue(),
+                        strVal(m.get("slug")),
+                        strVal(m.get("name")),
+                        price,
+                        m.get("estimated_days") instanceof Number d ? d.intValue() : null));
+            }
+            return quotes;
+        } catch (Exception e) {
+            logger.warn("[Kargonomi] fiyat karşılaştırma alınamadı ({}): {}", shipmentId, e.getMessage());
+            return List.of();
+        }
+    }
+
+    /**
+     * Creates a draft shipment and returns its id, without confirming a carrier. Used for
+     * pricing: the draft is the only way to ask Kargonomi what a delivery would cost, and the
+     * caller is expected to {@link #deleteShipment} it afterwards.
+     */
+    public String createDraftShipment(CargoShipmentRequest request) {
+        if (!isEnabled()) return null;
+        try {
+            int[] buyerGeo = geoLookup.lookupStateAndCity(
+                    request.getRecipientCity(), request.getRecipientDistrict());
+            if (buyerGeo == null) return null;
+
+            Map<String, Object> body = buildShipmentBody(request, buyerGeo[0], buyerGeo[1], false);
+            HttpHeaders headers = buildAuthHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            ResponseEntity<Map> response = restTemplate.postForEntity(
+                    getBaseUrl() + "/shipments", new HttpEntity<>(body, headers), Map.class);
+            return strVal(unwrapData(response.getBody()).get("id"));
+        } catch (Exception e) {
+            logger.warn("[Kargonomi] fiyat taslağı oluşturulamadı: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    private static BigDecimal toDecimal(Object value) {
+        if (value == null) return null;
+        try {
+            return new BigDecimal(value.toString().trim().replace(",", "."));
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
     // ─────────────────────────────────────────────────────────────
     //  Tracking (GET /shipments/{id})
     // ─────────────────────────────────────────────────────────────
@@ -262,6 +348,84 @@ public class KargonomiCargoProvider implements CargoApiProvider {
         } catch (Exception e) {
             logger.error("Kargonomi cancel exception: {}", e.getMessage());
             return CargoShipmentResult.failure("EXCEPTION", e.getMessage());
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    //  Correcting a shipment before it moves
+    // ─────────────────────────────────────────────────────────────
+
+    /**
+     * {@code PATCH /shipments/{id}} — corrects individual fields on a shipment that has not
+     * gone out yet. A wrong phone number or a missing apartment number used to mean cancelling
+     * the shipment and creating a new one, which loses the tracking number the customer already
+     * has.
+     *
+     * @param fields Kargonomi field names under {@code shipment}, e.g. {@code buyer_phone}
+     * @return true if Kargonomi accepted the change
+     */
+    public boolean patchShipment(String shipmentId, Map<String, Object> fields) {
+        if (!isEnabled() || shipmentId == null || fields == null || fields.isEmpty()) return false;
+        try {
+            String url = getBaseUrl() + "/shipments/" + shipmentId;
+            HttpHeaders headers = buildAuthHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<Map<String, Object>> entity =
+                    new HttpEntity<>(Map.of("shipment", fields), headers);
+            ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.PATCH, entity, Map.class);
+            logger.info("[Kargonomi] PATCH /shipments/{} — alanlar={}, sonuç={}",
+                    shipmentId, fields.keySet(), response.getStatusCode());
+            return response.getStatusCode().is2xxSuccessful();
+        } catch (Exception e) {
+            logger.error("Kargonomi shipment güncelleme hatası ({}): {}", shipmentId, e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Corrects the recipient on an existing shipment. Only the fields that were actually given
+     * are sent; city and district are translated to Kargonomi ids and are all-or-nothing, since
+     * a district id belonging to a different province would be worse than leaving the address be.
+     *
+     * @return true if Kargonomi accepted the change
+     */
+    public boolean patchRecipient(String shipmentId, String name, String phone, String address,
+                                   String city, String district) {
+        Map<String, Object> fields = new LinkedHashMap<>();
+        if (name != null && !name.isBlank()) fields.put("buyer_name", name.trim());
+        if (phone != null && !phone.isBlank()) fields.put("buyer_phone", normalizePhone(phone));
+        if (address != null && !address.isBlank()) fields.put("buyer_address", address.trim());
+
+        if (city != null && !city.isBlank() && district != null && !district.isBlank()) {
+            int[] geo = geoLookup.lookupStateAndCity(city, district);
+            if (geo == null) {
+                logger.warn("[Kargonomi] adres düzeltme — il/ilçe eşleşmedi: {} / {}", city, district);
+                return false;
+            }
+            fields.put("buyer_state_id", geo[0]);
+            fields.put("buyer_city_id", geo[1]);
+        }
+
+        return patchShipment(shipmentId, fields);
+    }
+
+    /**
+     * {@code DELETE /shipments/{id}} — removes a shipment that never left draft. Cancelling and
+     * deleting are different things on Kargonomi's side: a processed shipment must be cancelled
+     * (and only within 36 hours), while a draft is simply deleted. An order cancelled before
+     * dispatch used to leave its draft hanging in the Kargonomi panel forever.
+     */
+    public boolean deleteShipment(String shipmentId) {
+        if (!isEnabled() || shipmentId == null || shipmentId.isBlank()) return false;
+        try {
+            String url = getBaseUrl() + "/shipments/" + shipmentId;
+            HttpEntity<Void> entity = new HttpEntity<>(buildAuthHeaders());
+            ResponseEntity<Void> response = restTemplate.exchange(url, HttpMethod.DELETE, entity, Void.class);
+            logger.info("[Kargonomi] DELETE /shipments/{} — sonuç={}", shipmentId, response.getStatusCode());
+            return response.getStatusCode().is2xxSuccessful();
+        } catch (Exception e) {
+            logger.error("Kargonomi shipment silme hatası ({}): {}", shipmentId, e.getMessage());
+            return false;
         }
     }
 
@@ -588,18 +752,23 @@ public class KargonomiCargoProvider implements CargoApiProvider {
         }
 
         // Packages array — desi is required for each package
-        List<Map<String, Object>> packages = new ArrayList<>();
-        int count = request.getPackageCount() != null ? request.getPackageCount() : 1;
-        BigDecimal totalDesi = request.getTotalDesi() != null
-                ? request.getTotalDesi() : BigDecimal.ONE;
-        BigDecimal perPackageDesi = totalDesi.divide(
-                BigDecimal.valueOf(Math.max(1, count)), 2, java.math.RoundingMode.UP);
+        List<CargoShipmentRequest.PackagePlan> plan = request.getPackages();
+        if (plan == null || plan.isEmpty()) {
+            // No plan supplied (a caller outside the order flow): fall back to an even split.
+            plan = evenSplitFallback(request);
+        }
 
+        List<Map<String, Object>> packages = new ArrayList<>();
+        int count = plan.size();
         for (int i = 0; i < count; i++) {
+            CargoShipmentRequest.PackagePlan parcel = plan.get(i);
             Map<String, Object> pkg = new LinkedHashMap<>();
-            pkg.put("desi", perPackageDesi);
-            if (request.getContentDescription() != null) {
-                pkg.put("content", truncate(request.getContentDescription(), 200));
+            pkg.put("desi", parcel.getDesi());
+
+            String content = parcel.getContent() != null
+                    ? parcel.getContent() : request.getContentDescription();
+            if (content != null) {
+                pkg.put("content", truncate(content, 200));
             }
             // barcode → association with the order number (for easy searching within Kargonomi)
             if (request.getOrderNumber() != null) {
@@ -615,7 +784,11 @@ public class KargonomiCargoProvider implements CargoApiProvider {
         body.put("shipment", shipment);
 
         // warehouse_id can be used for the sender; otherwise inline sender information is sent.
-        String warehouseId = settingService.getSetting("kargonomi_warehouse_id");
+        //
+        // Never for a return, though: there the sender is the customer posting the goods back,
+        // and quietly substituting our own warehouse would print a label that collects the parcel
+        // from the wrong address.
+        String warehouseId = isReturn ? null : settingService.getSetting("kargonomi_warehouse_id");
         if (warehouseId != null && !warehouseId.isBlank()) {
             try { body.put("warehouse_id", Integer.parseInt(warehouseId.trim())); }
             catch (NumberFormatException ignored) {}
@@ -634,8 +807,27 @@ public class KargonomiCargoProvider implements CargoApiProvider {
             }
         }
 
+        // NOTE: is_return does not appear in Kargonomi's published API documentation. It is sent
+        // on the assumption that returns are flagged this way; until that is confirmed with
+        // Kargonomi, return labels stay behind the cargo_return_label_enabled setting.
         if (isReturn) body.put("is_return", true);
         return body;
+    }
+
+    /** Even split of the declared total desi — only used when no packing plan was supplied. */
+    private List<CargoShipmentRequest.PackagePlan> evenSplitFallback(CargoShipmentRequest request) {
+        int count = request.getPackageCount() != null ? Math.max(1, request.getPackageCount()) : 1;
+        BigDecimal totalDesi = request.getTotalDesi() != null && request.getTotalDesi().signum() > 0
+                ? request.getTotalDesi() : BigDecimal.ONE;
+        BigDecimal perPackage = totalDesi
+                .divide(BigDecimal.valueOf(count), 2, java.math.RoundingMode.UP)
+                .max(BigDecimal.ONE);
+
+        List<CargoShipmentRequest.PackagePlan> plan = new ArrayList<>(count);
+        for (int i = 0; i < count; i++) {
+            plan.add(new CargoShipmentRequest.PackagePlan(perPackage, null));
+        }
+        return plan;
     }
 
     private CargoShipmentResult buildResultFromShipment(Map<String, Object> shipment, String shipmentId) {
@@ -701,6 +893,31 @@ public class KargonomiCargoProvider implements CargoApiProvider {
                 .build();
     }
 
+    /**
+     * Kargonomi status code → the Turkish label Kargonomi itself uses (official doc).
+     * Anything unrecognised is returned unchanged, so this is safe to call on the raw status
+     * text of any provider.
+     */
+    public static String statusLabel(String kargonomiStatus) {
+        if (kargonomiStatus == null || kargonomiStatus.isBlank()) return "";
+        return switch (kargonomiStatus.trim().toLowerCase()) {
+            case "draft" -> "Taslak";
+            case "ready" -> "İşleme Hazır";
+            case "webservice_order_failed" -> "Kargo Siparişi Oluşturulamadı";
+            case "webservice_order_creating" -> "Kargo Siparişi Oluşturuluyor";
+            case "webservice_order_created" -> "Kargo Siparişi Oluşturuldu";
+            case "webservice_checking_shipment" -> "Kargo Kaydı Kontrol Ediliyor";
+            case "webservice_shipment_started" -> "Kargo Teslim Sürecinde";
+            case "webservice_shipment_delivered" -> "Kargo Teslim Edildi";
+            case "webservice_shipment_not_delivered" -> "Kargo Teslim Edilemedi";
+            case "webservice_shipment_returning" -> "Kargo Geri Geliyor";
+            case "webservice_shipment_missing" -> "Kargo Kayıp";
+            case "cancelled" -> "Kargo İptal Edildi";
+            case "request_for_cancellation" -> "İptal Talebi Alındı";
+            default -> kargonomiStatus;
+        };
+    }
+
     /** Kargonomi status string → CargoStatus enum mapping. */
     static CargoTrackingStatus.CargoStatus mapStatus(String kargonomiStatus) {
         if (kargonomiStatus == null) return CargoTrackingStatus.CargoStatus.UNKNOWN;
@@ -729,8 +946,12 @@ public class KargonomiCargoProvider implements CargoApiProvider {
         String token = settingService.getSetting("kargonomi_api_token");
         String appKey = settingService.getSetting("kargonomi_app_key");
         HttpHeaders headers = new HttpHeaders();
-        headers.setBearerAuth(token);
-        headers.set("X-App-Key", appKey);   // ← correct header: X-App-Key
+        headers.setBearerAuth(token != null ? token.trim() : "");
+        // Not in the published spec; sent only when the account actually has one, so an empty
+        // setting cannot turn into a literal "X-App-Key: null" on the wire.
+        if (appKey != null && !appKey.isBlank()) {
+            headers.set("X-App-Key", appKey.trim());
+        }
         headers.setAccept(List.of(MediaType.APPLICATION_JSON));
         return headers;
     }

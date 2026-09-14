@@ -51,6 +51,13 @@ public class ReturnRequest {
     @Column(name = "cargo_tracking_no", length = 100)
     private String cargoTrackingNo;
 
+    /** Carrier's own id for the return shipment, when we created one for the customer. */
+    @Column(name = "cargo_provider_shipment_id", length = 100)
+    private String cargoProviderShipmentId;
+
+    @Column(name = "cargo_provider_name", length = 100)
+    private String cargoProviderName;
+
     @OneToMany(mappedBy = "returnRequest", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @JsonIgnore
     private List<ReturnRequestItem> items;

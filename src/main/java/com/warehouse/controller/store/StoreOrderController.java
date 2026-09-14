@@ -35,6 +35,7 @@ public class StoreOrderController {
     private final com.warehouse.repository.CargoProviderRepository cargoProviderRepo;
     private final com.warehouse.service.InvoiceService invoiceService;
     private final com.warehouse.service.ReturnRequestService returnService;
+    private final com.warehouse.repository.CargoShipmentEventRepository cargoEventRepo;
 
     public StoreOrderController(OrderRepository orderRepo, OrderItemRepository orderItemRepo,
                                  OrderStatusHistoryRepository statusHistoryRepo, JwtService jwtService,
@@ -42,7 +43,8 @@ public class StoreOrderController {
                                  com.warehouse.repository.SupportTicketRepository supportTicketRepo,
                                  com.warehouse.repository.CargoProviderRepository cargoProviderRepo,
                                  com.warehouse.service.InvoiceService invoiceService,
-                                 com.warehouse.service.ReturnRequestService returnService) {
+                                 com.warehouse.service.ReturnRequestService returnService,
+                                 com.warehouse.repository.CargoShipmentEventRepository cargoEventRepo) {
         this.orderRepo = orderRepo;
         this.orderItemRepo = orderItemRepo;
         this.statusHistoryRepo = statusHistoryRepo;
@@ -52,6 +54,7 @@ public class StoreOrderController {
         this.cargoProviderRepo = cargoProviderRepo;
         this.invoiceService = invoiceService;
         this.returnService = returnService;
+        this.cargoEventRepo = cargoEventRepo;
     }
 
     @GetMapping
@@ -323,6 +326,22 @@ public class StoreOrderController {
         dto.put("cargoTrackingNo", o.getCargoTrackingNo());
         dto.put("cargoCompany", o.getCargoCompany() != null ? o.getCargoCompany().name() : null);
         dto.put("cargoProviderName", o.getCargoProviderName());
+
+        // Cargo movements, so "nerede benim kargom" is answered on our own page rather than by
+        // sending the customer off to the carrier's site. Only what the carrier timestamped:
+        // internal status rows would read as noise to a customer.
+        dto.put("cargoEvents", cargoEventRepo.findByOrderIdOrderByOccurredAtDescIdDesc(o.getId())
+                .stream()
+                .filter(e -> e.getOccurredAt() != null)
+                .map(e -> {
+                    java.util.Map<String, Object> ev = new java.util.LinkedHashMap<>();
+                    ev.put("date", e.getOccurredAt());
+                    ev.put("description", e.getDescription() != null && !e.getDescription().isBlank()
+                            ? e.getDescription() : e.getStatusLabel());
+                    ev.put("location", e.getLocation());
+                    return ev;
+                })
+                .toList());
         // Tracking URL priority order:
         //   1. cargo_providers.trackingUrlTemplate (admin-configured; most reliable)
         //   2. kargonomi_slug → KargonomiCargoProvider.buildCarrierTrackingUrl generic mapping

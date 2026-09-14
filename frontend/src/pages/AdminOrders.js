@@ -156,14 +156,80 @@ export default function AdminOrders() {
   }, [orders, loading]);
 
   const [detailError, setDetailError] = useState('');
+  const [cargoEvents, setCargoEvents] = useState([]);
+  const [selectedForLabels, setSelectedForLabels] = useState([]);
+  const [labelBatchLoading, setLabelBatchLoading] = useState(false);
+
+  const toggleLabelSelection = (orderId) => {
+    setSelectedForLabels((prev) =>
+      prev.includes(orderId) ? prev.filter((id) => id !== orderId) : [...prev, orderId]
+    );
+  };
+
+  // Prints every selected order's label as one PDF. Orders without a shipment come back in a
+  // header rather than silently missing from the stack, so a gap is visible before printing.
+  const downloadBatchLabels = async () => {
+    if (selectedForLabels.length === 0) return;
+    setLabelBatchLoading(true);
+    try {
+      const res = await axios.post(
+        '/api/admin/cargo/labels',
+        { orderIds: selectedForLabels },
+        { responseType: 'blob' }
+      );
+      const url = window.URL.createObjectURL(res.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `kargo-etiketleri-${new Date().toISOString().slice(0, 10)}.pdf`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+
+      const skipped = res.headers['x-skipped-orders'];
+      const included = res.headers['x-included-count'];
+      if (skipped) {
+        toast.warning(`${included} etiket indirildi. Atlananlar — ${skipped}`);
+      } else {
+        toast.success(`${included} etiket tek PDF olarak indirildi.`);
+      }
+      setSelectedForLabels([]);
+    } catch (err) {
+      let msg = 'Etiketler indirilemedi.';
+      try {
+        const body = await err.response?.data?.text?.();
+        if (body) {
+          const j = JSON.parse(body);
+          if (j.message) msg = j.message;
+        }
+      } catch {
+        /* ignore */
+      }
+      toast.error(msg);
+    } finally {
+      setLabelBatchLoading(false);
+    }
+  };
+
+  // Cargo history is a side panel, not part of the order: a failure here must not
+  // stop the detail modal from opening.
+  const loadCargoEvents = async (orderId) => {
+    try {
+      const res = await axios.get(`/api/admin/cargo/orders/${orderId}/events`);
+      setCargoEvents(res.data?.items || []);
+    } catch {
+      setCargoEvents([]);
+    }
+  };
+
   const openDetail = async (orderId) => {
     setSelectedOrder(orderId);
     setDetailLoading(true);
     setDetailError('');
+    setCargoEvents([]);
     try {
       const res = await axios.get(`/api/admin/orders/${orderId}`);
       setOrderDetail(res.data);
       loadOrderTransfers(orderId);
+      loadCargoEvents(orderId);
     } catch (e) {
       setDetailError(e.response?.data?.message || 'Sipariş detayı yüklenemedi.');
     } finally {
@@ -174,6 +240,7 @@ export default function AdminOrders() {
     setSelectedOrder(null);
     setOrderDetail(null);
     setOrderTransfers([]);
+    setCargoEvents([]);
   };
 
   // Stable identity matters: StockTransferModal re-reads warehouse stock whenever this
@@ -769,12 +836,39 @@ export default function AdminOrders() {
         </div>
       </div>
 
+      {selectedForLabels.length > 0 && (
+        <div className="alert alert-primary d-flex align-items-center justify-content-between py-2 mb-2">
+          <span>
+            <i className="fas fa-check-square me-2" />
+            {selectedForLabels.length} sipariş seçildi
+          </span>
+          <span className="d-flex gap-2">
+            <button className="btn btn-sm btn-outline-secondary" onClick={() => setSelectedForLabels([])}>
+              Seçimi temizle
+            </button>
+            <button
+              className="btn btn-sm btn-primary"
+              onClick={downloadBatchLabels}
+              disabled={labelBatchLoading}
+            >
+              {labelBatchLoading ? (
+                <span className="spinner-border spinner-border-sm me-2" />
+              ) : (
+                <i className="fas fa-print me-2" />
+              )}
+              Etiketleri Tek PDF İndir
+            </button>
+          </span>
+        </div>
+      )}
+
       {/* Table */}
       <div className="card border-0 shadow-sm">
         <div className="table-responsive">
           <table className="table table-hover align-middle mb-0">
             <thead className="table-light">
               <tr>
+                <th style={{ width: 36 }}></th>
                 <th>Sipariş No</th>
                 <th>Müşteri</th>
                 <th>Durum</th>
@@ -788,19 +882,29 @@ export default function AdminOrders() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="text-center py-5">
+                  <td colSpan={9} className="text-center py-5">
                     <div className="spinner-border spinner-border-sm" />
                   </td>
                 </tr>
               ) : orders.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="text-center py-5 text-muted">
+                  <td colSpan={9} className="text-center py-5 text-muted">
                     Sipariş bulunamadı
                   </td>
                 </tr>
               ) : (
                 orders.map((o) => (
                   <tr key={o.id} style={{ cursor: 'pointer' }} onClick={() => openDetail(o.id)}>
+                    <td onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        className="form-check-input"
+                        id={`label-select-${o.id}`}
+                        aria-label={`${o.orderNumber} etiket seçimi`}
+                        checked={selectedForLabels.includes(o.id)}
+                        onChange={() => toggleLabelSelection(o.id)}
+                      />
+                    </td>
                     <td>
                       <strong className="text-primary">{o.orderNumber}</strong>
                       <div>
@@ -1478,6 +1582,22 @@ export default function AdminOrders() {
                                   {orderDetail.cargoProviderName || orderDetail.cargoCompany || '—'}
                                 </span>
                               </div>
+                              {orderDetail.cargoStatus && (
+                                <div className="d-flex justify-content-between mb-2">
+                                  <span className="text-muted">Kargo Durumu</span>
+                                  <span
+                                    className={
+                                      /edilemedi|kayıp|geri geliyor|iptal|oluşturulamadı/i.test(
+                                        orderDetail.cargoStatus
+                                      )
+                                        ? 'badge bg-danger-subtle text-danger'
+                                        : 'badge bg-secondary-subtle text-secondary'
+                                    }
+                                  >
+                                    {orderDetail.cargoStatus}
+                                  </span>
+                                </div>
+                              )}
                               {orderDetail.cargoTrackingNo ? (
                                 <>
                                   <div className="d-flex justify-content-between align-items-center mb-2">
@@ -1571,6 +1691,34 @@ export default function AdminOrders() {
                                 </div>
                               )}
                             </>
+                          )}
+
+                          {cargoEvents.length > 0 && (
+                            <div className="mt-3 pt-3 border-top">
+                              <div className="text-muted mb-2">
+                                <i className="fas fa-route me-2" />
+                                Kargo Hareketleri
+                              </div>
+                              <ul className="list-unstyled mb-0">
+                                {cargoEvents.map((ev) => (
+                                  <li key={ev.id} className="d-flex gap-2 mb-2">
+                                    <i
+                                      className="fas fa-circle text-secondary mt-1"
+                                      style={{ fontSize: '.4rem' }}
+                                    />
+                                    <div className="flex-grow-1">
+                                      <div>{ev.label || ev.statusCode}</div>
+                                      <div className="text-muted" style={{ fontSize: '.75rem' }}>
+                                        {(ev.occurredAt || ev.recordedAt || '')
+                                          .replace('T', ' ')
+                                          .slice(0, 16)}
+                                        {ev.location ? ` · ${ev.location}` : ''}
+                                      </div>
+                                    </div>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
                           )}
                         </div>
                       </div>

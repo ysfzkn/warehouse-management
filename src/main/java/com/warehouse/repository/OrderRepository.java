@@ -33,6 +33,23 @@ public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecific
     /** Looks up an Order by tracking number — carrier-specific. */
     Optional<Order> findByCargoTrackingNo(String cargoTrackingNo);
 
+    /**
+     * Shipments due a tracking query: still in the given status, actually handed to a carrier,
+     * and either never polled or last polled before {@code staleBefore}.
+     *
+     * <p>Replaces "load the first page of all orders, then filter in Java", which stopped seeing
+     * shipped orders entirely once the table grew past one page. Oldest-first so nothing starves;
+     * {@code COALESCE} keeps never-polled orders at the front on any database.
+     */
+    @Query("SELECT o FROM Order o LEFT JOIN FETCH o.customer " +
+           "WHERE o.status = :status " +
+           "AND o.cargoTrackingNo IS NOT NULL AND o.cargoTrackingNo <> '' " +
+           "AND (o.cargoLastTrackedAt IS NULL OR o.cargoLastTrackedAt < :staleBefore) " +
+           "ORDER BY COALESCE(o.cargoLastTrackedAt, o.createdAt) ASC")
+    List<Order> findDueForCargoTracking(@Param("status") OrderStatus status,
+                                         @Param("staleBefore") LocalDateTime staleBefore,
+                                         Pageable pageable);
+
     @Query("SELECT o FROM Order o LEFT JOIN FETCH o.customer WHERE o.id = :id")
     Optional<Order> findByIdWithCustomer(@Param("id") Long id);
 

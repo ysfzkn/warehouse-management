@@ -30,23 +30,47 @@ public class StoreCheckoutController {
     private final CargoProviderRepository cargoProviderRepository;
     private final IdempotencyStore idempotencyStore;
     private final com.warehouse.security.ClientIpResolver clientIpResolver;
+    private final com.warehouse.service.cargo.CargoPriceQuoteService priceQuoteService;
 
     public StoreCheckoutController(CheckoutService checkoutService, JwtService jwtService,
                                     CargoProviderRepository cargoProviderRepository,
                                     IdempotencyStore idempotencyStore,
-                                    com.warehouse.security.ClientIpResolver clientIpResolver) {
+                                    com.warehouse.security.ClientIpResolver clientIpResolver,
+                                    com.warehouse.service.cargo.CargoPriceQuoteService priceQuoteService) {
         this.checkoutService = checkoutService;
         this.jwtService = jwtService;
         this.cargoProviderRepository = cargoProviderRepository;
         this.idempotencyStore = idempotencyStore;
         this.clientIpResolver = clientIpResolver;
+        this.priceQuoteService = priceQuoteService;
     }
 
     /**
      * Public endpoint: Active cargo providers for checkout selection.
      */
     @GetMapping("/cargo-providers")
-    public ResponseEntity<List<Map<String, Object>>> getCargoProviders() {
+    public ResponseEntity<List<Map<String, Object>>> getCargoProviders(
+            @RequestParam(required = false) String city,
+            @RequestParam(required = false) String district,
+            @RequestParam(required = false) java.math.BigDecimal desi) {
+
+        // Live prices for this destination, when the feature is on and the customer has already
+        // picked an address. Quotes are cached per district and parcel size, so this does not
+        // become one carrier call per page view.
+        Map<String, java.math.BigDecimal> livePrices = new LinkedHashMap<>();
+        Map<String, Integer> liveDays = new LinkedHashMap<>();
+        if (city != null && district != null && priceQuoteService.isEnabled()) {
+            try {
+                priceQuoteService.quotes(city, district, desi).forEach(q -> {
+                    if (q.slug() == null) return;
+                    livePrices.put(q.slug().toLowerCase(), q.price());
+                    if (q.estimatedDays() != null) liveDays.put(q.slug().toLowerCase(), q.estimatedDays());
+                });
+            } catch (Exception e) {
+                log.warn("Checkout canlı kargo fiyatı alınamadı: {}", e.toString());
+            }
+        }
+
         List<Map<String, Object>> providers = cargoProviderRepository.findByActiveTrueOrderBySortOrderAsc()
             .stream().map(p -> {
                 Map<String, Object> dto = new LinkedHashMap<>();
@@ -59,6 +83,13 @@ public class StoreCheckoutController {
                 dto.put("freeShippingThreshold", p.getFreeShippingThreshold());
                 dto.put("estimatedDeliveryDays", p.getEstimatedDeliveryDays());
                 dto.put("vatRate", p.getVatRate());
+
+                String slug = p.getKargonomiSlug() != null ? p.getKargonomiSlug().toLowerCase() : null;
+                if (slug != null && livePrices.containsKey(slug)) {
+                    // Present only when it is real; the storefront falls back to baseCost otherwise.
+                    dto.put("livePrice", livePrices.get(slug));
+                    if (liveDays.containsKey(slug)) dto.put("liveEstimatedDays", liveDays.get(slug));
+                }
                 return dto;
             }).collect(Collectors.toList());
         return ResponseEntity.ok(providers);

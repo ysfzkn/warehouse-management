@@ -652,6 +652,31 @@ export default function MyOrdersPage() {
                                         <i className="fas fa-external-link-alt" style={{ fontSize: 10 }} />
                                       </a>
                                     )}
+
+                                    {detailOrder.cargoEvents?.length > 0 && (
+                                      <div className="mt-3 pt-3 border-top">
+                                        <div className="fw-semibold mb-2" style={{ fontSize: 12 }}>
+                                          Kargo Hareketleri
+                                        </div>
+                                        <ul className="list-unstyled mb-0">
+                                          {detailOrder.cargoEvents.map((ev, i) => (
+                                            <li key={`${ev.date}-${i}`} className="d-flex gap-2 mb-2">
+                                              <span
+                                                className={`rounded-circle mt-1 flex-shrink-0 ${i === 0 ? 'bg-success' : 'bg-secondary'}`}
+                                                style={{ width: 7, height: 7 }}
+                                              />
+                                              <div style={{ fontSize: 12, lineHeight: 1.4 }}>
+                                                <div>{ev.description}</div>
+                                                <div className="text-muted" style={{ fontSize: 11 }}>
+                                                  {(ev.date || '').replace('T', ' ').slice(0, 16)}
+                                                  {ev.location ? ` · ${ev.location}` : ''}
+                                                </div>
+                                              </div>
+                                            </li>
+                                          ))}
+                                        </ul>
+                                      </div>
+                                    )}
                                   </div>
                                 )}
                               </div>

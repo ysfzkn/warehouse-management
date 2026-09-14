@@ -54,6 +54,7 @@ public class CheckoutServiceImpl implements CheckoutService {
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
     private final SiteSettingService siteSettingService;
+    private final com.warehouse.service.cargo.CargoPriceQuoteService priceQuoteService;
 
     public CheckoutServiceImpl(com.warehouse.service.CouponService couponService,
                                CartRepository cartRepository, CartItemRepository cartItemRepository,
@@ -64,7 +65,8 @@ public class CheckoutServiceImpl implements CheckoutService {
                                 StockEventRepository stockEventRepository,
                                 PasswordEncoder passwordEncoder,
                                 EmailService emailService,
-                                SiteSettingService siteSettingService) {
+                                SiteSettingService siteSettingService,
+                                com.warehouse.service.cargo.CargoPriceQuoteService priceQuoteService) {
         this.couponService = couponService;
         this.cartRepository = cartRepository;
         this.cartItemRepository = cartItemRepository;
@@ -79,6 +81,7 @@ public class CheckoutServiceImpl implements CheckoutService {
         this.passwordEncoder = passwordEncoder;
         this.emailService = emailService;
         this.siteSettingService = siteSettingService;
+        this.priceQuoteService = priceQuoteService;
     }
 
     /**
@@ -293,6 +296,42 @@ public class CheckoutServiceImpl implements CheckoutService {
             LocalDateTime kvkkConsentAt
     ) {}
 
+    /**
+     * The carrier's own price for this delivery, or null to fall back to our tariff.
+     *
+     * <p>Quotes are cached per district and parcel size, so a busy checkout does not translate
+     * into a request per visitor. Any failure here is deliberately silent: the caller has a
+     * working fallback, and a slow pricing call must not turn into a failed order.
+     */
+    private BigDecimal livePriceFor(CargoProvider cargoProvider, CustomerAddress shippingAddr,
+                                     BigDecimal totalDesi) {
+        if (shippingAddr == null || !priceQuoteService.isEnabled()) return null;
+        try {
+            String slug = cargoProvider.getKargonomiSlug();
+            if (slug != null && !slug.isBlank()) {
+                return priceQuoteService.priceFor(shippingAddr.getCity(), shippingAddr.getDistrict(),
+                        totalDesi, slug).orElse(null);
+            }
+            // No explicit mapping for this carrier — quote the cheapest available option instead
+            // of silently charging a tariff that may be nowhere near the real cost.
+            return priceQuoteService.cheapest(shippingAddr.getCity(), shippingAddr.getDistrict(), totalDesi)
+                    .map(q -> q.price())
+                    .orElse(null);
+        } catch (Exception e) {
+            logger.warn("Canlı kargo fiyatı alınamadı, tarifeye düşülüyor: {}", e.toString());
+            return null;
+        }
+    }
+
+    /** Free shipping still wins over a live price — the promise on the storefront is ours, not the carrier's. */
+    private BigDecimal applyFreeShippingThreshold(CargoProvider cargoProvider, BigDecimal price, BigDecimal subtotal) {
+        BigDecimal threshold = cargoProvider.getFreeShippingThreshold();
+        if (threshold != null && threshold.signum() > 0 && subtotal.compareTo(threshold) >= 0) {
+            return BigDecimal.ZERO;
+        }
+        return price;
+    }
+
     private PlaceOrderResponse createOrderInternal(Customer customer, List<CartItem> items,
                                                     CustomerAddress shippingAddr, CustomerAddress billingAddr,
                                                     String cargoCompanyStr, Long cargoProviderId,
@@ -396,7 +435,15 @@ public class CheckoutServiceImpl implements CheckoutService {
                     totalDesi = totalDesi.add(desi.multiply(BigDecimal.valueOf(ci.getQuantity())));
                 }
             }
-            shippingCost = cargoProvider.calculateShippingCost(totalDesi, subtotal);
+            // Live price from the carrier where it is switched on and the carrier quotes this
+            // route; otherwise the provider's own desi tariff. The tariff stays the fallback on
+            // purpose — a checkout must never fail because a pricing API was slow.
+            BigDecimal livePrice = livePriceFor(cargoProvider, shippingAddr, totalDesi);
+            if (livePrice != null) {
+                shippingCost = applyFreeShippingThreshold(cargoProvider, livePrice, subtotal);
+            } else {
+                shippingCost = cargoProvider.calculateShippingCost(totalDesi, subtotal);
+            }
             shippingVat = cargoProvider.calculateVat(shippingCost);
         } else {
             shippingCost = ShippingConstants.calculateShippingCost(subtotal);

@@ -45,6 +45,8 @@ public class AdminOrderDetailDto {
     private String cargoCompany;
     private String cargoProviderName;
     private String cargoTrackingNo;
+    /** Carrier's own status, already translated ("Kargo Teslim Edilemedi", "Kargo Kayıp", …) */
+    private String cargoStatus;
     private LocalDate estimatedDeliveryDate;
     private String customerNote;
     private String adminNote;

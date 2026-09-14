@@ -94,6 +94,16 @@ public class Product {
     @Column(name = "shipping_rate", precision = 10, scale = 2)
     private BigDecimal shippingRate; // per desi unit
 
+    /**
+     * How many parcels one unit of this product takes up on its own.
+     *
+     * <p>Null or 0 means "can share a box with anything else" — the default, and right for most
+     * catalogue items. Set it for goods that always travel alone (a wardrobe at 2, a table at 1),
+     * so the packing plan stops pretending six cushions and six tables cost the same to ship.
+     */
+    @Column(name = "packages_per_unit")
+    private Integer packagesPerUnit;
+
     @Column(name = "vat_rate", precision = 5, scale = 2)
     private BigDecimal vatRate; // VAT rate (%)
 

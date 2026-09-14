@@ -50,6 +50,7 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
     private final NotificationService notificationService;
     private final com.warehouse.repository.ReturnRequestPhotoRepository photoRepo;
     private final com.warehouse.service.PhotoStorageService photoStorageService;
+    private final com.warehouse.service.cargo.CargoApiService cargoApiService;
 
     private static final int MAX_PHOTOS = 6;
 
@@ -60,7 +61,8 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
                                     PaymentService paymentService, EmailService emailService,
                                     NotificationService notificationService,
                                     com.warehouse.repository.ReturnRequestPhotoRepository photoRepo,
-                                    com.warehouse.service.PhotoStorageService photoStorageService) {
+                                    com.warehouse.service.PhotoStorageService photoStorageService,
+                                    com.warehouse.service.cargo.CargoApiService cargoApiService) {
         this.returnRepo = returnRepo;
         this.orderRepo = orderRepo;
         this.orderItemRepo = orderItemRepo;
@@ -73,6 +75,7 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
         this.notificationService = notificationService;
         this.photoRepo = photoRepo;
         this.photoStorageService = photoStorageService;
+        this.cargoApiService = cargoApiService;
     }
 
     // ─────────────────────────── create ───────────────────────────
@@ -200,11 +203,62 @@ public class ReturnRequestServiceImpl implements ReturnRequestService {
         require(rr, ReturnStatus.PENDING);
         rr.setStatus(ReturnStatus.APPROVED);
         appendAdminNote(rr, adminNote);
+
+        // Open the return shipment for the customer where the feature is on, so they hand the
+        // parcel over with a tracking number instead of arranging and paying for cargo themselves.
+        String cargoInstructions = createReturnCargoSafely(rr);
+
         ReturnRequest saved = returnRepo.save(rr);
         emailCustomerSafe(rr.getOrder(), rr, "İadeniz onaylandı",
-                "İade talebiniz onaylandı. Lütfen ürünleri belirtilen adrese kargolayın; kargo bilgisi tarafımıza ulaştığında süreci ilerleteceğiz."
-                        + noteSuffix(adminNote));
+                "İade talebiniz onaylandı. " + cargoInstructions + noteSuffix(adminNote));
         return saved;
+    }
+
+    /**
+     * Creates the return shipment and writes its tracking number onto the request.
+     *
+     * <p>Returns the sentence the customer should read. A carrier failure is not allowed to block
+     * the approval — the return is approved either way, the customer is simply asked to post the
+     * goods back themselves, which is what happened before this existed.
+     */
+    private String createReturnCargoSafely(ReturnRequest rr) {
+        String manualInstructions = "Lütfen ürünleri belirtilen adrese kargolayın; "
+                + "kargo bilgisi tarafımıza ulaştığında süreci ilerleteceğiz.";
+        if (!cargoApiService.isReturnLabelEnabled()) return manualInstructions;
+
+        try {
+            var result = cargoApiService.createReturnShipmentForOrder(rr.getOrder());
+            if (result == null || !result.isSuccess()) {
+                log.warn("İade kargosu oluşturulamadı ({}): {}", rr.getReturnNumber(),
+                        result != null ? result.getErrorMessage() : "sonuç yok");
+                notifyAdminSafely("İade kargosu oluşturulamadı: " + rr.getReturnNumber(),
+                        "İade onaylandı ama iade kargo kaydı açılamadı; müşteriye kendi kargolaması söylendi.",
+                        rr.getId());
+                return manualInstructions;
+            }
+
+            rr.setCargoTrackingNo(result.getTrackingNumber());
+            rr.setCargoProviderShipmentId(result.getProviderShipmentId());
+            rr.setCargoProviderName(result.getCarrierName());
+            rr.setStatus(ReturnStatus.CARGO_WAITING);
+
+            return "Sizin için iade kargo kaydı oluşturduk: "
+                    + (result.getCarrierName() != null ? result.getCarrierName() + " " : "")
+                    + "takip numarası " + result.getTrackingNumber() + ". "
+                    + "Ürünleri paketleyip en yakın şubeye bu numarayla teslim etmeniz yeterli; "
+                    + "kargo ücreti tarafımıza aittir.";
+        } catch (Exception e) {
+            log.error("İade kargosu hatası ({}): {}", rr.getReturnNumber(), e.toString());
+            return manualInstructions;
+        }
+    }
+
+    private void notifyAdminSafely(String title, String message, Long returnId) {
+        try {
+            notificationService.create(title, message, "RETURN_REQUEST", returnId);
+        } catch (Exception e) {
+            log.warn("İade admin bildirimi oluşturulamadı: {}", e.toString());
+        }
     }
 
     @Override

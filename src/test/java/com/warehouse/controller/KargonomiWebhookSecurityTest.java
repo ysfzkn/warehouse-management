@@ -1,5 +1,7 @@
 package com.warehouse.controller;
 
+import com.warehouse.entity.CargoWebhookDelivery;
+import com.warehouse.repository.CargoWebhookDeliveryRepository;
 import com.warehouse.repository.OrderRepository;
 import com.warehouse.service.SiteSettingService;
 import com.warehouse.service.cargo.CargoApiService;
@@ -17,6 +19,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 /**
@@ -36,6 +40,7 @@ class KargonomiWebhookSecurityTest {
     @Mock private OrderRepository orderRepository;
     @Mock private CargoApiService cargoApiService;
     @Mock private SiteSettingService settingService;
+    @Mock private CargoWebhookDeliveryRepository deliveryRepository;
 
     private KargonomiWebhookController controller;
 
@@ -43,7 +48,8 @@ class KargonomiWebhookSecurityTest {
 
     @BeforeEach
     void setUp() {
-        controller = new KargonomiWebhookController(orderRepository, cargoApiService, settingService);
+        controller = new KargonomiWebhookController(
+                orderRepository, cargoApiService, settingService, deliveryRepository);
     }
 
     @Test
@@ -53,7 +59,7 @@ class KargonomiWebhookSecurityTest {
         ResponseEntity<Map<String, Object>> response = controller.receive("any-signature", BODY);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
-        verifyNoInteractions(orderRepository, cargoApiService);
+        verifyNoInteractions(orderRepository, cargoApiService, deliveryRepository);
     }
 
     @Test
@@ -63,7 +69,7 @@ class KargonomiWebhookSecurityTest {
         ResponseEntity<Map<String, Object>> response = controller.receive(null, BODY);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
-        verifyNoInteractions(orderRepository, cargoApiService);
+        verifyNoInteractions(orderRepository, cargoApiService, deliveryRepository);
     }
 
     @Test
@@ -73,12 +79,15 @@ class KargonomiWebhookSecurityTest {
         ResponseEntity<Map<String, Object>> response = controller.receive("deadbeef", BODY);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
-        verifyNoInteractions(orderRepository, cargoApiService);
+        verifyNoInteractions(orderRepository, cargoApiService, deliveryRepository);
     }
 
     @Test
     void acceptsACorrectlySignedPayload() {
         when(settingService.getSetting("kargonomi_webhook_secret")).thenReturn("s3cret");
+        when(deliveryRepository.findByIdempotencyKey(anyString())).thenReturn(java.util.Optional.empty());
+        when(deliveryRepository.saveAndFlush(any(CargoWebhookDelivery.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
         when(orderRepository.findByCargoProviderShipmentId("SHIP-1")).thenReturn(java.util.Optional.empty());
         when(orderRepository.findByCargoTrackingNo("TRK-1")).thenReturn(java.util.Optional.empty());
 

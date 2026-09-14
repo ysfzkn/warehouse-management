@@ -156,6 +156,18 @@ public class Order {
     @Column(name = "cargo_last_tracked_at")
     private LocalDateTime cargoLastTrackedAt;
 
+    /** Admin override for the number of parcels; null lets the packing plan decide. */
+    @Column(name = "cargo_package_count")
+    private Integer cargoPackageCount;
+
+    /** Raw carrier status as reported by the provider (e.g. Kargonomi's "webservice_shipment_started") */
+    @Column(name = "cargo_status", length = 60)
+    private String cargoStatus;
+
+    /** When cargoStatus last actually changed (not merely when it was polled) */
+    @Column(name = "cargo_status_updated_at")
+    private LocalDateTime cargoStatusUpdatedAt;
+
     @Column(name = "shipping_vat", precision = 10, scale = 2)
     private BigDecimal shippingVat = BigDecimal.ZERO;
 

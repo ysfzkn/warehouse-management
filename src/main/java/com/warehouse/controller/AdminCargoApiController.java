@@ -1,6 +1,10 @@
 package com.warehouse.controller;
 
+import com.warehouse.entity.CargoShipmentEvent;
+import com.warehouse.entity.CargoShipmentOutbox;
 import com.warehouse.entity.Order;
+import com.warehouse.repository.CargoShipmentEventRepository;
+import com.warehouse.repository.CargoShipmentOutboxRepository;
 import com.warehouse.repository.OrderRepository;
 import com.warehouse.service.AdminSecurityService;
 import com.warehouse.service.cargo.CargoApiProvider;
@@ -15,6 +19,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -33,13 +38,144 @@ public class AdminCargoApiController {
     private final CargoApiService cargoApiService;
     private final OrderRepository orderRepository;
     private final AdminSecurityService adminSecurityService;
+    private final CargoShipmentEventRepository eventRepository;
+    private final CargoShipmentOutboxRepository outboxRepository;
+    private final com.warehouse.service.cargo.CargoLabelBatchService labelBatchService;
 
     public AdminCargoApiController(CargoApiService cargoApiService,
                                     OrderRepository orderRepository,
-                                    AdminSecurityService adminSecurityService) {
+                                    AdminSecurityService adminSecurityService,
+                                    CargoShipmentEventRepository eventRepository,
+                                    CargoShipmentOutboxRepository outboxRepository,
+                                    com.warehouse.service.cargo.CargoLabelBatchService labelBatchService) {
         this.cargoApiService = cargoApiService;
         this.orderRepository = orderRepository;
         this.adminSecurityService = adminSecurityService;
+        this.eventRepository = eventRepository;
+        this.outboxRepository = outboxRepository;
+        this.labelBatchService = labelBatchService;
+    }
+
+    /**
+     * Every selected order's label in one PDF, ready for the printer.
+     *
+     * <p>Orders without a shipment are reported in the {@code X-Skipped-Orders} header rather
+     * than silently missing from the stack — the header is readable from the browser even on a
+     * blob download, which a JSON body would not be.
+     */
+    @PostMapping("/labels")
+    public ResponseEntity<?> batchLabels(@RequestBody Map<String, List<Long>> body) {
+        List<Long> orderIds = body.get("orderIds");
+        if (orderIds == null || orderIds.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "En az bir sipariş seçin."));
+        }
+
+        var result = labelBatchService.buildMergedLabels(orderIds);
+        if (result.isEmpty()) {
+            return ResponseEntity.status(502).body(Map.of(
+                    "message", "Hiçbir etiket indirilemedi.",
+                    "skipped", result.skipped()));
+        }
+
+        String skippedHeader = result.skipped().isEmpty() ? "" : String.join(", ",
+                result.skipped().entrySet().stream().map(e -> e.getKey() + ": " + e.getValue()).toList());
+
+        return ResponseEntity.ok()
+                .header("Content-Disposition",
+                        "attachment; filename=\"" + labelBatchService.suggestedFileName() + "\"")
+                .header("X-Included-Count", String.valueOf(result.includedOrders().size()))
+                .header("X-Skipped-Orders", skippedHeader)
+                .header("Access-Control-Expose-Headers", "X-Included-Count, X-Skipped-Orders")
+                .contentType(MediaType.APPLICATION_PDF)
+                .body(result.pdf());
+    }
+
+    /**
+     * Corrects the recipient on an order already handed to the carrier — a wrong phone number or
+     * a missing apartment number, without cancelling and recreating the shipment.
+     */
+    @PatchMapping("/orders/{orderId}/recipient")
+    public ResponseEntity<?> correctRecipient(@PathVariable Long orderId,
+                                               @RequestBody Map<String, String> body) {
+        Order order = orderRepository.findById(orderId).orElse(null);
+        if (order == null) {
+            return ResponseEntity.status(404).body(Map.of("message", "Sipariş bulunamadı"));
+        }
+        boolean ok = cargoApiService.correctRecipient(order,
+                body.get("recipientName"), body.get("recipientPhone"), body.get("recipientAddress"),
+                body.get("city"), body.get("district"));
+
+        return ok
+                ? ResponseEntity.ok(Map.of("success", true, "message", "Alıcı bilgisi güncellendi."))
+                : ResponseEntity.status(502).body(Map.of("success", false,
+                        "message", "Sipariş güncellendi ama kargo firması değişikliği kabul etmedi. "
+                                + "Kargo çıkmış olabilir — kargo firması panelinden kontrol edin."));
+    }
+
+    /**
+     * Withdraws the shipment: deletes it if it is still a draft, cancels it otherwise.
+     * Runs automatically when an order is cancelled; this endpoint is for doing it by hand.
+     */
+    @PostMapping("/orders/{orderId}/withdraw")
+    public ResponseEntity<?> withdrawShipment(@PathVariable Long orderId) {
+        Order order = orderRepository.findById(orderId).orElse(null);
+        if (order == null) {
+            return ResponseEntity.status(404).body(Map.of("message", "Sipariş bulunamadı"));
+        }
+        if (order.getCargoProviderShipmentId() == null) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Bu siparişin kargo gönderisi yok."));
+        }
+        boolean ok = cargoApiService.withdrawShipment(order);
+        return ok
+                ? ResponseEntity.ok(Map.of("success", true, "message", "Kargo gönderisi geri çekildi."))
+                : ResponseEntity.status(502).body(Map.of("success", false,
+                        "message", "Kargo geri çekilemedi — 36 saatlik iptal süresi geçmiş olabilir."));
+    }
+
+    /**
+     * The order's cargo history — every status change and carrier movement we were told about,
+     * newest first. Survives the carrier overwriting its own current status.
+     */
+    @GetMapping("/orders/{orderId}/events")
+    public ResponseEntity<?> orderCargoEvents(@PathVariable Long orderId) {
+        List<CargoShipmentEvent> events = eventRepository.findByOrderIdOrderByOccurredAtDescIdDesc(orderId);
+        List<Map<String, Object>> items = events.stream().map(e -> {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("id", e.getId());
+            row.put("statusCode", e.getStatusCode());
+            row.put("label", e.getStatusLabel() != null && !e.getStatusLabel().isBlank()
+                    ? e.getStatusLabel() : e.getDescription());
+            row.put("description", e.getDescription());
+            row.put("location", e.getLocation());
+            row.put("occurredAt", e.getOccurredAt());
+            row.put("recordedAt", e.getCreatedAt());
+            row.put("source", e.getSource());
+            return row;
+        }).toList();
+        return ResponseEntity.ok(Map.of("items", items));
+    }
+
+    /**
+     * Shipments still owed. PENDING entries are waiting for their next retry; ABANDONED ones
+     * ran out of attempts and need creating by hand in the Kargonomi panel.
+     */
+    @GetMapping("/outbox")
+    public ResponseEntity<?> outbox() {
+        List<Map<String, Object>> items = outboxRepository.findAll().stream()
+                .filter(o -> !CargoShipmentOutbox.STATUS_SUCCEEDED.equals(o.getStatus()))
+                .map(o -> {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("orderId", o.getOrderId());
+                    row.put("orderNumber", o.getOrderNumber());
+                    row.put("status", o.getStatus());
+                    row.put("attempts", o.getAttempts());
+                    row.put("nextAttemptAt", o.getNextAttemptAt());
+                    row.put("lastError", o.getLastError());
+                    return row;
+                }).toList();
+        return ResponseEntity.ok(Map.of("items", items,
+                "pending", outboxRepository.countByStatus(CargoShipmentOutbox.STATUS_PENDING),
+                "abandoned", outboxRepository.countByStatus(CargoShipmentOutbox.STATUS_ABANDONED)));
     }
 
     /** Active provider's account balance (Kargonomi: {@code GET /user/credit}). */

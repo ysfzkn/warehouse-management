@@ -73,6 +73,23 @@ public class CargoShipmentRequest {
     /** Order items (optional - some APIs require details) */
     private List<ShipmentItem> items;
 
+    /**
+     * The parcels to declare, one entry each. Built by {@link CargoPackagePlanner}; when it is
+     * null a provider falls back to splitting {@link #totalDesi} across {@link #packageCount}.
+     */
+    private List<PackagePlan> packages;
+
+    /** One physical parcel: what the carrier prices and prints a label for. */
+    @Data
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class PackagePlan {
+        /** Billable desi for this parcel; always greater than zero. */
+        private BigDecimal desi;
+        /** What is inside, when it is worth naming (a single bulky product, say). */
+        private String content;
+    }
+
     @Data
     @Builder
     @NoArgsConstructor

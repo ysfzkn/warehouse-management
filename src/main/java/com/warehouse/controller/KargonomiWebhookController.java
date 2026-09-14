@@ -1,6 +1,8 @@
 package com.warehouse.controller;
 
+import com.warehouse.entity.CargoWebhookDelivery;
 import com.warehouse.entity.Order;
+import com.warehouse.repository.CargoWebhookDeliveryRepository;
 import com.warehouse.repository.OrderRepository;
 import com.warehouse.service.SiteSettingService;
 import com.warehouse.service.cargo.CargoApiService;
@@ -9,12 +11,15 @@ import com.warehouse.service.cargo.KargonomiCargoProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.time.LocalDateTime;
 import java.util.HexFormat;
 import java.util.Map;
 import java.util.Optional;
@@ -34,8 +39,11 @@ import java.util.Optional;
  * <p>Retry policy (Kargonomi): 60s, 120s, 300s, 600s, 1200s — retries until a
  * 2xx is returned. 400/401/403/404/409/410/422 are skipped.
  *
- * <p>Idempotency: the same event is not processed more than once based on
- * payload.meta.idempotency_key (simple in-memory short-window tracking; use Redis/DB in production).
+ * <p><b>Idempotency</b> is a unique constraint on {@code cargo_webhook_deliveries}, claimed
+ * before any work is done. A delivery that was already handled is acknowledged and ignored; one
+ * whose processing failed is allowed through again, because Kargonomi's retry is the only chance
+ * that event gets. Every payload is stored either way — that log is what makes a signature or
+ * parsing problem diagnosable after the fact.
  */
 @RestController
 @RequestMapping("/api/public/cargo/kargonomi")
@@ -44,20 +52,22 @@ public class KargonomiWebhookController {
 
     private static final Logger log = LoggerFactory.getLogger(KargonomiWebhookController.class);
 
+    /** Enough of the payload to debug with; a runaway body cannot bloat the table. */
+    private static final int MAX_STORED_PAYLOAD = 20_000;
+
     private final OrderRepository orderRepository;
     private final CargoApiService cargoApiService;
     private final SiteSettingService settingService;
-
-    // Short-term idempotency cache — last 1000 keys
-    private final java.util.concurrent.ConcurrentHashMap<String, Long> seenKeys
-            = new java.util.concurrent.ConcurrentHashMap<>();
+    private final CargoWebhookDeliveryRepository deliveryRepository;
 
     public KargonomiWebhookController(OrderRepository orderRepository,
                                        CargoApiService cargoApiService,
-                                       SiteSettingService settingService) {
+                                       SiteSettingService settingService,
+                                       CargoWebhookDeliveryRepository deliveryRepository) {
         this.orderRepository = orderRepository;
         this.cargoApiService = cargoApiService;
         this.settingService = settingService;
+        this.deliveryRepository = deliveryRepository;
     }
 
     @PostMapping("/webhook")
@@ -93,39 +103,114 @@ public class KargonomiWebhookController {
             return ResponseEntity.badRequest().body(Map.of("error", "invalid json"));
         }
 
-        // 3) Idempotency check
         @SuppressWarnings("unchecked")
         Map<String, Object> meta = (Map<String, Object>) payload.getOrDefault("meta", Map.of());
-        String idemKey = String.valueOf(meta.getOrDefault("idempotency_key", ""));
-        if (!idemKey.isBlank() && seenKeys.putIfAbsent(idemKey, System.currentTimeMillis()) != null) {
-            log.debug("[KargonomiWebhook] duplicate idem key {} — skip", idemKey);
-            return ResponseEntity.ok(Map.of("status", "duplicate"));
-        }
-        cleanOldIdemKeys();
-
-        // 4) Extract the shipment
         @SuppressWarnings("unchecked")
         Map<String, Object> shipment = (Map<String, Object>) payload.get("shipment");
+
+        // 3) Claim the delivery — the database decides whether this event is ours to process.
+        CargoWebhookDelivery delivery;
+        try {
+            delivery = claimDelivery(meta, shipment, rawBody);
+        } catch (DuplicateDeliveryException duplicate) {
+            log.debug("[KargonomiWebhook] duplicate idem key {} — skip", duplicate.key);
+            return ResponseEntity.ok(Map.of("status", "duplicate"));
+        }
+
+        // 4) The shipment body itself
         if (shipment == null || shipment.isEmpty()) {
+            finish(delivery, CargoWebhookDelivery.STATUS_FAILED, "missing shipment", null);
             return ResponseEntity.badRequest().body(Map.of("error", "missing shipment"));
         }
 
-        // 5) Find the Order (by providerShipmentId or tracking_code)
-        Order order = findOrder(shipment);
-        if (order == null) {
-            log.info("[KargonomiWebhook] shipment geldi ama eşleşen order yok: {}",
-                    shipment.get("id"));
-            // Return 200; otherwise Kargonomi will retry repeatedly
-            return ResponseEntity.ok(Map.of("status", "order not found"));
+        try {
+            // 5) Find the Order (by providerShipmentId or tracking_code)
+            Order order = findOrder(shipment);
+            if (order == null) {
+                log.info("[KargonomiWebhook] shipment geldi ama eşleşen order yok: {}",
+                        shipment.get("id"));
+                finish(delivery, CargoWebhookDelivery.STATUS_ORDER_NOT_FOUND, null, null);
+                // Return 200; otherwise Kargonomi will retry repeatedly
+                return ResponseEntity.ok(Map.of("status", "order not found"));
+            }
+
+            // 6) Parse + apply — delivery, failed delivery and returns are all handled there.
+            CargoTrackingStatus status = parseWithProvider(shipment);
+            boolean changed = cargoApiService.applyTrackingUpdate(
+                    order.getId(), status, CargoApiService.SOURCE_WEBHOOK);
+            log.info("[KargonomiWebhook] order={} status={} changed={}",
+                    order.getOrderNumber(), status.getStatus(), changed);
+
+            finish(delivery, CargoWebhookDelivery.STATUS_PROCESSED, null, order);
+            return ResponseEntity.ok(Map.of("status", "ok", "orderNumber", order.getOrderNumber()));
+
+        } catch (Exception e) {
+            // Mark it failed rather than processed, so Kargonomi's next retry is let through
+            // instead of being dismissed as a duplicate of an event we never actually handled.
+            log.error("[KargonomiWebhook] işlenemedi: {}", e.toString(), e);
+            finish(delivery, CargoWebhookDelivery.STATUS_FAILED, e.toString(), null);
+            return ResponseEntity.status(500).body(Map.of("error", "processing failed"));
+        }
+    }
+
+    /**
+     * Reserves this event for processing.
+     *
+     * @throws DuplicateDeliveryException if it was already handled — including when a concurrent
+     *         request won the race for the same key
+     */
+    private CargoWebhookDelivery claimDelivery(Map<String, Object> meta,
+                                                Map<String, Object> shipment,
+                                                String rawBody) {
+        String key = String.valueOf(meta.getOrDefault("idempotency_key", "")).trim();
+        if (key.isBlank() || "null".equals(key)) {
+            // No key from the sender: fall back to the body's own fingerprint, which at least
+            // collapses identical retries.
+            key = "body:" + sha256Hex(rawBody);
         }
 
-        // 6) Parse + apply
-        CargoTrackingStatus status = parseWithProvider(shipment);
-        boolean changed = cargoApiService.applyTrackingUpdate(order, status);
-        log.info("[KargonomiWebhook] order={} status={} changed={}",
-                order.getOrderNumber(), status.getStatus(), changed);
+        Optional<CargoWebhookDelivery> existing = deliveryRepository.findByIdempotencyKey(key);
+        if (existing.isPresent()) {
+            CargoWebhookDelivery previous = existing.get();
+            if (!CargoWebhookDelivery.STATUS_FAILED.equals(previous.getStatus())) {
+                throw new DuplicateDeliveryException(key);
+            }
+            previous.setReceivedAt(LocalDateTime.now());
+            previous.setStatus(CargoWebhookDelivery.STATUS_RECEIVED);
+            return deliveryRepository.save(previous);
+        }
 
-        return ResponseEntity.ok(Map.of("status", "ok", "orderNumber", order.getOrderNumber()));
+        CargoWebhookDelivery row = new CargoWebhookDelivery();
+        row.setIdempotencyKey(key);
+        row.setStatus(CargoWebhookDelivery.STATUS_RECEIVED);
+        row.setEventType(strOrNull(meta.get("event_type")));
+        row.setAttemptNumber(intOrNull(meta.get("attempt_number")));
+        row.setShipmentId(shipment != null ? strOrNull(shipment.get("id")) : null);
+        row.setPayload(rawBody.length() > MAX_STORED_PAYLOAD
+                ? rawBody.substring(0, MAX_STORED_PAYLOAD) : rawBody);
+
+        try {
+            return deliveryRepository.saveAndFlush(row);
+        } catch (DataIntegrityViolationException race) {
+            // Another request inserted the same key between the lookup and the insert.
+            throw new DuplicateDeliveryException(key);
+        }
+    }
+
+    /** Records how the delivery ended. Never throws — the carrier already got its answer. */
+    private void finish(CargoWebhookDelivery delivery, String status, String error, Order order) {
+        try {
+            delivery.setStatus(status);
+            delivery.setErrorMessage(error != null && error.length() > 500
+                    ? error.substring(0, 500) : error);
+            if (order != null) {
+                delivery.setOrderId(order.getId());
+                delivery.setOrderNumber(order.getOrderNumber());
+            }
+            deliveryRepository.save(delivery);
+        } catch (Exception e) {
+            log.warn("[KargonomiWebhook] delivery kaydı güncellenemedi: {}", e.toString());
+        }
     }
 
     /** Find the Order from the webhook payload. First by providerShipmentId, then by tracking code. */
@@ -160,6 +245,15 @@ public class KargonomiWebhookController {
     //  Helpers
     // ─────────────────────────────────────────────────────────────
 
+    /** Signals that this event has already been accounted for. */
+    private static class DuplicateDeliveryException extends RuntimeException {
+        final String key;
+        DuplicateDeliveryException(String key) {
+            super(null, null, false, false);
+            this.key = key;
+        }
+    }
+
     private String hmacSha256Hex(String secret, String data) {
         try {
             Mac mac = Mac.getInstance("HmacSHA256");
@@ -171,6 +265,15 @@ public class KargonomiWebhookController {
         }
     }
 
+    private String sha256Hex(String data) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(digest.digest(data.getBytes(StandardCharsets.UTF_8)));
+        } catch (Exception e) {
+            throw new RuntimeException("SHA-256 hesaplanamadı: " + e.getMessage(), e);
+        }
+    }
+
     private boolean constantTimeEquals(String a, String b) {
         if (a == null || b == null) return false;
         if (a.length() != b.length()) return false;
@@ -179,9 +282,18 @@ public class KargonomiWebhookController {
         return result == 0;
     }
 
-    private void cleanOldIdemKeys() {
-        if (seenKeys.size() < 1000) return;
-        long cutoff = System.currentTimeMillis() - 10 * 60 * 1000; // older than 10 minutes
-        seenKeys.entrySet().removeIf(e -> e.getValue() < cutoff);
+    private static String strOrNull(Object value) {
+        if (value == null) return null;
+        String s = value.toString();
+        return s.isBlank() ? null : s;
+    }
+
+    private static Integer intOrNull(Object value) {
+        if (value == null) return null;
+        try {
+            return Integer.parseInt(value.toString().trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 }
