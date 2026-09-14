@@ -57,6 +57,8 @@ class CargoApiServiceTrackingTest {
     @Mock private CargoEventLedger eventLedger;
     @Mock private CargoShipmentOutboxService outboxService;
     @Mock private CargoPackagePlanner packagePlanner;
+    @Mock private KargonomiGeoLookupService geoLookup;
+    @Mock private com.warehouse.repository.WarehouseRepository warehouseRepository;
 
     private CargoApiService service;
 
@@ -65,7 +67,7 @@ class CargoApiServiceTrackingTest {
         service = new CargoApiService(List.of(), settingService, orderRepository, orderItemRepository,
                 cargoProviderRepository, statusHistoryRepository, orderDeliveryService,
                 notificationDispatchService, notificationService,
-                eventLedger, outboxService, packagePlanner);
+                eventLedger, outboxService, packagePlanner, geoLookup, warehouseRepository);
     }
 
     private Order shippedOrder() {

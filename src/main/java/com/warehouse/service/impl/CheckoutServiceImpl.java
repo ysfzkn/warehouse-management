@@ -55,6 +55,7 @@ public class CheckoutServiceImpl implements CheckoutService {
     private final EmailService emailService;
     private final SiteSettingService siteSettingService;
     private final com.warehouse.service.cargo.CargoPriceQuoteService priceQuoteService;
+    private final com.warehouse.service.cargo.CargoApiService cargoApiService;
 
     public CheckoutServiceImpl(com.warehouse.service.CouponService couponService,
                                CartRepository cartRepository, CartItemRepository cartItemRepository,
@@ -66,7 +67,8 @@ public class CheckoutServiceImpl implements CheckoutService {
                                 PasswordEncoder passwordEncoder,
                                 EmailService emailService,
                                 SiteSettingService siteSettingService,
-                                com.warehouse.service.cargo.CargoPriceQuoteService priceQuoteService) {
+                                com.warehouse.service.cargo.CargoPriceQuoteService priceQuoteService,
+                                com.warehouse.service.cargo.CargoApiService cargoApiService) {
         this.couponService = couponService;
         this.cartRepository = cartRepository;
         this.cartItemRepository = cartItemRepository;
@@ -82,6 +84,7 @@ public class CheckoutServiceImpl implements CheckoutService {
         this.emailService = emailService;
         this.siteSettingService = siteSettingService;
         this.priceQuoteService = priceQuoteService;
+        this.cargoApiService = cargoApiService;
     }
 
     /**
@@ -347,6 +350,17 @@ public class CheckoutServiceImpl implements CheckoutService {
                 + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"))
                 + java.util.UUID.randomUUID().toString().replace("-", "")
                         .substring(0, 6).toUpperCase();
+
+        // Check the address against the carrier's own district list before anything is reserved
+        // or charged. The lookup used to happen at dispatch, so a district the carrier did not
+        // recognise surfaced days later, as a shipment that could not be created.
+        if (shippingAddr != null
+                && !cargoApiService.isAddressDeliverable(shippingAddr.getCity(), shippingAddr.getDistrict())) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                    "Teslimat adresindeki il/ilçe kargo firmasının kayıtlarıyla eşleşmiyor ("
+                            + shippingAddr.getCity() + " / " + shippingAddr.getDistrict()
+                            + "). Lütfen adresinizi listeden yeniden seçin.");
+        }
 
         // Calculate totals
         BigDecimal subtotal = BigDecimal.ZERO;

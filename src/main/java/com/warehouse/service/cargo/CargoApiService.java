@@ -57,6 +57,8 @@ public class CargoApiService {
     private final CargoEventLedger eventLedger;
     private final CargoShipmentOutboxService outboxService;
     private final CargoPackagePlanner packagePlanner;
+    private final KargonomiGeoLookupService geoLookup;
+    private final com.warehouse.repository.WarehouseRepository warehouseRepository;
 
     public CargoApiService(List<CargoApiProvider> providers,
                             SiteSettingService settingService,
@@ -69,7 +71,9 @@ public class CargoApiService {
                             NotificationService notificationService,
                             CargoEventLedger eventLedger,
                             CargoShipmentOutboxService outboxService,
-                            CargoPackagePlanner packagePlanner) {
+                            CargoPackagePlanner packagePlanner,
+                            KargonomiGeoLookupService geoLookup,
+                            com.warehouse.repository.WarehouseRepository warehouseRepository) {
         this.providers = providers;
         this.settingService = settingService;
         this.orderRepository = orderRepository;
@@ -82,6 +86,8 @@ public class CargoApiService {
         this.eventLedger = eventLedger;
         this.outboxService = outboxService;
         this.packagePlanner = packagePlanner;
+        this.geoLookup = geoLookup;
+        this.warehouseRepository = warehouseRepository;
     }
 
     /**
@@ -228,6 +234,21 @@ public class CargoApiService {
             logger.info("Cargo shipment cancelled: order={}", order.getOrderNumber());
         }
         return result;
+    }
+
+    /**
+     * Can the active carrier actually deliver to this district?
+     *
+     * <p>Answers {@code true} whenever we cannot tell — integration off, a provider that does not
+     * publish its coverage, or a carrier we could not reach. A checkout is never blocked by an
+     * uncertain answer; only by a district the carrier positively does not recognise.
+     */
+    public boolean isAddressDeliverable(String city, String district) {
+        if (!isEnabled()) return true;
+        if (getActiveProvider() instanceof KargonomiCargoProvider) {
+            return geoLookup.isDeliverable(city, district);
+        }
+        return true;
     }
 
     /**
@@ -716,6 +737,7 @@ public class CargoApiService {
                 .recipientDistrict(strFromMap(shippingAddr, "district"))
                 .recipientPostalCode(strFromMap(shippingAddr, "postalCode"))
                 .recipientCountryCode("TR")
+                .senderWarehouseId(resolveSenderWarehouseId(orderItems))
                 .senderName(senderName)
                 .senderPhone(senderPhone)
                 .senderAddress(senderAddress)
@@ -734,6 +756,27 @@ public class CargoApiService {
                 .deliveryNote(order.getCustomerNote())
                 .items(items)
                 .build();
+    }
+
+    /**
+     * Which of our warehouses this order ships from, translated to the carrier's id.
+     *
+     * <p>Takes the warehouse of the first line that has one: a single order is picked from one
+     * place in practice, and guessing between two would print one wrong address either way.
+     * Null means "use the global setting", which is the whole story for a single-warehouse shop.
+     */
+    private String resolveSenderWarehouseId(List<OrderItem> orderItems) {
+        Long warehouseId = orderItems.stream()
+                .map(OrderItem::getWarehouseId)
+                .filter(java.util.Objects::nonNull)
+                .findFirst()
+                .orElse(null);
+        if (warehouseId == null) return null;
+
+        return warehouseRepository.findById(warehouseId)
+                .map(com.warehouse.entity.Warehouse::getKargonomiWarehouseId)
+                .filter(id -> id != null && !id.isBlank())
+                .orElse(null);
     }
 
     private String strFromMap(Map<String, Object> map, String key) {

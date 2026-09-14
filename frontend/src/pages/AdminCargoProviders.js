@@ -15,6 +15,8 @@ const EMPTY_FORM = {
   vatRate: 20,
   trackingUrlTemplate: '',
   kargonomiSlug: '',
+  maxDesi: '',
+  excludedDistricts: '',
   active: true,
   sortOrder: 100,
 };
@@ -285,6 +287,41 @@ export default function AdminCargoProviders() {
                         paneldeki Taşıyıcılar
                       </a>{' '}
                       sekmesinden kontrol edin.
+                    </small>
+                  </div>
+
+                  <div className="col-md-6">
+                    <label className="form-label small fw-medium">
+                      Azami Desi <small className="text-muted fw-normal">(opsiyonel)</small>
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      className="form-control"
+                      value={form.maxDesi || ''}
+                      onChange={(e) => f('maxDesi', e.target.value)}
+                      placeholder="Sınır yok"
+                    />
+                    <small className="text-muted">
+                      Bu firmanın kabul ettiği en büyük gönderi. Aşan sepetlerde firma checkout'ta
+                      gösterilmez.
+                    </small>
+                  </div>
+
+                  <div className="col-md-6">
+                    <label className="form-label small fw-medium">
+                      Gitmediği Yerler <small className="text-muted fw-normal">(opsiyonel)</small>
+                    </label>
+                    <input
+                      className="form-control"
+                      value={form.excludedDistricts || ''}
+                      onChange={(e) => f('excludedDistricts', e.target.value)}
+                      placeholder="Hakkari, Şırnak/Cizre"
+                    />
+                    <small className="text-muted">
+                      Virgülle ayır. Sadece il yazarsan o ilin tamamı, <code>İl/İlçe</code> yazarsan yalnızca
+                      o ilçe kapatılır.
                     </small>
                   </div>
 

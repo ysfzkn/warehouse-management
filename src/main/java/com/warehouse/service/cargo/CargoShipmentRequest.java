@@ -37,6 +37,11 @@ public class CargoShipmentRequest {
     private String recipientCountryCode;
 
     // --- Sender (store) information ---
+    /**
+     * The carrier's id for the warehouse this parcel leaves from. Null falls back to the single
+     * global warehouse setting; set when the goods come from a specific depot.
+     */
+    private String senderWarehouseId;
     private String senderName;
     private String senderPhone;
     private String senderAddress;

@@ -60,6 +60,11 @@ public class AdminCargoProviderController {
             if (update.getEstimatedDeliveryDays() != null) existing.setEstimatedDeliveryDays(update.getEstimatedDeliveryDays());
             if (update.getVatRate() != null) existing.setVatRate(update.getVatRate());
             if (update.getTrackingUrlTemplate() != null) existing.setTrackingUrlTemplate(update.getTrackingUrlTemplate());
+            // The slug was collected by the form but never copied here, so the Kargonomi carrier
+            // mapping could be typed and saved without ever taking effect.
+            if (update.getKargonomiSlug() != null) existing.setKargonomiSlug(update.getKargonomiSlug());
+            if (update.getMaxDesi() != null) existing.setMaxDesi(update.getMaxDesi());
+            if (update.getExcludedDistricts() != null) existing.setExcludedDistricts(update.getExcludedDistricts());
             existing.setSortOrder(update.getSortOrder());
             return ResponseEntity.ok(cargoRepo.save(existing));
         }).orElse(ResponseEntity.notFound().build());

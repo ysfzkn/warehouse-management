@@ -31,18 +31,21 @@ public class StoreCheckoutController {
     private final IdempotencyStore idempotencyStore;
     private final com.warehouse.security.ClientIpResolver clientIpResolver;
     private final com.warehouse.service.cargo.CargoPriceQuoteService priceQuoteService;
+    private final com.warehouse.service.cargo.CargoCarrierRules carrierRules;
 
     public StoreCheckoutController(CheckoutService checkoutService, JwtService jwtService,
                                     CargoProviderRepository cargoProviderRepository,
                                     IdempotencyStore idempotencyStore,
                                     com.warehouse.security.ClientIpResolver clientIpResolver,
-                                    com.warehouse.service.cargo.CargoPriceQuoteService priceQuoteService) {
+                                    com.warehouse.service.cargo.CargoPriceQuoteService priceQuoteService,
+                                    com.warehouse.service.cargo.CargoCarrierRules carrierRules) {
         this.checkoutService = checkoutService;
         this.jwtService = jwtService;
         this.cargoProviderRepository = cargoProviderRepository;
         this.idempotencyStore = idempotencyStore;
         this.clientIpResolver = clientIpResolver;
         this.priceQuoteService = priceQuoteService;
+        this.carrierRules = carrierRules;
     }
 
     /**
@@ -72,7 +75,11 @@ public class StoreCheckoutController {
         }
 
         List<Map<String, Object>> providers = cargoProviderRepository.findByActiveTrueOrderBySortOrderAsc()
-            .stream().map(p -> {
+            .stream()
+            // A carrier that does not serve this district, or refuses this parcel size, is not
+            // an option — offering it only produces a shipment that comes back.
+            .filter(p -> city == null || carrierRules.canCarry(p, city, district, desi))
+            .map(p -> {
                 Map<String, Object> dto = new LinkedHashMap<>();
                 dto.put("id", p.getId());
                 dto.put("name", p.getName());

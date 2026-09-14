@@ -46,6 +46,14 @@ public class Warehouse {
     @Column(name = "is_active", nullable = false)
     private boolean isActive = true;
 
+    /**
+     * This warehouse's id on the carrier's side, so a parcel leaving here is labelled with this
+     * address. Blank falls back to the single global setting, which is all a one-warehouse shop
+     * ever needs.
+     */
+    @Column(name = "kargonomi_warehouse_id", length = 40)
+    private String kargonomiWarehouseId;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "warehouse_type", nullable = false)
     private WarehouseType warehouseType = WarehouseType.STANDART;

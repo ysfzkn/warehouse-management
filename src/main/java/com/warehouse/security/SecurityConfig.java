@@ -250,6 +250,10 @@ public class SecurityConfig {
                         .requestMatchers(org.springframework.http.HttpMethod.GET, ApiPaths.STORE_PAYMENT_METHODS).permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, ApiPaths.STORE_PAYMENT_STATUS_TOKEN).permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, ApiPaths.STORE_CARGO_PROVIDERS).permitAll()
+                        // Province/district lists for the address form — the carrier's own
+                        // spelling, so an address is known deliverable before the order exists.
+                        // Public reference data, identical for every visitor.
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/store/geo/**").permitAll()
                         // Guest checkout: public (guest users can place an order without signing up)
                         .requestMatchers(org.springframework.http.HttpMethod.POST, ApiPaths.STORE_GUEST_CHECKOUT).permitAll()
                         // Guest order payment initialization: public, but the caller must prove

@@ -34,6 +34,31 @@ public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecific
     Optional<Order> findByCargoTrackingNo(String cargoTrackingNo);
 
     /**
+     * Carrier performance counts: {@code [carrierName, shipped, delivered, problems]} for orders
+     * created at or after {@code from}.
+     *
+     * <p>Counts only. Average delivery time is left to {@link #carrierDeliveryDurations} and
+     * computed in Java: date arithmetic is the one thing HQL spells differently on every
+     * database, and a report is not worth a query that works on H2 and fails on Postgres.
+     */
+    @Query("SELECT COALESCE(o.cargoProviderName, 'Bilinmiyor'), " +
+           "COUNT(o), " +
+           "SUM(CASE WHEN o.actualDeliveryDate IS NOT NULL THEN 1 ELSE 0 END), " +
+           "SUM(CASE WHEN o.cargoStatus IN :problemStatuses THEN 1 ELSE 0 END) " +
+           "FROM Order o " +
+           "WHERE o.cargoTrackingNo IS NOT NULL AND o.createdAt >= :from " +
+           "GROUP BY COALESCE(o.cargoProviderName, 'Bilinmiyor')")
+    List<Object[]> carrierPerformance(@Param("from") LocalDateTime from,
+                                       @Param("problemStatuses") java.util.Collection<String> problemStatuses);
+
+    /** {@code [carrierName, createdAt, actualDeliveryDate]} for delivered orders in the window. */
+    @Query("SELECT COALESCE(o.cargoProviderName, 'Bilinmiyor'), o.createdAt, o.actualDeliveryDate " +
+           "FROM Order o " +
+           "WHERE o.cargoTrackingNo IS NOT NULL AND o.createdAt >= :from " +
+           "AND o.actualDeliveryDate IS NOT NULL")
+    List<Object[]> carrierDeliveryDurations(@Param("from") LocalDateTime from);
+
+    /**
      * Shipments due a tracking query: still in the given status, actually handed to a carrier,
      * and either never polled or last polled before {@code staleBefore}.
      *

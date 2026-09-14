@@ -788,7 +788,10 @@ public class KargonomiCargoProvider implements CargoApiProvider {
         // Never for a return, though: there the sender is the customer posting the goods back,
         // and quietly substituting our own warehouse would print a label that collects the parcel
         // from the wrong address.
-        String warehouseId = isReturn ? null : settingService.getSetting("kargonomi_warehouse_id");
+        String warehouseId = isReturn ? null : request.getSenderWarehouseId();
+        if (warehouseId == null || warehouseId.isBlank()) {
+            warehouseId = isReturn ? null : settingService.getSetting("kargonomi_warehouse_id");
+        }
         if (warehouseId != null && !warehouseId.isBlank()) {
             try { body.put("warehouse_id", Integer.parseInt(warehouseId.trim())); }
             catch (NumberFormatException ignored) {}

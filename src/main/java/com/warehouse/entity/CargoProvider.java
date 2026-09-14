@@ -70,6 +70,18 @@ public class CargoProvider {
     @Column(name = "kargonomi_slug", length = 40)
     private String kargonomiSlug;
 
+    /** Largest parcel this carrier accepts, in desi. Null means no limit. */
+    @Column(name = "max_desi", precision = 10, scale = 2)
+    private BigDecimal maxDesi;
+
+    /**
+     * Where this carrier does not deliver: a comma-separated list of provinces or
+     * {@code Province/District} pairs. Checked before the carrier is offered or used, so a
+     * shipment is not created for a route that will only come back.
+     */
+    @Column(name = "excluded_districts", length = 2000)
+    private String excludedDistricts;
+
     @Column(nullable = false)
     @Builder.Default
     private boolean active = true;

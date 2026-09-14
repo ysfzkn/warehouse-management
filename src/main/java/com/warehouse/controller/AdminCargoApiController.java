@@ -41,19 +41,33 @@ public class AdminCargoApiController {
     private final CargoShipmentEventRepository eventRepository;
     private final CargoShipmentOutboxRepository outboxRepository;
     private final com.warehouse.service.cargo.CargoLabelBatchService labelBatchService;
+    private final com.warehouse.service.cargo.CargoPerformanceService performanceService;
 
     public AdminCargoApiController(CargoApiService cargoApiService,
                                     OrderRepository orderRepository,
                                     AdminSecurityService adminSecurityService,
                                     CargoShipmentEventRepository eventRepository,
                                     CargoShipmentOutboxRepository outboxRepository,
-                                    com.warehouse.service.cargo.CargoLabelBatchService labelBatchService) {
+                                    com.warehouse.service.cargo.CargoLabelBatchService labelBatchService,
+                                    com.warehouse.service.cargo.CargoPerformanceService performanceService) {
         this.cargoApiService = cargoApiService;
         this.orderRepository = orderRepository;
         this.adminSecurityService = adminSecurityService;
         this.eventRepository = eventRepository;
         this.outboxRepository = outboxRepository;
         this.labelBatchService = labelBatchService;
+        this.performanceService = performanceService;
+    }
+
+    /**
+     * Carrier scoreboard: volume, delivery rate, problem rate and average days in transit.
+     * Feeds the decision of which carrier to default to — and the next contract negotiation.
+     */
+    @GetMapping("/performance")
+    public ResponseEntity<?> performance(@RequestParam(defaultValue = "90") int days) {
+        return ResponseEntity.ok(Map.of(
+                "days", days,
+                "items", performanceService.report(days)));
     }
 
     /**

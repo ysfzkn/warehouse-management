@@ -50,6 +50,42 @@ public class KargonomiGeoLookupService {
     private final Map<Integer, Map<String, Integer>> cityCache = new ConcurrentHashMap<>();
     private final Map<Integer, Long> cityCacheExpiresAt = new ConcurrentHashMap<>();
 
+    // The same data with its original spelling, for the address form. The lookup maps fold
+    // Turkish characters away, which is right for matching and wrong for showing to a customer.
+    private volatile List<GeoEntry> stateList = List.of();
+    private final Map<Integer, List<GeoEntry>> cityList = new ConcurrentHashMap<>();
+
+    /** One province or district exactly as Kargonomi spells it. */
+    public record GeoEntry(int id, String name) {}
+
+    /** The 81 provinces, for the checkout address form. Empty if Kargonomi cannot be reached. */
+    public List<GeoEntry> states() {
+        ensureStateCache();
+        return stateList;
+    }
+
+    /** A province's districts. Empty if the province is unknown or Kargonomi cannot be reached. */
+    public List<GeoEntry> cities(int stateId) {
+        ensureCityCache(stateId);
+        return cityList.getOrDefault(stateId, List.of());
+    }
+
+    /**
+     * Would a shipment to this address get past the carrier's address check?
+     *
+     * <p>Answers {@code true} when we cannot tell — an unreachable Kargonomi must not block a
+     * checkout. Being wrong in that direction costs a retry from the outbox; being wrong the
+     * other way costs a sale.
+     */
+    public boolean isDeliverable(String city, String district) {
+        if (city == null || city.isBlank() || district == null || district.isBlank()) return true;
+        if (ensureStateCache().isEmpty()) return true;          // carrier unreachable — do not judge
+        Integer stateId = lookupStateId(city);
+        if (stateId == null) return false;
+        if (ensureCityCache(stateId).isEmpty()) return true;    // same, one level down
+        return lookupCityId(stateId, district) != null;
+    }
+
     public KargonomiGeoLookupService(SiteSettingService settingService) {
         this.settingService = settingService;
         this.restTemplate = new RestTemplate();
@@ -90,6 +126,7 @@ public class KargonomiGeoLookupService {
                     url, HttpMethod.GET, new HttpEntity<>(buildHeaders()), Map.class);
             Map<String, Integer> built = parseIdNameList(response.getBody(), "name", "id");
             stateCache = built;
+            stateList = parseDisplayList(response.getBody());
             stateCacheExpireAt = System.currentTimeMillis() + CACHE_TTL_MS;
             log.info("[KargonomiGeo] states cache loaded: {} entries", built.size());
             return stateCache;
@@ -110,6 +147,7 @@ public class KargonomiGeoLookupService {
                     url, HttpMethod.GET, new HttpEntity<>(buildHeaders()), Map.class);
             Map<String, Integer> built = parseIdNameList(response.getBody(), "name", "id");
             cityCache.put(stateId, built);
+            cityList.put(stateId, parseDisplayList(response.getBody()));
             cityCacheExpiresAt.put(stateId, System.currentTimeMillis() + CACHE_TTL_MS);
             log.debug("[KargonomiGeo] cities for state {} loaded: {}", stateId, built.size());
             return built;
@@ -136,6 +174,30 @@ public class KargonomiGeoLookupService {
             } catch (NumberFormatException ignored) {}
         }
         return out;
+    }
+
+    /** Same payload, original spelling, sorted the way a person reads a dropdown. */
+    @SuppressWarnings("unchecked")
+    private List<GeoEntry> parseDisplayList(Map<String, Object> body) {
+        if (body == null) return List.of();
+        Object data = body.getOrDefault("data", body);
+        if (!(data instanceof List)) return List.of();
+
+        List<GeoEntry> out = new java.util.ArrayList<>();
+        for (Object item : (List<Object>) data) {
+            if (!(item instanceof Map<?, ?> m)) continue;
+            Object name = m.get("name");
+            Object id = m.get("id");
+            if (name == null || id == null) continue;
+            try {
+                int idInt = id instanceof Number n ? n.intValue() : Integer.parseInt(id.toString());
+                out.add(new GeoEntry(idInt, name.toString()));
+            } catch (NumberFormatException ignored) {
+                // skip malformed rows rather than dropping the whole list
+            }
+        }
+        out.sort((a, b) -> a.name().compareTo(b.name()));
+        return List.copyOf(out);
     }
 
     private HttpHeaders buildHeaders() {
@@ -174,5 +236,7 @@ public class KargonomiGeoLookupService {
         stateCacheExpireAt = 0;
         cityCache.clear();
         cityCacheExpiresAt.clear();
+        stateList = List.of();
+        cityList.clear();
     }
 }
