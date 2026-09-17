@@ -36,6 +36,8 @@ public class DeliveryReceiptDto {
     private String driverPhone;
     private String vehiclePlate;
     private LocalDateTime transferDate;
+    /** Planlı çıkışlarda makbuza basılan teslim tarihi; anında teslimde boş. */
+    private LocalDateTime scheduledDeliveryAt;
     private String notes;
 
     private LocalDateTime deliveredAt;

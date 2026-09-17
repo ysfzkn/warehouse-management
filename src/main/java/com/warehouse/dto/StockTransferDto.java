@@ -33,6 +33,11 @@ public class StockTransferDto {
     private TransferStatus status;
     private TransferType transferType;
     private LocalDateTime transferDate;
+    /**
+     * Planlanan teslim tarihi; boşsa sevkiyat klasik akışta (mal çıkışta teslim edildi).
+     * Liste ekranı "Planlandı" rozetini ve gecikmiş uyarısını bunun üzerinden kuruyor.
+     */
+    private LocalDateTime scheduledDeliveryAt;
     private LocalDateTime completedDate;
     private LocalDateTime cancelledDate;
     private String notes;

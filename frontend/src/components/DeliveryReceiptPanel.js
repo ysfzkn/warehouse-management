@@ -60,6 +60,31 @@ const toLocalInput = (date) => {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 };
 
+const startOfDay = (value) => {
+  const date = new Date(value);
+  date.setHours(0, 0, 0, 0);
+  return date;
+};
+
+/**
+ * "Bugün teslim" / "Yarın teslim" / "3 gün gecikti" — planın durumu tek bakışta.
+ *
+ * <p>Gün farkı gün başlarından hesaplanıyor, saat farkından değil: bugün 09:00'da bakan
+ * biri için bu akşam 18:00'deki teslimat "bugün", yarın 08:00'deki "yarın". Ham saat farkı
+ * ikisine de "0 gün" derdi.</p>
+ */
+const planCountdown = (scheduledAt) => {
+  if (!scheduledAt) return null;
+  const days = Math.round((startOfDay(scheduledAt) - startOfDay(new Date())) / 86400000);
+  if (days < 0) {
+    const late = Math.abs(days);
+    return { days, label: `${late} gün gecikti`, tone: 'danger', icon: 'fa-triangle-exclamation' };
+  }
+  if (days === 0) return { days, label: 'Bugün teslim', tone: 'danger', icon: 'fa-truck-fast' };
+  if (days === 1) return { days, label: 'Yarın teslim', tone: 'warning', icon: 'fa-clock' };
+  return { days, label: `${days} gün kaldı`, tone: 'warning', icon: 'fa-calendar-day' };
+};
+
 export default function DeliveryReceiptPanel({
   transfer,
   isAdmin = false,
@@ -81,6 +106,19 @@ export default function DeliveryReceiptPanel({
     deliveredAt: toLocalInput(new Date()),
     note: '',
   });
+  // Planlı teslimatın kapanışı ayrı bir form: aynı alanları soruyor ama farklı bir şey
+  // yapıyor — bu kaydetme ürünleri stoktan düşürüyor. Teslim onayı formunu bu iş için
+  // yeniden kullanmak, "sadece ismi düzeltiyorum" diye açılan formun stok hareketi
+  // yaratmasına giden en kısa yol olurdu.
+  const [showCompleteForm, setShowCompleteForm] = useState(false);
+  const [completeForm, setCompleteForm] = useState({
+    deliveredByName: '',
+    receivedByName: '',
+    deliveredAt: toLocalInput(new Date()),
+    note: '',
+  });
+  const [showRescheduleForm, setShowRescheduleForm] = useState(false);
+  const [rescheduleForm, setRescheduleForm] = useState({ scheduledDeliveryAt: '', reason: '' });
   const [showCarrierForm, setShowCarrierForm] = useState(false);
   // The transfer prop comes from the list and is not re-fetched while this modal is open,
   // so after a successful assignment it would still claim the carrier is missing.
@@ -251,6 +289,91 @@ export default function DeliveryReceiptPanel({
     if (saved) setShowConfirmForm(false);
   };
 
+  const openCompleteForm = () => {
+    setCompleteForm({
+      deliveredByName: receipt?.deliveredByName || transfer?.driverName || transfer?.handedOverBy || '',
+      receivedByName: receipt?.receivedByName || '',
+      // Teslim anı varsayılan olarak "şimdi". Planlanan tarih önerilmiyor: teslimat
+      // genellikle planlanan saatte değil, gün içinde bir başka saatte yapılıyor ve
+      // kâğıda yazılması gereken, olanın tarihi.
+      deliveredAt: toLocalInput(new Date()),
+      note: '',
+    });
+    setShowCompleteForm(true);
+  };
+
+  /**
+   * Planlı teslimatı kapatır — ürünler stoktan <b>bu adımda</b> düşer.
+   *
+   * <p>Tek istek: stok düşümü ve makbuzun imza kaydı sunucuda aynı işlemde yapılıyor.
+   * İkiye bölünseydi ikinci çağrının hatası, stoğu düşmüş ama teslim alanı boş bir kayıt
+   * bırakırdı.</p>
+   */
+  const handleCompleteScheduled = async (event) => {
+    event.preventDefault();
+    if (!completeForm.receivedByName.trim()) {
+      setError('Teslim alan kişinin adı soyadı zorunludur.');
+      return;
+    }
+    const saved = await runAction(
+      'complete',
+      async () => {
+        const res = await axios.post(`/api/admin/stock-transfers/${transferId}/scheduled-delivery/complete`, {
+          deliveredByName: completeForm.deliveredByName.trim() || null,
+          receivedByName: completeForm.receivedByName.trim(),
+          deliveredAt: completeForm.deliveredAt ? `${completeForm.deliveredAt}:00` : null,
+          note: completeForm.note.trim() || null,
+        });
+        if (res.data?.receipt) setReceipt(res.data.receipt);
+        return res.data;
+      },
+      'Teslimat tamamlandı, ürünler stoktan düşüldü.'
+    );
+    if (saved) {
+      setShowCompleteForm(false);
+      // Sevkiyatın yeni hâli listeye ve modalin kendi kopyasına geri veriliyor; aksi
+      // hâlde panel hâlâ "planlı teslimat bekliyor" göstermeye devam ederdi.
+      if (saved.transfer && onTransferChanged) onTransferChanged(saved.transfer);
+    }
+  };
+
+  const openRescheduleForm = () => {
+    const current = transfer?.scheduledDeliveryAt;
+    setRescheduleForm({
+      scheduledDeliveryAt: current ? toLocalInput(new Date(current)) : toLocalInput(new Date()),
+      reason: '',
+    });
+    setShowRescheduleForm(true);
+  };
+
+  /** Tarihi değiştirir. Stoğa dokunmaz: mal zaten rezervede ve rezervede kalıyor. */
+  const handleReschedule = async (event) => {
+    event.preventDefault();
+    if (!rescheduleForm.scheduledDeliveryAt) {
+      setError('Yeni teslim tarihini girin.');
+      return;
+    }
+    if (new Date(rescheduleForm.scheduledDeliveryAt).getTime() <= Date.now()) {
+      setError('Yeni teslim tarihi gelecekte olmalıdır.');
+      return;
+    }
+    const saved = await runAction(
+      'reschedule',
+      async () => {
+        const res = await axios.put(`/api/admin/stock-transfers/${transferId}/scheduled-delivery`, {
+          scheduledDeliveryAt: `${rescheduleForm.scheduledDeliveryAt}:00`,
+          reason: rescheduleForm.reason.trim() || null,
+        });
+        return res.data;
+      },
+      'Teslim tarihi güncellendi. Makbuzdaki tarihi yenilemek için “Yeniden Bas”.'
+    );
+    if (saved) {
+      setShowRescheduleForm(false);
+      if (onTransferChanged) onTransferChanged(saved);
+    }
+  };
+
   /**
    * Records the carrier of a shipment that went out on a depot exit receipt.
    *
@@ -331,6 +454,14 @@ export default function DeliveryReceiptPanel({
   const carrierPending = Boolean(transfer?.carrierPending) && !carrierJustAssigned;
   const documentLabel = isHandover ? 'Depo Çıkış Makbuzu' : 'Teslimat Makbuzu';
 
+  // Planlı teslimat, sevkiyatın kendi alanından okunuyor — makbuzunkinden değil. Makbuz
+  // basıldığı andaki tarihi donduruyor; tarih sonradan ertelendiyse panelin göstermesi
+  // gereken güncel plan, müşterinin elindeki kâğıttaki eski tarih değil.
+  const scheduledAt = transfer?.scheduledDeliveryAt || null;
+  const transferClosed = transfer?.status === 'COMPLETED' || transfer?.status === 'CANCELLED';
+  const planOpen = Boolean(scheduledAt) && !transferClosed;
+  const countdown = planOpen ? planCountdown(scheduledAt) : null;
+
   return (
     <div className="border rounded-3 p-3 mt-3" ref={panelRef}>
       <div className="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
@@ -347,6 +478,15 @@ export default function DeliveryReceiptPanel({
                 <span className="badge rounded-pill bg-info-subtle text-info-emphasis border border-info-subtle">
                   <i className="fas fa-file-export me-1"></i>
                   Tek nüsha
+                </span>
+              )}
+              {countdown && (
+                <span
+                  className={`badge rounded-pill bg-${countdown.tone}-subtle text-${countdown.tone}-emphasis border border-${countdown.tone}-subtle`}
+                  title={`Planlanan teslim: ${formatDateTime(scheduledAt)}`}
+                >
+                  <i className={`fas ${countdown.icon} me-1`}></i>
+                  {countdown.label}
                 </span>
               )}
               {carrierPending && (
@@ -446,6 +586,179 @@ export default function DeliveryReceiptPanel({
         </div>
       )}
 
+      {/* ── Planlı teslimat ──
+          Panelin en üstünde ve makbuz bilgilerinden önce, çünkü bu sevkiyatta yapılacak
+          iş bu: mal hâlâ depoda ve stok teslimat kapatılana kadar düşmüyor. Aşağıda,
+          "İmzalı Nüsha" bölümünün yanında dursaydı, teslimatı kapatmak arşivleme kadar
+          rutin bir işmiş gibi okunurdu — oysa stoğu hareket ettiren tek adım o. */}
+      {planOpen && (
+        <div
+          className={`border rounded-3 p-3 mb-3 border-${countdown.tone}-subtle bg-${countdown.tone}-subtle`}
+        >
+          <div className="d-flex flex-wrap align-items-start justify-content-between gap-2">
+            <div>
+              <div className={`small text-uppercase fw-semibold text-${countdown.tone}-emphasis`}>
+                <i className={`fas ${countdown.icon} me-1`}></i>
+                Planlanan Teslimat · {countdown.label}
+              </div>
+              <div className="fw-bold fs-6 mt-1">{formatDateTime(scheduledAt)}</div>
+              <div className="small text-muted mt-1">
+                Ürünler rezervede; stoktan <strong>teslimat tamamlanınca</strong> düşer.
+              </div>
+            </div>
+            {!showCompleteForm && !showRescheduleForm && (
+              <div className="d-flex gap-2 flex-wrap">
+                <button
+                  type="button"
+                  className="btn btn-sm btn-success"
+                  disabled={anyBusy}
+                  onClick={openCompleteForm}
+                >
+                  <i className="fas fa-box-open me-1"></i>
+                  Teslimatı Tamamla
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-secondary"
+                  disabled={anyBusy}
+                  onClick={openRescheduleForm}
+                  title="Teslim tarihini değiştirir; stoğa dokunmaz"
+                >
+                  <i className="fas fa-calendar-days me-1"></i>
+                  Tarihi Değiştir
+                </button>
+              </div>
+            )}
+          </div>
+
+          {showCompleteForm && (
+            <form className="border rounded-3 p-3 bg-white mt-3" onSubmit={handleCompleteScheduled}>
+              <div className="alert alert-success py-2 px-3 small mb-3">
+                <i className="fas fa-boxes-stacked me-1"></i>
+                Kaydettiğinizde ürünler <strong>stoktan düşülecek</strong> ve sevkiyat tamamlanacak. Bu işlem
+                geri alınamaz; yanlışlıkla kapatılan bir teslimat ancak iade kaydıyla düzeltilir.
+              </div>
+              <div className="row g-2">
+                <div className="col-md-6">
+                  <label className="form-label small mb-1">Teslim Eden (Adı Soyadı)</label>
+                  <input
+                    type="text"
+                    className="form-control form-control-sm"
+                    value={completeForm.deliveredByName}
+                    onChange={(e) =>
+                      setCompleteForm((prev) => ({ ...prev, deliveredByName: e.target.value }))
+                    }
+                    placeholder="Malı götüren kişi"
+                  />
+                </div>
+                <div className="col-md-6">
+                  <label className="form-label small mb-1">
+                    Teslim Alan (Adı Soyadı) <span className="text-danger">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    className="form-control form-control-sm"
+                    required
+                    value={completeForm.receivedByName}
+                    onChange={(e) => setCompleteForm((prev) => ({ ...prev, receivedByName: e.target.value }))}
+                    placeholder="Makbuzu imzalayan kişi"
+                  />
+                </div>
+                <div className="col-md-6">
+                  <label className="form-label small mb-1">Teslim Tarihi</label>
+                  <input
+                    type="datetime-local"
+                    className="form-control form-control-sm"
+                    value={completeForm.deliveredAt}
+                    max={toLocalInput(new Date())}
+                    onChange={(e) => setCompleteForm((prev) => ({ ...prev, deliveredAt: e.target.value }))}
+                  />
+                </div>
+                <div className="col-md-6">
+                  <label className="form-label small mb-1">Not</label>
+                  <input
+                    type="text"
+                    className="form-control form-control-sm"
+                    maxLength={500}
+                    value={completeForm.note}
+                    onChange={(e) => setCompleteForm((prev) => ({ ...prev, note: e.target.value }))}
+                    placeholder="İsteğe bağlı"
+                  />
+                </div>
+              </div>
+              <div className="d-flex gap-2 mt-3">
+                <button type="submit" className="btn btn-sm btn-success" disabled={anyBusy}>
+                  <i className={`fas ${busy === 'complete' ? 'fa-spinner fa-spin' : 'fa-check'} me-1`}></i>
+                  Teslimatı Kaydet ve Stoktan Düş
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-light"
+                  disabled={anyBusy}
+                  onClick={() => setShowCompleteForm(false)}
+                >
+                  Vazgeç
+                </button>
+              </div>
+            </form>
+          )}
+
+          {showRescheduleForm && (
+            <form className="border rounded-3 p-3 bg-white mt-3" onSubmit={handleReschedule}>
+              <div className="small text-muted mb-2">
+                <i className="fas fa-circle-info me-1"></i>
+                Stoğa dokunulmaz, rezervasyon devam eder. Hatırlatmalar yeni tarihe göre yeniden kurulur.
+              </div>
+              <div className="row g-2">
+                <div className="col-md-5">
+                  <label className="form-label small mb-1">
+                    Yeni Teslim Tarihi <span className="text-danger">*</span>
+                  </label>
+                  <input
+                    type="datetime-local"
+                    className="form-control form-control-sm"
+                    required
+                    min={toLocalInput(new Date())}
+                    value={rescheduleForm.scheduledDeliveryAt}
+                    onChange={(e) =>
+                      setRescheduleForm((prev) => ({
+                        ...prev,
+                        scheduledDeliveryAt: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                <div className="col-md-7">
+                  <label className="form-label small mb-1">Sebep</label>
+                  <input
+                    type="text"
+                    className="form-control form-control-sm"
+                    maxLength={300}
+                    value={rescheduleForm.reason}
+                    onChange={(e) => setRescheduleForm((prev) => ({ ...prev, reason: e.target.value }))}
+                    placeholder="Müşteri talebi, araç yok, adres değişikliği…"
+                  />
+                </div>
+              </div>
+              <div className="d-flex gap-2 mt-3">
+                <button type="submit" className="btn btn-sm btn-warning" disabled={anyBusy}>
+                  <i className={`fas ${busy === 'reschedule' ? 'fa-spinner fa-spin' : 'fa-check'} me-1`}></i>
+                  Tarihi Güncelle
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-light"
+                  disabled={anyBusy}
+                  onClick={() => setShowRescheduleForm(false)}
+                >
+                  Vazgeç
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+      )}
+
       {receipt && (
         <>
           <div className="row g-2 small mt-1">
@@ -470,11 +783,28 @@ export default function DeliveryReceiptPanel({
               )}
             </div>
             <div className="col-sm-6 col-lg-3">
-              <div className="text-muted">{isHandover ? 'Çıkış Tarihi' : 'Teslim Tarihi'}</div>
+              <div className="text-muted">
+                {receipt.scheduledDeliveryAt ? 'Belge Tarihi' : isHandover ? 'Çıkış Tarihi' : 'Teslim Tarihi'}
+              </div>
               <div className="fw-semibold">
-                {formatDateTime(isHandover ? receipt.transferDate : receipt.deliveredAt)}
+                {formatDateTime(
+                  receipt.scheduledDeliveryAt || isHandover ? receipt.transferDate : receipt.deliveredAt
+                )}
               </div>
             </div>
+            {/* Kapanmış planlı teslimatta iki tarih birlikte okunmalı: planlanan ve
+                gerçekleşen. Gecikme ancak ikisi yan yanayken görünür. */}
+            {receipt.scheduledDeliveryAt && (
+              <div className="col-sm-6 col-lg-3">
+                <div className="text-muted">Planlanan Teslim</div>
+                <div className="fw-semibold">
+                  {formatDateTime(scheduledAt || receipt.scheduledDeliveryAt)}
+                </div>
+                {receipt.deliveredAt && (
+                  <div className="text-muted">Gerçekleşen: {formatDateTime(receipt.deliveredAt)}</div>
+                )}
+              </div>
+            )}
           </div>
 
           {receipt.receivedByNote && (
@@ -585,8 +915,12 @@ export default function DeliveryReceiptPanel({
             </div>
           )}
 
-          {/* ── Teslim onayı ── */}
-          <div className="mt-3">
+          {/* ── Teslim onayı ──
+              Planlı teslimat açıkken gizli. Bu düğme kâğıda bilgi işliyor, stoğa
+              dokunmuyor; planlı bir sevkiyatta onu kullanmak makbuzu "teslim edildi"
+              yapar ama mal rezervede kalırdı. O sevkiyatın doğru düğmesi yukarıdaki
+              "Teslimatı Tamamla". */}
+          <div className="mt-3" hidden={planOpen}>
             {!showConfirmForm ? (
               <button
                 type="button"

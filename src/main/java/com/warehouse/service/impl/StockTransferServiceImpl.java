@@ -5,6 +5,7 @@ import com.warehouse.dto.BulkDeleteResponse;
 import com.warehouse.dto.CarrierAssignmentRequest;
 import com.warehouse.dto.ServiceHandoverRequest;
 import com.warehouse.dto.NotificationRequest;
+import com.warehouse.event.ScheduledDeliveryPlannedEvent;
 import com.warehouse.dto.StockTransferFilter;
 import com.warehouse.dto.StockTransferSummary;
 import com.warehouse.dto.StockTransferDeletionResult;
@@ -48,12 +49,14 @@ import org.slf4j.LoggerFactory;
 import com.warehouse.constants.NotificationMessages;
 import com.warehouse.enums.DomainEntityType;
 import com.warehouse.enums.RoleName;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -73,6 +76,21 @@ public class StockTransferServiceImpl implements StockTransferService {
 
     private static final Logger logger = LoggerFactory.getLogger(StockTransferServiceImpl.class);
 
+    /**
+     * Planlı teslimat sayacının durum sayaçları haritasındaki anahtarı.
+     *
+     * <p>Gerçek bir {@link TransferStatus} değil — planlı sevkiyat PENDING ya da IN_TRANSIT
+     * olabiliyor ve ikisinden de düşülüp buraya toplanıyor. Enum'a yeni bir değer eklemek
+     * yerine sayaç düzeyinde ayrılmasının sebebi, tamamlama ve iptal yollarının mevcut
+     * durumları zaten doğru işlemesi: yeni bir durum, o yolların hepsini yeniden gözden
+     * geçirmeyi gerektirirdi.</p>
+     */
+    private static final String SCHEDULED_COUNT_KEY = "SCHEDULED";
+
+    /** Planlı teslimat tarihinin bildirim ve denetim metinlerindeki biçimi. */
+    private static final DateTimeFormatter SCHEDULED_DATE_FORMAT =
+            DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm");
+
     private final StockTransferRepository stockTransferRepository;
     private final TransferReturnRepository transferReturnRepository;
     private final com.warehouse.repository.ReturnRequestRepository returnRequestRepository;
@@ -90,6 +108,7 @@ public class StockTransferServiceImpl implements StockTransferService {
     private final com.warehouse.service.DriverService driverService;
     private final com.warehouse.service.VehicleService vehicleService;
     private final com.warehouse.service.DeliveryReceiptService deliveryReceiptService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public StockTransferServiceImpl(StockTransferRepository stockTransferRepository,
                                     StockRepository stockRepository,
@@ -107,7 +126,8 @@ public class StockTransferServiceImpl implements StockTransferService {
                                     com.warehouse.service.VehicleService vehicleService,
                                     TransferReturnRepository transferReturnRepository,
                                     com.warehouse.repository.ReturnRequestRepository returnRequestRepository,
-                                    com.warehouse.service.DeliveryReceiptService deliveryReceiptService) {
+                                    com.warehouse.service.DeliveryReceiptService deliveryReceiptService,
+                                    ApplicationEventPublisher eventPublisher) {
         this.stockTransferRepository = stockTransferRepository;
         this.transferReturnRepository = transferReturnRepository;
         this.returnRequestRepository = returnRequestRepository;
@@ -125,6 +145,7 @@ public class StockTransferServiceImpl implements StockTransferService {
         this.driverService = driverService;
         this.vehicleService = vehicleService;
         this.deliveryReceiptService = deliveryReceiptService;
+        this.eventPublisher = eventPublisher;
     }
 
     @Override
@@ -147,6 +168,7 @@ public class StockTransferServiceImpl implements StockTransferService {
         return loadPage(stockTransferRepository.findIdsByFilters(
                 null,
                 params.status,
+                params.scheduledOnly,
                 params.transferType,
                 params.sourceWarehouseId,
                 params.destinationWarehouseId,
@@ -261,6 +283,7 @@ public class StockTransferServiceImpl implements StockTransferService {
         return loadPage(stockTransferRepository.findIdsByFilters(
                 username,
                 params.status,
+                params.scheduledOnly,
                 params.transferType,
                 params.sourceWarehouseId,
                 params.destinationWarehouseId,
@@ -290,9 +313,16 @@ public class StockTransferServiceImpl implements StockTransferService {
         TransferFilterParams params = TransferFilterParams.from(filter);
         String createdBy = currentUserOnly ? CurrentUser.usernameOrSystem() : null;
 
-        Map<String, Long> statusCounts = stockTransferRepository.countByFiltersGroupedStatus(
+        // Planlı teslimatlar kendi kovasında toplanıyor ve PENDING / IN_TRANSIT
+        // sayaçlarından düşülüyor. Aksi hâlde aynı kayıt listede "Planlandı" rozetiyle
+        // görünürken sayaçta "Yolda" olarak sayılır, iki ekran birbirini tutmazdı.
+        long scheduledCount = 0L;
+        Map<String, Long> statusCounts = new LinkedHashMap<>();
+        for (StockTransferRepository.StatusCountProjection row
+                : stockTransferRepository.countByFiltersGroupedStatus(
                         createdBy,
                         params.status,
+                        params.scheduledOnly,
                         params.transferType,
                         params.sourceWarehouseId,
                         params.destinationWarehouseId,
@@ -306,15 +336,19 @@ public class StockTransferServiceImpl implements StockTransferService {
                         params.skuPattern,
                         params.customerProvided,
                         params.customerNamePattern,
-                        params.customerPhonePattern)
-                .stream()
-                .collect(Collectors.toMap(
-                        sc -> sc.getStatus().name(),
-                        StockTransferRepository.StatusCountProjection::getCount));
+                        params.customerPhonePattern)) {
+            if (row.getScheduled() == 1) {
+                scheduledCount += row.getCount();
+            } else {
+                statusCounts.merge(row.getStatus().name(), row.getCount(), Long::sum);
+            }
+        }
+        statusCounts.put(SCHEDULED_COUNT_KEY, scheduledCount);
 
         Map<String, Long> typeCounts = stockTransferRepository.countByFiltersGroupedTransferType(
                         createdBy,
                         params.status,
+                        params.scheduledOnly,
                         params.transferType,
                         params.sourceWarehouseId,
                         params.destinationWarehouseId,
@@ -457,12 +491,25 @@ public class StockTransferServiceImpl implements StockTransferService {
                             + "kullanıcı tarafından düzenlenebilir.");
         }
 
+        LocalDateTime now = LocalDateTime.now();
         LocalDateTime handedOverAt = request.getHandedOverAt() != null
                 ? request.getHandedOverAt()
-                : LocalDateTime.now();
-        if (handedOverAt.isAfter(LocalDateTime.now().plusMinutes(5))) {
+                : now;
+        if (handedOverAt.isAfter(now.plusMinutes(5))) {
+            // Bu alan belgenin tarihi: mal ne zaman çıktıysa o. İleri tarih burada değil,
+            // scheduledDeliveryAt'te ifade ediliyor — ikisini aynı alana yığmak "geçmişte
+            // çıktı" ile "gelecekte çıkacak"ı ayırt edilemez hâle getirirdi.
             throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
-                    "Teslim tarihi ileri bir tarih olamaz.");
+                    "Belge tarihi ileri bir tarih olamaz. İleri tarihli teslimat için "
+                            + "\"Planlanan Teslim Tarihi\" alanını kullanın.");
+        }
+
+        LocalDateTime scheduledDeliveryAt = request.getScheduledDeliveryAt();
+        boolean scheduled = scheduledDeliveryAt != null;
+        if (scheduled && !scheduledDeliveryAt.isAfter(now)) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                    "Planlanan teslim tarihi gelecekte olmalıdır. Mal şu anda çıkıyorsa "
+                            + "planlı teslimat seçeneğini kapatın.");
         }
 
         StockTransfer transfer = new StockTransfer();
@@ -483,6 +530,7 @@ public class StockTransferServiceImpl implements StockTransferService {
         transfer.setCustomerId(request.getCustomerId());
         transfer.setNotes(trimToNull(request.getNotes()));
         transfer.setTransferDate(handedOverAt);
+        transfer.setScheduledDeliveryAt(scheduledDeliveryAt);
 
         List<StockTransferItem> items = new ArrayList<>();
         for (ServiceHandoverRequest.Item line : request.getItems()) {
@@ -504,8 +552,129 @@ public class StockTransferServiceImpl implements StockTransferService {
         // leave, and therefore no way for these goods to be deducted twice when the carrier is
         // filled in later.
         StockTransfer created = clearStartApprovalForHandover(createTransfer(transfer));
+
+        if (scheduled) {
+            // Mal depoda duruyor. Stoktan düşmek sayımı bozar; hiç dokunmamak aynı malın
+            // bir başkasına satılmasına izin verir. Arada duran hâl rezervasyon ve onu
+            // kuran yol zaten var — burada sevkiyat rezerve edilip teslim gününe bırakılıyor.
+            return reserveForScheduledDelivery(created);
+        }
+
         return completeTransfer(created.getId(),
                 "Servise teslim edildi — taşıyıcı sonradan belirlenecek");
+    }
+
+    /**
+     * Planlı çıkışın stok tarafı: mal rezerve edilir, sevkiyat teslim gününü bekler.
+     *
+     * <p>{@link #startTransfer} ile aynı rezervasyon adımlarını yapıyor ama onu çağırmıyor:
+     * o metot sevkiyatı "yola çıktı" sayıp bağlı siparişi SHIPPED'e çekiyor. Planlı çıkışta
+     * mal hâlâ depoda; müşteriye teslim gününden günler önce "kargonuz yola çıktı" demek
+     * yanlış bilgi vermek olurdu. Sipariş durumu teslimat kapandığında
+     * {@link #completeTransfer} tarafından DELIVERED'a çekiliyor.</p>
+     *
+     * <p>Durum yine IN_TRANSIT. Tabloya yeni bir durum eklemek yerine mevcut "rezerve
+     * tutuluyor" hâli kullanılıyor, çünkü tamamlama ve iptal yolları bu durumu zaten doğru
+     * işliyor: planlı sevkiyat iptal edilince rezervasyon kendiliğinden geri bırakılıyor,
+     * tamamlanınca rezerveden düşülüyor. Ekranlarda "Yolda" değil "Planlandı" yazmasını
+     * sağlayan şey durum değil, {@code scheduledDeliveryAt} alanının dolu olması.</p>
+     */
+    private StockTransfer reserveForScheduledDelivery(StockTransfer created) {
+        List<StockTransferItem> items = getTransferItemsOrFallback(created);
+        Map<String, Stock> sourceStocks = loadSourceStocks(created.getSourceWarehouse(), items);
+        Map<Long, Integer> orderReservations = reservedForOrder(created.getOrderId());
+        for (StockTransferItem item : items) {
+            Stock sourceStock = sourceStocks.get(stockKey(item));
+            int fromOrder = reservationShare(orderReservations, sourceStock, item.getQuantity());
+            validateSufficientAvailableStock(sourceStock, item.getQuantity(), fromOrder);
+            // Bağlı sipariş zaten bu satırdan `fromOrder` adet tutuyor; yalnızca kalanı
+            // rezerve ediyoruz, yoksa aynı adet iki kez sayılırdı.
+            int shortfall = item.getQuantity() - fromOrder;
+            if (shortfall > 0) {
+                reserveStockForTransfer(sourceStock, shortfall, created);
+            }
+        }
+
+        created.setStatus(TransferStatus.IN_TRANSIT);
+        StockTransfer saved = stockTransferRepository.save(created);
+
+        String username = CurrentUser.usernameOrSystem();
+        auditService.log(AuditAction.TRANSFER_START, DomainEntityType.StockTransfer.name(),
+                saved.getId(), username,
+                String.format("Planlı depo çıkışı: %s tarihinde teslim edilmek üzere rezerve edildi | Ürünler=%s",
+                        formatScheduled(saved.getScheduledDeliveryAt()), describeItems(saved)),
+                buildTransferMetadata(saved));
+        notificationService.create(buildTransferNotification(
+                NotificationMessages.DELIVERY_SCHEDULED_TITLE,
+                String.format("%s adına planlı depo çıkışı oluşturuldu. Teslim tarihi: %s. "
+                                + "Ürünler rezerve edildi, stoktan teslimat onaylandığında düşecek. Ürünler: %s",
+                        saved.getCustomerFullName(), formatScheduled(saved.getScheduledDeliveryAt()),
+                        describeItems(saved)),
+                saved));
+
+        // Hatırlatma taraması commit sonrasına bırakılıyor: bugüne ya da yarına planlanmış
+        // bir teslimatın hatırlatması sabahki job'ı bekleyemez, o tren kaçmış olur.
+        eventPublisher.publishEvent(new ScheduledDeliveryPlannedEvent(this, saved.getId()));
+
+        logger.info("Scheduled handover created. transferId={}, scheduledFor={}",
+                saved.getId(), saved.getScheduledDeliveryAt());
+        return stockTransferRepository.findByIdWithRelations(saved.getId()).orElse(saved);
+    }
+
+    @Override
+    public StockTransfer rescheduleDelivery(Long transferId, LocalDateTime scheduledDeliveryAt, String reason) {
+        if (!isCurrentUserAdmin() && !isCurrentUserStockOut()) {
+            throw new WarehouseManagementException(ErrorCode.UNAUTHORIZED_ACTION,
+                    "Teslim tarihi yalnızca yönetici veya stok çıkış yetkisi olan "
+                            + "kullanıcı tarafından değiştirilebilir.");
+        }
+        StockTransfer transfer = getTransferByIdOrThrow(transferId);
+        if (transfer.getScheduledDeliveryAt() == null) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                    "Bu sevkiyat planlı bir teslimat değil; teslim tarihi değiştirilemez.");
+        }
+        if (transfer.getStatus() == TransferStatus.COMPLETED
+                || transfer.getStatus() == TransferStatus.CANCELLED) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                    "Kapanmış bir sevkiyatın teslim tarihi değiştirilemez.");
+        }
+        if (scheduledDeliveryAt == null || !scheduledDeliveryAt.isAfter(LocalDateTime.now())) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                    "Yeni teslim tarihi gelecekte olmalıdır.");
+        }
+
+        LocalDateTime previous = transfer.getScheduledDeliveryAt();
+        transfer.setScheduledDeliveryAt(scheduledDeliveryAt);
+        // Damgalar sıfırlanıyor: yeni tarihin kendi "yarın teslim" uyarısı olmalı. Eski
+        // damgalar kalsaydı ertelenen her teslimat sessizleşir — tam da izlenmesi gereken
+        // kayıtlar bildirim akışından düşerdi.
+        transfer.setReminderDayBeforeAt(null);
+        transfer.setReminderDueDayAt(null);
+        transfer.setReminderOverdueAt(null);
+
+        String note = trimToNull(reason);
+        StockTransfer saved = stockTransferRepository.save(transfer);
+        String username = CurrentUser.usernameOrSystem();
+        auditService.log(AuditAction.TRANSFER_UPDATE, DomainEntityType.StockTransfer.name(),
+                saved.getId(), username,
+                String.format("Teslim tarihi değiştirildi: %s → %s%s",
+                        formatScheduled(previous), formatScheduled(scheduledDeliveryAt),
+                        note != null ? " | Sebep: " + note : ""),
+                buildTransferMetadata(saved));
+        notificationService.create(buildTransferNotification(
+                NotificationMessages.DELIVERY_RESCHEDULED_TITLE,
+                String.format("#%d numaralı planlı teslimat %s tarihinden %s tarihine alındı.%s",
+                        saved.getId(), formatScheduled(previous), formatScheduled(scheduledDeliveryAt),
+                        note != null ? " Sebep: " + note : ""),
+                saved));
+        eventPublisher.publishEvent(new ScheduledDeliveryPlannedEvent(this, saved.getId()));
+
+        return stockTransferRepository.findByIdWithRelations(saved.getId()).orElse(saved);
+    }
+
+    /** Bildirim ve denetim metinlerinde kullanılan kısa tarih biçimi. */
+    private static String formatScheduled(LocalDateTime value) {
+        return value == null ? "-" : value.format(SCHEDULED_DATE_FORMAT);
     }
 
     @Override
@@ -2116,6 +2285,8 @@ public class StockTransferServiceImpl implements StockTransferService {
         private final boolean driverNameProvided;
         private final boolean notesProvided;
         private final boolean customerProvided;
+        /** Yalnızca planı olan ve hâlâ kapanmamış teslimatlar. */
+        private final boolean scheduledOnly;
         private final String productNamePattern;
         private final String skuPattern;
         private final String driverPattern;
@@ -2136,6 +2307,7 @@ public class StockTransferServiceImpl implements StockTransferService {
                 this.driverNameProvided = false;
                 this.notesProvided = false;
                 this.customerProvided = false;
+                this.scheduledOnly = false;
                 this.productNamePattern = "%";
                 this.skuPattern = "%";
                 this.driverPattern = "%";
@@ -2160,6 +2332,7 @@ public class StockTransferServiceImpl implements StockTransferService {
                 this.driverNameProvided = driverName != null;
                 this.notesProvided = notes != null;
                 this.customerProvided = customerQuery != null;
+                this.scheduledOnly = filter.isScheduledOnly();
                 this.productNamePattern = productNameProvided ? likePattern(productName) : "%";
                 this.skuPattern = skuProvided ? likePattern(sku) : "%";
                 this.driverPattern = driverNameProvided ? likePattern(driverName) : "%";

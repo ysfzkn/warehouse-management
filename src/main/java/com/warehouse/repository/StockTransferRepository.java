@@ -217,6 +217,12 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, Lo
         LEFT JOIN st.product directProduct
         WHERE (:createdBy IS NULL OR st.createdBy = :createdBy)
           AND (:status IS NULL OR st.status = :status)
+          AND (
+                :scheduledOnly = false
+                OR (st.scheduledDeliveryAt IS NOT NULL
+                    AND st.status IN (com.warehouse.enums.TransferStatus.PENDING,
+                                     com.warehouse.enums.TransferStatus.IN_TRANSIT))
+          )
           AND (:transferType IS NULL OR st.transferType = :transferType)
           AND (:sourceWarehouseId IS NULL OR st.sourceWarehouse.id = :sourceWarehouseId)
           AND (:destinationWarehouseId IS NULL OR st.destinationWarehouse.id = :destinationWarehouseId)
@@ -276,6 +282,12 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, Lo
         LEFT JOIN st.product directProduct
         WHERE (:createdBy IS NULL OR st.createdBy = :createdBy)
           AND (:status IS NULL OR st.status = :status)
+          AND (
+                :scheduledOnly = false
+                OR (st.scheduledDeliveryAt IS NOT NULL
+                    AND st.status IN (com.warehouse.enums.TransferStatus.PENDING,
+                                     com.warehouse.enums.TransferStatus.IN_TRANSIT))
+          )
           AND (:transferType IS NULL OR st.transferType = :transferType)
           AND (:sourceWarehouseId IS NULL OR st.sourceWarehouse.id = :sourceWarehouseId)
           AND (:destinationWarehouseId IS NULL OR st.destinationWarehouse.id = :destinationWarehouseId)
@@ -332,6 +344,7 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, Lo
 
     Page<Long> findIdsByFilters(@Param("createdBy") String createdBy,
                                       @Param("status") TransferStatus status,
+                                      @Param("scheduledOnly") boolean scheduledOnly,
                                       @Param("transferType") TransferType transferType,
                                       @Param("sourceWarehouseId") Long sourceWarehouseId,
                                       @Param("destinationWarehouseId") Long destinationWarehouseId,
@@ -366,10 +379,22 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, Lo
     List<StockTransfer> findAllWithRelationsByIdIn(@Param("ids") List<Long> ids);
 
     @Query("""
-        SELECT st.status AS status, COUNT(DISTINCT st.id) AS count FROM StockTransfer st
+        SELECT st.status AS status,
+               CASE WHEN st.scheduledDeliveryAt IS NOT NULL
+                         AND st.status IN (com.warehouse.enums.TransferStatus.PENDING,
+                                           com.warehouse.enums.TransferStatus.IN_TRANSIT)
+                    THEN 1 ELSE 0 END AS scheduled,
+               COUNT(DISTINCT st.id) AS count
+        FROM StockTransfer st
         LEFT JOIN st.product directProduct
         WHERE (:createdBy IS NULL OR st.createdBy = :createdBy)
           AND (:status IS NULL OR st.status = :status)
+          AND (
+                :scheduledOnly = false
+                OR (st.scheduledDeliveryAt IS NOT NULL
+                    AND st.status IN (com.warehouse.enums.TransferStatus.PENDING,
+                                     com.warehouse.enums.TransferStatus.IN_TRANSIT))
+          )
           AND (:transferType IS NULL OR st.transferType = :transferType)
           AND (:sourceWarehouseId IS NULL OR st.sourceWarehouse.id = :sourceWarehouseId)
           AND (:destinationWarehouseId IS NULL OR st.destinationWarehouse.id = :destinationWarehouseId)
@@ -414,10 +439,15 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, Lo
                       )
                 )
           )
-        GROUP BY st.status
+        GROUP BY st.status,
+                 CASE WHEN st.scheduledDeliveryAt IS NOT NULL
+                           AND st.status IN (com.warehouse.enums.TransferStatus.PENDING,
+                                             com.warehouse.enums.TransferStatus.IN_TRANSIT)
+                      THEN 1 ELSE 0 END
     """)
     List<StatusCountProjection> countByFiltersGroupedStatus(@Param("createdBy") String createdBy,
                                                             @Param("status") TransferStatus status,
+                                                            @Param("scheduledOnly") boolean scheduledOnly,
                                                             @Param("transferType") TransferType transferType,
                                                             @Param("sourceWarehouseId") Long sourceWarehouseId,
                                                             @Param("destinationWarehouseId") Long destinationWarehouseId,
@@ -438,6 +468,12 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, Lo
         LEFT JOIN st.product directProduct
         WHERE (:createdBy IS NULL OR st.createdBy = :createdBy)
           AND (:status IS NULL OR st.status = :status)
+          AND (
+                :scheduledOnly = false
+                OR (st.scheduledDeliveryAt IS NOT NULL
+                    AND st.status IN (com.warehouse.enums.TransferStatus.PENDING,
+                                     com.warehouse.enums.TransferStatus.IN_TRANSIT))
+          )
           AND (:transferType IS NULL OR st.transferType = :transferType)
           AND (:sourceWarehouseId IS NULL OR st.sourceWarehouse.id = :sourceWarehouseId)
           AND (:destinationWarehouseId IS NULL OR st.destinationWarehouse.id = :destinationWarehouseId)
@@ -486,6 +522,7 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, Lo
     """)
     List<TransferTypeCountProjection> countByFiltersGroupedTransferType(@Param("createdBy") String createdBy,
                                                                         @Param("status") TransferStatus status,
+                                                                        @Param("scheduledOnly") boolean scheduledOnly,
                                                                         @Param("transferType") TransferType transferType,
                                                                         @Param("sourceWarehouseId") Long sourceWarehouseId,
                                                                         @Param("destinationWarehouseId") Long destinationWarehouseId,
@@ -501,8 +538,44 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, Lo
                                                                         @Param("customerNamePattern") String customerNamePattern,
                                                                         @Param("customerPhonePattern") String customerPhonePattern);
 
+    /**
+     * Planı olan ve hâlâ kapanmamış sevkiyatlar — hatırlatma job'ının çalışma kümesi.
+     *
+     * <p>Tarih filtresi bilerek yok: job hangi aşamanın geldiğini kendisi hesaplıyor ve
+     * kaçırılmış aşamaları da kapatması gerekiyor. "Yarını sorgula" biçiminde bir filtre,
+     * uygulamanın bir gün kapalı kaldığı her durumda o günün hatırlatmalarını sessizce
+     * kaybederdi. Küme küçük kalıyor: tamamlanan ve iptal edilen kayıtlar dışarıda ve
+     * kısmi indeks tam da bunu karşılıyor.</p>
+     *
+     * <p>Kalemler ve depo eagerly yükleniyor: hatırlatma metni ürün dökümünü yazıyor ve
+     * job bir işlem dışında çalıştığı için lazy koleksiyon orada açılamaz.</p>
+     */
+    @Query("SELECT DISTINCT st FROM StockTransfer st "
+            + "LEFT JOIN FETCH st.sourceWarehouse "
+            + "LEFT JOIN FETCH st.items i "
+            + "LEFT JOIN FETCH i.product "
+            + "WHERE st.scheduledDeliveryAt IS NOT NULL "
+            + "AND st.status IN (com.warehouse.enums.TransferStatus.PENDING, "
+            + "                  com.warehouse.enums.TransferStatus.IN_TRANSIT) "
+            + "ORDER BY st.scheduledDeliveryAt ASC")
+    List<StockTransfer> findOpenScheduledDeliveries();
+
+    /**
+     * Durum sayacı, planlı teslimatlar ayrı bir kova olacak şekilde.
+     *
+     * <p>Planlı bir sevkiyatın durumu IN_TRANSIT ("rezerve tutuluyor") ama mal depoda.
+     * Ekrandaki "Yolda" sayacı onları da sayarsa, aynı kayıt listede "Planlandı" rozetiyle
+     * görünürken sayaçta "Yolda" olarak sayılır — iki ekran aynı kaydı iki farklı şey
+     * sanardı.</p>
+     *
+     * <p>Ayrı bir sayım sorgusu yerine aynı sorguya ikinci bir gruplama ekseni eklendi:
+     * bu dosyadaki WHERE koşulunun zaten üç kopyası var ve dördüncüsü zamanla
+     * diğerlerinden sessizce ayrışırdı.</p>
+     */
     interface StatusCountProjection {
         TransferStatus getStatus();
+        /** 1 = planı olan ve hâlâ açık sevkiyat; 0 = diğerleri. */
+        int getScheduled();
         long getCount();
     }
 

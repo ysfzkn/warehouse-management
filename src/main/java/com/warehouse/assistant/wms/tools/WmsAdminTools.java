@@ -123,6 +123,15 @@ public class WmsAdminTools {
         public Long id;
         public LocalDateTime transferDate;
         public TransferStatus status;
+
+        /**
+         * Planlanan teslim tarihi; doluysa mal hâlâ depoda ve teslim gününü bekliyor.
+         *
+         * <p>Duruma bakmak yetmiyor: planlı sevkiyatın durumu IN_TRANSIT ("rezerve
+         * tutuluyor") ve bu alan olmadan asistan, rafta duran mal için "yolda" derdi.</p>
+         */
+        public LocalDateTime scheduledDeliveryAt;
+
         public TransferType transferType;
 
         public Long sourceWarehouseId;
@@ -145,7 +154,7 @@ public class WmsAdminTools {
         public String driverName;
     }
 
-    @Tool(description = "ADMIN: Transfer hareketlerini arar ve sayfalı olarak listeler. Filtreler: status (PENDING/IN_TRANSIT/COMPLETED/CANCELLED veya Türkçe: bekleyen/yolda/tamamlanan/iptal), transferType (WAREHOUSE/CUSTOMER_DELIVERY veya depo/müşteri), sourceWarehouseId, destinationWarehouseId, startDate/endDate (tarih+saat; örn: 2025-12-12T10:30:00 veya 2025-12-12 10:30 veya 2025-12-12), productName, sku, driverName, notes, customerQuery (örn. müşteri adı/telefon). Sayfalama: page,size.")
+    @Tool(description = "ADMIN: Transfer hareketlerini arar ve sayfalı olarak listeler. Filtreler: status (PENDING/IN_TRANSIT/COMPLETED/CANCELLED veya Türkçe: bekleyen/yolda/tamamlanan/iptal), transferType (WAREHOUSE/CUSTOMER_DELIVERY veya depo/müşteri), sourceWarehouseId, destinationWarehouseId, startDate/endDate (tarih+saat; örn: 2025-12-12T10:30:00 veya 2025-12-12 10:30 veya 2025-12-12), productName, sku, driverName, notes, customerQuery (örn. müşteri adı/telefon). Sayfalama: page,size. Sonuçtaki scheduledDeliveryAt doluysa sevkiyat planlı bir teslimattir: mal hâlâ depoda, stok teslimat tamamlanınca düşer — durumu IN_TRANSIT olsa da 'yolda' deme.")
     public PagedResponse<WmsTransferListItem> searchTransfers(String status,
                                                               String transferType,
                                                               Long sourceWarehouseId,
@@ -232,6 +241,7 @@ public class WmsAdminTools {
         out.id = t.getId();
         out.transferDate = t.getTransferDate();
         out.status = t.getStatus();
+        out.scheduledDeliveryAt = t.getScheduledDeliveryAt();
         out.transferType = t.getTransferType();
 
         if (t.getSourceWarehouse() != null) {

@@ -66,5 +66,16 @@ public interface EmailService {
     void sendAdminInvoiceDigest(String toEmail, java.util.List<java.util.Map<String,Object>> errorRows,
                                 java.util.List<java.util.Map<String,Object>> stuckPendingRows);
 
+    /**
+     * Planlı bir teslimat için hatırlatma maili — teslimden bir gün önce, teslim günü ve
+     * tarihi geçtiğinde.
+     *
+     * <p>Alıcı depo tarafı, müşteri değil: mail "bugün şu adrese şu ürünleri götürün"
+     * diyor. İçerik hazır biçimlenmiş olarak geliyor, bkz. {@link com.warehouse.dto.DeliveryReminderMail}.</p>
+     *
+     * @param toEmail {@code delivery_reminder_email} ayarındaki adres (ya da yedekleri)
+     */
+    void sendDeliveryReminder(String toEmail, com.warehouse.dto.DeliveryReminderMail reminder);
+
     boolean isEnabled();
 }

@@ -73,6 +73,21 @@ public class ServiceHandoverRequest {
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime handedOverAt;
 
+    /**
+     * İleri tarihli teslimat: makbuz bugün kesiliyor, mal bu tarihte teslim edilecek.
+     *
+     * <p>Dolu geldiğinde çıkış "planlı" hâle geçer — mal rezerve edilir ama stoktan düşmez,
+     * düşüm teslimat onaylandığında olur. Tarihten bir gün önce ve teslim günü hatırlatma
+     * gönderilir.</p>
+     *
+     * <p>{@link #handedOverAt} ile aynı anda dolu olması bir çelişki değil, iki ayrı olgu:
+     * ilki belgenin düzenlendiği an, bu ise malın gideceği gün. Yine de planlı çıkışta
+     * ilkini geçmişe çekmek anlamsız olduğundan servis katmanı belge tarihini "şimdi"ye
+     * sabitler.</p>
+     */
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
+    private LocalDateTime scheduledDeliveryAt;
+
     @Size(max = 500, message = "Not 500 karakteri aşamaz")
     private String notes;
 

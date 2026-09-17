@@ -102,6 +102,18 @@ public class DeliveryReceipt {
     private LocalDateTime transferDate;
 
     /**
+     * Planlanan teslim tarihi, kâğıt basıldığı andaki hâliyle.
+     *
+     * <p>Sevkiyattaki alanın kopyası olması bu belgenin tamamındaki kuralın aynısı: teslim
+     * sonradan ertelenirse müşterinin elindeki nüshada hâlâ eski tarih yazıyor, ve öyle de
+     * yazmalı. Yeniden basımda güncel tarihle tazelenir.</p>
+     *
+     * <p>Boş olması "planlı değil" demek: mal makbuz imzalanırken çıkmıştır.</p>
+     */
+    @Column(name = "scheduled_delivery_at")
+    private LocalDateTime scheduledDeliveryAt;
+
+    /**
      * Line items as they read on the printed page, serialised as JSON.
      *
      * <p>A join back to {@code products} would re-render the receipt with today's product

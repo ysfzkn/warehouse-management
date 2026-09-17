@@ -2,6 +2,8 @@ package com.warehouse.controller;
 
 import com.warehouse.dto.BulkDeleteResponse;
 import com.warehouse.dto.CarrierAssignmentRequest;
+import com.warehouse.dto.ScheduledDeliveryCompleteRequest;
+import com.warehouse.dto.ScheduledDeliveryRescheduleRequest;
 import com.warehouse.dto.ServiceHandoverRequest;
 import com.warehouse.dto.TransferReturnDto;
 import com.warehouse.dto.TransferReturnRequest;
@@ -79,8 +81,10 @@ public class StockTransferController {
             @RequestParam(required = false) String transferDateTo,
             @RequestParam(required = false) String createdAtFrom,
             @RequestParam(required = false) String createdAtTo,
+            /* Planlı teslimat kuyruğu: durumun üstüne binen bir kesit, ayrı bir durum değil. */
+            @RequestParam(required = false, defaultValue = "false") boolean scheduledOnly,
             @PageableDefault(size = 25, sort = "transferDate", direction = Sort.Direction.DESC) Pageable pageable) {
-        StockTransferFilter filter = buildFilter(status, transferType, sourceWarehouseId, destinationWarehouseId, startDate, endDate, productName, sku, driverName, notes, customerQuery, transferDateFrom, transferDateTo, createdAtFrom, createdAtTo);
+        StockTransferFilter filter = buildFilter(status, transferType, sourceWarehouseId, destinationWarehouseId, startDate, endDate, productName, sku, driverName, notes, customerQuery, transferDateFrom, transferDateTo, createdAtFrom, createdAtTo, scheduledOnly);
         Page<StockTransfer> transfers = stockTransferService.getTransfersPaged(filter, pageable);
         List<StockTransferDto> dtos = transferMapper.toDtoList(transfers.getContent());
         StockTransferSummary summary = stockTransferService.getTransferSummary(filter, false);
@@ -154,8 +158,10 @@ public class StockTransferController {
             @RequestParam(required = false) String transferDateTo,
             @RequestParam(required = false) String createdAtFrom,
             @RequestParam(required = false) String createdAtTo,
+            /* Planlı teslimat kuyruğu: durumun üstüne binen bir kesit, ayrı bir durum değil. */
+            @RequestParam(required = false, defaultValue = "false") boolean scheduledOnly,
             @PageableDefault(size = 25, sort = "transferDate", direction = Sort.Direction.DESC) Pageable pageable) {
-        StockTransferFilter filter = buildFilter(status, transferType, sourceWarehouseId, destinationWarehouseId, startDate, endDate, productName, sku, driverName, notes, customerQuery, transferDateFrom, transferDateTo, createdAtFrom, createdAtTo);
+        StockTransferFilter filter = buildFilter(status, transferType, sourceWarehouseId, destinationWarehouseId, startDate, endDate, productName, sku, driverName, notes, customerQuery, transferDateFrom, transferDateTo, createdAtFrom, createdAtTo, scheduledOnly);
         Page<StockTransfer> transfers = stockTransferService.getTransfersForCurrentUserPaged(filter, pageable);
         List<StockTransferDto> dtos = transferMapper.toDtoList(transfers.getContent());
         StockTransferSummary summary = stockTransferService.getTransferSummary(filter, true);
@@ -208,6 +214,45 @@ public class StockTransferController {
             @Valid @RequestBody ServiceHandoverRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(serviceHandoverService.handOver(request, CurrentUser.usernameOrSystem()));
+    }
+
+    /**
+     * Planlı bir teslimatı kapatır — <b>stok bu uç noktada düşer</b>.
+     *
+     * <p>İleri tarihli çıkışta mal makbuz basıldığında değil, müşteriye gerçekten teslim
+     * edildiğinde stoktan iniyor; arada rezervede duruyor. Stok hareketi ile makbuzun imza
+     * kaydı tek işlemde yapılıyor, bkz. {@link ServiceHandoverService#completeScheduledDelivery}.</p>
+     *
+     * <p>Depo çıkışını açan rollerle aynı yetki: çıkışı kesen kişi teslimatı da kapatıyor,
+     * ve bu iki adım aynı işin başı ile sonu.</p>
+     */
+    @PostMapping("/{id}/scheduled-delivery/complete")
+    @PreAuthorize("hasAnyRole('ADMIN', 'STOCK_OUT')")
+    public ResponseEntity<ServiceHandoverService.Result> completeScheduledDelivery(
+            @PathVariable Long id,
+            @Valid @RequestBody ScheduledDeliveryCompleteRequest request) {
+        return ResponseEntity.ok(serviceHandoverService.completeScheduledDelivery(
+                id,
+                request.getDeliveredByName(),
+                request.getReceivedByName(),
+                request.getDeliveredAt(),
+                request.getNote(),
+                CurrentUser.usernameOrSystem()));
+    }
+
+    /**
+     * Planlı teslimatı başka bir tarihe alır.
+     *
+     * <p>Stoğa dokunmaz: mal zaten rezervede ve rezervede kalıyor. Hatırlatma damgaları
+     * sıfırlanır, böylece yeni tarih kendi "yarın teslim" uyarısını alır.</p>
+     */
+    @PutMapping("/{id}/scheduled-delivery")
+    @PreAuthorize("hasAnyRole('ADMIN', 'STOCK_OUT')")
+    public ResponseEntity<StockTransferDto> rescheduleDelivery(
+            @PathVariable Long id,
+            @Valid @RequestBody ScheduledDeliveryRescheduleRequest request) {
+        return ResponseEntity.ok(transferMapper.toDto(stockTransferService.rescheduleDelivery(
+                id, request.getScheduledDeliveryAt(), request.getReason())));
     }
 
     /**
@@ -366,9 +411,11 @@ public class StockTransferController {
                                             String transferDateFrom,
                                             String transferDateTo,
                                             String createdAtFrom,
-                                            String createdAtTo) {
+                                            String createdAtTo,
+                                            boolean scheduledOnly) {
         StockTransferFilter filter = new StockTransferFilter();
         filter.setStatus(status);
+        filter.setScheduledOnly(scheduledOnly);
         filter.setTransferType(transferType);
         filter.setSourceWarehouseId(sourceWarehouseId);
         filter.setDestinationWarehouseId(destinationWarehouseId);

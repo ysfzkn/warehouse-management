@@ -318,6 +318,19 @@ export default function AdminDeliveryReceipts() {
                             Depo çıkışı
                           </span>
                         )}
+                        {/* Planlı çıkışta belge tarihi ile malın gittiği tarih ayrı.
+                            Arşivde ikisini ayırt edecek bir işaret olmasaydı, teslim
+                            edilmemiş bir makbuz teslim edilmiş gibi okunurdu. */}
+                        {r.scheduledDeliveryAt && (
+                          <span
+                            className="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle ms-1"
+                            style={{ fontSize: '0.66rem' }}
+                            title={`Planlanan teslim: ${formatDateTime(r.scheduledDeliveryAt)}`}
+                          >
+                            <i className="fas fa-calendar-day me-1"></i>
+                            Planlı · {formatDateTime(r.scheduledDeliveryAt)}
+                          </span>
+                        )}
                         <div className="text-muted" style={{ fontSize: '0.72rem' }}>
                           {formatDateTime(r.issuedAt)}
                           {r.revision > 1 && ` · ${r.revision}. basım`}
@@ -364,8 +377,18 @@ export default function AdminDeliveryReceipts() {
                         {(r.kind === 'SERVICE_HANDOVER' ? r.handoverToName : r.receivedByName) || '—'}
                       </td>
                       <td className="small d-none d-md-table-cell">
-                        {formatDateTime(
-                          r.kind === 'SERVICE_HANDOVER' && !r.deliveredAt ? r.transferDate : r.deliveredAt
+                        {/* Planlı çıkışta belge tarihini "teslim tarihi" diye göstermek
+                            yanıltıcı: mal o gün depodaydı. Teslim gerçekleşmediyse
+                            planlanan tarih, "planlanan" olduğu söylenerek yazılıyor. */}
+                        {r.deliveredAt ? (
+                          formatDateTime(r.deliveredAt)
+                        ) : r.scheduledDeliveryAt ? (
+                          <span className="text-warning-emphasis">
+                            {formatDateTime(r.scheduledDeliveryAt)}{' '}
+                            <span className="text-muted">(planlanan)</span>
+                          </span>
+                        ) : (
+                          formatDateTime(r.kind === 'SERVICE_HANDOVER' ? r.transferDate : null)
                         )}
                       </td>
                       <td className="text-center">

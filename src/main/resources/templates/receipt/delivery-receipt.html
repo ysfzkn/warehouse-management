@@ -79,6 +79,21 @@
             white-space: nowrap;
         }
 
+        /* Planlı teslimat rozeti nüsha rozetiyle aynı kalıpta ama farklı renkte: ikisi de
+           aynı köşede duruyor ve karıştırılmamalı. Kırmızıya yakın turuncu, "bu kâğıt bir
+           teslim belgesi değil, bir randevu" uyarısını taşıyor.
+
+           Nüsha rozetinden farklı olarak block ve sağa yaslı, inline-block değil:
+           openhtmltopdf nowrap'li inline-block kutuyu içeriğinden dar ölçüyor ve sol
+           kenarlık ilk harfin üzerine biniyordu. Block kutu hücre genişliğini alıyor,
+           metin içinde ortalanıyor. */
+        .plan-badge {
+            display: block; margin-top: 2.5mm; padding: 1.2mm 3mm;
+            border: 1.2pt solid #b45309; color: #b45309;
+            font-size: 8pt; font-weight: 700; letter-spacing: .5pt;
+            text-align: center; white-space: nowrap;
+        }
+
         /* ── Taraflar ───────────────────────────────────────────── */
         .parties { width: 100%; border-collapse: collapse; border: 1.4pt solid #101418; border-top: none; }
         .parties > tbody > tr > td { width: 50%; vertical-align: top; padding: 0; }
@@ -233,6 +248,12 @@
                      kendini tekrar eden bir etiketti. copies listesi yine tek elemanlı
                      kalıyor, sayfa sayısını o belirliyor. -->
                 <div class="copy-badge" th:unless="${handover}" th:text="${copy}">FİRMA NÜSHASI</div>
+                <!-- Planlı çıkışta kâğıdı eline alan kişinin ilk anlaması gereken şey,
+                     malın henüz teslim edilmediği. Tarih aşağıda ayrıca yazıyor ama
+                     başlığın yanındaki rozet olmadan belge sıradan bir çıkış makbuzu
+                     gibi okunuyor. -->
+                <div class="plan-badge" th:if="${scheduled}"
+                     th:text="'PLANLI TESLİMAT · ' + ${scheduledDeliveryText}">PLANLI TESLİMAT</div>
             </td>
         </tr>
     </table>
@@ -275,8 +296,17 @@
                         <td class="v" th:text="${receipt.sourceWarehouseName} ?: '-'">-</td>
                     </tr>
                     <tr>
-                        <td class="k" th:text="${handover} ? 'Çıkış Tarihi' : 'Sevk Tarihi'">Sevk Tarihi</td>
+                        <td class="k"
+                            th:text="${scheduled} ? 'Belge Tarihi' : (${handover} ? 'Çıkış Tarihi' : 'Sevk Tarihi')">Sevk Tarihi</td>
                         <td class="v" th:text="${transferDateText} ?: '-'">-</td>
+                    </tr>
+                    <!-- Planlı çıkış: mal henüz depoda, kâğıt bugün kesiliyor. Bu satır
+                         müşterinin elindeki nüshadaki en kritik bilgi, o yüzden vurgulu.
+                         Plan yoksa satır hiç basılmıyor — boş bir "Planlanan Teslim: -"
+                         satırı, plan varmış da girilmemiş gibi okunurdu. -->
+                    <tr th:if="${scheduled}">
+                        <td class="k">Planlanan Teslim</td>
+                        <td class="v" style="font-weight:700;" th:text="${scheduledDeliveryText}">-</td>
                     </tr>
                     <!-- Depo çıkışında malı devralan servis, sevkiyat bilgisinin kendisidir:
                          o an bilinen tek taşıma tarafı odur. Girilmediyse satır hiç
@@ -381,8 +411,13 @@
                     </div>
                 </div>
                 <div class="row">
-                    <div class="lbl" th:text="${handover} ? 'ÇIKIŞ TARİHİ' : 'TESLİM TARİHİ'">TESLİM TARİHİ</div>
-                    <div th:with="when=${handover} ? ${transferDateText} : ${deliveredAtText}">
+                    <div class="lbl"
+                         th:text="${handover and !scheduled} ? 'ÇIKIŞ TARİHİ' : 'TESLİM TARİHİ'">TESLİM TARİHİ</div>
+                    <!-- Planlı çıkışta mal henüz çıkmadı: buraya bugünün tarihini basmak,
+                         imzalanmamış bir teslimi olmuş gibi gösterirdi. Çizgi kalıyor,
+                         teslim günü elle doldurulur; teslimat sistemden onaylanıp makbuz
+                         yeniden basılırsa gerçek tarih yerine geçer. -->
+                    <div th:with="when=${scheduled} ? ${deliveredAtText} : (${handover} ? ${transferDateText} : ${deliveredAtText})">
                         <div th:if="${when}" class="filled" th:text="${when}">-</div>
                         <div th:unless="${when}" class="line"></div>
                     </div>
@@ -396,7 +431,12 @@
                 <div class="sign-title">TESLİM ALAN</div>
                 <div class="row">
                     <div class="lbl" th:text="${handover} ? 'SERVİS / ADI SOYADI' : 'ADI SOYADI'">ADI SOYADI</div>
-                    <div th:with="name=${handover} ? ${receipt.handoverToName} : ${receipt.receivedByName}">
+                    <!-- Planlı çıkışta kâğıdı imzalayan, tezgâhtaki servis değil teslim
+                         anında malı alan kişi: handoverToName çoğu zaman boş, receivedByName
+                         ise teslimat kapatılırken doluyor. İkisi de boşsa çizgi basılıyor. -->
+                    <div th:with="name=${scheduled}
+                                      ? (${receipt.receivedByName} ?: ${receipt.handoverToName})
+                                      : (${handover} ? ${receipt.handoverToName} : ${receipt.receivedByName})">
                         <div th:if="${name}" class="filled" th:text="${name}">-</div>
                         <div th:unless="${name}" class="line"></div>
                     </div>
@@ -427,8 +467,9 @@
                     </table>
                 </div>
                 <div class="row">
-                    <div class="lbl" th:text="${handover} ? 'ÇIKIŞ TARİHİ' : 'TESLİM TARİHİ'">TESLİM TARİHİ</div>
-                    <div th:with="when=${handover} ? ${transferDateText} : ${deliveredAtText}">
+                    <div class="lbl"
+                         th:text="${handover and !scheduled} ? 'ÇIKIŞ TARİHİ' : 'TESLİM TARİHİ'">TESLİM TARİHİ</div>
+                    <div th:with="when=${scheduled} ? ${deliveredAtText} : (${handover} ? ${transferDateText} : ${deliveredAtText})">
                         <div th:if="${when}" class="filled" th:text="${when}">-</div>
                         <div th:unless="${when}" class="line"></div>
                     </div>
@@ -453,7 +494,25 @@
         </tr>
     </table>
 
-    <div class="legal" th:if="${handover}">
+    <!-- Planlı çıkışta kapanış paragrafı değişmek zorunda: standart metin "teslim
+         alınmıştır" diyor, oysa mal hâlâ depoda ve kâğıt bir teslim taahhüdü olarak
+         veriliyor. Olmamış bir teslimi olmuş gibi yazan bir belge imzalatmak, ihtilafta
+         imzalayanın aleyhine delil üretirdi. -->
+    <div class="legal" th:if="${handover and scheduled and receipt.deliveredAt != null}">
+        Yukarıda dökümü yapılan malzemeler, <b th:text="${scheduledDeliveryText}">-</b> tarihine
+        planlanan teslimat kapsamında <b th:text="${deliveredAtText}">-</b> tarihinde eksiksiz ve
+        hasarsız olarak teslim edilmiştir. Tek nüsha düzenlenmiştir ve imzalı hâli firmada kalır.
+        Bu belge <span th:text="${receipt.receiptNo}">-</span> numarası ile sistemde kayıtlıdır.
+    </div>
+    <div class="legal" th:if="${handover and scheduled and receipt.deliveredAt == null}">
+        Yukarıda dökümü yapılan malzemeler belirtilen müşteriye
+        <b th:text="${scheduledDeliveryText}">-</b> tarihinde teslim edilmek üzere ayrılmış ve
+        kayda alınmıştır. Mal bu tarihe kadar depoda muhafaza edilir; teslim anında bu belge
+        karşılıklı imzalanır. Taşıyıcı araç ve sürücü bilgisi belirlendiğinde bu belgenin
+        kaydına işlenir. Tek nüsha düzenlenmiştir ve imzalı hâli firmada kalır.
+        Bu belge <span th:text="${receipt.receiptNo}">-</span> numarası ile sistemde kayıtlıdır.
+    </div>
+    <div class="legal" th:if="${handover and !scheduled}">
         Yukarıda dökümü yapılan malzemeler eksiksiz ve hasarsız olarak, belirtilen müşteriye
         ulaştırılmak üzere teslim alınmıştır. Taşıyıcı araç ve sürücü bilgisi belirlendiğinde
         bu belgenin kaydına işlenir. Tek nüsha düzenlenmiştir ve imzalı hâli firmada kalır.

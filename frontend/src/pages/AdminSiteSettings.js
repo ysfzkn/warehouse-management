@@ -193,6 +193,17 @@ const SETTING_GROUPS = [
     tooltip: 'Kargo gönderisinde "gönderici" olarak gösterilecek mağaza bilgileri.',
   },
   {
+    id: 'delivery-reminders',
+    section: 'Depo',
+    title: 'Teslimat Hatırlatmaları',
+    icon: 'fas fa-calendar-check',
+    keys: ['delivery_reminder_enabled', 'delivery_reminder_email'],
+    tooltip:
+      'İleri tarihli depo çıkışları için hatırlatma. Teslimden 1 gün önce ve teslim günü, ' +
+      'ürün dökümü ve adresle birlikte panele bildirim düşer ve bu adrese e-posta gider.',
+    enabledKey: 'delivery_reminder_enabled',
+  },
+  {
     id: 'invoice',
     section: 'E-Fatura',
     title: 'E-Fatura (Logo)',
@@ -330,6 +341,8 @@ const LABELS = {
   logo_customer_alias: 'Müşteri Alias (tüzel)',
   logo_earsiv_design_file: 'e-Arşiv Tasarım Dosyası',
   logo_efatura_design_file: 'e-Fatura Tasarım Dosyası',
+  delivery_reminder_enabled: 'Teslimat Hatırlatmaları',
+  delivery_reminder_email: 'Teslimat Hatırlatma E-postası',
   invoice_admin_digest_email: 'Günlük Fatura Özeti E-posta',
   logo_company_vkn: 'Vergi / TC Kimlik No',
   logo_company_title: 'Ticari Unvan',
@@ -460,6 +473,10 @@ const FIELD_TOOLTIPS = {
     'e-Fatura tasarım dosyası adı (Logo panelinden alınır, tüzel müşteri faturalarında kullanılır)',
   invoice_admin_digest_email:
     'Her gün 08:00\'da hatalı ve 24h+ beklemede kalan faturaların özeti bu adrese gönderilir. Boşsa "İletişim Formu Hedef E-posta" kullanılır.',
+  delivery_reminder_enabled:
+    'Kapatılırsa planlı teslimatlar için hatırlatma bildirimi ve e-postası gönderilmez. Planlı çıkış oluşturmayı engellemez.',
+  delivery_reminder_email:
+    'Planlı teslimat hatırlatmaları (1 gün önce, teslim günü, gecikme) bu adrese gider. Boşsa sırayla "Günlük Fatura Özeti E-posta" ve "İletişim Formu Hedef E-posta" kullanılır.',
   logo_company_vkn: 'Şahıs işletmesi ise 11 haneli TC Kimlik No; tüzel kişi ise 10 haneli Vergi No',
   logo_company_title: 'Firmanın resmi ticari unvanı (Vergi levhanızdaki tam isim)',
   logo_company_tax_office: 'Kayıtlı olduğunuz vergi dairesi (örn: Ankara Kurumlar Vergi Dairesi)',
@@ -1353,6 +1370,7 @@ export default function AdminSiteSettings() {
         'cargo_api_auto_create',
         'invoice_auto_generate',
         'logo_efatura_test_mode',
+        'delivery_reminder_enabled',
       ].includes(key)
     ) {
       const defaultFalse = [
@@ -1552,6 +1570,7 @@ export default function AdminSiteSettings() {
       'default_shipping_cost',
       'social_whatsapp',
       'contact_form_email',
+      'delivery_reminder_email',
     ].includes(key);
     return (
       <div key={key} className={isShort ? 'col-md-6' : 'col-12'}>

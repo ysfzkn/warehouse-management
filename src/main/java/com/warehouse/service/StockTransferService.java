@@ -14,6 +14,7 @@ import com.warehouse.enums.TransferApprovalStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -53,8 +54,24 @@ public interface StockTransferService {
      * so a depot exit and a normal delivery are indistinguishable in the ledger — which is
      * the point. The carrier fields stay empty and {@code carrierPending} is set until
      * {@link #assignCarrier} fills them in.</p>
+     *
+     * <p>With {@code scheduledDeliveryAt} set the shipment is planned rather than completed:
+     * the goods are reserved and stay on the shelf, and the deduction waits for
+     * {@link #completeTransfer}. Same row, same ledger, same receipt — only the moment the
+     * stock moves differs, which is what keeps a planned exit from becoming a second way
+     * for goods to leave the books.</p>
      */
     StockTransfer createServiceHandover(ServiceHandoverRequest request);
+
+    /**
+     * Moves a planned delivery to another date.
+     *
+     * <p>Deliveries slip, and the alternative — cancel and re-issue — would mint a second
+     * receipt number for goods the customer already holds paperwork for. Rescheduling keeps
+     * the shipment, the reservation and the receipt identity; only the date and the
+     * reminder stages reset, so the new date gets its own "yarın teslim" warning.</p>
+     */
+    StockTransfer rescheduleDelivery(Long transferId, LocalDateTime scheduledDeliveryAt, String reason);
 
     /**
      * Fills in the carrier of a shipment that went out on a depot exit receipt.

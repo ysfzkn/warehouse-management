@@ -30,6 +30,13 @@ public final class NotificationMessages {
     public static final String TRANSFER_APPROVAL_REJECTED_TITLE = "Transfer Reddedildi";
     public static final String TRANSFER_DELETE_REQUEST_TITLE = "Transfer Silme Talebi";
 
+    // Planlı (ileri tarihli) teslimat
+    public static final String DELIVERY_SCHEDULED_TITLE = "Planlı Teslimat Oluşturuldu";
+    public static final String DELIVERY_RESCHEDULED_TITLE = "Teslim Tarihi Değişti";
+    public static final String DELIVERY_REMINDER_TITLE = "Teslimat Hatırlatması";
+    public static final String DELIVERY_OVERDUE_TITLE = "Gecikmiş Teslimat";
+    public static final String DELIVERY_COMPLETED_TITLE = "Planlı Teslimat Tamamlandı";
+
     // Stock request notifications
     public static final String STOCK_REQUEST_CREATED_TITLE = "Yeni Stok Talebi";
     public static final String STOCK_REQUEST_APPROVED_TITLE = "Stok Talebi Onaylandı";

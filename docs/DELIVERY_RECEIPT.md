@@ -56,6 +56,18 @@ Toplu **basım** (seçili sevkiyatların makbuzlarını tek PDF olarak indirme) 
 
 ---
 
+## 1c. İleri tarihli teslimat
+
+Depo çıkış makbuzu bugün kesilip mal ileri bir tarihte teslim edilebilir. O durumda mal
+**rezerve** edilir, stok **teslimat kapatıldığında** düşer ve teslimden bir gün önce ile
+teslim günü hatırlatma gönderilir. Kâğıt da farklı basılır: başlığın yanında **PLANLI
+TESLİMAT** rozeti, ayrı bir *Planlanan Teslim* satırı ve "teslim alınmıştır" demeyen bir
+kapanış paragrafı.
+
+Ayrıntılar: [Planlı (İleri Tarihli) Teslimat](SCHEDULED_DELIVERY.md)
+
+---
+
 ## 2. Neden alanlar kopyalanıyor
 
 `delivery_receipts` tablosundaki müşteri, şoför, plaka ve kalem bilgileri
@@ -162,6 +174,8 @@ Kâğıdın hayat döngüsünün tamamı `audit_logs`'a yazılır:
 | GET | `/api/admin/stock-transfers/{id}/receipt/print` | depo + admin |
 | GET | `/api/admin/stock-transfers/{id}/receipt/pdf` | depo + admin |
 | POST | `/api/admin/stock-transfers/{id}/receipt/confirm` | depo + admin |
+| POST | `/api/admin/stock-transfers/{id}/scheduled-delivery/complete` | ADMIN + STOCK_OUT |
+| PUT | `/api/admin/stock-transfers/{id}/scheduled-delivery` | ADMIN + STOCK_OUT |
 | POST | `/api/admin/stock-transfers/{id}/receipt/attachments` | depo + admin |
 | POST | `/api/admin/stock-transfers/receipts/by-transfers` | depo + admin |
 | POST | `/api/admin/stock-transfers/receipts/bulk-pdf` | depo + admin |

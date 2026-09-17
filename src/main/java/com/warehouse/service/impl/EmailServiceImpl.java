@@ -482,6 +482,114 @@ public class EmailServiceImpl implements EmailService {
         sendHtml(toEmail, subject, body.toString());
     }
 
+    /**
+     * Planlı teslimat hatırlatması.
+     *
+     * <p>Mailin tamamı tek bir soruyu cevaplamak üzere dizilmiş: <em>bugün ne yapılacak?</em>
+     * Tarih ve "Yarın / Bugün / 3 gün gecikti" ifadesi en üstte, sonra adres ve telefon,
+     * sonra araca yüklenecek kalemler. Sipariş numarası ve makbuz numarası en altta —
+     * teslimatı yapan kişi onlara nadiren bakar, ama ihtilafta tek bağlayıcı şey onlar.</p>
+     *
+     * <p>Konu satırı aşama + tarih + müşteri: gelen kutusunda maili açmadan hangi teslimat
+     * olduğu okunmalı, çünkü yoğun bir günde art arda birkaç tane düşüyor.</p>
+     */
+    @Override
+    @Async
+    public void sendDeliveryReminder(String toEmail, com.warehouse.dto.DeliveryReminderMail reminder) {
+        if (reminder == null) return;
+        if (toEmail == null || toEmail.isBlank()) {
+            log.warn("Teslimat hatırlatması gönderilemedi — alıcı adres yapılandırılmamış.");
+            return;
+        }
+        if (!enabled) {
+            log.info("Email disabled — teslimat hatırlatması atlandı: {} / {} / {}",
+                    reminder.stage(), reminder.scheduledAt(), reminder.customerFullName());
+            return;
+        }
+
+        boolean overdue = reminder.stage() == com.warehouse.enums.DeliveryReminderStage.OVERDUE;
+        String accent = overdue ? "#b91c1c" : "#0f766e";
+        String accentBg = overdue ? "#fef2f2" : "#f0fdfa";
+
+        String subject = "[" + reminder.stage().getBadge() + "] "
+                + reminder.scheduledAt() + " — "
+                + (reminder.customerFullName() != null ? reminder.customerFullName() : "Teslimat");
+
+        StringBuilder body = new StringBuilder();
+        body.append(buildHeader(reminder.stage().getTitle()));
+
+        body.append("<div style=\"background:").append(accentBg)
+            .append(";border-left:4px solid ").append(accent)
+            .append(";border-radius:8px;padding:16px 18px;margin-bottom:22px;\">")
+            .append("<div style=\"color:").append(accent)
+            .append(";font-size:13px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;\">")
+            .append(escape(reminder.daysLabel())).append("</div>")
+            .append("<div style=\"color:#0f172a;font-size:22px;font-weight:700;margin-top:4px;\">")
+            .append(escape(reminder.scheduledAt())).append("</div>")
+            .append("</div>");
+
+        body.append("<table style=\"width:100%;border-collapse:collapse;font-size:14px;\">");
+        body.append(reminderRow("Müşteri", reminder.customerFullName()));
+        body.append(reminderRow("Telefon", reminder.customerPhone()));
+        body.append(reminderRow("Adres", reminder.customerAddress()));
+        body.append(reminderRow("Çıkış Deposu", reminder.warehouseName()));
+        body.append(reminderRow("Teslim Alan Servis", reminder.handoverToName()));
+        body.append(reminderRow("Sipariş No", reminder.orderNumber()));
+        body.append(reminderRow("Makbuz No", reminder.receiptNo()));
+        body.append(reminderRow("Not", reminder.notes()));
+        body.append("</table>");
+
+        body.append("<h3 style=\"color:#0f172a;font-size:15px;margin:26px 0 8px;\">Ürünler (")
+            .append(reminder.totalQuantity()).append(" adet)</h3>");
+        body.append("<table style=\"width:100%;border-collapse:collapse;background:#f8fafc;border-radius:6px;overflow:hidden;\">")
+            .append("<tr style=\"color:#475569;font-size:12px;text-align:left;\">")
+            .append("<th style=\"padding:9px 12px;\">Stok Kodu</th>")
+            .append("<th style=\"padding:9px 12px;\">Ürün</th>")
+            .append("<th style=\"padding:9px 12px;text-align:center;\">Adet</th>")
+            .append("</tr>");
+        for (var line : reminder.items()) {
+            body.append("<tr style=\"border-top:1px solid rgba(0,0,0,0.06);color:#0f172a;font-size:13px;\">")
+                .append("<td style=\"padding:9px 12px;font-family:monospace;\">")
+                .append(escape(line.sku() != null ? line.sku() : "-")).append("</td>")
+                .append("<td style=\"padding:9px 12px;\">").append(escape(line.name())).append("</td>")
+                .append("<td style=\"padding:9px 12px;text-align:center;font-weight:700;\">")
+                .append(line.quantity()).append("</td>")
+                .append("</tr>");
+        }
+        body.append("</table>");
+
+        // Teslimat kapatılınca stok o anda düşüyor. Mailin bunu söylemesi şart: aksi hâlde
+        // "stok zaten çıkmıştı" varsayımıyla kimse teslimatı sistemde kapatmaz ve mal hem
+        // rafta hem rezervede asılı kalır.
+        body.append("<p style=\"color:#475569;font-size:13px;line-height:1.6;margin-top:22px;\">")
+            .append(overdue
+                    ? "Bu teslimatın tarihi geçti ve hâlâ kapatılmadı. Ürünler rezervede bekliyor."
+                    : "Teslimat yapıldığında panelden <b>Teslimatı Tamamla</b> ile kapatın.")
+            .append(" Ürünler stoktan <b>ancak o adımda</b> düşer.")
+            .append("</p>");
+
+        String baseUrl = getBaseUrl();
+        body.append("<div style=\"text-align:center;margin:26px 0;\">")
+            // highlightTransfer, sevkiyat detayını doğrudan açan mevcut derin bağlantı:
+            // tarih filtresi kaydı listeden düşürmüş olsa bile API'den çekip açıyor.
+            .append("<a href=\"").append(baseUrl).append("/stock?highlightTransfer=")
+            .append(reminder.transferId())
+            .append("\" style=\"display:inline-block;background:").append(accent)
+            .append(";color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;\">")
+            .append("Sevkiyatı Aç</a></div>");
+
+        body.append(buildFooter());
+        sendHtml(toEmail, subject, body.toString());
+    }
+
+    /** Boş alanlar hiç basılmıyor: "Sipariş No: -" satırı bilgi değil, gürültü. */
+    private static String reminderRow(String label, String value) {
+        if (value == null || value.isBlank()) return "";
+        return "<tr><td style=\"padding:7px 0;color:#64748b;width:38%;vertical-align:top;\">" + escape(label)
+                + "</td><td style=\"padding:7px 0;color:#0f172a;font-weight:600;\">" + escape(value)
+                + "</td></tr>";
+    }
+
     private String renderDigestTable(java.util.List<java.util.Map<String,Object>> rows, String bg, String fg) {
         StringBuilder sb = new StringBuilder();
         sb.append("<table style=\"width:100%;border-collapse:collapse;background:").append(bg).append(";border-radius:6px;overflow:hidden;margin-top:8px;\">");

@@ -52,6 +52,7 @@ public class StockTransferMapper {
         dto.setStatus(entity.getStatus());
         dto.setTransferType(entity.getTransferType());
         dto.setTransferDate(entity.getTransferDate());
+        dto.setScheduledDeliveryAt(entity.getScheduledDeliveryAt());
         dto.setCompletedDate(entity.getCompletedDate());
         dto.setCancelledDate(entity.getCancelledDate());
         dto.setNotes(entity.getNotes());

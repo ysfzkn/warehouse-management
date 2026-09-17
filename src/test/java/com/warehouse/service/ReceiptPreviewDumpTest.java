@@ -317,6 +317,94 @@ class ReceiptPreviewDumpTest {
         SecurityContextHolder.clearContext();
     }
 
+    /**
+     * Planlı depo çıkışı: kâğıt bugün kesiliyor, mal ileri bir tarihte teslim edilecek.
+     *
+     * <p>Bakılacak yerler: başlığın yanındaki PLANLI TESLİMAT rozeti, "Belge Tarihi" ile
+     * "Planlanan Teslim" satırlarının birlikte okunuşu, imza bloklarındaki teslim tarihi
+     * çizgisinin boş kalması ve kapanış paragrafının "teslim alınmıştır" değil "teslim
+     * edilmek üzere ayrılmıştır" demesi.</p>
+     */
+    @Test
+    void dumpScheduledHandoverPreview() throws Exception {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("yusuf", "pw",
+                        List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
+
+        installBranding();
+
+        Category category = new Category();
+        category.setName("Beyaz Eşya");
+        category.setSlug("beyaz-esya-plan-" + System.nanoTime());
+        category = categoryRepository.save(category);
+
+        Warehouse warehouse = new Warehouse();
+        warehouse.setName("Merkez Depo — Kale Mah.");
+        warehouse.setLocation("Niğde");
+        warehouse = warehouseRepository.save(warehouse);
+
+        com.warehouse.dto.ServiceHandoverRequest request = new com.warehouse.dto.ServiceHandoverRequest();
+        request.setSourceWarehouseId(warehouse.getId());
+        request.setHandedOverBy("Mehmet Güneş");
+        request.setCustomerFullName("Işık Şahin Mobilya Ltd. Şti.");
+        request.setCustomerPhone("0553 999 33 03");
+        request.setCustomerAddress("Selçuk Mah. Dr. Sami Yağız Cad. No: 53, Merkez / NİĞDE");
+        request.setNotes("Müşteri salı günü evde olacak; teslimat öğleden sonra yapılacak.");
+        request.setScheduledDeliveryAt(
+                LocalDateTime.now().plusDays(5).withHour(14).withMinute(0).withSecond(0).withNano(0));
+
+        String[][] rows = {
+                {"PRF-BZD-4820", "Profilo BD3086 Çift Kapılı No-Frost Buzdolabı", "1"},
+                {"SMF-ANK-9012", "Simfer Ankastre Fırın Seti (Fırın + Ocak + Davlumbaz)", "2"},
+                {"FKR-SUP-3311", "Fakir Veyron Turbo XL Dikey Süpürge", "3"},
+        };
+        java.util.List<com.warehouse.dto.ServiceHandoverRequest.Item> items = new java.util.ArrayList<>();
+        for (String[] row : rows) {
+            Product product = new Product();
+            product.setName(row[1]);
+            product.setSku(row[0]);
+            product.setSlug(row[0].toLowerCase() + "-plan-" + System.nanoTime());
+            product.setCategory(category);
+            product = productRepository.save(product);
+
+            com.warehouse.entity.Stock stock = new com.warehouse.entity.Stock();
+            stock.setProduct(product);
+            stock.setWarehouse(warehouse);
+            stock.setQuantity(50);
+            stockRepository.save(stock);
+
+            com.warehouse.dto.ServiceHandoverRequest.Item item =
+                    new com.warehouse.dto.ServiceHandoverRequest.Item();
+            item.setProductId(product.getId());
+            item.setQuantity(Integer.parseInt(row[2]));
+            items.add(item);
+        }
+        request.setItems(items);
+
+        var result = handoverService.handOver(request, "yusuf");
+        Long transferId = result.transfer().getId();
+
+        Path dir = Path.of(System.getProperty("receipt.dump"));
+        Files.createDirectories(dir);
+
+        byte[] pdf = receiptService.renderPdf(transferId, "yusuf");
+        Files.write(dir.resolve("depo-cikis-planli.pdf"), pdf);
+        Files.writeString(dir.resolve("depo-cikis-planli.html"),
+                receiptService.renderHtml(transferId, true));
+        render(pdf, dir, "depo-cikis-planli");
+
+        // Ve teslimat kapandıktan sonraki hâli: aynı numara, artık gerçekleşen tarihle.
+        handoverService.completeScheduledDelivery(transferId, "Mehmet Güneş",
+                "Ayşe Gültekin", LocalDateTime.now(), "Eksiksiz teslim alındı.", "yusuf");
+        receiptService.issue(transferId, "yusuf");
+
+        byte[] delivered = receiptService.renderPdf(transferId, "yusuf");
+        Files.write(dir.resolve("depo-cikis-planli-teslim.pdf"), delivered);
+        render(delivered, dir, "depo-cikis-planli-teslim");
+
+        SecurityContextHolder.clearContext();
+    }
+
     private void render(byte[] pdf, Path dir, String prefix) throws Exception {
         try (PDDocument document = PDDocument.load(pdf)) {
             PDFRenderer renderer = new PDFRenderer(document);

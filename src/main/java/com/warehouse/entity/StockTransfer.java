@@ -221,6 +221,47 @@ public class StockTransfer {
     @Column(name = "transfer_date", nullable = false)
     private LocalDateTime transferDate;
 
+    /**
+     * Planlanan teslim tarihi — mal depodan çıkmadan makbuzu kesilen sevkiyatlarda dolu.
+     *
+     * <p>Dolu olduğunda sevkiyat, kâğıt basıldığı anda tamamlanmaz: mal rezerve edilir ve
+     * stoktan ancak teslimat onaylandığında düşer. Boş olması klasik akış demek — mal
+     * makbuz imzalanırken zaten binadan çıkmıştır.</p>
+     *
+     * <p>{@link #transferDate} ile karıştırılmamalı: o, kâğıdın düzenlendiği an. İkisi
+     * planlı çıkışta bilerek farklı — belgenin ne zaman kesildiği ile malın ne zaman
+     * gideceği ayrı olgular.</p>
+     */
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss", timezone = "Europe/Istanbul")
+    @Column(name = "scheduled_delivery_at")
+    private LocalDateTime scheduledDeliveryAt;
+
+    /**
+     * Teslimden bir gün önceki hatırlatmanın işlendiği an.
+     *
+     * <p>Aşama başına ayrı damga, tek bir "hatırlatıldı" bayrağı değil: iki ayrı bildirim
+     * gönderiliyor ve her biri tam bir kez gitmeli. Job her gün tüm açık planları tarıyor,
+     * damgası olanı atlıyor — böylece iki instance aynı anda koşsa bile mail tekrarlanmaz.</p>
+     *
+     * <p>Zamanı geçmiş bir aşama postalanmadan damgalanır: teslim günü "yarın teslim
+     * edilecek" maili hatırlatma değil, gürültüdür.</p>
+     */
+    @Column(name = "reminder_day_before_at")
+    private LocalDateTime reminderDayBeforeAt;
+
+    /** Teslim günü hatırlatmasının işlendiği an. */
+    @Column(name = "reminder_due_day_at")
+    private LocalDateTime reminderDueDayAt;
+
+    /**
+     * Tarihi geçtiği hâlde hâlâ teslim edilmemiş sevkiyat için tek seferlik uyarı.
+     *
+     * <p>Olmazsa planlı çıkış sessizce çürür: mal rezervede kalır, kimse teslimatı
+     * kapatmaz ve durum ancak sayımda fark edilir.</p>
+     */
+    @Column(name = "reminder_overdue_at")
+    private LocalDateTime reminderOverdueAt;
+
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss", timezone = "Europe/Istanbul")
     @Column(name = "completed_date")
     private LocalDateTime completedDate;

@@ -32,6 +32,30 @@ const toLocalInput = (date) => {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 };
 
+/** Yarın sabah 10:00 — planlı teslimatta en sık girilen değer, form onunla açılıyor. */
+const defaultScheduledAt = () => {
+  const date = new Date();
+  date.setDate(date.getDate() + 1);
+  date.setHours(10, 0, 0, 0);
+  return toLocalInput(date);
+};
+
+const formatScheduled = (value) => {
+  if (!value) return '';
+  try {
+    return new Date(value).toLocaleString('tr-TR', {
+      weekday: 'long',
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return value;
+  }
+};
+
 const emptyForm = () => ({
   sourceWarehouseId: '',
   handoverToName: '',
@@ -41,6 +65,10 @@ const emptyForm = () => ({
   customerPhone: '',
   customerAddress: '',
   handedOverAt: toLocalInput(new Date()),
+  // Planlı teslimat, kâğıdın kesildiği an ile malın gideceği günü ayırmak için var.
+  // Boş bırakılırsa (mod = now) akış eskisi gibi: mal çıkar, stok o an düşer.
+  deliveryMode: 'now',
+  scheduledDeliveryAt: defaultScheduledAt(),
   notes: '',
 });
 
@@ -149,9 +177,20 @@ export default function ServiceHandoverModal({ onClose }) {
 
   const totalQuantity = items.reduce((sum, item) => sum + item.quantity, 0);
 
+  const scheduled = form.deliveryMode === 'scheduled';
+
   const validate = () => {
     const errors = {};
     if (!form.sourceWarehouseId) errors.sourceWarehouseId = 'Çıkış deposu seçin.';
+    if (scheduled) {
+      if (!form.scheduledDeliveryAt) {
+        errors.scheduledDeliveryAt = 'Planlanan teslim tarihini girin.';
+      } else if (new Date(form.scheduledDeliveryAt).getTime() <= Date.now()) {
+        // Sunucu da aynı kuralı uyguluyor; burada erken durmak, kullanıcıyı ürün listesi
+        // dolu bir formu gönderip hata almaktan kurtarıyor.
+        errors.scheduledDeliveryAt = 'Teslim tarihi gelecekte olmalı.';
+      }
+    }
     // Teslim eden ve teslim alan bilerek zorunlu değil: kâğıt tezgâhta, kurye beklerken
     // basılıyor ve iki imza bloğu çoğu zaman elle dolduruluyor. Boş bırakılırsa makbuz
     // o alanlara yazmak için çizgi basıyor.
@@ -191,6 +230,10 @@ export default function ServiceHandoverModal({ onClose }) {
         customerPhone: formatPhoneForSubmit(form.customerPhone),
         customerAddress: form.customerAddress.trim(),
         handedOverAt: form.handedOverAt ? `${form.handedOverAt}:00` : null,
+        // Alanın dolu olması akışı değiştiriyor: stok düşmez, rezerve edilir ve teslim
+        // gününde düşer. Mod "şimdi" iken null gitmeli — boş metin gönderilse sunucu
+        // planlı çıkış kurardı.
+        scheduledDeliveryAt: scheduled && form.scheduledDeliveryAt ? `${form.scheduledDeliveryAt}:00` : null,
         notes: form.notes.trim() || null,
         items: items.map((item) => ({
           stockId: item.stockId,
@@ -272,6 +315,7 @@ export default function ServiceHandoverModal({ onClose }) {
 
   // ── Kayıt tamamlandı ekranı ────────────────────────────────────────────────
   if (result) {
+    const plannedAt = result.receipt?.scheduledDeliveryAt || result.transfer?.scheduledDeliveryAt;
     return (
       <div
         className="modal show d-block"
@@ -280,10 +324,15 @@ export default function ServiceHandoverModal({ onClose }) {
       >
         <div className="modal-dialog modal-dialog-centered">
           <div className="modal-content border-0 rounded-4 shadow">
-            <div className="modal-header bg-success text-white rounded-top-4">
+            <div
+              className={`modal-header text-white rounded-top-4 ${plannedAt ? '' : 'bg-success'}`}
+              style={
+                plannedAt ? { background: 'linear-gradient(135deg, #b45309 0%, #92400e 100%)' } : undefined
+              }
+            >
               <h5 className="modal-title">
-                <i className="fas fa-circle-check me-2"></i>
-                Depo Çıkışı Kaydedildi
+                <i className={`fas ${plannedAt ? 'fa-calendar-check' : 'fa-circle-check'} me-2`}></i>
+                {plannedAt ? 'Teslimat Planlandı' : 'Depo Çıkışı Kaydedildi'}
               </h5>
               <button type="button" className="btn-close btn-close-white" onClick={onClose}></button>
             </div>
@@ -292,12 +341,37 @@ export default function ServiceHandoverModal({ onClose }) {
                 <div className="text-muted small text-uppercase">Makbuz No</div>
                 <div className="fs-4 fw-bold">{result.receipt?.receiptNo}</div>
               </div>
-              <div className="alert alert-info py-2 px-3 small">
-                <i className="fas fa-info-circle me-1"></i>
-                Ürünler stoktan düşüldü. Taşıyıcı belli olduğunda sevkiyat detayından{' '}
-                <strong>Taşıyıcı Bilgisi Gir</strong> ile kaydedin —{' '}
-                <strong>yeni bir sevkiyat oluşturmayın</strong>, stok ikinci kez düşer.
-              </div>
+
+              {/* Planlı çıkışta ekranın söylemesi gereken tek kritik şey stoğun HENÜZ
+                  düşmediği. Aksi hâlde kullanıcı işi bitmiş sayar, teslim günü kimse
+                  teslimatı kapatmaz ve mal hem rafta hem rezervede asılı kalır. */}
+              {plannedAt ? (
+                <>
+                  <div className="border rounded-3 p-3 mb-3 text-center bg-warning-subtle border-warning-subtle">
+                    <div className="text-uppercase small text-warning-emphasis fw-semibold">
+                      Planlanan Teslim Tarihi
+                    </div>
+                    <div className="fw-bold mt-1">{formatScheduled(plannedAt)}</div>
+                  </div>
+                  <div className="alert alert-warning py-2 px-3 small mb-2">
+                    <i className="fas fa-boxes-stacked me-1"></i>
+                    Ürünler <strong>rezerve edildi, stoktan düşmedi</strong>. Teslimat yapıldığında sevkiyat
+                    detayından <strong>Teslimatı Tamamla</strong> ile kapatın; stok o adımda düşer.
+                  </div>
+                  <div className="alert alert-info py-2 px-3 small">
+                    <i className="fas fa-bell me-1"></i>
+                    Teslimden <strong>1 gün önce</strong> ve <strong>teslim günü</strong> bildirim ve e-posta
+                    hatırlatması gönderilir.
+                  </div>
+                </>
+              ) : (
+                <div className="alert alert-info py-2 px-3 small">
+                  <i className="fas fa-info-circle me-1"></i>
+                  Ürünler stoktan düşüldü. Taşıyıcı belli olduğunda sevkiyat detayından{' '}
+                  <strong>Taşıyıcı Bilgisi Gir</strong> ile kaydedin —{' '}
+                  <strong>yeni bir sevkiyat oluşturmayın</strong>, stok ikinci kez düşer.
+                </div>
+              )}
               {error && <div className="alert alert-danger py-2 px-3 small">{error}</div>}
               <div className="d-grid gap-2">
                 <button
@@ -342,26 +416,97 @@ export default function ServiceHandoverModal({ onClose }) {
         <form className="modal-content border-0 rounded-4 shadow" onSubmit={submit}>
           <div
             className="modal-header text-white rounded-top-4"
-            style={{ background: 'linear-gradient(135deg, #0f766e 0%, #115e59 100%)' }}
+            style={{
+              background: scheduled
+                ? 'linear-gradient(135deg, #b45309 0%, #92400e 100%)'
+                : 'linear-gradient(135deg, #0f766e 0%, #115e59 100%)',
+            }}
           >
             <div>
               <h5 className="modal-title mb-0">
                 <i className="fas fa-file-export me-2"></i>
                 Depo Çıkış Makbuzu
               </h5>
-              <small className="opacity-75">Mal servise teslim ediliyor, taşıyıcı henüz belli değil</small>
+              <small className="opacity-75">
+                {scheduled
+                  ? 'Makbuz bugün kesiliyor, mal planlanan tarihte teslim edilecek'
+                  : 'Mal servise teslim ediliyor, taşıyıcı henüz belli değil'}
+              </small>
             </div>
             <button type="button" className="btn-close btn-close-white" onClick={onClose}></button>
           </div>
 
           <div className="modal-body">
-            <div className="alert alert-warning py-2 px-3 small d-flex align-items-start gap-2">
-              <i className="fas fa-triangle-exclamation mt-1"></i>
-              <span>
-                Bu işlem ürünleri <strong>hemen stoktan düşer</strong> ve tek nüshalık bir makbuz basar. Şoför
-                ve plaka sonradan aynı kayda işlenir; ikinci bir sevkiyat açmayın.
-              </span>
+            {/* ── Teslimat zamanı ──
+                Formun en üstünde, çünkü seçilen mod alttaki her şeyin anlamını değiştiriyor:
+                stok ne zaman düşecek, kâğıtta hangi tarih yazacak, hatırlatma gidecek mi.
+                Aşağıya gömülü bir onay kutusu olsaydı, kullanıcı formu doldurduktan sonra
+                fark edip baştan düşünmek zorunda kalırdı. */}
+            <div className="row g-2 mb-3">
+              {[
+                {
+                  key: 'now',
+                  icon: 'fa-dolly',
+                  title: 'Şimdi teslim ediliyor',
+                  desc: 'Mal şu anda çıkıyor, stok hemen düşer',
+                  accent: '#0f766e',
+                },
+                {
+                  key: 'scheduled',
+                  icon: 'fa-calendar-day',
+                  title: 'İleri tarihli teslimat',
+                  desc: 'Makbuz bugün, teslim ileri bir tarihte',
+                  accent: '#b45309',
+                },
+              ].map((option) => {
+                const active = form.deliveryMode === option.key;
+                return (
+                  <div className="col-sm-6" key={option.key}>
+                    <button
+                      type="button"
+                      className={`btn w-100 h-100 text-start border rounded-3 p-3 ${
+                        active ? 'shadow-sm' : 'bg-white'
+                      }`}
+                      style={{
+                        borderColor: active ? option.accent : '#dee2e6',
+                        borderWidth: active ? 2 : 1,
+                        backgroundColor: active ? `${option.accent}12` : undefined,
+                      }}
+                      aria-pressed={active}
+                      onClick={() => set('deliveryMode', option.key)}
+                    >
+                      <div
+                        className="fw-semibold d-flex align-items-center gap-2"
+                        style={{ color: active ? option.accent : undefined }}
+                      >
+                        <i className={`fas ${option.icon}`}></i>
+                        {option.title}
+                        {active && <i className="fas fa-circle-check ms-auto"></i>}
+                      </div>
+                      <div className="small text-muted mt-1">{option.desc}</div>
+                    </button>
+                  </div>
+                );
+              })}
             </div>
+
+            {scheduled ? (
+              <div className="alert alert-warning py-2 px-3 small d-flex align-items-start gap-2">
+                <i className="fas fa-calendar-check mt-1"></i>
+                <span>
+                  Ürünler <strong>rezerve edilir, stoktan düşmez</strong>. Düşüm teslimat onaylandığında olur.
+                  Teslimden 1 gün önce ve teslim günü bildirim ve e-posta hatırlatması gönderilir.
+                </span>
+              </div>
+            ) : (
+              <div className="alert alert-warning py-2 px-3 small d-flex align-items-start gap-2">
+                <i className="fas fa-triangle-exclamation mt-1"></i>
+                <span>
+                  Bu işlem ürünleri <strong>hemen stoktan düşer</strong> ve tek nüshalık bir makbuz basar.
+                  Şoför ve plaka sonradan aynı kayda işlenir; ikinci bir sevkiyat açmayın.
+                </span>
+              </div>
+            )}
 
             {error && (
               <div className="alert alert-danger py-2 px-3 small">
@@ -400,7 +545,12 @@ export default function ServiceHandoverModal({ onClose }) {
                     <div className="invalid-feedback">{fieldErrors.sourceWarehouseId}</div>
                   </div>
                   <div className="col-md-6">
-                    <label className="form-label small mb-1">Çıkış Tarihi</label>
+                    {/* Planlı çıkışta bu alan malın çıktığı an değil, kâğıdın kesildiği an.
+                        Etiketin değişmesi şart: "Çıkış Tarihi" yazarken bugünü göstermesi,
+                        mal hâlâ depodayken çıkmış gibi okunuyordu. */}
+                    <label className="form-label small mb-1">
+                      {scheduled ? 'Belge Tarihi' : 'Çıkış Tarihi'}
+                    </label>
                     <input
                       type="datetime-local"
                       className="form-control"
@@ -409,6 +559,27 @@ export default function ServiceHandoverModal({ onClose }) {
                       onChange={(e) => set('handedOverAt', e.target.value)}
                     />
                   </div>
+                  {scheduled && (
+                    <div className="col-12">
+                      <label className="form-label small mb-1">
+                        Planlanan Teslim Tarihi <span className="text-danger">*</span>
+                      </label>
+                      <input
+                        type="datetime-local"
+                        className={`form-control ${invalid('scheduledDeliveryAt')}`}
+                        min={toLocalInput(new Date())}
+                        value={form.scheduledDeliveryAt}
+                        onChange={(e) => set('scheduledDeliveryAt', e.target.value)}
+                      />
+                      <div className="invalid-feedback">{fieldErrors.scheduledDeliveryAt}</div>
+                      {form.scheduledDeliveryAt && !fieldErrors.scheduledDeliveryAt && (
+                        <div className="form-text">
+                          <i className="fas fa-bell me-1"></i>
+                          {formatScheduled(form.scheduledDeliveryAt)} — makbuza bu tarih basılır.
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* ── Taraflar ── */}
@@ -594,11 +765,15 @@ export default function ServiceHandoverModal({ onClose }) {
             </button>
             <button
               type="submit"
-              className="btn btn-success"
+              className={`btn ${scheduled ? 'btn-warning' : 'btn-success'}`}
               disabled={loading || loadingData || items.length === 0}
             >
-              <i className={`fas ${loading ? 'fa-spinner fa-spin' : 'fa-file-export'} me-2`}></i>
-              Çıkışı Kaydet ve Makbuz Bas
+              <i
+                className={`fas ${
+                  loading ? 'fa-spinner fa-spin' : scheduled ? 'fa-calendar-check' : 'fa-file-export'
+                } me-2`}
+              ></i>
+              {scheduled ? 'Teslimatı Planla ve Makbuz Bas' : 'Çıkışı Kaydet ve Makbuz Bas'}
             </button>
           </div>
         </form>

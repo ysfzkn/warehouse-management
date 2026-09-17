@@ -220,6 +220,7 @@ public class DeliveryReceiptServiceImpl implements DeliveryReceiptService {
         receipt.setDriverPhone(transfer.getDriverPhone());
         receipt.setVehiclePlate(transfer.getVehiclePlate());
         receipt.setTransferDate(transfer.getTransferDate());
+        receipt.setScheduledDeliveryAt(transfer.getScheduledDeliveryAt());
         receipt.setNotes(transfer.getNotes());
         receipt.setItemsJson(serialiseItems(transfer));
 
@@ -417,6 +418,19 @@ public class DeliveryReceiptServiceImpl implements DeliveryReceiptService {
             throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
                     "Teslim alan kişinin adı soyadı zorunludur.");
         }
+
+        // Planlı ve hâlâ açık bir teslimatta bu uç nokta yanlış kapı: kâğıda "teslim edildi"
+        // yazar ama mal rezervede kalır — stok ne çıkmış ne serbest olur ve fark ancak
+        // sayımda görünür. Panel bu düğmeyi zaten gizliyor; kural burada da duruyor çünkü
+        // uç nokta doğrudan çağrılabilir.
+        StockTransfer transfer = receipt.getTransfer();
+        if (transfer != null && transfer.getScheduledDeliveryAt() != null
+                && transfer.getStatus() != TransferStatus.COMPLETED
+                && transfer.getStatus() != TransferStatus.CANCELLED) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                    "Bu planlı bir teslimat. Teslim bilgisini kaydetmek ürünleri stoktan "
+                            + "düşürür; sevkiyat detayındaki \"Teslimatı Tamamla\" adımını kullanın.");
+        }
         LocalDateTime when = deliveredAt != null ? deliveredAt : LocalDateTime.now();
         if (when.isAfter(LocalDateTime.now().plusMinutes(5))) {
             throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
@@ -523,6 +537,11 @@ public class DeliveryReceiptServiceImpl implements DeliveryReceiptService {
         context.setVariable("issuedAtText", format(receipt.getIssuedAt()));
         context.setVariable("transferDateText", format(receipt.getTransferDate()));
         context.setVariable("deliveredAtText", format(receipt.getDeliveredAt()));
+        // Planlı çıkışta kâğıdın en önemli satırı bu: müşterinin elindeki nüshada malın
+        // hangi gün geleceği yazıyor. Anında teslimde alan hiç basılmıyor — boş bir
+        // "Planlanan Teslim: -" satırı, plan varmış da girilmemiş gibi okunurdu.
+        context.setVariable("scheduledDeliveryText", format(receipt.getScheduledDeliveryAt()));
+        context.setVariable("scheduled", receipt.getScheduledDeliveryAt() != null);
         context.setVariable("logoDataUri", logoDataUri());
         context.setVariable("showPrintBar", showPrintBar);
         // A customer delivery prints twice — the driver leaves one copy and brings the signed
@@ -665,7 +684,9 @@ public class DeliveryReceiptServiceImpl implements DeliveryReceiptService {
      * became the full company card, which is roughly twice as tall as a plain wordmark and
      * costs four of them; a shorter logo would win them back. Two things add to the sheet, and
      * each costs two filler rows rather than a page: the return notice, and the depot exit's
-     * hand-filled plate / TC line under the receiving party. The figures are empirical:
+     * hand-filled plate / TC line under the receiving party. A planned delivery costs two
+     * more — the PLANLI TESLİMAT badge beside the title and the "Planlanan Teslim" line in
+     * the exit block. The figures are empirical:
      * openhtmltopdf's box heights do not match the browser's, so change them only against a
      * rendered PDF, never by arithmetic — and check the single-item receipt, which is the
      * tallest one because it has the most filler rows.</p>
@@ -680,6 +701,9 @@ public class DeliveryReceiptServiceImpl implements DeliveryReceiptService {
             rows -= 2;
         }
         if (receipt.getKind() == DeliveryReceiptKind.SERVICE_HANDOVER) {
+            rows -= 2;
+        }
+        if (receipt.getScheduledDeliveryAt() != null) {
             rows -= 2;
         }
         return rows;
@@ -858,6 +882,7 @@ public class DeliveryReceiptServiceImpl implements DeliveryReceiptService {
                 .driverPhone(receipt.getDriverPhone())
                 .vehiclePlate(receipt.getVehiclePlate())
                 .transferDate(receipt.getTransferDate())
+                .scheduledDeliveryAt(receipt.getScheduledDeliveryAt())
                 .notes(receipt.getNotes())
                 .deliveredAt(receipt.getDeliveredAt())
                 .deliveredByName(receipt.getDeliveredByName())

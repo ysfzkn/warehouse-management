@@ -951,6 +951,43 @@ const getTransferStatusMeta = (status) => {
   return transferStatusMap[key] || transferStatusMap.DEFAULT;
 };
 
+/**
+ * Planlı bir teslimatın listede nasıl görüneceği.
+ *
+ * Planlı sevkiyat kendi durumu olmayan bir hâl: kayıt IN_TRANSIT (mal rezerve) ama mal
+ * hâlâ depoda duruyor. Durum rozetine "Yolda" yazmak listeye bakan kişiyi malı aramaya
+ * gönderirdi; rozet bu yüzden tarihten türetiliyor.
+ *
+ * Gün farkı gün başlarından hesaplanıyor: bugün 09:00'da bakan biri için bu akşam
+ * 18:00'deki teslimat "bugün", yarın 08:00'deki "yarın". Ham saat farkı ikisine de
+ * "0 gün" derdi.
+ */
+const describeDeliveryPlan = (scheduledAt) => {
+  if (!scheduledAt) return null;
+  const startOfDay = (value) => {
+    const date = new Date(value);
+    date.setHours(0, 0, 0, 0);
+    return date;
+  };
+  const days = Math.round((startOfDay(scheduledAt) - startOfDay(new Date())) / 86400000);
+  if (days < 0) {
+    return {
+      days,
+      label: 'Gecikmiş',
+      badgeClass: 'danger',
+      icon: 'triangle-exclamation',
+      tone: 'danger',
+    };
+  }
+  if (days === 0) {
+    return { days, label: 'Bugün Teslim', badgeClass: 'danger', icon: 'truck-fast', tone: 'danger' };
+  }
+  if (days === 1) {
+    return { days, label: 'Yarın Teslim', badgeClass: 'warning', icon: 'clock', tone: 'warning' };
+  }
+  return { days, label: 'Planlandı', badgeClass: 'warning', icon: 'calendar-day', tone: 'warning' };
+};
+
 const getTransferTypeLabel = (type) =>
   (type || 'WAREHOUSE') === 'CUSTOMER_DELIVERY' ? 'Müşteri Sevkiyatı' : 'Depo Transferi';
 
@@ -1303,7 +1340,13 @@ const Stock = () => {
         const params = {
           page,
           size,
-          status: transferStatusFilter !== 'ALL' ? transferStatusFilter : undefined,
+          // "Planlı" bir durum değil, durumun üstüne binen bir kesit: sevkiyat PENDING
+          // ya da IN_TRANSIT olabilir. Bu yüzden status yerine kendi bayrağıyla gidiyor.
+          status:
+            transferStatusFilter !== 'ALL' && transferStatusFilter !== 'SCHEDULED'
+              ? transferStatusFilter
+              : undefined,
+          scheduledOnly: transferStatusFilter === 'SCHEDULED' ? true : undefined,
           transferType: transferTypeFilter !== 'ALL' ? transferTypeFilter : undefined,
           productName: normalizedProductName,
           sku: normalizedSku,
@@ -4418,7 +4461,19 @@ const Stock = () => {
                           <div className="border rounded-3 p-3 h-100">
                             <small className="text-muted text-uppercase d-block mb-1">Durum</small>
                             {(() => {
-                              const meta = getTransferStatusMeta(t.status);
+                              // Listedeki rozetle aynı kural: planlı sevkiyatta durum
+                              // IN_TRANSIT ama mal depoda, "Yolda" yazması yanlış olur.
+                              const detailPlan =
+                                t.scheduledDeliveryAt && t.status !== 'COMPLETED' && t.status !== 'CANCELLED'
+                                  ? describeDeliveryPlan(t.scheduledDeliveryAt)
+                                  : null;
+                              const meta = detailPlan
+                                ? {
+                                    bootstrap: detailPlan.badgeClass,
+                                    icon: detailPlan.icon,
+                                    label: detailPlan.label,
+                                  }
+                                : getTransferStatusMeta(t.status);
                               return (
                                 <span className={`badge bg-${meta.bootstrap}`}>
                                   <i className={`fas fa-${meta.icon} me-1`}></i>
@@ -4430,7 +4485,12 @@ const Stock = () => {
                         </div>
                         <div className="col-md-4">
                           <div className="border rounded-3 p-3 h-100">
-                            <small className="text-muted text-uppercase">Tarih</small>
+                            {/* Planlı sevkiyatta bu tarih malın çıktığı an değil, makbuzun
+                                kesildiği an. Etiket değişmezse iki ayrı olgu tek tarihmiş
+                                gibi okunuyor. */}
+                            <small className="text-muted text-uppercase">
+                              {t.scheduledDeliveryAt ? 'Belge Tarihi' : 'Tarih'}
+                            </small>
                             <div className="fw-semibold">
                               {formatDateInTurkeyTimezone(t.transferDate, {
                                 year: 'numeric',
@@ -4440,6 +4500,20 @@ const Stock = () => {
                                 minute: '2-digit',
                               })}
                             </div>
+                            {t.scheduledDeliveryAt && (
+                              <div className="small mt-2 pt-2 border-top">
+                                <span className="text-muted text-uppercase d-block">Planlanan Teslim</span>
+                                <span className="fw-semibold">
+                                  {formatDateInTurkeyTimezone(t.scheduledDeliveryAt, {
+                                    year: 'numeric',
+                                    month: '2-digit',
+                                    day: '2-digit',
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  })}
+                                </span>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -4743,8 +4817,8 @@ const Stock = () => {
         <div className="mt-4">
           {/* Statistics Cards */}
           <div className="row g-3 mb-4">
-            <div className="col-md-3">
-              <div className="card border-warning shadow-sm">
+            <div className="col-6 col-lg">
+              <div className="card border-warning shadow-sm h-100">
                 <div className="card-body text-center">
                   <i className="fas fa-clock fa-2x text-warning mb-2"></i>
                   <h3 className="mb-0">{getStatusCount('PENDING')}</h3>
@@ -4752,8 +4826,21 @@ const Stock = () => {
                 </div>
               </div>
             </div>
-            <div className="col-md-3">
-              <div className="card border-info shadow-sm">
+            {/* Planlı teslimat kendi kartında: sevkiyat IN_TRANSIT ("rezerve tutuluyor")
+                ama mal depoda. "Yolda" sayacında kalsaydı aynı kayıt listede "Planlandı"
+                rozetiyle görünürken sayaçta "Yolda" sayılırdı — iki ekran aynı kaydı iki
+                farklı şey sanardı. Sunucu da onları IN_TRANSIT sayacından düşüyor. */}
+            <div className="col-6 col-lg">
+              <div className="card border-warning shadow-sm h-100">
+                <div className="card-body text-center">
+                  <i className="fas fa-calendar-day fa-2x text-warning mb-2"></i>
+                  <h3 className="mb-0">{getStatusCount('SCHEDULED')}</h3>
+                  <p className="text-muted mb-0 small">Planlı Teslimat</p>
+                </div>
+              </div>
+            </div>
+            <div className="col-6 col-lg">
+              <div className="card border-info shadow-sm h-100">
                 <div className="card-body text-center">
                   <i className="fas fa-truck fa-2x text-info mb-2"></i>
                   <h3 className="mb-0">{getStatusCount('IN_TRANSIT')}</h3>
@@ -4761,8 +4848,8 @@ const Stock = () => {
                 </div>
               </div>
             </div>
-            <div className="col-md-3">
-              <div className="card border-success shadow-sm">
+            <div className="col-6 col-lg">
+              <div className="card border-success shadow-sm h-100">
                 <div className="card-body text-center">
                   <i className="fas fa-check-circle fa-2x text-success mb-2"></i>
                   <h3 className="mb-0">{getStatusCount('COMPLETED')}</h3>
@@ -4770,8 +4857,8 @@ const Stock = () => {
                 </div>
               </div>
             </div>
-            <div className="col-md-3">
-              <div className="card border-danger shadow-sm">
+            <div className="col-6 col-lg">
+              <div className="card border-danger shadow-sm h-100">
                 <div className="card-body text-center">
                   <i className="fas fa-times-circle fa-2x text-danger mb-2"></i>
                   <h3 className="mb-0">{getStatusCount('CANCELLED')}</h3>
@@ -4823,6 +4910,23 @@ const Stock = () => {
                   <label className="btn btn-outline-warning" htmlFor="status-pending">
                     <i className="fas fa-clock me-1"></i>
                     Beklemede
+                  </label>
+
+                  {/* Planlı teslimat kuyruğu. Durum filtreleriyle aynı grupta ama sunucuya
+                      status olarak gitmiyor: planlı bir sevkiyat PENDING de IN_TRANSIT de
+                      olabilir, kesit durumun üstüne biniyor. */}
+                  <input
+                    type="radio"
+                    className="btn-check"
+                    name="transferStatus"
+                    id="status-scheduled"
+                    value="SCHEDULED"
+                    checked={transferStatusFilter === 'SCHEDULED'}
+                    onChange={(e) => setTransferStatusFilter(e.target.value)}
+                  />
+                  <label className="btn btn-outline-warning" htmlFor="status-scheduled">
+                    <i className="fas fa-calendar-day me-1"></i>
+                    Planlı
                   </label>
 
                   <input
@@ -5323,7 +5427,9 @@ const Stock = () => {
                   <h5 className="text-muted">
                     {transferStatusFilter === 'ALL'
                       ? 'Henüz transfer kaydı bulunmuyor'
-                      : `${transferStatusFilter === 'PENDING' ? 'Beklemede' : transferStatusFilter === 'IN_TRANSIT' ? 'Yolda' : transferStatusFilter === 'COMPLETED' ? 'Tamamlanmış' : 'İptal edilmiş'} transfer bulunmuyor`}
+                      : transferStatusFilter === 'SCHEDULED'
+                        ? 'Planlanmış teslimat bulunmuyor'
+                        : `${transferStatusFilter === 'PENDING' ? 'Beklemede' : transferStatusFilter === 'IN_TRANSIT' ? 'Yolda' : transferStatusFilter === 'COMPLETED' ? 'Tamamlanmış' : 'İptal edilmiş'} transfer bulunmuyor`}
                   </h5>
                   <p className="text-muted">
                     {transferStatusFilter === 'ALL' &&
@@ -5431,7 +5537,18 @@ const Stock = () => {
                             COMPLETED: { label: 'Tamamlandı', class: 'success', icon: 'check-circle' },
                             CANCELLED: { label: 'İptal Edildi', class: 'danger', icon: 'times-circle' },
                           };
-                          const status = statusConfig[transfer.status] || statusConfig.PENDING;
+                          // Planlı teslimat, kendi durumu olmayan bir hâl: sevkiyat
+                          // IN_TRANSIT (mal rezerve) ama depoda duruyor. "Yolda" yazması
+                          // yanlış bilgi — listeye bakan kişi malı aramaya çıkar.
+                          const plan =
+                            transfer.scheduledDeliveryAt &&
+                            transfer.status !== 'COMPLETED' &&
+                            transfer.status !== 'CANCELLED'
+                              ? describeDeliveryPlan(transfer.scheduledDeliveryAt)
+                              : null;
+                          const status = plan
+                            ? { label: plan.label, class: plan.badgeClass, icon: plan.icon }
+                            : statusConfig[transfer.status] || statusConfig.PENDING;
                           const transferItemsPreview = getTransferItemsList(transfer);
                           const totalQuantity = getTransferTotalQuantity(transfer);
                           const awaitingApproval =
@@ -5728,6 +5845,18 @@ const Stock = () => {
                                     </span>
                                   </span>
                                 )}
+                                {plan && (
+                                  <small
+                                    className="d-block text-muted mt-1"
+                                    title={`Planlanan teslim: ${formatDateInTurkeyTimezone(transfer.scheduledDeliveryAt, { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}. Stok teslimat tamamlanınca düşer.`}
+                                  >
+                                    <i className="fas fa-calendar-day me-1"></i>
+                                    {formatDateInTurkeyTimezone(transfer.scheduledDeliveryAt, {
+                                      day: '2-digit',
+                                      month: '2-digit',
+                                    })}
+                                  </small>
+                                )}
                                 {transfer.completedDate && (
                                   <small
                                     className="d-block text-success mt-1"
@@ -5929,23 +6058,47 @@ const Stock = () => {
                                     ))}
                                   {transfer.status === 'IN_TRANSIT' && (
                                     <>
-                                      <button
-                                        className="btn btn-sm btn-success w-100 py-1 px-2"
-                                        style={{
-                                          fontSize: 'clamp(0.7rem, 2vw, 0.8rem)',
-                                          whiteSpace: 'nowrap',
-                                        }}
-                                        onClick={() =>
-                                          openCompletionFlow(
-                                            transfer,
-                                            'Transfer tamamlanacak ve stok rezervasyonu kapatılacak. Onaylıyor musunuz?'
-                                          )
-                                        }
-                                        title="Transferi tamamla ve stok taşı"
-                                      >
-                                        <i className="fas fa-check-double me-1"></i>
-                                        Tamamla
-                                      </button>
+                                      {/* Planlı teslimatın kapanışı listeden yapılmıyor.
+                                          Genel "Tamamla" yalnızca stoğu düşürür; planlı
+                                          çıkışta teslim alanın adı da aynı işlemde
+                                          makbuza yazılmalı, yoksa stok hareketi var ama
+                                          malı kimin aldığı yazmayan bir kayıt kalır.
+                                          Düğme bu yüzden makbuz paneline götürüyor. */}
+                                      {plan ? (
+                                        <button
+                                          className="btn btn-sm btn-success w-100 py-1 px-2"
+                                          style={{
+                                            fontSize: 'clamp(0.7rem, 2vw, 0.8rem)',
+                                            whiteSpace: 'nowrap',
+                                          }}
+                                          onClick={() =>
+                                            openTransferDetailModal(transfer, { focusReceipt: true })
+                                          }
+                                          title="Teslim alan bilgisini girin; stok o adımda düşer"
+                                        >
+                                          <i className="fas fa-box-open me-1"></i>
+                                          <span className="d-none d-sm-inline">Teslimatı Tamamla</span>
+                                          <span className="d-inline d-sm-none">Teslim</span>
+                                        </button>
+                                      ) : (
+                                        <button
+                                          className="btn btn-sm btn-success w-100 py-1 px-2"
+                                          style={{
+                                            fontSize: 'clamp(0.7rem, 2vw, 0.8rem)',
+                                            whiteSpace: 'nowrap',
+                                          }}
+                                          onClick={() =>
+                                            openCompletionFlow(
+                                              transfer,
+                                              'Transfer tamamlanacak ve stok rezervasyonu kapatılacak. Onaylıyor musunuz?'
+                                            )
+                                          }
+                                          title="Transferi tamamla ve stok taşı"
+                                        >
+                                          <i className="fas fa-check-double me-1"></i>
+                                          Tamamla
+                                        </button>
+                                      )}
                                       <button
                                         className="btn btn-sm btn-warning w-100 py-1 px-2"
                                         style={{

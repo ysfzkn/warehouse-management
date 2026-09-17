@@ -23,6 +23,15 @@ public class StockTransferFilter {
     private LocalDateTime createdAtFrom;
     private LocalDateTime createdAtTo;
 
+    /**
+     * Yalnızca planı olan ve hâlâ kapanmamış teslimatlar.
+     *
+     * Ayrı bir "durum" değil, durumun üzerine binen bir kesit: planlı sevkiyat PENDING ya
+     * da IN_TRANSIT olabilir. Kendi bayrağı olmasının sebebi, ekranın onu ayrı bir kuyruk
+     * gibi göstermesi — mal depoda ve teslim gününü bekliyor.
+     */
+    private boolean scheduledOnly;
+
     public TransferStatus getStatus() {
         return status;
     }
@@ -141,5 +150,13 @@ public class StockTransferFilter {
 
     public void setCreatedAtTo(LocalDateTime createdAtTo) {
         this.createdAtTo = createdAtTo;
+    }
+
+    public boolean isScheduledOnly() {
+        return scheduledOnly;
+    }
+
+    public void setScheduledOnly(boolean scheduledOnly) {
+        this.scheduledOnly = scheduledOnly;
     }
 }
