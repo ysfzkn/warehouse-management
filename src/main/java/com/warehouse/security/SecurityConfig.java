@@ -175,10 +175,18 @@ public class SecurityConfig {
                         .requestMatchers(org.springframework.http.HttpMethod.GET,
                                 "/api/admin/delivery-receipts/attachments/*/view").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/admin/settings/site/asset/view/**").permitAll()
-                        // Cargo and e-invoice provider webhooks: server-to-server, authenticated
-                        // by HMAC signature inside the controller rather than by a session.
-                        .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/admin/cargo/webhook/**").permitAll()
-                        .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/admin/invoice/webhook/**").permitAll()
+                        // No inbound webhook lives under /api/admin/. The carrier POSTs to
+                        // /api/public/cargo/kargonomi/webhook, which its own chain opens and the
+                        // HMAC signature guards. Two rules here used to open
+                        // /api/admin/cargo/webhook/** and /api/admin/invoice/webhook/** on the
+                        // premise that they were signed callbacks; the first is the panel's own
+                        // "register with Kargonomi" action, which verifies an admin security code
+                        // and no signature, and the second matched no endpoint at all (invoices
+                        // are under /api/admin/invoices). Method security on the controller was
+                        // what actually kept the register endpoint closed — the URL rule was
+                        // saying the opposite, and any later edit to that annotation would have
+                        // exposed an endpoint that reconfigures where our shipment notifications,
+                        // buyer addresses and phone numbers get delivered.
                         // Stock transfer item photo operations
                         .requestMatchers(ApiPaths.ADMIN_STOCK_TRANSFER_ITEMS).hasAnyRole("ADMIN", "STOCK_IN", "STOCK_OUT")
                         // Excel operations only for ADMIN
@@ -383,9 +391,16 @@ public class SecurityConfig {
         // Register callback paths FIRST (more specific paths take precedence)
         source.registerCorsConfiguration("/api/store/payment/callback", callbackConfig);
         source.registerCorsConfiguration("/api/store/payment/callback/**", callbackConfig);
-        // Webhooks (Kargonomi, Logo): behave like callbacks
-        source.registerCorsConfiguration("/api/admin/cargo/webhook/**", callbackConfig);
-        source.registerCorsConfiguration("/api/admin/invoice/webhook/**", callbackConfig);
+        // Inbound webhooks: the carrier POSTs here server-to-server, so only carrier origins
+        // are allowed. Everything under /api/admin/ is the opposite direction — an
+        // administrator's browser calling us — and must not be listed here.
+        //
+        // /api/admin/cargo/webhook/** used to be, which meant the panel's own
+        // "Kargonomi'ye Kaydet" button was answered with "Invalid CORS request": the admin
+        // origin is not a carrier origin. Listing /api/webhooks (plural) was unaffected, so
+        // the symptom was a register button that failed while the list beside it worked.
+        // /api/admin/invoice/webhook/** matched no endpoint at all — invoices live under
+        // /api/admin/invoices — so it only ever added confusion.
         source.registerCorsConfiguration("/api/public/cargo/**", callbackConfig);
         // Then general API paths
         source.registerCorsConfiguration("/api/**", config);
