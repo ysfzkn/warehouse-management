@@ -524,6 +524,107 @@ const validateField = (key, value) => {
   return null;
 };
 
+/**
+ * Go-live checklist for the cargo integration.
+ *
+ * <p>Each prerequisite fails somewhere else and quietly — a missing webhook secret answers the
+ * carrier with 503, a product without a size under-declares the parcel, an unregistered webhook
+ * simply never arrives. Asking all of them at once turns going live into a list you can work
+ * down instead of a sequence of surprises.
+ */
+function CargoReadinessPanel() {
+  const [report, setReport] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const run = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await axios.get('/api/admin/cargo/readiness');
+      setReport(res.data);
+    } catch (e) {
+      setError(e.response?.data?.message || 'Kontrol çalıştırılamadı.');
+      setReport(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const levelStyle = (level) =>
+    level === 'OK'
+      ? { icon: 'fas fa-check-circle text-success', row: '' }
+      : level === 'WARN'
+        ? { icon: 'fas fa-exclamation-triangle text-warning', row: '' }
+        : { icon: 'fas fa-times-circle text-danger', row: 'fw-semibold' };
+
+  return (
+    <div className="mt-4 pt-3 border-top">
+      <div className="d-flex align-items-center justify-content-between mb-2">
+        <div>
+          <h6 className="mb-0">Canlıya Çıkış Kontrolü</h6>
+          <small className="text-muted">
+            Token, bakiye, webhook kaydı, gönderici adresi, il listesi, firma eşlemeleri ve ürün ölçüleri tek
+            seferde kontrol edilir.
+          </small>
+        </div>
+        <button className="btn btn-sm btn-outline-primary" onClick={run} disabled={loading}>
+          {loading ? (
+            <span className="spinner-border spinner-border-sm me-2" />
+          ) : (
+            <i className="fas fa-stethoscope me-2" />
+          )}
+          Kontrol Et
+        </button>
+      </div>
+
+      {error && <div className="alert alert-danger py-2 small mb-0">{error}</div>}
+
+      {report && (
+        <>
+          <div
+            className={`alert py-2 small ${
+              report.overall === 'OK'
+                ? 'alert-success'
+                : report.overall === 'WARN'
+                  ? 'alert-warning'
+                  : 'alert-danger'
+            }`}
+          >
+            {report.passed}/{report.total} kontrol tamam.{' '}
+            {report.overall === 'OK'
+              ? 'Canlıya çıkmaya hazır.'
+              : report.overall === 'WARN'
+                ? 'Çalışır, ama aşağıdakileri gözden geçirin.'
+                : 'Kırmızı maddeler giderilmeden canlıya çıkmayın.'}
+          </div>
+
+          <ul className="list-unstyled mb-0">
+            {report.checks.map((c) => {
+              const style = levelStyle(c.level);
+              return (
+                <li key={c.key} className="d-flex gap-2 mb-2">
+                  <i className={`${style.icon} mt-1`} />
+                  <div className="small">
+                    <div className={style.row}>{c.label}</div>
+                    <div className="text-muted">{c.detail}</div>
+                    {c.fix && (
+                      <div className="text-muted fst-italic">
+                        <i className="fas fa-arrow-right me-1" style={{ fontSize: 10 }} />
+                        {c.fix}
+                      </div>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function AdminSiteSettings() {
   const [settings, setSettings] = useState({});
   const [originalSettings, setOriginalSettings] = useState({});
@@ -1683,6 +1784,8 @@ export default function AdminSiteSettings() {
                 ) : (
                   <div className="row g-3">{activeGroup.keys.map((key) => renderField(key))}</div>
                 )}
+
+                {activeGroup.id === 'cargo' && <CargoReadinessPanel />}
               </div>
 
               {/* Group footer — quick save */}

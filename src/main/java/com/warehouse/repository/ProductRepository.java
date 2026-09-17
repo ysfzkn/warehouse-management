@@ -28,6 +28,18 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 
     boolean existsBySku(String sku);
 
+    /**
+     * Sellable products with nothing to compute a parcel size from.
+     *
+     * <p>Desi is the greater of weight and volume; a product with neither contributes zero, so the
+     * carrier is quoted a shipment lighter than it is and the difference turns up on their invoice.
+     * Counted before go-live rather than discovered later.
+     */
+    @Query("SELECT COUNT(p) FROM Product p WHERE p.isActive = true AND p.ecommerceVisible = true " +
+           "AND (p.weight IS NULL OR p.weight = 0) " +
+           "AND (p.lengthCm IS NULL OR p.widthCm IS NULL OR p.heightCm IS NULL)")
+    long countWithoutShippingDimensions();
+
     @Query("SELECT p FROM Product p WHERE p.isActive = true ORDER BY p.name")
     @EntityGraph(value = Product.GRAPH_WITH_RELATIONS, type = EntityGraph.EntityGraphType.LOAD)
     List<Product> findAllActive();

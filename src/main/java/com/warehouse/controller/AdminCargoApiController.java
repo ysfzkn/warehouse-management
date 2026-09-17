@@ -42,6 +42,7 @@ public class AdminCargoApiController {
     private final CargoShipmentOutboxRepository outboxRepository;
     private final com.warehouse.service.cargo.CargoLabelBatchService labelBatchService;
     private final com.warehouse.service.cargo.CargoPerformanceService performanceService;
+    private final com.warehouse.service.cargo.CargoReadinessService readinessService;
 
     public AdminCargoApiController(CargoApiService cargoApiService,
                                     OrderRepository orderRepository,
@@ -49,7 +50,8 @@ public class AdminCargoApiController {
                                     CargoShipmentEventRepository eventRepository,
                                     CargoShipmentOutboxRepository outboxRepository,
                                     com.warehouse.service.cargo.CargoLabelBatchService labelBatchService,
-                                    com.warehouse.service.cargo.CargoPerformanceService performanceService) {
+                                    com.warehouse.service.cargo.CargoPerformanceService performanceService,
+                                    com.warehouse.service.cargo.CargoReadinessService readinessService) {
         this.cargoApiService = cargoApiService;
         this.orderRepository = orderRepository;
         this.adminSecurityService = adminSecurityService;
@@ -57,6 +59,17 @@ public class AdminCargoApiController {
         this.outboxRepository = outboxRepository;
         this.labelBatchService = labelBatchService;
         this.performanceService = performanceService;
+        this.readinessService = readinessService;
+    }
+
+    /**
+     * Go-live checklist in one call: settings, token, balance, webhook registration, sender
+     * address, province list, carrier mappings and product dimensions. Each of these fails
+     * quietly and somewhere else; this is the one place that asks all of them together.
+     */
+    @GetMapping("/readiness")
+    public ResponseEntity<?> readiness() {
+        return ResponseEntity.ok(readinessService.run());
     }
 
     /**

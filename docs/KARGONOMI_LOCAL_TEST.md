@@ -322,6 +322,26 @@ Log: `[Kargonomi Webhook] HMAC mismatch — reddedildi.`
 
 ---
 
+## 10.0 Canliya Cikis Kontrolu (tek tikla)
+
+Ayarlar > Kargo API bolumunun altinda **Canliya Cikis Kontrolu** paneli var.
+Tek tikta su dokuzu birden kontrol eder ve eksikleri "nasil duzeltilir" notuyla listeler:
+
+entegrasyon acik mi - token + bakiye - webhook secret - Kargonomi'de webhook kaydi -
+gonderici deposu / gonderici bilgileri - il listesi - kargo firmasi slug eslemeleri -
+urun olculeri - otomatik gonderi olusturma
+
+API'den de cagrilabilir:
+
+```bash
+curl -s http://localhost:8080/api/admin/cargo/readiness   -H "Authorization: Bearer $TOKEN" | jq
+```
+
+Kirmizi (FAIL) maddeler giderilmeden canliya cikilmamali; sari (WARN) maddeler calisir
+ama olmasi gerekenden kotudur.
+
+---
+
 ## 10.1 Kargo Tablolarını İzleme
 
 Entegrasyon canlıdayken bakılacak üç yer:
@@ -341,6 +361,21 @@ FROM cargo_webhook_deliveries ORDER BY received_at DESC LIMIT 20;
 SELECT order_number, attempts, next_attempt_at, last_error
 FROM cargo_shipment_outbox WHERE status <> 'SUCCEEDED';
 ```
+
+---
+
+## 10.3 Iade Kargosu — Kargonomi'nin Cevabi
+
+Kargonomi SSS'sine gore iade kargosu **ayni sartlar ve maliyetlerle** kullanilabiliyor,
+ama tarif edilen iki yol da **panel uzerinden**:
+
+1. Gonderiler sayfasindan mevcut bir kargoyu bulup ayarlar simgesinden iade olusturma
+2. Gonderiler > yeni gonderi olustur ile iade kodu uretip musteriyle paylasma
+
+SSS API'den nasil yapilacagini soylemiyor; `is_return` alani hala dogrulanmis degil.
+Bu yuzden `cargo_return_label_enabled` kapali kaliyor. **Pratikte kaybimiz kucuk:**
+iade onaylandiginda admin Kargonomi panelinden iade olusturup kodu musteriye
+iletebilir; kod `return_requests.cargo_tracking_no` alanina elle girilebilir.
 
 ---
 
