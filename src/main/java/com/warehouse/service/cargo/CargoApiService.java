@@ -430,14 +430,14 @@ public class CargoApiService {
         return new byte[0];
     }
 
-    /** The active provider's account balance. {@code null} if unsupported. */
-    public BigDecimal getProviderBalance() {
-        if (!isEnabled()) return null;
+    /** The active provider's account balance, including why it is unknown when it is. */
+    public CargoBalance getProviderBalance() {
+        if (!isEnabled()) return CargoBalance.unsupported();
         CargoApiProvider provider = getActiveProvider();
         if (provider instanceof KargonomiCargoProvider k) {
-            return k.getBalance();
+            return k.fetchBalance();
         }
-        return null;
+        return CargoBalance.unsupported();
     }
 
     /**

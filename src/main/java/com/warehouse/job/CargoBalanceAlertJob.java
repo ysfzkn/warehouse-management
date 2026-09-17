@@ -3,6 +3,7 @@ package com.warehouse.job;
 import com.warehouse.service.NotificationService;
 import com.warehouse.service.SiteSettingService;
 import com.warehouse.service.cargo.CargoApiService;
+import com.warehouse.service.cargo.CargoBalance;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,26 +47,45 @@ public class CargoBalanceAlertJob {
     public void checkBalance() {
         if (!cargoApiService.isEnabled()) return;
 
-        BigDecimal balance = cargoApiService.getProviderBalance();
-        if (balance == null) {
-            logger.debug("Kargo bakiyesi sorgulanamadı — sağlayıcı desteklemiyor olabilir.");
-            return;
+        CargoBalance balance = cargoApiService.getProviderBalance();
+
+        switch (balance.state()) {
+            case UNSUPPORTED -> {
+                logger.debug("Kargo bakiyesi sorgulanmadı — entegrasyon kapalı ya da desteklenmiyor.");
+                return;
+            }
+            case UNREACHABLE -> {
+                // Not an alert on its own: a carrier that is down comes back, and the outbox
+                // already covers the shipments that failed meanwhile.
+                logger.warn("Kargo bakiyesi sorgulanamadı — kargo firmasına ulaşılamıyor.");
+                return;
+            }
+            case NOT_REPORTED -> {
+                // The carrier answered and reported no credit. On a prepaid account that means
+                // no shipment can be created at all, which used to pass silently as "unknown".
+                alert("Kargo hesabında bakiye görünmüyor", balance.describe());
+                return;
+            }
+            case OK -> { /* fall through to the threshold check */ }
         }
 
+        BigDecimal amount = balance.amount();
         BigDecimal threshold = threshold();
-        if (balance.compareTo(threshold) >= 0) {
-            logger.debug("Kargo bakiyesi yeterli: {} TL", balance);
+        if (amount.compareTo(threshold) >= 0) {
+            logger.debug("Kargo bakiyesi yeterli: {} TL", amount);
             return;
         }
 
-        logger.warn("Kargo bakiyesi düşük: {} TL (eşik {} TL)", balance, threshold);
+        logger.warn("Kargo bakiyesi düşük: {} TL (eşik {} TL)", amount, threshold);
+        alert("Kargo bakiyesi düşük: " + amount + " TL",
+                "Kargo hesabındaki bakiye " + threshold + " TL eşiğinin altına indi. "
+                        + "Bakiye bitince yeni kargo gönderileri oluşturulamaz ve siparişler "
+                        + "kuyruğa alınır.");
+    }
+
+    private void alert(String title, String message) {
         try {
-            notificationService.create(
-                    "Kargo bakiyesi düşük: " + balance + " TL",
-                    "Kargo hesabındaki bakiye " + threshold + " TL eşiğinin altına indi. "
-                            + "Bakiye bitince yeni kargo gönderileri oluşturulamaz ve siparişler "
-                            + "kuyruğa alınır.",
-                    "ORDER", null);
+            notificationService.create(title, message, "ORDER", null);
         } catch (Exception e) {
             logger.warn("Kargo bakiye bildirimi oluşturulamadı: {}", e.toString());
         }

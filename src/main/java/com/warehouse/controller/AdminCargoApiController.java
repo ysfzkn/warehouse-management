@@ -205,10 +205,24 @@ public class AdminCargoApiController {
         out.put("enabled", true);
         out.put("provider", provider != null ? provider.getProviderName() : null);
 
-        BigDecimal balance = cargoApiService.getProviderBalance();
-        out.put("balance", balance);
-        out.put("warning", balance != null && balance.compareTo(new BigDecimal("100")) < 0
-                ? "Bakiye düşük — kargo gönderimi başarısız olabilir." : null);
+        com.warehouse.service.cargo.CargoBalance balance = cargoApiService.getProviderBalance();
+        out.put("balance", balance.amount());
+        out.put("balanceState", balance.state().name());
+        out.put("balanceText", balance.describe());
+
+        // A balance we could not read is not the same as a healthy one — say which it is,
+        // rather than leaving the screen blank and reassuring.
+        String warning = null;
+        if (balance.isDepleted()) {
+            warning = balance.describe();
+        } else if (balance.state() == com.warehouse.service.cargo.CargoBalance.State.OK
+                && balance.amount() != null
+                && balance.amount().compareTo(new BigDecimal("100")) < 0) {
+            warning = "Bakiye düşük — kargo gönderimi başarısız olabilir.";
+        } else if (balance.state() == com.warehouse.service.cargo.CargoBalance.State.UNREACHABLE) {
+            warning = balance.describe();
+        }
+        out.put("warning", warning);
         return ResponseEntity.ok(out);
     }
 

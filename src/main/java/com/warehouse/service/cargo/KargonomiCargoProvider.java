@@ -504,24 +504,38 @@ public class KargonomiCargoProvider implements CargoApiProvider {
     // ─────────────────────────────────────────────────────────────
 
     /** GET /user/credit — account balance (TRY). Returns null on error. */
-    public BigDecimal getBalance() {
-        if (!isEnabled()) return null;
+    public CargoBalance fetchBalance() {
+        if (!isEnabled()) return CargoBalance.unsupported();
         try {
             String url = getBaseUrl() + "/user/credit";
             HttpEntity<Void> entity = new HttpEntity<>(buildAuthHeaders());
             ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.GET, entity, Map.class);
             Map<String, Object> body = response.getBody();
-            if (body == null) return null;
+            if (body == null) return CargoBalance.unreachable();
+
             Object data = body.getOrDefault("data", body);
-            if (data instanceof Map<?,?> m) {
-                Object credit = m.get("credit");
-                if (credit instanceof Number n) return BigDecimal.valueOf(n.doubleValue());
-                if (credit != null) return new BigDecimal(credit.toString());
+            if (!(data instanceof Map<?, ?> m)) return CargoBalance.unreachable();
+
+            Object credit = m.get("credit");
+            // A successful response carrying credit:null is the carrier telling us the account
+            // has no balance — a different thing from not being able to ask, and the one that
+            // stops shipments from being created.
+            if (credit == null) {
+                if (!m.containsKey("credit")) return CargoBalance.unreachable();
+                logger.warn("[Kargonomi] /user/credit 'credit: null' döndü — hesapta yüklü bakiye yok "
+                        + "görünüyor. Bakiye yüklenmeden gönderi oluşturulamaz.");
+                return CargoBalance.notReported();
             }
-            return null;
+            if (credit instanceof Number n) return CargoBalance.of(BigDecimal.valueOf(n.doubleValue()));
+            try {
+                return CargoBalance.of(new BigDecimal(credit.toString().trim()));
+            } catch (NumberFormatException e) {
+                logger.warn("[Kargonomi] bakiye sayıya çevrilemedi: {}", credit);
+                return CargoBalance.notReported();
+            }
         } catch (Exception e) {
             logger.warn("Kargonomi balance sorgu hatası: {}", e.getMessage());
-            return null;
+            return CargoBalance.unreachable();
         }
     }
 
