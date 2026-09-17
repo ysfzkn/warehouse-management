@@ -65,6 +65,7 @@ public class CargoReadinessService {
 
         checks.add(providerSelected());
         checks.add(tokenAndBalance());
+        checks.add(strayAppKey());
         checks.add(webhookSecret());
         checks.add(webhookRegistered());
         checks.add(senderAddress());
@@ -99,6 +100,26 @@ public class CargoReadinessService {
         }
         return new Check("enabled", "Kargo entegrasyonu açık mı", Level.OK,
                 "Kargonomi aktif.", null);
+    }
+
+    /**
+     * {@code kargonomi_app_key} is sent as an {@code X-App-Key} header whenever it holds a value,
+     * but no such header appears anywhere in Kargonomi's published API — every documented request
+     * carries only Authorization, Accept and Content-Type. A stale value left in this field is
+     * therefore an unexplained header on every call and a prime suspect when a token that works
+     * elsewhere is refused here. Silent until the field is actually filled.
+     */
+    private Check strayAppKey() {
+        String appKey = settingService.getSetting("kargonomi_app_key");
+        if (appKey == null || appKey.isBlank()) {
+            return new Check("appkey", "APP KEY ayarı", Level.OK,
+                    "Boş — doğrusu bu, Kargonomi dokümanında böyle bir başlık yok.", null);
+        }
+        return new Check("appkey", "APP KEY ayarı", Level.WARN,
+                "Dolu, dolayısıyla her isteğe X-App-Key başlığı ekleniyor — "
+                + "oysa resmî dokümanda bu başlık geçmiyor.",
+                "Kargonomi size özel bir APP KEY vermediyse Ayarlar → Kargo API'den boşaltın. "
+                + "Token reddediliyorsa önce bunu deneyin.");
     }
 
     private Check tokenAndBalance() {
