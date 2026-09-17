@@ -9,6 +9,7 @@ import com.warehouse.repository.OrderRepository;
 import com.warehouse.service.AdminSecurityService;
 import com.warehouse.service.cargo.CargoApiProvider;
 import com.warehouse.service.cargo.CargoApiService;
+import com.warehouse.service.cargo.CargoWebhookRegistration;
 import com.warehouse.service.cargo.KargonomiCargoProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -283,18 +284,20 @@ public class AdminCargoApiController {
                     "message", "Aktif sağlayıcı Kargonomi değil."));
         }
 
-        Map<String, Object> created = k.registerWebhook(callbackUrl, secret);
-        boolean ok = created != null;
+        CargoWebhookRegistration registration = k.registerWebhook(callbackUrl, secret);
         // If Kargonomi issues its own signing key, the create response is the only place it
         // appears — hand it back so the panel can show it rather than losing it in a log line.
-        String issuedSecret = KargonomiCargoProvider.issuedSecretOf(created);
-        log.info("[Cargo] webhook register → url={}, ok={}, secretIssued={}",
-                callbackUrl, ok, issuedSecret != null);
+        String issuedSecret = registration.issuedSecret();
+        log.info("[Cargo] webhook register → url={}, ok={}, secretIssued={}, reason={}",
+                callbackUrl, registration.success(), issuedSecret != null, registration.reason());
 
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("success", ok);
+        result.put("success", registration.success());
         result.put("callbackUrl", callbackUrl);
         if (issuedSecret != null) result.put("issuedSecret", issuedSecret);
+        // Without this the panel could only say "kaydedilemedi": the cause was reaching the
+        // server log and stopping there, where an administrator never sees it.
+        if (registration.reason() != null) result.put("message", registration.reason());
         return ResponseEntity.ok(result);
     }
 

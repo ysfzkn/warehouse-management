@@ -595,6 +595,13 @@ function CargoWebhookPanel({ secret, onSecretChange, withSecurityCode }) {
         { callbackUrl: url, secret },
         { headers: { 'X-ADMIN-SECURITY-CODE': code } }
       );
+      // Backend bu ucu 200 + success:false ile bitirebiliyor (Kargonomi reddettiğinde).
+      // Yalnızca issuedSecret'a bakınca başarısız kayıt da yeşil "kaydedildi" görünüyordu.
+      if (data && data.success === false) {
+        toast.error(data.message || 'Webhook kaydedilemedi.');
+        load();
+        return;
+      }
       // Kargonomi imza anahtarını kendi üretiyorsa yalnızca bu yanıtta görünür; kaçırırsak
       // kaydı silip yeniden açmaktan başka yolu yok. Alana yazıp kaydetmesini isteyelim.
       if (data && data.issuedSecret) {

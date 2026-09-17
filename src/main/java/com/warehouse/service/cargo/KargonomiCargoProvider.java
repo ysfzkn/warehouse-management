@@ -555,8 +555,14 @@ public class KargonomiCargoProvider implements CargoApiProvider {
 
     /** Webhook registration. Kargonomi POSTs to callbackUrl on {@code shipment.updated} events. */
     @SuppressWarnings("unchecked")
-    public Map<String, Object> registerWebhook(String callbackUrl, String secret) {
-        if (!isEnabled() || callbackUrl == null || callbackUrl.isBlank()) return null;
+    public CargoWebhookRegistration registerWebhook(String callbackUrl, String secret) {
+        if (!isEnabled()) {
+            return CargoWebhookRegistration.failed(
+                    "Kargo entegrasyonu kapalı ya da API token'ı boş.");
+        }
+        if (callbackUrl == null || callbackUrl.isBlank()) {
+            return CargoWebhookRegistration.failed("Bildirim adresi boş.");
+        }
         try {
             String url = getBaseUrl() + "/webhooks";
             Map<String, Object> body = new LinkedHashMap<>();
@@ -579,27 +585,35 @@ public class KargonomiCargoProvider implements CargoApiProvider {
                 created = (Map<String, Object>) data;
             }
             logger.info("[Kargonomi] Webhook kaydedildi: {}", callbackUrl);
-            return created != null ? created : Map.of();
+            return CargoWebhookRegistration.ok(created);
+        } catch (HttpClientErrorException.Unauthorized | HttpClientErrorException.Forbidden e) {
+            logger.warn("[Kargonomi] webhook kaydı reddedildi: HTTP {}", e.getStatusCode());
+            return CargoWebhookRegistration.failed(
+                    "Kargonomi API token'ını reddetti (HTTP " + e.getStatusCode().value()
+                    + "). Token'ı Ayarlar → Kargo API'den kontrol edin.");
+        } catch (HttpStatusCodeException e) {
+            // The body is where the carrier says which field it did not like, and it is the
+            // only thing that turns "kaydedilemedi" into something an admin can act on.
+            String detail = summarize(e.getResponseBodyAsString());
+            logger.warn("[Kargonomi] webhook kaydı HTTP {} döndü: {}", e.getStatusCode(), detail);
+            return CargoWebhookRegistration.failed(
+                    "Kargonomi isteği reddetti (HTTP " + e.getStatusCode().value() + ")"
+                    + (detail.isBlank() ? "." : ": " + detail));
         } catch (Exception e) {
-            logger.warn("Webhook kayıt hatası: {}", e.getMessage());
-            return null;
+            logger.warn("Webhook kayıt hatası: {}", e.toString());
+            return CargoWebhookRegistration.failed(
+                    "Kargonomi'ye ulaşılamadı: " + e.getClass().getSimpleName()
+                    + ". Sunucunun dış ağ çıkışını ve kargonomi_api_base_url ayarını kontrol edin.");
         }
     }
 
-    /**
-     * The signature key Kargonomi issued for a webhook it just created, if it issued one.
-     *
-     * <p>The field is undocumented, so the name is a guess across the three spellings a carrier
-     * plausibly uses. Returning null is a real answer: it means we have to ask Kargonomi where
-     * the key comes from, not that the registration failed.
-     */
-    public static String issuedSecretOf(Map<String, Object> createdWebhook) {
-        if (createdWebhook == null) return null;
-        for (String field : new String[]{"secret", "secret_key", "signature_key"}) {
-            Object value = createdWebhook.get(field);
-            if (value != null && !value.toString().isBlank()) return value.toString();
-        }
-        return null;
+    /** Trims a carrier error body down to something that fits in a toast without losing the cause. */
+    private static String summarize(String body) {
+        if (body == null) return "";
+        String flat = body.replaceAll("\\s+", " ").trim();
+        // An HTML error page carries no usable message; saying so beats pasting markup.
+        if (flat.startsWith("<")) return "HTML yanıt döndü (istek API'ye ulaşmamış olabilir)";
+        return flat.length() > 300 ? flat.substring(0, 300) + "…" : flat;
     }
 
     /** GET /webhooks — lists all registered webhooks. */
