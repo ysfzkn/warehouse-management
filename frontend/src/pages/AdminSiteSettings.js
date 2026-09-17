@@ -532,6 +532,174 @@ const validateField = (key, value) => {
  * simply never arrives. Asking all of them at once turns going live into a list you can work
  * down instead of a sequence of surprises.
  */
+/**
+ * Registering the status webhook with the carrier.
+ *
+ * <p>The endpoints for this existed from the start but nothing ever called them, so the one
+ * step that decides whether cargo updates arrive at all had to be done with curl. The signing
+ * secret lives on both sides — ours verifies with it, the carrier signs with it — so it is
+ * generated and registered here together, rather than copied between two screens by hand.
+ */
+function CargoWebhookPanel({ secret, onSecretChange, withSecurityCode }) {
+  const toast = useAdminToast();
+  const callbackPath = '/api/public/cargo/kargonomi/webhook';
+  const [hooks, setHooks] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [url, setUrl] = useState(`${window.location.origin}${callbackPath}`);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const res = await axios.get('/api/admin/cargo/webhooks');
+      setHooks(res.data?.items || []);
+    } catch (e) {
+      toast.error(e.response?.data?.message || 'Webhook listesi alınamadı.');
+      setHooks([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 32 bytes of hex — the same shape as `openssl rand -hex 32`, without leaving the browser.
+  const generateSecret = () => {
+    const bytes = new Uint8Array(32);
+    window.crypto.getRandomValues(bytes);
+    const value = Array.from(bytes)
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
+    onSecretChange(value);
+    toast.info("Secret üretildi. Kaydet'e basmadan Kargonomi'ye kaydetmeyin.");
+  };
+
+  const register = () =>
+    withSecurityCode('Webhook kaydı için güvenlik şifresini girin.', async (code) => {
+      await axios.post(
+        '/api/admin/cargo/webhook/register',
+        { callbackUrl: url, secret },
+        { headers: { 'X-ADMIN-SECURITY-CODE': code } }
+      );
+      toast.success("Webhook Kargonomi'ye kaydedildi.");
+      load();
+    });
+
+  const remove = (id) =>
+    withSecurityCode('Webhook silmek için güvenlik şifresini girin.', async (code) => {
+      await axios.delete(`/api/admin/cargo/webhooks/${id}`, {
+        headers: { 'X-ADMIN-SECURITY-CODE': code },
+      });
+      toast.success('Webhook silindi.');
+      load();
+    });
+
+  const secretMissing = !secret || !secret.trim();
+  const urlLooksWrong = !url.startsWith('https://') || !url.endsWith(callbackPath);
+
+  return (
+    <div className="mt-4 pt-3 border-top">
+      <div className="d-flex align-items-center justify-content-between mb-2">
+        <div>
+          <h6 className="mb-0">Kargonomi Webhook Kaydı</h6>
+          <small className="text-muted">
+            Kargo durumu değişince Kargonomi bu adrese bildirim gönderir. Kayıt yoksa durumlar yalnızca 30
+            dakikalık yoklamayla gelir.
+          </small>
+        </div>
+        <button className="btn btn-sm btn-outline-secondary" onClick={load} disabled={loading}>
+          {loading ? (
+            <span className="spinner-border spinner-border-sm me-2" />
+          ) : (
+            <i className="fas fa-sync me-2" />
+          )}
+          Kayıtları Getir
+        </button>
+      </div>
+
+      <div className="row g-2 align-items-end mb-2">
+        <div className="col-md-7">
+          <label className="form-label small fw-medium mb-1" htmlFor="cargo-webhook-url">
+            Bildirim adresi
+          </label>
+          <input
+            id="cargo-webhook-url"
+            className="form-control form-control-sm font-monospace"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+          />
+          {urlLooksWrong && (
+            <small className="text-warning">
+              Adres https ile başlamalı ve <code>{callbackPath}</code> ile bitmeli.
+            </small>
+          )}
+        </div>
+        <div className="col-md-5">
+          <label className="form-label small fw-medium mb-1" htmlFor="cargo-webhook-secret-state">
+            İmza anahtarı
+          </label>
+          <div className="d-flex gap-2">
+            <input
+              id="cargo-webhook-secret-state"
+              className="form-control form-control-sm font-monospace"
+              value={secretMissing ? '' : `${secret.slice(0, 8)}…${secret.slice(-4)}`}
+              placeholder="Tanımlı değil"
+              readOnly
+            />
+            <button className="btn btn-sm btn-outline-primary text-nowrap" onClick={generateSecret}>
+              Üret
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {secretMissing ? (
+        <div className="alert alert-danger py-2 small">
+          İmza anahtarı yok. <strong>Üret</strong>'e basın, sayfanın altından <strong>Kaydet</strong>'e basın,
+          sonra kaydı oluşturun. Anahtar olmadan gelen her bildirim reddedilir.
+        </div>
+      ) : (
+        <div className="alert alert-secondary py-2 small">
+          Anahtarı değiştirdiyseniz <strong>önce ayarları kaydedin</strong>, sonra kaydı oluşturun —
+          Kargonomi'ye gönderilen anahtarla bizim doğrulamada kullandığımız aynı olmalı.
+        </div>
+      )}
+
+      <button className="btn btn-sm btn-primary mb-3" onClick={register} disabled={secretMissing}>
+        <i className="fas fa-plug me-2" />
+        Kargonomi'ye Kaydet
+      </button>
+
+      {hooks !== null &&
+        (hooks.length === 0 ? (
+          <div className="text-muted small">Kargonomi tarafında kayıtlı webhook yok.</div>
+        ) : (
+          <ul className="list-unstyled mb-0">
+            {hooks.map((h) => {
+              const isOurs = String(h.url || '').includes(callbackPath);
+              return (
+                <li key={h.id} className="d-flex align-items-start gap-2 mb-2 small">
+                  <i
+                    className={`fas ${isOurs ? 'fa-check-circle text-success' : 'fa-circle text-muted'} mt-1`}
+                  />
+                  <div className="flex-grow-1">
+                    <div className="font-monospace" style={{ wordBreak: 'break-all' }}>
+                      {h.url}
+                    </div>
+                    <div className="text-muted">
+                      {h.event_type} · {h.is_active ? 'aktif' : 'pasif'}
+                      {!isOurs && ' · bu adres bize ait değil'}
+                    </div>
+                  </div>
+                  <button className="btn btn-sm btn-link text-danger p-0" onClick={() => remove(h.id)}>
+                    Sil
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        ))}
+    </div>
+  );
+}
+
 function CargoReadinessPanel() {
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -1785,7 +1953,16 @@ export default function AdminSiteSettings() {
                   <div className="row g-3">{activeGroup.keys.map((key) => renderField(key))}</div>
                 )}
 
-                {activeGroup.id === 'cargo' && <CargoReadinessPanel />}
+                {activeGroup.id === 'cargo' && (
+                  <>
+                    <CargoWebhookPanel
+                      secret={settings.kargonomi_webhook_secret || ''}
+                      onSecretChange={(v) => handleChange('kargonomi_webhook_secret', v)}
+                      withSecurityCode={withSecurityCode}
+                    />
+                    <CargoReadinessPanel />
+                  </>
+                )}
               </div>
 
               {/* Group footer — quick save */}

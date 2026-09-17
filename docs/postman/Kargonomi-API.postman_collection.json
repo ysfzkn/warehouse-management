@@ -1,0 +1,806 @@
+{
+  "info": {
+    "_postman_id": "8f2c1d34-6a7b-4c19-9e52-0b3a1f7d4c88",
+    "name": "Kargonomi API v1",
+    "description": "Kargonomi resmi API'sinin (app.kargonomi.com.tr/api/v1) tamami.\n\n## Kurulum\n1. `Kargonomi-API.postman_environment.json` dosyasini Postman'e import et ve sag ustten sec.\n2. Environment'taki `token` alanina Kargonomi API token'ini yapistir. **Token'i collection'a degil environment'a yaz** — collection repoda duruyor.\n3. `Hesap > Bakiye Sorgula` ile basla; 401 alirsan token yanlis, `credit: null` alirsan token dogru ama hesapta bakiye yok.\n\n## Klasor sirasi\nCollection Runner ile bastan sona calistirilabilir: Lokasyon adimlari `state_id` / `city_id` degiskenlerini doldurur, gonderi olusturma `shipment_id`'yi doldurur, sonraki istekler onu kullanir.\n\n## !!! PARA HARCAYAN ADIMLAR\nKargonomi'nin ayri bir test ortami yoktur; bu istekler **gercek hesaba** gider.\n- `Fiyatlandirma > Tasiyici Sec (ONAYLA)` — bu adim gonderiyi kesinlestirir ve **bakiyeden dusulur**.\n- Taslak olusturma ve fiyat karsilastirma ucretsizdir; taslagi `Gonderi Yonetimi > Taslak Sil` ile temizle.\n\nKlasor ve istek aciklamalarinda hangisinin guvenli oldugu ayrica yaziyor.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Token yoksa her istek 401 doner ve sebebi belirsiz kalir; burada acikca soyle.",
+          "const token = pm.environment.get('token') || pm.collectionVariables.get('token');",
+          "if (!token || !String(token).trim()) {",
+          "  throw new Error('token bos. Environment > Kargonomi > token alanina API token girin.');",
+          "}"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Her istekte gecerli olan iki kontrol.",
+          "pm.test('401 degil (token gecerli)', function () {",
+          "  pm.expect(pm.response.code, 'token reddedildi').to.not.eql(401);",
+          "});",
+          "pm.test('Sunucu hatasi yok', function () {",
+          "  pm.expect(pm.response.code).to.be.below(500);",
+          "});"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://app.kargonomi.com.tr/api/v1",
+      "type": "string"
+    },
+    {
+      "key": "state_id",
+      "value": "",
+      "type": "string",
+      "description": "Il id'si. 'Iller' istegi Istanbul'u bulup otomatik doldurur."
+    },
+    {
+      "key": "city_id",
+      "value": "",
+      "type": "string",
+      "description": "Ilce id'si. 'Ilceler' istegi otomatik doldurur."
+    },
+    {
+      "key": "shipment_id",
+      "value": "",
+      "type": "string",
+      "description": "Gonderi olusturuldugunda otomatik dolar."
+    },
+    {
+      "key": "webhook_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "warehouse_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "webhook_url",
+      "value": "https://ORNEK-ALAN-ADINIZ/api/public/cargo/kargonomi/webhook",
+      "type": "string",
+      "description": "Kendi sunucunuzun webhook adresi. Yol kismi sabittir, alan adini degistirin."
+    },
+    {
+      "key": "webhook_secret",
+      "value": "",
+      "type": "string",
+      "description": "openssl rand -hex 32 ile uretilen deger. Ayni degeri site ayarlarina da girin."
+    }
+  ],
+  "item": [
+    {
+      "name": "1 - Hesap",
+      "description": "En hizli smoke test. Once buradan basla.",
+      "item": [
+        {
+          "name": "Bakiye Sorgula",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/user/credit",
+              "host": ["{{base_url}}"],
+              "path": ["user", "credit"]
+            },
+            "description": "Token gecerli mi ve hesapta bakiye var mi?\n\n- `401` → token yanlis ya da API erisimi acilmamis\n- `{\"data\":{\"credit\":null}}` → **token dogru**, hesapta yuklu bakiye yok\n- `{\"data\":{\"credit\":47.5}}` → her sey yolunda\n\nBakiyesiz gonderi olusturulamaz."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Istek basarili', () => pm.response.to.have.status(200));",
+                  "",
+                  "const body = pm.response.json();",
+                  "const credit = body.data ? body.data.credit : body.credit;",
+                  "",
+                  "if (credit === null || credit === undefined) {",
+                  "  console.log('Token calisiyor ama bakiye bildirilmedi — hesaba bakiye yukleyin.');",
+                  "} else {",
+                  "  console.log('Bakiye: ' + credit + ' TL');",
+                  "  pm.test('Bakiye pozitif', () => pm.expect(Number(credit)).to.be.above(0));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2 - Lokasyon",
+      "description": "Kargonomi il/ilce id'leri. Gonderi olustururken isim degil id isteniyor.\nBu iki istek `state_id` ve `city_id` degiskenlerini otomatik doldurur.",
+      "item": [
+        {
+          "name": "Iller (Turkiye)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/states/1",
+              "host": ["{{base_url}}"],
+              "path": ["states", "1"],
+              "variable": []
+            },
+            "description": "Yol sonundaki `1` ulke id'si (Turkiye). Bos birakilirsa da Turkiye varsayilir.\n81 il donmeli."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Istek basarili', () => pm.response.to.have.status(200));",
+                  "",
+                  "const body = pm.response.json();",
+                  "const states = Array.isArray(body.data) ? body.data : body;",
+                  "pm.test('Il listesi geldi', () => pm.expect(states.length).to.be.above(0));",
+                  "console.log(states.length + ' il geldi');",
+                  "",
+                  "// Sonraki istekler icin bir il sec: Istanbul varsa o, yoksa ilk sira.",
+                  "const istanbul = states.find(s => (s.name || '').toLocaleLowerCase('tr').indexOf('stanbul') > -1);",
+                  "const chosen = istanbul || states[0];",
+                  "if (chosen) {",
+                  "  pm.collectionVariables.set('state_id', chosen.id);",
+                  "  console.log('state_id = ' + chosen.id + ' (' + chosen.name + ')');",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Ilceler (secili il)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/cities/{{state_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["cities", "{{state_id}}"]
+            },
+            "description": "Secili ilin ilceleri. `state_id` bir onceki istekle doluyor."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Istek basarili', () => pm.response.to.have.status(200));",
+                  "",
+                  "const body = pm.response.json();",
+                  "const cities = Array.isArray(body.data) ? body.data : body;",
+                  "pm.test('Ilce listesi geldi', () => pm.expect(cities.length).to.be.above(0));",
+                  "",
+                  "const kadikoy = cities.find(c => (c.name || '').toLocaleLowerCase('tr').indexOf('kad') === 0);",
+                  "const chosen = kadikoy || cities[0];",
+                  "if (chosen) {",
+                  "  pm.collectionVariables.set('city_id', chosen.id);",
+                  "  console.log('city_id = ' + chosen.id + ' (' + chosen.name + ')');",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3 - Gonderi Olusturma",
+      "description": "Iki fazli akis: once taslak olusur, sonra tasiyici onaylanir.\n\n**Taslak olusturmak ucretsizdir.** Ucret, tasiyici onaylandiginda dusulur.",
+      "item": [
+        {
+          "name": "Taslak Gonderi Olustur (ucretsiz)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"shipment\": {\n    \"buyer_name\": \"Test Alici\",\n    \"buyer_phone\": \"5001234567\",\n    \"buyer_address\": \"Test Mahallesi Deneme Sokak No 1 Daire 2\",\n    \"buyer_state_id\": {{state_id}},\n    \"buyer_city_id\": {{city_id}},\n    \"buyer_email\": \"test@example.com\",\n    \"packages\": [\n      {\n        \"desi\": 3,\n        \"content\": \"Test gonderi\",\n        \"barcode\": \"TEST-0001\"\n      }\n    ]\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/shipments",
+              "host": ["{{base_url}}"],
+              "path": ["shipments"]
+            },
+            "description": "Zorunlu alanlar:\n- `buyer_name` (5-255 karakter)\n- `buyer_phone` (**10 hane, basinda 0 yok**)\n- `buyer_address` (10-512 karakter)\n- `buyer_state_id`, `buyer_city_id` (Lokasyon klasorunden)\n- `packages[]` — en az bir koli, her birinde `desi` > 0\n\nGondericiyi belirtmenin iki yolu var:\n1. Govdeye `\"warehouse_id\": 123` ekle (Kargonomi'deki depo) — onerilen\n2. `sender_name`, `sender_phone`, `sender_address`, `sender_state_id`, `sender_city_id` alanlarini tek tek gonder\n\nHicbiri yoksa Kargonomi hesabin varsayilan deposunu kullanir.\n\n**Bu adim ucret dogurmaz**, sadece taslak yaratir."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Gonderi olustu', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                  "",
+                  "if (pm.response.code === 422) {",
+                  "  console.log('Dogrulama hatasi — govdedeki alanlari kontrol edin:');",
+                  "  console.log(pm.response.text());",
+                  "}",
+                  "",
+                  "try {",
+                  "  const body = pm.response.json();",
+                  "  const shipment = body.data || body;",
+                  "  if (shipment && shipment.id) {",
+                  "    pm.collectionVariables.set('shipment_id', shipment.id);",
+                  "    console.log('shipment_id = ' + shipment.id);",
+                  "  }",
+                  "} catch (e) {",
+                  "  console.log('Yanit JSON degil: ' + pm.response.text());",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Fiyat Karsilastirma (ucretsiz)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/shipment-price-comparison/{{shipment_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["shipment-price-comparison", "{{shipment_id}}"]
+            },
+            "description": "Taslak gonderi icin her tasiyicinin fiyati.\nYanitta `shipping_provider_with_price` dizisi gelir; her elemanda `id`, `slug`, `name`, `price`.\n\nBir sonraki adimda kullanacagin `shipping_provider_id` degeri buradaki `id`.\n\n`slug` degerleri, site ayarlarindaki **Kargo Firmalari > Kargonomi Slug** alanina yazilacak olanlardir."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Istek basarili', () => pm.response.to.have.status(200));",
+                  "",
+                  "const body = pm.response.json();",
+                  "const data = body.data || body;",
+                  "const offers = data.shipping_provider_with_price || [];",
+                  "",
+                  "pm.test('En az bir tasiyici teklifi var', () => pm.expect(offers.length).to.be.above(0));",
+                  "",
+                  "offers.forEach(o => console.log(o.slug + ' (' + o.id + ') = ' + o.price + ' TL — ' + o.name));",
+                  "",
+                  "// En ucuzu sonraki adim icin hazirla.",
+                  "if (offers.length) {",
+                  "  const cheapest = offers.slice().sort((a, b) => Number(a.price) - Number(b.price))[0];",
+                  "  pm.collectionVariables.set('cheapest_provider_id', cheapest.id);",
+                  "  console.log('En ucuz: ' + cheapest.slug + ' → provider_id ' + cheapest.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Tasiyici Sec (ONAYLA - UCRET DUSULUR)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"shipment_id\": {{shipment_id}},\n  \"shipping_provider_id\": -1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/confirm-shipping-price",
+              "host": ["{{base_url}}"],
+              "path": ["confirm-shipping-price"]
+            },
+            "description": "**DIKKAT: Bu adim gonderiyi kesinlestirir ve bakiyeden dusulur.**\n\n`shipping_provider_id`:\n- `-1` → Kargonomi otomatik en ucuzu secer\n- Fiyat karsilastirmadan gelen bir `id` → o tasiyici ile gonderilir\n\nOnayladiktan sonra Kargonomi arka planda kargo siparisini olusturur; takip numarasi birkac dakika icinde `GET /shipments/{id}` ile gorunur.\n\nYanlislikla olusturduysan **36 saat icinde** `Gonderi Yonetimi > Gonderi Iptal` ile iptal edebilirsin."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Onay kabul edildi', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                  "console.log('Gonderi onaylandi. Takip numarasi icin birkac dakika sonra Gonderi Detay istegini calistirin.');"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4 - Gonderi Yonetimi",
+      "description": "Olusturulmus gonderiler uzerinde islemler.",
+      "item": [
+        {
+          "name": "Gonderi Listesi",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/shipments?page=1",
+              "host": ["{{base_url}}"],
+              "path": ["shipments"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Sayfa basina 50 kayit."
+                }
+              ]
+            },
+            "description": "Hesaptaki tum gonderiler, sayfa basina 50 kayit.\nGunluk mutabakat isi de bu ucu kullaniyor."
+          },
+          "response": []
+        },
+        {
+          "name": "Gonderi Detay",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/shipments/{{shipment_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["shipments", "{{shipment_id}}"]
+            },
+            "description": "Tek gonderinin tam hali. Takip numarasi `shipping_webservice_tracking_code` alaninda.\n\n**Onemli:** Bu uc, Kargonomi'nin kendi gonderi id'sini ister — kargo firmasinin takip numarasini degil."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Istek basarili', () => pm.response.to.have.status(200));",
+                  "",
+                  "const body = pm.response.json();",
+                  "const s = body.data || body;",
+                  "console.log('Durum: ' + s.status);",
+                  "console.log('Takip no: ' + (s.shipping_webservice_tracking_code || 'henuz yok'));",
+                  "console.log('Tasiyici: ' + (s.shipping_provider_name || '-') + ' / ' + (s.shipping_provider_slug || '-'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Alici Bilgisi Duzelt (PATCH)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"shipment\": {\n    \"buyer_phone\": \"5009876543\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/shipments/{{shipment_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["shipments", "{{shipment_id}}"]
+            },
+            "description": "Sadece degistirmek istedigin alanlari gonder. Yanlis telefon ya da eksik daire no icin ideal — iptal edip yeniden olusturmaya gerek kalmaz.\n\nIl/ilce degistiriyorsan **ikisini birlikte** gonder (`buyer_state_id` + `buyer_city_id`); baska ile ait bir ilce id'si adresi bozar."
+          },
+          "response": []
+        },
+        {
+          "name": "Gonderi Guncelle (PUT - tum alanlar)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"shipment\": {\n    \"buyer_name\": \"Test Alici Guncellendi\",\n    \"buyer_phone\": \"5001234567\",\n    \"buyer_address\": \"Yeni Mahalle Yeni Sokak No 5 Daire 3\",\n    \"buyer_state_id\": {{state_id}},\n    \"buyer_city_id\": {{city_id}},\n    \"packages\": [\n      {\n        \"desi\": 5,\n        \"content\": \"Guncellenmis gonderi\"\n      }\n    ]\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/shipments/{{shipment_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["shipments", "{{shipment_id}}"]
+            },
+            "description": "POST ile ayni govde; gonderinin tamamini degistirir. Tek alan duzeltmek icin PATCH daha guvenli."
+          },
+          "response": []
+        },
+        {
+          "name": "Gonderi Iptal (islenmis gonderi)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"shipment_id\": {{shipment_id}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/shipments/cancel",
+              "host": ["{{base_url}}"],
+              "path": ["shipments", "cancel"]
+            },
+            "description": "Onaylanmis (islenmis) gonderiyi iptal eder.\n\n- Yalnizca **islenmis ve hazir** gonderiler icin\n- Iptal hakki **36 saat** icinde gecerli\n\nHenuz onaylanmamis bir taslagi silmek icin 'Taslak Sil' istegini kullan."
+          },
+          "response": []
+        },
+        {
+          "name": "Taslak Sil (DELETE)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/shipments/{{shipment_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["shipments", "{{shipment_id}}"]
+            },
+            "description": "Onaylanmamis taslak gonderiyi tamamen siler.\n\nFiyat sormak icin actigin taslaklari bununla temizle; yoksa Kargonomi panelinde birikirler."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Silme kabul edildi', () => pm.expect(pm.response.code).to.be.oneOf([200, 204]));",
+                  "pm.collectionVariables.set('shipment_id', '');"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "5 - Etiket",
+      "item": [
+        {
+          "name": "Barkod / Etiket (base64 PDF)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/shipments/{{shipment_id}}/barcode?format=pdf&packageContentVisibility=true&warningVisibility=true&integratedOrderNoVisibility=true",
+              "host": ["{{base_url}}"],
+              "path": ["shipments", "{{shipment_id}}", "barcode"],
+              "query": [
+                {
+                  "key": "format",
+                  "value": "pdf",
+                  "description": "pdf desteklenir"
+                },
+                {
+                  "key": "packageContentVisibility",
+                  "value": "true",
+                  "description": "Koli icerigi etikette gorunsun mu"
+                },
+                {
+                  "key": "warningVisibility",
+                  "value": "true",
+                  "description": "Uyari metinleri basilsin mi"
+                },
+                {
+                  "key": "integratedOrderNoVisibility",
+                  "value": "true",
+                  "description": "Entegre siparis no basilsin mi"
+                }
+              ]
+            },
+            "description": "Etiket **base64 kodlu** doner (`data` alani), dosya olarak degil.\n\nPDF'e cevirmek icin konsoldaki base64'u kopyalayip:\n\n```bash\n# Git Bash\ncat base64.txt | base64 -d > etiket.pdf\n```\n\nveya PowerShell:\n\n```powershell\n[IO.File]::WriteAllBytes(\"etiket.pdf\", [Convert]::FromBase64String((Get-Content base64.txt -Raw)))\n```\n\nGunluk kullanimda buna gerek yok — admin panelinden 'Kargo Etiketi Indir' ya da secili siparisler icin 'Etiketleri Tek PDF Indir' dogrudan PDF verir."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Istek basarili', () => pm.response.to.have.status(200));",
+                  "",
+                  "const body = pm.response.json();",
+                  "const b64 = body.data || body.barcode || body.pdf;",
+                  "if (b64) {",
+                  "  console.log('Etiket geldi (' + String(b64).length + ' karakter base64).');",
+                  "  pm.test('Base64 icerik dolu', () => pm.expect(String(b64).length).to.be.above(100));",
+                  "} else {",
+                  "  console.log('Beklenen alan bulunamadi, ham yanit:');",
+                  "  console.log(pm.response.text().substring(0, 500));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "6 - Depo",
+      "description": "Gonderici adresi. Bir kez olusturup id'sini site ayarlarindaki `kargonomi_warehouse_id` alanina yaz.",
+      "item": [
+        {
+          "name": "Depo Olustur",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"warehouse\": {\n    \"name\": \"Ana Depo\",\n    \"is_main\": true,\n    \"contact_name\": \"Yetkili Adi\",\n    \"contact_phone\": \"5001112233\",\n    \"address\": \"Depo Mahallesi Sanayi Caddesi No 10\",\n    \"state_id\": {{state_id}},\n    \"city_id\": {{city_id}},\n    \"tax_number\": \"1234567890\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/warehouses",
+              "host": ["{{base_url}}"],
+              "path": ["warehouses"]
+            },
+            "description": "Donen `id` degerini site ayarlarina `kargonomi_warehouse_id` olarak gir.\n\nBirden fazla depodan sevkiyat yapiyorsan her depo icin ayri kayit ac ve id'lerini **Depolar** ekranindaki 'Kargonomi depo id' alanina yaz."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Depo olustu', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                  "",
+                  "try {",
+                  "  const body = pm.response.json();",
+                  "  const w = body.data || body;",
+                  "  if (w && w.id) {",
+                  "    pm.collectionVariables.set('warehouse_id', w.id);",
+                  "    console.log('warehouse_id = ' + w.id + '  → site ayarlarindaki kargonomi_warehouse_id alanina yazin');",
+                  "  }",
+                  "} catch (e) {",
+                  "  console.log(pm.response.text());",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "7 - Webhook",
+      "description": "Kargo durumu degisince Kargonomi'nin bizim sunucumuza POST atmasi.\n\nSecret olmadan bizim alici uc **her bildirime 503 doner** — once `webhook_secret` degiskenini doldur ve ayni degeri site ayarlarina gir.",
+      "item": [
+        {
+          "name": "Webhook Olustur",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Siparis Durum Bildirimi\",\n  \"url\": \"{{webhook_url}}\",\n  \"event_type\": \"shipment.updated\",\n  \"is_active\": true,\n  \"secret\": \"{{webhook_secret}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/webhooks",
+              "host": ["{{base_url}}"],
+              "path": ["webhooks"]
+            },
+            "description": "Zorunlu: `name`, `url`, `event_type` (`shipment.updated`). `is_active` opsiyonel.\n\n`secret` alani **resmi dokumanda gecmiyor** ama imza dogrulamasi icin bir secret gerekiyor. Bu istek 422 verirse secret'i govdeden cikarip Kargonomi panelinden tanimlamayi dene; secret'i nereden aldigini Kargonomi'ye sor.\n\nURL mutlaka **https** ve disaridan erisilebilir olmali.\n\nYeniden deneme politikasi: 60s → 120s → 300s → 600s → 1200s. 2xx disindaki her yanit yeniden denenir; 400/401/403/404/409/410/422 denenmez."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Webhook olustu', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                  "",
+                  "if (pm.response.code === 422) {",
+                  "  console.log('Dogrulama hatasi — secret alani kabul edilmemis olabilir:');",
+                  "  console.log(pm.response.text());",
+                  "}",
+                  "",
+                  "try {",
+                  "  const body = pm.response.json();",
+                  "  const w = body.data || body;",
+                  "  if (w && w.id) {",
+                  "    pm.collectionVariables.set('webhook_id', w.id);",
+                  "    console.log('webhook_id = ' + w.id);",
+                  "  }",
+                  "} catch (e) { /* yanit JSON degil */ }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Webhook Listesi",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/webhooks",
+              "host": ["{{base_url}}"],
+              "path": ["webhooks"]
+            },
+            "description": "Kayitli webhook'lar. Canliya cikmadan once burada bizim adresimize bakan **aktif** bir kayit gormelisin."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Istek basarili', () => pm.response.to.have.status(200));",
+                  "",
+                  "const body = pm.response.json();",
+                  "const hooks = Array.isArray(body.data) ? body.data : (Array.isArray(body) ? body : []);",
+                  "console.log(hooks.length + ' webhook kayitli');",
+                  "hooks.forEach(h => console.log('  ' + (h.is_active ? '[aktif]' : '[pasif]') + ' ' + h.event_type + ' → ' + h.url));",
+                  "",
+                  "const ours = hooks.some(h => String(h.url || '').indexOf('/api/public/cargo/kargonomi/webhook') > -1);",
+                  "if (!ours) {",
+                  "  console.log('UYARI: bizim adresimize bakan kayit yok — durum guncellemeleri sadece yoklama ile gelir.');",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Webhook Detay",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/webhooks/{{webhook_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["webhooks", "{{webhook_id}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Webhook Guncelle",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Siparis Durum Bildirimi\",\n  \"url\": \"{{webhook_url}}\",\n  \"event_type\": \"shipment.updated\",\n  \"is_active\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/webhooks/{{webhook_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["webhooks", "{{webhook_id}}"]
+            },
+            "description": "Adres degistiginde ya da gecici olarak durdurmak icin (`is_active: false`)."
+          },
+          "response": []
+        },
+        {
+          "name": "Webhook Sil",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/webhooks/{{webhook_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["webhooks", "{{webhook_id}}"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Silme kabul edildi', () => pm.expect(pm.response.code).to.be.oneOf([200, 204]));",
+                  "pm.collectionVariables.set('webhook_id', '');"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -4,6 +4,26 @@ Bu doküman lokalde Kargonomi entegrasyonunu uçtan uca test etmek için adımla
 
 ---
 
+## 0.1 Postman Koleksiyonu
+
+`docs/postman/` altinda Kargonomi'nin 19 ucunun tamamini iceren bir koleksiyon var:
+
+1. Postman > Import > `Kargonomi-API.postman_collection.json` ve
+   `Kargonomi-API.postman_environment.json`
+2. Sag ustten **Kargonomi** environment'ini sec
+3. Environment'taki `token` alanina API token'ini yapistir
+   (**collection'a degil environment'a** — collection repoda duruyor)
+4. `1 - Hesap > Bakiye Sorgula` ile basla
+
+Klasorler numarali ve zincirleme calisiyor: il/ilce istekleri `state_id`/`city_id`
+degiskenlerini, gonderi olusturma `shipment_id`'yi otomatik dolduruyor.
+
+> **Para harcayan tek adim:** `3 - Gonderi Olusturma > Tasiyici Sec (ONAYLA)`.
+> Taslak olusturma ve fiyat karsilastirma ucretsiz; taslagi `Taslak Sil` ile temizle.
+> Kargonomi'nin ayri test ortami yok, her sey gercek hesaba gidiyor.
+
+---
+
 ## 0. Ön Hazırlık — Kargonomi Hesabı
 
 1. **https://www.kargonomi.com.tr** üzerinden hesap aç (ticari)
@@ -206,6 +226,13 @@ ngrok http 8080
 ```
 
 ### 6.1 Webhook kaydı
+
+> **Panelden:** Ayarlar > Kargo API bolumunun altinda **Kargonomi Webhook Kaydi**
+> paneli var. Secret'i oradan uretip (Uret butonu), ayarlari kaydedip,
+> "Kargonomi'ye Kaydet" diyebilirsin. Asagidaki curl ayni isi yapar.
+>
+> Secret'i once **kaydetmen** sart: Kargonomi'ye gonderilen anahtarla bizim
+> dogrulamada kullandigimiz ayni olmali.
 
 ```bash
 curl -s -X POST http://localhost:8080/api/admin/cargo/webhook/register \
