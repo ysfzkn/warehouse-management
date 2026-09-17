@@ -122,6 +122,42 @@ public class CargoReadinessService {
                 + "Token reddediliyorsa önce bunu deneyin.");
     }
 
+    /**
+     * A fingerprint of the stored token: enough to tell whether the server holds the value the
+     * administrator thinks it does, without putting the credential on screen.
+     *
+     * <p>When the carrier answers 401 there is no way to tell from outside whether the token is
+     * invalid at the carrier or simply mistyped here — a truncated paste, a stray quote from a
+     * copied JSON snippet, or an invisible character all look the same. Length plus the first and
+     * last four characters settles it in one glance, and the shape warnings name the causes that
+     * survive the {@code trim()} the request already does.
+     *
+     * <p>The same first-four/last-four masking is what the payment gateway screen already uses
+     * for its own credentials.
+     */
+    private static String describeToken(String token) {
+        String trimmed = token.trim();
+        StringBuilder note = new StringBuilder(trimmed.length() + " karakter, ");
+        note.append(trimmed.length() > 8
+                ? trimmed.substring(0, 4) + "…" + trimmed.substring(trimmed.length() - 4)
+                : "çok kısa");
+
+        if (!token.equals(trimmed)) {
+            note.append(", başında/sonunda boşluk var");
+        }
+        if (trimmed.startsWith("\"") || trimmed.endsWith("\"")
+                || trimmed.startsWith("'") || trimmed.endsWith("'")) {
+            note.append(", TIRNAK İÇİNDE kaydedilmiş");
+        }
+        if (trimmed.toLowerCase().startsWith("bearer ")) {
+            note.append(", başında 'Bearer ' var — yalnızca token'ın kendisi girilmeli");
+        }
+        if (!trimmed.chars().allMatch(c -> c > 32 && c < 127)) {
+            note.append(", ASCII dışı karakter içeriyor");
+        }
+        return note.toString();
+    }
+
     private Check tokenAndBalance() {
         String token = settingService.getSetting("kargonomi_api_token");
         if (token == null || token.isBlank()) {
@@ -144,9 +180,11 @@ public class CargoReadinessService {
             // Reddedilme ile ulaşamama ayrı ayrı raporlanıyor: ikisinin çaresi zıt, tek
             // mesajda birleştirilince admin hangisini düzelteceğini bilemiyordu.
             case REJECTED -> new Check("token", "API token ve bakiye", Level.FAIL,
-                    "Kargonomi token'ı reddetti — " + balance.detail() + ".",
-                    "Token hatalı, süresi dolmuş ya da başka bir hesaba ait. "
-                    + "Kargonomi panelinden yeni token alıp Ayarlar → Kargo API'ye girin.");
+                    "Kargonomi token'ı reddetti — " + balance.detail()
+                    + ". Sunucudaki token: " + describeToken(token),
+                    "Yukarıdaki parmak izini elinizdeki token'la karşılaştırın; tutuyorsa "
+                    + "token Kargonomi tarafında geçersiz, tutmuyorsa Ayarlar → Kargo API'ye "
+                    + "yanlış değer kaydedilmiş.");
             case UNREACHABLE -> new Check("token", "API token ve bakiye", Level.FAIL,
                     "Kargonomi'ye hiç ulaşılamadı" + (balance.detail() == null
                             ? "." : " — " + balance.detail() + "."),
