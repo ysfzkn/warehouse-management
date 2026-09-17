@@ -22,6 +22,15 @@ degiskenlerini, gonderi olusturma `shipment_id`'yi otomatik dolduruyor.
 > Taslak olusturma ve fiyat karsilastirma ucretsiz; taslagi `Taslak Sil` ile temizle.
 > Kargonomi'nin ayri test ortami yok, her sey gercek hesaba gidiyor.
 
+**JSON yerine HTML donerse:** istek API'ye degil `www.kargonomi.com.tr` tanitim
+sitesine dusmustur. Iki sebebi olur — `Accept: application/json` basligi yoktur
+(Kargonomi Laravel; bu baslik olmadan hata durumunda JSON degil yonlendirme doner)
+ya da govde dogrulamadan gecmemistir (ornegin `webhook_url` hala ornek deger).
+Koleksiyon artik Accept basligini her istege kendisi ekliyor ve HTML gelirse
+"Yanit JSON" testi kirmizi yanip konsola gercek adresi ve yanitin ilk 300 karakterini
+yaziyor. Kendi curl'unde de `--header 'Accept: application/json'` kullan —
+dokumandaki her ornek boyle.
+
 ---
 
 ## 0. Ön Hazırlık — Kargonomi Hesabı
@@ -233,6 +242,15 @@ ngrok http 8080
 >
 > Secret'i once **kaydetmen** sart: Kargonomi'ye gonderilen anahtarla bizim
 > dogrulamada kullandigimiz ayni olmali.
+>
+> **Secret'i kim uretiyor — acik soru.** Kargonomi dokumaninda webhook olusturma
+> parametreleri `name`, `url`, `event_type`, `is_active`; **`secret` yok.** Ama imza
+> dogrulama bolumu bir `secret_key`'den bahsediyor. Yani anahtari Kargonomi'nin
+> kendisi uretiyor olabilir. Kayit yanitinda `secret` / `secret_key` / `signature_key`
+> alanlarindan biri donerse panel onu otomatik alana yazar ve seni Kaydet'e yonlendirir —
+> **o an kaydetmezsen anahtar kaybolur**, kaydi silip yeniden acman gerekir. Hicbiri
+> donmezse anahtarin nereden alinacagini Kargonomi'ye sor; o zamana kadar alici uc
+> her bildirime 503 doner (503 yeniden denenir, ~35 dakika icinde 5 deneme).
 
 ```bash
 curl -s -X POST http://localhost:8080/api/admin/cargo/webhook/register \

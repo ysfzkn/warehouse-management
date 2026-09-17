@@ -283,9 +283,19 @@ public class AdminCargoApiController {
                     "message", "Aktif sağlayıcı Kargonomi değil."));
         }
 
-        boolean ok = k.registerWebhook(callbackUrl, secret);
-        log.info("[Cargo] webhook register → url={}, ok={}", callbackUrl, ok);
-        return ResponseEntity.ok(Map.of("success", ok, "callbackUrl", callbackUrl));
+        Map<String, Object> created = k.registerWebhook(callbackUrl, secret);
+        boolean ok = created != null;
+        // If Kargonomi issues its own signing key, the create response is the only place it
+        // appears — hand it back so the panel can show it rather than losing it in a log line.
+        String issuedSecret = KargonomiCargoProvider.issuedSecretOf(created);
+        log.info("[Cargo] webhook register → url={}, ok={}, secretIssued={}",
+                callbackUrl, ok, issuedSecret != null);
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", ok);
+        result.put("callbackUrl", callbackUrl);
+        if (issuedSecret != null) result.put("issuedSecret", issuedSecret);
+        return ResponseEntity.ok(result);
     }
 
     /** List all registered webhooks. */

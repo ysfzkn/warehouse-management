@@ -98,6 +98,32 @@ class KargonomiWebhookSecurityTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
     }
 
+    /**
+     * Kargonomi puts the event type at {@code meta.webhook.event_type}, not at the top of
+     * {@code meta}. Reading only the top level left the stored type blank on every delivery —
+     * the one column an operator scans to see what a batch of notifications was about.
+     */
+    @Test
+    void recordsTheEventTypeFromItsDocumentedNestedPosition() {
+        String body = "{\"meta\":{\"webhook\":{\"event_type\":\"shipment.updated\"},"
+                + "\"idempotency_key\":\"abc123\",\"attempt_number\":2},"
+                + "\"shipment\":{\"id\":\"SHIP-1\"}}";
+
+        when(settingService.getSetting("kargonomi_webhook_secret")).thenReturn("s3cret");
+        when(deliveryRepository.findByIdempotencyKey("abc123")).thenReturn(java.util.Optional.empty());
+        when(deliveryRepository.saveAndFlush(any(CargoWebhookDelivery.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+        when(orderRepository.findByCargoProviderShipmentId("SHIP-1")).thenReturn(java.util.Optional.empty());
+
+        controller.receive(hmacSha256Hex("s3cret", body), body);
+
+        org.mockito.ArgumentCaptor<CargoWebhookDelivery> saved =
+                org.mockito.ArgumentCaptor.forClass(CargoWebhookDelivery.class);
+        verify(deliveryRepository).saveAndFlush(saved.capture());
+        assertThat(saved.getValue().getEventType()).isEqualTo("shipment.updated");
+        assertThat(saved.getValue().getAttemptNumber()).isEqualTo(2);
+    }
+
     private static String hmacSha256Hex(String secret, String payload) {
         try {
             Mac mac = Mac.getInstance("HmacSHA256");

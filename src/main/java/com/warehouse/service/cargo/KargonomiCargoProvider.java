@@ -544,8 +544,9 @@ public class KargonomiCargoProvider implements CargoApiProvider {
     // ─────────────────────────────────────────────────────────────
 
     /** Webhook registration. Kargonomi POSTs to callbackUrl on {@code shipment.updated} events. */
-    public boolean registerWebhook(String callbackUrl, String secret) {
-        if (!isEnabled() || callbackUrl == null || callbackUrl.isBlank()) return false;
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> registerWebhook(String callbackUrl, String secret) {
+        if (!isEnabled() || callbackUrl == null || callbackUrl.isBlank()) return null;
         try {
             String url = getBaseUrl() + "/webhooks";
             Map<String, Object> body = new LinkedHashMap<>();
@@ -553,17 +554,42 @@ public class KargonomiCargoProvider implements CargoApiProvider {
             body.put("url", callbackUrl);
             body.put("event_type", "shipment.updated");
             body.put("is_active", true);
+            // Not documented as a request parameter, but harmless if ignored: Kargonomi may
+            // either accept the key we chose or issue its own. Whichever it does, the answer
+            // is in the response below — and nowhere else, since the key is shown once.
             if (secret != null && !secret.isBlank()) body.put("secret", secret);
 
             HttpHeaders headers = buildAuthHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
-            restTemplate.postForEntity(url, new HttpEntity<>(body, headers), Map.class);
+            ResponseEntity<Map> response =
+                    restTemplate.postForEntity(url, new HttpEntity<>(body, headers), Map.class);
+
+            Map<String, Object> created = response.getBody();
+            if (created != null && created.get("data") instanceof Map<?, ?> data) {
+                created = (Map<String, Object>) data;
+            }
             logger.info("[Kargonomi] Webhook kaydedildi: {}", callbackUrl);
-            return true;
+            return created != null ? created : Map.of();
         } catch (Exception e) {
             logger.warn("Webhook kayıt hatası: {}", e.getMessage());
-            return false;
+            return null;
         }
+    }
+
+    /**
+     * The signature key Kargonomi issued for a webhook it just created, if it issued one.
+     *
+     * <p>The field is undocumented, so the name is a guess across the three spellings a carrier
+     * plausibly uses. Returning null is a real answer: it means we have to ask Kargonomi where
+     * the key comes from, not that the registration failed.
+     */
+    public static String issuedSecretOf(Map<String, Object> createdWebhook) {
+        if (createdWebhook == null) return null;
+        for (String field : new String[]{"secret", "secret_key", "signature_key"}) {
+            Object value = createdWebhook.get(field);
+            if (value != null && !value.toString().isBlank()) return value.toString();
+        }
+        return null;
     }
 
     /** GET /webhooks — lists all registered webhooks. */

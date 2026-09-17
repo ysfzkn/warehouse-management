@@ -573,12 +573,21 @@ function CargoWebhookPanel({ secret, onSecretChange, withSecurityCode }) {
 
   const register = () =>
     withSecurityCode('Webhook kaydı için güvenlik şifresini girin.', async (code) => {
-      await axios.post(
+      const { data } = await axios.post(
         '/api/admin/cargo/webhook/register',
         { callbackUrl: url, secret },
         { headers: { 'X-ADMIN-SECURITY-CODE': code } }
       );
-      toast.success("Webhook Kargonomi'ye kaydedildi.");
+      // Kargonomi imza anahtarını kendi üretiyorsa yalnızca bu yanıtta görünür; kaçırırsak
+      // kaydı silip yeniden açmaktan başka yolu yok. Alana yazıp kaydetmesini isteyelim.
+      if (data && data.issuedSecret) {
+        onSecretChange(data.issuedSecret);
+        toast.warning(
+          "Kargonomi kendi imza anahtarını üretti ve alana yazıldı. Sayfanın altından Kaydet'e basın."
+        );
+      } else {
+        toast.success("Webhook Kargonomi'ye kaydedildi.");
+      }
       load();
     });
 

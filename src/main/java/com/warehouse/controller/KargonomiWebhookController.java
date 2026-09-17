@@ -183,7 +183,7 @@ public class KargonomiWebhookController {
         CargoWebhookDelivery row = new CargoWebhookDelivery();
         row.setIdempotencyKey(key);
         row.setStatus(CargoWebhookDelivery.STATUS_RECEIVED);
-        row.setEventType(strOrNull(meta.get("event_type")));
+        row.setEventType(eventTypeOf(meta));
         row.setAttemptNumber(intOrNull(meta.get("attempt_number")));
         row.setShipmentId(shipment != null ? strOrNull(shipment.get("id")) : null);
         row.setPayload(rawBody.length() > MAX_STORED_PAYLOAD
@@ -280,6 +280,22 @@ public class KargonomiWebhookController {
         int result = 0;
         for (int i = 0; i < a.length(); i++) result |= a.charAt(i) ^ b.charAt(i);
         return result == 0;
+    }
+
+    /**
+     * The event type lives at {@code meta.webhook.event_type} in Kargonomi's documented payload,
+     * not at the top of {@code meta}. Reading only the top level left every stored delivery with a
+     * blank type, which is the column an operator scans first when asking what a batch of
+     * notifications was about. The top-level read stays as a fallback in case the shape changes.
+     */
+    @SuppressWarnings("unchecked")
+    private static String eventTypeOf(Map<String, Object> meta) {
+        Object nested = meta.get("webhook");
+        if (nested instanceof Map<?, ?> webhook) {
+            String type = strOrNull(((Map<String, Object>) webhook).get("event_type"));
+            if (type != null) return type;
+        }
+        return strOrNull(meta.get("event_type"));
     }
 
     private static String strOrNull(Object value) {

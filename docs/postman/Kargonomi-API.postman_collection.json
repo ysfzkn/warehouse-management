@@ -21,6 +21,10 @@
       "script": {
         "type": "text/javascript",
         "exec": [
+          "// Accept olmadan Kargonomi (Laravel) hata durumlarinda JSON yerine HTML yonlendirme",
+          "// doner — istek tanitim sitesine dusuyormus gibi gorunur. Dokumandaki her curl'de var.",
+          "pm.request.headers.upsert({ key: 'Accept', value: 'application/json' });",
+          "",
           "// Token yoksa her istek 401 doner ve sebebi belirsiz kalir; burada acikca soyle.",
           "const token = pm.environment.get('token') || pm.collectionVariables.get('token');",
           "if (!token || !String(token).trim()) {",
@@ -34,12 +38,23 @@
       "script": {
         "type": "text/javascript",
         "exec": [
-          "// Her istekte gecerli olan iki kontrol.",
+          "// Her istekte gecerli olan kontroller.",
           "pm.test('401 degil (token gecerli)', function () {",
           "  pm.expect(pm.response.code, 'token reddedildi').to.not.eql(401);",
           "});",
           "pm.test('Sunucu hatasi yok', function () {",
           "  pm.expect(pm.response.code).to.be.below(500);",
+          "});",
+          "",
+          "// HTML donuyorsa istek API'ye degil tanitim sitesine gitmistir: ya Accept basligi",
+          "// dusmustur ya da govde dogrulamadan gecmeyip Laravel ana sayfaya yonlendirmistir.",
+          "pm.test('Yanit JSON (HTML donmedi)', function () {",
+          "  const contentType = pm.response.headers.get('Content-Type') || '';",
+          "  if (contentType.indexOf('text/html') > -1) {",
+          "    console.log('HTML dondu. Gidilen adres: ' + pm.request.url.toString());",
+          "    console.log('Ilk 300 karakter: ' + pm.response.text().substring(0, 300));",
+          "  }",
+          "  pm.expect(contentType, 'API yerine tanitim sitesi dondu — govdeyi ve Accept basligini kontrol et').to.not.include('text/html');",
           "});"
         ]
       }
@@ -644,7 +659,7 @@
     },
     {
       "name": "7 - Webhook",
-      "description": "Kargo durumu degisince Kargonomi'nin bizim sunucumuza POST atmasi.\n\nSecret olmadan bizim alici uc **her bildirime 503 doner** — once `webhook_secret` degiskenini doldur ve ayni degeri site ayarlarina gir.",
+      "description": "Kargo durumu degisince Kargonomi'nin bizim sunucumuza POST atmasi.\n\nOnce `webhook_url` degiskenine kendi https adresini yaz — ornek deger ile istek reddedilir.\n\nSecret olmadan bizim alici uc **her bildirime 503 doner**. Secret govde parametresi degil: Kargonomi imza anahtarini kendisi uretiyorsa `Webhook Olustur` yanitinda doner ve konsola yazilir; donmezse anahtarin nereden alinacagini Kargonomi'ye sor. Elindeki degeri Ayarlar > Kargo API > Kargonomi Webhook Kaydi alanina gir.\n\nImza: `X-Webhook-Signature` basligi, ham govdenin secret ile HMAC-SHA256'si. Bizim alici uc tam olarak bunu dogruluyor.",
       "item": [
         {
           "name": "Webhook Olustur",
@@ -658,7 +673,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Siparis Durum Bildirimi\",\n  \"url\": \"{{webhook_url}}\",\n  \"event_type\": \"shipment.updated\",\n  \"is_active\": true,\n  \"secret\": \"{{webhook_secret}}\"\n}",
+              "raw": "{\n  \"name\": \"Siparis Durum Bildirimi\",\n  \"url\": \"{{webhook_url}}\",\n  \"event_type\": \"shipment.updated\",\n  \"is_active\": true\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -670,10 +685,27 @@
               "host": ["{{base_url}}"],
               "path": ["webhooks"]
             },
-            "description": "Zorunlu: `name`, `url`, `event_type` (`shipment.updated`). `is_active` opsiyonel.\n\n`secret` alani **resmi dokumanda gecmiyor** ama imza dogrulamasi icin bir secret gerekiyor. Bu istek 422 verirse secret'i govdeden cikarip Kargonomi panelinden tanimlamayi dene; secret'i nereden aldigini Kargonomi'ye sor.\n\nURL mutlaka **https** ve disaridan erisilebilir olmali.\n\nYeniden deneme politikasi: 60s → 120s → 300s → 600s → 1200s. 2xx disindaki her yanit yeniden denenir; 400/401/403/404/409/410/422 denenmez."
+            "description": "Zorunlu: `name`, `url`, `event_type` (`shipment.updated`). `is_active` opsiyonel.\n\n**`secret` govdede YOK.** Dokumandaki parametre tablosunda boyle bir alan gecmiyor; imza dogrulamasinda kullanilan `secret_key`'i Kargonomi kendisi uretiyor olmali. Bu istegin yanitinda bir `secret` alani donerse **onu kopyalayip** Ayarlar > Kargo API > Kargonomi Webhook Kaydi alanina yapistir. Donmuyorsa secret'in nereden alinacagini Kargonomi'ye sor — imza dogrulamasi olmadan bizim alici uc her bildirime 503 doner.\n\nURL mutlaka **https** ve disaridan erisilebilir olmali. `{{webhook_url}}` degiskenindeki ornek alan adini kendi alan adinla degistirmeyi unutma.\n\nYeniden deneme politikasi: 60s → 120s → 300s → 600s → 1200s. 2xx disindaki her yanit yeniden denenir; 400/401/403/404/409/410/422 denenmez."
           },
           "response": [],
           "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Ornek alan adi ile gonderilirse Kargonomi govdeyi reddeder ve (Accept yoksa)",
+                  "// hata yerine ana sayfaya yonlendirir; sebebi anlasilmaz. Burada erkenden durdur.",
+                  "const url = pm.environment.get('webhook_url') || pm.collectionVariables.get('webhook_url') || '';",
+                  "if (url.indexOf('ORNEK-ALAN-ADINIZ') > -1) {",
+                  "  throw new Error('webhook_url hala ornek deger. Environment > webhook_url alanina kendi https adresini yaz.');",
+                  "}",
+                  "if (url.indexOf('https://') !== 0) {",
+                  "  throw new Error('webhook_url https ile baslamali: ' + url);",
+                  "}"
+                ]
+              }
+            },
             {
               "listen": "test",
               "script": {
@@ -682,7 +714,7 @@
                   "pm.test('Webhook olustu', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
                   "",
                   "if (pm.response.code === 422) {",
-                  "  console.log('Dogrulama hatasi — secret alani kabul edilmemis olabilir:');",
+                  "  console.log('Dogrulama hatasi — govdeyi kontrol et:');",
                   "  console.log(pm.response.text());",
                   "}",
                   "",
@@ -692,6 +724,16 @@
                   "  if (w && w.id) {",
                   "    pm.collectionVariables.set('webhook_id', w.id);",
                   "    console.log('webhook_id = ' + w.id);",
+                  "  }",
+                  "",
+                  "  // Imza anahtari Kargonomi tarafindan uretiliyorsa yanitta doner ve yalnizca",
+                  "  // burada gorunur — kaydi acan istegin yanitinda. Kaciracak olursan sil-yeniden ac.",
+                  "  const secret = w && (w.secret || w.secret_key || w.signature_key);",
+                  "  if (secret) {",
+                  "    pm.environment.set('webhook_secret', secret);",
+                  "    console.log('SECRET DONDU — bunu site ayarlarina yapistir: ' + secret);",
+                  "  } else {",
+                  "    console.log('Yanitta secret alani yok. Imza anahtarini Kargonomi panelinden ya da destekten al.');",
                   "  }",
                   "} catch (e) { /* yanit JSON degil */ }"
                 ]
