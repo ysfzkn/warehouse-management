@@ -74,11 +74,22 @@ curl -s http://localhost:8080/api/admin/cargo/balance \
   -H "Authorization: Bearer $TOKEN" | jq
 ```
 
-Beklenen response: `{"credit": 47.50}` (TL).
+Beklenen response: `{"balance": 47.50, "balanceState": "OK", ...}`.
 
-Hata durumları:
-- `401 Unauthorized` → token/app-key yanlış
-- `null credit` → KargonomiCargoProvider.isEnabled() false dönüyor (settings boş)
+`balanceState` ne diyorsa odur:
+- `OK` → bakiye okundu
+- `NOT_REPORTED` → **token çalışıyor** ama Kargonomi bakiye bildirmiyor; hesaba
+  bakiye yüklenmemiş demektir. Bakiyesiz gönderi oluşturulamaz.
+- `UNREACHABLE` → Kargonomi'ye ulaşılamadı ya da token reddedildi (401)
+- `UNSUPPORTED` → entegrasyon kapalı (`cargo_api_enabled=false`) ya da sağlayıcı MOCK
+
+Ham API'yi doğrudan denemek istersen (token'ı kendi terminalinde kullan):
+
+```bash
+curl -s -H "Authorization: Bearer <KARGONOMI_TOKEN>"   https://app.kargonomi.com.tr/api/v1/user/credit
+```
+
+`401` = token yanlış. `{"data":{"credit":null}}` = token doğru, bakiye yok.
 
 ---
 
