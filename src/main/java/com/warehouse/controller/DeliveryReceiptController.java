@@ -1,7 +1,11 @@
 package com.warehouse.controller;
 
 import com.warehouse.dto.DeliveryReceiptDto;
+import com.warehouse.dto.DeliveryReceiptFilter;
+import com.warehouse.enums.DeliveryPlanFilter;
+import com.warehouse.enums.DeliveryReceiptKind;
 import com.warehouse.enums.DeliveryReceiptStatus;
+import com.warehouse.enums.ReceiptDateField;
 import com.warehouse.security.SignedUrlService;
 import com.warehouse.service.DeliveryReceiptService;
 import com.warehouse.util.CurrentUser;
@@ -144,21 +148,69 @@ public class DeliveryReceiptController {
 
     // ───────────────────── Archive (admin only) ───────────────────────────
 
+    /**
+     * Arşiv listesi.
+     *
+     * <p>{@code dateField} tarih aralığının hangi tarihe bakacağını seçiyor — planlı teslimat
+     * geldiğinden beri bir makbuzun kesildiği gün, gideceği gün ve gittiği gün ayrı günlere
+     * düşebiliyor ve "Ekim makbuzları" sorusunun tek bir doğru cevabı yok.</p>
+     *
+     * <p>{@code sort} beyaz listeden geçiyor: sıralama alanı doğrudan Criteria API'ye gidiyor ve
+     * istemciden gelen serbest metin, var olmayan bir alanda 500'e ya da ilişki üzerinden
+     * beklenmeyen bir join'e dönüşürdü.</p>
+     */
     @GetMapping("/api/admin/delivery-receipts")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Page<DeliveryReceiptDto>> list(
             @RequestParam(required = false) DeliveryReceiptStatus status,
+            @RequestParam(required = false) DeliveryReceiptKind kind,
             @RequestParam(required = false) Boolean hasSignedCopy,
+            @RequestParam(required = false) Boolean carrierPending,
+            @RequestParam(required = false) DeliveryPlanFilter plan,
+            @RequestParam(required = false) ReceiptDateField dateField,
             @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(
                     iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,
             @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(
                     iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE_TIME) LocalDateTime to,
             @RequestParam(required = false) String search,
+            @RequestParam(required = false) String sort,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         int safeSize = Math.min(100, Math.max(1, size));
-        return ResponseEntity.ok(receiptService.search(status, hasSignedCopy, from, to, search,
-                PageRequest.of(Math.max(0, page), safeSize, Sort.by(Sort.Direction.DESC, "issuedAt"))));
+        DeliveryReceiptFilter filter = DeliveryReceiptFilter.builder()
+                .status(status)
+                .kind(kind)
+                .hasSignedCopy(hasSignedCopy)
+                .carrierPending(carrierPending)
+                .plan(plan)
+                .dateField(dateField)
+                .from(from)
+                .to(to)
+                .search(search)
+                .build();
+        return ResponseEntity.ok(receiptService.search(filter,
+                PageRequest.of(Math.max(0, page), safeSize, parseSort(sort))));
+    }
+
+    /**
+     * İstemciden gelen sıralama ifadesini beyaz listeden geçirir.
+     *
+     * <p>"En son kesilen" ile "en yakın teslim" farklı sorular ve arşiv ikisini de cevaplamak
+     * zorunda; ama alan adı doğrudan Criteria API'ye gittiği için serbest metin kabul edilemez.
+     * Tanınmayan bir değer hataya değil varsayılana düşüyor: eski bir yer imi yüzünden ekranın
+     * boş açılması, yanlış sıralamadan daha kötü.</p>
+     */
+    private static Sort parseSort(String sort) {
+        Sort newestFirst = Sort.by(Sort.Direction.DESC, "issuedAt");
+        if (sort == null || sort.isBlank()) return newestFirst;
+        String[] parts = sort.split(",", 2);
+        String field = parts[0].trim();
+        boolean ascending = parts.length > 1 && "asc".equalsIgnoreCase(parts[1].trim());
+        return switch (field) {
+            case "scheduledDeliveryAt", "deliveredAt", "receiptNo", "issuedAt" ->
+                    Sort.by(ascending ? Sort.Direction.ASC : Sort.Direction.DESC, field);
+            default -> newestFirst;
+        };
     }
 
     @GetMapping("/api/admin/delivery-receipts/stats")

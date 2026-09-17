@@ -1,6 +1,7 @@
 package com.warehouse.service;
 
 import com.warehouse.dto.DeliveryReceiptDto;
+import com.warehouse.dto.DeliveryReceiptFilter;
 import com.warehouse.entity.Category;
 import com.warehouse.entity.Product;
 import com.warehouse.entity.StockTransfer;
@@ -123,7 +124,15 @@ class DeliveryReceiptSearchTest {
 
     private List<DeliveryReceiptDto> search(DeliveryReceiptStatus status, Boolean signed,
                                             LocalDateTime from, LocalDateTime to, String q) {
-        return receiptService.search(status, signed, from, to, q, PageRequest.of(0, 20, NEWEST))
+        return receiptService.search(
+                        DeliveryReceiptFilter.builder()
+                                .status(status)
+                                .hasSignedCopy(signed)
+                                .from(from)
+                                .to(to)
+                                .search(q)
+                                .build(),
+                        PageRequest.of(0, 20, NEWEST))
                 .getContent();
     }
 
@@ -249,6 +258,162 @@ class DeliveryReceiptSearchTest {
         // Tek bir uyuşmazlık tümünü elemeye yeter.
         assertThat(search(DeliveryReceiptStatus.DELIVERED, false, now.minusDays(1), now.plusDays(1), "Ayşe"))
                 .isEmpty();
+    }
+
+    // ───────────────────── Yeni yapının kesitleri ──────────────────────────
+
+    /**
+     * Planlı bir depo çıkışı kurar ve makbuzunu keser.
+     *
+     * <p>Sevkiyat doğrudan yazılıyor, {@code ServiceHandoverService} üzerinden değil: bu
+     * sınıf filtreleri test ediyor, stok hareketini değil, ve akışın tamamını kurmak testi
+     * ilgisiz bir sürü hazırlığa bağımlı kılardı.</p>
+     */
+    private Long scheduledHandover(String customer, LocalDateTime scheduledAt) {
+        StockTransfer transfer = new StockTransfer();
+        transfer.setSourceWarehouse(warehouseRepository.findAll().get(0));
+        transfer.setProduct(productRepository.findAll().get(0));
+        transfer.setQuantity(1);
+        transfer.setTransferType(TransferType.CUSTOMER_DELIVERY);
+        transfer.setCustomerFullName(customer);
+        transfer.setCustomerPhone("05551234567");
+        transfer.setCustomerAddress("Kale Mah. No: 28 Niğde");
+        transfer.setCarrierPending(true);
+        transfer.setHandoverToName("Yıldız Nakliyat");
+        transfer.setScheduledDeliveryAt(scheduledAt);
+        transfer.setStatus(TransferStatus.IN_TRANSIT);
+        transfer.setTransferDate(LocalDateTime.now());
+
+        StockTransferItem item = new StockTransferItem();
+        item.setProduct(transfer.getProduct());
+        item.setQuantity(1);
+        transfer.addItem(item);
+
+        Long id = transferRepository.save(transfer).getId();
+        receiptService.issue(id, "admin", com.warehouse.enums.DeliveryReceiptKind.SERVICE_HANDOVER);
+        return id;
+    }
+
+    private List<DeliveryReceiptDto> search(DeliveryReceiptFilter filter) {
+        return receiptService.search(filter, PageRequest.of(0, 20, NEWEST)).getContent();
+    }
+
+    @Test
+    @DisplayName("Belge tipi filtresi iki kâğıdı ayırır")
+    void kindFilterSeparatesTheTwoPapers() {
+        scheduledHandover("Planlı Müşteri", LocalDateTime.now().plusDays(2));
+
+        assertThat(search(DeliveryReceiptFilter.builder()
+                .kind(com.warehouse.enums.DeliveryReceiptKind.SERVICE_HANDOVER).build()))
+                .hasSize(1);
+        assertThat(search(DeliveryReceiptFilter.builder()
+                .kind(com.warehouse.enums.DeliveryReceiptKind.DELIVERY).build()))
+                .hasSize(2);
+    }
+
+    @Test
+    @DisplayName("Teslim planı kesitleri: planlı, bugün, gecikmiş, plansız")
+    void planFilterSlicesByDeliveryDate() {
+        scheduledHandover("Yarınki", LocalDateTime.now().plusDays(1));
+        scheduledHandover("Bugünkü", LocalDateTime.now().plusMinutes(30));
+        scheduledHandover("Gecikmiş", LocalDateTime.now().minusDays(3));
+
+        assertThat(search(DeliveryReceiptFilter.builder()
+                .plan(com.warehouse.enums.DeliveryPlanFilter.SCHEDULED).build()))
+                .as("açık planların tamamı")
+                .hasSize(3);
+        assertThat(search(DeliveryReceiptFilter.builder()
+                .plan(com.warehouse.enums.DeliveryPlanFilter.DUE_TODAY).build()))
+                .extracting(DeliveryReceiptDto::getCustomerFullName)
+                .containsExactly("Bugünkü");
+        assertThat(search(DeliveryReceiptFilter.builder()
+                .plan(com.warehouse.enums.DeliveryPlanFilter.OVERDUE).build()))
+                .extracting(DeliveryReceiptDto::getCustomerFullName)
+                .containsExactly("Gecikmiş");
+        assertThat(search(DeliveryReceiptFilter.builder()
+                .plan(com.warehouse.enums.DeliveryPlanFilter.NONE).build()))
+                .as("planı olmayan iki klasik makbuz")
+                .hasSize(2);
+    }
+
+    @Test
+    @DisplayName("Teslim edilen plan, açık planlar kesitinden düşer")
+    void aDeliveredPlanLeavesTheOpenSlice() {
+        Long transferId = scheduledHandover("Teslim Edilen", LocalDateTime.now().plusDays(1));
+        assertThat(search(DeliveryReceiptFilter.builder()
+                .plan(com.warehouse.enums.DeliveryPlanFilter.SCHEDULED).build())).hasSize(1);
+
+        // Sevkiyat önce kapanıyor, sonra kağıda imza işleniyor — gerçek sıra da bu.
+        // Tersi zaten reddediliyor: açık bir planda teslim onayı malı rezervede bırakır.
+        StockTransfer delivered = transferRepository.findById(transferId).orElseThrow();
+        delivered.setStatus(TransferStatus.COMPLETED);
+        delivered.setCompletedDate(LocalDateTime.now());
+        transferRepository.save(delivered);
+
+        receiptService.confirmDelivery(transferId, null, "Ayşe Gültekin",
+                LocalDateTime.now(), null, "admin");
+
+        assertThat(search(DeliveryReceiptFilter.builder()
+                .plan(com.warehouse.enums.DeliveryPlanFilter.SCHEDULED).build()))
+                .as("teslim edilmiş bir plan artık kovalanacak iş değil")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("Taşıyıcısı girilmemiş depo çıkışları ayrı bir kesit")
+    void carrierPendingIsItsOwnSlice() {
+        scheduledHandover("Taşıyıcısız", LocalDateTime.now().plusDays(2));
+
+        assertThat(search(DeliveryReceiptFilter.builder().carrierPending(true).build()))
+                .extracting(DeliveryReceiptDto::getCustomerFullName)
+                .containsExactly("Taşıyıcısız");
+        assertThat(search(DeliveryReceiptFilter.builder().carrierPending(false).build()))
+                .as("şoförü belli olan teslimat makbuzları")
+                .hasSize(2);
+    }
+
+    @Test
+    @DisplayName("Tarih aralığı seçilen tarih alanına uygulanır")
+    void theDateRangeFollowsTheChosenField() {
+        scheduledHandover("Gelecek Hafta", LocalDateTime.now().plusDays(7));
+        LocalDateTime now = LocalDateTime.now();
+
+        // Düzenleme tarihi bugün: üçü de bugün kesildi.
+        assertThat(search(DeliveryReceiptFilter.builder()
+                .dateField(com.warehouse.enums.ReceiptDateField.ISSUED)
+                .from(now.minusHours(1)).to(now.plusHours(1)).build()))
+                .hasSize(3);
+
+        // Aynı aralık planlanan teslim tarihine uygulandığında hiçbiri düşmüyor: plan
+        // gelecek hafta, ve planı olmayanlar bu kesitte zaten görünmüyor.
+        assertThat(search(DeliveryReceiptFilter.builder()
+                .dateField(com.warehouse.enums.ReceiptDateField.SCHEDULED)
+                .from(now.minusHours(1)).to(now.plusHours(1)).build()))
+                .isEmpty();
+        assertThat(search(DeliveryReceiptFilter.builder()
+                .dateField(com.warehouse.enums.ReceiptDateField.SCHEDULED)
+                .from(now).to(now.plusDays(10)).build()))
+                .extracting(DeliveryReceiptDto::getCustomerFullName)
+                .containsExactly("Gelecek Hafta");
+    }
+
+    @Test
+    @DisplayName("Sayaçlar listeyle aynı kesiti sayar")
+    void theCountersAgreeWithTheList() {
+        scheduledHandover("Bugünkü", LocalDateTime.now().plusMinutes(30));
+        scheduledHandover("Gecikmiş", LocalDateTime.now().minusDays(2));
+
+        var stats = receiptService.stats();
+        assertThat(stats.get("scheduled")).isEqualTo(2L);
+        assertThat(stats.get("dueToday")).isEqualTo(1L);
+        assertThat(stats.get("overdue")).isEqualTo(1L);
+        assertThat(stats.get("carrierPending")).isEqualTo(2L);
+
+        // Karttaki sayı ile karta tıklayınca gelen liste aynı Specification'dan üretiliyor;
+        // bu eşitlik bozulursa hangisinin doğru olduğu anlaşılamaz.
+        assertThat(search(DeliveryReceiptFilter.builder()
+                .plan(com.warehouse.enums.DeliveryPlanFilter.OVERDUE).build()))
+                .hasSize(stats.get("overdue").intValue());
     }
 
     /** 1x1 PNG. */

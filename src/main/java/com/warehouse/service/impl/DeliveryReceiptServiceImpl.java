@@ -4,11 +4,13 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.warehouse.dto.AuditMetadata;
 import com.warehouse.dto.DeliveryReceiptDto;
+import com.warehouse.dto.DeliveryReceiptFilter;
 import com.warehouse.entity.DeliveryReceipt;
 import com.warehouse.entity.DeliveryReceiptAttachment;
 import com.warehouse.entity.StockTransfer;
 import com.warehouse.entity.StockTransferItem;
 import com.warehouse.enums.AuditAction;
+import com.warehouse.enums.DeliveryPlanFilter;
 import com.warehouse.enums.DeliveryReceiptKind;
 import com.warehouse.enums.DeliveryReceiptStatus;
 import com.warehouse.enums.DomainEntityType;
@@ -302,14 +304,10 @@ public class DeliveryReceiptServiceImpl implements DeliveryReceiptService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<DeliveryReceiptDto> search(DeliveryReceiptStatus status,
-                                           Boolean hasSignedCopy,
-                                           LocalDateTime from,
-                                           LocalDateTime to,
-                                           String search,
-                                           Pageable pageable) {
+    public Page<DeliveryReceiptDto> search(DeliveryReceiptFilter filter, Pageable pageable) {
         return receiptRepository.findAll(
-                filter(status, hasSignedCopy, from, to, search), pageable).map(this::toDto);
+                spec(filter != null ? filter : DeliveryReceiptFilter.builder().build()),
+                pageable).map(this::toDto);
     }
 
     /**
@@ -325,29 +323,37 @@ public class DeliveryReceiptServiceImpl implements DeliveryReceiptService {
      * <p>A specification has no such hole. An absent filter contributes no predicate and
      * therefore no parameter, and the statement that reaches the database carries only the
      * conditions in use.</p>
+     *
+     * <p>Aynı yüklemleri {@link #stats()} de kullanıyor: karttaki sayı ile karta tıklayınca
+     * gelen liste tek bir kaynaktan üretiliyor, ayrışmaları mümkün değil.</p>
      */
-    private static Specification<DeliveryReceipt> filter(DeliveryReceiptStatus status,
-                                                         Boolean hasSignedCopy,
-                                                         LocalDateTime from,
-                                                         LocalDateTime to,
-                                                         String search) {
+    private static Specification<DeliveryReceipt> spec(DeliveryReceiptFilter filter) {
         return (root, query, cb) -> {
             List<jakarta.persistence.criteria.Predicate> predicates = new ArrayList<>();
 
-            if (status != null) {
-                predicates.add(cb.equal(root.get("status"), status));
+            if (filter.getStatus() != null) {
+                predicates.add(cb.equal(root.get("status"), filter.getStatus()));
             }
-            if (from != null) {
-                predicates.add(cb.greaterThanOrEqualTo(root.get("issuedAt"), from));
+            if (filter.getKind() != null) {
+                predicates.add(cb.equal(root.get("kind"), filter.getKind()));
             }
-            if (to != null) {
-                predicates.add(cb.lessThanOrEqualTo(root.get("issuedAt"), to));
+
+            // Tarih aralığı, kullanıcının seçtiği tarih alanına uygulanıyor. Planlı teslimat
+            // geldiğinden beri bir makbuzun kesildiği gün, gideceği gün ve gittiği gün ayrı
+            // günlere düşebiliyor; "Ekim makbuzları" sorusunun tek bir doğru cevabı yok.
+            String dateAttribute = filter.dateFieldOrDefault().getAttribute();
+            if (filter.getFrom() != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get(dateAttribute), filter.getFrom()));
+            }
+            if (filter.getTo() != null) {
+                predicates.add(cb.lessThanOrEqualTo(root.get(dateAttribute), filter.getTo()));
             }
 
             // Arama, sütunları tek tek taramak yerine ASCII'ye katlanmış searchText üzerinden
             // yapılıyor. Türkçe'de küçültme geri döndürülemez olduğu için doğrudan
             // karşılaştırma güvenilir değil: "I" hem "ı" hem "i"nin büyüğü, "İ" küçülünce
             // birleşik bir diziye dönüşüyor — "IŞIK" hiçbir zaman "Işık"ı bulamazdı.
+            String search = filter.getSearch();
             String normalized = com.warehouse.util.TurkishText.normalize(search);
             String digits = search == null ? "" : search.replaceAll("\\D", "");
             List<jakarta.persistence.criteria.Predicate> anyOf = new ArrayList<>();
@@ -377,19 +383,69 @@ public class DeliveryReceiptServiceImpl implements DeliveryReceiptService {
                         : cb.or(anyOf.toArray(new jakarta.persistence.criteria.Predicate[0])));
             }
 
-            if (hasSignedCopy != null) {
+            if (filter.getHasSignedCopy() != null) {
                 // EXISTS rather than a count: the question is only whether the receipt has
                 // any attachment at all, and the server can stop at the first row.
                 jakarta.persistence.criteria.Subquery<Integer> signed = query.subquery(Integer.class);
                 var attachment = signed.from(DeliveryReceiptAttachment.class);
                 signed.select(cb.literal(1))
                       .where(cb.equal(attachment.get("receipt"), root));
-                predicates.add(hasSignedCopy ? cb.exists(signed) : cb.not(cb.exists(signed)));
+                predicates.add(filter.getHasSignedCopy() ? cb.exists(signed) : cb.not(cb.exists(signed)));
+            }
+
+            if (filter.getCarrierPending() != null) {
+                // Yalnızca depo çıkışında anlamlı: teslimat makbuzu şoför olmadan hiç
+                // basılmıyor, o yüzden kesit kâğıt tipini de kendisi daraltıyor.
+                jakarta.persistence.criteria.Predicate pending = cb.and(
+                        cb.equal(root.get("kind"), DeliveryReceiptKind.SERVICE_HANDOVER),
+                        cb.isNull(root.get("driverName")),
+                        cb.notEqual(root.get("status"), DeliveryReceiptStatus.CANCELLED));
+                predicates.add(filter.getCarrierPending() ? pending : cb.not(pending));
+            }
+
+            if (filter.getPlan() != null) {
+                predicates.add(planPredicate(filter.getPlan(), root, cb));
             }
 
             return predicates.isEmpty()
                     ? cb.conjunction()
                     : cb.and(predicates.toArray(new jakarta.persistence.criteria.Predicate[0]));
+        };
+    }
+
+    /**
+     * Teslim planı kesitleri.
+     *
+     * <p>"Açık plan" üç koşulun birleşimi: tarih var, teslim edilmemiş, iptal olmamış.
+     * Makbuzun kendi durumuna bakmak yetmiyor — tarihi üç hafta geçmiş bir makbuz da bugün
+     * teslim edilecek olan da "ISSUED" durumunda duruyor.</p>
+     *
+     * <p>Gün sınırı günün başlangıcından hesaplanıyor, saat farkından değil: bugün 09:00'da
+     * bakan biri için bu akşam 18:00'deki teslimat "bugün", dün 23:00'teki "gecikmiş". Ham
+     * saat farkı ikisini de aynı kovaya atardı.</p>
+     */
+    private static jakarta.persistence.criteria.Predicate planPredicate(
+            DeliveryPlanFilter plan,
+            jakarta.persistence.criteria.Root<DeliveryReceipt> root,
+            jakarta.persistence.criteria.CriteriaBuilder cb) {
+
+        if (plan == DeliveryPlanFilter.NONE) {
+            return cb.isNull(root.get("scheduledDeliveryAt"));
+        }
+
+        jakarta.persistence.criteria.Predicate open = cb.and(
+                cb.isNotNull(root.get("scheduledDeliveryAt")),
+                cb.isNull(root.get("deliveredAt")),
+                cb.notEqual(root.get("status"), DeliveryReceiptStatus.CANCELLED));
+
+        LocalDateTime dayStart = java.time.LocalDate.now().atStartOfDay();
+        return switch (plan) {
+            case DUE_TODAY -> cb.and(open,
+                    cb.greaterThanOrEqualTo(root.get("scheduledDeliveryAt"), dayStart),
+                    cb.lessThan(root.get("scheduledDeliveryAt"), dayStart.plusDays(1)));
+            case OVERDUE -> cb.and(open,
+                    cb.lessThan(root.get("scheduledDeliveryAt"), dayStart));
+            default -> open;
         };
     }
 
@@ -400,8 +456,21 @@ public class DeliveryReceiptServiceImpl implements DeliveryReceiptService {
         stats.put("total", receiptRepository.count());
         stats.put("issued", receiptRepository.countByStatus(DeliveryReceiptStatus.ISSUED));
         stats.put("delivered", receiptRepository.countByStatus(DeliveryReceiptStatus.DELIVERED));
+        stats.put("cancelled", receiptRepository.countByStatus(DeliveryReceiptStatus.CANCELLED));
         stats.put("awaitingSignedCopy", receiptRepository.countAwaitingSignedCopy());
+        // Sayaçlar listeyle aynı Specification'dan sayılıyor. Ayrı sorgular yazılsaydı,
+        // kartın gösterdiği rakam ile karta tıklayınca gelen satır sayısı zamanla ayrışır
+        // ve hangisinin doğru olduğu anlaşılamazdı.
+        stats.put("scheduled", count(DeliveryPlanFilter.SCHEDULED));
+        stats.put("dueToday", count(DeliveryPlanFilter.DUE_TODAY));
+        stats.put("overdue", count(DeliveryPlanFilter.OVERDUE));
+        stats.put("carrierPending", receiptRepository.count(
+                spec(DeliveryReceiptFilter.builder().carrierPending(true).build())));
         return stats;
+    }
+
+    private long count(DeliveryPlanFilter plan) {
+        return receiptRepository.count(spec(DeliveryReceiptFilter.builder().plan(plan).build()));
     }
 
     // ───────────────────────────── Confirm ───────────────────────────────

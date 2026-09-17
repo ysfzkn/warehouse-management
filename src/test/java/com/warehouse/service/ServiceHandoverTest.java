@@ -276,7 +276,8 @@ class ServiceHandoverTest {
         transferService.assignCarrier(result.transfer().getId(), carrier);
 
         for (String term : new String[]{"YILMAZ", "ats 303"}) {
-            var page = receiptService.search(null, null, null, null, term,
+            var page = receiptService.search(
+                    com.warehouse.dto.DeliveryReceiptFilter.builder().search(term).build(),
                     org.springframework.data.domain.PageRequest.of(0, 20));
             assertThat(page.getContent())
                     .as("'%s' aramasi makbuzu bulmali", term)

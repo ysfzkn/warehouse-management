@@ -1,6 +1,7 @@
 package com.warehouse.service;
 
 import com.warehouse.dto.DeliveryReceiptDto;
+import com.warehouse.dto.DeliveryReceiptFilter;
 import com.warehouse.entity.Category;
 import com.warehouse.entity.Product;
 import com.warehouse.entity.StockTransfer;
@@ -321,22 +322,29 @@ class DeliveryReceiptServiceTest {
         assertThat(auditLogRepository.count()).isGreaterThanOrEqualTo(before + 2);
     }
 
+    /** Tek alanlı filtre; çağrı yerinde builder gürültüsü yapmasin diye. */
+    private static DeliveryReceiptFilter signedCopy(boolean signed) {
+        return DeliveryReceiptFilter.builder().hasSignedCopy(signed).build();
+    }
+
     @Test
     @DisplayName("Arşiv araması imzalı nüsha durumuna göre filtreler")
     void archiveSearchFiltersBySignedCopy() {
         receiptService.issue(transfer.getId(), "admin");
 
-        assertThat(receiptService.search(null, false, null, null, null, PageRequest.of(0, 20))
+        assertThat(receiptService.search(signedCopy(false), PageRequest.of(0, 20))
                 .getContent()).extracting(DeliveryReceiptDto::getTransferId).contains(transfer.getId());
-        assertThat(receiptService.search(null, true, null, null, null, PageRequest.of(0, 20))
+        assertThat(receiptService.search(signedCopy(true), PageRequest.of(0, 20))
                 .getContent()).isEmpty();
 
         receiptService.addAttachment(transfer.getId(),
                 new MockMultipartFile("file", "n.png", "image/png", pngBytes()), "admin");
 
-        assertThat(receiptService.search(null, true, null, null, null, PageRequest.of(0, 20))
+        assertThat(receiptService.search(signedCopy(true), PageRequest.of(0, 20))
                 .getContent()).hasSize(1);
-        assertThat(receiptService.search(null, null, null, null, "Işık", PageRequest.of(0, 20))
+        assertThat(receiptService.search(
+                        DeliveryReceiptFilter.builder().search("Işık").build(),
+                        PageRequest.of(0, 20))
                 .getContent()).hasSize(1);
     }
 

@@ -1,6 +1,7 @@
 package com.warehouse.service;
 
 import com.warehouse.dto.DeliveryReceiptDto;
+import com.warehouse.dto.DeliveryReceiptFilter;
 import com.warehouse.enums.DeliveryReceiptKind;
 import com.warehouse.enums.DeliveryReceiptStatus;
 import org.springframework.data.domain.Page;
@@ -84,14 +85,21 @@ public interface DeliveryReceiptService {
     /** Bytes and content type of a stored attachment, for the view endpoint. */
     StoredAttachment loadAttachment(Long attachmentId);
 
-    Page<DeliveryReceiptDto> search(DeliveryReceiptStatus status,
-                                    Boolean hasSignedCopy,
-                                    LocalDateTime from,
-                                    LocalDateTime to,
-                                    String search,
-                                    Pageable pageable);
+    /**
+     * Arşiv listesi. Boş bir filtre "hepsi" demek.
+     *
+     * <p>{@code pageable}'ın sıralaması çağırandan geliyor: "en son kesilen" ile "en yakın
+     * teslim" farklı sorular ve arşiv ikisini de cevaplamak zorunda.</p>
+     */
+    Page<DeliveryReceiptDto> search(DeliveryReceiptFilter filter, Pageable pageable);
 
-    /** Counters for the receipts screen header. */
+    /**
+     * Ekran başlığındaki sayaçlar.
+     *
+     * <p>Her biri aynı anda bir kısayol filtresi: kartın gösterdiği sayı ile tıklanınca
+     * gelen liste aynı {@code Specification}'dan üretiliyor, yani birbirini tutmaması
+     * mümkün değil.</p>
+     */
     Map<String, Long> stats();
 
     record StoredAttachment(byte[] bytes, String contentType, String fileName) {}

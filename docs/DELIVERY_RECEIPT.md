@@ -28,7 +28,7 @@ Ekranlar:
 | Stok Yönetimi → Transfer Geçmişi → satır | Makbuz varsa **tek tıkla PDF iner**; yoksa detay açılır |
 | Aynı liste → seçim → **Makbuzları İndir** | Seçili sevkiyatların makbuzları **tek PDF** |
 | Transfer detayı → Teslimat Makbuzu paneli | Düzenle, yazdır, indir, yeniden bas, teslim onayı, imzalı nüsha yükle |
-| Teslimat Makbuzları (admin) | Arşiv: arama, durum/tarih filtresi, **imzalı nüsha bekleyenler** |
+| Teslimat Makbuzları (admin) | Arşiv: altı görünüm kartı (planlı / bugün / gecikmiş / imzalı nüsha / taşıyıcı bekleyen), belge tipi — plan — tarih alanı filtreleri, toplu PDF |
 
 Satırdaki **Makbuz** düğmesinin köşesindeki nokta imzalı nüsha durumunu gösterir:
 yeşil = geldi, sarı = bekleniyor.
@@ -180,6 +180,7 @@ Kâğıdın hayat döngüsünün tamamı `audit_logs`'a yazılır:
 | POST | `/api/admin/stock-transfers/receipts/by-transfers` | depo + admin |
 | POST | `/api/admin/stock-transfers/receipts/bulk-pdf` | depo + admin |
 | GET | `/api/admin/delivery-receipts` | ADMIN |
+| GET | `/api/admin/delivery-receipts?kind=&plan=&carrierPending=&dateField=&sort=` | ADMIN |
 | GET | `/api/admin/delivery-receipts/stats` | ADMIN |
 | DELETE | `/api/admin/delivery-receipts/attachments/{id}` | ADMIN |
 | GET | `/api/admin/delivery-receipts/attachments/{id}/view` | imzalı URL |

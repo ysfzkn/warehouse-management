@@ -3064,16 +3064,27 @@ const Stock = () => {
     return getTransferItemsList(transfer).reduce((sum, item) => sum + (item.quantity || 0), 0);
   };
 
+  /*
+   * Sunucu sayaçları gönderdiyse eksik bir anahtar "sıfır" demektir, "bilinmiyor" değil.
+   *
+   * Anahtar bazında yoklayan eski hâl, sunucu bir kovayı ilk kez boş döndürdüğünde
+   * bozuldu: planlı teslimatlar IN_TRANSIT sayacından düşülüp kendi kovasına alınınca
+   * IN_TRANSIT anahtarı yanıttan tamamen kalktı, yedek yol devreye girdi ve sayfadaki
+   * satırları sayarak aynı dört kaydı bir de "Yolda" olarak gösterdi. Yedek yol yalnızca
+   * sunucudan hiç sayaç gelmediğinde anlamlı.
+   */
+  const hasServerCounts = (counts) => counts && Object.keys(counts).length > 0;
+
   const getStatusCount = (status) => {
-    if (transferStatusCounts && Object.prototype.hasOwnProperty.call(transferStatusCounts, status)) {
-      return transferStatusCounts[status];
+    if (hasServerCounts(transferStatusCounts)) {
+      return transferStatusCounts[status] ?? 0;
     }
     return transfers.filter((t) => t.status === status).length;
   };
 
   const getTransferTypeCount = (type) => {
-    if (transferTypeCounts && Object.prototype.hasOwnProperty.call(transferTypeCounts, type)) {
-      return transferTypeCounts[type];
+    if (hasServerCounts(transferTypeCounts)) {
+      return transferTypeCounts[type] ?? 0;
     }
     if (type === 'CUSTOMER_DELIVERY') {
       return transfers.filter((t) => t.transferType === 'CUSTOMER_DELIVERY').length;

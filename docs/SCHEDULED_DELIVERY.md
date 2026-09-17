@@ -63,7 +63,7 @@ Alternatif uçlar:
 | Transfer listesi → sayaçlar ve filtre | **Planlı Teslimat** kartı ve **Planlı** filtresi — açık planların kuyruğu |
 | Transfer listesi → İşlemler | Planlı sevkiyatta "Tamamla" yerine **Teslimatı Tamamla** — detayı makbuz panelinde açar |
 | Transfer detayı → Makbuz paneli | Planlanan teslimat kartı: geri sayım, **Teslimatı Tamamla**, **Tarihi Değiştir** |
-| Teslimat Makbuzları (arşiv) | **Planlı · tarih** rozeti; tarih sütununda teslim olmamışsa "(planlanan)" |
+| Teslimat Makbuzları (arşiv) | Altı görünüm kartı (Planlı / Bugün / Gecikmiş / İmzalı nüsha / Taşıyıcı), plan — belge tipi — tarih alanı filtreleri, "Teslim" sütununda geri sayım |
 | Ayarlar → Depo → Teslimat Hatırlatmaları | Ana şalter ve hatırlatma e-posta adresi |
 
 Listedeki durum rozeti neden `status` alanından türetilmiyor: planlı sevkiyatın durumu
@@ -187,6 +187,7 @@ Migration: `V114__scheduled_delivery.sql`.
 | PUT | `/api/admin/stock-transfers/{id}/scheduled-delivery` | ADMIN + STOCK_OUT | dokunmaz |
 | POST | `/api/admin/stock-transfers/{id}/cancel` | mevcut kural | rezervasyonu bırakır |
 | GET | `/api/admin/stock-transfers?scheduledOnly=true` | mevcut kural | — (açık planların kuyruğu) |
+| GET | `/api/admin/delivery-receipts?plan=SCHEDULED\|DUE_TODAY\|OVERDUE\|NONE` | ADMIN | — (arşiv kesitleri) |
 
 ---
 
@@ -205,7 +206,32 @@ Migration: `V114__scheduled_delivery.sql`.
 
 ---
 
-## 10. Testler
+## 10. Makbuz arşivi
+
+Arşiv tek bir liste değil, birkaç kuyruk: imzalı nüshası gelmemişler, taşıyıcısı
+girilmemiş depo çıkışları, bugün teslim edilecekler ve tarihi geçmiş planlar. Üstteki altı
+kart bunların her biri için birer görünüm kısayolu — dekorasyon değil, tıklanınca filtreyi
+baştan kuruyorlar.
+
+Filtreler: arama, **belge tipi** (TM / DC), **teslim planı** (açık / bugün / gecikmiş /
+plansız), durum, imzalı nüsha, **taşıyıcı bekleyen**, **tarih alanı** (düzenleme / planlanan
+teslim / teslim) + aralık, ve sıralama. Aktif filtreler tek tek kaldırılabilen çiplerde
+görünüyor.
+
+İki tasarım kararı:
+
+- **Sayaçlar ile listeler aynı `Specification`'dan üretiliyor.** Karttaki rakam ile karta
+  tıklayınca gelen satır sayısının ayrışması böylece mümkün değil; ayrı sorgular yazılsaydı
+  hangisinin doğru olduğu anlaşılamazdı.
+- **Tarih aralığı hangi tarihe bakacak, kullanıcı seçiyor.** Bir makbuzun üç tarihi var ve
+  planlı teslimatta üçü ayrı günlere düşebiliyor; "Ekim makbuzları" sorusunun tek bir doğru
+  cevabı yok.
+
+Seçilen makbuzlar tek PDF olarak indirilebiliyor (mevcut `receipts/bulk-pdf` ucu).
+
+---
+
+## 11. Testler
 
 `src/test/java/com/warehouse/service/ScheduledDeliveryTest.java` — planın stoğu rezerve
 ettiği, düşümün yalnızca teslimatta olduğu, iki kez kapatılamadığı, ertelemenin
