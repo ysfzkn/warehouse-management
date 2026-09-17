@@ -12,6 +12,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestTemplate;
 
 import java.math.BigDecimal;
@@ -533,9 +534,18 @@ public class KargonomiCargoProvider implements CargoApiProvider {
                 logger.warn("[Kargonomi] bakiye sayıya çevrilemedi: {}", credit);
                 return CargoBalance.notReported();
             }
+        } catch (HttpClientErrorException.Unauthorized | HttpClientErrorException.Forbidden e) {
+            // The carrier answered — it just refused us. Saying "unreachable" here sent admins
+            // chasing network problems when the only thing wrong was the token in settings.
+            logger.warn("[Kargonomi] /user/credit token reddedildi: HTTP {}", e.getStatusCode());
+            return CargoBalance.rejected("HTTP " + e.getStatusCode().value());
+        } catch (HttpStatusCodeException e) {
+            logger.warn("[Kargonomi] /user/credit HTTP {} döndü: {}",
+                    e.getStatusCode(), e.getResponseBodyAsString());
+            return CargoBalance.unreachable("HTTP " + e.getStatusCode().value());
         } catch (Exception e) {
             logger.warn("Kargonomi balance sorgu hatası: {}", e.getMessage());
-            return CargoBalance.unreachable();
+            return CargoBalance.unreachable(e.getClass().getSimpleName());
         }
     }
 

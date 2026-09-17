@@ -28,6 +28,24 @@ class CargoBalanceTest {
     void unreachableIsNotDepleted() {
         assertThat(CargoBalance.unreachable().isDepleted()).isFalse();
         assertThat(CargoBalance.unsupported().isDepleted()).isFalse();
+        assertThat(CargoBalance.rejected("HTTP 401").isDepleted()).isFalse();
+    }
+
+    /**
+     * A refused token and a carrier we cannot reach need opposite fixes — one is a settings
+     * change, the other a network problem — so the admin screen must not merge them.
+     */
+    @Test
+    @DisplayName("Reddedilen token ile ulaşılamayan sunucu ayrı durumlar")
+    void aRefusedTokenIsNotAnUnreachableCarrier() {
+        CargoBalance rejected = CargoBalance.rejected("HTTP 401");
+        CargoBalance unreachable = CargoBalance.unreachable("ResourceAccessException");
+
+        assertThat(rejected.isCredentialProblem()).isTrue();
+        assertThat(unreachable.isCredentialProblem()).isFalse();
+
+        assertThat(rejected.describe()).contains("token").contains("HTTP 401");
+        assertThat(unreachable.describe()).doesNotContain("token");
     }
 
     @Test
@@ -44,7 +62,7 @@ class CargoBalanceTest {
         for (CargoBalance.State state : CargoBalance.State.values()) {
             CargoBalance balance = state == CargoBalance.State.OK
                     ? CargoBalance.of(new BigDecimal("120"))
-                    : new CargoBalance(state, null);
+                    : new CargoBalance(state, null, null);
             assertThat(balance.describe()).isNotBlank();
         }
     }

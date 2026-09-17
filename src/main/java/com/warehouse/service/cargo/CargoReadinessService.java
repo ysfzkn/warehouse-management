@@ -120,9 +120,17 @@ public class CargoReadinessService {
             case NOT_REPORTED -> new Check("token", "API token ve bakiye", Level.FAIL,
                     "Token çalışıyor (401 dönmedi) ama Kargonomi bakiye bildirmiyor.",
                     "Kargonomi hesabına bakiye yükleyip tekrar kontrol edin.");
+            // Reddedilme ile ulaşamama ayrı ayrı raporlanıyor: ikisinin çaresi zıt, tek
+            // mesajda birleştirilince admin hangisini düzelteceğini bilemiyordu.
+            case REJECTED -> new Check("token", "API token ve bakiye", Level.FAIL,
+                    "Kargonomi token'ı reddetti — " + balance.detail() + ".",
+                    "Token hatalı, süresi dolmuş ya da başka bir hesaba ait. "
+                    + "Kargonomi panelinden yeni token alıp Ayarlar → Kargo API'ye girin.");
             case UNREACHABLE -> new Check("token", "API token ve bakiye", Level.FAIL,
-                    "Kargonomi'ye ulaşılamadı ya da token reddedildi.",
-                    "Token'ı ve kargonomi_api_base_url ayarını kontrol edin.");
+                    "Kargonomi'ye hiç ulaşılamadı" + (balance.detail() == null
+                            ? "." : " — " + balance.detail() + "."),
+                    "Token değil bağlantı sorunu: sunucunun dış ağ çıkışını ve "
+                    + "kargonomi_api_base_url ayarını kontrol edin.");
             case UNSUPPORTED -> new Check("token", "API token ve bakiye", Level.WARN,
                     "Aktif sağlayıcı bakiye sorgusunu desteklemiyor.", null);
         };

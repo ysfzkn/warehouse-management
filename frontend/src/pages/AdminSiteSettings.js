@@ -891,7 +891,10 @@ export default function AdminSiteSettings() {
 
       // 403: security code, 400: validation, 401: session, 500: server, no response: network
       if (status === 403) {
-        toast.error('Güvenlik şifresi hatalı.');
+        // Backend 403'ü iki ayrı sebep için kullanıyor: şifre yanlış ve "çok fazla hatalı
+        // deneme, N dakika kilitli". Sabit metin basınca kilitli kullanıcı sebebi hiç
+        // göremiyor ve denemeye devam ediyordu.
+        toast.error(backendMsg || 'Güvenlik şifresi hatalı.');
       } else if (status === 401) {
         toast.error('Oturumunuz sona ermiş. Lütfen tekrar giriş yapın.');
       } else if (status === 400 || status === 422) {
