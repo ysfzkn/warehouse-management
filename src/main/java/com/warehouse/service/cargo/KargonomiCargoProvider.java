@@ -56,10 +56,11 @@ public class KargonomiCargoProvider implements CargoApiProvider {
     private final RestTemplate restTemplate;
 
     public KargonomiCargoProvider(SiteSettingService settingService,
-                                   KargonomiGeoLookupService geoLookup) {
+                                   KargonomiGeoLookupService geoLookup,
+                                   RestTemplate restTemplate) {
         this.settingService = settingService;
         this.geoLookup = geoLookup;
-        this.restTemplate = new RestTemplate();
+        this.restTemplate = restTemplate;
     }
 
     @Override

@@ -36,7 +36,11 @@ public class CaptchaService {
     private static final String HCAPTCHA_VERIFY_URL = "https://hcaptcha.com/siteverify";
     private static final String RECAPTCHA_VERIFY_URL = "https://www.google.com/recaptcha/api/siteverify";
 
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestTemplate restTemplate;
+
+    public CaptchaService(RestTemplate restTemplate) {
+        this.restTemplate = restTemplate;
+    }
 
     @Value("${captcha.provider:hcaptcha}")
     private String provider;

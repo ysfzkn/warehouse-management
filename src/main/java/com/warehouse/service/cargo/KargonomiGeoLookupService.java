@@ -88,9 +88,10 @@ public class KargonomiGeoLookupService {
         return lookupCityId(stateId, district) != null;
     }
 
-    public KargonomiGeoLookupService(SiteSettingService settingService) {
+    public KargonomiGeoLookupService(SiteSettingService settingService,
+                                      RestTemplate restTemplate) {
         this.settingService = settingService;
-        this.restTemplate = new RestTemplate();
+        this.restTemplate = restTemplate;
     }
 
     /** Converts a text province name to a Kargonomi state_id. {@code null} if not found. */

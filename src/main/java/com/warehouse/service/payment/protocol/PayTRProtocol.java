@@ -46,8 +46,8 @@ public class PayTRProtocol implements BankPosProtocol {
     private final RestTemplate restTemplate;
     private final ObjectMapper paytrJsonMapper = new ObjectMapper();
 
-    public PayTRProtocol() {
-        this.restTemplate = new RestTemplate();
+    public PayTRProtocol(RestTemplate restTemplate) {
+        this.restTemplate = restTemplate;
     }
 
     @Override

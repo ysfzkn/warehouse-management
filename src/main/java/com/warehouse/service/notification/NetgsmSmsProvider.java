@@ -32,9 +32,9 @@ public class NetgsmSmsProvider implements SmsProvider {
     private final SiteSettingService settingService;
     private final RestTemplate restTemplate;
 
-    public NetgsmSmsProvider(SiteSettingService settingService) {
+    public NetgsmSmsProvider(SiteSettingService settingService, RestTemplate restTemplate) {
         this.settingService = settingService;
-        this.restTemplate = new RestTemplate();
+        this.restTemplate = restTemplate;
     }
 
     @Override

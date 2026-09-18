@@ -39,11 +39,7 @@ class KargonomiGeoLookupTest {
 
     @BeforeEach
     void setUp() {
-        geoLookup = new KargonomiGeoLookupService(settingService);
-        // The service builds its own RestTemplate; swap it for the mock rather than reshaping
-        // production wiring in the middle of an incident.
-        org.springframework.test.util.ReflectionTestUtils.setField(
-                geoLookup, "restTemplate", restTemplate);
+        geoLookup = new KargonomiGeoLookupService(settingService, restTemplate);
         when(settingService.getSetting("kargonomi_api_base_url")).thenReturn("");
         when(settingService.getSetting("kargonomi_app_key")).thenReturn("");
     }

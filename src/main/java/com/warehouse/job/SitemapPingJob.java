@@ -28,10 +28,11 @@ public class SitemapPingJob {
     private static final Logger log = LoggerFactory.getLogger(SitemapPingJob.class);
 
     private final SiteSettingService settingService;
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestTemplate restTemplate;
 
-    public SitemapPingJob(SiteSettingService settingService) {
+    public SitemapPingJob(SiteSettingService settingService, RestTemplate restTemplate) {
         this.settingService = settingService;
+        this.restTemplate = restTemplate;
     }
 
     /** Monday morning at 04:00 (Turkey) — low-traffic hour. */

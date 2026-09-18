@@ -73,9 +73,9 @@ public class LogoInvoiceProvider implements InvoiceProvider {
     private final RestTemplate restTemplate;
     private final AtomicReference<SessionCache> sessionCache = new AtomicReference<>();
 
-    public LogoInvoiceProvider(SiteSettingService settingService) {
+    public LogoInvoiceProvider(SiteSettingService settingService, RestTemplate restTemplate) {
         this.settingService = settingService;
-        this.restTemplate = new RestTemplate();
+        this.restTemplate = restTemplate;
     }
 
     @Override

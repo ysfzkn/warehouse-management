@@ -24,9 +24,9 @@ public class GoogleOAuthServiceImpl implements GoogleOAuthService {
     private final GoogleOAuthProperties properties;
     private final RestTemplate restTemplate;
 
-    public GoogleOAuthServiceImpl(GoogleOAuthProperties properties) {
+    public GoogleOAuthServiceImpl(GoogleOAuthProperties properties, RestTemplate restTemplate) {
         this.properties = properties;
-        this.restTemplate = new RestTemplate();
+        this.restTemplate = restTemplate;
     }
 
     @Override
