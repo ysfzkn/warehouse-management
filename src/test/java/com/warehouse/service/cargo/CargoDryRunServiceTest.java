@@ -34,17 +34,21 @@ class CargoDryRunServiceTest {
     @Mock private SiteSettingService settingService;
     @Mock private CargoApiService cargoApiService;
     @Mock private KargonomiCargoProvider provider;
+    @Mock private KargonomiGeoLookupService geoLookup;
 
     private CargoDryRunService dryRun;
 
     private static final String DRAFT_ID = "9911";
     private static final BigDecimal ONE_DESI = BigDecimal.ONE;
+    private static final int[] KNOWN_GEO = { 34, 1234 };
 
     @BeforeEach
     void setUp() {
-        dryRun = new CargoDryRunService(settingService, cargoApiService, new CargoSenderProfile(settingService));
+        dryRun = new CargoDryRunService(settingService, cargoApiService,
+                new CargoSenderProfile(settingService), geoLookup);
         when(cargoApiService.getActiveProvider()).thenReturn(provider);
         when(provider.isEnabled()).thenReturn(true);
+        when(geoLookup.lookupStateAndCity(anyString(), anyString())).thenReturn(KNOWN_GEO);
         // Kargonomi altısını da istiyor; eksik olan biri isteğin tamamını reddettiriyor.
         when(settingService.getSetting(SettingKeys.SENDER_NAME)).thenReturn("Deneme Ticaret A.Ş.");
         when(settingService.getSetting(SettingKeys.SENDER_PHONE)).thenReturn("5551112233");
@@ -57,7 +61,7 @@ class CargoDryRunServiceTest {
     @Test
     @DisplayName("Başarılı deneme fiyatları getirir ve taslağı siler")
     void aSuccessfulTrialReturnsPricesAndCleansUp() {
-        when(provider.createDraftShipment(any())).thenReturn(DRAFT_ID);
+        when(provider.openDraft(any())).thenReturn(opened(DRAFT_ID));
         when(provider.fetchPriceComparison(DRAFT_ID)).thenReturn(List.of(
                 new KargonomiCargoProvider.CarrierQuote(4, "aras", "Aras Kargo",
                         new BigDecimal("55.00"), 2)));
@@ -78,7 +82,7 @@ class CargoDryRunServiceTest {
     @Test
     @DisplayName("Deneme ücretli gönderi oluşturma yolunu hiç kullanmaz")
     void theTrialNeverTakesThePathThatSpends() {
-        when(provider.createDraftShipment(any())).thenReturn(DRAFT_ID);
+        when(provider.openDraft(any())).thenReturn(opened(DRAFT_ID));
         when(provider.fetchPriceComparison(DRAFT_ID)).thenReturn(List.of());
         when(provider.deleteShipment(DRAFT_ID)).thenReturn(true);
 
@@ -94,7 +98,7 @@ class CargoDryRunServiceTest {
     @Test
     @DisplayName("Fiyat alınamasa bile taslak silinir")
     void theDraftIsDeletedEvenWhenPricingFails() {
-        when(provider.createDraftShipment(any())).thenReturn(DRAFT_ID);
+        when(provider.openDraft(any())).thenReturn(opened(DRAFT_ID));
         when(provider.fetchPriceComparison(DRAFT_ID))
                 .thenThrow(new IllegalStateException("Kargonomi 500"));
         when(provider.deleteShipment(DRAFT_ID)).thenReturn(true);
@@ -129,7 +133,7 @@ class CargoDryRunServiceTest {
                     assertThat(step.label()).isEqualTo("Gönderici bilgileri");
                     assertThat(step.detail()).contains("vergi/kimlik no");
                 });
-        verify(provider, never()).createDraftShipment(any());
+        verify(provider, never()).openDraft(any());
     }
 
     /** The invoice tax id already on file stands in, so nobody types the same number twice. */
@@ -138,7 +142,7 @@ class CargoDryRunServiceTest {
     void theInvoiceTaxIdStandsInWhenNoCargoSpecificOneIsSet() {
         when(settingService.getSetting(SettingKeys.SENDER_TAX_NUMBER)).thenReturn("");
         when(settingService.getSetting(SettingKeys.INVOICE_COMPANY_TAX_ID)).thenReturn("9876543210");
-        when(provider.createDraftShipment(any())).thenReturn(DRAFT_ID);
+        when(provider.openDraft(any())).thenReturn(opened(DRAFT_ID));
         when(provider.fetchPriceComparison(DRAFT_ID)).thenReturn(List.of(
                 new KargonomiCargoProvider.CarrierQuote(4, "aras", "Aras Kargo",
                         new BigDecimal("55.00"), 2)));
@@ -154,7 +158,8 @@ class CargoDryRunServiceTest {
     @Test
     @DisplayName("Taslak açılamazsa hangi adımda durduğu yazılır")
     void aRefusedDraftNamesTheStepThatFailed() {
-        when(provider.createDraftShipment(any())).thenReturn(null);
+        when(provider.openDraft(any()))
+                .thenReturn(refused("Kargonomi reddetti (HTTP 422): alıcı adresi eksik."));
 
         CargoDryRunService.Result result = dryRun.run("İstanbul", "Bilinmeyenİlçe", ONE_DESI);
 
@@ -164,8 +169,63 @@ class CargoDryRunServiceTest {
                 .singleElement()
                 .satisfies(step -> {
                     assertThat(step.label()).isEqualTo("Taslak gönderi");
-                    assertThat(step.detail()).isNotBlank();
+                    assertThat(step.detail()).contains("HTTP 422", "alıcı adresi eksik");
                 });
         verify(provider, never()).deleteShipment(anyString());
+    }
+
+    private static KargonomiCargoProvider.DraftAttempt opened(String id) {
+        return new KargonomiCargoProvider.DraftAttempt(id, null);
+    }
+
+    private static KargonomiCargoProvider.DraftAttempt refused(String reason) {
+        return new KargonomiCargoProvider.DraftAttempt(null, reason);
+    }
+
+    /**
+     * Kargonomi keeps its own province and district list, and silently drops a sender whose
+     * district it spells differently — then reports all six sender fields as missing, which sends
+     * the administrator to settings that are in fact filled in correctly. Catching it here names
+     * the one thing that is wrong.
+     */
+    @Test
+    @DisplayName("Gönderici ilçesi Kargonomi'de yoksa taslak açılmadan söylenir")
+    void anUnrecognisedSenderDistrictIsNamedBeforeTheDraft() {
+        when(geoLookup.lookupStateAndCity("NİĞDE", "MERKEZ")).thenReturn(null);
+        when(settingService.getSetting(SettingKeys.SENDER_CITY)).thenReturn("NİĞDE");
+        when(settingService.getSetting(SettingKeys.SENDER_DISTRICT)).thenReturn("MERKEZ");
+
+        CargoDryRunService.Result result = dryRun.run("İstanbul", "Kadıköy", ONE_DESI);
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.steps())
+                .filteredOn(step -> !step.ok())
+                .singleElement()
+                .satisfies(step -> {
+                    assertThat(step.label()).isEqualTo("Gönderici il/ilçe");
+                    assertThat(step.detail()).contains("NİĞDE", "MERKEZ");
+                });
+        verify(provider, never()).openDraft(any());
+    }
+
+    /**
+     * With a warehouse configured Kargonomi takes {@code warehouse_id} and none of the six sender
+     * fields are sent at all, so demanding them would fail a trial that would really succeed.
+     */
+    @Test
+    @DisplayName("Depo tanımlıysa gönderici alanları aranmaz")
+    void aConfiguredWarehouseReplacesTheSenderFields() {
+        when(settingService.getSetting(SettingKeys.KARGONOMI_WAREHOUSE_ID)).thenReturn("42");
+        when(settingService.getSetting(SettingKeys.SENDER_NAME)).thenReturn("");
+        when(settingService.getSetting(SettingKeys.SITE_NAME)).thenReturn("");
+        when(settingService.getSetting(SettingKeys.SENDER_TAX_NUMBER)).thenReturn("");
+        when(settingService.getSetting(SettingKeys.INVOICE_COMPANY_TAX_ID)).thenReturn("");
+        when(provider.openDraft(any())).thenReturn(opened(DRAFT_ID));
+        when(provider.fetchPriceComparison(DRAFT_ID)).thenReturn(List.of(
+                new KargonomiCargoProvider.CarrierQuote(4, "aras", "Aras Kargo",
+                        new BigDecimal("55.00"), 2)));
+        when(provider.deleteShipment(DRAFT_ID)).thenReturn(true);
+
+        assertThat(dryRun.run("İstanbul", "Kadıköy", ONE_DESI).success()).isTrue();
     }
 }

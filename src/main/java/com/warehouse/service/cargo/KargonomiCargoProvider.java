@@ -262,27 +262,71 @@ public class KargonomiCargoProvider implements CargoApiProvider {
     }
 
     /**
-     * Creates a draft shipment and returns its id, without confirming a carrier. Used for
-     * pricing: the draft is the only way to ask Kargonomi what a delivery would cost, and the
-     * caller is expected to {@link #deleteShipment} it afterwards.
+     * A draft that was opened, or the reason it was not.
+     *
+     * <p>{@link #createDraftShipment} answers {@code null} for every kind of refusal. That is
+     * enough for checkout pricing, which falls back to the rate table whatever went wrong, and
+     * useless for the trial, whose whole job is to say what is wrong. Carrying the reason is what
+     * lets the administrator read Kargonomi's own words instead of being sent to a server log
+     * they cannot open.
      */
-    public String createDraftShipment(CargoShipmentRequest request) {
-        if (!isEnabled()) return null;
-        try {
-            int[] buyerGeo = geoLookup.lookupStateAndCity(
-                    request.getRecipientCity(), request.getRecipientDistrict());
-            if (buyerGeo == null) return null;
+    public record DraftAttempt(String id, String failure) {
+        static DraftAttempt opened(String id) { return new DraftAttempt(id, null); }
+        static DraftAttempt refused(String failure) { return new DraftAttempt(null, failure); }
+        public boolean ok() { return id != null; }
+    }
 
+    /**
+     * Opens a draft shipment without confirming a carrier, and says why when it cannot.
+     *
+     * <p>A draft is the only way to ask Kargonomi what a delivery would cost, and it is free —
+     * only {@code confirm-shipping-price} charges. The caller is expected to
+     * {@link #deleteShipment} it afterwards.
+     */
+    public DraftAttempt openDraft(CargoShipmentRequest request) {
+        if (!isEnabled()) {
+            return DraftAttempt.refused("Kargonomi entegrasyonu kapalı ya da API token'ı boş.");
+        }
+
+        int[] buyerGeo = geoLookup.lookupStateAndCity(
+                request.getRecipientCity(), request.getRecipientDistrict());
+        if (buyerGeo == null) {
+            // Distinguished from a carrier refusal on purpose: this one never left our server,
+            // and the fix is a spelling in the address rather than anything in the account.
+            return DraftAttempt.refused("Alıcı adresi Kargonomi'nin il/ilçe listesinde bulunamadı: "
+                    + request.getRecipientCity() + " / " + request.getRecipientDistrict());
+        }
+
+        try {
             Map<String, Object> body = buildShipmentBody(request, buyerGeo[0], buyerGeo[1], false);
             HttpHeaders headers = buildAuthHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
             ResponseEntity<Map> response = restTemplate.postForEntity(
                     getBaseUrl() + "/shipments", new HttpEntity<>(body, headers), Map.class);
-            return strVal(unwrapData(response.getBody()).get("id"));
+            String draftId = strVal(unwrapData(response.getBody()).get("id"));
+            return draftId != null ? DraftAttempt.opened(draftId)
+                    : DraftAttempt.refused("Kargonomi yanıtında taslak numarası yok.");
+        } catch (IllegalStateException e) {
+            // Our own precondition, e.g. an unmatched sender district: nothing was sent, and the
+            // message already says which setting to fix.
+            return DraftAttempt.refused(e.getMessage());
+        } catch (HttpStatusCodeException e) {
+            // The body names the field the carrier did not like; without it every rejection reads
+            // the same and the administrator is left guessing which setting is at fault.
+            String detail = summarize(e.getResponseBodyAsString());
+            logger.warn("[Kargonomi] taslak reddedildi HTTP {}: {}", e.getStatusCode(), detail);
+            return DraftAttempt.refused("Kargonomi reddetti (HTTP " + e.getStatusCode().value() + ")"
+                    + (detail.isBlank() ? "." : ": " + detail));
         } catch (Exception e) {
-            logger.warn("[Kargonomi] fiyat taslağı oluşturulamadı: {}", e.getMessage());
-            return null;
+            logger.warn("[Kargonomi] taslak oluşturulamadı: {}", e.toString());
+            return DraftAttempt.refused("Kargonomi'ye ulaşılamadı: " + e.getClass().getSimpleName()
+                    + ". Sunucunun dış ağ çıkışını kontrol edin.");
         }
+    }
+
+    /** {@link #openDraft} without the reason, for callers that treat every failure the same. */
+    public String createDraftShipment(CargoShipmentRequest request) {
+        return openDraft(request).id();
     }
 
     private static BigDecimal toDecimal(Object value) {
@@ -869,20 +913,23 @@ public class KargonomiCargoProvider implements CargoApiProvider {
             // the wrong place".
             int[] senderGeo = geoLookup.lookupStateAndCity(
                     request.getSenderCity(), request.getSenderDistrict());
-            if (senderGeo != null) {
-                shipment.put("sender_name", request.getSenderName());
-                shipment.put("sender_phone", normalizePhone(request.getSenderPhone()));
-                shipment.put("sender_address", request.getSenderAddress());
-                shipment.put("sender_state_id", senderGeo[0]);
-                shipment.put("sender_city_id", senderGeo[1]);
-                // Required whenever no warehouse is named, and never sent until now.
-                if (request.getSenderTaxNumber() != null && !request.getSenderTaxNumber().isBlank()) {
-                    shipment.put("sender_tax_number", request.getSenderTaxNumber().trim());
-                }
-            } else {
-                logger.warn("[Kargonomi] gönderici il/ilçe eşleşmedi: {} / {} — gönderici "
-                        + "bilgileri gönderilemiyor, istek reddedilecek.",
-                        request.getSenderCity(), request.getSenderDistrict());
+            if (senderGeo == null) {
+                // Sending the request anyway produced a 422 listing every sender field as
+                // missing, which points at the six settings rather than at the one that is
+                // actually wrong: the province or district spelling Kargonomi does not know.
+                throw new IllegalStateException(
+                        "Gönderici il/ilçe Kargonomi listesinde bulunamadı: "
+                        + request.getSenderCity() + " / " + request.getSenderDistrict()
+                        + ". Ayarlar → Gönderici Bilgileri'ndeki yazımı kontrol edin.");
+            }
+            shipment.put("sender_name", request.getSenderName());
+            shipment.put("sender_phone", normalizePhone(request.getSenderPhone()));
+            shipment.put("sender_address", request.getSenderAddress());
+            shipment.put("sender_state_id", senderGeo[0]);
+            shipment.put("sender_city_id", senderGeo[1]);
+            // Required whenever no warehouse is named, and never sent until now.
+            if (request.getSenderTaxNumber() != null && !request.getSenderTaxNumber().isBlank()) {
+                shipment.put("sender_tax_number", request.getSenderTaxNumber().trim());
             }
         }
 

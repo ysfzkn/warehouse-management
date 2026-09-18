@@ -43,6 +43,8 @@ public class CargoPriceQuoteService {
     private static final String QUOTE_NAME = "Fiyat Sorgulama";
     private static final String QUOTE_PHONE = "5000000000";
     private static final String QUOTE_ADDRESS = "Fiyat sorgulama amacli olusturulan gecici kayit";
+    /** Every Kargonomi example names the package contents; a parcel without it is refused. */
+    private static final String QUOTE_CONTENT = "Fiyat sorgulama";
 
     private final SiteSettingService settingService;
     private final CargoApiService cargoApiService;
@@ -120,7 +122,8 @@ public class CargoPriceQuoteService {
                 .recipientCountryCode("TR")
                 .packageCount(1)
                 .totalDesi(desi)
-                .packages(List.of(new CargoShipmentRequest.PackagePlan(desi, null)))
+                .contentDescription(QUOTE_CONTENT)
+                .packages(List.of(new CargoShipmentRequest.PackagePlan(desi, QUOTE_CONTENT)))
                 .build();
 
         String draftId = provider.createDraftShipment(probe);

@@ -33,16 +33,20 @@ public class CargoDryRunService {
     private static final String PROBE_NAME = "Deneme Alici";
     private static final String PROBE_PHONE = "5000000000";
     private static final String PROBE_ADDRESS = "Deneme Mahallesi Deneme Sokak No 1 Daire 1";
+    /** Kargonomi's own example always names the package contents; an unnamed parcel is refused. */
+    private static final String PROBE_CONTENT = "Deneme gonderi";
 
     private final SiteSettingService settingService;
     private final CargoApiService cargoApiService;
     private final CargoSenderProfile senderProfile;
+    private final KargonomiGeoLookupService geoLookup;
 
     public CargoDryRunService(SiteSettingService settingService, CargoApiService cargoApiService,
-                               CargoSenderProfile senderProfile) {
+                               CargoSenderProfile senderProfile, KargonomiGeoLookupService geoLookup) {
         this.settingService = settingService;
         this.cargoApiService = cargoApiService;
         this.senderProfile = senderProfile;
+        this.geoLookup = geoLookup;
     }
 
     /**
@@ -76,18 +80,49 @@ public class CargoDryRunService {
         }
         steps.add(new Step("Sağlayıcı", true, "Kargonomi aktif."));
 
-        // Kargonomi altı gönderici alanının hepsini istiyor ve biri eksikse isteğin tamamını
-        // reddediyor — yalnızca ile bakmak, eksiği taslak adımına kadar gizliyordu.
-        if (!senderProfile.isComplete()) {
-            steps.add(new Step("Gönderici bilgileri", false,
-                    "Eksik alan(lar): " + senderProfile.missingFields()
-                    + ". Kargonomi bunlar olmadan gönderi oluşturmuyor."));
+        // A configured warehouse replaces the whole sender block: Kargonomi takes warehouse_id
+        // and none of the six fields are sent, so checking them here would fail a trial that
+        // would in fact succeed.
+        String warehouseId = settingService.getSetting(SettingKeys.KARGONOMI_WAREHOUSE_ID);
+        boolean usesWarehouse = warehouseId != null && !warehouseId.isBlank();
+
+        if (usesWarehouse) {
+            steps.add(new Step("Gönderici bilgileri", true,
+                    "Kargonomi deposu kullanılıyor (id " + warehouseId.trim() + ")."));
+        } else {
+            // Kargonomi altı gönderici alanının hepsini istiyor ve biri eksikse isteğin tamamını
+            // reddediyor — yalnızca ile bakmak, eksiği taslak adımına kadar gizliyordu.
+            if (!senderProfile.isComplete()) {
+                steps.add(new Step("Gönderici bilgileri", false,
+                        "Eksik alan(lar): " + senderProfile.missingFields()
+                        + ". Kargonomi bunlar olmadan gönderi oluşturmuyor."));
+                return new Result(false, steps, List.of());
+            }
+            String senderCity = settingService.getSetting(SettingKeys.SENDER_CITY);
+            String senderDistrict = settingService.getSetting(SettingKeys.SENDER_DISTRICT);
+            steps.add(new Step("Gönderici bilgileri", true,
+                    senderProfile.name() + " — " + senderCity + " / " + senderDistrict));
+
+            // Filled in is not the same as recognised. Kargonomi keeps its own province and
+            // district list, and a district it spells differently is dropped from the request —
+            // which the carrier then reports as every sender field missing, pointing at the
+            // wrong settings entirely.
+            if (geoLookup.lookupStateAndCity(senderCity, senderDistrict) == null) {
+                steps.add(new Step("Gönderici il/ilçe", false,
+                        "Kargonomi \"" + senderCity + " / " + senderDistrict + "\" adresini "
+                        + "tanımıyor. Ayarlardaki yazımı Kargonomi'nin listesine göre düzeltin."));
+                return new Result(false, steps, List.of());
+            }
+            steps.add(new Step("Gönderici il/ilçe", true, "Kargonomi tanıdı."));
+        }
+
+        if (geoLookup.lookupStateAndCity(city, district) == null) {
+            steps.add(new Step("Alıcı il/ilçe", false,
+                    "Kargonomi \"" + city + " / " + district + "\" adresini tanımıyor. "
+                    + "Deneme için il ve ilçeyi Kargonomi'nin yazdığı gibi girin."));
             return new Result(false, steps, List.of());
         }
-        steps.add(new Step("Gönderici bilgileri", true,
-                senderProfile.name() + " — "
-                + settingService.getSetting(SettingKeys.SENDER_CITY) + " / "
-                + settingService.getSetting(SettingKeys.SENDER_DISTRICT)));
+        steps.add(new Step("Alıcı il/ilçe", true, "Kargonomi tanıdı."));
 
         CargoShipmentRequest probe = senderProfile.applyTo(CargoShipmentRequest.builder())
                 .orderNumber(null)                 // no barcode: this draft is not an order
@@ -99,16 +134,17 @@ public class CargoDryRunService {
                 .recipientCountryCode("TR")
                 .packageCount(1)
                 .totalDesi(desi)
-                .packages(List.of(new CargoShipmentRequest.PackagePlan(desi, null)))
+                .contentDescription(PROBE_CONTENT)
+                .packages(List.of(new CargoShipmentRequest.PackagePlan(desi, PROBE_CONTENT)))
                 .build();
 
-        String draftId = provider.createDraftShipment(probe);
-        if (draftId == null) {
-            steps.add(new Step("Taslak gönderi", false,
-                    "Kargonomi taslağı oluşturmadı. Alıcı il/ilçe tanınmamış ya da gönderici "
-                    + "bilgileri kabul edilmemiş olabilir; sunucu günlüğünde sebebi yazıyor."));
+        KargonomiCargoProvider.DraftAttempt attempt = provider.openDraft(probe);
+        if (!attempt.ok()) {
+            // The carrier's own words, not a pointer to a log the administrator cannot open.
+            steps.add(new Step("Taslak gönderi", false, attempt.failure()));
             return new Result(false, steps, List.of());
         }
+        String draftId = attempt.id();
         steps.add(new Step("Taslak gönderi", true, "Oluşturuldu (id " + draftId + ") — ücretsiz."));
 
         List<KargonomiCargoProvider.CarrierQuote> quotes = List.of();
