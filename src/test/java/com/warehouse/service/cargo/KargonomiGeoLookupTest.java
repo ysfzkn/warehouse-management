@@ -53,13 +53,13 @@ class KargonomiGeoLookupTest {
     @DisplayName("Sonunda boşluk olan token kırpılarak gönderilir")
     void aTokenPastedWithTrailingWhitespaceIsStillSentCorrectly() {
         when(settingService.getSetting("kargonomi_api_token")).thenReturn("abc123\n");
-        when(restTemplate.exchange(anyString(), eq(HttpMethod.GET), any(), eq(Map.class)))
+        when(restTemplate.exchange(anyString(), eq(HttpMethod.GET), any(), eq(Object.class)))
                 .thenReturn(ResponseEntity.ok(TWO_PROVINCES));
 
         geoLookup.states();
 
         var entity = org.mockito.ArgumentCaptor.forClass(HttpEntity.class);
-        verify(restTemplate).exchange(anyString(), eq(HttpMethod.GET), entity.capture(), eq(Map.class));
+        verify(restTemplate).exchange(anyString(), eq(HttpMethod.GET), entity.capture(), eq(Object.class));
         assertThat(entity.getValue().getHeaders().getFirst("Authorization"))
                 .isEqualTo("Bearer abc123");
     }
@@ -72,7 +72,7 @@ class KargonomiGeoLookupTest {
     @DisplayName("Boş liste önbelleğe alınmaz, sonraki istekte tekrar denenir")
     void anEmptyListIsRetriedRatherThanRemembered() {
         when(settingService.getSetting("kargonomi_api_token")).thenReturn("abc123");
-        when(restTemplate.exchange(anyString(), eq(HttpMethod.GET), any(), eq(Map.class)))
+        when(restTemplate.exchange(anyString(), eq(HttpMethod.GET), any(), eq(Object.class)))
                 .thenReturn(ResponseEntity.ok(Map.of("data", List.of())))
                 .thenReturn(ResponseEntity.ok(TWO_PROVINCES));
 
@@ -81,20 +81,40 @@ class KargonomiGeoLookupTest {
         // Second call must go back to the carrier rather than serving the remembered emptiness.
         assertThat(geoLookup.states()).hasSize(2);
         verify(restTemplate, times(2))
-                .exchange(anyString(), eq(HttpMethod.GET), any(), eq(Map.class));
+                .exchange(anyString(), eq(HttpMethod.GET), any(), eq(Object.class));
+    }
+
+    /**
+     * Kargonomi wraps some list endpoints in {@code {"data": [...]}} and returns others as a bare
+     * array. Binding the response to {@code Map.class} read the first shape and threw on the
+     * second, which is why the balance check passed while the province list reported the carrier
+     * unreachable — same token, same moment, opposite verdicts.
+     */
+    @Test
+    @DisplayName("Üst seviye dizi de data sarmalı da okunur")
+    void bothResponseShapesAreUnderstood() {
+        when(settingService.getSetting("kargonomi_api_token")).thenReturn("abc123");
+        when(restTemplate.exchange(anyString(), eq(HttpMethod.GET), any(), eq(Object.class)))
+                .thenReturn(ResponseEntity.ok(List.of(
+                        Map.of("id", 34, "name", "İSTANBUL"), Map.of("id", 6, "name", "ANKARA"))));
+
+        assertThat(geoLookup.states())
+                .as("sarmalsız dizi de bir yanıttır")
+                .hasSize(2);
+        assertThat(geoLookup.lookupStateId("İstanbul")).isEqualTo(34);
     }
 
     @Test
     @DisplayName("Dolu liste önbelleğe alınır, tekrar sorulmaz")
     void aRealListIsCachedAndNotAskedForTwice() {
         when(settingService.getSetting("kargonomi_api_token")).thenReturn("abc123");
-        when(restTemplate.exchange(anyString(), eq(HttpMethod.GET), any(), eq(Map.class)))
+        when(restTemplate.exchange(anyString(), eq(HttpMethod.GET), any(), eq(Object.class)))
                 .thenReturn(ResponseEntity.ok(TWO_PROVINCES));
 
         assertThat(geoLookup.states()).hasSize(2);
         assertThat(geoLookup.states()).hasSize(2);
 
         verify(restTemplate, times(1))
-                .exchange(anyString(), eq(HttpMethod.GET), any(), eq(Map.class));
+                .exchange(anyString(), eq(HttpMethod.GET), any(), eq(Object.class));
     }
 }

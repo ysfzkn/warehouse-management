@@ -125,8 +125,8 @@ public class KargonomiGeoLookupService {
         }
         try {
             String url = getBaseUrl() + "/states/" + TURKEY_COUNTRY_ID;
-            ResponseEntity<Map> response = restTemplate.exchange(
-                    url, HttpMethod.GET, new HttpEntity<>(buildHeaders()), Map.class);
+            ResponseEntity<Object> response = restTemplate.exchange(
+                    url, HttpMethod.GET, new HttpEntity<>(buildHeaders()), Object.class);
             Map<String, Integer> built = parseIdNameList(response.getBody(), "name", "id");
             if (built.isEmpty()) {
                 // An empty answer is never a real one — Turkey has 81 provinces. Caching it
@@ -154,8 +154,8 @@ public class KargonomiGeoLookupService {
         }
         try {
             String url = getBaseUrl() + "/cities/" + stateId;
-            ResponseEntity<Map> response = restTemplate.exchange(
-                    url, HttpMethod.GET, new HttpEntity<>(buildHeaders()), Map.class);
+            ResponseEntity<Object> response = restTemplate.exchange(
+                    url, HttpMethod.GET, new HttpEntity<>(buildHeaders()), Object.class);
             Map<String, Integer> built = parseIdNameList(response.getBody(), "name", "id");
             if (built.isEmpty()) {
                 // Same reasoning as the province list: every Turkish province has districts, so
@@ -175,11 +175,31 @@ public class KargonomiGeoLookupService {
         }
     }
 
+    /**
+     * The rows of a list response, whichever shape the carrier sent them in.
+     *
+     * <p>Kargonomi wraps some list endpoints in {@code {"data": [...]}} and returns others as a
+     * bare {@code [...]}. Binding the response to {@code Map.class} therefore worked for the
+     * balance call and threw for the province list — the same token, the same moment, one
+     * endpoint healthy and the other reporting "Kargonomi'ye ulaşılamadı". Binding to
+     * {@code Object} and deciding here is what makes both shapes readable.
+     *
+     * @return the row list, or null when the body is neither shape
+     */
     @SuppressWarnings("unchecked")
-    private Map<String, Integer> parseIdNameList(Map<String, Object> body, String nameKey, String idKey) {
-        if (body == null) return Map.of();
-        Object data = body.getOrDefault("data", body);
-        if (!(data instanceof List)) return Map.of();
+    private static List<Object> rowsOf(Object body) {
+        if (body instanceof List<?> list) return (List<Object>) list;
+        if (body instanceof Map<?, ?> map) {
+            Object data = ((Map<String, Object>) map).getOrDefault("data", null);
+            if (data instanceof List<?> list) return (List<Object>) list;
+        }
+        return null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Integer> parseIdNameList(Object body, String nameKey, String idKey) {
+        Object data = rowsOf(body);
+        if (data == null) return Map.of();
         Map<String, Integer> out = new HashMap<>();
         for (Object item : (List<Object>) data) {
             if (!(item instanceof Map<?,?> m)) continue;
@@ -196,10 +216,9 @@ public class KargonomiGeoLookupService {
 
     /** Same payload, original spelling, sorted the way a person reads a dropdown. */
     @SuppressWarnings("unchecked")
-    private List<GeoEntry> parseDisplayList(Map<String, Object> body) {
-        if (body == null) return List.of();
-        Object data = body.getOrDefault("data", body);
-        if (!(data instanceof List)) return List.of();
+    private List<GeoEntry> parseDisplayList(Object body) {
+        Object data = rowsOf(body);
+        if (data == null) return List.of();
 
         List<GeoEntry> out = new java.util.ArrayList<>();
         for (Object item : (List<Object>) data) {
