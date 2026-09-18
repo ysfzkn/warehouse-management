@@ -2,6 +2,7 @@ package com.warehouse.service.cargo;
 
 import com.warehouse.constants.SettingKeys;
 import com.warehouse.service.SiteSettingService;
+import com.warehouse.util.TurkishPhone;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
 import org.slf4j.Logger;
@@ -440,7 +441,7 @@ public class KargonomiCargoProvider implements CargoApiProvider {
                                    String city, String district) {
         Map<String, Object> fields = new LinkedHashMap<>();
         if (name != null && !name.isBlank()) fields.put("buyer_name", name.trim());
-        if (phone != null && !phone.isBlank()) fields.put("buyer_phone", normalizePhone(phone));
+        if (phone != null && !phone.isBlank()) fields.put("buyer_phone", TurkishPhone.national(phone));
         if (address != null && !address.isBlank()) fields.put("buyer_address", address.trim());
 
         if (city != null && !city.isBlank() && district != null && !district.isBlank()) {
@@ -775,7 +776,7 @@ public class KargonomiCargoProvider implements CargoApiProvider {
             body.put("is_main", req.isMain());
             body.put("contact_name", req.getContactName());
             body.put("address", req.getAddress());
-            body.put("contact_phone", normalizePhone(req.getContactPhone()));
+            body.put("contact_phone", TurkishPhone.national(req.getContactPhone()));
             body.put("state_id", geo[0]);
             body.put("city_id", geo[1]);
             if (req.getTaxNumber() != null) body.put("tax_number", req.getTaxNumber());
@@ -853,7 +854,7 @@ public class KargonomiCargoProvider implements CargoApiProvider {
                                                     boolean isReturn) {
         Map<String, Object> shipment = new LinkedHashMap<>();
         shipment.put("buyer_name", request.getRecipientName());
-        shipment.put("buyer_phone", normalizePhone(request.getRecipientPhone()));
+        shipment.put("buyer_phone", TurkishPhone.national(request.getRecipientPhone()));
         shipment.put("buyer_address", request.getRecipientAddress());
         shipment.put("buyer_state_id", buyerStateId);
         shipment.put("buyer_city_id", buyerCityId);
@@ -923,7 +924,7 @@ public class KargonomiCargoProvider implements CargoApiProvider {
                         + ". Ayarlar → Gönderici Bilgileri'ndeki yazımı kontrol edin.");
             }
             shipment.put("sender_name", request.getSenderName());
-            shipment.put("sender_phone", normalizePhone(request.getSenderPhone()));
+            shipment.put("sender_phone", TurkishPhone.national(request.getSenderPhone()));
             shipment.put("sender_address", request.getSenderAddress());
             shipment.put("sender_state_id", senderGeo[0]);
             shipment.put("sender_city_id", senderGeo[1]);
@@ -1117,15 +1118,6 @@ public class KargonomiCargoProvider implements CargoApiProvider {
     private static String truncate(String s, int max) {
         if (s == null) return null;
         return s.length() <= max ? s : s.substring(0, max) + "…";
-    }
-
-    private static String normalizePhone(String phone) {
-        if (phone == null) return null;
-        // Kargonomi usually expects 10 digits (without a leading 0)
-        String digits = phone.replaceAll("\\D+", "");
-        if (digits.startsWith("90") && digits.length() == 12) return digits.substring(2);
-        if (digits.startsWith("0") && digits.length() == 11) return digits.substring(1);
-        return digits;
     }
 
     private static LocalDateTime parseDate(String s) {

@@ -2,6 +2,7 @@ package com.warehouse.service.cargo;
 
 import com.warehouse.constants.SettingKeys;
 import com.warehouse.service.SiteSettingService;
+import com.warehouse.util.TurkishPhone;
 import org.springframework.stereotype.Service;
 
 /**
@@ -64,6 +65,37 @@ public class CargoSenderProfile {
                 && notBlank(settingService.getSetting(SettingKeys.SENDER_CITY))
                 && notBlank(settingService.getSetting(SettingKeys.SENDER_DISTRICT))
                 && notBlank(taxNumber());
+    }
+
+    /**
+     * Whether the configured phone is one Kargonomi will accept, and why not when it is not.
+     *
+     * <p>Present is not the same as usable: a number typed with an extension, a second number
+     * beside it or a digit short passes every "is it filled in" check and is refused by the
+     * carrier with "Gönderici Telefon 1 (Mobil) 10 rakam olmalıdır" — after the shipment was
+     * supposed to go out. Answering it here costs nothing and names the field.
+     *
+     * @return null when the number is fine, otherwise a sentence for the administrator
+     */
+    public String phoneProblem() {
+        String phone = settingService.getSetting(SettingKeys.SENDER_PHONE);
+        if (!notBlank(phone)) return "Gönderici telefonu boş.";
+        if (TurkishPhone.isValid(phone)) return null;
+
+        String reduced = TurkishPhone.national(phone);
+        return "Kargonomi telefonu " + TurkishPhone.NATIONAL_LENGTH + " hane istiyor; ayarlardaki "
+                + "numara " + reduced.length() + " haneye çözülüyor (" + reduced + "). Başında 0 ya "
+                + "da +90 olmadan, dahili veya ikinci numara olmadan girin.";
+    }
+
+    /** Kargonomi names this field "Telefon 1 (Mobil)", so a landline may not be accepted. */
+    public boolean hasMobilePhone() {
+        return TurkishPhone.isMobile(settingService.getSetting(SettingKeys.SENDER_PHONE));
+    }
+
+    /** The number exactly as it would be sent to the carrier. */
+    public String dialledPhone() {
+        return TurkishPhone.national(settingService.getSetting(SettingKeys.SENDER_PHONE));
     }
 
     /** Names what is missing, so the admin screen can say which field to fill. */

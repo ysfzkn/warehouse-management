@@ -51,7 +51,7 @@ class CargoDryRunServiceTest {
         when(geoLookup.lookupStateAndCity(anyString(), anyString())).thenReturn(KNOWN_GEO);
         // Kargonomi altısını da istiyor; eksik olan biri isteğin tamamını reddettiriyor.
         when(settingService.getSetting(SettingKeys.SENDER_NAME)).thenReturn("Deneme Ticaret A.Ş.");
-        when(settingService.getSetting(SettingKeys.SENDER_PHONE)).thenReturn("5551112233");
+        when(settingService.getSetting(SettingKeys.SENDER_PHONE)).thenReturn("0555 111 22 33");
         when(settingService.getSetting(SettingKeys.SENDER_ADDRESS)).thenReturn("Merkez Mah. No 1");
         when(settingService.getSetting(SettingKeys.SENDER_CITY)).thenReturn("İstanbul");
         when(settingService.getSetting(SettingKeys.SENDER_DISTRICT)).thenReturn("Üsküdar");
@@ -227,5 +227,29 @@ class CargoDryRunServiceTest {
         when(provider.deleteShipment(DRAFT_ID)).thenReturn(true);
 
         assertThat(dryRun.run("İstanbul", "Kadıköy", ONE_DESI).success()).isTrue();
+    }
+
+    /**
+     * The carrier refused a real trial with "Gönderici Telefon 1 (Mobil) 10 rakam olmalıdır",
+     * which is only readable once someone knows what we actually sent. The trial now says so
+     * before the request leaves.
+     */
+    @Test
+    @DisplayName("Telefon on haneye inmiyorsa taslak açılmadan söylenir")
+    void aPhoneThatDoesNotReduceToTenDigitsStopsTheTrial() {
+        when(settingService.getSetting(SettingKeys.SENDER_PHONE))
+                .thenReturn("0555 111 22 33 dahili 12");
+
+        CargoDryRunService.Result result = dryRun.run("İstanbul", "Kadıköy", ONE_DESI);
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.steps())
+                .filteredOn(step -> !step.ok())
+                .singleElement()
+                .satisfies(step -> {
+                    assertThat(step.label()).isEqualTo("Gönderici telefon");
+                    assertThat(step.detail()).contains("10 hane");
+                });
+        verify(provider, never()).openDraft(any());
     }
 }

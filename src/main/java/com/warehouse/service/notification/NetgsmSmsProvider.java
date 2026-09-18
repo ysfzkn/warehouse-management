@@ -1,6 +1,7 @@
 package com.warehouse.service.notification;
 
 import com.warehouse.constants.SettingKeys;
+import com.warehouse.util.TurkishPhone;
 import com.warehouse.service.SiteSettingService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -105,15 +106,9 @@ public class NetgsmSmsProvider implements SmsProvider {
             && password != null && !password.isBlank();
     }
 
-    /** "+905551234567" or "05551234567" -> "5551234567" (10 digits) */
+    /** "+905551234567" or "05551234567" -> "5551234567"; null when it is not a mobile. */
     private String normalizePhone(String phone) {
-        if (phone == null) return null;
-        String digits = phone.replaceAll("\\D", "");
-        if (digits.startsWith("90")) digits = digits.substring(2);
-        if (digits.startsWith("0")) digits = digits.substring(1);
-        if (digits.length() != 10) return null;
-        if (!digits.startsWith("5")) return null; // a GSM number must start with 5
-        return digits;
+        return TurkishPhone.isMobile(phone) ? TurkishPhone.national(phone) : null;
     }
 
     private String interpretNetgsmError(String code) {

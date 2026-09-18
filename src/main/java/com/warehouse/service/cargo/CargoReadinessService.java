@@ -300,6 +300,13 @@ public class CargoReadinessService {
         // refuses the request unless every one of its fields is present. The list of what
         // "complete" means lives in CargoSenderProfile; this check had its own copy, which was
         // missing the tax number and so reported a sender that the carrier would reject.
+        // Complete is not the same as acceptable: the phone has to be ten digits or the carrier
+        // refuses the shipment, and finding that out here beats finding it out at dispatch.
+        String phoneProblem = senderProfile.phoneProblem();
+        if (senderProfile.isComplete() && phoneProblem != null) {
+            return new Check("sender", "Gönderici deposu", Level.FAIL, phoneProblem,
+                    "Ayarlar → Gönderici Bilgileri → Telefon alanını düzeltin.");
+        }
         if (senderProfile.isComplete()) {
             return new Check("sender", "Gönderici deposu", Level.WARN,
                     "Kargonomi depo id'si yok; gönderici bilgileri her gönderide tek tek yollanacak.",

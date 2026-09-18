@@ -144,10 +144,9 @@ public class StoreAddressController {
         return errors;
     }
 
+    /** Stored the way it is written at home, "05321112233", whatever shape was typed. */
     private String normalizePhone(String phone) {
-        String clean = phone.replaceAll("[\\s\\-]", "");
-        if (clean.startsWith("+90")) clean = "0" + clean.substring(3);
-        if (!clean.startsWith("0")) clean = "0" + clean;
-        return clean;
+        String stored = com.warehouse.util.TurkishPhone.withTrunkZero(phone);
+        return stored == null || stored.isEmpty() ? phone : stored;
     }
 }

@@ -114,6 +114,18 @@ public class CargoDryRunService {
                 return new Result(false, steps, List.of());
             }
             steps.add(new Step("Gönderici il/ilçe", true, "Kargonomi tanıdı."));
+
+            // Filled in is not the same as dialable either. A number with an extension or a
+            // second number beside it reaches the carrier as the wrong length and is refused.
+            String phoneProblem = senderProfile.phoneProblem();
+            if (phoneProblem != null) {
+                steps.add(new Step("Gönderici telefon", false, phoneProblem));
+                return new Result(false, steps, List.of());
+            }
+            steps.add(new Step("Gönderici telefon", true, senderProfile.dialledPhone()
+                    + (senderProfile.hasMobilePhone() ? ""
+                       : " — Kargonomi bu alanı \"Mobil\" olarak adlandırıyor, sabit hattı "
+                         + "kabul etmeyebilir.")));
         }
 
         if (geoLookup.lookupStateAndCity(city, district) == null) {
