@@ -44,6 +44,7 @@ public class AdminCargoApiController {
     private final com.warehouse.service.cargo.CargoLabelBatchService labelBatchService;
     private final com.warehouse.service.cargo.CargoPerformanceService performanceService;
     private final com.warehouse.service.cargo.CargoReadinessService readinessService;
+    private final com.warehouse.service.cargo.CargoDryRunService dryRunService;
 
     public AdminCargoApiController(CargoApiService cargoApiService,
                                     OrderRepository orderRepository,
@@ -52,7 +53,8 @@ public class AdminCargoApiController {
                                     CargoShipmentOutboxRepository outboxRepository,
                                     com.warehouse.service.cargo.CargoLabelBatchService labelBatchService,
                                     com.warehouse.service.cargo.CargoPerformanceService performanceService,
-                                    com.warehouse.service.cargo.CargoReadinessService readinessService) {
+                                    com.warehouse.service.cargo.CargoReadinessService readinessService,
+                                    com.warehouse.service.cargo.CargoDryRunService dryRunService) {
         this.cargoApiService = cargoApiService;
         this.orderRepository = orderRepository;
         this.adminSecurityService = adminSecurityService;
@@ -61,6 +63,7 @@ public class AdminCargoApiController {
         this.labelBatchService = labelBatchService;
         this.performanceService = performanceService;
         this.readinessService = readinessService;
+        this.dryRunService = dryRunService;
     }
 
     /**
@@ -71,6 +74,32 @@ public class AdminCargoApiController {
     @GetMapping("/readiness")
     public ResponseEntity<?> readiness() {
         return ResponseEntity.ok(readinessService.run());
+    }
+
+    /**
+     * Free end-to-end trial: opens a draft shipment, reads the carrier prices, deletes the draft.
+     *
+     * <p>Kargonomi charges on {@code confirm-shipping-price}, not before, so this exercises the
+     * sender address, the province and district lookup, the parcel size and the carrier's own
+     * pricing without touching the balance. The readiness check can only inspect each setting on
+     * its own; this is the only thing short of a real parcel that shows they work together.
+     */
+    @PostMapping("/dry-run")
+    public ResponseEntity<?> dryRun(@RequestBody Map<String, String> body) {
+        String city = body.getOrDefault("city", "");
+        String district = body.getOrDefault("district", "");
+        if (city.isBlank() || district.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "İl ve ilçe zorunlu."));
+        }
+
+        BigDecimal desi;
+        try {
+            desi = new BigDecimal(body.getOrDefault("desi", "1"));
+        } catch (NumberFormatException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Desi sayı olmalı."));
+        }
+
+        return ResponseEntity.ok(dryRunService.run(city, district, desi));
     }
 
     /**

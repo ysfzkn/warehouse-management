@@ -733,6 +733,132 @@ function CargoWebhookPanel({ secret, onSecretChange, withSecurityCode }) {
   );
 }
 
+/**
+ * Ücretsiz deneme: Kargonomi taslak açar, fiyatları okur, taslağı siler.
+ *
+ * Kargonomi yalnızca taşıyıcı onayında ücret alıyor; buraya kadarı bedava. Kontrol listesi her
+ * ayarı tek tek doğrulayabiliyor ama birlikte çalıştıklarını gösteremiyor — gerçek bir koli
+ * göndermeden bunu görmenin tek yolu bu.
+ */
+function CargoDryRunPanel() {
+  const toast = useAdminToast();
+  const [city, setCity] = useState('İstanbul');
+  const [district, setDistrict] = useState('Kadıköy');
+  const [desi, setDesi] = useState('1');
+  const [result, setResult] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const run = async () => {
+    setLoading(true);
+    setResult(null);
+    try {
+      const { data } = await axios.post('/api/admin/cargo/dry-run', {
+        city,
+        district,
+        desi,
+      });
+      setResult(data);
+      if (data.success) toast.success('Deneme başarılı — zincirin tamamı çalışıyor.');
+      else toast.warning('Deneme tamamlanamadı, aşağıdaki adımlara bakın.');
+    } catch (e) {
+      toast.error(e.response?.data?.message || 'Deneme çalıştırılamadı.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="mt-4 pt-3 border-top">
+      <div className="mb-2">
+        <h6 className="mb-0">Ücretsiz Deneme</h6>
+        <small className="text-muted">
+          Taslak gönderi açılır, kargo firmalarının fiyatı okunur ve taslak silinir.{' '}
+          <strong>Bakiyeden düşülmez</strong>, hesapta iz kalmaz.
+        </small>
+      </div>
+
+      <div className="row g-2 align-items-end mb-2">
+        <div className="col-sm-4">
+          <label className="form-label small mb-1" htmlFor="dryrun-city">
+            Alıcı ili
+          </label>
+          <input
+            id="dryrun-city"
+            className="form-control form-control-sm"
+            value={city}
+            onChange={(e) => setCity(e.target.value)}
+          />
+        </div>
+        <div className="col-sm-4">
+          <label className="form-label small mb-1" htmlFor="dryrun-district">
+            Alıcı ilçesi
+          </label>
+          <input
+            id="dryrun-district"
+            className="form-control form-control-sm"
+            value={district}
+            onChange={(e) => setDistrict(e.target.value)}
+          />
+        </div>
+        <div className="col-sm-2">
+          <label className="form-label small mb-1" htmlFor="dryrun-desi">
+            Desi
+          </label>
+          <input
+            id="dryrun-desi"
+            className="form-control form-control-sm"
+            value={desi}
+            onChange={(e) => setDesi(e.target.value)}
+          />
+        </div>
+        <div className="col-sm-2">
+          <button className="btn btn-sm btn-outline-primary w-100" onClick={run} disabled={loading}>
+            {loading ? <span className="spinner-border spinner-border-sm" /> : 'Dene'}
+          </button>
+        </div>
+      </div>
+
+      {result && (
+        <>
+          <ul className="list-unstyled small mb-2">
+            {result.steps.map((s) => (
+              <li key={s.label} className="mb-1">
+                <i
+                  className={`me-2 ${
+                    s.ok ? 'fas fa-check-circle text-success' : 'fas fa-times-circle text-danger'
+                  }`}
+                />
+                <strong>{s.label}</strong> — {s.detail}
+              </li>
+            ))}
+          </ul>
+
+          {result.quotes?.length > 0 && (
+            <div className="table-responsive">
+              <table className="table table-sm small mb-0">
+                <thead>
+                  <tr>
+                    <th>Kargo firması</th>
+                    <th className="text-end">Fiyat</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {result.quotes.map((q) => (
+                    <tr key={q.slug || q.name}>
+                      <td>{q.name}</td>
+                      <td className="text-end">{q.price ?? '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 function CargoReadinessPanel() {
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -1999,6 +2125,7 @@ export default function AdminSiteSettings() {
                       withSecurityCode={withSecurityCode}
                     />
                     <CargoReadinessPanel />
+                    <CargoDryRunPanel />
                   </>
                 )}
               </div>

@@ -196,9 +196,17 @@ public class CargoReadinessService {
                             + "bazılarında temizlenmiyordu; token'ı temiz hâliyle yeniden girin.")
                         : new Check("token", "API token ve bakiye", Level.OK,
                             "Token çalışıyor, bakiye " + balance.amount() + " TL.", null);
-            case NOT_REPORTED -> new Check("token", "API token ve bakiye", Level.FAIL,
-                    "Token çalışıyor (401 dönmedi) ama Kargonomi bakiye bildirmiyor.",
-                    "Kargonomi hesabına bakiye yükleyip tekrar kontrol edin.");
+            // Kargonomi bu alanı haftalık güncellediğini bildirdi: yüklü bakiye varken de boş
+            // dönebiliyor. Dolayısıyla "bakiye yok" diye kesin konuşamayız — engelleyici bir
+            // hata olarak göstermek, hesabı dolu olan kullanıcıyı boşuna durdurur. Uyarıya
+            // indirildi ve doğrulamanın nasıl yapılacağı söyleniyor.
+            case NOT_REPORTED -> new Check("token", "API token ve bakiye", Level.WARN,
+                    "Token çalışıyor (401 dönmedi) ama Kargonomi bakiye bildirmiyor. "
+                    + "Kargonomi bu alanı haftalık güncellediğini belirtti; yüklü bakiye varken "
+                    + "de boş dönebiliyor.",
+                    "Gerçek durumu Kargonomi panelinden görün. Emin olmak için aşağıdaki "
+                    + "\"Ücretsiz Deneme\" ile taslak gönderi açıp fiyat alın — bakiye "
+                    + "harcamaz ve zincirin çalıştığını kanıtlar.");
             // Reddedilme ile ulaşamama ayrı ayrı raporlanıyor: ikisinin çaresi zıt, tek
             // mesajda birleştirilince admin hangisini düzelteceğini bilemiyordu.
             case REJECTED -> new Check("token", "API token ve bakiye", Level.FAIL,
