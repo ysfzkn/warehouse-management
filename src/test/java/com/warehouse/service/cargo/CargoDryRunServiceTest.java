@@ -42,11 +42,16 @@ class CargoDryRunServiceTest {
 
     @BeforeEach
     void setUp() {
-        dryRun = new CargoDryRunService(settingService, cargoApiService);
+        dryRun = new CargoDryRunService(settingService, cargoApiService, new CargoSenderProfile(settingService));
         when(cargoApiService.getActiveProvider()).thenReturn(provider);
         when(provider.isEnabled()).thenReturn(true);
+        // Kargonomi altısını da istiyor; eksik olan biri isteğin tamamını reddettiriyor.
+        when(settingService.getSetting(SettingKeys.SENDER_NAME)).thenReturn("Deneme Ticaret A.Ş.");
+        when(settingService.getSetting(SettingKeys.SENDER_PHONE)).thenReturn("5551112233");
+        when(settingService.getSetting(SettingKeys.SENDER_ADDRESS)).thenReturn("Merkez Mah. No 1");
         when(settingService.getSetting(SettingKeys.SENDER_CITY)).thenReturn("İstanbul");
         when(settingService.getSetting(SettingKeys.SENDER_DISTRICT)).thenReturn("Üsküdar");
+        when(settingService.getSetting(SettingKeys.SENDER_TAX_NUMBER)).thenReturn("1234567890");
     }
 
     @Test
@@ -103,17 +108,43 @@ class CargoDryRunServiceTest {
         verify(provider).deleteShipment(DRAFT_ID);
     }
 
+    /**
+     * Kargonomi refuses the whole request when any of its six sender fields is missing, so finding
+     * out at the draft step wastes a round trip and reports the wrong cause. The tax number is the
+     * one most easily overlooked: it was never sent at all until the carrier named it.
+     */
     @Test
-    @DisplayName("Gönderici adresi boşken taslak hiç açılmaz")
-    void nothingIsOpenedWithoutASenderAddress() {
-        when(settingService.getSetting(SettingKeys.SENDER_CITY)).thenReturn("");
+    @DisplayName("Vergi no eksikse taslak hiç açılmaz ve eksik alan söylenir")
+    void anIncompleteSenderIsCaughtBeforeAnyRequestIsMade() {
+        when(settingService.getSetting(SettingKeys.SENDER_TAX_NUMBER)).thenReturn("");
+        when(settingService.getSetting(SettingKeys.INVOICE_COMPANY_TAX_ID)).thenReturn("");
 
         CargoDryRunService.Result result = dryRun.run("İstanbul", "Kadıköy", ONE_DESI);
 
         assertThat(result.success()).isFalse();
-        assertThat(result.steps()).anySatisfy(step ->
-                assertThat(step.label()).isEqualTo("Gönderici adresi"));
+        assertThat(result.steps())
+                .filteredOn(step -> !step.ok())
+                .singleElement()
+                .satisfies(step -> {
+                    assertThat(step.label()).isEqualTo("Gönderici bilgileri");
+                    assertThat(step.detail()).contains("vergi/kimlik no");
+                });
         verify(provider, never()).createDraftShipment(any());
+    }
+
+    /** The invoice tax id already on file stands in, so nobody types the same number twice. */
+    @Test
+    @DisplayName("Kargo vergi no boşsa fatura vergi no'su kullanılır")
+    void theInvoiceTaxIdStandsInWhenNoCargoSpecificOneIsSet() {
+        when(settingService.getSetting(SettingKeys.SENDER_TAX_NUMBER)).thenReturn("");
+        when(settingService.getSetting(SettingKeys.INVOICE_COMPANY_TAX_ID)).thenReturn("9876543210");
+        when(provider.createDraftShipment(any())).thenReturn(DRAFT_ID);
+        when(provider.fetchPriceComparison(DRAFT_ID)).thenReturn(List.of(
+                new KargonomiCargoProvider.CarrierQuote(4, "aras", "Aras Kargo",
+                        new BigDecimal("55.00"), 2)));
+        when(provider.deleteShipment(DRAFT_ID)).thenReturn(true);
+
+        assertThat(dryRun.run("İstanbul", "Kadıköy", ONE_DESI).success()).isTrue();
     }
 
     /**

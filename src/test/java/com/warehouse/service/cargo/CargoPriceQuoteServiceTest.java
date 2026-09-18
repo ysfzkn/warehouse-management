@@ -51,7 +51,7 @@ class CargoPriceQuoteServiceTest {
                 new KargonomiCargoProvider.CarrierQuote(1, "yurtici", "Yurtiçi Kargo", new BigDecimal("89.90"), 2),
                 new KargonomiCargoProvider.CarrierQuote(2, "surat", "Sürat Kargo", new BigDecimal("71.50"), 3)));
 
-        service = new CargoPriceQuoteService(settingService, cargoApiService);
+        service = new CargoPriceQuoteService(settingService, cargoApiService, new CargoSenderProfile(settingService));
     }
 
     @Test

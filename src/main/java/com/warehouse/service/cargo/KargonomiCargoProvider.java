@@ -862,17 +862,27 @@ public class KargonomiCargoProvider implements CargoApiProvider {
             try { body.put("warehouse_id", Integer.parseInt(warehouseId.trim())); }
             catch (NumberFormatException ignored) {}
         } else {
-            // Inline sender (when there is no warehouse)
+            // Inline sender, and it belongs INSIDE shipment — Kargonomi names these fields
+            // shipment.sender_name, shipment.sender_phone and so on. Sending them as a sibling
+            // "sender" object meant the carrier never saw them and rejected the request with all
+            // six reported missing, which reads as "we sent nothing" rather than "we sent it in
+            // the wrong place".
             int[] senderGeo = geoLookup.lookupStateAndCity(
                     request.getSenderCity(), request.getSenderDistrict());
             if (senderGeo != null) {
-                Map<String, Object> sender = new LinkedHashMap<>();
-                sender.put("sender_name", request.getSenderName());
-                sender.put("sender_phone", normalizePhone(request.getSenderPhone()));
-                sender.put("sender_address", request.getSenderAddress());
-                sender.put("sender_state_id", senderGeo[0]);
-                sender.put("sender_city_id", senderGeo[1]);
-                body.put("sender", sender);
+                shipment.put("sender_name", request.getSenderName());
+                shipment.put("sender_phone", normalizePhone(request.getSenderPhone()));
+                shipment.put("sender_address", request.getSenderAddress());
+                shipment.put("sender_state_id", senderGeo[0]);
+                shipment.put("sender_city_id", senderGeo[1]);
+                // Required whenever no warehouse is named, and never sent until now.
+                if (request.getSenderTaxNumber() != null && !request.getSenderTaxNumber().isBlank()) {
+                    shipment.put("sender_tax_number", request.getSenderTaxNumber().trim());
+                }
+            } else {
+                logger.warn("[Kargonomi] gönderici il/ilçe eşleşmedi: {} / {} — gönderici "
+                        + "bilgileri gönderilemiyor, istek reddedilecek.",
+                        request.getSenderCity(), request.getSenderDistrict());
             }
         }
 

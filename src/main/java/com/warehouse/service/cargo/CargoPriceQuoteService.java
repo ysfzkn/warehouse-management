@@ -46,12 +46,15 @@ public class CargoPriceQuoteService {
 
     private final SiteSettingService settingService;
     private final CargoApiService cargoApiService;
+    private final CargoSenderProfile senderProfile;
 
     private final Map<String, CachedQuotes> cache = new ConcurrentHashMap<>();
 
-    public CargoPriceQuoteService(SiteSettingService settingService, CargoApiService cargoApiService) {
+    public CargoPriceQuoteService(SiteSettingService settingService, CargoApiService cargoApiService,
+                                   CargoSenderProfile senderProfile) {
         this.settingService = settingService;
         this.cargoApiService = cargoApiService;
+        this.senderProfile = senderProfile;
     }
 
     private record CachedQuotes(List<KargonomiCargoProvider.CarrierQuote> quotes, long expiresAt) {}
@@ -107,7 +110,7 @@ public class CargoPriceQuoteService {
             return List.of();
         }
 
-        CargoShipmentRequest probe = CargoShipmentRequest.builder()
+        CargoShipmentRequest probe = senderProfile.applyTo(CargoShipmentRequest.builder())
                 .orderNumber(null)                       // no barcode: this draft is not an order
                 .recipientName(QUOTE_NAME)
                 .recipientPhone(QUOTE_PHONE)

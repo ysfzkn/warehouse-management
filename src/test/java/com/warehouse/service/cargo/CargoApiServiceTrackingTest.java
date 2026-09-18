@@ -67,7 +67,8 @@ class CargoApiServiceTrackingTest {
         service = new CargoApiService(List.of(), settingService, orderRepository, orderItemRepository,
                 cargoProviderRepository, statusHistoryRepository, orderDeliveryService,
                 notificationDispatchService, notificationService,
-                eventLedger, outboxService, packagePlanner, geoLookup, warehouseRepository);
+                eventLedger, outboxService, packagePlanner, geoLookup, warehouseRepository,
+                new CargoSenderProfile(settingService));
     }
 
     private Order shippedOrder() {

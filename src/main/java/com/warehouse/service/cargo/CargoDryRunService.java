@@ -36,10 +36,13 @@ public class CargoDryRunService {
 
     private final SiteSettingService settingService;
     private final CargoApiService cargoApiService;
+    private final CargoSenderProfile senderProfile;
 
-    public CargoDryRunService(SiteSettingService settingService, CargoApiService cargoApiService) {
+    public CargoDryRunService(SiteSettingService settingService, CargoApiService cargoApiService,
+                               CargoSenderProfile senderProfile) {
         this.settingService = settingService;
         this.cargoApiService = cargoApiService;
+        this.senderProfile = senderProfile;
     }
 
     /**
@@ -73,16 +76,20 @@ public class CargoDryRunService {
         }
         steps.add(new Step("Sağlayıcı", true, "Kargonomi aktif."));
 
-        String senderCity = settingService.getSetting(SettingKeys.SENDER_CITY);
-        String senderDistrict = settingService.getSetting(SettingKeys.SENDER_DISTRICT);
-        if (senderCity == null || senderCity.isBlank()) {
-            steps.add(new Step("Gönderici adresi", false,
-                    "Gönderici il/ilçe ayarı boş — gönderi oluşturulamaz."));
+        // Kargonomi altı gönderici alanının hepsini istiyor ve biri eksikse isteğin tamamını
+        // reddediyor — yalnızca ile bakmak, eksiği taslak adımına kadar gizliyordu.
+        if (!senderProfile.isComplete()) {
+            steps.add(new Step("Gönderici bilgileri", false,
+                    "Eksik alan(lar): " + senderProfile.missingFields()
+                    + ". Kargonomi bunlar olmadan gönderi oluşturmuyor."));
             return new Result(false, steps, List.of());
         }
-        steps.add(new Step("Gönderici adresi", true, senderCity + " / " + senderDistrict));
+        steps.add(new Step("Gönderici bilgileri", true,
+                senderProfile.name() + " — "
+                + settingService.getSetting(SettingKeys.SENDER_CITY) + " / "
+                + settingService.getSetting(SettingKeys.SENDER_DISTRICT)));
 
-        CargoShipmentRequest probe = CargoShipmentRequest.builder()
+        CargoShipmentRequest probe = senderProfile.applyTo(CargoShipmentRequest.builder())
                 .orderNumber(null)                 // no barcode: this draft is not an order
                 .recipientName(PROBE_NAME)
                 .recipientPhone(PROBE_PHONE)

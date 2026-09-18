@@ -41,6 +41,8 @@ public final class SettingKeys {
     public static final String SENDER_CITY = "sender_city";
     public static final String SENDER_DISTRICT = "sender_district";
     public static final String SENDER_POSTAL_CODE = "sender_postal_code";
+    /** Kargonomi gönderici için vergi/kimlik no istiyor; boşsa INVOICE_COMPANY_TAX_ID kullanılır. */
+    public static final String SENDER_TAX_NUMBER = "sender_tax_number";
 
     // ── Shipping pricing ────────────────────────────────────────
     public static final String DEFAULT_SHIPPING_COST = "default_shipping_cost";
@@ -50,6 +52,7 @@ public final class SettingKeys {
     public static final String INVOICE_PROVIDER = "invoice_provider";
     public static final String INVOICE_AUTO_GENERATE = "invoice_auto_generate";
     public static final String INVOICE_ADMIN_DIGEST_EMAIL = "invoice_admin_digest_email";
+    public static final String INVOICE_COMPANY_TAX_ID = "invoice_company_tax_id";
     public static final String LOGO_EFATURA_ENDPOINT = "logo_efatura_endpoint";
     public static final String LOGO_EFATURA_USERNAME = "logo_efatura_username";
     public static final String LOGO_EFATURA_PASSWORD = "logo_efatura_password";

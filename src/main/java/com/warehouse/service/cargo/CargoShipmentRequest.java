@@ -48,6 +48,7 @@ public class CargoShipmentRequest {
     private String senderCity;
     private String senderDistrict;
     private String senderPostalCode;
+    private String senderTaxNumber;
 
     // --- Package information ---
     /** Package count (there may be more than one parcel) */

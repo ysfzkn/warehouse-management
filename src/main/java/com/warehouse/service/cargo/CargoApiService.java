@@ -58,6 +58,7 @@ public class CargoApiService {
     private final CargoEventLedger eventLedger;
     private final CargoShipmentOutboxService outboxService;
     private final CargoPackagePlanner packagePlanner;
+    private final CargoSenderProfile senderProfile;
     private final KargonomiGeoLookupService geoLookup;
     private final com.warehouse.repository.WarehouseRepository warehouseRepository;
 
@@ -74,7 +75,8 @@ public class CargoApiService {
                             CargoShipmentOutboxService outboxService,
                             CargoPackagePlanner packagePlanner,
                             KargonomiGeoLookupService geoLookup,
-                            com.warehouse.repository.WarehouseRepository warehouseRepository) {
+                            com.warehouse.repository.WarehouseRepository warehouseRepository,
+                            CargoSenderProfile senderProfile) {
         this.providers = providers;
         this.settingService = settingService;
         this.orderRepository = orderRepository;
@@ -87,6 +89,7 @@ public class CargoApiService {
         this.eventLedger = eventLedger;
         this.outboxService = outboxService;
         this.packagePlanner = packagePlanner;
+        this.senderProfile = senderProfile;
         this.geoLookup = geoLookup;
         this.warehouseRepository = warehouseRepository;
     }
@@ -674,17 +677,6 @@ public class CargoApiService {
     private CargoShipmentRequest buildShipmentRequest(Order order) {
         Map<String, Object> shippingAddr = order.getShippingAddressSnapshot();
 
-        // Sender information from site_settings
-        String senderName = settingService.getSetting(SettingKeys.SENDER_NAME);
-        String senderPhone = settingService.getSetting(SettingKeys.SENDER_PHONE);
-        String senderAddress = settingService.getSetting(SettingKeys.SENDER_ADDRESS);
-        String senderCity = settingService.getSetting(SettingKeys.SENDER_CITY);
-        String senderDistrict = settingService.getSetting(SettingKeys.SENDER_DISTRICT);
-        String senderPostalCode = settingService.getSetting(SettingKeys.SENDER_POSTAL_CODE);
-
-        if (senderName == null || senderName.isBlank()) {
-            senderName = settingService.getSetting(SettingKeys.SITE_NAME);
-        }
 
         // Order items
         List<OrderItem> orderItems = orderItemRepository.findByOrderId(order.getId());
@@ -727,7 +719,9 @@ public class CargoApiService {
         // and if none exists, null → Kargonomi automatically picks the cheapest.
         String carrierSlug = resolveKargonomiSlug(order);
 
-        return CargoShipmentRequest.builder()
+        // Sender comes from CargoSenderProfile so the order flow, the price quote and the trial
+        // shipment all send the same six fields Kargonomi requires.
+        return senderProfile.applyTo(CargoShipmentRequest.builder())
                 .orderId(order.getId())
                 .orderNumber(order.getOrderNumber())
                 .recipientName(strFromMap(shippingAddr, "firstName") + " " + strFromMap(shippingAddr, "lastName"))
@@ -739,12 +733,6 @@ public class CargoApiService {
                 .recipientPostalCode(strFromMap(shippingAddr, "postalCode"))
                 .recipientCountryCode("TR")
                 .senderWarehouseId(resolveSenderWarehouseId(orderItems))
-                .senderName(senderName)
-                .senderPhone(senderPhone)
-                .senderAddress(senderAddress)
-                .senderCity(senderCity)
-                .senderDistrict(senderDistrict)
-                .senderPostalCode(senderPostalCode)
                 .packageCount(packagePlan.size())
                 .packages(packagePlan)
                 .totalWeightKg(totalWeight)
