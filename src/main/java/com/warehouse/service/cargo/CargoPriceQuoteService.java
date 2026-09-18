@@ -1,5 +1,6 @@
 package com.warehouse.service.cargo;
 
+import com.warehouse.constants.SettingKeys;
 import com.warehouse.service.SiteSettingService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -57,7 +58,7 @@ public class CargoPriceQuoteService {
 
     public boolean isEnabled() {
         return cargoApiService.isEnabled()
-                && "true".equalsIgnoreCase(settingService.getSetting("cargo_checkout_live_pricing"))
+                && "true".equalsIgnoreCase(settingService.getSetting(SettingKeys.CARGO_CHECKOUT_LIVE_PRICING))
                 && cargoApiService.getActiveProvider() instanceof KargonomiCargoProvider;
     }
 
@@ -165,7 +166,7 @@ public class CargoPriceQuoteService {
     }
 
     private long cacheMinutes() {
-        String raw = settingService.getSetting("cargo_price_cache_minutes");
+        String raw = settingService.getSetting(SettingKeys.CARGO_PRICE_CACHE_MINUTES);
         if (raw != null && !raw.isBlank()) {
             try {
                 long value = Long.parseLong(raw.trim());

@@ -16,6 +16,7 @@ import com.iyzipay.request.CreateRefundRequest;
 import com.iyzipay.request.RetrieveCheckoutFormRequest;
 import com.iyzipay.request.RetrieveInstallmentInfoRequest;
 import com.warehouse.config.PaymentProperties;
+import com.warehouse.constants.SettingKeys;
 import com.warehouse.dto.payment.*;
 import com.warehouse.entity.PaymentGatewayConfig;
 import com.warehouse.enums.PaymentProvider;
@@ -58,12 +59,12 @@ public class IyzicoPaymentGateway implements PaymentGateway {
      * small transactions considered safe (e.g. under ₺50).
      */
     private boolean requires3DS(java.math.BigDecimal amount) {
-        String alwaysSetting = settingService.getSetting("threeds_always");
+        String alwaysSetting = settingService.getSetting(SettingKeys.THREEDS_ALWAYS);
         boolean always = alwaysSetting == null || alwaysSetting.isBlank()
                 || "true".equalsIgnoreCase(alwaysSetting.trim());
         if (always) return true;
         if (amount == null) return true; // unknown → err on the safe side
-        String minStr = settingService.getSetting("threeds_min_amount");
+        String minStr = settingService.getSetting(SettingKeys.THREEDS_MIN_AMOUNT);
         java.math.BigDecimal min = java.math.BigDecimal.valueOf(50);
         if (minStr != null && !minStr.isBlank()) {
             try { min = new java.math.BigDecimal(minStr.trim()); }

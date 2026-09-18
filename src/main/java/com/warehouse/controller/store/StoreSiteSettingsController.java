@@ -1,5 +1,6 @@
 package com.warehouse.controller.store;
 
+import com.warehouse.constants.SettingKeys;
 import com.warehouse.service.PhotoStorageService;
 import com.warehouse.service.SiteSettingService;
 import org.springframework.http.*;
@@ -43,7 +44,7 @@ public class StoreSiteSettingsController {
     @GetMapping("/bank-transfer-qr")
     public ResponseEntity<byte[]> viewBankTransferQr() {
         // QR enabled check — don't serve if the admin turned it off
-        String enabled = siteSettingService.getSetting("bank_transfer_qr_enabled");
+        String enabled = siteSettingService.getSetting(SettingKeys.BANK_TRANSFER_QR_ENABLED);
         if (!"true".equalsIgnoreCase(enabled)) {
             return ResponseEntity.notFound().build();
         }

@@ -1,5 +1,6 @@
 package com.warehouse.job;
 
+import com.warehouse.constants.SettingKeys;
 import com.warehouse.service.SiteSettingService;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.slf4j.Logger;
@@ -37,7 +38,7 @@ public class SitemapPingJob {
     @Scheduled(cron = "0 0 4 * * MON", zone = "Europe/Istanbul")
     @SchedulerLock(name = "sitemapPing", lockAtMostFor = "PT5M", lockAtLeastFor = "PT1M")
     public void pingSearchEngines() {
-        String domain = settingService.getSetting("seo_canonical_domain");
+        String domain = settingService.getSetting(SettingKeys.SEO_CANONICAL_DOMAIN);
         if (domain == null || domain.isBlank()) {
             log.info("[Sitemap] Ping atlandı — seo_canonical_domain ayarlanmamış.");
             return;

@@ -1,5 +1,6 @@
 package com.warehouse.job;
 
+import com.warehouse.constants.SettingKeys;
 import com.warehouse.entity.Invoice;
 import com.warehouse.repository.InvoiceRepository;
 import com.warehouse.service.EmailService;
@@ -85,9 +86,9 @@ public class InvoiceAdminDigestJob {
     }
 
     private String resolveAdminEmail() {
-        String dedicated = settings.getSetting("invoice_admin_digest_email");
+        String dedicated = settings.getSetting(SettingKeys.INVOICE_ADMIN_DIGEST_EMAIL);
         if (dedicated != null && !dedicated.isBlank()) return dedicated.trim();
-        String contact = settings.getSetting("contact_form_email");
+        String contact = settings.getSetting(SettingKeys.CONTACT_FORM_EMAIL);
         if (contact != null && !contact.isBlank()) return contact.trim();
         return null;
     }

@@ -6,6 +6,7 @@ import com.warehouse.service.crawler.ProductImageCrawlerService.CrawlException;
 import com.warehouse.service.crawler.ProductImageCrawlerService.CrawlPreview;
 import com.warehouse.service.crawler.ProductImageCrawlerService.ImportResult;
 import com.warehouse.service.crawler.ProductImageCrawlerService.SpecGroup;
+import com.warehouse.util.Locales;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -373,7 +374,7 @@ public class ProductCrawlBatchService {
     /** Upper-case, Turkish letters folded to ASCII, everything non-alphanumeric dropped. */
     static String normalise(String s) {
         if (s == null) return "";
-        String upper = s.toUpperCase(new Locale("tr", "TR"));
+        String upper = s.toUpperCase(Locales.TR);
         StringBuilder sb = new StringBuilder(upper.length());
         for (char c : upper.toCharArray()) {
             char folded = switch (c) {

@@ -2,6 +2,7 @@ package com.warehouse.service.impl;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.warehouse.constants.SettingKeys;
 import com.warehouse.dto.AuditMetadata;
 import com.warehouse.dto.DeliveryReceiptDto;
 import com.warehouse.dto.DeliveryReceiptFilter;
@@ -28,6 +29,7 @@ import com.warehouse.service.DeliveryReceiptService;
 import com.warehouse.service.PhotoStorageService;
 import com.warehouse.service.SiteSettingService;
 import com.warehouse.service.receipt.ReceiptPdfRenderer;
+import com.warehouse.util.Locales;
 import org.apache.pdfbox.multipdf.PDFMergerUtility;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -64,7 +66,7 @@ public class DeliveryReceiptServiceImpl implements DeliveryReceiptService {
     private static final Logger log = LoggerFactory.getLogger(DeliveryReceiptServiceImpl.class);
 
     private static final DateTimeFormatter DATE_TIME =
-            DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm", new Locale("tr", "TR"));
+            DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm", Locales.TR);
     private static final String STORAGE_PREFIX = "delivery-receipts";
     private static final String SIGNED_RESOURCE = "receipt-attachment";
     /** Phone photographs of an A4 page are routinely 6-10 MB; scans rarely exceed this. */
@@ -596,7 +598,7 @@ public class DeliveryReceiptServiceImpl implements DeliveryReceiptService {
         int total = items.stream()
                 .mapToInt(i -> i.getQuantity() == null ? 0 : i.getQuantity()).sum();
 
-        Context context = new Context(new Locale("tr", "TR"));
+        Context context = new Context(Locales.TR);
         context.setVariable("receipt", receipt);
         context.setVariable("items", items);
         context.setVariable("totalQuantity", total);
@@ -671,7 +673,7 @@ public class DeliveryReceiptServiceImpl implements DeliveryReceiptService {
      * doğru logoyla basılıyor.</p>
      */
     private String logoDataUri() {
-        String path = siteSettingService.getSetting("receipt_logo");
+        String path = siteSettingService.getSetting(SettingKeys.RECEIPT_LOGO);
         if (path == null || path.isBlank()) {
             return packagedLetterheadDataUri();
         }

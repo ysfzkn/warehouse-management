@@ -1,5 +1,6 @@
 package com.warehouse.service.impl;
 
+import com.warehouse.constants.SettingKeys;
 import com.warehouse.service.EmailService;
 import com.warehouse.service.PhotoStorageService;
 import com.warehouse.service.SiteSettingService;
@@ -41,13 +42,13 @@ public class EmailServiceImpl implements EmailService {
     public boolean isEnabled() { return enabled; }
 
     private String getSiteName() {
-        try { String n = settingService.getSetting("site_name"); return (n != null && !n.isEmpty()) ? n : "Mağaza"; } catch (Exception e) { return "Mağaza"; }
+        try { String n = settingService.getSetting(SettingKeys.SITE_NAME); return (n != null && !n.isEmpty()) ? n : "Mağaza"; } catch (Exception e) { return "Mağaza"; }
     }
 
     /** Get logo as base64 data URI for inline email embedding */
     private String getLogoBase64() {
         try {
-            String logoPath = settingService.getSetting("site_logo");
+            String logoPath = settingService.getSetting(SettingKeys.SITE_LOGO);
             if (logoPath == null || logoPath.isEmpty()) return null;
             try (java.io.InputStream is = photoStorageService.openPhotoStream(logoPath)) {
                 byte[] bytes = is.readAllBytes();
@@ -615,7 +616,7 @@ public class EmailServiceImpl implements EmailService {
 
     private String getBaseUrl() {
         try {
-            String v = settingService.getSetting("seo_canonical_domain");
+            String v = settingService.getSetting(SettingKeys.SEO_CANONICAL_DOMAIN);
             if (v != null && !v.isBlank()) return v.trim().replaceAll("/$", "");
         } catch (Exception e) {
             // Silently falling through here means every outgoing mail links to localhost.

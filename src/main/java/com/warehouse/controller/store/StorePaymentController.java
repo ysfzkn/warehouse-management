@@ -1,13 +1,14 @@
 package com.warehouse.controller.store;
 
+import com.warehouse.constants.SettingKeys;
 import com.warehouse.dto.payment.*;
 import com.warehouse.entity.PaymentGatewayConfig;
 import com.warehouse.repository.PaymentGatewayConfigRepository;
+import com.warehouse.security.JwtService;
 import com.warehouse.service.PaymentService;
 import com.warehouse.service.payment.VirtualPosGateway;
 import com.warehouse.service.payment.protocol.BankPosProtocol;
 import com.warehouse.service.payment.protocol.BankPosProtocolFactory;
-import com.warehouse.security.JwtService;
 import com.warehouse.util.CustomerTokenExtractor;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -232,9 +233,9 @@ public class StorePaymentController {
         List<Map<String, Object>> methods = new ArrayList<>();
 
         // Read admin toggles from site settings (default: enabled if setting missing)
-        boolean ccEnabled = !"false".equals(siteSettingService.getSetting("payment_method_credit_card_enabled"));
-        boolean btEnabled = !"false".equals(siteSettingService.getSetting("payment_method_bank_transfer_enabled"));
-        boolean doorEnabled = !"false".equals(siteSettingService.getSetting("payment_method_door_cash_enabled"));
+        boolean ccEnabled = !"false".equals(siteSettingService.getSetting(SettingKeys.PAYMENT_METHOD_CREDIT_CARD_ENABLED));
+        boolean btEnabled = !"false".equals(siteSettingService.getSetting(SettingKeys.PAYMENT_METHOD_BANK_TRANSFER_ENABLED));
+        boolean doorEnabled = !"false".equals(siteSettingService.getSetting(SettingKeys.PAYMENT_METHOD_DOOR_CASH_ENABLED));
 
         // Credit card — only if enabled AND gateway configured
         if (ccEnabled) {

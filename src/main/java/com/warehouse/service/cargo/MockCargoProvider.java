@@ -1,5 +1,6 @@
 package com.warehouse.service.cargo;
 
+import com.warehouse.constants.SettingKeys;
 import com.warehouse.entity.Order;
 import com.warehouse.repository.OrderRepository;
 import com.warehouse.service.SiteSettingService;
@@ -38,7 +39,7 @@ public class MockCargoProvider implements CargoApiProvider {
 
     @Override
     public boolean isEnabled() {
-        String provider = settingService.getSetting("cargo_api_provider");
+        String provider = settingService.getSetting(SettingKeys.CARGO_API_PROVIDER);
         return provider == null || provider.isBlank() || "MOCK".equalsIgnoreCase(provider);
     }
 
@@ -151,12 +152,12 @@ public class MockCargoProvider implements CargoApiProvider {
 
             pdf.line(50, y, "GONDERICI", 13);
             y -= 18;
-            pdf.line(50, y, safe(settingService.getSetting("sender_name")));
+            pdf.line(50, y, safe(settingService.getSetting(SettingKeys.SENDER_NAME)));
             y -= 16;
-            pdf.line(50, y, safe(settingService.getSetting("sender_phone")));
+            pdf.line(50, y, safe(settingService.getSetting(SettingKeys.SENDER_PHONE)));
             y -= 16;
-            pdf.line(50, y, safe(settingService.getSetting("sender_district")) + " / "
-                    + safe(settingService.getSetting("sender_city")));
+            pdf.line(50, y, safe(settingService.getSetting(SettingKeys.SENDER_DISTRICT)) + " / "
+                    + safe(settingService.getSetting(SettingKeys.SENDER_CITY)));
             y -= 20;
 
             pdf.line(50, y, "Desi: 1  |  Agirlik: 0.5 kg  |  Paket: 1");

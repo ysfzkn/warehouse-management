@@ -1,11 +1,13 @@
 package com.warehouse.service.invoice;
 
+import com.warehouse.constants.SettingKeys;
 import com.warehouse.entity.Invoice;
 import com.warehouse.entity.Order;
 import com.warehouse.entity.OrderItem;
 import com.warehouse.enums.InvoiceStatus;
 import com.warehouse.repository.InvoiceRepository;
 import com.warehouse.service.SiteSettingService;
+import com.warehouse.util.Locales;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -86,7 +88,7 @@ public class MockInvoiceProvider implements InvoiceProvider {
 
     @Override
     public boolean isEnabled() {
-        String provider = settingService.getSetting("invoice_provider");
+        String provider = settingService.getSetting(SettingKeys.INVOICE_PROVIDER);
         // MOCK is active when no provider is set OR explicitly set to MOCK
         return provider == null || provider.isBlank() || "MOCK".equalsIgnoreCase(provider);
     }
@@ -209,7 +211,7 @@ public class MockInvoiceProvider implements InvoiceProvider {
     private String truncate(String s, int max) { return s == null ? "" : (s.length() <= max ? s : s.substring(0, max) + "..."); }
     private String fmtMoney(BigDecimal v) {
         if (v == null) return "0,00 TL";
-        NumberFormat nf = NumberFormat.getNumberInstance(new Locale("tr", "TR"));
+        NumberFormat nf = NumberFormat.getNumberInstance(Locales.TR);
         nf.setMinimumFractionDigits(2);
         nf.setMaximumFractionDigits(2);
         return nf.format(v) + " TL";

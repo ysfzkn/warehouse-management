@@ -1,5 +1,6 @@
 package com.warehouse.job;
 
+import com.warehouse.constants.SettingKeys;
 import com.warehouse.service.NotificationService;
 import com.warehouse.service.SiteSettingService;
 import com.warehouse.service.cargo.CargoApiService;
@@ -92,7 +93,7 @@ public class CargoBalanceAlertJob {
     }
 
     private BigDecimal threshold() {
-        String raw = settingService.getSetting("cargo_balance_alert_threshold");
+        String raw = settingService.getSetting(SettingKeys.CARGO_BALANCE_ALERT_THRESHOLD);
         if (raw != null && !raw.isBlank()) {
             try {
                 BigDecimal value = new BigDecimal(raw.trim());

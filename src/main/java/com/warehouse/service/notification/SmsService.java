@@ -1,5 +1,6 @@
 package com.warehouse.service.notification;
 
+import com.warehouse.constants.SettingKeys;
 import com.warehouse.service.SiteSettingService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -67,7 +68,7 @@ public class SmsService {
      * Checks the global SMS feature flag.
      */
     public boolean isSmsEnabled() {
-        String enabled = settingService.getSetting("sms_enabled");
+        String enabled = settingService.getSetting(SettingKeys.SMS_ENABLED);
         return "true".equalsIgnoreCase(enabled);
     }
 }

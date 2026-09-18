@@ -1,5 +1,6 @@
 package com.warehouse.job;
 
+import com.warehouse.constants.SettingKeys;
 import com.warehouse.entity.Order;
 import com.warehouse.enums.OrderStatus;
 import com.warehouse.repository.OrderRepository;
@@ -92,7 +93,7 @@ public class CargoDispatchSlaJob {
     }
 
     private int slaHours() {
-        String raw = settingService.getSetting("cargo_dispatch_sla_hours");
+        String raw = settingService.getSetting(SettingKeys.CARGO_DISPATCH_SLA_HOURS);
         if (raw != null && !raw.isBlank()) {
             try {
                 int value = Integer.parseInt(raw.trim());

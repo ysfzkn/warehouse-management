@@ -1,5 +1,6 @@
 package com.warehouse.service.impl;
 
+import com.warehouse.constants.SettingKeys;
 import com.warehouse.entity.Customer;
 import com.warehouse.entity.Product;
 import com.warehouse.entity.Stock;
@@ -8,9 +9,9 @@ import com.warehouse.repository.CustomerRepository;
 import com.warehouse.repository.ProductRepository;
 import com.warehouse.repository.StockNotificationSubscriptionRepository;
 import com.warehouse.service.EmailService;
+import com.warehouse.service.SiteSettingService;
 import com.warehouse.service.StockNotificationService;
 import com.warehouse.service.StockService;
-import com.warehouse.service.SiteSettingService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -154,10 +155,10 @@ public class StockNotificationServiceImpl implements StockNotificationService {
     }
 
     private String buildProductUrl(Product product) {
-        String baseUrl = settingService.getSetting("seo_canonical_domain");
+        String baseUrl = settingService.getSetting(SettingKeys.SEO_CANONICAL_DOMAIN);
         if (baseUrl == null || baseUrl.isBlank()) {
             // Use app.base-url as a fallback if needed, but it's not in SiteSetting; this is the best fallback for the frontend domain
-            baseUrl = settingService.getSetting("app_base_url");
+            baseUrl = settingService.getSetting(SettingKeys.APP_BASE_URL);
         }
         if (baseUrl == null || baseUrl.isBlank()) baseUrl = "";
         String cleanBase = baseUrl.replaceAll("/+$", "");
@@ -171,7 +172,7 @@ public class StockNotificationServiceImpl implements StockNotificationService {
                         .orElse(null);
                 if (primary != null) {
                     // Image API URL
-                    String baseUrl = settingService.getSetting("seo_canonical_domain");
+                    String baseUrl = settingService.getSetting(SettingKeys.SEO_CANONICAL_DOMAIN);
                     String cleanBase = baseUrl != null ? baseUrl.replaceAll("/+$", "") : "";
                     return cleanBase + "/api/admin/products/images/" + primary.getId() + "/view";
                 }

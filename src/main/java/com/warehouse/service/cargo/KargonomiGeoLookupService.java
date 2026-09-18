@@ -1,6 +1,8 @@
 package com.warehouse.service.cargo;
 
+import com.warehouse.constants.SettingKeys;
 import com.warehouse.service.SiteSettingService;
+import com.warehouse.util.Locales;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpEntity;
@@ -216,8 +218,8 @@ public class KargonomiGeoLookupService {
     }
 
     private HttpHeaders buildHeaders() {
-        String token = settingService.getSetting("kargonomi_api_token");
-        String appKey = settingService.getSetting("kargonomi_app_key");
+        String token = settingService.getSetting(SettingKeys.KARGONOMI_API_TOKEN);
+        String appKey = settingService.getSetting(SettingKeys.KARGONOMI_APP_KEY);
         HttpHeaders headers = new HttpHeaders();
         // Trimmed, exactly as KargonomiCargoProvider does. Without it a token pasted with a
         // trailing newline produced a malformed Authorization header here while the provider's
@@ -230,7 +232,7 @@ public class KargonomiGeoLookupService {
     }
 
     private String getBaseUrl() {
-        String url = settingService.getSetting("kargonomi_api_base_url");
+        String url = settingService.getSetting(SettingKeys.KARGONOMI_API_BASE_URL);
         if (url == null || url.isBlank()) url = "https://app.kargonomi.com.tr/api/v1";
         return url.replaceAll("/+$", "");
     }
@@ -241,7 +243,7 @@ public class KargonomiGeoLookupService {
      */
     static String normalize(String s) {
         if (s == null) return "";
-        String t = s.trim().toLowerCase(new Locale("tr", "TR"));
+        String t = s.trim().toLowerCase(Locales.TR);
         t = t.replace('ı', 'i').replace('ş', 's').replace('ğ', 'g')
              .replace('ü', 'u').replace('ö', 'o').replace('ç', 'c');
         // NFD normalize → remove combining marks

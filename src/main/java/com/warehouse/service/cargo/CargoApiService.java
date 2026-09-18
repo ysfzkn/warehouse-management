@@ -1,5 +1,6 @@
 package com.warehouse.service.cargo;
 
+import com.warehouse.constants.SettingKeys;
 import com.warehouse.entity.CargoProvider;
 import com.warehouse.entity.Order;
 import com.warehouse.entity.OrderItem;
@@ -94,14 +95,14 @@ public class CargoApiService {
      * Is the cargo API integration enabled?
      */
     public boolean isEnabled() {
-        return "true".equalsIgnoreCase(settingService.getSetting("cargo_api_enabled"));
+        return "true".equalsIgnoreCase(settingService.getSetting(SettingKeys.CARGO_API_ENABLED));
     }
 
     /**
      * Should a cargo shipment be created automatically when an order is placed?
      */
     public boolean isAutoCreateEnabled() {
-        return isEnabled() && "true".equalsIgnoreCase(settingService.getSetting("cargo_api_auto_create"));
+        return isEnabled() && "true".equalsIgnoreCase(settingService.getSetting(SettingKeys.CARGO_API_AUTO_CREATE));
     }
 
     /**
@@ -261,7 +262,7 @@ public class CargoApiService {
      */
     public boolean isReturnLabelEnabled() {
         return isEnabled()
-                && "true".equalsIgnoreCase(settingService.getSetting("cargo_return_label_enabled"));
+                && "true".equalsIgnoreCase(settingService.getSetting(SettingKeys.CARGO_RETURN_LABEL_ENABLED));
     }
 
     /**
@@ -288,13 +289,13 @@ public class CargoApiService {
                 .orderId(order.getId())
                 .orderNumber("IADE-" + order.getOrderNumber())
                 // Recipient: us.
-                .recipientName(firstNonBlank(settingService.getSetting("sender_name"),
-                        settingService.getSetting("site_name")))
-                .recipientPhone(settingService.getSetting("sender_phone"))
-                .recipientAddress(settingService.getSetting("sender_address"))
-                .recipientCity(settingService.getSetting("sender_city"))
-                .recipientDistrict(settingService.getSetting("sender_district"))
-                .recipientPostalCode(settingService.getSetting("sender_postal_code"))
+                .recipientName(firstNonBlank(settingService.getSetting(SettingKeys.SENDER_NAME),
+                        settingService.getSetting(SettingKeys.SITE_NAME)))
+                .recipientPhone(settingService.getSetting(SettingKeys.SENDER_PHONE))
+                .recipientAddress(settingService.getSetting(SettingKeys.SENDER_ADDRESS))
+                .recipientCity(settingService.getSetting(SettingKeys.SENDER_CITY))
+                .recipientDistrict(settingService.getSetting(SettingKeys.SENDER_DISTRICT))
+                .recipientPostalCode(settingService.getSetting(SettingKeys.SENDER_POSTAL_CODE))
                 .recipientCountryCode("TR")
                 // Sender: the customer posting the goods back.
                 .senderName(customerName)
@@ -628,7 +629,7 @@ public class CargoApiService {
      */
     public boolean isWebhookTrackingActive() {
         if (!(getActiveProvider() instanceof KargonomiCargoProvider)) return false;
-        String secret = settingService.getSetting("kargonomi_webhook_secret");
+        String secret = settingService.getSetting(SettingKeys.KARGONOMI_WEBHOOK_SECRET);
         return secret != null && !secret.isBlank();
     }
 
@@ -674,15 +675,15 @@ public class CargoApiService {
         Map<String, Object> shippingAddr = order.getShippingAddressSnapshot();
 
         // Sender information from site_settings
-        String senderName = settingService.getSetting("sender_name");
-        String senderPhone = settingService.getSetting("sender_phone");
-        String senderAddress = settingService.getSetting("sender_address");
-        String senderCity = settingService.getSetting("sender_city");
-        String senderDistrict = settingService.getSetting("sender_district");
-        String senderPostalCode = settingService.getSetting("sender_postal_code");
+        String senderName = settingService.getSetting(SettingKeys.SENDER_NAME);
+        String senderPhone = settingService.getSetting(SettingKeys.SENDER_PHONE);
+        String senderAddress = settingService.getSetting(SettingKeys.SENDER_ADDRESS);
+        String senderCity = settingService.getSetting(SettingKeys.SENDER_CITY);
+        String senderDistrict = settingService.getSetting(SettingKeys.SENDER_DISTRICT);
+        String senderPostalCode = settingService.getSetting(SettingKeys.SENDER_POSTAL_CODE);
 
         if (senderName == null || senderName.isBlank()) {
-            senderName = settingService.getSetting("site_name");
+            senderName = settingService.getSetting(SettingKeys.SITE_NAME);
         }
 
         // Order items

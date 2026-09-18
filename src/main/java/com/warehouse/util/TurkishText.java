@@ -3,7 +3,6 @@ package com.warehouse.util;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Set;
 
 /**
@@ -28,8 +27,6 @@ public final class TurkishText {
         "bay", "bayan", "sayin", "musteri", "musterisi", "teslim", "edildi", "verildi",
         "gonderildi", "iade", "adet", "urun", "siparis", "icin", "adina", "kargo", "not");
 
-    private static final Locale TR = new Locale("tr", "TR");
-
     private TurkishText() {}
 
     /**
@@ -38,7 +35,7 @@ public final class TurkishText {
      */
     public static String normalize(String raw) {
         if (raw == null) return "";
-        String lower = raw.toLowerCase(TR);
+        String lower = raw.toLowerCase(Locales.TR);
         StringBuilder sb = new StringBuilder(lower.length());
         for (char c : lower.toCharArray()) {
             switch (c) {
@@ -182,13 +179,13 @@ public final class TurkishText {
                 // "Yıldız Kargo ve Nakliyat", never "Ve". Only mid-value — a name that starts
                 // with one of these words is not using it as a conjunction.
                 if (i > 0 && isConjunctionAt(collapsed, i)) {
-                    out.append(single.toLowerCase(TR));
+                    out.append(single.toLowerCase(Locales.TR));
                 } else {
-                    out.append(c == 'i' ? 'İ' : c == 'ı' ? 'I' : single.toUpperCase(TR).charAt(0));
+                    out.append(c == 'i' ? 'İ' : c == 'ı' ? 'I' : single.toUpperCase(Locales.TR).charAt(0));
                 }
                 startOfWord = false;
             } else {
-                out.append(single.toLowerCase(TR));
+                out.append(single.toLowerCase(Locales.TR));
             }
         }
         return out.toString();
@@ -198,7 +195,7 @@ public final class TurkishText {
     private static boolean isConjunctionAt(String text, int from) {
         int end = from;
         while (end < text.length() && " -'’".indexOf(text.charAt(end)) < 0) end++;
-        String word = text.substring(from, end).toLowerCase(TR);
+        String word = text.substring(from, end).toLowerCase(Locales.TR);
         return "ve".equals(word) || "ile".equals(word) || "veya".equals(word);
     }
 
@@ -250,7 +247,7 @@ public final class TurkishText {
 
         char first = collapsed.charAt(0);
         String head = first == 'i' ? "İ" : first == 'ı' ? "I"
-            : String.valueOf(first).toUpperCase(TR);
+            : String.valueOf(first).toUpperCase(Locales.TR);
         return head + collapsed.substring(1);
     }
 

@@ -1,5 +1,6 @@
 package com.warehouse.service.impl;
 
+import com.warehouse.constants.SettingKeys;
 import com.warehouse.dto.InvoiceCreateRequest;
 import com.warehouse.dto.InvoiceDto;
 import com.warehouse.entity.Invoice;
@@ -13,9 +14,9 @@ import com.warehouse.exception.WarehouseManagementException;
 import com.warehouse.repository.InvoiceRepository;
 import com.warehouse.repository.OrderItemRepository;
 import com.warehouse.repository.OrderRepository;
+import com.warehouse.service.EmailService;
 import com.warehouse.service.InvoiceService;
 import com.warehouse.service.SiteSettingService;
-import com.warehouse.service.EmailService;
 import com.warehouse.service.invoice.InvoiceNumberGenerator;
 import com.warehouse.service.invoice.InvoiceProvider;
 import com.warehouse.service.invoice.InvoiceResult;
@@ -407,7 +408,7 @@ public class InvoiceServiceImpl implements InvoiceService {
                 order.getOrderNumber(), resolvedType, individual, providerName);
 
         // If auto-generation is enabled, send to the provider
-        boolean autoGenerate = "true".equalsIgnoreCase(settingService.getSetting("invoice_auto_generate"));
+        boolean autoGenerate = "true".equalsIgnoreCase(settingService.getSetting(SettingKeys.INVOICE_AUTO_GENERATE));
         if (autoGenerate) {
             return sendToProvider(invoice);
         }

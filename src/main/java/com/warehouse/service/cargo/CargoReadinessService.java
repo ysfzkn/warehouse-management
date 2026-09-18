@@ -1,5 +1,6 @@
 package com.warehouse.service.cargo;
 
+import com.warehouse.constants.SettingKeys;
 import com.warehouse.entity.CargoProvider;
 import com.warehouse.repository.CargoProviderRepository;
 import com.warehouse.repository.ProductRepository;
@@ -86,7 +87,7 @@ public class CargoReadinessService {
 
     private Check providerSelected() {
         boolean enabled = cargoApiService.isEnabled();
-        String provider = settingService.getSetting("cargo_api_provider");
+        String provider = settingService.getSetting(SettingKeys.CARGO_API_PROVIDER);
 
         if (!enabled) {
             return new Check("enabled", "Kargo entegrasyonu açık mı", Level.FAIL,
@@ -110,7 +111,7 @@ public class CargoReadinessService {
      * elsewhere is refused here. Silent until the field is actually filled.
      */
     private Check strayAppKey() {
-        String appKey = settingService.getSetting("kargonomi_app_key");
+        String appKey = settingService.getSetting(SettingKeys.KARGONOMI_APP_KEY);
         if (appKey == null || appKey.isBlank()) {
             return new Check("appkey", "APP KEY ayarı", Level.OK,
                     "Boş — doğrusu bu, Kargonomi dokümanında böyle bir başlık yok.", null);
@@ -122,19 +123,6 @@ public class CargoReadinessService {
                 + "Token reddediliyorsa önce bunu deneyin.");
     }
 
-    /**
-     * A fingerprint of the stored token: enough to tell whether the server holds the value the
-     * administrator thinks it does, without putting the credential on screen.
-     *
-     * <p>When the carrier answers 401 there is no way to tell from outside whether the token is
-     * invalid at the carrier or simply mistyped here — a truncated paste, a stray quote from a
-     * copied JSON snippet, or an invisible character all look the same. Length plus the first and
-     * last four characters settles it in one glance, and the shape warnings name the causes that
-     * survive the {@code trim()} the request already does.
-     *
-     * <p>The same first-four/last-four masking is what the payment gateway screen already uses
-     * for its own credentials.
-     */
     /**
      * Whitespace or quotes around a credential: harmless where the value is trimmed before use,
      * fatal where it is not. That asymmetry is exactly what made the carrier look half-broken —
@@ -150,6 +138,19 @@ public class CargoReadinessService {
                 || !trimmed.chars().allMatch(c -> c > 32 && c < 127);
     }
 
+    /**
+     * A fingerprint of a stored credential: enough to tell whether the server holds the value the
+     * administrator thinks it does, without putting the credential on screen.
+     *
+     * <p>When the carrier answers 401 there is no way to tell from outside whether the token is
+     * invalid at the carrier or simply mistyped here — a truncated paste, a stray quote from a
+     * copied JSON snippet, or an invisible character all look the same. Length plus the first and
+     * last four characters settles it in one glance, and the shape warnings name the causes that
+     * survive the {@code trim()} the request already does.
+     *
+     * <p>The same first-four/last-four masking is what the payment gateway screen already uses
+     * for its own credentials.
+     */
     private static String describeSecret(String token) {
         String trimmed = token.trim();
         StringBuilder note = new StringBuilder(trimmed.length() + " karakter, ");
@@ -174,7 +175,7 @@ public class CargoReadinessService {
     }
 
     private Check tokenAndBalance() {
-        String token = settingService.getSetting("kargonomi_api_token");
+        String token = settingService.getSetting(SettingKeys.KARGONOMI_API_TOKEN);
         if (token == null || token.isBlank()) {
             return new Check("token", "API token ve bakiye", Level.FAIL,
                     "kargonomi_api_token boş.",
@@ -217,7 +218,7 @@ public class CargoReadinessService {
     }
 
     private Check webhookSecret() {
-        String secret = settingService.getSetting("kargonomi_webhook_secret");
+        String secret = settingService.getSetting(SettingKeys.KARGONOMI_WEBHOOK_SECRET);
         if (secret == null || secret.isBlank()) {
             return new Check("webhookSecret", "Webhook imza anahtarı", Level.FAIL,
                     "kargonomi_webhook_secret boş — webhook alıcısı gelen her bildirime 503 döner, "
@@ -272,7 +273,7 @@ public class CargoReadinessService {
     }
 
     private Check senderAddress() {
-        String warehouseId = settingService.getSetting("kargonomi_warehouse_id");
+        String warehouseId = settingService.getSetting(SettingKeys.KARGONOMI_WAREHOUSE_ID);
         long mappedWarehouses = warehouseRepository.findAll().stream()
                 .filter(w -> w.getKargonomiWarehouseId() != null && !w.getKargonomiWarehouseId().isBlank())
                 .count();

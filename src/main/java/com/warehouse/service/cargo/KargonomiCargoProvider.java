@@ -1,5 +1,6 @@
 package com.warehouse.service.cargo;
 
+import com.warehouse.constants.SettingKeys;
 import com.warehouse.service.SiteSettingService;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
@@ -74,10 +75,10 @@ public class KargonomiCargoProvider implements CargoApiProvider {
      */
     @Override
     public boolean isEnabled() {
-        if (!"KARGONOMI".equalsIgnoreCase(settingService.getSetting("cargo_api_provider"))) {
+        if (!"KARGONOMI".equalsIgnoreCase(settingService.getSetting(SettingKeys.CARGO_API_PROVIDER))) {
             return false;
         }
-        String token = settingService.getSetting("kargonomi_api_token");
+        String token = settingService.getSetting(SettingKeys.KARGONOMI_API_TOKEN);
         return token != null && !token.isBlank();
     }
 
@@ -854,7 +855,7 @@ public class KargonomiCargoProvider implements CargoApiProvider {
         // from the wrong address.
         String warehouseId = isReturn ? null : request.getSenderWarehouseId();
         if (warehouseId == null || warehouseId.isBlank()) {
-            warehouseId = isReturn ? null : settingService.getSetting("kargonomi_warehouse_id");
+            warehouseId = isReturn ? null : settingService.getSetting(SettingKeys.KARGONOMI_WAREHOUSE_ID);
         }
         if (warehouseId != null && !warehouseId.isBlank()) {
             try { body.put("warehouse_id", Integer.parseInt(warehouseId.trim())); }
@@ -1010,8 +1011,8 @@ public class KargonomiCargoProvider implements CargoApiProvider {
     // ─────────────────────────────────────────────────────────────
 
     private HttpHeaders buildAuthHeaders() {
-        String token = settingService.getSetting("kargonomi_api_token");
-        String appKey = settingService.getSetting("kargonomi_app_key");
+        String token = settingService.getSetting(SettingKeys.KARGONOMI_API_TOKEN);
+        String appKey = settingService.getSetting(SettingKeys.KARGONOMI_APP_KEY);
         HttpHeaders headers = new HttpHeaders();
         headers.setBearerAuth(token != null ? token.trim() : "");
         // Not in the published spec; sent only when the account actually has one, so an empty
@@ -1024,7 +1025,7 @@ public class KargonomiCargoProvider implements CargoApiProvider {
     }
 
     private String getBaseUrl() {
-        String url = settingService.getSetting("kargonomi_api_base_url");
+        String url = settingService.getSetting(SettingKeys.KARGONOMI_API_BASE_URL);
         if (url == null || url.isBlank()) url = DEFAULT_BASE_URL;
         return url.replaceAll("/+$", "");
     }

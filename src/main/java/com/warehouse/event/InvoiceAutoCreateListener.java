@@ -1,5 +1,6 @@
 package com.warehouse.event;
 
+import com.warehouse.constants.SettingKeys;
 import com.warehouse.service.InvoiceService;
 import com.warehouse.service.SiteSettingService;
 import org.slf4j.Logger;
@@ -41,7 +42,7 @@ public class InvoiceAutoCreateListener {
     @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onOrderPaid(OrderPaidEvent event) {
-        String autoGenerate = settingService.getSetting("invoice_auto_generate");
+        String autoGenerate = settingService.getSetting(SettingKeys.INVOICE_AUTO_GENERATE);
         if (autoGenerate == null || !"true".equalsIgnoreCase(autoGenerate.trim())) {
             log.debug("[Invoice] Auto-generate kapalı, atlandı: order={}", event.getOrderNumber());
             return;

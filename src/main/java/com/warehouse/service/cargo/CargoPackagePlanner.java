@@ -1,5 +1,6 @@
 package com.warehouse.service.cargo;
 
+import com.warehouse.constants.SettingKeys;
 import com.warehouse.entity.OrderItem;
 import com.warehouse.entity.Product;
 import com.warehouse.service.SiteSettingService;
@@ -128,7 +129,7 @@ public class CargoPackagePlanner {
     }
 
     private BigDecimal maxDesiPerPackage() {
-        String raw = settingService.getSetting("cargo_max_desi_per_package");
+        String raw = settingService.getSetting(SettingKeys.CARGO_MAX_DESI_PER_PACKAGE);
         if (raw != null && !raw.isBlank()) {
             try {
                 BigDecimal value = new BigDecimal(raw.trim());

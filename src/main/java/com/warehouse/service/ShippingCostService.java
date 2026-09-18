@@ -1,5 +1,6 @@
 package com.warehouse.service;
 
+import com.warehouse.constants.SettingKeys;
 import com.warehouse.constants.ShippingConstants;
 import com.warehouse.entity.CargoProvider;
 import org.springframework.stereotype.Service;
@@ -55,7 +56,7 @@ public class ShippingCostService {
                 && provider.getFreeShippingThreshold().compareTo(BigDecimal.ZERO) > 0) {
             return provider.getFreeShippingThreshold();
         }
-        String global = settingService.getSetting("free_shipping_threshold");
+        String global = settingService.getSetting(SettingKeys.FREE_SHIPPING_THRESHOLD);
         if (global != null && !global.isBlank()) {
             try { return new BigDecimal(global.trim()); } catch (NumberFormatException ignored) {}
         }
@@ -68,7 +69,7 @@ public class ShippingCostService {
                 && provider.getBaseCost().compareTo(BigDecimal.ZERO) > 0) {
             return provider.getBaseCost();
         }
-        String global = settingService.getSetting("default_shipping_cost");
+        String global = settingService.getSetting(SettingKeys.DEFAULT_SHIPPING_COST);
         if (global != null && !global.isBlank()) {
             try { return new BigDecimal(global.trim()); } catch (NumberFormatException ignored) {}
         }

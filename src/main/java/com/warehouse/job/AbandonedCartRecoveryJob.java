@@ -1,11 +1,12 @@
 package com.warehouse.job;
 
+import com.warehouse.constants.SettingKeys;
 import com.warehouse.entity.Cart;
 import com.warehouse.entity.CartItem;
 import com.warehouse.entity.Customer;
 import com.warehouse.entity.Product;
-import com.warehouse.repository.CartRepository;
 import com.warehouse.repository.CartItemRepository;
+import com.warehouse.repository.CartRepository;
 import com.warehouse.service.EmailService;
 import com.warehouse.service.SiteSettingService;
 import org.slf4j.Logger;
@@ -60,7 +61,7 @@ public class AbandonedCartRecoveryJob {
     @Transactional
     public void processAbandonedCarts() {
         // Feature flag
-        String enabled = settingService.getSetting("abandoned_cart_enabled");
+        String enabled = settingService.getSetting(SettingKeys.ABANDONED_CART_ENABLED);
         if (!"true".equalsIgnoreCase(enabled)) {
             return;
         }

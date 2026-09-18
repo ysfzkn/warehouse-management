@@ -1,5 +1,6 @@
 package com.warehouse.service.notification;
 
+import com.warehouse.constants.SettingKeys;
 import com.warehouse.service.SiteSettingService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,7 +39,7 @@ public class MockSmsProvider implements SmsProvider {
     @Override
     public boolean isEnabled() {
         // Mock provider is only active in MOCK mode
-        String provider = settingService.getSetting("sms_provider");
+        String provider = settingService.getSetting(SettingKeys.SMS_PROVIDER);
         return provider == null || provider.isBlank() || "MOCK".equalsIgnoreCase(provider);
     }
 }

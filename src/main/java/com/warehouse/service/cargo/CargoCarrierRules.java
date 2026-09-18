@@ -1,6 +1,7 @@
 package com.warehouse.service.cargo;
 
 import com.warehouse.entity.CargoProvider;
+import com.warehouse.util.Locales;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -85,7 +86,7 @@ public class CargoCarrierRules {
     /** "Şırnak / Cizre" and "sirnak/cizre" must be the same entry. */
     static String normalize(String value) {
         if (value == null) return "";
-        String lower = value.trim().toLowerCase(new Locale("tr", "TR"))
+        String lower = value.trim().toLowerCase(Locales.TR)
                 .replace('ı', 'i').replace('ş', 's').replace('ğ', 'g')
                 .replace('ü', 'u').replace('ö', 'o').replace('ç', 'c');
         lower = Normalizer.normalize(lower, Normalizer.Form.NFD).replaceAll("\\p{M}+", "");

@@ -1,5 +1,6 @@
 package com.warehouse.controller;
 
+import com.warehouse.constants.SettingKeys;
 import com.warehouse.entity.CargoWebhookDelivery;
 import com.warehouse.entity.Order;
 import com.warehouse.repository.CargoWebhookDeliveryRepository;
@@ -95,7 +96,7 @@ public class KargonomiWebhookController {
         // from an attacker. Previously a missing secret meant the check was skipped
         // with nothing but a log line, so any unauthenticated POST could move an
         // order to "delivered". A webhook we cannot authenticate is refused.
-        String secret = settingService.getSetting("kargonomi_webhook_secret");
+        String secret = settingService.getSetting(SettingKeys.KARGONOMI_WEBHOOK_SECRET);
         if (secret == null || secret.isBlank()) {
             log.error("[KargonomiWebhook] kargonomi_webhook_secret tanımsız — webhook REDDEDİLDİ. "
                     + "Ayarlar ekranından secret tanımlanana kadar kargo bildirimleri işlenmeyecek.");

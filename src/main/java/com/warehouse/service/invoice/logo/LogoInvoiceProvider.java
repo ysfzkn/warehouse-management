@@ -1,5 +1,6 @@
 package com.warehouse.service.invoice.logo;
 
+import com.warehouse.constants.SettingKeys;
 import com.warehouse.entity.Invoice;
 import com.warehouse.entity.Order;
 import com.warehouse.entity.OrderItem;
@@ -84,11 +85,11 @@ public class LogoInvoiceProvider implements InvoiceProvider {
 
     @Override
     public boolean isEnabled() {
-        if (!"LOGO".equalsIgnoreCase(settingService.getSetting("invoice_provider"))) {
+        if (!"LOGO".equalsIgnoreCase(settingService.getSetting(SettingKeys.INVOICE_PROVIDER))) {
             return false;
         }
-        String username = settingService.getSetting("logo_efatura_username");
-        String password = settingService.getSetting("logo_efatura_password");
+        String username = settingService.getSetting(SettingKeys.LOGO_EFATURA_USERNAME);
+        String password = settingService.getSetting(SettingKeys.LOGO_EFATURA_PASSWORD);
         return username != null && !username.isBlank()
             && password != null && !password.isBlank();
     }
@@ -322,8 +323,8 @@ public class LogoInvoiceProvider implements InvoiceProvider {
         }
 
         try {
-            String username = settingService.getSetting("logo_efatura_username");
-            String password = settingService.getSetting("logo_efatura_password");
+            String username = settingService.getSetting(SettingKeys.LOGO_EFATURA_USERNAME);
+            String password = settingService.getSetting(SettingKeys.LOGO_EFATURA_PASSWORD);
             String soap = buildLoginSoap(username, password);
             String response = callSoap(soap, "Login");
 
@@ -385,11 +386,11 @@ public class LogoInvoiceProvider implements InvoiceProvider {
     }
 
     private String resolveEndpoint() {
-        String custom = settingService.getSetting("logo_efatura_endpoint");
+        String custom = settingService.getSetting(SettingKeys.LOGO_EFATURA_ENDPOINT);
         if (custom != null && !custom.isBlank()) {
             return custom.trim();
         }
-        boolean testMode = !"false".equalsIgnoreCase(settingService.getSetting("logo_efatura_test_mode"));
+        boolean testMode = !"false".equalsIgnoreCase(settingService.getSetting(SettingKeys.LOGO_EFATURA_TEST_MODE));
         return testMode ? TEST_ENDPOINT : PROD_ENDPOINT;
     }
 

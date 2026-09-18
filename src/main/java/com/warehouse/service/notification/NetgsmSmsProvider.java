@@ -1,5 +1,6 @@
 package com.warehouse.service.notification;
 
+import com.warehouse.constants.SettingKeys;
 import com.warehouse.service.SiteSettingService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,9 +49,9 @@ public class NetgsmSmsProvider implements SmsProvider {
                     "Netgsm bilgileri yapılandırılmamış.");
         }
 
-        String username = settingService.getSetting("netgsm_username");
-        String password = settingService.getSetting("netgsm_password");
-        String sender = settingService.getSetting("netgsm_sender");
+        String username = settingService.getSetting(SettingKeys.NETGSM_USERNAME);
+        String password = settingService.getSetting(SettingKeys.NETGSM_PASSWORD);
+        String sender = settingService.getSetting(SettingKeys.NETGSM_SENDER);
         if (sender == null || sender.isBlank()) sender = DEFAULT_SENDER;
 
         // Normalize the phone number (strip +90 / 0 prefix)
@@ -96,10 +97,10 @@ public class NetgsmSmsProvider implements SmsProvider {
 
     @Override
     public boolean isEnabled() {
-        String provider = settingService.getSetting("sms_provider");
+        String provider = settingService.getSetting(SettingKeys.SMS_PROVIDER);
         if (!"NETGSM".equalsIgnoreCase(provider)) return false;
-        String username = settingService.getSetting("netgsm_username");
-        String password = settingService.getSetting("netgsm_password");
+        String username = settingService.getSetting(SettingKeys.NETGSM_USERNAME);
+        String password = settingService.getSetting(SettingKeys.NETGSM_PASSWORD);
         return username != null && !username.isBlank()
             && password != null && !password.isBlank();
     }
