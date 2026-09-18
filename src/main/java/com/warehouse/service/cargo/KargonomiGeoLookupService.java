@@ -125,6 +125,14 @@ public class KargonomiGeoLookupService {
             ResponseEntity<Map> response = restTemplate.exchange(
                     url, HttpMethod.GET, new HttpEntity<>(buildHeaders()), Map.class);
             Map<String, Integer> built = parseIdNameList(response.getBody(), "name", "id");
+            if (built.isEmpty()) {
+                // An empty answer is never a real one — Turkey has 81 provinces. Caching it
+                // would hold checkout address validation down for the full 24 hours even after
+                // whatever caused it is fixed, with no way to force a refresh.
+                log.warn("[KargonomiGeo] states listesi boş döndü — önbelleğe alınmadı, "
+                        + "sonraki istekte tekrar denenecek.");
+                return stateCache != null ? stateCache : Map.of();
+            }
             stateCache = built;
             stateList = parseDisplayList(response.getBody());
             stateCacheExpireAt = System.currentTimeMillis() + CACHE_TTL_MS;
@@ -146,6 +154,13 @@ public class KargonomiGeoLookupService {
             ResponseEntity<Map> response = restTemplate.exchange(
                     url, HttpMethod.GET, new HttpEntity<>(buildHeaders()), Map.class);
             Map<String, Integer> built = parseIdNameList(response.getBody(), "name", "id");
+            if (built.isEmpty()) {
+                // Same reasoning as the province list: every Turkish province has districts, so
+                // an empty list is a failure to be retried, not an answer to be remembered.
+                log.warn("[KargonomiGeo] {} ili için ilçe listesi boş döndü — önbelleğe alınmadı.",
+                        stateId);
+                return cityCache.getOrDefault(stateId, Map.of());
+            }
             cityCache.put(stateId, built);
             cityList.put(stateId, parseDisplayList(response.getBody()));
             cityCacheExpiresAt.put(stateId, System.currentTimeMillis() + CACHE_TTL_MS);
@@ -204,8 +219,12 @@ public class KargonomiGeoLookupService {
         String token = settingService.getSetting("kargonomi_api_token");
         String appKey = settingService.getSetting("kargonomi_app_key");
         HttpHeaders headers = new HttpHeaders();
-        if (token != null && !token.isBlank()) headers.setBearerAuth(token);
-        if (appKey != null && !appKey.isBlank()) headers.set("X-App-Key", appKey);
+        // Trimmed, exactly as KargonomiCargoProvider does. Without it a token pasted with a
+        // trailing newline produced a malformed Authorization header here while the provider's
+        // own calls worked — so the balance check passed and the province list came back 401 in
+        // the same readiness run, which reads as "the carrier is half broken".
+        if (token != null && !token.isBlank()) headers.setBearerAuth(token.trim());
+        if (appKey != null && !appKey.isBlank()) headers.set("X-App-Key", appKey.trim());
         headers.setAccept(List.of(MediaType.APPLICATION_JSON));
         return headers;
     }

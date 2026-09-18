@@ -21,7 +21,7 @@ class CargoTokenFingerprintTest {
 
     private String describe(String token) {
         return (String) ReflectionTestUtils.invokeMethod(
-                CargoReadinessService.class, "describeToken", token);
+                CargoReadinessService.class, "describeSecret", token);
     }
 
     @Test

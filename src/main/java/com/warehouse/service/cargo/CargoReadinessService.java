@@ -135,7 +135,22 @@ public class CargoReadinessService {
      * <p>The same first-four/last-four masking is what the payment gateway screen already uses
      * for its own credentials.
      */
-    private static String describeToken(String token) {
+    /**
+     * Whitespace or quotes around a credential: harmless where the value is trimmed before use,
+     * fatal where it is not. That asymmetry is exactly what made the carrier look half-broken —
+     * the balance call trimmed and worked, the province lookup did not and returned 401 — so it
+     * is worth naming even while the token is otherwise working.
+     */
+    private static boolean hasSuspiciousShape(String secret) {
+        String trimmed = secret.trim();
+        return !secret.equals(trimmed)
+                || trimmed.startsWith("\"") || trimmed.endsWith("\"")
+                || trimmed.startsWith("'") || trimmed.endsWith("'")
+                || trimmed.toLowerCase().startsWith("bearer ")
+                || !trimmed.chars().allMatch(c -> c > 32 && c < 127);
+    }
+
+    private static String describeSecret(String token) {
         String trimmed = token.trim();
         StringBuilder note = new StringBuilder(trimmed.length() + " karakter, ");
         note.append(trimmed.length() > 8
@@ -172,8 +187,14 @@ public class CargoReadinessService {
                     ? new Check("token", "API token ve bakiye", Level.FAIL,
                         "Token çalışıyor ama bakiye " + balance.amount() + " TL.",
                         "Kargonomi hesabına bakiye yükleyin; bakiyesiz gönderi oluşturulamaz.")
-                    : new Check("token", "API token ve bakiye", Level.OK,
-                        "Token çalışıyor, bakiye " + balance.amount() + " TL.", null);
+                    : hasSuspiciousShape(token)
+                        ? new Check("token", "API token ve bakiye", Level.WARN,
+                            "Bakiye " + balance.amount() + " TL, ama token biçimi şüpheli: "
+                            + describeSecret(token),
+                            "Boşluk ve tırnak gibi fazlalıklar bazı çağrılarda temizlenip "
+                            + "bazılarında temizlenmiyordu; token'ı temiz hâliyle yeniden girin.")
+                        : new Check("token", "API token ve bakiye", Level.OK,
+                            "Token çalışıyor, bakiye " + balance.amount() + " TL.", null);
             case NOT_REPORTED -> new Check("token", "API token ve bakiye", Level.FAIL,
                     "Token çalışıyor (401 dönmedi) ama Kargonomi bakiye bildirmiyor.",
                     "Kargonomi hesabına bakiye yükleyip tekrar kontrol edin.");
@@ -181,7 +202,7 @@ public class CargoReadinessService {
             // mesajda birleştirilince admin hangisini düzelteceğini bilemiyordu.
             case REJECTED -> new Check("token", "API token ve bakiye", Level.FAIL,
                     "Kargonomi token'ı reddetti — " + balance.detail()
-                    + ". Sunucudaki token: " + describeToken(token),
+                    + ". Sunucudaki token: " + describeSecret(token),
                     "Yukarıdaki parmak izini elinizdeki token'la karşılaştırın; tutuyorsa "
                     + "token Kargonomi tarafında geçersiz, tutmuyorsa Ayarlar → Kargo API'ye "
                     + "yanlış değer kaydedilmiş.");
@@ -208,7 +229,15 @@ public class CargoReadinessService {
                     "Secret kısa (" + secret.length() + " karakter).",
                     "En az 32 karakterlik rastgele bir değer kullanın.");
         }
-        return new Check("webhookSecret", "Webhook imza anahtarı", Level.OK, "Tanımlı.", null);
+        // The fingerprint is what makes a save verifiable. Kargonomi issues its own signing key
+        // when a webhook is registered and returns it exactly once; the panel writes it into the
+        // field, but until the settings are saved the server still verifies against the previous
+        // value. "Tanımlı." looked identical in both cases, and the mismatch is silent: every
+        // delivery would be refused with 401, which Kargonomi does not retry.
+        return new Check("webhookSecret", "Webhook imza anahtarı", Level.OK,
+                "Kayıtlı: " + describeSecret(secret),
+                "Ekrandaki anahtarla aynı olmalı. Farklıysa ayarları kaydetmemişsiniz demektir; "
+                + "kaydedilmezse Kargonomi'nin imzaladığı bildirimler 401 ile reddedilir.");
     }
 
     private Check webhookRegistered() {
