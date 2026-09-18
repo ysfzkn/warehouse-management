@@ -70,6 +70,20 @@ public class KargonomiWebhookController {
         this.deliveryRepository = deliveryRepository;
     }
 
+    /**
+     * Reachability probe. Kargonomi fetches the callback URL before it will save a webhook and
+     * refuses the registration with "Belirtilen URL erişilebilir değil" unless it gets a 2xx.
+     *
+     * <p>The answer is deliberately a constant. Anyone on the internet can call this, so it must
+     * not report whether a signing key is configured, which orders exist, or anything else that
+     * would differ between two installations — the probe only needs to know the address answers.
+     * Delivery of actual events remains POST-only and signature-verified.
+     */
+    @RequestMapping(value = "/webhook", method = {RequestMethod.GET, RequestMethod.HEAD})
+    public ResponseEntity<Map<String, String>> probe() {
+        return ResponseEntity.ok(Map.of("status", "ok"));
+    }
+
     @PostMapping("/webhook")
     public ResponseEntity<Map<String, Object>> receive(
             @RequestHeader(value = "X-Webhook-Signature", required = false) String signature,

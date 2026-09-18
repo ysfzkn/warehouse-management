@@ -341,6 +341,14 @@ public class SecurityConfig {
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/assistant/flags/**").permitAll()
                         // Cargo provider webhook — authenticated by HMAC signature in the controller
                         .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/public/cargo/**").permitAll()
+                        // Kargonomi fetches the callback URL before it will save a webhook, and
+                        // refuses the registration unless that fetch returns 2xx. With only POST
+                        // opened above, the probe fell through to denyAll() and came back 403, so
+                        // registration failed with "Belirtilen URL erişilebilir değil (HTTP 403)".
+                        // Scoped to the webhook path itself, and the handler answers with a
+                        // constant — delivery stays POST-only and signature-verified.
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/public/cargo/*/webhook").permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.HEAD, "/api/public/cargo/*/webhook").permitAll()
                         // CORS preflight must never require credentials
                         .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
                         // All other actuator endpoints (env, configprops, loggers, beans, metrics,

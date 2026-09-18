@@ -99,6 +99,44 @@ class KargonomiWebhookSecurityTest {
     }
 
     /**
+     * Kargonomi fetches the callback URL before saving a webhook and refuses the registration
+     * unless that fetch returns 2xx. The probe therefore has to answer — but it answers to the
+     * whole internet, so it must say the same thing on every installation in every state. A reply
+     * that varied with whether a signing key is configured would tell an attacker exactly when
+     * this endpoint is standing open.
+     */
+    @Test
+    void theReachabilityProbeAnswersWithoutRevealingAnything() {
+        ResponseEntity<Map<String, String>> configured = controller.probe();
+
+        assertThat(configured.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(configured.getBody()).isEqualTo(Map.of("status", "ok"));
+
+        // Nothing was consulted to produce it, so nothing can leak through it.
+        verifyNoInteractions(settingService, orderRepository, cargoApiService, deliveryRepository);
+
+        // And it stays identical across calls — no counter, no timestamp, no state.
+        assertThat(controller.probe().getBody()).isEqualTo(configured.getBody());
+    }
+
+    /**
+     * The probe must not become a second way in: only POST carries events, and only POST is
+     * signature-verified. Opening GET beyond the webhook path itself would widen
+     * {@code /api/public/cargo/**} for anything added there later.
+     */
+    @Test
+    void onlyTheWebhookPathIsOpenedToUnsignedMethods() throws Exception {
+        String config = java.nio.file.Files.readString(
+                java.nio.file.Path.of("src/main/java/com/warehouse/security/SecurityConfig.java"));
+
+        assertThat(config)
+                .as("sonda yalnızca webhook yoluna açılmalı")
+                .contains("HttpMethod.GET, \"/api/public/cargo/*/webhook\").permitAll()")
+                .contains("HttpMethod.HEAD, \"/api/public/cargo/*/webhook\").permitAll()")
+                .doesNotContain("HttpMethod.GET, \"/api/public/cargo/**\").permitAll()");
+    }
+
+    /**
      * Kargonomi puts the event type at {@code meta.webhook.event_type}, not at the top of
      * {@code meta}. Reading only the top level left the stored type blank on every delivery —
      * the one column an operator scans to see what a batch of notifications was about.
