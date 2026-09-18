@@ -447,10 +447,30 @@ public class SecurityConfig {
         return result;
     }
 
+    /**
+     * Answers a denial with a bare 403 and writes one line about it to the server log.
+     *
+     * <p>Silent towards the caller on purpose: a refusal that explains itself tells whoever is
+     * probing which paths exist and what role they need. Silent towards <em>us</em> was the
+     * accident. Denials arrived in production as a hundred-line
+     * {@code AccessDeniedException} stack trace naming no path, no method and no user, which is
+     * both unreadable and unanswerable — every one of them looks like every other one, so a
+     * misconfigured endpoint and a passing scanner are indistinguishable.
+     *
+     * <p>The log line carries the path, the method and the authenticated name when there is one.
+     * No stack trace: the interesting part of a denial is which request it was, and the trace is
+     * the same framework frames every time.
+     */
     private static class SilentAccessDeniedHandler implements AccessDeniedHandler {
         @Override
         public void handle(HttpServletRequest request, HttpServletResponse response,
                           AccessDeniedException accessDeniedException) {
+            var authentication = org.springframework.security.core.context.SecurityContextHolder
+                    .getContext().getAuthentication();
+            String who = authentication == null ? "anonim" : authentication.getName();
+
+            log.warn("[Yetki] Reddedildi: {} {} — kullanıcı={}",
+                    request.getMethod(), request.getRequestURI(), who);
             response.setStatus(HttpServletResponse.SC_FORBIDDEN);
         }
     }

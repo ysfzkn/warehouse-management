@@ -184,6 +184,7 @@ const SETTING_GROUPS = [
     icon: 'fas fa-store',
     keys: [
       'sender_name',
+      'sender_tax_number',
       'sender_phone',
       'sender_address',
       'sender_city',
@@ -327,6 +328,7 @@ const LABELS = {
   kargonomi_webhook_secret: 'Kargonomi Webhook Secret',
   kargonomi_warehouse_id: 'Kargonomi Warehouse ID',
   sender_name: 'Gönderici Adı / Firma',
+  sender_tax_number: 'Gönderici Vergi / Kimlik No',
   sender_phone: 'Gönderici Telefon',
   sender_address: 'Gönderici Adresi',
   sender_city: 'Gönderici Şehir',
@@ -452,6 +454,8 @@ const FIELD_TOOLTIPS = {
   kargonomi_warehouse_id:
     'Kargonomi\'de oluşturulan gönderici depo ID\'si. Boşsa her shipment\'ta "Gönderici Bilgileri" kullanılır. Admin → Kargo API → "Webhook Kaydet" butonu ile de senkronize edebilirsiniz.',
   sender_name: 'Faturada ve kargoda "gönderici" olarak gözükecek firma adı',
+  sender_tax_number:
+    'Kargonomi gönderici için vergi ya da kimlik numarası zorunlu tutuyor (10-11 hane). Boş bırakılırsa fatura ayarlarındaki şirket vergi numarası kullanılır.',
   sender_phone: 'Kargo iletişimi için telefon',
   sender_address: 'Kargo çıkış adresi',
   sender_city: 'Kargo çıkış şehri',

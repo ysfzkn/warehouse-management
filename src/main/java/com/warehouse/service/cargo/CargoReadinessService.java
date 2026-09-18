@@ -39,19 +39,22 @@ public class CargoReadinessService {
     private final WarehouseRepository warehouseRepository;
     private final ProductRepository productRepository;
     private final KargonomiGeoLookupService geoLookup;
+    private final CargoSenderProfile senderProfile;
 
     public CargoReadinessService(SiteSettingService settingService,
                                   CargoApiService cargoApiService,
                                   CargoProviderRepository cargoProviderRepository,
                                   WarehouseRepository warehouseRepository,
                                   ProductRepository productRepository,
-                                  KargonomiGeoLookupService geoLookup) {
+                                  KargonomiGeoLookupService geoLookup,
+                                  CargoSenderProfile senderProfile) {
         this.settingService = settingService;
         this.cargoApiService = cargoApiService;
         this.cargoProviderRepository = cargoProviderRepository;
         this.warehouseRepository = warehouseRepository;
         this.productRepository = productRepository;
         this.geoLookup = geoLookup;
+        this.senderProfile = senderProfile;
     }
 
     /** OK = ready, WARN = will work but something is worse than it should be, FAIL = blocks go-live. */
@@ -293,21 +296,20 @@ public class CargoReadinessService {
             return new Check("sender", "Gönderici deposu", Level.OK, detail, null);
         }
 
-        // No warehouse id anywhere — the sender has to be sent inline instead.
-        List<String> missing = new ArrayList<>();
-        for (String key : List.of("sender_name", "sender_phone", "sender_address",
-                                   "sender_city", "sender_district")) {
-            String value = settingService.getSetting(key);
-            if (value == null || value.isBlank()) missing.add(key);
-        }
-        if (missing.isEmpty()) {
+        // No warehouse id anywhere — the sender has to be sent inline instead, and Kargonomi
+        // refuses the request unless every one of its fields is present. The list of what
+        // "complete" means lives in CargoSenderProfile; this check had its own copy, which was
+        // missing the tax number and so reported a sender that the carrier would reject.
+        if (senderProfile.isComplete()) {
             return new Check("sender", "Gönderici deposu", Level.WARN,
                     "Kargonomi depo id'si yok; gönderici bilgileri her gönderide tek tek yollanacak.",
                     "Kargonomi'de depo oluşturup id'sini kaydetmek daha sağlam.");
         }
         return new Check("sender", "Gönderici deposu", Level.FAIL,
-                "Ne depo id'si var ne de gönderici bilgileri tam. Eksik: " + String.join(", ", missing),
-                "Ayarlar → Gönderici Bilgileri'ni doldurun ya da Kargonomi'de depo oluşturun.");
+                "Ne depo id'si var ne de gönderici bilgileri tam. Eksik: "
+                + senderProfile.missingFields(),
+                "Ayarlar → Gönderici Bilgileri'ni doldurun ya da Kargonomi'de depo oluşturun. "
+                + "Depo tanımlarsanız bu alanların hiçbiri gerekmez.");
     }
 
     private Check geoReachable() {
