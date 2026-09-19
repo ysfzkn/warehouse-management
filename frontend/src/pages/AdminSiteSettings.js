@@ -3,6 +3,7 @@ import axios from 'axios';
 import useSecurityCodePrompt from '../components/useSecurityCodePrompt';
 import { useAdminToast } from '../components/AdminToast';
 import { parsePhoneDirectoryEditable, PHONE_TYPES } from '../utils/phones';
+import { formatTRY } from '../utils/money';
 import confirmDialog from '../utils/confirmDialog';
 
 // ─────────────────────────────────────────────────────────────
@@ -850,7 +851,7 @@ function CargoDryRunPanel() {
                   {result.quotes.map((q) => (
                     <tr key={q.slug || q.name}>
                       <td>{q.name}</td>
-                      <td className="text-end">{q.price ?? '—'}</td>
+                      <td className="text-end">{formatTRY(q.price)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -967,7 +968,6 @@ export default function AdminSiteSettings() {
   const [dragOver, setDragOver] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [visiblePasswords, setVisiblePasswords] = useState({});
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const fileInputRef = useRef(null);
   const faviconInputRef = useRef(null);
   const { askCode, SecurityCodePrompt } = useSecurityCodePrompt();
@@ -1090,11 +1090,10 @@ export default function AdminSiteSettings() {
         e.preventDefault();
         if (isDirty && !saving) handleSave();
       }
-      if (e.key === 'Escape' && mobileMenuOpen) setMobileMenuOpen(false);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [isDirty, saving, handleSave, mobileMenuOpen]);
+  }, [isDirty, saving, handleSave]);
 
   const handleFileUpload = async (type, file) => {
     if (!file) return;
@@ -1958,14 +1957,40 @@ export default function AdminSiteSettings() {
         </div>
       </div>
 
-      {/* ── Mobile Menu Toggle ── */}
-      <button
-        className="btn btn-outline-primary w-100 mb-3 d-md-none"
-        onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-      >
-        <i className={`fas fa-${mobileMenuOpen ? 'times' : 'bars'} me-2`}></i>
-        {mobileMenuOpen ? 'Menüyü Kapat' : `${activeGroup.title} — Menüyü Aç`}
-      </button>
+      {/* ── Bölüm seçici (mobil) ──
+          Kenar çubuğu md altında gizli. Burada eskiden bir "Menüyü Aç" düğmesi vardı; etiketi
+          açık bölümün adıyla başladığı için başlık gibi okunuyordu ve listeye ulaşmak için önce
+          onun bir düğme olduğunu fark etmek gerekiyordu. Açılır liste her zaman ekranda: bütün
+          bölümler tek dokunuşta görünüyor, keşfedilecek bir şey kalmıyor. */}
+      <div className="d-md-none mb-3">
+        <label htmlFor="settings-group-select" className="form-label small text-muted mb-1">
+          Bölüm
+        </label>
+        <select
+          id="settings-group-select"
+          className="form-select"
+          value={activeGroupId}
+          onChange={(e) => setActiveGroupId(e.target.value)}
+        >
+          {Object.entries(sectionedGroups).map(([section, groups]) => (
+            <optgroup key={section} label={section}>
+              {groups.map((g) => {
+                const stats = groupStats[g.id];
+                const marks = [
+                  stats.dirty > 0 ? `${stats.dirty} değişiklik` : null,
+                  g.enabledKey !== undefined ? (stats.enabled ? 'aktif' : 'pasif') : null,
+                ].filter(Boolean);
+                return (
+                  <option key={g.id} value={g.id}>
+                    {g.title}
+                    {marks.length > 0 ? ` — ${marks.join(', ')}` : ''}
+                  </option>
+                );
+              })}
+            </optgroup>
+          ))}
+        </select>
+      </div>
 
       {/* ── Search Results View ── */}
       {searchResults !== null ? (
@@ -2010,7 +2035,7 @@ export default function AdminSiteSettings() {
       ) : (
         <div className="row g-4">
           {/* ── Sidebar ── */}
-          <div className={`col-lg-3 col-md-4 ${mobileMenuOpen ? '' : 'd-none d-md-block'}`}>
+          <div className="col-lg-3 col-md-4 d-none d-md-block">
             <div className="card border-0 shadow-sm sticky-top" style={{ top: 16 }}>
               <div className="card-body p-2">
                 {Object.entries(sectionedGroups).map(([section, groups]) => (
@@ -2029,10 +2054,7 @@ export default function AdminSiteSettings() {
                         <button
                           key={g.id}
                           className={`btn w-100 text-start d-flex align-items-center gap-2 py-2 px-2 mb-1 border-0 ${isActive ? 'bg-primary text-white' : 'text-dark'}`}
-                          onClick={() => {
-                            setActiveGroupId(g.id);
-                            setMobileMenuOpen(false);
-                          }}
+                          onClick={() => setActiveGroupId(g.id)}
                           style={{ fontSize: 13, borderRadius: 6, transition: 'background .12s' }}
                           onMouseEnter={(e) => {
                             if (!isActive) e.currentTarget.style.backgroundColor = 'rgba(0,0,0,.04)';
