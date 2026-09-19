@@ -25,6 +25,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
@@ -382,5 +383,157 @@ class StockServiceTest {
 
         assertEquals("XYZ/2026/99", result.getIrsaliyeNo(), "stored as typed, only trimmed");
         assertEquals(java.time.LocalDate.of(2026, 4, 2), result.getIrsaliyeDate());
+    }
+
+    // ─── Warehouse correction on update ──────────────────────────────────────
+    // Stock entered against the wrong warehouse is put right from the settings screen: the row
+    // moves rather than being deleted and retyped, so its id — and everything pointing at it —
+    // survives. These cover the guards that keep the move a correction and not a hidden transfer.
+
+    private Warehouse otherWarehouse(WarehouseType type) {
+        Warehouse other = new Warehouse();
+        other.setId(2L);
+        other.setName("Merkez Depo");
+        other.setWarehouseType(type);
+        return other;
+    }
+
+    private Stock warehouseChangeRequest() {
+        Warehouse reference = new Warehouse();
+        reference.setId(2L);
+        Stock changes = new Stock();
+        changes.setWarehouse(reference);
+        return changes;
+    }
+
+    @Test
+    void updateStock_WhenWarehouseCorrected_ShouldMoveRowAndLeaveQuantityAlone() {
+        Warehouse target = otherWarehouse(WarehouseType.STANDART);
+        when(stockRepository.findById(1L)).thenReturn(Optional.of(stock));
+        when(warehouseRepository.findById(2L)).thenReturn(Optional.of(target));
+        when(stockRepository.findByProductAndWarehouse(product, target)).thenReturn(Optional.empty());
+        when(stockRepository.save(any(Stock.class))).thenAnswer(i -> i.getArgument(0));
+
+        Stock result = stockService.updateStock(1L, warehouseChangeRequest());
+
+        assertEquals(2L, result.getWarehouse().getId());
+        assertEquals(100, result.getQuantity(), "a warehouse correction must not move quantity");
+        assertEquals(1L, result.getId(), "the row keeps its id so orders pointing at it follow");
+        verify(auditService, times(1)).log(eq(AuditAction.STOCK_UPDATE), anyString(), anyLong(), anyString(),
+                contains("Depo: Test Warehouse → Merkez Depo"), any());
+    }
+
+    @Test
+    void updateStock_WhenTargetWarehouseHoldsTheSameProduct_ShouldRefuse() {
+        Warehouse target = otherWarehouse(WarehouseType.STANDART);
+        Stock rival = new Stock();
+        rival.setId(9L);
+        rival.setProduct(product);
+        rival.setWarehouse(target);
+        when(stockRepository.findById(1L)).thenReturn(Optional.of(stock));
+        when(warehouseRepository.findById(2L)).thenReturn(Optional.of(target));
+        when(stockRepository.findByProductAndWarehouse(product, target)).thenReturn(Optional.of(rival));
+
+        WarehouseManagementException ex = assertThrows(WarehouseManagementException.class,
+                () -> stockService.updateStock(1L, warehouseChangeRequest()));
+
+        assertEquals(ErrorCode.STOCK_ALREADY_EXISTS, ex.getErrorCode());
+        verify(stockRepository, never()).save(any(Stock.class));
+    }
+
+    @Test
+    void updateStock_WhenQuantityIsReserved_ShouldRefuseWarehouseChange() {
+        stock.setReservedQuantity(4);
+        when(stockRepository.findById(1L)).thenReturn(Optional.of(stock));
+        when(warehouseRepository.findById(2L)).thenReturn(Optional.of(otherWarehouse(WarehouseType.STANDART)));
+
+        WarehouseManagementException ex = assertThrows(WarehouseManagementException.class,
+                () -> stockService.updateStock(1L, warehouseChangeRequest()));
+
+        assertEquals(ErrorCode.INVALID_VALUE, ex.getErrorCode());
+        assertEquals(1L, stock.getWarehouse().getId(), "the row must stay where it was");
+        verify(stockRepository, never()).save(any(Stock.class));
+    }
+
+    @Test
+    void updateStock_WhenTargetWarehouseIsPassive_ShouldRefuse() {
+        Warehouse target = otherWarehouse(WarehouseType.STANDART);
+        target.setActive(false);
+        when(stockRepository.findById(1L)).thenReturn(Optional.of(stock));
+        when(warehouseRepository.findById(2L)).thenReturn(Optional.of(target));
+
+        WarehouseManagementException ex = assertThrows(WarehouseManagementException.class,
+                () -> stockService.updateStock(1L, warehouseChangeRequest()));
+
+        assertEquals(ErrorCode.INVALID_VALUE, ex.getErrorCode());
+        verify(stockRepository, never()).save(any(Stock.class));
+    }
+
+    @Test
+    void updateStock_WhenMovingIntoEmanetWithoutCustomer_ShouldRefuse() {
+        when(stockRepository.findById(1L)).thenReturn(Optional.of(stock));
+        when(warehouseRepository.findById(2L)).thenReturn(Optional.of(otherWarehouse(WarehouseType.EMANET_DEPO)));
+
+        WarehouseManagementException ex = assertThrows(WarehouseManagementException.class,
+                () -> stockService.updateStock(1L, warehouseChangeRequest()));
+
+        assertEquals(ErrorCode.REQUIRED_FIELD_MISSING, ex.getErrorCode());
+        verify(stockRepository, never()).save(any(Stock.class));
+    }
+
+    @Test
+    void updateStock_WhenMovingIntoEmanetWithCustomer_ShouldStampTheDetailsOnTheRow() {
+        Warehouse target = otherWarehouse(WarehouseType.EMANET_DEPO);
+        when(stockRepository.findById(1L)).thenReturn(Optional.of(stock));
+        when(warehouseRepository.findById(2L)).thenReturn(Optional.of(target));
+        when(stockRepository.findByProductAndWarehouseAndCustomerName(product, target, "Ayşe Yılmaz"))
+                .thenReturn(Optional.empty());
+        when(stockRepository.save(any(Stock.class))).thenAnswer(i -> i.getArgument(0));
+
+        Stock changes = warehouseChangeRequest();
+        changes.setCustomerName("ayşe yılmaz");
+        changes.setCustomerPhone("5551112233");
+
+        Stock result = stockService.updateStock(1L, changes);
+
+        assertEquals("Ayşe Yılmaz", result.getCustomerName());
+        assertEquals("5551112233", result.getCustomerPhone());
+    }
+
+    @Test
+    void updateStock_WhenMovingOutOfEmanet_ShouldDropCustomerDetails() {
+        Warehouse emanet = new Warehouse();
+        emanet.setId(3L);
+        emanet.setName("Emanet Depo");
+        emanet.setWarehouseType(WarehouseType.EMANET_DEPO);
+        stock.setWarehouse(emanet);
+        stock.setCustomerName("Acme");
+        stock.setCustomerPhone("5551112233");
+
+        Warehouse target = otherWarehouse(WarehouseType.STANDART);
+        when(stockRepository.findById(1L)).thenReturn(Optional.of(stock));
+        when(warehouseRepository.findById(2L)).thenReturn(Optional.of(target));
+        when(stockRepository.findByProductAndWarehouse(product, target)).thenReturn(Optional.empty());
+        when(stockRepository.save(any(Stock.class))).thenAnswer(i -> i.getArgument(0));
+
+        Stock result = stockService.updateStock(1L, warehouseChangeRequest());
+
+        assertNull(result.getCustomerName(), "a standard warehouse holds no consignment customer");
+        assertNull(result.getCustomerPhone());
+        verify(auditService, times(1)).log(eq(AuditAction.STOCK_UPDATE), anyString(), anyLong(), anyString(),
+                contains("Müşteri Bilgisi: Acme → (kaldırıldı)"), any());
+    }
+
+    @Test
+    void updateStock_WhenWarehouseOmitted_ShouldLeaveItUntouched() {
+        when(stockRepository.findById(1L)).thenReturn(Optional.of(stock));
+        when(stockRepository.save(any(Stock.class))).thenAnswer(i -> i.getArgument(0));
+        Stock changes = new Stock();
+        changes.setMinStockLevel(5);
+
+        Stock result = stockService.updateStock(1L, changes);
+
+        assertEquals(1L, result.getWarehouse().getId());
+        verify(warehouseRepository, never()).findById(anyLong());
     }
 }

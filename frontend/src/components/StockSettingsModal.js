@@ -10,10 +10,29 @@ import {
 import { todayIsoDate } from '../utils/date';
 import IrsaliyePicker from './IrsaliyePicker';
 
+const EMANET_TYPES = ['EMANET_DEPO', 'EmanetDepo', 'emanetDepo'];
+
+const isEmanetWarehouse = (warehouse) => EMANET_TYPES.includes(warehouse?.warehouseType);
+
+// Both search dropdowns in this modal float above the body; sharing one style keeps them from
+// drifting apart as either is touched.
+const SEARCH_DROPDOWN_STYLE = {
+  zIndex: 1055,
+  maxHeight: '280px',
+  overflowY: 'auto',
+  marginTop: '4px',
+  backgroundColor: 'var(--surface-card)',
+  border: '2px solid var(--color-primary-600)',
+  borderRadius: '0.375rem',
+  boxShadow: '0 0.5rem 1rem rgba(0, 0, 0, 0.15)',
+  top: '100%',
+  left: 0,
+};
+
 /**
  * Stock settings modal - for managing consigned, reserved, and min stock levels
  */
-const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
+const StockSettingsModal = ({ stock, products = [], warehouses = [], onSuccess, onClose }) => {
   const role = (typeof window !== 'undefined' && localStorage.getItem('auth_role')) || 'ADMIN';
   const [settings, setSettings] = useState({
     productId: null,
@@ -28,20 +47,52 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
   const [productSearchTerm, setProductSearchTerm] = useState('');
   const [showProductDropdown, setShowProductDropdown] = useState(false);
   const [highlightedProductIndex, setHighlightedProductIndex] = useState(0);
+  // The warehouse starts locked behind a button. Picking the wrong one on entry is exactly the
+  // mistake this field exists to repair, and an always-open search would let it happen again here.
+  const [warehouseId, setWarehouseId] = useState(stock?.warehouse?.id ?? null);
+  const [warehousePickerOpen, setWarehousePickerOpen] = useState(false);
+  const [warehouseSearchTerm, setWarehouseSearchTerm] = useState('');
+  const [showWarehouseDropdown, setShowWarehouseDropdown] = useState(false);
+  const [highlightedWarehouseIndex, setHighlightedWarehouseIndex] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [errors, setErrors] = useState({});
   const todayIso = useMemo(() => todayIsoDate(), []);
 
-  // Check if warehouse is EMANET_DEPO type
-  // Support both string and enum formats
-  const warehouseType = stock?.warehouse?.warehouseType;
-  const isEmanetDepo =
-    warehouseType === 'EMANET_DEPO' || warehouseType === 'EmanetDepo' || warehouseType === 'emanetDepo';
+  const originalWarehouseId = stock?.warehouse?.id ?? null;
+  // Reserved units are already promised to an order or a transfer that recorded this row, so the
+  // backend refuses to move it. Saying so here spares the operator a rejected save.
+  const reservedQuantity = stock?.reservedQuantity || 0;
+  const warehouseMoveBlocked = reservedQuantity > 0;
+
+  const selectableWarehouses = useMemo(() => {
+    const list = Array.isArray(warehouses) ? warehouses : [];
+    // A passive warehouse cannot receive stock. The one the row already sits in stays listed so
+    // the field always has something to show, even if it was deactivated after the entry.
+    return list.filter((item) => item.active !== false || item.id === originalWarehouseId);
+  }, [warehouses, originalWarehouseId]);
+
+  const selectedWarehouse = useMemo(() => {
+    const match = selectableWarehouses.find((item) => item.id === warehouseId);
+    if (match) return match;
+    // Falls back to the row's own warehouse so the name still reads correctly while the warehouse
+    // list is still loading.
+    return warehouseId === originalWarehouseId ? stock?.warehouse || null : null;
+  }, [selectableWarehouses, warehouseId, originalWarehouseId, stock]);
+
+  const warehouseChanged = warehouseId !== null && warehouseId !== originalWarehouseId;
+
+  // Which customer fields apply follows the warehouse the row is heading for, not the one it came
+  // from: a move into a consignment warehouse has to collect the customer before it can be saved.
+  const isEmanetDepo = isEmanetWarehouse(selectedWarehouse);
 
   useEffect(() => {
     if (stock) {
+      setWarehouseId(stock.warehouse?.id ?? null);
+      setWarehousePickerOpen(false);
+      setWarehouseSearchTerm('');
+      setShowWarehouseDropdown(false);
       setSettings({
         productId: stock.product?.id || null,
         consignedQuantity: stock.consignedQuantity || 0,
@@ -63,6 +114,10 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
   useEffect(() => {
     setHighlightedProductIndex(0);
   }, [productSearchTerm]);
+
+  useEffect(() => {
+    setHighlightedWarehouseIndex(0);
+  }, [warehouseSearchTerm]);
 
   // Filter products for search
   const filteredProducts = useMemo(() => {
@@ -95,6 +150,50 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
     setHighlightedProductIndex(0);
     if (errors.productId) {
       setErrors((prev) => ({ ...prev, productId: null }));
+    }
+  };
+
+  // Warehouses are few enough that an empty box can just list them; typing narrows by name,
+  // location or manager, which is how operators tell two depots in the same city apart.
+  const filteredWarehouses = useMemo(() => {
+    const query = warehouseSearchTerm.trim().toLocaleLowerCase('tr-TR');
+    if (!query) return selectableWarehouses.slice(0, 10);
+    return selectableWarehouses
+      .filter((item) => {
+        const haystack = [item.name, item.location, item.manager]
+          .filter(Boolean)
+          .map((text) => text.toLocaleLowerCase('tr-TR'));
+        return haystack.some((text) => text.includes(query));
+      })
+      .slice(0, 10);
+  }, [selectableWarehouses, warehouseSearchTerm]);
+
+  const handleWarehouseSelect = (warehouse) => {
+    setWarehouseId(warehouse.id);
+    setWarehouseSearchTerm('');
+    setShowWarehouseDropdown(false);
+    setHighlightedWarehouseIndex(0);
+    setWarehousePickerOpen(false);
+    setError(null);
+  };
+
+  const handleWarehouseSearchKeyDown = (e) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlightedWarehouseIndex((prev) => Math.min(prev + 1, filteredWarehouses.length - 1));
+      setShowWarehouseDropdown(true);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightedWarehouseIndex((prev) => Math.max(prev - 1, 0));
+      setShowWarehouseDropdown(true);
+    } else if (e.key === 'Enter' && filteredWarehouses.length > 0) {
+      e.preventDefault();
+      handleWarehouseSelect(filteredWarehouses[highlightedWarehouseIndex]);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setShowWarehouseDropdown(false);
+      setWarehousePickerOpen(false);
+      setWarehouseSearchTerm('');
     }
   };
 
@@ -188,6 +287,7 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
     const originalIrsaliyeNo = stock.irsaliyeNo || '';
     const originalIrsaliyeDate = stock.irsaliyeDate || '';
     const hasChanges =
+      warehouseChanged ||
       settings.productId !== originalProductId ||
       settings.consignedQuantity !== (stock.consignedQuantity || 0) ||
       settings.minStockLevel !== (stock.minStockLevel || 2) ||
@@ -228,6 +328,12 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
         updateData.product = { id: settings.productId };
       }
 
+      // Only sent when it actually moved: the backend leaves the warehouse alone when the field
+      // is absent, which is what every other caller of this endpoint relies on.
+      if (warehouseChanged) {
+        updateData.warehouse = { id: warehouseId };
+      }
+
       if (isEmanetDepo) {
         updateData.customerName = settings.customerName.trim();
         updateData.customerPhone = formatPhoneForSubmit(settings.customerPhone);
@@ -241,7 +347,11 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
 
       await axios.put(`/api/stocks/${stock.id}`, updateData);
 
-      setSuccess('✓ Ayarlar başarıyla güncellendi!');
+      setSuccess(
+        warehouseChanged
+          ? `✓ Stok kaydı ${selectedWarehouse?.name} deposuna taşındı.`
+          : '✓ Ayarlar başarıyla güncellendi!'
+      );
       setTimeout(() => {
         onSuccess();
       }, 800);
@@ -286,6 +396,12 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
                     <small className="text-muted">
                       <i className="fas fa-warehouse me-1"></i>
                       {stock.warehouse.name}
+                      {warehouseChanged && (
+                        <>
+                          <i className="fas fa-long-arrow-alt-right mx-2" aria-hidden="true"></i>
+                          <span className="fw-bold text-warning">{selectedWarehouse?.name}</span>
+                        </>
+                      )}
                     </small>
                   </div>
                   <span className={`badge bg-${status.class}`}>
@@ -333,6 +449,182 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
                     {success}
                   </div>
                 )}
+
+                <div className="mb-3">
+                  {/* A plain label would point at an input that only exists while the picker is
+                      open, so the field is named once and referenced from whichever control is
+                      currently on screen. */}
+                  <span className="form-label fw-bold d-block" id="warehouseFieldLabel">
+                    <i className="fas fa-warehouse me-1 text-primary"></i>
+                    Depo
+                  </span>
+                  {warehousePickerOpen ? (
+                    <div
+                      className="position-relative"
+                      style={{ zIndex: showWarehouseDropdown ? 1055 : 'auto' }}
+                    >
+                      <input
+                        type="text"
+                        className="form-control form-control-lg border-primary"
+                        id="warehouseSearch"
+                        aria-labelledby="warehouseFieldLabel"
+                        placeholder="Depo adı, konum veya sorumlu yazın..."
+                        value={warehouseSearchTerm}
+                        autoFocus
+                        autoComplete="off"
+                        onChange={(e) => {
+                          setWarehouseSearchTerm(e.target.value);
+                          setShowWarehouseDropdown(true);
+                        }}
+                        onFocus={() => setShowWarehouseDropdown(true)}
+                        onBlur={() => {
+                          // Delay to allow click events on dropdown items
+                          setTimeout(() => setShowWarehouseDropdown(false), 200);
+                        }}
+                        onKeyDown={handleWarehouseSearchKeyDown}
+                        style={{ borderWidth: '2px' }}
+                      />
+                      {showWarehouseDropdown && filteredWarehouses.length > 0 && (
+                        <div className="list-group position-absolute w-100" style={SEARCH_DROPDOWN_STYLE}>
+                          <div
+                            className="list-group-item bg-light border-bottom fw-semibold small text-muted py-2 px-3"
+                            style={{ position: 'sticky', top: 0, zIndex: 1 }}
+                          >
+                            <i className="fas fa-list me-2"></i>
+                            {filteredWarehouses.length} depo listeleniyor
+                          </div>
+                          {filteredWarehouses.map((item, index) => (
+                            <button
+                              key={item.id}
+                              type="button"
+                              className={`list-group-item list-group-item-action border-0 ${
+                                index === highlightedWarehouseIndex ? 'active bg-primary text-white' : ''
+                              }`}
+                              style={{ transition: 'all 0.15s ease', cursor: 'pointer' }}
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                handleWarehouseSelect(item);
+                              }}
+                              onMouseEnter={() => setHighlightedWarehouseIndex(index)}
+                            >
+                              <div className="d-flex justify-content-between align-items-center gap-2">
+                                <div className="flex-grow-1 text-start">
+                                  <div
+                                    className={`fw-bold ${index === highlightedWarehouseIndex ? 'text-white' : ''}`}
+                                  >
+                                    {item.name}
+                                    {isEmanetWarehouse(item) && (
+                                      <span className="badge bg-info ms-2">Emanet</span>
+                                    )}
+                                  </div>
+                                  <small
+                                    className={
+                                      index === highlightedWarehouseIndex
+                                        ? 'text-white text-opacity-75'
+                                        : 'text-muted'
+                                    }
+                                  >
+                                    {item.location || 'Konum belirtilmemiş'}
+                                  </small>
+                                </div>
+                                {item.id === warehouseId && (
+                                  <i
+                                    className={`fas fa-check-circle ${index === highlightedWarehouseIndex ? 'text-white' : 'text-success'}`}
+                                  ></i>
+                                )}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {showWarehouseDropdown && filteredWarehouses.length === 0 && (
+                        <div
+                          className="position-absolute w-100 text-center text-muted p-3"
+                          style={{ ...SEARCH_DROPDOWN_STYLE, borderColor: 'var(--color-error)' }}
+                        >
+                          {/* An unfiltered list that comes back empty is not the same problem as a
+                              search that missed — the warehouse list simply has not arrived. */}
+                          {warehouseSearchTerm.trim() ? (
+                            <>
+                              <i className="fas fa-search me-2 text-danger"></i>
+                              <strong>Bu aramaya uyan depo yok.</strong>
+                            </>
+                          ) : (
+                            <>
+                              <i className="fas fa-warehouse me-2 text-danger"></i>
+                              <strong>Seçilebilecek depo listesi yüklenemedi.</strong>
+                              <div className="small mt-1">Sayfayı yenileyip tekrar deneyin.</div>
+                            </>
+                          )}
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-link px-0 mt-1"
+                        onClick={() => {
+                          setWarehousePickerOpen(false);
+                          setWarehouseSearchTerm('');
+                          setShowWarehouseDropdown(false);
+                        }}
+                      >
+                        Vazgeç
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="d-flex align-items-center justify-content-between gap-2 border rounded-3 px-3 py-2 bg-light">
+                      <div className="flex-grow-1" style={{ minWidth: 0 }}>
+                        <div className="fw-semibold text-truncate">
+                          {selectedWarehouse?.name || stock.warehouse?.name || '-'}
+                          {isEmanetDepo && <span className="badge bg-info ms-2">Emanet</span>}
+                        </div>
+                        {selectedWarehouse?.location && (
+                          <small className="text-muted d-block text-truncate">
+                            {selectedWarehouse.location}
+                          </small>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-outline-primary flex-shrink-0"
+                        onClick={() => {
+                          setWarehousePickerOpen(true);
+                          setWarehouseSearchTerm('');
+                          setShowWarehouseDropdown(true);
+                        }}
+                        disabled={warehouseMoveBlocked}
+                      >
+                        <i className="fas fa-exchange-alt me-1"></i>
+                        Depoyu Değiştir
+                      </button>
+                    </div>
+                  )}
+                  {warehouseMoveBlocked ? (
+                    <small className="text-muted d-block mt-1">
+                      <i className="fas fa-lock me-1"></i>
+                      Bu kayıtta {reservedQuantity} adet rezerve miktar var. Depo değişikliği için önce
+                      siparişin ya da transferin tamamlanması gerekir.
+                    </small>
+                  ) : (
+                    <small className="text-muted d-block mt-1">
+                      Stok yanlış depoya girildiyse buradan düzeltebilirsiniz. Miktar değişmez, kayıt olduğu
+                      gibi yeni depoya taşınır.
+                    </small>
+                  )}
+                  {warehouseChanged && (
+                    <div className="alert alert-warning py-2 mt-2 mb-0" role="alert">
+                      <i className="fas fa-exclamation-triangle me-2"></i>
+                      <strong>{stock.quantity} adet</strong> {stock.warehouse.name} deposundan{' '}
+                      <strong>{selectedWarehouse?.name}</strong> deposuna taşınacak. Bu bir transfer kaydı
+                      oluşturmaz; yanlış girilen depoyu düzeltir.
+                      {!isEmanetWarehouse(stock.warehouse) && isEmanetDepo && (
+                        <div className="mt-1">Emanet depo için müşteri bilgilerini doldurun.</div>
+                      )}
+                      {isEmanetWarehouse(stock.warehouse) && !isEmanetDepo && (
+                        <div className="mt-1">Kayıttaki müşteri bilgileri silinecek.</div>
+                      )}
+                    </div>
+                  )}
+                </div>
 
                 <div className="mb-3">
                   <label htmlFor="productId" className="form-label fw-bold">
@@ -384,21 +676,7 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
                       </button>
                     )}
                     {showProductDropdown && filteredProducts.length > 0 && (
-                      <div
-                        className="list-group position-absolute w-100"
-                        style={{
-                          zIndex: 1055,
-                          maxHeight: '280px',
-                          overflowY: 'auto',
-                          marginTop: '4px',
-                          backgroundColor: '#fff',
-                          border: '2px solid #0d6efd',
-                          borderRadius: '0.375rem',
-                          boxShadow: '0 0.5rem 1rem rgba(0, 0, 0, 0.15)',
-                          top: '100%',
-                          left: 0,
-                        }}
-                      >
+                      <div className="list-group position-absolute w-100" style={SEARCH_DROPDOWN_STYLE}>
                         <div
                           className="list-group-item bg-light border-bottom fw-semibold small text-muted py-2 px-3"
                           style={{ position: 'sticky', top: 0, zIndex: 1 }}
@@ -454,23 +732,11 @@ const StockSettingsModal = ({ stock, products = [], onSuccess, onClose }) => {
                     )}
                     {showProductDropdown && productSearchTerm.trim() && filteredProducts.length === 0 && (
                       <div
-                        className="position-absolute w-100"
-                        style={{
-                          zIndex: 1055,
-                          marginTop: '4px',
-                          padding: '1.5rem',
-                          backgroundColor: '#fff',
-                          border: '2px solid #dc3545',
-                          borderRadius: '0.375rem',
-                          boxShadow: '0 0.5rem 1rem rgba(0, 0, 0, 0.15)',
-                          top: '100%',
-                          left: 0,
-                        }}
+                        className="position-absolute w-100 text-center text-muted p-3"
+                        style={{ ...SEARCH_DROPDOWN_STYLE, borderColor: 'var(--color-error)' }}
                       >
-                        <div className="text-muted text-center">
-                          <i className="fas fa-search me-2 text-danger"></i>
-                          <strong>Arama kriterlerine uygun ürün bulunamadı.</strong>
-                        </div>
+                        <i className="fas fa-search me-2 text-danger"></i>
+                        <strong>Arama kriterlerine uygun ürün bulunamadı.</strong>
                       </div>
                     )}
                   </div>

@@ -4386,6 +4386,7 @@ const Stock = () => {
         <StockSettingsModal
           stock={selectedStock}
           products={products}
+          warehouses={warehouses}
           onSuccess={handleSettingsSuccess}
           onClose={() => {
             setShowSettingsModal(false);

@@ -435,7 +435,6 @@ public class StockServiceImpl implements StockService {
     public Stock updateStock(Long id, Stock stockDetails) {
         logger.info("Updating stock with id: {}", id);
         Stock stock = getStockByIdOrThrow(id);
-        Warehouse warehouse = stock.getWarehouse();
 
         // CRITICAL: Quantity updates are NOT allowed through this endpoint
         // Quantity can ONLY be changed via add/remove endpoints (/add, /remove)
@@ -444,6 +443,7 @@ public class StockServiceImpl implements StockService {
 
         // Store old values for audit log
         String oldProductName = stock.getProduct() != null ? stock.getProduct().getName() : null;
+        String oldWarehouseName = stock.getWarehouse().getName();
         Integer oldMinStockLevel = stock.getMinStockLevel();
         Integer oldReservedQuantity = stock.getReservedQuantity();
         Integer oldConsignedQuantity = stock.getConsignedQuantity();
@@ -452,55 +452,65 @@ public class StockServiceImpl implements StockService {
         String oldCustomerPhone = stock.getCustomerPhone();
         String oldIrsaliyeNo = stock.getIrsaliyeNo();
         LocalDate oldIrsaliyeDate = stock.getIrsaliyeDate();
-        
+
         // Track changes
         List<String> changes = new ArrayList<>();
 
-        // Update product if provided
-        if (stockDetails.getProduct() != null && stockDetails.getProduct().getId() != null) {
-            Long newProductId = stockDetails.getProduct().getId();
-            Long currentProductId = stock.getProduct().getId();
+        // A row booked into the wrong warehouse is corrected here rather than by a transfer:
+        // nothing physically moved, so recording a shipment would put a delivery that never
+        // happened into the transfer history. The row keeps its id, so the orders, requests and
+        // audit entries pointing at it follow the correction instead of being left behind.
+        Warehouse warehouse = resolveTargetWarehouse(stock, stockDetails);
+        boolean warehouseChanged = !warehouse.getId().equals(stock.getWarehouse().getId());
 
-            // Only update if product is actually changing
-            if (!newProductId.equals(currentProductId)) {
-                Product newProduct = findProductOrThrow(newProductId);
+        Product product = resolveTargetProduct(stock, stockDetails);
+        boolean productChanged = !product.getId().equals(stock.getProduct().getId());
 
-                // Validate uniqueness with new product
-                // For EMANET_DEPO, check with customerName
-                // For STANDART, check without customerName
-                String customerNameForValidation = warehouse.getWarehouseType() == WarehouseType.EMANET_DEPO
-                        ? stock.getCustomerName()
-                        : null;
-
-                // Check if another stock exists with the new product, same warehouse, and same
-                // customer (if EMANET_DEPO)
-                if (warehouse.getWarehouseType() == WarehouseType.EMANET_DEPO) {
-                    if (customerNameForValidation == null || customerNameForValidation.trim().isEmpty()) {
-                        throw new WarehouseManagementException(ErrorCode.REQUIRED_FIELD_MISSING,
-                                "Emanet depo için müşteri adı gereklidir.");
-                    }
-                    Optional<Stock> existingStock = stockRepository.findByProductAndWarehouseAndCustomerName(
-                            newProduct, warehouse, customerNameForValidation.trim());
-                    // Allow if it's the same stock (updating itself)
-                    if (existingStock.isPresent() && !existingStock.get().getId().equals(stock.getId())) {
-                        throw new WarehouseManagementException(ErrorCode.STOCK_ALREADY_EXISTS,
-                                String.format("Bu ürün için %s müşterisi adına zaten bir stok kaydı mevcut.",
-                                        customerNameForValidation));
-                    }
-                } else {
-                    Optional<Stock> existingStock = stockRepository.findByProductAndWarehouse(newProduct, warehouse);
-                    // Allow if it's the same stock (updating itself)
-                    if (existingStock.isPresent() && !existingStock.get().getId().equals(stock.getId())) {
-                        throw new WarehouseManagementException(ErrorCode.STOCK_ALREADY_EXISTS,
-                                "Bu ürün için bu depoda zaten bir stok kaydı mevcut.");
-                    }
-                }
-
-                stock.setProduct(newProduct);
-                String newProductName = newProduct.getName();
-                changes.add(String.format("Ürün: %s → %s", oldProductName, newProductName));
-                logger.info("Product changed from {} to {} for stock id: {}", currentProductId, newProductId, id);
+        // Consignment rows are told apart by their customer, so the details are settled before the
+        // collision lookup that reads them — doing it the other way round would let a blank name
+        // merge two customers' goods into one row. A request value wins over the stored one, which
+        // is what a move out of a standard warehouse into a consignment one needs.
+        boolean targetIsEmanet = warehouse.getWarehouseType() == WarehouseType.EMANET_DEPO;
+        String emanetCustomerName = targetIsEmanet
+                ? com.warehouse.util.TurkishText.toTitleCase(
+                        valueOrFallback(stockDetails.getCustomerName(), oldCustomerName))
+                : null;
+        String emanetCustomerPhone = targetIsEmanet
+                ? trimToNull(valueOrFallback(stockDetails.getCustomerPhone(), oldCustomerPhone))
+                : null;
+        // Demanded only when the details are actually being written or the row is moving into a
+        // consignment warehouse. A legacy row with missing details is left alone otherwise, so an
+        // edit to its minimum level does not fail on a field that edit never touched.
+        if (targetIsEmanet && (warehouseChanged || productChanged
+                || stockDetails.getCustomerName() != null || stockDetails.getCustomerPhone() != null)) {
+            if (emanetCustomerName == null || emanetCustomerName.isEmpty()) {
+                throw new WarehouseManagementException(ErrorCode.REQUIRED_FIELD_MISSING,
+                        "Emanet depo için müşteri adı gereklidir.");
             }
+            if (emanetCustomerPhone == null) {
+                throw new WarehouseManagementException(ErrorCode.REQUIRED_FIELD_MISSING,
+                        "Emanet depo için müşteri telefon numarası gereklidir.");
+            }
+        }
+
+        // Product and warehouse are checked as a pair: either one moving changes which existing
+        // row this would collide with, so the lookup has to use the combination that gets saved.
+        if (warehouseChanged || productChanged) {
+            requireNoRivalStock(product, warehouse, emanetCustomerName, stock.getId());
+        }
+
+        if (warehouseChanged) {
+            stock.setWarehouse(warehouse);
+            changes.add(String.format("Depo: %s → %s", oldWarehouseName, warehouse.getName()));
+            logger.info("Warehouse changed from {} to {} for stock id: {}", oldWarehouseName,
+                    warehouse.getName(), id);
+        }
+
+        if (productChanged) {
+            stock.setProduct(product);
+            changes.add(String.format("Ürün: %s → %s", oldProductName, product.getName()));
+            logger.info("Product changed from {} to {} for stock id: {}", oldProductName,
+                    product.getName(), id);
         }
 
         // Update min stock level
@@ -565,36 +575,28 @@ public class StockServiceImpl implements StockService {
             }
         }
 
-        // Update customer info for EMANET_DEPO warehouses
-        if (warehouse.getWarehouseType() == WarehouseType.EMANET_DEPO) {
-            // Update customer name if provided
-            if (stockDetails.getCustomerName() != null) {
-                String customerName = com.warehouse.util.TurkishText.toTitleCase(stockDetails.getCustomerName());
-                if (customerName.isEmpty()) {
-                    throw new WarehouseManagementException(ErrorCode.REQUIRED_FIELD_MISSING,
-                            "Emanet depo için müşteri adı gereklidir.");
-                }
-                if (!Objects.equals(oldCustomerName, customerName)) {
-                    stock.setCustomerName(customerName);
-                    String oldValue = oldCustomerName != null && !oldCustomerName.isEmpty() ? oldCustomerName : "(boş)";
-                    changes.add(String.format("Müşteri Adı: %s → %s", oldValue, customerName));
-                }
+        // Customer details for EMANET_DEPO warehouses. The values were settled at the top, before
+        // the collision lookup that reads them.
+        if (targetIsEmanet) {
+            if (emanetCustomerName != null && !emanetCustomerName.isEmpty()
+                    && !Objects.equals(oldCustomerName, emanetCustomerName)) {
+                stock.setCustomerName(emanetCustomerName);
+                String oldValue = oldCustomerName != null && !oldCustomerName.isEmpty() ? oldCustomerName : "(boş)";
+                changes.add(String.format("Müşteri Adı: %s → %s", oldValue, emanetCustomerName));
             }
-            // Update customer phone if provided
-            if (stockDetails.getCustomerPhone() != null) {
-                String customerPhone = stockDetails.getCustomerPhone().trim();
-                if (customerPhone.isEmpty()) {
-                    throw new WarehouseManagementException(ErrorCode.REQUIRED_FIELD_MISSING,
-                            "Emanet depo için müşteri telefon numarası gereklidir.");
-                }
-                if (!Objects.equals(oldCustomerPhone, customerPhone)) {
-                    stock.setCustomerPhone(customerPhone);
-                    String oldValue = oldCustomerPhone != null && !oldCustomerPhone.isEmpty() ? oldCustomerPhone : "(boş)";
-                    changes.add(String.format("Müşteri Telefonu: %s → %s", oldValue, customerPhone));
-                }
+            if (emanetCustomerPhone != null && !Objects.equals(oldCustomerPhone, emanetCustomerPhone)) {
+                stock.setCustomerPhone(emanetCustomerPhone);
+                String oldValue = oldCustomerPhone != null && !oldCustomerPhone.isEmpty() ? oldCustomerPhone : "(boş)";
+                changes.add(String.format("Müşteri Telefonu: %s → %s", oldValue, emanetCustomerPhone));
             }
         } else {
-            // For STANDART warehouses, customer info should always be null
+            // For STANDART warehouses, customer info should always be null. Named in the audit
+            // trail when there was something to drop — on a move out of a consignment warehouse
+            // the details were on the row a moment ago and their disappearance needs a reason.
+            if (oldCustomerName != null || oldCustomerPhone != null) {
+                changes.add(String.format("Müşteri Bilgisi: %s → (kaldırıldı)",
+                        oldCustomerName != null && !oldCustomerName.isEmpty() ? oldCustomerName : "(boş)"));
+            }
             stock.setCustomerName(null);
             stock.setCustomerPhone(null);
         }
@@ -913,6 +915,71 @@ public class StockServiceImpl implements StockService {
                     logger.warn("Warehouse not found with id: {}", warehouseId);
                     return new WarehouseManagementException(ErrorCode.WAREHOUSE_NOT_FOUND);
                 });
+    }
+
+    /**
+     * The warehouse this row should end up in — the current one unless the request names another,
+     * so callers that only touch quantities or notes are unaffected.
+     *
+     * <p>A reserved quantity refuses the move: those units are already promised to an order or a
+     * transfer that recorded this very row, and quietly changing which warehouse ships them is not
+     * a correction but a second mistake. A passive warehouse is refused for the same reason it
+     * cannot be picked when the stock is first entered.
+     */
+    private Warehouse resolveTargetWarehouse(Stock stock, Stock stockDetails) {
+        Warehouse current = stock.getWarehouse();
+        Long requestedId = stockDetails.getWarehouse() != null ? stockDetails.getWarehouse().getId() : null;
+        if (requestedId == null || requestedId.equals(current.getId())) {
+            return current;
+        }
+        Warehouse target = findWarehouseOrThrow(requestedId);
+        if (!target.isActive()) {
+            throw new WarehouseManagementException(ErrorCode.INVALID_VALUE,
+                    String.format("%s deposu pasif durumda, stok bu depoya taşınamaz.", target.getName()));
+        }
+        int reserved = stock.getReservedQuantity() != null ? stock.getReservedQuantity() : 0;
+        if (reserved > 0) {
+            throw new WarehouseManagementException(ErrorCode.INVALID_VALUE, String.format(
+                    "Bu kayıtta %d adet rezerve miktar var. Depo değişikliği için önce siparişin ya da"
+                            + " transferin tamamlanması gerekir.", reserved));
+        }
+        return target;
+    }
+
+    /** The product this row should end up on — the current one unless the request names another. */
+    private Product resolveTargetProduct(Stock stock, Stock stockDetails) {
+        Product current = stock.getProduct();
+        Long requestedId = stockDetails.getProduct() != null ? stockDetails.getProduct().getId() : null;
+        if (requestedId == null || requestedId.equals(current.getId())) {
+            return current;
+        }
+        return findProductOrThrow(requestedId);
+    }
+
+    /**
+     * Refuses a product/warehouse pair another row already occupies. The two are deliberately not
+     * merged here: each row has its own id and orders, requests and transfer items point at them
+     * individually, so the caller is sent to transfer instead — it moves the quantity and leaves
+     * both rows where the rest of the system expects to find them.
+     */
+    private void requireNoRivalStock(Product product, Warehouse warehouse, String customerName, Long selfId) {
+        boolean emanet = warehouse.getWarehouseType() == WarehouseType.EMANET_DEPO;
+        Optional<Stock> rival = emanet
+                ? stockRepository.findByProductAndWarehouseAndCustomerName(product, warehouse, customerName)
+                : stockRepository.findByProductAndWarehouse(product, warehouse);
+        if (rival.isEmpty() || Objects.equals(rival.get().getId(), selfId)) {
+            return;
+        }
+        String where = emanet
+                ? String.format("%s deposunda %s müşterisi adına", warehouse.getName(), customerName)
+                : String.format("%s deposunda", warehouse.getName());
+        throw new WarehouseManagementException(ErrorCode.STOCK_ALREADY_EXISTS, String.format(
+                "%s bu ürün için zaten bir stok kaydı var. Kayıtları birleştirmek için transfer kullanın.",
+                where));
+    }
+
+    private static String valueOrFallback(String preferred, String fallback) {
+        return preferred != null ? preferred : fallback;
     }
 
     // In-memory matchers removed; filtering is handled by the repository query now
