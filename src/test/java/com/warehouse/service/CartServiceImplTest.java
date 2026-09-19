@@ -31,7 +31,7 @@ class CartServiceImplTest {
     @Mock private CouponRepository couponRepo;
     @Mock private StockService stockService;
     @Mock private com.warehouse.repository.ProductImageRepository productImageRepo;
-    @Mock private com.warehouse.service.ShippingCostService shippingCostService;
+    @Mock private com.warehouse.service.ShippingPriceService shippingPriceService;
     @Mock private com.warehouse.service.CouponService couponService;
 
     private CartServiceImpl cartService;
@@ -39,7 +39,12 @@ class CartServiceImplTest {
     @BeforeEach
     void setUp() {
         cartService = new CartServiceImpl(cartRepo, cartItemRepo, productRepo, couponRepo,
-                stockService, productImageRepo, shippingCostService, couponService);
+                stockService, productImageRepo, shippingPriceService, couponService);
+        // Sepetin her görünümü kargo ücretini soruyor; varsayılan cevap burada, kargoyu
+        // konu eden testler kendi değerini veriyor.
+        lenient().when(shippingPriceService.quote(any())).thenReturn(
+                new com.warehouse.service.ShippingPriceService.Quote(new BigDecimal("29.99"),
+                        BigDecimal.ZERO, false, com.warehouse.service.ShippingPriceService.Source.DEFAULT));
     }
 
     @Test
@@ -241,8 +246,10 @@ class CartServiceImplTest {
         when(cartRepo.findByCustomerId(customer.getId())).thenReturn(Optional.of(cart));
         when(cartItemRepo.findByCartId(cart.getId())).thenReturn(List.of(item));
         when(stockService.getStocksByProduct(any())).thenReturn(List.of());
-        // Subtotal 600 → ShippingCostService returns free shipping above the threshold
-        when(shippingCostService.calculate(any(), any())).thenReturn(BigDecimal.ZERO);
+        // Subtotal 600 → eşiğin üstünde, kargo ücretsiz
+        when(shippingPriceService.quote(any())).thenReturn(
+                new com.warehouse.service.ShippingPriceService.Quote(BigDecimal.ZERO, BigDecimal.ZERO,
+                        true, com.warehouse.service.ShippingPriceService.Source.FREE));
 
         CartDto result = cartService.getCart(customer.getId(), null);
 
@@ -260,8 +267,10 @@ class CartServiceImplTest {
         when(cartRepo.findByCustomerId(customer.getId())).thenReturn(Optional.of(cart));
         when(cartItemRepo.findByCartId(cart.getId())).thenReturn(List.of(item));
         when(stockService.getStocksByProduct(any())).thenReturn(List.of());
-        // Subtotal 100 → ShippingCostService returns 29.99 TL shipping below the threshold
-        when(shippingCostService.calculate(any(), any())).thenReturn(new BigDecimal("29.99"));
+        // Subtotal 100 → eşiğin altında, varsayılan kargo ücreti
+        when(shippingPriceService.quote(any())).thenReturn(
+                new com.warehouse.service.ShippingPriceService.Quote(new BigDecimal("29.99"),
+                        BigDecimal.ZERO, false, com.warehouse.service.ShippingPriceService.Source.DEFAULT));
 
         CartDto result = cartService.getCart(customer.getId(), null);
 

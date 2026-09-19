@@ -2,6 +2,7 @@ package com.warehouse.controller.store;
 
 import com.warehouse.dto.store.*;
 import com.warehouse.repository.CargoProviderRepository;
+import com.warehouse.service.ShippingPriceService;
 import com.warehouse.security.IdempotencyStore;
 import com.warehouse.service.CheckoutService;
 import com.warehouse.util.CustomerTokenExtractor;
@@ -28,51 +29,47 @@ public class StoreCheckoutController {
     private final CheckoutService checkoutService;
     private final JwtService jwtService;
     private final CargoProviderRepository cargoProviderRepository;
+    private final com.warehouse.service.ShippingPriceService shippingPriceService;
     private final IdempotencyStore idempotencyStore;
     private final com.warehouse.security.ClientIpResolver clientIpResolver;
-    private final com.warehouse.service.cargo.CargoPriceQuoteService priceQuoteService;
     private final com.warehouse.service.cargo.CargoCarrierRules carrierRules;
 
     public StoreCheckoutController(CheckoutService checkoutService, JwtService jwtService,
                                     CargoProviderRepository cargoProviderRepository,
+                                    com.warehouse.service.ShippingPriceService shippingPriceService,
                                     IdempotencyStore idempotencyStore,
                                     com.warehouse.security.ClientIpResolver clientIpResolver,
-                                    com.warehouse.service.cargo.CargoPriceQuoteService priceQuoteService,
                                     com.warehouse.service.cargo.CargoCarrierRules carrierRules) {
         this.checkoutService = checkoutService;
         this.jwtService = jwtService;
         this.cargoProviderRepository = cargoProviderRepository;
+        this.shippingPriceService = shippingPriceService;
         this.idempotencyStore = idempotencyStore;
         this.clientIpResolver = clientIpResolver;
-        this.priceQuoteService = priceQuoteService;
         this.carrierRules = carrierRules;
     }
 
     /**
      * Public endpoint: Active cargo providers for checkout selection.
      */
+    /**
+     * Public endpoint: the carriers a customer may choose, each with the price that will be
+     * charged for this basket.
+     *
+     * <p>The price used to be left to the storefront, which showed {@code baseCost} alone — no
+     * per-desi surcharge, no live carrier price. The order charged both, so a white-goods basket
+     * was billed well above the figure the customer agreed to. The number is computed here now,
+     * by the same service the order uses, and the screen only displays it.
+     *
+     * @param subtotal basket total, needed to tell whether free shipping applies
+     * @param desi     parcel size of the basket, as the cart reports it
+     */
     @GetMapping("/cargo-providers")
     public ResponseEntity<List<Map<String, Object>>> getCargoProviders(
             @RequestParam(required = false) String city,
             @RequestParam(required = false) String district,
-            @RequestParam(required = false) java.math.BigDecimal desi) {
-
-        // Live prices for this destination, when the feature is on and the customer has already
-        // picked an address. Quotes are cached per district and parcel size, so this does not
-        // become one carrier call per page view.
-        Map<String, java.math.BigDecimal> livePrices = new LinkedHashMap<>();
-        Map<String, Integer> liveDays = new LinkedHashMap<>();
-        if (city != null && district != null && priceQuoteService.isEnabled()) {
-            try {
-                priceQuoteService.quotes(city, district, desi).forEach(q -> {
-                    if (q.slug() == null) return;
-                    livePrices.put(q.slug().toLowerCase(), q.price());
-                    if (q.estimatedDays() != null) liveDays.put(q.slug().toLowerCase(), q.estimatedDays());
-                });
-            } catch (Exception e) {
-                log.warn("Checkout canlı kargo fiyatı alınamadı: {}", e.toString());
-            }
-        }
+            @RequestParam(required = false) java.math.BigDecimal desi,
+            @RequestParam(required = false) java.math.BigDecimal subtotal) {
 
         List<Map<String, Object>> providers = cargoProviderRepository.findByActiveTrueOrderBySortOrderAsc()
             .stream()
@@ -91,12 +88,14 @@ public class StoreCheckoutController {
                 dto.put("estimatedDeliveryDays", p.getEstimatedDeliveryDays());
                 dto.put("vatRate", p.getVatRate());
 
-                String slug = p.getKargonomiSlug() != null ? p.getKargonomiSlug().toLowerCase() : null;
-                if (slug != null && livePrices.containsKey(slug)) {
-                    // Present only when it is real; the storefront falls back to baseCost otherwise.
-                    dto.put("livePrice", livePrices.get(slug));
-                    if (liveDays.containsKey(slug)) dto.put("liveEstimatedDays", liveDays.get(slug));
-                }
+                ShippingPriceService.Quote quote =
+                        shippingPriceService.quote(p, subtotal, desi, city, district);
+                dto.put("price", quote.cost());
+                dto.put("priceVat", quote.vat());
+                dto.put("priceTotal", quote.total());
+                dto.put("free", quote.free());
+                // "live" tells the screen it may show a carrier-quoted delivery time as well.
+                dto.put("priceSource", quote.source().name().toLowerCase());
                 return dto;
             }).collect(Collectors.toList());
         return ResponseEntity.ok(providers);

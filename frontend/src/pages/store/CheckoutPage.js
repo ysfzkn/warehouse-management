@@ -81,20 +81,41 @@ export default function CheckoutPage() {
       .catch(() => setShowNewAddress(true));
   }, [isGuest]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Load cargo providers
+  // Kargo firmaları ve bu sepet için ödenecek kargo ücreti.
+  //
+  // Fiyatı ekran hesaplamıyor: sunucu, siparişi oluştururken kullandığı kuralla hesaplayıp
+  // gönderiyor. Eskiden burada yalnızca baseCost gösteriliyordu; desi ücreti ve canlı kargo
+  // fiyatı sipariş anında ekleniyordu, yani müşteri onayladığı tutardan fazlasını ödüyordu.
+  // Adres seçilince yeniden soruluyor, çünkü il/ilçe hem canlı fiyatı hem de firmanın o
+  // adrese gidip gitmediğini belirliyor.
+  const cartSubtotal = cart.cart?.subtotal;
+  const cartDesi = cart.cart?.totalDesi;
+  const shipCity = address?.city;
+  const shipDistrict = address?.district;
+
   useEffect(() => {
+    const params = {};
+    if (shipCity) params.city = shipCity;
+    if (shipDistrict) params.district = shipDistrict;
+    if (cartDesi != null) params.desi = cartDesi;
+    if (cartSubtotal != null) params.subtotal = cartSubtotal;
+
     axios
-      .get('/api/store/checkout/cargo-providers')
+      .get('/api/store/checkout/cargo-providers', { params })
       .then((r) => {
         const providers = r.data || [];
         setCargoProviders(providers);
-        if (providers.length > 0) {
-          setSelectedCargoProvider(providers[0]);
-          setCargoCompany(providers[0].code);
-        }
+        setSelectedCargoProvider((current) => {
+          // Seçili firma hâlâ listedeyse güncel fiyatıyla korunuyor; adres değişince o adrese
+          // gitmeyen firma listeden düşebiliyor.
+          const stillListed = current && providers.find((p) => p.id === current.id);
+          const next = stillListed || providers[0] || null;
+          if (next) setCargoCompany(next.code);
+          return next;
+        });
       })
       .catch(() => {});
-  }, []);
+  }, [shipCity, shipDistrict, cartDesi, cartSubtotal]);
 
   useEffect(() => {
     axios
@@ -131,6 +152,25 @@ export default function CheckoutPage() {
         ]);
       });
   }, []);
+
+  /**
+   * Kargo ücreti ve KDV'si — sunucunun bu sepet için hesaplayıp gönderdiği değerler.
+   *
+   * Ekran kendi aritmetiğini yapmıyor. Eskiden yapıyordu ve yalnızca baseCost'u topluyordu;
+   * desi ücreti ile canlı kargo fiyatı sipariş anında ekleniyordu, yani gösterilen tutar
+   * ödenen tutar değildi. `price` alanı gelmeyen eski bir yanıt için sepet özetindeki ücrete
+   * düşülüyor.
+   */
+  const shippingCostOf = (provider, cartShippingCost = 0) => {
+    if (!provider) return Number(cartShippingCost) || 0;
+    if (provider.free) return 0;
+    return provider.price != null ? Number(provider.price) : Number(cartShippingCost) || 0;
+  };
+
+  const shippingVatOf = (provider) => {
+    if (!provider || provider.free) return 0;
+    return provider.priceVat != null ? Number(provider.priceVat) : 0;
+  };
 
   const formatPrice = (p) =>
     new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(p || 0);
@@ -500,10 +540,8 @@ export default function CheckoutPage() {
   // Mobile sticky bar — mirrors the current step's primary CTA + a live total.
   const stickySubtotal = cart.cart?.subtotal || 0;
   const stickyCp = selectedCargoProvider;
-  const stickyFree =
-    stickyCp && stickyCp.freeShippingThreshold && stickySubtotal >= stickyCp.freeShippingThreshold;
-  const stickyShip = stickyFree ? 0 : stickyCp?.baseCost || cart.cart?.shippingCost || 0;
-  const stickyShipVat = stickyShip > 0 && stickyCp?.vatRate ? (stickyShip * stickyCp.vatRate) / 100 : 0;
+  const stickyShip = shippingCostOf(stickyCp, cart.cart?.shippingCost);
+  const stickyShipVat = shippingVatOf(stickyCp);
   const stickyTotal = stickySubtotal + stickyShip + stickyShipVat - (cart.cart?.discountAmount || 0);
   const stickyBar =
     step === 'confirm'
@@ -707,10 +745,9 @@ export default function CheckoutPage() {
             <div className="d-flex flex-column gap-2">
               {cargoProviders.map((cp) => {
                 const isSelected = selectedCargoProvider?.id === cp.id;
-                const subtotal = cart.cart?.subtotal || 0;
-                const isFree = cp.freeShippingThreshold && subtotal >= cp.freeShippingThreshold;
-                const cost = isFree ? 0 : cp.baseCost;
-                const vat = cost > 0 ? (cost * (cp.vatRate || 0)) / 100 : 0;
+                const isFree = !!cp.free;
+                const cost = shippingCostOf(cp);
+                const vat = shippingVatOf(cp);
                 return (
                   <div
                     key={cp.id}
@@ -830,9 +867,9 @@ export default function CheckoutPage() {
         (() => {
           const subtotal = cart.cart?.subtotal || 0;
           const cp = selectedCargoProvider;
-          const isFreeShipping = cp && cp.freeShippingThreshold && subtotal >= cp.freeShippingThreshold;
-          const shippingCost = isFreeShipping ? 0 : cp?.baseCost || cart.cart?.shippingCost || 0;
-          const shippingVat = shippingCost > 0 && cp?.vatRate ? (shippingCost * cp.vatRate) / 100 : 0;
+          const isFreeShipping = !!cp?.free;
+          const shippingCost = shippingCostOf(cp, cart.cart?.shippingCost);
+          const shippingVat = shippingVatOf(cp);
           const discount = cart.cart?.discountAmount || 0;
           const total = subtotal + shippingCost + shippingVat - discount;
           return (

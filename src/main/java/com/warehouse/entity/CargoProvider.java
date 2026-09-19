@@ -106,7 +106,9 @@ public class CargoProvider {
      * Calculate shipping cost for given desi and subtotal.
      */
     public BigDecimal calculateShippingCost(BigDecimal desi, BigDecimal subtotal) {
-        if (freeShippingThreshold != null && subtotal != null
+        // A zero threshold means "no free shipping". Without the sign check, saving 0 in this
+        // field made every order ship free, because any subtotal is >= 0.
+        if (freeShippingThreshold != null && freeShippingThreshold.signum() > 0 && subtotal != null
             && subtotal.compareTo(freeShippingThreshold) >= 0) {
             return BigDecimal.ZERO;
         }

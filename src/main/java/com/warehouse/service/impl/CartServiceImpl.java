@@ -30,14 +30,14 @@ public class CartServiceImpl implements CartService {
     private final CouponRepository couponRepository;
     private final StockService stockService;
     private final com.warehouse.repository.ProductImageRepository productImageRepository;
-    private final com.warehouse.service.ShippingCostService shippingCostService;
+    private final com.warehouse.service.ShippingPriceService shippingPriceService;
     private final com.warehouse.service.CouponService couponService;
 
     public CartServiceImpl(CartRepository cartRepository, CartItemRepository cartItemRepository,
                            ProductRepository productRepository, CouponRepository couponRepository,
                            StockService stockService,
                            com.warehouse.repository.ProductImageRepository productImageRepository,
-                           com.warehouse.service.ShippingCostService shippingCostService,
+                           com.warehouse.service.ShippingPriceService shippingPriceService,
                            com.warehouse.service.CouponService couponService) {
         this.cartRepository = cartRepository;
         this.cartItemRepository = cartItemRepository;
@@ -45,7 +45,7 @@ public class CartServiceImpl implements CartService {
         this.couponRepository = couponRepository;
         this.stockService = stockService;
         this.productImageRepository = productImageRepository;
-        this.shippingCostService = shippingCostService;
+        this.shippingPriceService = shippingPriceService;
         this.couponService = couponService;
     }
 
@@ -216,6 +216,7 @@ public class CartServiceImpl implements CartService {
             .items(List.of())
             .itemCount(0)
             .subtotal(BigDecimal.ZERO)
+            .totalDesi(BigDecimal.ZERO)
             .shippingCost(BigDecimal.ZERO)
             .discountAmount(BigDecimal.ZERO)
             .total(BigDecimal.ZERO)
@@ -245,8 +246,7 @@ public class CartServiceImpl implements CartService {
         // Shipping cost: read from site settings configurable in the admin panel
         // (without provider selection; recalculated separately by CheckoutServiceImpl
         // once a provider is chosen during checkout).
-        BigDecimal shippingCost = shippingCostService.calculate(subtotal, null);
-        if (shippingCost == null) shippingCost = BigDecimal.ZERO;
+        BigDecimal shippingCost = shippingPriceService.quote(subtotal).cost();
         if (couponService.isFreeShipping(coupon)) {
             shippingCost = BigDecimal.ZERO;
         }
@@ -272,6 +272,7 @@ public class CartServiceImpl implements CartService {
             .items(itemDtos)
             .itemCount(itemDtos.stream().mapToInt(CartItemDto::getQuantity).sum())
             .subtotal(subtotal)
+            .totalDesi(shippingPriceService.desiOf(items))
             .shippingCost(shippingCost)
             .discountAmount(discountAmount)
             .total(total)

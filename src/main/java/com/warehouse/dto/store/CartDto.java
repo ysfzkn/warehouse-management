@@ -11,6 +11,8 @@ public class CartDto {
     private List<CartItemDto> items;
     private int itemCount;
     private BigDecimal subtotal;
+    /** Parcel size of the whole basket, so the checkout screen can be quoted on what ships. */
+    private BigDecimal totalDesi;
     private BigDecimal shippingCost;
     private BigDecimal discountAmount;
     private BigDecimal total;

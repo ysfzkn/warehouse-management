@@ -37,6 +37,7 @@ const fmt = (v) =>
 
 export default function AdminCargoProviders() {
   const [providers, setProviders] = useState([]);
+  const [livePricing, setLivePricing] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -57,12 +58,28 @@ export default function AdminCargoProviders() {
     fetchProviders();
   }, [fetchProviders]);
 
+  // Aşağıdaki tarifenin gerçekten kullanılıp kullanılmadığı burada görünmüyordu: canlı
+  // fiyatlandırma açıkken müşteri Kargonomi'nin fiyatını görüyor, tarife yalnızca yedek oluyor.
+  useEffect(() => {
+    axios
+      .get('/api/admin/settings/site')
+      .then((r) => {
+        const live = (r.data || []).find((x) => x.settingKey === 'cargo_checkout_live_pricing');
+        setLivePricing(live?.settingValue === 'true');
+      })
+      .catch(() => setLivePricing(null));
+  }, []);
+
   const handleSave = async () => {
     try {
+      // Boş bırakılan azami desi "sınır yok" demek. Boş dizgi sunucuda null'a çevriliyor ve
+      // null alanlar atlandığı için eski sınır yerinde kalıyordu: bir kez konan sınır
+      // kaldırılamıyordu. 0 sınırsızın kendisi.
+      const payload = { ...form, maxDesi: form.maxDesi === '' || form.maxDesi == null ? 0 : form.maxDesi };
       if (editing) {
-        await axios.put(`/api/admin/cargo-providers/${editing}`, form);
+        await axios.put(`/api/admin/cargo-providers/${editing}`, payload);
       } else {
-        await axios.post('/api/admin/cargo-providers', form);
+        await axios.post('/api/admin/cargo-providers', payload);
       }
       setShowForm(false);
       setEditing(null);
@@ -123,7 +140,9 @@ export default function AdminCargoProviders() {
         <div>
           <h2 className="mb-1">Kargo Ayarları</h2>
           <p className="text-muted small mb-0">
-            Anlaşmalı kargo firmalarını, fiyatlandırmayı ve kargo kurallarını yönetin
+            Anlaşmalı kargo firmaları, tarifeleri ve taşıma kuralları. Müşteri checkout'ta bir firma
+            seçtiğinde bu sayfadaki tarife geçerlidir; Site Ayarları → Kargo Ücretlendirme yalnızca firma
+            seçilmeden önceki sepet özetinde kullanılır.
           </p>
         </div>
         <button className="btn btn-primary" onClick={startCreate}>
@@ -131,6 +150,27 @@ export default function AdminCargoProviders() {
           Yeni Kargo Firması
         </button>
       </div>
+
+      {livePricing !== null && (
+        <div className={`alert ${livePricing ? 'alert-info' : 'alert-light border'} small d-flex gap-2`}>
+          <i className={`fas fa-${livePricing ? 'bolt' : 'table'} mt-1`} />
+          <div>
+            {livePricing ? (
+              <>
+                <strong>Canlı fiyatlandırma açık.</strong> Müşteriye Kargonomi'nin o adres ve desi için
+                verdiği gerçek fiyat gösterilir ve o tahsil edilir. Aşağıdaki tarife yalnızca Kargonomi fiyat
+                veremediğinde devreye girer.
+              </>
+            ) : (
+              <>
+                <strong>Canlı fiyatlandırma kapalı.</strong> Müşteriye aşağıdaki tarife gösterilir ve o tahsil
+                edilir: <code>Temel Ücret + (Desi × Desi Ücreti)</code>. Kargonomi'nin gerçek fiyatı bundan
+                farklı olabilir — aradaki fark size kalır.
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="row g-4">
         {showForm && (
@@ -223,7 +263,9 @@ export default function AdminCargoProviders() {
                       value={form.freeShippingThreshold}
                       onChange={(e) => f('freeShippingThreshold', parseFloat(e.target.value) || 0)}
                     />
-                    <small className="text-muted">Bu tutarın üzerinde kargo ücretsiz</small>
+                    <small className="text-muted">
+                      Bu tutarın üzerinde kargo ücretsiz. <strong>0</strong> = ücretsiz kargo yok.
+                    </small>
                   </div>
                   <div className="col-md-6">
                     <label className="form-label small fw-medium">Tahmini Teslimat (gün)</label>
@@ -406,6 +448,7 @@ export default function AdminCargoProviders() {
                         <th>Temel Ücret</th>
                         <th>Desi Ücreti</th>
                         <th>Ücretsiz Limit</th>
+                        <th>Kurallar</th>
                         <th>Teslimat</th>
                         <th>Durum</th>
                         <th style={{ width: 140 }}>İşlemler</th>
@@ -423,7 +466,27 @@ export default function AdminCargoProviders() {
                             {fmt(p.costPerDesi)}
                             <small className="text-muted">/desi</small>
                           </td>
-                          <td>{p.freeShippingThreshold > 0 ? fmt(p.freeShippingThreshold) : '—'}</td>
+                          <td>{p.freeShippingThreshold > 0 ? fmt(p.freeShippingThreshold) : 'Yok'}</td>
+                          <td className="small text-muted">
+                            {p.kargonomiSlug ? (
+                              <div>
+                                <i className="fas fa-link me-1" />
+                                {p.kargonomiSlug}
+                              </div>
+                            ) : (
+                              <div>
+                                <i className="fas fa-link me-1 opacity-25" />
+                                en ucuz
+                              </div>
+                            )}
+                            {p.maxDesi > 0 && <div>azami {p.maxDesi} desi</div>}
+                            {p.excludedDistricts && (
+                              <div title={p.excludedDistricts}>
+                                <i className="fas fa-ban me-1" />
+                                {p.excludedDistricts.split(',').length} yer hariç
+                              </div>
+                            )}
+                          </td>
                           <td>
                             <span className="badge bg-light text-dark">{p.estimatedDeliveryDays} gün</span>
                           </td>
@@ -485,6 +548,12 @@ export default function AdminCargoProviders() {
                 <div className="col-md-6">
                   <i className="fas fa-percent text-primary me-2" />
                   <strong>KDV:</strong> Kargo ücretine ayrıca KDV eklenir
+                </div>
+                <div className="col-12">
+                  <i className="fas fa-list-ol text-primary me-2" />
+                  <strong>Sıra:</strong> 1) Ücretsiz kargo limiti aşıldıysa 0 — bu söz bizim, canlı fiyatın da
+                  önünde. 2) Canlı fiyatlandırma açıksa Kargonomi'nin fiyatı. 3) Değilse bu sayfadaki tarife.
+                  4) Firma seçilmemişse Site Ayarları'ndaki varsayılan ücret.
                 </div>
                 <div className="col-md-6">
                   <i className="fas fa-gift text-primary me-2" />

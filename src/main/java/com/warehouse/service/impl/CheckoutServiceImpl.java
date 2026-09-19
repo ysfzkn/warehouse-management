@@ -1,8 +1,8 @@
 package com.warehouse.service.impl;
 
+import com.warehouse.service.ShippingPriceService;
 import com.warehouse.dto.store.*;
 import com.warehouse.entity.*;
-import com.warehouse.constants.ShippingConstants;
 import com.warehouse.enums.AddressType;
 import com.warehouse.enums.OrderStatus;
 import com.warehouse.exception.ErrorCode;
@@ -56,6 +56,7 @@ public class CheckoutServiceImpl implements CheckoutService {
     private final SiteSettingService siteSettingService;
     private final com.warehouse.service.cargo.CargoPriceQuoteService priceQuoteService;
     private final com.warehouse.service.cargo.CargoApiService cargoApiService;
+    private final com.warehouse.service.ShippingPriceService shippingPriceService;
 
     public CheckoutServiceImpl(com.warehouse.service.CouponService couponService,
                                CartRepository cartRepository, CartItemRepository cartItemRepository,
@@ -68,7 +69,8 @@ public class CheckoutServiceImpl implements CheckoutService {
                                 EmailService emailService,
                                 SiteSettingService siteSettingService,
                                 com.warehouse.service.cargo.CargoPriceQuoteService priceQuoteService,
-                                com.warehouse.service.cargo.CargoApiService cargoApiService) {
+                                com.warehouse.service.cargo.CargoApiService cargoApiService,
+                                com.warehouse.service.ShippingPriceService shippingPriceService) {
         this.couponService = couponService;
         this.cartRepository = cartRepository;
         this.cartItemRepository = cartItemRepository;
@@ -85,6 +87,7 @@ public class CheckoutServiceImpl implements CheckoutService {
         this.siteSettingService = siteSettingService;
         this.priceQuoteService = priceQuoteService;
         this.cargoApiService = cargoApiService;
+        this.shippingPriceService = shippingPriceService;
     }
 
     /**
@@ -128,7 +131,9 @@ public class CheckoutServiceImpl implements CheckoutService {
             if (price != null) subtotal = subtotal.add(price.multiply(BigDecimal.valueOf(item.getQuantity())));
         }
 
-        BigDecimal shippingCost = ShippingConstants.calculateShippingCost(subtotal);
+        // The same rule the basket and the order use; this endpoint used to answer with a
+        // hardcoded 29,99 that ignored every setting and every carrier.
+        BigDecimal shippingCost = shippingPriceService.quote(subtotal).cost();
         BigDecimal total = subtotal.add(shippingCost);
 
         return CheckoutValidationResponse.builder()
@@ -286,9 +291,6 @@ public class CheckoutServiceImpl implements CheckoutService {
     }
 
     /**
-     * Shared order-creation logic for member and guest orders.
-     */
-    /**
      * Immutable snapshot carrying the legal contract acceptance timestamps.
      * Timestamps captured on the client side (the moment the contract was read) are
      * included in this record; if null, the server-now() fallback is used.
@@ -300,41 +302,8 @@ public class CheckoutServiceImpl implements CheckoutService {
     ) {}
 
     /**
-     * The carrier's own price for this delivery, or null to fall back to our tariff.
-     *
-     * <p>Quotes are cached per district and parcel size, so a busy checkout does not translate
-     * into a request per visitor. Any failure here is deliberately silent: the caller has a
-     * working fallback, and a slow pricing call must not turn into a failed order.
+     * Shared order-creation logic for member and guest orders.
      */
-    private BigDecimal livePriceFor(CargoProvider cargoProvider, CustomerAddress shippingAddr,
-                                     BigDecimal totalDesi) {
-        if (shippingAddr == null || !priceQuoteService.isEnabled()) return null;
-        try {
-            String slug = cargoProvider.getKargonomiSlug();
-            if (slug != null && !slug.isBlank()) {
-                return priceQuoteService.priceFor(shippingAddr.getCity(), shippingAddr.getDistrict(),
-                        totalDesi, slug).orElse(null);
-            }
-            // No explicit mapping for this carrier — quote the cheapest available option instead
-            // of silently charging a tariff that may be nowhere near the real cost.
-            return priceQuoteService.cheapest(shippingAddr.getCity(), shippingAddr.getDistrict(), totalDesi)
-                    .map(q -> q.price())
-                    .orElse(null);
-        } catch (Exception e) {
-            logger.warn("Canlı kargo fiyatı alınamadı, tarifeye düşülüyor: {}", e.toString());
-            return null;
-        }
-    }
-
-    /** Free shipping still wins over a live price — the promise on the storefront is ours, not the carrier's. */
-    private BigDecimal applyFreeShippingThreshold(CargoProvider cargoProvider, BigDecimal price, BigDecimal subtotal) {
-        BigDecimal threshold = cargoProvider.getFreeShippingThreshold();
-        if (threshold != null && threshold.signum() > 0 && subtotal.compareTo(threshold) >= 0) {
-            return BigDecimal.ZERO;
-        }
-        return price;
-    }
-
     private PlaceOrderResponse createOrderInternal(Customer customer, List<CartItem> items,
                                                     CustomerAddress shippingAddr, CustomerAddress billingAddr,
                                                     String cargoCompanyStr, Long cargoProviderId,
@@ -420,7 +389,7 @@ public class CheckoutServiceImpl implements CheckoutService {
             orderItems.add(oi);
         }
 
-        // Calculate shipping cost — dynamic from CargoProvider or fallback to ShippingConstants
+        // Shipping — one rule, in ShippingPriceService.
         BigDecimal shippingCost;
         BigDecimal shippingVat = BigDecimal.ZERO;
         CargoProvider cargoProvider = null;
@@ -429,39 +398,15 @@ public class CheckoutServiceImpl implements CheckoutService {
             cargoProvider = cargoProviderRepository.findById(cargoProviderId).orElse(null);
         }
 
-        if (cargoProvider != null) {
-            // Calculate total desi from cart items
-            BigDecimal totalDesi = BigDecimal.ZERO;
-            for (var ci : items) {
-                Product prod = ci.getProduct();
-                if (prod != null) {
-                    // Physical weight
-                    BigDecimal weight = prod.getWeight() != null ? BigDecimal.valueOf(prod.getWeight()) : BigDecimal.ZERO;
-                    // Volumetric weight: (L x W x H) / 3000
-                    BigDecimal volumetric = BigDecimal.ZERO;
-                    if (prod.getLengthCm() != null && prod.getWidthCm() != null && prod.getHeightCm() != null) {
-                        volumetric = BigDecimal.valueOf(prod.getLengthCm())
-                            .multiply(BigDecimal.valueOf(prod.getWidthCm()))
-                            .multiply(BigDecimal.valueOf(prod.getHeightCm()))
-                            .divide(new BigDecimal("3000"), 2, java.math.RoundingMode.HALF_UP);
-                    }
-                    BigDecimal desi = weight.max(volumetric);
-                    totalDesi = totalDesi.add(desi.multiply(BigDecimal.valueOf(ci.getQuantity())));
-                }
-            }
-            // Live price from the carrier where it is switched on and the carrier quotes this
-            // route; otherwise the provider's own desi tariff. The tariff stays the fallback on
-            // purpose — a checkout must never fail because a pricing API was slow.
-            BigDecimal livePrice = livePriceFor(cargoProvider, shippingAddr, totalDesi);
-            if (livePrice != null) {
-                shippingCost = applyFreeShippingThreshold(cargoProvider, livePrice, subtotal);
-            } else {
-                shippingCost = cargoProvider.calculateShippingCost(totalDesi, subtotal);
-            }
-            shippingVat = cargoProvider.calculateVat(shippingCost);
-        } else {
-            shippingCost = ShippingConstants.calculateShippingCost(subtotal);
-        }
+        // One rule, asked once. The storefront shows the answer to this same call, so what the
+        // customer agreed to and what the order charges cannot drift apart.
+        BigDecimal totalDesi = shippingPriceService.desiOf(items);
+        ShippingPriceService.Quote shippingQuote = shippingPriceService.quote(
+                cargoProvider, subtotal, totalDesi,
+                shippingAddr != null ? shippingAddr.getCity() : null,
+                shippingAddr != null ? shippingAddr.getDistrict() : null);
+        shippingCost = shippingQuote.cost();
+        shippingVat = shippingQuote.vat();
 
         // ─── Coupon ───────────────────────────────────────────────────────────
         // Re-validated against the final subtotal: the basket may have changed since the code

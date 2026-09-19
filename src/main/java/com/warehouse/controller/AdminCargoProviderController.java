@@ -66,6 +66,10 @@ public class AdminCargoProviderController {
             if (update.getMaxDesi() != null) existing.setMaxDesi(update.getMaxDesi());
             if (update.getExcludedDistricts() != null) existing.setExcludedDistricts(update.getExcludedDistricts());
             existing.setSortOrder(update.getSortOrder());
+            // The edit form has an "Aktif" switch and it was never copied, so flipping it and
+            // pressing Güncelle silently did nothing — the carrier kept its old state and only
+            // the separate pause/play button could change it. The form always sends the field.
+            existing.setActive(update.isActive());
             return ResponseEntity.ok(cargoRepo.save(existing));
         }).orElse(ResponseEntity.notFound().build());
     }

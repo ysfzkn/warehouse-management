@@ -97,7 +97,7 @@ const SETTING_GROUPS = [
     icon: 'fas fa-truck-loading',
     keys: ['free_shipping_threshold', 'default_shipping_cost'],
     tooltip:
-      'Ücretsiz kargo eşiği ve varsayılan kargo ücreti. Provider tabanlı detaylar Kargo Sağlayıcıları sayfasında.',
+      'Yalnızca müşteri henüz kargo firması seçmemişken geçerli: sepet özetindeki kargo ücreti ve ücretsiz kargo eşiği. Firma seçildiği anda Kargo Ayarları sayfasındaki tarife devreye girer.',
   },
   {
     id: 'abandon',
