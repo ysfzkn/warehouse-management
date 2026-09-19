@@ -156,8 +156,10 @@ public class ShippingPriceService {
                 logger.warn("[Kargo] free_shipping_threshold sayı değil: {}", global);
             }
         }
-        return isPositive(ShippingConstants.FREE_SHIPPING_THRESHOLD)
-                ? ShippingConstants.FREE_SHIPPING_THRESHOLD : null;
+        // Boş alan "ücretsiz kargo yok" demek. Sabitteki 500'e düşmek, kimsenin girmediği bir
+        // sözü sessizce vermek olurdu; alanı yanlışlıkla boşaltmanın bedeli de görünmez bir
+        // gelir kaybı olurdu. Boşsa ücret alınır ve bu panelde görünür.
+        return null;
     }
 
     /** The carrier's real price for this route, when live pricing is on and the address is known. */

@@ -201,4 +201,19 @@ class ShippingPriceServiceTest {
         assertThat(shipping.quote(provider, new BigDecimal("5000"), BigDecimal.ONE, null, null).free())
                 .isTrue();
     }
+
+    /**
+     * Production had this setting empty, and the old code fell back to a 500 ₺ constant — a
+     * promise nobody had configured, given away on every order above 500 ₺ without appearing on
+     * any screen. Emptying the field now simply means the shop does not offer free shipping.
+     */
+    @Test
+    @DisplayName("Ayar boşsa ücretsiz kargo yok, gizli bir varsayılana düşülmüyor")
+    void anEmptySettingMeansNoFreeShippingRatherThanAHiddenDefault() {
+        when(settingService.getSetting(SettingKeys.FREE_SHIPPING_THRESHOLD)).thenReturn("");
+
+        assertThat(shipping.freeShippingThreshold()).isNull();
+        assertThat(shipping.quote(carrier(), new BigDecimal("100000"), BigDecimal.ONE, null, null).free())
+                .isFalse();
+    }
 }

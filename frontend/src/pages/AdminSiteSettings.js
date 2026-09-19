@@ -378,7 +378,8 @@ const FIELD_TOOLTIPS = {
     'Ürün sayfasındaki "WhatsApp ile Sipariş" butonu bu numaraya yazar. Boşsa sosyal WhatsApp numarası kullanılır. Ülke kodu ile (ör: 905551234567).',
   whatsapp_order_template:
     'Hazır mesaj şablonu. Kullanılabilir alanlar: {urun} {fiyat} {sku} {link} (ayrıca {marka} {kategori}). Boşsa varsayılan şablon kullanılır.',
-  free_shipping_threshold: 'Bu tutarın üzerindeki siparişlerde kargo ücretsiz olur',
+  free_shipping_threshold:
+    'Bu tutarın üzerindeki siparişlerde kargo ücretsiz olur. Mağaza geneli tek limit: kargo firmasına göre değişmez. Boş bırakılırsa ya da 0 yazılırsa ücretsiz kargo verilmez.',
   default_shipping_cost: 'Ücretsiz kargo limitinin altındaki siparişlere uygulanır',
   contact_form_email: 'İletişim formundan gelen mesajlar bu adrese yönlendirilir',
   company_legal_name: 'Şirketin tam resmi ticari unvanı',
