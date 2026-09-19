@@ -102,27 +102,4 @@ public class CargoProvider {
     @PreUpdate
     protected void onUpdate() { this.updatedAt = LocalDateTime.now(); }
 
-    /**
-     * Calculate shipping cost for given desi and subtotal.
-     */
-    public BigDecimal calculateShippingCost(BigDecimal desi, BigDecimal subtotal) {
-        // A zero threshold means "no free shipping". Without the sign check, saving 0 in this
-        // field made every order ship free, because any subtotal is >= 0.
-        if (freeShippingThreshold != null && freeShippingThreshold.signum() > 0 && subtotal != null
-            && subtotal.compareTo(freeShippingThreshold) >= 0) {
-            return BigDecimal.ZERO;
-        }
-        BigDecimal cost = baseCost != null ? baseCost : BigDecimal.ZERO;
-        if (costPerDesi != null && desi != null && desi.compareTo(BigDecimal.ZERO) > 0) {
-            cost = cost.add(costPerDesi.multiply(desi));
-        }
-        return cost;
-    }
-
-    public BigDecimal calculateVat(BigDecimal shippingCost) {
-        if (vatRate == null || shippingCost == null || shippingCost.compareTo(BigDecimal.ZERO) == 0) {
-            return BigDecimal.ZERO;
-        }
-        return shippingCost.multiply(vatRate).divide(new BigDecimal("100"), 2, java.math.RoundingMode.HALF_UP);
-    }
 }

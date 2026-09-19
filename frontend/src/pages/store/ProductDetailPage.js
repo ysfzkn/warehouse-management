@@ -39,6 +39,7 @@ import {
 import { getDefaultPhone, telHref, buildWhatsappOrderUrl } from '../../utils/phones';
 import { hapticSuccess } from '../../utils/haptics';
 import { recordRecentlyViewed, getRecentlyViewedIdsExcluding } from '../../utils/recentlyViewed';
+import { formatTRY } from '../../utils/money';
 
 export default function ProductDetailPage() {
   const { slug } = useParams();
@@ -46,6 +47,7 @@ export default function ProductDetailPage() {
   const toast = useToast();
   const wishlist = useWishlist();
   const { settings } = useSiteSettings();
+  const freeShippingThreshold = Number(settings?.free_shipping_threshold) || 0;
   const [product, setProduct] = useState(null);
   const [quantity, setQuantity] = useState(1);
   const [alsoBought, setAlsoBought] = useState([]);
@@ -734,9 +736,13 @@ export default function ProductDetailPage() {
             )}
             {key === 'shipping' && (
               <div className="text-muted" style={{ lineHeight: 1.8 }}>
+                {/* Limit ayardan okunuyor. Burada 500 yazılıydı: ayar değiştiğinde ürün sayfası
+                    eski sözü vermeye devam ediyor, sepet başka bir sayı söylüyordu. */}
                 <p>
-                  <strong>Kargo:</strong> 500₺ ve üzeri siparişlerde ücretsiz kargo. Altında standart kargo
-                  ücreti uygulanır.
+                  <strong>Kargo:</strong>{' '}
+                  {freeShippingThreshold > 0
+                    ? `${formatTRY(freeShippingThreshold)} ve üzeri siparişlerde ücretsiz kargo. Altında standart kargo ücreti uygulanır.`
+                    : 'Sipariş tutarına ve gönderi boyutuna göre kargo ücreti uygulanır.'}
                 </p>
                 <p>
                   <strong>Teslimat Süresi:</strong> Siparişiniz 1-3 iş günü içerisinde kargoya verilir.

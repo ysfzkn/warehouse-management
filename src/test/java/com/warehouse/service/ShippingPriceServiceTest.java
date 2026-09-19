@@ -44,6 +44,8 @@ class ShippingPriceServiceTest {
     void setUp() {
         shipping = new ShippingPriceService(settingService, priceQuoteService);
         when(priceQuoteService.isEnabled()).thenReturn(false);
+        // Mağaza geneli söz: bu tutarın üstünde kargo bizden.
+        when(settingService.getSetting(SettingKeys.FREE_SHIPPING_THRESHOLD)).thenReturn("5000");
     }
 
     private CargoProvider carrier() {
@@ -80,7 +82,7 @@ class ShippingPriceServiceTest {
     @Test
     @DisplayName("Eşiğin üstünde kargo ücretsiz, KDV de yok")
     void aboveTheThresholdShippingIsFree() {
-        var quote = shipping.quote(carrier(), new BigDecimal("600"), new BigDecimal("80"), null, null);
+        var quote = shipping.quote(carrier(), new BigDecimal("5200"), new BigDecimal("80"), null, null);
 
         assertThat(quote.free()).isTrue();
         assertThat(quote.cost()).isEqualByComparingTo(BigDecimal.ZERO);
@@ -95,11 +97,9 @@ class ShippingPriceServiceTest {
     @Test
     @DisplayName("Sıfır eşik 'ücretsiz kargo yok' demek")
     void aZeroThresholdMeansNoFreeShippingRatherThanAlwaysFree() {
-        CargoProvider provider = carrier();
-        provider.setFreeShippingThreshold(BigDecimal.ZERO);
         when(settingService.getSetting(SettingKeys.FREE_SHIPPING_THRESHOLD)).thenReturn("0");
 
-        var quote = shipping.quote(provider, new BigDecimal("10000"), BigDecimal.ONE, null, null);
+        var quote = shipping.quote(carrier(), new BigDecimal("10000"), BigDecimal.ONE, null, null);
 
         assertThat(quote.free()).isFalse();
         assertThat(quote.cost()).isEqualByComparingTo("31.99");
@@ -125,7 +125,7 @@ class ShippingPriceServiceTest {
     void freeShippingOutranksALivePrice() {
         when(priceQuoteService.isEnabled()).thenReturn(true);
 
-        var quote = shipping.quote(carrier(), new BigDecimal("600"), BigDecimal.ONE, "İstanbul", "Kadıköy");
+        var quote = shipping.quote(carrier(), new BigDecimal("5200"), BigDecimal.ONE, "İstanbul", "Kadıköy");
 
         assertThat(quote.free()).isTrue();
         assertThat(quote.source()).isEqualTo(ShippingPriceService.Source.FREE);
@@ -135,7 +135,6 @@ class ShippingPriceServiceTest {
     @DisplayName("Firma seçilmeden önce ayardaki varsayılan ücret geçerli")
     void withNoCarrierTheConfiguredDefaultApplies() {
         when(settingService.getSetting(SettingKeys.DEFAULT_SHIPPING_COST)).thenReturn("34.50");
-        when(settingService.getSetting(SettingKeys.FREE_SHIPPING_THRESHOLD)).thenReturn("500");
 
         var quote = shipping.quote(new BigDecimal("100"));
 
@@ -183,5 +182,23 @@ class ShippingPriceServiceTest {
     void anEmptyBasketHasNoParcel() {
         assertThat(shipping.desiOf(List.of())).isEqualByComparingTo(BigDecimal.ZERO);
         assertThat(shipping.desiOf(null)).isEqualByComparingTo(BigDecimal.ZERO);
+    }
+
+    /**
+     * Each carrier used to carry its own threshold and it beat the setting, so the promise a
+     * customer got depended on which carrier they picked — and the number typed in Site Ayarları
+     * was not the one that applied.
+     */
+    @Test
+    @DisplayName("Firma bazlı limit artık kararı etkilemiyor, mağaza geneli limit geçerli")
+    void aCarrierCannotOverrideTheStoreWidePromise() {
+        CargoProvider provider = carrier();
+        provider.setFreeShippingThreshold(new BigDecimal("500"));
+
+        // Firma 500 diyor, mağaza 5000: 600 liralık sepet ücretsiz değil.
+        assertThat(shipping.quote(provider, new BigDecimal("600"), BigDecimal.ONE, null, null).free())
+                .isFalse();
+        assertThat(shipping.quote(provider, new BigDecimal("5000"), BigDecimal.ONE, null, null).free())
+                .isTrue();
     }
 }

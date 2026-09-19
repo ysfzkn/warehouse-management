@@ -90,6 +90,7 @@ export default function ManualOrderModal({ onClose, onCreated }) {
   const [products, setProducts] = useState([]);
   const [productsLoading, setProductsLoading] = useState(false);
   const [productsError, setProductsError] = useState('');
+  const [freeShippingThreshold, setFreeShippingThreshold] = useState(0);
   const [cargoProviders, setCargoProviders] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [customerSearch, setCustomerSearch] = useState('');
@@ -135,6 +136,15 @@ export default function ManualOrderModal({ onClose, onCreated }) {
       .get('/api/cargo-providers')
       .then((r) => setCargoProviders((r.data || []).filter((p) => p.active)))
       .catch(() => setCargoProviders([]));
+  }, []);
+
+  // Ücretsiz kargo limiti mağaza geneli tek bir ayar. Burada firmanın kendi sütunu okunuyordu;
+  // mağaza 5000 derken bu ekran 500'de ücretsiz yazıp kargo ücretini sıfırlıyordu.
+  useEffect(() => {
+    axios
+      .get('/api/store/settings')
+      .then((r) => setFreeShippingThreshold(Number(r.data?.free_shipping_threshold) || 0))
+      .catch(() => setFreeShippingThreshold(0));
   }, []);
 
   useEffect(() => {
@@ -279,8 +289,8 @@ export default function ManualOrderModal({ onClose, onCreated }) {
   const freeShipping =
     form.deliveryMethod === 'CARGO' &&
     Boolean(selectedProvider) &&
-    Number(selectedProvider?.freeShippingThreshold) > 0 &&
-    subtotal >= Number(selectedProvider?.freeShippingThreshold);
+    freeShippingThreshold > 0 &&
+    subtotal >= freeShippingThreshold;
   const shippingCost = freeShipping && !shippingTouched ? 0 : Number(form.shippingCost || 0);
   const trackingUrl =
     selectedProvider?.trackingUrlTemplate && form.cargoTrackingNo.trim()
@@ -855,9 +865,9 @@ export default function ManualOrderModal({ onClose, onCreated }) {
                               <span className="small text-muted d-block">
                                 {money(provider.baseCost)} · {provider.estimatedDeliveryDays || 3} iş günü
                               </span>
-                              {Number(provider.freeShippingThreshold) > 0 && (
+                              {freeShippingThreshold > 0 && (
                                 <span className="small text-success d-block">
-                                  {money(provider.freeShippingThreshold)} üzeri ücretsiz
+                                  {money(freeShippingThreshold)} üzeri ücretsiz
                                 </span>
                               )}
                             </button>

@@ -29,8 +29,8 @@ import java.util.Collection;
  * questions is fixed:
  *
  * <ol>
- *   <li>Does free shipping apply? The threshold on the carrier, else the global setting. Ours to
- *       promise, so it beats a live carrier price as well.</li>
+ *   <li>Does free shipping apply? One store-wide threshold, set in Site Ayarları → Kargo
+ *       Ücretlendirme. Ours to promise, so it beats a live carrier price as well.</li>
  *   <li>Is there a live carrier price for this address? Only when live pricing is switched on and
  *       the destination is known.</li>
  *   <li>Otherwise the carrier's own tariff: base + desi × per-desi rate.</li>
@@ -115,7 +115,7 @@ public class ShippingPriceService {
                         String city, String district) {
         BigDecimal basket = subtotal != null ? subtotal : BigDecimal.ZERO;
 
-        BigDecimal threshold = freeShippingThreshold(provider);
+        BigDecimal threshold = freeShippingThreshold();
         if (threshold != null && basket.compareTo(threshold) >= 0) {
             return new Quote(BigDecimal.ZERO, BigDecimal.ZERO, true, Source.FREE);
         }
@@ -138,11 +138,15 @@ public class ShippingPriceService {
 
     // ── steps ──
 
-    /** The carrier's own threshold, else the global one. Null when free shipping is not offered. */
-    private BigDecimal freeShippingThreshold(CargoProvider provider) {
-        if (provider != null && isPositive(provider.getFreeShippingThreshold())) {
-            return provider.getFreeShippingThreshold();
-        }
+    /**
+     * The one threshold the shop promises free shipping above. Null when it offers none.
+     *
+     * <p>Every carrier used to carry its own and it overrode the setting, so the number typed in
+     * Site Ayarları was not the number customers got — which one applied depended on the carrier
+     * they happened to pick. The column stays for a future carrier-specific campaign; the price
+     * decision does not read it.
+     */
+    public BigDecimal freeShippingThreshold() {
         String global = settingService.getSetting(SettingKeys.FREE_SHIPPING_THRESHOLD);
         if (global != null && !global.isBlank()) {
             try {

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
+import { Link } from 'react-router-dom';
 import useSecurityCodePrompt from '../components/useSecurityCodePrompt';
 import { useAdminToast } from '../components/AdminToast';
 import confirmDialog from '../utils/confirmDialog';
@@ -10,7 +11,6 @@ const EMPTY_FORM = {
   logoUrl: '',
   baseCost: 29.99,
   costPerDesi: 2.0,
-  freeShippingThreshold: 500,
   estimatedDeliveryDays: 3,
   vatRate: 20,
   trackingUrlTemplate: '',
@@ -38,6 +38,7 @@ const fmt = (v) =>
 export default function AdminCargoProviders() {
   const [providers, setProviders] = useState([]);
   const [livePricing, setLivePricing] = useState(null);
+  const [freeShippingThreshold, setFreeShippingThreshold] = useState(0);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -64,8 +65,11 @@ export default function AdminCargoProviders() {
     axios
       .get('/api/admin/settings/site')
       .then((r) => {
-        const live = (r.data || []).find((x) => x.settingKey === 'cargo_checkout_live_pricing');
+        const settings = r.data || [];
+        const live = settings.find((x) => x.settingKey === 'cargo_checkout_live_pricing');
         setLivePricing(live?.settingValue === 'true');
+        const threshold = settings.find((x) => x.settingKey === 'free_shipping_threshold');
+        setFreeShippingThreshold(Number(threshold?.settingValue) || 0);
       })
       .catch(() => setLivePricing(null));
   }, []);
@@ -255,16 +259,17 @@ export default function AdminCargoProviders() {
                   </div>
 
                   <div className="col-md-6">
-                    <label className="form-label small fw-medium">Ücretsiz Kargo Alt Limiti (₺)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      className="form-control"
-                      value={form.freeShippingThreshold}
-                      onChange={(e) => f('freeShippingThreshold', parseFloat(e.target.value) || 0)}
-                    />
+                    <label className="form-label small fw-medium">Ücretsiz Kargo Alt Limiti</label>
+                    <div className="form-control bg-light d-flex align-items-center justify-content-between">
+                      <span>{freeShippingThreshold > 0 ? fmt(freeShippingThreshold) : 'Yok'}</span>
+                      <Link to="/admin/site-settings" className="small">
+                        Değiştir
+                      </Link>
+                    </div>
                     <small className="text-muted">
-                      Bu tutarın üzerinde kargo ücretsiz. <strong>0</strong> = ücretsiz kargo yok.
+                      Mağaza geneli, tüm firmalar için aynı: Site Ayarları → Kargo Ücretlendirme. Firma başına
+                      ayrı limit tutulmuyor — iki yerde iki sayı olunca hangisinin geçerli olduğu hiçbir
+                      ekranda görünmüyordu.
                     </small>
                   </div>
                   <div className="col-md-6">
@@ -399,10 +404,10 @@ export default function AdminCargoProviders() {
                       {fmt(form.baseCost + form.costPerDesi)} + KDV{' '}
                       {fmt(((form.baseCost + form.costPerDesi) * form.vatRate) / 100)} ={' '}
                       <strong>{fmt((form.baseCost + form.costPerDesi) * (1 + form.vatRate / 100))}</strong>
-                      {form.freeShippingThreshold > 0 && (
+                      {freeShippingThreshold > 0 && (
                         <span>
                           {' '}
-                          | {fmt(form.freeShippingThreshold)} üzeri <strong>ücretsiz</strong>
+                          | {fmt(freeShippingThreshold)} üzeri <strong>ücretsiz</strong>
                         </span>
                       )}
                     </div>
@@ -447,7 +452,6 @@ export default function AdminCargoProviders() {
                         <th>Firma</th>
                         <th>Temel Ücret</th>
                         <th>Desi Ücreti</th>
-                        <th>Ücretsiz Limit</th>
                         <th>Kurallar</th>
                         <th>Teslimat</th>
                         <th>Durum</th>
@@ -466,7 +470,6 @@ export default function AdminCargoProviders() {
                             {fmt(p.costPerDesi)}
                             <small className="text-muted">/desi</small>
                           </td>
-                          <td>{p.freeShippingThreshold > 0 ? fmt(p.freeShippingThreshold) : 'Yok'}</td>
                           <td className="small text-muted">
                             {p.kargonomiSlug ? (
                               <div>

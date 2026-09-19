@@ -84,7 +84,9 @@ public class StoreCheckoutController {
                 dto.put("logoUrl", p.getLogoUrl());
                 dto.put("baseCost", p.getBaseCost());
                 dto.put("costPerDesi", p.getCostPerDesi());
-                dto.put("freeShippingThreshold", p.getFreeShippingThreshold());
+                // The store-wide promise, not this carrier's old column — the storefront
+                // prints it as "… üzeri ücretsiz kargo" and it has to be the real number.
+                dto.put("freeShippingThreshold", shippingPriceService.freeShippingThreshold());
                 dto.put("estimatedDeliveryDays", p.getEstimatedDeliveryDays());
                 dto.put("vatRate", p.getVatRate());
 

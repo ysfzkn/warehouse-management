@@ -147,11 +147,11 @@ const SECTIONS = [
     items: [
       {
         q: 'Kargo firması nasıl eklerim?',
-        a: '"Ayarlar → Kargo Ayarları" sayfasından "Yeni Kargo Firması" butonuna tıklayın:\n• Firma adı ve kodu\n• Temel kargo ücreti (₺)\n• Desi başına ek ücret (₺)\n• Ücretsiz kargo alt limiti (bu tutarın üzerinde kargo ücretsiz olur)\n• Tahmini teslimat süresi (gün)\n• KDV oranı (%)\n• Kargo takip URL şablonu',
+        a: '"Ayarlar → Kargo Ayarları" sayfasından "Yeni Kargo Firması" butonuna tıklayın:\n• Firma adı ve kodu\n• Temel kargo ücreti (₺)\n• Desi başına ek ücret (₺)\n• Tahmini teslimat süresi (gün)\n• KDV oranı (%)\n• Kargo takip URL şablonu\n\nÜcretsiz kargo limiti firma başına değil, mağaza geneli tek bir ayardır: Site Ayarları → Kargo Ücretlendirme.',
       },
       {
         q: 'Kargo fiyatı nasıl hesaplanıyor?',
-        a: 'Formül: Temel Ücret + (Desi × Desi Ücreti)\n\nDesi hesabı: Ürünün fiziksel ağırlığı ile hacimsel ağırlığından (En×Boy×Yükseklik / 3000) büyük olanı alınır.\n\nSepet toplamı ücretsiz kargo limitini aşarsa kargo ücretsiz olur.',
+        a: "Sıra şu:\n1) Sepet toplamı ücretsiz kargo limitini aşıyorsa kargo ücretsizdir. Bu söz mağazanın, canlı fiyatın da önünde gelir.\n2) Kargo API canlı fiyatlandırması açıksa Kargonomi'nin o adres ve desi için verdiği gerçek fiyat uygulanır.\n3) Değilse firmanın tarifesi: Temel Ücret + (Desi × Desi Ücreti)\n4) Henüz firma seçilmemişse Site Ayarları'ndaki varsayılan kargo ücreti.\n\nDesi hesabı: Ürünün fiziksel ağırlığı ile hacimsel ağırlığından (En×Boy×Yükseklik / 3000) büyük olanı alınır.\n\nMüşteriye gösterilen tutar ile tahsil edilen tutar aynıdır; ikisi de aynı hesaptan gelir.",
       },
       {
         q: 'Takip URL şablonu nedir?',
