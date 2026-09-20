@@ -34,6 +34,10 @@ public class HostValidationFilter extends OncePerRequestFilter {
 
     private static final Logger log = LoggerFactory.getLogger(HostValidationFilter.class);
 
+    private static final String USER_AGENT_HEADER = "User-Agent";
+    private static final int USER_AGENT_LOG_LIMIT = 120;
+    private static final String USER_AGENT_ABSENT = "-";
+
     private final List<String> allowedAdminHosts;
     private final List<String> allowedStoreHosts;
     private final boolean enabled;
@@ -82,7 +86,8 @@ public class HostValidationFilter extends OncePerRequestFilter {
         boolean isStoreEndpoint = uri.startsWith("/api/store/");
 
         if (isAdminEndpoint && !allowedAdminHosts.isEmpty() && !matchesAny(host, allowedAdminHosts)) {
-            log.warn("[HostValidation] Admin endpoint cağrısı reddedildi: host={}, uri={}", host, uri);
+            log.warn("[HostValidation] Admin endpoint cağrısı reddedildi: method={}, host={}, uri={}, ua={}",
+                    request.getMethod(), host, uri, loggableUserAgent(request));
             response.setStatus(HttpServletResponse.SC_FORBIDDEN);
             response.setContentType("application/json");
             response.getWriter().write("{\"error\":\"FORBIDDEN_HOST\"}");
@@ -93,7 +98,8 @@ public class HostValidationFilter extends OncePerRequestFilter {
         // admin host too — the XSS concern only runs the other way (store → admin).
         if (isStoreEndpoint && !allowedStoreHosts.isEmpty()
                 && !matchesAny(host, allowedStoreHosts) && !matchesAny(host, allowedAdminHosts)) {
-            log.warn("[HostValidation] Store endpoint cağrısı reddedildi: host={}, uri={}", host, uri);
+            log.warn("[HostValidation] Store endpoint cağrısı reddedildi: method={}, host={}, uri={}, ua={}",
+                    request.getMethod(), host, uri, loggableUserAgent(request));
             response.setStatus(HttpServletResponse.SC_FORBIDDEN);
             response.setContentType("application/json");
             response.getWriter().write("{\"error\":\"FORBIDDEN_HOST\"}");
@@ -113,6 +119,23 @@ public class HostValidationFilter extends OncePerRequestFilter {
             || uri.contains("/settings/site/logo/view")
             || (uri.contains("/products/images/") && uri.endsWith("/view"))
             || (uri.contains("/reviews/images/") && uri.endsWith("/view"));
+    }
+
+    /**
+     * Neden ham başlık log'a yazılmıyor: User-Agent'ı istemci belirler. Satır sonu karakteri
+     * içeren bir değer log'a sahte satır uydurabilir (log injection), uzunluğu da sınırsızdır.
+     * Kaynağı tanımaya yetecek kadarını alıp gerisini atıyoruz — bu alanın tek işi, reddedilen
+     * isteğin eski bir tarayıcı sekmesinden mi yoksa bir tarama botundan mı geldiğini ayırmak.
+     */
+    String loggableUserAgent(HttpServletRequest request) {
+        String raw = request.getHeader(USER_AGENT_HEADER);
+        if (raw == null || raw.isBlank()) {
+            return USER_AGENT_ABSENT;
+        }
+        String singleLine = raw.replaceAll("[\\r\\n]", " ");
+        return singleLine.length() > USER_AGENT_LOG_LIMIT
+                ? singleLine.substring(0, USER_AGENT_LOG_LIMIT) + "…"
+                : singleLine;
     }
 
     private boolean matchesAny(String host, List<String> patterns) {
