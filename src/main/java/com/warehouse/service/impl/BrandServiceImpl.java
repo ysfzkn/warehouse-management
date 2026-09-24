@@ -48,6 +48,12 @@ public class BrandServiceImpl implements BrandService {
 
     @Override
     @Transactional(readOnly = true)
+    public List<Brand> getStorefrontBrands() {
+        return brandRepository.findActiveWithStorefrontProducts();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<Brand> searchActiveBrands(String name) {
         logger.debug("Searching active brands by name: {}", name);
         return brandRepository.searchActiveByName(name);

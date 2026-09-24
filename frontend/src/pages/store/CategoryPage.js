@@ -1,15 +1,21 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams, useOutletContext, useSearchParams, useNavigationType } from 'react-router-dom';
+import { Link, useParams, useOutletContext, useSearchParams, useNavigationType } from 'react-router-dom';
 import axios from 'axios';
 import ProductCard from '../../components/store/ProductCard';
 import Breadcrumb from '../../components/store/Breadcrumb';
 import SeoHead from '../../components/store/SeoHead';
 import { useSiteSettings } from '../../hooks/useSiteSettings';
+import { useStoreBrands } from '../../hooks/useStoreBrands';
 import {
   buildCollectionPageSchema,
   buildBreadcrumbSchema,
   buildLocalKeywords,
-  withCity,
+  buildCategoryHeading,
+  buildListingDescription,
+  buildBrandHeading,
+  buildBrandTitle,
+  buildBrandDescription,
+  plainText,
 } from '../../utils/seo';
 import { useToast } from '../../components/store/Toast';
 import { readListPosition, saveListPosition } from '../../utils/listPosition';
@@ -85,7 +91,13 @@ function toggleSet(set, id) {
 /** Products fetched per infinite-scroll step; also the unit the saved position counts in. */
 const PAGE_SIZE = 24;
 
-export default function CategoryPage() {
+/**
+ * Product listing for a category (/kategori/:slug) or a brand (/marka/:slug, mode="brand").
+ * A brand page is the same listing with the brand fixed: it exists so "{city} {brand}"
+ * searches land on a page about that brand instead of the homepage.
+ */
+export default function CategoryPage({ mode = 'category' }) {
+  const brandMode = mode === 'brand';
   const { slug } = useParams();
   const { cart } = useOutletContext();
   const [searchParams] = useSearchParams();
@@ -102,7 +114,9 @@ export default function CategoryPage() {
   const [products, setProducts] = useState([]);
   const [category, setCategory] = useState(null);
   const [categories, setCategories] = useState([]);
-  const [brands, setBrands] = useState([]);
+  const { brands, loaded: brandsLoaded, failed: brandsFailed } = useStoreBrands();
+  const brand = brandMode ? brands.find((b) => b.slug === slug) || null : null;
+  const brandMissing = brandMode && brandsLoaded && !brand;
   const [colors, setColors] = useState([]);
   // Starting further in keeps the infinite-scroll sentinel counting from where the
   // visitor actually was; the fetch below asks for all of those pages at once.
@@ -135,7 +149,7 @@ export default function CategoryPage() {
   // Load category by slug
   useEffect(() => {
     setCategoryReady(false);
-    if (slug && slug !== 'arama' && slug !== 'tumu') {
+    if (!brandMode && slug && slug !== 'arama' && slug !== 'tumu') {
       axios
         .get(`/api/store/categories/${slug}`)
         .then((r) => {
@@ -158,7 +172,8 @@ export default function CategoryPage() {
     } else {
       setCategory(null);
       setCategoryId(null);
-      setCategoryReady(true);
+      // A brand page cannot ask for products until it knows the brand's id.
+      setCategoryReady(!brandMode || brandsLoaded);
     }
     if (prevSlugRef.current !== slug) {
       setPage(0);
@@ -169,17 +184,13 @@ export default function CategoryPage() {
       setPriceApplied({ min: '', max: '' });
       prevSlugRef.current = slug;
     }
-  }, [slug, categories]);
+  }, [slug, categories, brandMode, brandsLoaded]);
 
   // Load sidebar data
   useEffect(() => {
     axios
       .get('/api/store/categories/tree')
       .then((r) => setCategories(r.data || []))
-      .catch(() => {});
-    axios
-      .get('/api/store/brands')
-      .then((r) => setBrands((r.data || []).filter((b) => b.name)))
       .catch(() => {});
     axios
       .get('/api/store/colors')
@@ -190,6 +201,10 @@ export default function CategoryPage() {
   // Fetch products
   const fetchProducts = useCallback(() => {
     if (!categoryReady) return;
+    if (brandMissing) {
+      setLoading(false);
+      return;
+    }
     // Coming back from a product: ask for every page the visitor had already loaded in
     // one request, rather than replaying the scroll that fetched them one by one.
     const restore = restoreRef.current;
@@ -200,7 +215,8 @@ export default function CategoryPage() {
       ? { page: 0, size: PAGE_SIZE * restore.pages, sortBy, sortDir }
       : { page, size: PAGE_SIZE, sortBy, sortDir };
     if (categoryId) params.categoryId = categoryId;
-    if (selectedBrands.size > 0) params.brandIds = Array.from(selectedBrands).join(',');
+    if (brand) params.brandIds = String(brand.id);
+    else if (selectedBrands.size > 0) params.brandIds = Array.from(selectedBrands).join(',');
     if (selectedColors.size > 0) params.colorIds = Array.from(selectedColors).join(',');
     if (priceApplied.min) params.minPrice = priceApplied.min;
     if (priceApplied.max) params.maxPrice = priceApplied.max;
@@ -242,6 +258,8 @@ export default function CategoryPage() {
     searchQuery,
     productTypeFilter,
     categoryReady,
+    brand,
+    brandMissing,
   ]);
 
   useEffect(() => {
@@ -338,6 +356,7 @@ export default function CategoryPage() {
     selectedBrands.size + selectedColors.size + (priceApplied.min || priceApplied.max ? 1 : 0);
 
   const breadcrumbs = [
+    ...(brand ? [{ label: brand.name, href: `/marka/${brand.slug}` }] : []),
     ...(category?.parentSlug
       ? [{ label: category.parentName, href: `/kategori/${category.parentSlug}` }]
       : []),
@@ -413,7 +432,7 @@ export default function CategoryPage() {
       </FilterSection>
 
       {/* Brands — Multi-select */}
-      {brands.length > 0 && (
+      {!brandMode && brands.length > 0 && (
         <FilterSection title="Markalar" count={selectedBrands.size}>
           <div className="store-filter-list" role="group" aria-label="Markalar">
             {brands.map((b) => (
@@ -554,23 +573,44 @@ export default function CategoryPage() {
     </>
   );
 
-  // SEO: meta tags + structured data (city-aware for local SEO)
-  const seoTitle =
-    category?.metaTitle ||
-    (category?.name
-      ? withCity(`${category.name} Modelleri ve Fiyatları`, settings)
-      : searchQuery
-        ? `"${searchQuery}" araması`
-        : 'Tüm Ürünler');
-  const seoDescription =
-    category?.metaDescription ||
-    category?.description ||
-    (category ? `${category.name} kategorisindeki tüm ürünler` : 'Tüm ürün kategorilerimizi keşfedin');
-  const seoPath = category?.slug ? `/kategori/${category.slug}` : '/kategori/tumu';
-  const seoKeywords = category?.name ? buildLocalKeywords(settings, { category: category.name }) : undefined;
+  // SEO: meta tags + structured data (city-aware for local SEO). The server renders the
+  // same title for these URLs (StorefrontSeoService) — change both together.
+  const categoryHeading = category?.name ? buildCategoryHeading(category.name, settings) : null;
+  const categoryListingText = category?.name
+    ? buildListingDescription(category.name.toLocaleLowerCase('tr-TR'), settings)
+    : '';
+  let heading;
+  let intro = '';
+  let seoTitle;
+  let seoDescription;
+  let seoPath;
+  if (brand) {
+    heading = buildBrandHeading(brand.name, settings);
+    intro = buildBrandDescription(brand.name, settings);
+    seoTitle = buildBrandTitle(brand.name, settings);
+    seoDescription = intro;
+    seoPath = `/marka/${brand.slug}`;
+  } else if (category?.name) {
+    heading = categoryHeading;
+    intro = plainText(category.description, 1500) || categoryListingText;
+    seoTitle = category.metaTitle || categoryHeading;
+    seoDescription = category.metaDescription || plainText(category.description, 160) || categoryListingText;
+    seoPath = `/kategori/${category.slug}`;
+  } else {
+    heading = searchQuery ? `"${searchQuery}" araması` : 'Tüm Ürünler';
+    seoTitle = heading;
+    seoDescription = 'Tüm ürün kategorilerimizi keşfedin';
+    seoPath = '/kategori/tumu';
+  }
+  const seoKeywords = brand
+    ? buildLocalKeywords(settings, { brand: brand.name })
+    : category?.name
+      ? buildLocalKeywords(settings, { category: category.name })
+      : undefined;
 
   const schemaBreadcrumbs = [
     { name: 'Ana Sayfa', url: '/' },
+    ...(brand ? [{ name: brand.name, url: `/marka/${brand.slug}` }] : []),
     ...(category?.parentSlug ? [{ name: category.parentName, url: `/kategori/${category.parentSlug}` }] : []),
     ...(category ? [{ name: category.name, url: `/kategori/${category.slug}` }] : []),
   ];
@@ -579,6 +619,35 @@ export default function CategoryPage() {
     category ? buildCollectionPageSchema(category, settings) : null,
     schemaBreadcrumbs.length > 1 ? buildBreadcrumbSchema(schemaBreadcrumbs, settings) : null,
   ].filter(Boolean);
+
+  // Unknown brand slug (or the brand list could not be fetched): no listing to show.
+  if (brandMode && (brandMissing || brandsFailed)) {
+    return (
+      <div className="container my-3">
+        <SeoHead title="Marka bulunamadı" path={`/marka/${slug}`} noindex />
+        <div className="store-empty-state">
+          <FiSearch size={48} />
+          {brandsFailed ? (
+            <>
+              <h1 className="h5">Marka bilgisi yüklenemedi</h1>
+              <p>Bağlantınızı kontrol edip sayfayı yenileyin.</p>
+              <button className="btn btn-outline-primary btn-sm" onClick={() => window.location.reload()}>
+                Sayfayı Yenile
+              </button>
+            </>
+          ) : (
+            <>
+              <h1 className="h5">Marka bulunamadı</h1>
+              <p>Aradığınız marka mağazamızda yer almıyor ya da adresi değişmiş olabilir.</p>
+              <Link className="btn btn-outline-primary btn-sm" to="/kategori/tumu">
+                Tüm Ürünlere Göz Atın
+              </Link>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="container my-3">
@@ -592,6 +661,15 @@ export default function CategoryPage() {
         jsonLd={jsonLd}
       />
       <Breadcrumb items={breadcrumbs.length > 0 ? breadcrumbs : [{ label: 'Tüm Ürünler' }]} />
+      {/* The page's H1 — for "Niğde buzdolabı" style searches the visible heading carries
+          more weight than any meta tag. Hidden until the brand is known, to avoid a flash
+          of the generic "Tüm Ürünler". */}
+      {(!brandMode || brand) && (
+        <header className="store-listing-header">
+          <h1 className="store-listing-title">{heading}</h1>
+          {intro && <p className="store-listing-intro">{intro}</p>}
+        </header>
+      )}
 
       <div className="row g-4">
         {/* Sidebar Filters — Desktop */}

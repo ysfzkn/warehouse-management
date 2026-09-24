@@ -11,8 +11,14 @@ import {
   buildWebSiteSchema,
   buildLocalBusinessSchema,
   buildHomeLocalKeywords,
+  buildHomeHeading,
   getLocalCity,
+  getPrimaryBrands,
+  locative,
+  resolveDescription,
+  withCity,
 } from '../../utils/seo';
+import { useStoreBrands } from '../../hooks/useStoreBrands';
 import {
   FiShoppingBag,
   FiArrowRight,
@@ -39,6 +45,7 @@ export default function HomePage() {
   const { cart } = useOutletContext();
   const toast = useToast();
   const { settings } = useSiteSettings();
+  const { brands } = useStoreBrands();
   const [featured, setFeatured] = useState([]);
   const [newProducts, setNewProducts] = useState([]);
   const [saleProducts, setSaleProducts] = useState([]);
@@ -164,6 +171,12 @@ export default function HomePage() {
     settings?.seo_meta_title_home ||
     (city ? `${city} ${leadBrand ? leadBrand + ', ' : ''}Beyaz Eşya & Küçük Ev Aletleri` : null);
   const homeKeywords = buildHomeLocalKeywords(settings);
+  const homeHeading = buildHomeHeading(settings);
+  const localDescription = resolveDescription(settings?.seo_local_description, settings);
+  // Authorised brands, in the order the settings list them; only those with products.
+  const primaryBrands = getPrimaryBrands(settings)
+    .map((name) => brands.find((b) => b.name.toLocaleLowerCase('tr-TR') === name.toLocaleLowerCase('tr-TR')))
+    .filter(Boolean);
 
   return (
     <div>
@@ -179,6 +192,14 @@ export default function HomePage() {
       <div className="container mt-3">
         <HeroBanner />
       </div>
+
+      {/* The page's H1: what the homepage should rank for ("Niğde Profilo …"). */}
+      {homeHeading && (
+        <div className="container store-home-intro">
+          <h1 className="store-home-title">{homeHeading}</h1>
+          {settings?.seo_local_slogan && <p className="store-home-tagline">{settings.seo_local_slogan}</p>}
+        </div>
+      )}
 
       {/* Empty Store */}
       {!loading && !hasContent && (
@@ -282,6 +303,43 @@ export default function HomePage() {
           icon={<FiClock className="text-secondary me-2" />}
           products={recentlyViewed}
         />
+      )}
+
+      {/* Local store section — tells visitors (and search engines) where the shop is and
+          links every authorised brand and main category by the name people search for. */}
+      {city && (localDescription || primaryBrands.length > 0) && (
+        <section className="store-section store-local-seo">
+          <div className="container">
+            <h2 className="store-section-title">{locative(city)} Beyaz Eşya ve Ev Aletleri</h2>
+            {localDescription && <p className="store-local-seo-text">{localDescription}</p>}
+            <div className="row g-4">
+              {primaryBrands.length > 0 && (
+                <div className="col-md-6">
+                  <h3 className="store-local-seo-subtitle">Yetkili Satıcısı Olduğumuz Markalar</h3>
+                  <ul className="store-local-seo-links">
+                    {primaryBrands.map((b) => (
+                      <li key={b.id}>
+                        <Link to={`/marka/${b.slug}`}>{withCity(b.name, settings)}</Link>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {orderedCategories.length > 0 && (
+                <div className="col-md-6">
+                  <h3 className="store-local-seo-subtitle">Kategoriler</h3>
+                  <ul className="store-local-seo-links">
+                    {orderedCategories.slice(0, 12).map((cat) => (
+                      <li key={cat.id}>
+                        <Link to={`/kategori/${cat.slug}`}>{withCity(cat.name, settings)}</Link>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
       )}
     </div>
   );

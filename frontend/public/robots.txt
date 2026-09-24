@@ -19,5 +19,6 @@ Disallow: /*?*page=
 # User-agent: CCBot
 # Disallow: /
 
-# Sitemap (backend dinamik üretiyor)
-Sitemap: /sitemap.xml
+# Sitemap (backend dinamik üretiyor). Tam URL şart: göreli bir Sitemap satırı
+# arama motorları tarafından geçersiz sayılıp yok sayılır.
+Sitemap: https://atsdtm.com.tr/sitemap.xml

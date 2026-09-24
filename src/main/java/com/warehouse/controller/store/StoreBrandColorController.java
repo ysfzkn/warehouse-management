@@ -24,7 +24,7 @@ public class StoreBrandColorController {
 
     @GetMapping("/brands")
     public ResponseEntity<List<BrandDto>> getActiveBrands() {
-        List<BrandDto> brands = brandService.getAllActiveBrands().stream()
+        List<BrandDto> brands = brandService.getStorefrontBrands().stream()
             .map(b -> new BrandDto(b.getId(), b.getName(), b.getSlug(), b.getLogoUrl()))
             .collect(Collectors.toList());
         return ResponseEntity.ok(brands);

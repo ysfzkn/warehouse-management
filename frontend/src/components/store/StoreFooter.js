@@ -2,8 +2,17 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { FiPhone, FiMail, FiMapPin, FiInstagram, FiMessageCircle, FiFacebook } from 'react-icons/fi';
 import { groupPhoneDirectory, telHref, waHref } from '../../utils/phones';
+import { getPrimaryBrands, withCity } from '../../utils/seo';
+import { useStoreBrands } from '../../hooks/useStoreBrands';
 
 export default function StoreFooter({ settings }) {
+  const { brands } = useStoreBrands();
+  // Every page links the authorised brands' pages — the internal links that tell search
+  // engines those pages matter. Only brands that actually have products.
+  const footerBrands = getPrimaryBrands(settings.settings)
+    .map((name) => brands.find((b) => b.name.toLocaleLowerCase('tr-TR') === name.toLocaleLowerCase('tr-TR')))
+    .filter(Boolean);
+
   return (
     <footer className="store-footer">
       <div className="container">
@@ -157,6 +166,17 @@ export default function StoreFooter({ settings }) {
             </ul>
           </div>
         </div>
+
+        {footerBrands.length > 0 && (
+          <nav className="store-footer-brands" aria-label="Markalar">
+            <span className="store-footer-brands-label">Yetkili satıcısı olduğumuz markalar:</span>
+            {footerBrands.map((b) => (
+              <Link key={b.id} to={`/marka/${b.slug}`}>
+                {withCity(b.name, settings.settings)}
+              </Link>
+            ))}
+          </nav>
+        )}
 
         {/* Bottom Bar */}
         <div className="store-footer-bottom">

@@ -30,10 +30,26 @@ export function getDefaultOgImage(siteSettings) {
   return siteSettings?.seo_default_og_image || siteSettings?.site_logo_url || '';
 }
 
-/** Description fallback chain */
+/**
+ * Description fallback chain: the page's own → site default → local business blurb.
+ * Mirrored by StorefrontSeoService (server-rendered head); keep the two in step.
+ */
 export function resolveDescription(customDescription, siteSettings) {
   if (customDescription && customDescription.trim()) return customDescription.trim();
-  return siteSettings?.seo_default_meta_description || '';
+  return (
+    (siteSettings?.seo_default_meta_description || '').trim() ||
+    (siteSettings?.seo_local_description || '').trim()
+  );
+}
+
+/** Rich-text (HTML) to plain text, cut at a word boundary. */
+export function plainText(html, maxLength) {
+  if (!html) return '';
+  const doc = new DOMParser().parseFromString(String(html), 'text/html');
+  const text = (doc.body.textContent || '').replace(/\s+/g, ' ').trim();
+  if (text.length <= maxLength) return text;
+  const cut = text.lastIndexOf(' ', maxLength);
+  return `${text.substring(0, cut > 0 ? cut : maxLength).trim()}…`;
 }
 
 /** Make a full URL: convert a relative path to an absolute one */
@@ -269,6 +285,67 @@ export function withCity(text, siteSettings) {
   if (!city || !base) return base;
   if (base.toLowerCase().includes(city.toLowerCase())) return base;
   return `${city} ${base}`;
+}
+
+/**
+ * Turkish locative of a proper noun: Niğde'de, Ankara'da, Sivas'ta.
+ * Vowel follows the word's last vowel; the consonant hardens after ç f h k p s ş t.
+ */
+export function locative(place) {
+  const lower = place.toLocaleLowerCase('tr-TR');
+  const lastVowel = [...lower].reverse().find((c) => 'aıoueiöü'.includes(c));
+  const back = !lastVowel || 'aıou'.includes(lastVowel);
+  const hard = 'çfhkpsşt'.includes(lower.slice(-1));
+  return `${place}'${hard ? 't' : 'd'}${back ? 'a' : 'e'}`;
+}
+
+/** Primary (authorised-dealer) brands from settings, in configured order. */
+export function getPrimaryBrands(siteSettings) {
+  return splitList(siteSettings?.seo_local_primary_brands);
+}
+
+export function isPrimaryBrand(name, siteSettings) {
+  const wanted = (name || '').trim().toLocaleLowerCase('tr-TR');
+  return getPrimaryBrands(siteSettings).some((b) => b.toLocaleLowerCase('tr-TR') === wanted);
+}
+
+function listingLead(subject, siteSettings) {
+  const city = getLocalCity(siteSettings);
+  return `${city ? `${locative(city)} ${subject}` : subject} modelleri ve güncel fiyatları.`;
+}
+
+/** "Niğde'de buzdolabı modelleri ve güncel fiyatları. ATS DTM güvencesiyle …" */
+export function buildListingDescription(subject, siteSettings) {
+  return `${listingLead(subject, siteSettings)} ${getSiteName(siteSettings)} güvencesiyle inceleyin, kolayca sipariş verin.`;
+}
+
+export function buildBrandDescription(brand, siteSettings) {
+  const city = getLocalCity(siteSettings);
+  if (!city || !isPrimaryBrand(brand, siteSettings)) return buildListingDescription(brand, siteSettings);
+  return `${listingLead(brand, siteSettings)} ${getSiteName(siteSettings)}, ${city} ${brand} yetkili satıcısıdır.`;
+}
+
+/** Brand page H1: "Niğde Profilo Yetkili Satıcısı" for authorised brands, "Niğde Tefal Ürünleri" otherwise. */
+export function buildBrandHeading(brand, siteSettings) {
+  const suffix = isPrimaryBrand(brand, siteSettings) ? ' Yetkili Satıcısı' : ' Ürünleri';
+  return withCity(`${brand}${suffix}`, siteSettings);
+}
+
+export function buildBrandTitle(brand, siteSettings) {
+  const heading = buildBrandHeading(brand, siteSettings);
+  return isPrimaryBrand(brand, siteSettings) ? `${heading}: Modeller ve Fiyatlar` : `${heading} ve Fiyatları`;
+}
+
+/** Category page H1 (also its default title): "Niğde Buzdolabı Modelleri ve Fiyatları". */
+export function buildCategoryHeading(categoryName, siteSettings) {
+  return withCity(`${categoryName} Modelleri ve Fiyatları`, siteSettings);
+}
+
+/** Homepage H1: "Niğde Profilo Yetkili Satıcısı", or the site name without city/brand settings. */
+export function buildHomeHeading(siteSettings) {
+  const city = getLocalCity(siteSettings);
+  const lead = getPrimaryBrands(siteSettings)[0];
+  return city && lead ? `${city} ${lead} Yetkili Satıcısı` : getSiteName(siteSettings);
 }
 
 /**

@@ -35,6 +35,7 @@ import {
   buildLocalKeywords,
   withCity,
   getCanonicalUrl,
+  plainText,
 } from '../../utils/seo';
 import { getDefaultPhone, telHref, buildWhatsappOrderUrl } from '../../utils/phones';
 import { hapticSuccess } from '../../utils/haptics';
@@ -171,9 +172,7 @@ export default function ProductDetailPage() {
     product.metaTitle ||
     withCity(`${product.name}${product.brandName ? ` ${product.brandName}` : ''}`, settings);
   const seoDescription =
-    product.metaDescription ||
-    product.shortDescription ||
-    (product.description ? product.description.substring(0, 160) : '');
+    product.metaDescription || product.shortDescription || plainText(product.description, 160);
   const ogImage = product.images?.length > 0 ? product.images[0].url : product.primaryImageUrl;
   const seoKeywords = buildLocalKeywords(settings, {
     brand: product.brandName,
@@ -265,7 +264,7 @@ export default function ProductDetailPage() {
           {/* Brand */}
           {product.brandName && (
             <Link
-              to={`/kategori/tumu?brand=${product.brandName}`}
+              to={product.brandSlug ? `/marka/${product.brandSlug}` : '/kategori/tumu'}
               className="text-muted text-decoration-none small text-uppercase fw-semibold"
               style={{ letterSpacing: '0.05em' }}
             >

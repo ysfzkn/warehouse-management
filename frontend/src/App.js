@@ -227,6 +227,7 @@ function StoreRoutes() {
         <Route path="/" element={<StoreLayout />}>
           <Route index element={<HomePage />} />
           <Route path="kategori/:slug" element={<CategoryPage />} />
+          <Route path="marka/:slug" element={<CategoryPage mode="brand" />} />
           <Route path="urun/:slug" element={<ProductDetailPage />} />
           <Route path="sepet" element={<CartPage />} />
           <Route path="odeme" element={<CheckoutPage />} />

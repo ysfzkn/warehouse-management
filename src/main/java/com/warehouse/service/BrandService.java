@@ -14,6 +14,9 @@ public interface BrandService {
 
     List<Brand> getAllActiveBrands();
 
+    /** Active brands with at least one product the storefront shows. */
+    List<Brand> getStorefrontBrands();
+
     List<Brand> searchActiveBrands(String name);
 
     Optional<Brand> getBrandById(Long id);

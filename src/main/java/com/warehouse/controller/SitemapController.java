@@ -1,8 +1,10 @@
 package com.warehouse.controller;
 
+import com.warehouse.entity.Brand;
 import com.warehouse.entity.Category;
 import com.warehouse.entity.CmsPage;
 import com.warehouse.entity.Product;
+import com.warehouse.repository.BrandRepository;
 import com.warehouse.repository.CategoryRepository;
 import com.warehouse.repository.CmsPageRepository;
 import com.warehouse.repository.ProductRepository;
@@ -27,13 +29,16 @@ public class SitemapController {
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
     private final CmsPageRepository cmsPageRepository;
+    private final BrandRepository brandRepository;
 
     public SitemapController(ProductRepository productRepository,
                              CategoryRepository categoryRepository,
-                             CmsPageRepository cmsPageRepository) {
+                             CmsPageRepository cmsPageRepository,
+                             BrandRepository brandRepository) {
         this.productRepository = productRepository;
         this.categoryRepository = categoryRepository;
         this.cmsPageRepository = cmsPageRepository;
+        this.brandRepository = brandRepository;
     }
 
     @GetMapping(value = "/sitemap.xml", produces = MediaType.APPLICATION_XML_VALUE)
@@ -50,8 +55,8 @@ public class SitemapController {
         xml.append("    <priority>1.0</priority>\n");
         xml.append("  </url>\n");
 
-        // Active products
-        List<Product> products = productRepository.findAllActive();
+        // Products a visitor can open — an active product hidden from e-commerce is a 404 page
+        List<Product> products = productRepository.findAllStorefrontVisible();
         for (Product product : products) {
             xml.append("  <url>\n");
             xml.append("    <loc>").append(escapeXml(baseUrl)).append("/urun/")
@@ -75,6 +80,21 @@ public class SitemapController {
             }
             xml.append("    <changefreq>weekly</changefreq>\n");
             xml.append("    <priority>0.6</priority>\n");
+            xml.append("  </url>\n");
+        }
+
+        // Brand pages — they answer "{city} {brand}" searches. Only brands with something
+        // to show: the table also holds model codes imported as brands, with no products.
+        List<Brand> brands = brandRepository.findActiveWithStorefrontProducts();
+        for (Brand brand : brands) {
+            xml.append("  <url>\n");
+            xml.append("    <loc>").append(escapeXml(baseUrl)).append("/marka/")
+               .append(escapeXml(brand.getSlug())).append("</loc>\n");
+            if (brand.getUpdatedAt() != null) {
+                xml.append("    <lastmod>").append(brand.getUpdatedAt().format(W3C_DATE)).append("</lastmod>\n");
+            }
+            xml.append("    <changefreq>weekly</changefreq>\n");
+            xml.append("    <priority>0.7</priority>\n");
             xml.append("  </url>\n");
         }
 
