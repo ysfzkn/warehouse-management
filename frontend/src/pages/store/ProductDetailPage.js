@@ -34,6 +34,7 @@ import {
   buildBreadcrumbSchema,
   buildLocalKeywords,
   withCity,
+  withBrand,
   getCanonicalUrl,
   plainText,
 } from '../../utils/seo';
@@ -168,9 +169,7 @@ export default function ProductDetailPage() {
     settings
   );
 
-  const seoTitle =
-    product.metaTitle ||
-    withCity(`${product.name}${product.brandName ? ` ${product.brandName}` : ''}`, settings);
+  const seoTitle = product.metaTitle || withCity(withBrand(product.name, product.brandName), settings);
   const seoDescription =
     product.metaDescription || product.shortDescription || plainText(product.description, 160);
   const ogImage = product.images?.length > 0 ? product.images[0].url : product.primaryImageUrl;

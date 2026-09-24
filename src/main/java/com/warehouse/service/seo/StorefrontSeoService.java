@@ -121,7 +121,7 @@ public class StorefrontSeoService {
         String brandName = product.getBrand() != null ? product.getBrand().getName() : "";
         String title = LocalSeoText.firstNonBlank(
                 product.getMetaTitle(),
-                LocalSeoText.withCity(ctx.city(), product.getName() + (brandName.isEmpty() ? "" : " " + brandName)));
+                LocalSeoText.withCity(ctx.city(), LocalSeoText.withBrand(product.getName(), brandName)));
         String description = ctx.description(LocalSeoText.firstNonBlank(
                 product.getMetaDescription(),
                 product.getShortDescription(),

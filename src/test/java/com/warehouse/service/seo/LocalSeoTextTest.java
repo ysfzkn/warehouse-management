@@ -42,6 +42,16 @@ class LocalSeoTextTest {
     }
 
     @Test
+    @DisplayName("Marka adda zaten geçiyorsa başlığa tekrar eklenmez")
+    void brandIsNotRepeated() {
+        assertThat(LocalSeoText.withBrand("Regal 140 Lt Büro Tipi Buzdolabı", "Regal"))
+                .isEqualTo("Regal 140 Lt Büro Tipi Buzdolabı");
+        assertThat(LocalSeoText.withBrand("SIMFER 8738 Davlumbaz", "Simfer")).isEqualTo("SIMFER 8738 Davlumbaz");
+        assertThat(LocalSeoText.withBrand("11 DLM Yağlı Radyatör", "Altus")).isEqualTo("11 DLM Yağlı Radyatör Altus");
+        assertThat(LocalSeoText.withBrand("Tost Makinesi", null)).isEqualTo("Tost Makinesi");
+    }
+
+    @Test
     @DisplayName("Zengin metin düz metne iner, kelime ortasından kesilmez")
     void richTextIsFlattenedAndCutAtAWord() {
         String text = LocalSeoText.plainText("<p>Enerji <b>sınıfı</b> A+++ olan geniş hacimli buzdolabı</p>", 30);

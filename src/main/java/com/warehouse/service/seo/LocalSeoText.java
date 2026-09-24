@@ -22,10 +22,23 @@ final class LocalSeoText {
     static String withCity(String city, String text) {
         String base = text == null ? "" : text.trim();
         if (city.isEmpty() || base.isEmpty()
-                || base.toLowerCase(Locales.TR).contains(city.toLowerCase(Locales.TR))) {
+                || fold(base).contains(fold(city))) {
             return base;
         }
         return city + " " + base;
+    }
+
+    /**
+     * "Buzdolabı" + "Regal" → "Buzdolabı Regal", but "Regal 140 Lt Buzdolabı" stays as is:
+     * repeating a brand the name already carries only lengthens a title Google cuts at ~60 chars.
+     */
+    static String withBrand(String name, String brand) {
+        String base = name == null ? "" : name.trim();
+        if (brand == null || brand.isBlank()
+                || fold(base).contains(fold(brand))) {
+            return base;
+        }
+        return base + " " + brand.trim();
     }
 
     /**
@@ -57,6 +70,15 @@ final class LocalSeoText {
         }
         int cut = text.lastIndexOf(' ', maxLength);
         return text.substring(0, cut > 0 ? cut : maxLength).trim() + "…";
+    }
+
+    /**
+     * Case-insensitive form for "is it already in the text" checks. Turkish lower-casing turns
+     * "SIMFER" into "sımfer" and "Simfer" into "simfer", so upper-case product names never
+     * matched; dotted and dotless i are treated as the same letter.
+     */
+    static String fold(String text) {
+        return text.trim().toLowerCase(Locales.TR).replace('ı', 'i');
     }
 
     static String firstNonBlank(String... values) {

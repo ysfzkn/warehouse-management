@@ -283,8 +283,29 @@ export function withCity(text, siteSettings) {
   const city = getLocalCity(siteSettings);
   const base = (text || '').trim();
   if (!city || !base) return base;
-  if (base.toLowerCase().includes(city.toLowerCase())) return base;
+  if (fold(base).includes(fold(city))) return base;
   return `${city} ${base}`;
+}
+
+/**
+ * Case-insensitive form for "already in the text" checks: Turkish lower-casing turns "SIMFER"
+ * into "sımfer" but "Simfer" into "simfer", so dotted and dotless i count as one letter.
+ * Mirrors LocalSeoText.fold.
+ */
+function fold(text) {
+  return text.trim().toLocaleLowerCase('tr-TR').replace(/ı/g, 'i');
+}
+
+/**
+ * "Buzdolabı" + "Regal" → "Buzdolabı Regal"; "Regal 140 Lt Buzdolabı" stays as is. Repeating a
+ * brand the name already carries only lengthens a title Google cuts at ~60 chars.
+ * Mirrors LocalSeoText.withBrand on the server.
+ */
+export function withBrand(name, brand) {
+  const base = (name || '').trim();
+  const b = (brand || '').trim();
+  if (!b || fold(base).includes(fold(b))) return base;
+  return `${base} ${b}`;
 }
 
 /**
