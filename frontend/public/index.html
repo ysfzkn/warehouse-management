@@ -21,6 +21,11 @@
           integrity="sha384-3B6NwesSXE7YJlcLI9RpRqGf2p/EgVH8BgoKTaUrmKNDkHPStTQ3EyoYjCGXaOTS"
           crossorigin="anonymous">
     <title>ATS DTM — Niğde Profilo, Beyaz Eşya & Küçük Ev Aletleri</title>
+    <!-- nginx puts server-rendered page content (.seo-prerender) inside #root for crawlers
+         and link previews. React replaces it on mount; hiding it while JS runs keeps it
+         from flashing before that. Without JS it stays visible. -->
+    <script>document.documentElement.classList.add('js')</script>
+    <style>.js .seo-prerender{display:none}</style>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>

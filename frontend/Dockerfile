@@ -24,8 +24,9 @@ COPY . .
 ARG REACT_APP_GOOGLE_CLIENT_ID=""
 ENV REACT_APP_GOOGLE_CLIENT_ID=$REACT_APP_GOOGLE_CLIENT_ID
 
-# Build the application
-RUN npm run build
+# Build the application, then splice in the nginx SSI includes that give every
+# storefront URL its own server-rendered head (see scripts/inject-ssi.js)
+RUN npm run build && node scripts/inject-ssi.js build/index.html
 
 # Production stage
 FROM nginx:alpine

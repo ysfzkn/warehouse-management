@@ -43,7 +43,17 @@ public class CacheConfig {
             .expireAfterWrite(5, TimeUnit.MINUTES)
             .maximumSize(100)
             .recordStats());
-        
+
+        // Every storefront page load asks for its head and body fragment (nginx SSI), so this
+        // must hold the whole catalog: ~600 URLs today, 100 would evict on every crawl.
+        // Bounded, because a random slug is also a cache entry (an empty one).
+        cacheManager.registerCustomCache(com.warehouse.service.seo.StorefrontSeoService.CACHE_NAME,
+            Caffeine.newBuilder()
+                .expireAfterWrite(10, TimeUnit.MINUTES)
+                .maximumSize(5_000)
+                .recordStats()
+                .build());
+
         return cacheManager;
     }
 

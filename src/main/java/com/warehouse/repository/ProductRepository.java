@@ -48,6 +48,14 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     @EntityGraph(value = Product.GRAPH_WITH_RELATIONS, type = EntityGraph.EntityGraphType.LOAD)
     Page<Product> findAllActive(Pageable pageable);
 
+    /**
+     * Products a storefront visitor can open. Active alone is not enough: a product hidden
+     * from e-commerce answers 404 on its page, and listing it in the sitemap sends crawlers
+     * to that 404. No entity graph — callers read only slug and dates.
+     */
+    @Query("SELECT p FROM Product p WHERE p.isActive = true AND p.ecommerceVisible = true ORDER BY p.name")
+    List<Product> findAllStorefrontVisible();
+
     @Query("SELECT p FROM Product p WHERE p.category = :category AND p.isActive = true ORDER BY p.name")
     @EntityGraph(value = Product.GRAPH_WITH_RELATIONS, type = EntityGraph.EntityGraphType.LOAD)
     List<Product> findByCategoryAndActive(@Param("category") Category category);

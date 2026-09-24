@@ -337,6 +337,9 @@ public class SecurityConfig {
                                 ApiPaths.ERROR).permitAll()
                         // SEO endpoints
                         .requestMatchers("/sitemap.xml", "/sitemap-*.xml", "/robots.txt", "/favicon.ico").permitAll()
+                        // Head/body fragments nginx splices into index.html (SeoFragmentController).
+                        // GET only; every value in them is already public via /api/store.
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/seo/**").permitAll()
                         // Assistant feature flags consumed by both storefront and admin shells
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/assistant/flags/**").permitAll()
                         // Cargo provider webhook — authenticated by HMAC signature in the controller

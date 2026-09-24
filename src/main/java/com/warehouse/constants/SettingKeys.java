@@ -79,6 +79,14 @@ public final class SettingKeys {
     public static final String SITE_LOGO = "site_logo";
     public static final String RECEIPT_LOGO = "receipt_logo";
     public static final String SEO_CANONICAL_DOMAIN = "seo_canonical_domain";
+    public static final String SEO_ORGANIZATION_NAME = "seo_organization_name";
+    public static final String SEO_META_TITLE_HOME = "seo_meta_title_home";
+    public static final String SEO_DEFAULT_META_DESCRIPTION = "seo_default_meta_description";
+    public static final String SEO_DEFAULT_OG_IMAGE = "seo_default_og_image";
+    public static final String SEO_LOCAL_CITY = "seo_local_city";
+    public static final String SEO_LOCAL_DESCRIPTION = "seo_local_description";
+    public static final String SEO_LOCAL_PRIMARY_BRANDS = "seo_local_primary_brands";
+    public static final String SITE_LOGO_URL = "site_logo_url";
     public static final String CONTACT_FORM_EMAIL = "contact_form_email";
     public static final String ABANDONED_CART_ENABLED = "abandoned_cart_enabled";
 }
