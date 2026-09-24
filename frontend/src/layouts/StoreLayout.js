@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
 import StoreHeader from '../components/store/StoreHeader';
 import StoreFooter from '../components/store/StoreFooter';
 import MobileNav from '../components/store/MobileNav';
@@ -72,7 +73,7 @@ export default function StoreLayout() {
     );
   }, [assistantFlags]);
 
-  // Dynamic favicon and title from site settings.
+  // Dynamic favicon from site settings.
   // Prefer a dedicated favicon; if none was uploaded, fall back to the brand
   // logo so the tab icon automatically matches the admin-uploaded logo.
   useEffect(() => {
@@ -86,10 +87,6 @@ export default function StoreLayout() {
       link.href = faviconUrl + (faviconUrl.includes('?') ? '&' : '?') + 'v=' + Date.now();
       document.head.appendChild(link);
     }
-    const siteName = siteSettings.get('site_name', '');
-    if (siteName) {
-      document.title = siteName;
-    }
   }, [siteSettings]);
 
   return (
@@ -102,6 +99,11 @@ export default function StoreLayout() {
             '--store-secondary': siteSettings.get('secondary_color', '#1e40af'),
           }}
         >
+          {/* Only a fallback for pages without their own SeoHead. This used to be a
+              document.title write in the effect above, which re-ran on every layout render
+              (useSiteSettings returns a new object each time) and overwrote the page's
+              "Niğde Profilo …" title with the bare site name — e.g. after cookie consent. */}
+          <Helmet defaultTitle={siteSettings.get('site_name', '') || undefined} />
           <a href="#main-content" className="skip-to-content">
             Ana içeriğe atla
           </a>
