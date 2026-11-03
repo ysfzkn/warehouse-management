@@ -16,6 +16,69 @@ import ConfirmModal from './ConfirmModal';
  * hesaba katılmalı. Bu kredi yalnızca orijinal depoda geçerli.
  */
 
+/**
+ * Düzenlemenin neden yapılamadığı, yapılabiliyorsa boş metin.
+ *
+ * Sunucudaki StockTransferServiceImpl.requireEditableHandover ile aynı kurallar. Burada
+ * tek yerde duruyor ki makbuz paneli ile makbuz arşivi aynı cevabı versin; sunucu yine de
+ * son sözü söylüyor.
+ */
+export const contentsEditBlockReason = (transfer) => {
+  if (!transfer) return '';
+  if (transfer.status === 'CANCELLED') return 'İptal edilmiş bir çıkış düzenlenemez.';
+  if (transfer.status !== 'COMPLETED' && transfer.status !== 'IN_TRANSIT') {
+    return 'Bu çıkış henüz stoktan düşülmemiş; sevkiyat formundan düzenleyin.';
+  }
+  if ((transfer.returnedQuantity || 0) > 0) {
+    return 'Bu çıkış için iade kaydı var; kalemleri artık değiştirilemez. Eksik/fazla ürünü iade ya da yeni bir çıkışla düzeltin.';
+  }
+  if (transfer.status === 'IN_TRANSIT' && transfer.orderId) {
+    return 'Siparişe bağlı planlı çıkışın kalemleri değiştirilemez. Çıkışı iptal edip siparişten yeniden oluşturun.';
+  }
+  return '';
+};
+
+/*
+ * "Yeni nüshayı yazdırın" işareti, makbuz kimliği ve basım numarasıyla tarayıcıda tutuluyor.
+ * Düzenleme panelden de arşivden de yapılabiliyor; işaret ikisinde aynı görünmeli ve sayfa
+ * yenilenince kaybolmamalı — eski kâğıt elde dolaşırken uyarının sessizce gitmesi, tam da
+ * önlenmek istenen şey. Yeni nüsha basılınca ya da indirilince kalkıyor. Tarayıcı depolaması
+ * kapalıysa uyarı yalnızca o oturumda görünür; işlevi bozan bir şey değil.
+ */
+const REPRINT_KEY = 'receiptReprintPending';
+
+const readReprints = () => {
+  try {
+    return JSON.parse(window.localStorage.getItem(REPRINT_KEY) || '{}') || {};
+  } catch {
+    return {};
+  }
+};
+
+const writeReprints = (map) => {
+  try {
+    window.localStorage.setItem(REPRINT_KEY, JSON.stringify(map));
+  } catch {
+    /* depolama kapalı: işaret yalnızca bileşen durumunda kalır */
+  }
+};
+
+export const markReprintPending = (receipt) => {
+  if (!receipt?.id) return;
+  writeReprints({ ...readReprints(), [receipt.id]: receipt.revision });
+};
+
+export const clearReprintPending = (receiptId) => {
+  const map = readReprints();
+  if (!(receiptId in map)) return;
+  delete map[receiptId];
+  writeReprints(map);
+};
+
+/** Yalnızca işaretlendiği basım için geçerli; araya başka bir basım girdiyse kâğıt zaten yeni. */
+export const isReprintPending = (receipt) =>
+  Boolean(receipt?.id) && readReprints()[receipt.id] === receipt.revision;
+
 const lineKey = () => `n-${Math.random().toString(36).slice(2, 10)}`;
 
 const availableOf = (stock) =>
@@ -868,16 +931,22 @@ export default function HandoverContentsEditModal({ transfer, receipt, onClose, 
     load();
   }, [load]);
 
+  const blocked = fresh
+    ? receipt?.kind !== 'SERVICE_HANDOVER'
+      ? 'Yalnızca depo çıkış makbuzlarının içeriği düzenlenebilir.'
+      : contentsEditBlockReason(fresh)
+    : '';
+
   useEffect(() => {
-    if (fresh) return undefined;
+    if (fresh && !blocked) return undefined;
     const onKey = (event) => {
       if (event.key === 'Escape') onClose();
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [fresh, onClose]);
+  }, [fresh, blocked, onClose]);
 
-  if (fresh) {
+  if (fresh && !blocked) {
     return <ContentsEditForm transfer={fresh} receipt={receipt} onClose={onClose} onSaved={onSaved} />;
   }
 
@@ -892,7 +961,18 @@ export default function HandoverContentsEditModal({ transfer, receipt, onClose, 
       <div className="modal-dialog modal-dialog-centered">
         <div className="modal-content border-0 rounded-4 shadow">
           <div className="modal-body text-center py-4">
-            {loadError ? (
+            {blocked ? (
+              <>
+                <div className="text-warning-emphasis mb-2">
+                  <i className="fas fa-lock fa-2x"></i>
+                </div>
+                <h6 className="fw-bold mb-2">Bu çıkış düzenlenemez</h6>
+                <p className="small text-muted mb-3">{blocked}</p>
+                <button type="button" className="btn btn-light" onClick={onClose} autoFocus>
+                  Kapat
+                </button>
+              </>
+            ) : loadError ? (
               <>
                 <div className="text-danger mb-3">
                   <i className="fas fa-triangle-exclamation me-1"></i>

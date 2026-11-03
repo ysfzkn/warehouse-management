@@ -8,6 +8,7 @@ import com.warehouse.dto.DeliveryReceiptDto;
 import com.warehouse.dto.DeliveryReceiptFilter;
 import com.warehouse.entity.DeliveryReceipt;
 import com.warehouse.entity.DeliveryReceiptAttachment;
+import com.warehouse.entity.DeliveryReceiptRevision;
 import com.warehouse.entity.StockTransfer;
 import com.warehouse.entity.StockTransferItem;
 import com.warehouse.enums.AuditAction;
@@ -21,6 +22,7 @@ import com.warehouse.exception.ErrorCode;
 import com.warehouse.exception.WarehouseManagementException;
 import com.warehouse.repository.DeliveryReceiptAttachmentRepository;
 import com.warehouse.repository.DeliveryReceiptRepository;
+import com.warehouse.repository.DeliveryReceiptRevisionRepository;
 import com.warehouse.repository.StockTransferRepository;
 import com.warehouse.security.SignedUrlService;
 import com.warehouse.security.UploadValidator;
@@ -81,6 +83,7 @@ public class DeliveryReceiptServiceImpl implements DeliveryReceiptService {
 
     private final DeliveryReceiptRepository receiptRepository;
     private final DeliveryReceiptAttachmentRepository attachmentRepository;
+    private final DeliveryReceiptRevisionRepository revisionRepository;
     private final StockTransferRepository transferRepository;
     private final PhotoStorageService photoStorageService;
     private final SiteSettingService siteSettingService;
@@ -91,6 +94,7 @@ public class DeliveryReceiptServiceImpl implements DeliveryReceiptService {
 
     public DeliveryReceiptServiceImpl(DeliveryReceiptRepository receiptRepository,
                                       DeliveryReceiptAttachmentRepository attachmentRepository,
+                                      DeliveryReceiptRevisionRepository revisionRepository,
                                       StockTransferRepository transferRepository,
                                       PhotoStorageService photoStorageService,
                                       SiteSettingService siteSettingService,
@@ -99,6 +103,7 @@ public class DeliveryReceiptServiceImpl implements DeliveryReceiptService {
                                       AuditService auditService) {
         this.receiptRepository = receiptRepository;
         this.attachmentRepository = attachmentRepository;
+        this.revisionRepository = revisionRepository;
         this.transferRepository = transferRepository;
         this.photoStorageService = photoStorageService;
         this.siteSettingService = siteSettingService;
@@ -274,13 +279,17 @@ public class DeliveryReceiptServiceImpl implements DeliveryReceiptService {
     }
 
     private List<DeliveryReceiptDto.ItemLine> deserialiseItems(DeliveryReceipt receipt) {
-        if (receipt.getItemsJson() == null || receipt.getItemsJson().isBlank()) {
+        return parseItems(receipt.getItemsJson(), receipt.getReceiptNo());
+    }
+
+    private List<DeliveryReceiptDto.ItemLine> parseItems(String json, String receiptNo) {
+        if (json == null || json.isBlank()) {
             return List.of();
         }
         try {
-            return objectMapper.readValue(receipt.getItemsJson(), new TypeReference<>() {});
+            return objectMapper.readValue(json, new TypeReference<>() {});
         } catch (Exception e) {
-            log.error("Makbuz {} kalemleri okunamadı: {}", receipt.getReceiptNo(), e.getMessage());
+            log.error("Makbuz {} kalemleri okunamadı: {}", receiptNo, e.getMessage());
             return List.of();
         }
     }
@@ -668,13 +677,32 @@ public class DeliveryReceiptServiceImpl implements DeliveryReceiptService {
             return null;
         }
         StockTransfer transfer = receipt.getTransfer();
+        // "Önce", sevkiyatın değil makbuzun o ana kadarki hâli: elde dolaşan kâğıtta yazan bu.
+        String warehouseBefore = receipt.getSourceWarehouseName();
+        String itemsBefore = receipt.getItemsJson();
         // Yalnızca düzeltilen iki alan yenileniyor, tam anlık görüntü değil: taraflar, müşteri
         // ve tarih kâğıdın imzalandığı andaki hâliyle kalmalı.
         receipt.setSourceWarehouseName(
                 transfer.getSourceWarehouse() != null ? transfer.getSourceWarehouse().getName() : null);
         receipt.setItemsJson(serialiseItems(transfer));
         receipt.setRevision(receipt.getRevision() == null ? 2 : receipt.getRevision() + 1);
+        LocalDateTime now = LocalDateTime.now();
+        receipt.setEditCount((receipt.getEditCount() == null ? 0 : receipt.getEditCount()) + 1);
+        receipt.setLastEditedAt(now);
+        receipt.setLastEditedBy(username);
         receipt = receiptRepository.save(receipt);
+
+        DeliveryReceiptRevision entry = new DeliveryReceiptRevision();
+        entry.setReceipt(receipt);
+        entry.setRevision(receipt.getRevision());
+        entry.setEditedAt(now);
+        entry.setEditedBy(username);
+        entry.setReason(trim(reason == null ? "" : reason.trim(), 300));
+        entry.setSourceWarehouseBefore(warehouseBefore);
+        entry.setSourceWarehouseAfter(receipt.getSourceWarehouseName());
+        entry.setItemsBeforeJson(itemsBefore == null ? "[]" : itemsBefore);
+        entry.setItemsAfterJson(receipt.getItemsJson());
+        revisionRepository.save(entry);
 
         auditService.log(AuditAction.RECEIPT_REISSUE,
                 DomainEntityType.StockTransfer.name(), transferId, username,
@@ -683,6 +711,28 @@ public class DeliveryReceiptServiceImpl implements DeliveryReceiptService {
                         + (reason != null && !reason.isBlank() ? " — Sebep: " + reason.trim() : ""),
                 metadata(transfer));
         return toDto(receipt);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<DeliveryReceiptDto.RevisionDto> revisions(Long transferId) {
+        DeliveryReceipt receipt = receiptRepository.findByTransferId(transferId).orElse(null);
+        if (receipt == null) {
+            return List.of();
+        }
+        return revisionRepository.findByReceiptIdOrderByEditedAtDescIdDesc(receipt.getId()).stream()
+                .map(entry -> DeliveryReceiptDto.RevisionDto.builder()
+                        .id(entry.getId())
+                        .revision(entry.getRevision())
+                        .editedAt(entry.getEditedAt())
+                        .editedBy(entry.getEditedBy())
+                        .reason(entry.getReason())
+                        .sourceWarehouseBefore(entry.getSourceWarehouseBefore())
+                        .sourceWarehouseAfter(entry.getSourceWarehouseAfter())
+                        .itemsBefore(parseItems(entry.getItemsBeforeJson(), receipt.getReceiptNo()))
+                        .itemsAfter(parseItems(entry.getItemsAfterJson(), receipt.getReceiptNo()))
+                        .build())
+                .toList();
     }
 
     /**
@@ -992,6 +1042,9 @@ public class DeliveryReceiptServiceImpl implements DeliveryReceiptService {
                 .issuedBy(receipt.getIssuedBy())
                 .items(deserialiseItems(receipt))
                 .signedCopyOnFile(!attachments.isEmpty())
+                .editCount(receipt.getEditCount() == null ? 0 : receipt.getEditCount())
+                .lastEditedAt(receipt.getLastEditedAt())
+                .lastEditedBy(receipt.getLastEditedBy())
                 .attachments(attachments.stream().map(this::toAttachmentDto).toList())
                 .build();
     }

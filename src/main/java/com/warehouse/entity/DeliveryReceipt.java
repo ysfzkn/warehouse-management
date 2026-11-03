@@ -182,6 +182,19 @@ public class DeliveryReceipt {
     @Column(name = "search_text", length = 500)
     private String searchText;
 
+    // ── İçerik düzenlemeleri ──────────────────────────────────────────────────
+    // Ayrıntısı delivery_receipt_revisions'ta; burada yalnızca arşiv listesinin satır
+    // başına ikinci bir sorgu atmadan gösterebileceği özet.
+
+    @Column(name = "edit_count", nullable = false)
+    private Integer editCount = 0;
+
+    @Column(name = "last_edited_at")
+    private LocalDateTime lastEditedAt;
+
+    @Column(name = "last_edited_by", length = 100)
+    private String lastEditedBy;
+
     // ── Bookkeeping ───────────────────────────────────────────────────────────
     @Column(name = "issued_at", nullable = false)
     private LocalDateTime issuedAt;

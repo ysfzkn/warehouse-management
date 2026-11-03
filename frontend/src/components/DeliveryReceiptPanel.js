@@ -1,6 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import axios from 'axios';
-import HandoverContentsEditModal from './HandoverContentsEditModal';
+import HandoverContentsEditModal, {
+  clearReprintPending,
+  contentsEditBlockReason,
+  isReprintPending,
+  markReprintPending,
+} from './HandoverContentsEditModal';
+import ReceiptEditHistory from './ReceiptEditHistory';
 
 /**
  * Delivery receipt panel, shown inside the transfer detail modal.
@@ -132,8 +138,11 @@ export default function DeliveryReceiptPanel({
   });
   const [showContentsEdit, setShowContentsEdit] = useState(false);
   // Düzenlemeden sonra kalıcı uyarı: 4 saniyede kaybolan bir bildirim, elde kalan eski
-  // kâğıdın artık geçersiz olduğunu söylemeye yetmez. Yeni nüsha basılınca kalkar.
+  // kâğıdın artık geçersiz olduğunu söylemeye yetmez. Yeni nüsha basılınca kalkar. İşaret
+  // makbuz arşiviyle ortak; düzenleme orada yapıldıysa burada da görünür.
   const [reprintNeeded, setReprintNeeded] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [historyVersion, setHistoryVersion] = useState(0);
   const fileInputRef = useRef(null);
   const panelRef = useRef(null);
 
@@ -155,6 +164,10 @@ export default function DeliveryReceiptPanel({
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    setReprintNeeded(isReprintPending(receipt));
+  }, [receipt]);
 
   // Makbuz düğmesinden açıldıysa paneli görünür yap. Veri geldikten sonra kaydırıyoruz,
   // aksi hâlde panel henüz tek satırken kaydırıp sonra büyüyor ve hedefi kaçırıyor.
@@ -225,6 +238,7 @@ export default function DeliveryReceiptPanel({
       printWindow.document.open();
       printWindow.document.write(res.data);
       printWindow.document.close();
+      clearReprintPending(receipt?.id);
       setReprintNeeded(false);
       setTimeout(() => {
         try {
@@ -255,13 +269,20 @@ export default function DeliveryReceiptPanel({
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
+      clearReprintPending(receipt?.id);
       setReprintNeeded(false);
     });
 
   const handleContentsSaved = (result) => {
     setShowContentsEdit(false);
-    if (result?.receipt) setReceipt(result.receipt);
+    if (result?.receipt) {
+      markReprintPending(result.receipt);
+      setReceipt(result.receipt);
+    }
     setReprintNeeded(true);
+    // Yeni kayıt hemen görünsün: geçmiş açılıyor ve tazeleniyor.
+    setShowHistory(true);
+    setHistoryVersion((v) => v + 1);
     setError('');
     setNotice('Çıkış içeriği güncellendi, stok farkı işlendi.');
     if (onChanged) onChanged();
@@ -485,12 +506,7 @@ export default function DeliveryReceiptPanel({
   // ekranda cevaplanmalı.
   const canSeeContentsEdit =
     isAdmin && isHandover && receipt?.status !== 'CANCELLED' && transfer?.status !== 'CANCELLED';
-  const contentsEditBlocked =
-    (transfer?.returnedQuantity || 0) > 0
-      ? 'Bu çıkış için iade kaydı var; kalemler artık değiştirilemez.'
-      : planOpen && transfer?.orderId
-        ? 'Siparişe bağlı planlı çıkışın kalemleri değiştirilemez.'
-        : '';
+  const contentsEditBlocked = contentsEditBlockReason(transfer);
 
   return (
     <div className="border rounded-3 p-3 mt-3" ref={panelRef}>
@@ -1066,6 +1082,33 @@ export default function DeliveryReceiptPanel({
               </form>
             )}
           </div>
+
+          {/* ── Düzenleme geçmişi ──
+              Yalnızca içerik en az bir kez düzenlendiyse. Kapalıyken de kimin ve ne zaman
+              düzenlediği başlıkta yazıyor; ayrıntı için açmak gerekiyor, varlığını fark
+              etmek için değil. */}
+          {receipt.editCount > 0 && (
+            <div className="mt-3 pt-3 border-top">
+              <button
+                type="button"
+                className="btn btn-link btn-sm p-0 text-decoration-none d-flex align-items-center gap-2 w-100 text-start"
+                aria-expanded={showHistory}
+                aria-controls={`receipt-history-${receipt.id}`}
+                onClick={() => setShowHistory((v) => !v)}
+              >
+                <i className={`fas ${showHistory ? 'fa-chevron-down' : 'fa-chevron-right'} text-muted`}></i>
+                <small className="text-muted text-uppercase">Düzeltme Geçmişi ({receipt.editCount})</small>
+                <small className="text-muted ms-auto">
+                  Son: {receipt.lastEditedBy || '—'} · {formatDateTime(receipt.lastEditedAt)}
+                </small>
+              </button>
+              {showHistory && (
+                <div className="mt-2" id={`receipt-history-${receipt.id}`}>
+                  <ReceiptEditHistory transferId={transferId} refreshKey={historyVersion} />
+                </div>
+              )}
+            </div>
+          )}
 
           {/* ── İmzalı nüsha ── */}
           <div className="mt-3 pt-3 border-top">

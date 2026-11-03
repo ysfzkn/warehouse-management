@@ -486,6 +486,39 @@ class ServiceHandoverTest {
     }
 
     @Test
+    @DisplayName("Her düzenleme kim, ne zaman, neden ve önce/sonra kalemleriyle geçmişe yazılır")
+    void editingContentsIsRecordedInHistory() {
+        var result = handoverService.handOver(request(5), "admin");
+        Long transferId = result.transfer().getId();
+        assertThat(receiptService.revisions(transferId)).isEmpty();
+
+        handoverService.editContents(transferId, edit(warehouse.getId(), stock, 3), "admin");
+        var second = edit(warehouse.getId(), stock, 4);
+        second.setReason("Sayımda bir adet daha çıktığı görüldü");
+        var latest = handoverService.editContents(transferId, second, "admin");
+
+        assertThat(latest.receipt().getEditCount()).isEqualTo(2);
+        assertThat(latest.receipt().getLastEditedBy()).isEqualTo("admin");
+        assertThat(latest.receipt().getLastEditedAt()).isNotNull();
+
+        var history = receiptService.revisions(transferId);
+        assertThat(history).hasSize(2);
+        // En yenisi başta; "önce" bir önceki düzenlemenin "sonra"sı, yani elde dolaşan kâğıt.
+        var newest = history.get(0);
+        assertThat(newest.getRevision()).isEqualTo(latest.receipt().getRevision());
+        assertThat(newest.getEditedBy()).isEqualTo("admin");
+        assertThat(newest.getReason()).isEqualTo("Sayımda bir adet daha çıktığı görüldü");
+        assertThat(newest.getItemsBefore()).singleElement()
+                .extracting(com.warehouse.dto.DeliveryReceiptDto.ItemLine::getQuantity).isEqualTo(3);
+        assertThat(newest.getItemsAfter()).singleElement()
+                .extracting(com.warehouse.dto.DeliveryReceiptDto.ItemLine::getQuantity).isEqualTo(4);
+        assertThat(history.get(1).getItemsBefore()).singleElement()
+                .extracting(com.warehouse.dto.DeliveryReceiptDto.ItemLine::getQuantity).isEqualTo(5);
+        assertThat(newest.getSourceWarehouseBefore()).isEqualTo("Merkez Depo");
+        assertThat(newest.getSourceWarehouseAfter()).isEqualTo("Merkez Depo");
+    }
+
+    @Test
     @DisplayName("Çıkış deposu değişince mal eski depoya döner, yeni depodan düşer")
     void changingWarehouseMovesStockBetweenDepots() {
         Warehouse other = new Warehouse();

@@ -65,6 +65,17 @@ public class DeliveryReceiptController {
     }
 
     /**
+     * İçerik düzenlemelerinin geçmişi — kim, ne zaman, neden, neyi neye çevirdi.
+     *
+     * <p>Makbuzu görebilen herkes geçmişini de görebilmeli: kâğıdın neden 2. basım olduğu,
+     * elinde eski nüsha olan depo görevlisinin sorusu. Düzenlemenin kendisi yöneticide.</p>
+     */
+    @GetMapping("/api/admin/stock-transfers/{transferId}/receipt/revisions")
+    public ResponseEntity<java.util.List<DeliveryReceiptDto.RevisionDto>> revisions(@PathVariable Long transferId) {
+        return ResponseEntity.ok(receiptService.revisions(transferId));
+    }
+
+    /**
      * The printable page.
      *
      * <p>Returned as HTML to an authenticated XHR rather than opened directly in a tab:

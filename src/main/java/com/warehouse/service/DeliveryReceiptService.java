@@ -45,6 +45,9 @@ public interface DeliveryReceiptService {
      */
     DeliveryReceiptDto refreshContents(Long transferId, String username, String reason);
 
+    /** Bir makbuzun içerik düzenlemeleri, en yenisi başta. Makbuz yoksa boş liste. */
+    List<DeliveryReceiptDto.RevisionDto> revisions(Long transferId);
+
     /** The receipt for a transfer, or null when none has been issued yet. */
     /**
      * Taşıyıcı sonradan belirlendiğinde makbuz kaydına işler.

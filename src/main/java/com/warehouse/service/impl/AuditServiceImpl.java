@@ -41,7 +41,10 @@ public class AuditServiceImpl implements AuditService {
         log.setEntityType(entityType);
         log.setEntityId(entityId);
         log.setUsername(username);
-        log.setDetails(details);
+        // Sütun 2000 karakter. Postgres daha uzununu reddeder ve denetim kaydını yazan iş de
+        // onunla birlikte geri sarılır — çok kalemli bir sevkiyatın açıklaması buna yeter.
+        log.setDetails(details != null && details.length() > 2000
+                ? details.substring(0, 1997) + "..." : details);
         if (metadata != null) {
             log.setWarehouseId(metadata.getWarehouseId());
             log.setWarehouseName(metadata.getWarehouseName());

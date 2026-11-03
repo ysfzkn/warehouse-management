@@ -64,6 +64,28 @@ public class DeliveryReceiptDto {
      */
     private boolean signedCopyOnFile;
 
+    /** İçerik kaç kez düzenlendi; arşiv satırındaki "düzenlendi" rozeti bundan. */
+    private int editCount;
+    private LocalDateTime lastEditedAt;
+    private String lastEditedBy;
+
+    /** Bir içerik düzenlemesi: kim, ne zaman, neden; depo ve kalemler önce/sonra. */
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class RevisionDto {
+        private Long id;
+        private Integer revision;
+        private LocalDateTime editedAt;
+        private String editedBy;
+        private String reason;
+        private String sourceWarehouseBefore;
+        private String sourceWarehouseAfter;
+        private List<ItemLine> itemsBefore;
+        private List<ItemLine> itemsAfter;
+    }
+
     @Data
     @Builder
     @NoArgsConstructor

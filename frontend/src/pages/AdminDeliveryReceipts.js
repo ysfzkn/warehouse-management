@@ -2,6 +2,12 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
 import FilterChips from '../components/FilterChips';
+import HandoverContentsEditModal, {
+  clearReprintPending,
+  isReprintPending,
+  markReprintPending,
+} from '../components/HandoverContentsEditModal';
+import ReceiptEditHistory from '../components/ReceiptEditHistory';
 
 /**
  * Teslimat makbuzu arşivi.
@@ -127,6 +133,17 @@ export default function AdminDeliveryReceipts() {
   const [downloading, setDownloading] = useState(null);
   const [selected, setSelected] = useState([]);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  // Düzenlenen makbuz satırı. Modal sevkiyatı kendisi tazeliyor; satırdan yalnızca makbuz
+  // numarası, basım ve imzalı nüsha bilgisi gidiyor.
+  const [editing, setEditing] = useState(null);
+  // Geçmişi açılan makbuz satırı.
+  const [historyFor, setHistoryFor] = useState(null);
+  // "Yeniden basılmalı" işareti tarayıcıda tutuluyor (bkz. HandoverContentsEditModal);
+  // değiştiğinde tabloyu yeniden çizmek için sayaç.
+  const [, setReprintVersion] = useState(0);
+  // Rota zaten yöneticiye kapalı; düğme yine de rolü soruyor ki ekran başka bir role
+  // açıldığı gün stok hareketi yaratan bir işlem kendiliğinden görünür olmasın.
+  const isAdmin = (typeof window !== 'undefined' && localStorage.getItem('auth_role')) === 'ADMIN';
 
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [applied, setApplied] = useState(EMPTY_FILTERS);
@@ -216,6 +233,8 @@ export default function AdminDeliveryReceipts() {
         responseType: 'blob',
       });
       saveBlob(res.data, `makbuz-${receipt.receiptNo}.pdf`);
+      clearReprintPending(receipt.id);
+      setReprintVersion((v) => v + 1);
     } catch {
       setError('Makbuz indirilemedi.');
     } finally {
@@ -235,6 +254,8 @@ export default function AdminDeliveryReceipts() {
         { responseType: 'blob' }
       );
       saveBlob(res.data, `makbuzlar-${selected.length}.pdf`);
+      selected.forEach((id) => clearReprintPending(id));
+      setReprintVersion((v) => v + 1);
       setNotice(`${selected.length} makbuz tek PDF olarak indirildi.`);
     } catch {
       setError('Toplu PDF oluşturulamadı.');
@@ -253,6 +274,33 @@ export default function AdminDeliveryReceipts() {
     link.remove();
     window.URL.revokeObjectURL(url);
   };
+
+  /**
+   * Düzenleme sonrası yalnızca o satır tazeleniyor. Listeyi baştan çekmek kullanıcının
+   * filtresini ve sayfasını korur ama satır, sıralamaya göre başka bir sayfaya kayabilir;
+   * az önce düzeltilen makbuzun gözden kaybolması yanlış bir his bırakır.
+   */
+  const handleContentsSaved = (result) => {
+    const updated = result?.receipt;
+    setEditing(null);
+    if (updated) {
+      markReprintPending(updated);
+      setReceipts((prev) => prev.map((r) => (r.id === updated.id ? { ...r, ...updated } : r)));
+      setReprintVersion((v) => v + 1);
+      setNotice(
+        `${updated.receiptNo} güncellendi (${updated.revision}. basım). Yeni nüshayı indirip imzalatın.`
+      );
+    }
+  };
+
+  useEffect(() => {
+    if (!historyFor) return undefined;
+    const onKey = (event) => {
+      if (event.key === 'Escape') setHistoryFor(null);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [historyFor]);
 
   const toggleSelect = (id) =>
     setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -653,7 +701,7 @@ export default function AdminDeliveryReceipts() {
                 <th className="small d-none d-lg-table-cell">Teslim Alan</th>
                 <th className="small text-center">Durum</th>
                 <th className="small text-center d-none d-md-table-cell">İmzalı Nüsha</th>
-                <th className="small text-center" style={{ width: 110 }}>
+                <th className="small text-center" style={{ width: 150 }}>
                   İşlemler
                 </th>
               </tr>
@@ -697,6 +745,8 @@ export default function AdminDeliveryReceipts() {
                       ? planCountdown(r.scheduledDeliveryAt)
                       : null;
                   const carrierPending = isHandover && !r.driverName && r.status !== 'CANCELLED';
+                  const reprint = isReprintPending(r);
+                  const canEdit = isAdmin && isHandover && r.status !== 'CANCELLED';
                   return (
                     <tr
                       key={r.id}
@@ -734,6 +784,29 @@ export default function AdminDeliveryReceipts() {
                               title={`${r.revision}. kez basıldı`}
                             >
                               {r.revision}. basım
+                            </span>
+                          )}
+                          {r.editCount > 0 && (
+                            <button
+                              type="button"
+                              className="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle"
+                              style={{ fontSize: '0.66rem', cursor: 'pointer' }}
+                              title={`Son düzeltme: ${r.lastEditedBy || '—'}, ${formatDateTime(r.lastEditedAt)} — geçmişi gör`}
+                              aria-label={`${r.receiptNo} düzeltme geçmişi, ${r.editCount} kayıt`}
+                              onClick={() => setHistoryFor(r)}
+                            >
+                              <i className="fas fa-clock-rotate-left me-1"></i>
+                              {r.editCount === 1 ? 'Düzeltildi' : `${r.editCount} kez düzeltildi`}
+                            </button>
+                          )}
+                          {reprint && (
+                            <span
+                              className="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle"
+                              style={{ fontSize: '0.66rem' }}
+                              title="İçerik düzenlendi; elde kalan eski kâğıt geçersiz. Yeni nüshayı indirince işaret kalkar."
+                            >
+                              <i className="fas fa-print me-1"></i>
+                              Yeniden basılmalı
                             </span>
                           )}
                         </div>
@@ -830,10 +903,11 @@ export default function AdminDeliveryReceipts() {
                         <div className="d-flex gap-1 justify-content-center">
                           <button
                             type="button"
-                            className="btn btn-sm btn-outline-primary"
+                            className={`btn btn-sm ${reprint ? 'btn-warning' : 'btn-outline-primary'}`}
                             disabled={downloading === r.id}
                             onClick={() => downloadPdf(r)}
-                            title="PDF indir"
+                            title={reprint ? 'Yeni nüshayı indir' : 'PDF indir'}
+                            aria-label={`${r.receiptNo} PDF indir`}
                           >
                             <i
                               className={`fas ${downloading === r.id ? 'fa-spinner fa-spin' : 'fa-file-pdf'}`}
@@ -850,6 +924,17 @@ export default function AdminDeliveryReceipts() {
                           >
                             <i className="fas fa-up-right-from-square"></i>
                           </Link>
+                          {canEdit && (
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-outline-warning"
+                              onClick={() => setEditing(r)}
+                              title="Çıkış deposunu ve ürünleri düzenle"
+                              aria-label={`${r.receiptNo} içeriğini düzenle`}
+                            >
+                              <i className="fas fa-pen-to-square"></i>
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -899,6 +984,66 @@ export default function AdminDeliveryReceipts() {
           </div>
         </div>
       </div>
+
+      {historyFor && (
+        <div
+          className="modal show d-block"
+          tabIndex="-1"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="receipt-history-title"
+          style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 2100 }}
+        >
+          <div className="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div className="modal-content border-0 rounded-4 shadow">
+              <div className="modal-header">
+                <div>
+                  <h5 className="modal-title mb-0" id="receipt-history-title">
+                    <i className="fas fa-clock-rotate-left me-2"></i>
+                    Düzeltme Geçmişi
+                  </h5>
+                  <small className="text-muted">
+                    {historyFor.receiptNo} · {historyFor.customerFullName || 'Müşteri'} · şu an{' '}
+                    {historyFor.revision}. basım
+                  </small>
+                </div>
+                <button
+                  type="button"
+                  className="btn-close"
+                  aria-label="Kapat"
+                  onClick={() => setHistoryFor(null)}
+                ></button>
+              </div>
+              <div className="modal-body bg-light">
+                <ReceiptEditHistory transferId={historyFor.transferId} />
+              </div>
+              <div className="modal-footer justify-content-between">
+                {/* Stok hareketleri (geri eklenen / düşülen satırlar) sevkiyatın genel
+                    denetim kaydında; buradan oraya tek tık. */}
+                <Link
+                  to={`/stock?auditTransferId=${historyFor.transferId}`}
+                  className="btn btn-sm btn-outline-secondary"
+                >
+                  <i className="fas fa-list-ul me-1"></i>
+                  Stok hareketleriyle tüm denetim kaydı
+                </Link>
+                <button type="button" className="btn btn-light" onClick={() => setHistoryFor(null)} autoFocus>
+                  Kapat
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editing && (
+        <HandoverContentsEditModal
+          transfer={{ id: editing.transferId }}
+          receipt={editing}
+          onClose={() => setEditing(null)}
+          onSaved={handleContentsSaved}
+        />
+      )}
     </div>
   );
 }
