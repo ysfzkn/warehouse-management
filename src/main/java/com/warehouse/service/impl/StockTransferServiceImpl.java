@@ -714,6 +714,250 @@ public class StockTransferServiceImpl implements StockTransferService {
     }
 
     @Override
+    public StockTransfer updateHandoverContents(Long transferId,
+                                                com.warehouse.dto.HandoverContentsUpdateRequest request) {
+        // Yalnızca yönetici: bu işlem geçmişe dönük stok hareketi yaratıyor, iade kaydıyla
+        // aynı ağırlıkta. Tezgâhtaki görevli hatayı fark ettiğinde yöneticiye iletir.
+        if (!isCurrentUserAdmin()) {
+            throw new WarehouseManagementException(ErrorCode.UNAUTHORIZED_ACTION,
+                    "Depo çıkış makbuzunun içeriği yalnızca yönetici tarafından düzenlenebilir.");
+        }
+        StockTransfer transfer = getTransferByIdOrThrow(transferId);
+        requireEditableHandover(transfer, request.getExpectedUpdatedAt());
+
+        Warehouse oldWarehouse = transfer.getSourceWarehouse();
+        Warehouse newWarehouse = findWarehouseOrThrow(request.getSourceWarehouseId());
+        List<StockTransferItem> oldItems = new ArrayList<>(getTransferItemsOrFallback(transfer));
+        List<StockTransferItem> newItems = resolveHandoverLines(request.getItems(), transfer);
+
+        // Açıklama, kalemler yerinde güncellenmeden önce alınıyor; sonrasında eski adetler
+        // artık okunamaz.
+        String before = describeItems(oldItems);
+        String after = describeItems(newItems);
+        boolean warehouseChanged = !Objects.equals(oldWarehouse.getId(), newWarehouse.getId());
+
+        Map<Long, Stock> rows = new LinkedHashMap<>();
+        Map<Long, Integer> delta = new LinkedHashMap<>();
+        Map<String, Stock> oldStocks = loadSourceStocks(oldWarehouse, oldItems);
+        for (StockTransferItem item : oldItems) {
+            Stock stock = oldStocks.get(stockKey(item));
+            rows.put(stock.getId(), stock);
+            delta.merge(stock.getId(), item.getQuantity(), Integer::sum);
+        }
+        Map<String, Stock> newStocks = loadSourceStocks(newWarehouse, newItems);
+        for (StockTransferItem item : newItems) {
+            Stock stock = newStocks.get(stockKey(item));
+            if (!Objects.equals(stock.getProduct().getId(), item.getProduct().getId())) {
+                throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                        "Seçilen stok satırı ürünle eşleşmiyor: " + item.getProduct().getName());
+            }
+            // Satır sabitleniyor: depoda aynı ürünün birden fazla satırı olabilir (emanet),
+            // ve tamamlama/iptal yolları stoğu bu kimlikle bulacak.
+            item.setStockId(stock.getId());
+            rows.put(stock.getId(), stock);
+            delta.merge(stock.getId(), -item.getQuantity(), Integer::sum);
+        }
+
+        // Karşılaştırma stok satırı üzerinden: eski kalemde satır kimliği boş olabilir,
+        // formdan gelen aynı satır ise kimlikle geliyor — ikisi aynı çıkış.
+        if (!warehouseChanged && delta.values().stream().allMatch(change -> change == 0)) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                    "Kaydedilecek bir değişiklik yok.");
+        }
+
+        transfer.setSourceWarehouse(newWarehouse);
+        boolean reserved = transfer.getStatus() == TransferStatus.IN_TRANSIT;
+        // Önce geri verilenler: aynı depoda satır değiştiren bir düzeltmede serbest kalan
+        // adet, düşülecek olanın yeterlilik kontrolünden önce görünür olmalı.
+        delta.forEach((stockId, change) -> {
+            if (change > 0) {
+                giveBackForHandoverEdit(rows.get(stockId), change, transfer, reserved, request.getReason());
+            }
+        });
+        delta.forEach((stockId, change) -> {
+            if (change < 0) {
+                takeForHandoverEdit(rows.get(stockId), -change, transfer, reserved);
+            }
+        });
+
+        reconcileItems(transfer, newItems);
+        transfer.setQuantity(calculateTotalQuantity(newItems));
+        transfer.setProduct(newItems.size() == 1 ? newItems.get(0).getProduct() : null);
+        StockTransfer saved = stockTransferRepository.save(transfer);
+
+        String username = CurrentUser.usernameOrSystem();
+        String reason = request.getReason().trim();
+        StringBuilder details = new StringBuilder("Depo çıkışı düzenlendi");
+        if (warehouseChanged) {
+            details.append(" | Depo: ").append(oldWarehouse.getName())
+                   .append(" → ").append(newWarehouse.getName());
+        }
+        details.append(" | Ürünler: ").append(before).append(" → ").append(after)
+               .append(" | Sebep: ").append(reason);
+        auditService.log(AuditAction.TRANSFER_UPDATE, DomainEntityType.StockTransfer.name(),
+                saved.getId(), username, details.toString(), buildTransferMetadata(saved));
+        notificationService.create(buildTransferNotification(
+                NotificationMessages.TRANSFER_UPDATED_TITLE,
+                String.format("Kullanıcı %s, #%d numaralı depo çıkışının içeriğini düzenledi. %s Sebep: %s",
+                        username, saved.getId(),
+                        warehouseChanged ? "Depo: " + oldWarehouse.getName() + " → "
+                                + newWarehouse.getName() + "." : "",
+                        reason),
+                saved));
+        logger.info("Handover contents edited. transferId={}, warehouseChanged={}", saved.getId(), warehouseChanged);
+
+        return stockTransferRepository.findByIdWithRelations(saved.getId()).orElse(saved);
+    }
+
+    /**
+     * Düzenlemenin önkoşulları. Her biri, farkın kimsenin defterini bozmadan
+     * hesaplanamadığı bir durum.
+     */
+    private void requireEditableHandover(StockTransfer transfer, LocalDateTime expectedUpdatedAt) {
+        if (transfer.getTransferType() != TransferType.CUSTOMER_DELIVERY) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                    "Yalnızca depo çıkış makbuzlarının içeriği düzenlenebilir.");
+        }
+        if (transfer.getStatus() == TransferStatus.CANCELLED) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                    "İptal edilmiş bir çıkış düzenlenemez.");
+        }
+        if (transfer.getStatus() != TransferStatus.COMPLETED
+                && transfer.getStatus() != TransferStatus.IN_TRANSIT) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                    "Bu çıkış henüz stoktan düşülmemiş; sevkiyat formundan düzenleyin.");
+        }
+        if (transfer.getReturnedQuantity() != null && transfer.getReturnedQuantity() > 0) {
+            // İade, kalem başına geri gelen adedi tutuyor. Kalem değişirse o adetlerin
+            // hangi satıra ait olduğu belirsizleşir.
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                    "Bu çıkış için iade kaydı var; kalemleri artık değiştirilemez. "
+                            + "Eksik/fazla ürünü iade ya da yeni bir çıkışla düzeltin.");
+        }
+        if (transfer.getStatus() == TransferStatus.IN_TRANSIT && transfer.getOrderId() != null) {
+            // Rezervasyonun bir kısmı siparişe ait. Kalem ya da depo değişirse o pay eski
+            // satırda sahipsiz kalır ve hiçbir yol onu bir daha serbest bırakmaz.
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                    "Siparişe bağlı planlı çıkışın kalemleri değiştirilemez. Çıkışı iptal edip "
+                            + "siparişten yeniden oluşturun.");
+        }
+        if (expectedUpdatedAt != null && transfer.getUpdatedAt() != null
+                && !transfer.getUpdatedAt().withNano(0).equals(expectedUpdatedAt.withNano(0))) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                    "Bu çıkış siz formu açtıktan sonra başka biri tarafından değiştirildi. "
+                            + "Kaydı yenileyip tekrar deneyin.");
+        }
+    }
+
+    /** İstek satırlarını kalemlere çevirir; aynı stok satırı iki kez geldiyse birleştirir. */
+    private List<StockTransferItem> resolveHandoverLines(List<ServiceHandoverRequest.Item> lines,
+                                                         StockTransfer transfer) {
+        Map<String, StockTransferItem> merged = new LinkedHashMap<>();
+        for (ServiceHandoverRequest.Item line : lines) {
+            Product product = findProductOrThrow(line.getProductId());
+            String key = line.getStockId() != null ? "S" + line.getStockId() : "P" + product.getId();
+            StockTransferItem existing = merged.get(key);
+            if (existing != null) {
+                existing.setQuantity(existing.getQuantity() + line.getQuantity());
+                continue;
+            }
+            StockTransferItem item = new StockTransferItem();
+            item.setTransfer(transfer);
+            item.setProduct(product);
+            item.setStockId(line.getStockId());
+            item.setQuantity(line.getQuantity());
+            merged.put(key, item);
+        }
+        return new ArrayList<>(merged.values());
+    }
+
+    private void giveBackForHandoverEdit(Stock stock, int quantity, StockTransfer transfer,
+                                         boolean reserved, String reason) {
+        if (reserved) {
+            releaseReservedStock(stock, quantity);
+            return;
+        }
+        stock.setQuantity(stock.getQuantity() + quantity);
+        Stock saved = stockRepository.save(stock);
+        Product product = saved.getProduct();
+        Warehouse warehouse = saved.getWarehouse();
+        auditService.log(AuditAction.STOCK_ADD, DomainEntityType.Stock.name(), saved.getId(),
+                CurrentUser.usernameOrSystem(),
+                String.format("Depo çıkışı düzeltmesiyle stoğa geri eklendi: +%d adet → Yeni=%d | "
+                                + "Transfer #%d | Sebep=%s | Depo=%s, Ürün=%s",
+                        quantity, saved.getQuantity(), transfer.getId(), reason.trim(),
+                        warehouse != null ? warehouse.getName() : "N/A",
+                        product != null ? product.getName() : "N/A"),
+                AuditMetadata.builder()
+                        .warehouseId(warehouse != null ? warehouse.getId() : null)
+                        .warehouseName(warehouse != null ? warehouse.getName() : null)
+                        .productId(product != null ? product.getId() : null)
+                        .productName(product != null ? product.getName() : null)
+                        .productSku(product != null ? product.getSku() : null)
+                        .quantity(quantity)
+                        .transferId(transfer.getId())
+                        .build());
+    }
+
+    private void takeForHandoverEdit(Stock stock, int quantity, StockTransfer transfer, boolean reserved) {
+        if (stock.getAvailableQuantity() < quantity) {
+            // Genel INSUFFICIENT_STOCK hangi kalemin yetmediğini söylemiyor; çok kalemli bir
+            // düzeltmede kullanıcı hangisini azaltacağını bilmeli.
+            throw new WarehouseManagementException(ErrorCode.INSUFFICIENT_STOCK,
+                    String.format("%s için %s deposunda yeterli stok yok (kullanılabilir: %d, gereken: %d).",
+                            stock.getProduct() != null ? stock.getProduct().getName() : "Ürün",
+                            stock.getWarehouse() != null ? stock.getWarehouse().getName() : "seçilen",
+                            Math.max(0, stock.getAvailableQuantity()), quantity));
+        }
+        if (reserved) {
+            reserveStockForTransfer(stock, quantity, transfer);
+        } else {
+            deductStockDirectly(stock, quantity, transfer);
+        }
+    }
+
+    /**
+     * Kalemleri yerinde günceller, silip yeniden yazmaz: kaleme bağlı ürün fotoğrafı ve
+     * kalem kimliği, adedi değişen satırda korunmalı. Önce aynı stok satırı, yoksa aynı ürün
+     * eşleştiriliyor — depo değişince satır kimliği değişir ama ürün aynı kalır.
+     */
+    private void reconcileItems(StockTransfer transfer, List<StockTransferItem> newItems) {
+        if (transfer.getItems() == null || transfer.getItems().isEmpty()) {
+            transfer.setItems(newItems);
+            return;
+        }
+        List<StockTransferItem> unmatched = new ArrayList<>(transfer.getItems());
+        List<StockTransferItem> result = new ArrayList<>();
+        for (StockTransferItem wanted : newItems) {
+            StockTransferItem match = unmatched.stream()
+                    .filter(existing -> Objects.equals(existing.getStockId(), wanted.getStockId()))
+                    .findFirst()
+                    .or(() -> unmatched.stream()
+                            .filter(existing -> Objects.equals(existing.getProduct().getId(),
+                                    wanted.getProduct().getId()))
+                            .findFirst())
+                    .orElse(null);
+            if (match == null) {
+                result.add(wanted);
+                continue;
+            }
+            unmatched.removeIf(existing -> existing == match);
+            match.setProduct(wanted.getProduct());
+            match.setStockId(wanted.getStockId());
+            match.setQuantity(wanted.getQuantity());
+            result.add(match);
+        }
+        // Kimlik karşılaştırması bilerek: Lombok'un equals'ı kalem → sevkiyat → kalemler
+        // üzerinden kendi kuyruğunu kovalıyor.
+        transfer.getItems().removeIf(existing -> unmatched.stream().anyMatch(gone -> gone == existing));
+        for (StockTransferItem item : result) {
+            if (transfer.getItems().stream().noneMatch(existing -> existing == item)) {
+                transfer.addItem(item);
+            }
+        }
+    }
+
+    @Override
     public TransferReturnDto recordReturn(Long transferId, TransferReturnRequest request) {
         if (!isCurrentUserAdmin()) {
             throw new WarehouseManagementException(ErrorCode.UNAUTHORIZED_ACTION,

@@ -270,6 +270,22 @@ public class StockTransferController {
     }
 
     /**
+     * Corrects the source warehouse and line items of a depot exit receipt.
+     *
+     * <p>Admin only: it moves stock after the fact, like a return. Only the difference moves,
+     * and the receipt is refreshed with a bumped revision in the same transaction. Returns
+     * both so the panel can offer the new copy for printing at once.</p>
+     */
+    @PutMapping("/{id}/handover-contents")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ServiceHandoverService.Result> editHandoverContents(
+            @PathVariable Long id,
+            @Valid @RequestBody com.warehouse.dto.HandoverContentsUpdateRequest request) {
+        return ResponseEntity.ok(serviceHandoverService.editContents(
+                id, request, CurrentUser.usernameOrSystem()));
+    }
+
+    /**
      * Records goods coming back from a completed shipment.
      *
      * <p>Admin only, and it moves stock, so it is not a shop-floor action. Returns the saved

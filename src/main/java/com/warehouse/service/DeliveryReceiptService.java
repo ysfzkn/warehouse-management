@@ -35,6 +35,16 @@ public interface DeliveryReceiptService {
      */
     DeliveryReceiptDto issue(Long transferId, String username, DeliveryReceiptKind kindWhenNew);
 
+    /**
+     * Depo çıkışının deposu ya da kalemleri düzeltildiğinde makbuz kaydını yeni içerikle
+     * eşitler ve basım numarasını artırır.
+     *
+     * <p>Basım numarası bilerek artıyor: elde kalan eski kâğıt artık sistemle uyuşmuyor, ve
+     * yeni nüsha ondan ayırt edilebilmeli. Numara değişmez — aynı çıkış için iki makbuz
+     * numarası dolaşımda olmamalı. Makbuz yoksa null döner.</p>
+     */
+    DeliveryReceiptDto refreshContents(Long transferId, String username, String reason);
+
     /** The receipt for a transfer, or null when none has been issued yet. */
     /**
      * Taşıyıcı sonradan belirlendiğinde makbuz kaydına işler.

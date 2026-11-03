@@ -661,6 +661,30 @@ public class DeliveryReceiptServiceImpl implements DeliveryReceiptService {
         return toDto(saved);
     }
 
+    @Override
+    public DeliveryReceiptDto refreshContents(Long transferId, String username, String reason) {
+        DeliveryReceipt receipt = receiptRepository.findByTransferId(transferId).orElse(null);
+        if (receipt == null) {
+            return null;
+        }
+        StockTransfer transfer = receipt.getTransfer();
+        // Yalnızca düzeltilen iki alan yenileniyor, tam anlık görüntü değil: taraflar, müşteri
+        // ve tarih kâğıdın imzalandığı andaki hâliyle kalmalı.
+        receipt.setSourceWarehouseName(
+                transfer.getSourceWarehouse() != null ? transfer.getSourceWarehouse().getName() : null);
+        receipt.setItemsJson(serialiseItems(transfer));
+        receipt.setRevision(receipt.getRevision() == null ? 2 : receipt.getRevision() + 1);
+        receipt = receiptRepository.save(receipt);
+
+        auditService.log(AuditAction.RECEIPT_REISSUE,
+                DomainEntityType.StockTransfer.name(), transferId, username,
+                "Makbuz içeriği düzenlendi (" + receipt.getReceiptNo() + ", "
+                        + receipt.getRevision() + ". basım)"
+                        + (reason != null && !reason.isBlank() ? " — Sebep: " + reason.trim() : ""),
+                metadata(transfer));
+        return toDto(receipt);
+    }
+
     /**
      * The logo is inlined rather than linked. A {@code <img src="https://...">} would make
      * every PDF render an outbound HTTP request from the server, which is both a failure

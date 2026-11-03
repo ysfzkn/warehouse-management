@@ -164,6 +164,9 @@ public class SecurityConfig {
                         .requestMatchers(org.springframework.http.HttpMethod.DELETE, ApiPaths.ADMIN_STOCKS).hasRole("ADMIN")
                         // Stock requests - create/view for all warehouse roles
                         .requestMatchers(ApiPaths.ADMIN_STOCK_REQUESTS).hasAnyRole("ADMIN", "STOCK_IN", "STOCK_OUT")
+                        // Depo çıkışı içerik düzeltmesi geçmişe dönük stok hareketi yaratıyor;
+                        // genel transfer kuralından önce yöneticiye daraltılıyor.
+                        .requestMatchers(org.springframework.http.HttpMethod.PUT, "/api/admin/stock-transfers/*/handover-contents").hasRole("ADMIN")
                         // Stock transfers available to all authenticated warehouse roles
                         .requestMatchers(ApiPaths.ADMIN_STOCK_TRANSFERS).hasAnyRole("ADMIN", "STOCK_IN", "STOCK_OUT")
                         // Public image viewing

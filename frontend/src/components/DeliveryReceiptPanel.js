@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import axios from 'axios';
+import HandoverContentsEditModal from './HandoverContentsEditModal';
 
 /**
  * Delivery receipt panel, shown inside the transfer detail modal.
@@ -129,6 +130,10 @@ export default function DeliveryReceiptPanel({
     driverPhone: '',
     vehiclePlate: '',
   });
+  const [showContentsEdit, setShowContentsEdit] = useState(false);
+  // Düzenlemeden sonra kalıcı uyarı: 4 saniyede kaybolan bir bildirim, elde kalan eski
+  // kâğıdın artık geçersiz olduğunu söylemeye yetmez. Yeni nüsha basılınca kalkar.
+  const [reprintNeeded, setReprintNeeded] = useState(false);
   const fileInputRef = useRef(null);
   const panelRef = useRef(null);
 
@@ -220,6 +225,7 @@ export default function DeliveryReceiptPanel({
       printWindow.document.open();
       printWindow.document.write(res.data);
       printWindow.document.close();
+      setReprintNeeded(false);
       setTimeout(() => {
         try {
           printWindow.focus();
@@ -249,7 +255,19 @@ export default function DeliveryReceiptPanel({
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
+      setReprintNeeded(false);
     });
+
+  const handleContentsSaved = (result) => {
+    setShowContentsEdit(false);
+    if (result?.receipt) setReceipt(result.receipt);
+    setReprintNeeded(true);
+    setError('');
+    setNotice('Çıkış içeriği güncellendi, stok farkı işlendi.');
+    if (onChanged) onChanged();
+    // Detay modalindeki ürün listesi ve depo adı da bu yanıtla tazeleniyor.
+    if (result?.transfer && onTransferChanged) onTransferChanged(result.transfer);
+  };
 
   const openConfirmForm = () => {
     // Geriye dönük makbuzlarda tarih önemli: sevkiyat geçen ay çıktıysa formun bugünü
@@ -462,6 +480,18 @@ export default function DeliveryReceiptPanel({
   const planOpen = Boolean(scheduledAt) && !transferClosed;
   const countdown = planOpen ? planCountdown(scheduledAt) : null;
 
+  // İçerik düzenleme: yalnızca yöneticide ve depo çıkışında. Engelli durumlarda düğme
+  // gizlenmiyor, nedenini söyleyerek pasif kalıyor — "neden düzenleyemiyorum" sorusu
+  // ekranda cevaplanmalı.
+  const canSeeContentsEdit =
+    isAdmin && isHandover && receipt?.status !== 'CANCELLED' && transfer?.status !== 'CANCELLED';
+  const contentsEditBlocked =
+    (transfer?.returnedQuantity || 0) > 0
+      ? 'Bu çıkış için iade kaydı var; kalemler artık değiştirilemez.'
+      : planOpen && transfer?.orderId
+        ? 'Siparişe bağlı planlı çıkışın kalemleri değiştirilemez.'
+        : '';
+
   return (
     <div className="border rounded-3 p-3 mt-3" ref={panelRef}>
       <div className="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
@@ -561,6 +591,24 @@ export default function DeliveryReceiptPanel({
                 <i className={`fas ${busy === 'issue' ? 'fa-spinner fa-spin' : 'fa-rotate'} me-1`}></i>
                 Yeniden Bas
               </button>
+              {canSeeContentsEdit && (
+                // Pasif düğme title göstermiyor; açıklama sarmalayıcıda duruyor.
+                <span
+                  title={
+                    contentsEditBlocked || 'Çıkış deposunu ve ürünleri düzeltir; stok farkı otomatik işlenir.'
+                  }
+                >
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline-warning"
+                    disabled={anyBusy || Boolean(contentsEditBlocked)}
+                    onClick={() => setShowContentsEdit(true)}
+                  >
+                    <i className="fas fa-pen-to-square me-1"></i>
+                    İçeriği Düzenle
+                  </button>
+                </span>
+              )}
             </>
           )}
         </div>
@@ -583,6 +631,25 @@ export default function DeliveryReceiptPanel({
         <div className="alert alert-success py-2 px-3 small mb-2">
           <i className="fas fa-circle-check me-1"></i>
           {notice}
+        </div>
+      )}
+      {reprintNeeded && receipt && (
+        <div className="alert alert-warning py-2 px-3 small mb-2 d-flex flex-wrap align-items-center justify-content-between gap-2">
+          <span>
+            <i className="fas fa-print me-1"></i>
+            Makbuz <strong>{receipt.revision}. basım</strong> olarak güncellendi. Daha önce basılmış kâğıt
+            artık geçersiz; yeni nüshayı yazdırıp imzalatın.
+          </span>
+          <button type="button" className="btn btn-sm btn-warning" disabled={anyBusy} onClick={handlePrint}>
+            <i className={`fas ${busy === 'print' ? 'fa-spinner fa-spin' : 'fa-print'} me-1`}></i>
+            Yeni Nüshayı Yazdır
+          </button>
+        </div>
+      )}
+      {canSeeContentsEdit && contentsEditBlocked && (
+        <div className="small text-muted mb-2">
+          <i className="fas fa-lock me-1"></i>
+          İçerik düzenlenemez: {contentsEditBlocked}
         </div>
       )}
 
@@ -1084,6 +1151,15 @@ export default function DeliveryReceiptPanel({
             )}
           </div>
         </>
+      )}
+
+      {showContentsEdit && receipt && (
+        <HandoverContentsEditModal
+          transfer={transfer}
+          receipt={receipt}
+          onClose={() => setShowContentsEdit(false)}
+          onSaved={handleContentsSaved}
+        />
       )}
     </div>
   );

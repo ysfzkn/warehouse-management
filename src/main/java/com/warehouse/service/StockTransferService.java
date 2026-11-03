@@ -84,6 +84,21 @@ public interface StockTransferService {
     StockTransfer assignCarrier(Long transferId, CarrierAssignmentRequest request);
 
     /**
+     * Corrects the source warehouse and line items of a depot exit after the fact.
+     *
+     * <p>Only the difference moves: a line that went from 5 to 3 puts 2 back on its stock
+     * row, a new line comes off its row, and a warehouse change returns everything to the old
+     * depot and takes it from the new one. A completed exit adjusts on-hand quantities; a
+     * planned one still sitting in reservation adjusts the reservation instead. Shipments with
+     * returns, cancelled ones, and planned ones tied to an order are refused — in each of
+     * those the difference cannot be stated without rewriting someone else's bookkeeping.</p>
+     *
+     * <p>Does not touch the receipt; the caller refreshes it in the same transaction.</p>
+     */
+    StockTransfer updateHandoverContents(Long transferId,
+                                         com.warehouse.dto.HandoverContentsUpdateRequest request);
+
+    /**
      * Records goods from a completed shipment arriving back at the warehouse.
      *
      * <p>Does not undo the shipment. The goods left — that is history, the signed receipt says

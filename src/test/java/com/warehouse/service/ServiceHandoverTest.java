@@ -446,6 +446,110 @@ class ServiceHandoverTest {
                 .isEqualTo(40);
     }
 
+    private com.warehouse.dto.HandoverContentsUpdateRequest edit(Long warehouseId, Object... stockAndQuantity) {
+        com.warehouse.dto.HandoverContentsUpdateRequest request = new com.warehouse.dto.HandoverContentsUpdateRequest();
+        request.setSourceWarehouseId(warehouseId);
+        request.setReason("Tezgâhta yanlış adet girildi");
+        List<ServiceHandoverRequest.Item> items = new java.util.ArrayList<>();
+        for (int i = 0; i < stockAndQuantity.length; i += 2) {
+            Stock row = (Stock) stockAndQuantity[i];
+            ServiceHandoverRequest.Item item = new ServiceHandoverRequest.Item();
+            item.setStockId(row.getId());
+            item.setProductId(row.getProduct().getId());
+            item.setQuantity((Integer) stockAndQuantity[i + 1]);
+            items.add(item);
+        }
+        request.setItems(items);
+        return request;
+    }
+
+    private int onHand(Stock row) {
+        return stockRepository.findById(row.getId()).orElseThrow().getQuantity();
+    }
+
+    @Test
+    @DisplayName("Çıkış düzenlenince yalnızca fark stoğa yansır ve makbuz yeni basım olur")
+    void editingContentsMovesOnlyTheDifference() {
+        var result = handoverService.handOver(request(5), "admin");
+        assertThat(onHand(stock)).isEqualTo(35);
+
+        var edited = handoverService.editContents(result.transfer().getId(), edit(warehouse.getId(), stock, 3), "admin");
+
+        assertThat(onHand(stock)).as("5 → 3: iki adet rafa geri dönmeli, beşi birden değil").isEqualTo(37);
+        assertThat(edited.transfer().getTotalQuantity()).isEqualTo(3);
+        assertThat(edited.receipt().getReceiptNo()).as("numara değişmez").isEqualTo(result.receipt().getReceiptNo());
+        assertThat(edited.receipt().getRevision()).isEqualTo(result.receipt().getRevision() + 1);
+        assertThat(edited.receipt().getItems()).singleElement()
+                .extracting(com.warehouse.dto.DeliveryReceiptDto.ItemLine::getQuantity).isEqualTo(3);
+        // Taraflar kâğıdın imzalandığı andaki hâliyle kalmalı.
+        assertThat(edited.receipt().getHandoverToName()).isEqualTo(SERVICE_NAME);
+    }
+
+    @Test
+    @DisplayName("Çıkış deposu değişince mal eski depoya döner, yeni depodan düşer")
+    void changingWarehouseMovesStockBetweenDepots() {
+        Warehouse other = new Warehouse();
+        other.setName("Bor Şube Depo");
+        other.setLocation("Bor");
+        other = warehouseRepository.save(other);
+        Stock otherRow = new Stock();
+        otherRow.setProduct(product);
+        otherRow.setWarehouse(other);
+        otherRow.setQuantity(10);
+        otherRow = stockRepository.save(otherRow);
+
+        var result = handoverService.handOver(request(4), "admin");
+        var edited = handoverService.editContents(result.transfer().getId(), edit(other.getId(), otherRow, 4), "admin");
+
+        assertThat(onHand(stock)).as("eski depo tam geri almalı").isEqualTo(40);
+        assertThat(onHand(otherRow)).isEqualTo(6);
+        assertThat(edited.receipt().getSourceWarehouseName()).isEqualTo("Bor Şube Depo");
+        assertThat(edited.transfer().getSourceWarehouse().getId()).isEqualTo(other.getId());
+    }
+
+    @Test
+    @DisplayName("Düzenleme stok yetmiyorsa hiçbir şeyi değiştirmeden reddedilir")
+    void editingBeyondAvailableStockIsRefused() {
+        var result = handoverService.handOver(request(5), "admin");
+
+        assertThatThrownBy(() -> handoverService.editContents(
+                result.transfer().getId(), edit(warehouse.getId(), stock, 100), "admin"))
+                .isInstanceOf(WarehouseManagementException.class)
+                .hasMessageContaining("yeterli stok yok");
+    }
+
+    @Test
+    @DisplayName("Planlı çıkışta düzenleme rezervasyonu düzeltir, stoğa dokunmaz")
+    void editingScheduledExitAdjustsReservation() {
+        ServiceHandoverRequest planned = request(4);
+        planned.setScheduledDeliveryAt(java.time.LocalDateTime.now().plusDays(2));
+        var result = handoverService.handOver(planned, "admin");
+        assertThat(stockRepository.findById(stock.getId()).orElseThrow().getReservedQuantity()).isEqualTo(4);
+
+        handoverService.editContents(result.transfer().getId(), edit(warehouse.getId(), stock, 6), "admin");
+
+        Stock row = stockRepository.findById(stock.getId()).orElseThrow();
+        assertThat(row.getQuantity()).as("mal hâlâ depoda").isEqualTo(40);
+        assertThat(row.getReservedQuantity()).isEqualTo(6);
+    }
+
+    @Test
+    @DisplayName("Değişiklik olmayan düzenleme ve yönetici olmayan kullanıcı reddedilir")
+    void noOpAndNonAdminEditsAreRefused() {
+        var result = handoverService.handOver(request(2), "admin");
+        Long id = result.transfer().getId();
+
+        assertThatThrownBy(() -> handoverService.editContents(id, edit(warehouse.getId(), stock, 2), "admin"))
+                .isInstanceOf(WarehouseManagementException.class)
+                .hasMessageContaining("değişiklik yok");
+
+        loginAs("depocu", "STOCK_OUT");
+        assertThatThrownBy(() -> handoverService.editContents(id, edit(warehouse.getId(), stock, 1), "depocu"))
+                .isInstanceOf(WarehouseManagementException.class)
+                .hasMessageContaining("yönetici");
+        assertThat(onHand(stock)).isEqualTo(38);
+    }
+
     @Test
     @DisplayName("Normal transfer hâlâ şoför bilgisi olmadan oluşturulamaz")
     void ordinaryTransferStillRequiresACarrier() {

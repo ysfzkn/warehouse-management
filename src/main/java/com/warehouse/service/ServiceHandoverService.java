@@ -137,6 +137,29 @@ public class ServiceHandoverService {
         return new Result(transferMapper.toDto(completed), receipt);
     }
 
+    /**
+     * Depo çıkış makbuzunun deposunu ve kalemlerini düzeltir.
+     *
+     * <p>Stok farkı ile makbuz kaydı aynı işlemde: biri yazılıp diğeri patlarsa ya stok
+     * düzelmiş ama makbuz eski kalemleri basıyor, ya da tersi — kâğıt ile kaydın
+     * ayrıştığı tam olarak o hâl.</p>
+     */
+    @Transactional
+    public Result editContents(Long transferId,
+                               com.warehouse.dto.HandoverContentsUpdateRequest request,
+                               String username) {
+        DeliveryReceiptDto current = receiptService.findByTransfer(transferId);
+        if (current == null || current.getKind() != com.warehouse.enums.DeliveryReceiptKind.SERVICE_HANDOVER) {
+            // Teslimat makbuzlu sevkiyatın kalemi şoförün elindeki iki nüshada yazılı;
+            // onların düzeltmesi bu yoldan değil, iade ve yeni sevkiyatla yapılıyor.
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                    "Yalnızca depo çıkış makbuzlarının içeriği düzenlenebilir.");
+        }
+        StockTransfer updated = transferService.updateHandoverContents(transferId, request);
+        DeliveryReceiptDto receipt = receiptService.refreshContents(transferId, username, request.getReason());
+        return new Result(transferMapper.toDto(updated), receipt);
+    }
+
     private static String format(LocalDateTime value) {
         return value == null ? "-" : value.format(DATE_TIME);
     }
