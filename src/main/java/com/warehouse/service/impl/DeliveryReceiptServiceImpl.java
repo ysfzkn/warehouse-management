@@ -56,6 +56,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -943,6 +944,42 @@ public class DeliveryReceiptServiceImpl implements DeliveryReceiptService {
                 receipt != null ? receipt.getTransfer().getId() : null, username,
                 "İmzalı makbuz nüshası silindi"
                         + (receipt != null ? " (" + receipt.getReceiptNo() + ")" : ""));
+    }
+
+    @Override
+    public void deleteForTransfer(Long transferId) {
+        receiptRepository.findByTransferId(transferId).ifPresent(receipt -> {
+            List<String> storageKeys = receipt.getAttachments().stream()
+                    .map(DeliveryReceiptAttachment::getStorageKey)
+                    .filter(Objects::nonNull)
+                    .toList();
+            // Dosyalar commit'ten sonra siliniyor: silme geri sarılırsa (stok yetmedi, başka
+            // bir hata) makbuz satırı geri gelir, imzalı nüsha ise geri gelmezdi.
+            runAfterCommit(() -> storageKeys.forEach(key -> {
+                try {
+                    photoStorageService.deleteDocument(key);
+                } catch (Exception e) {
+                    log.warn("Makbuz eki silinemedi ({}): {}", key, e.getMessage());
+                }
+            }));
+            revisionRepository.deleteAll(
+                    revisionRepository.findByReceiptIdOrderByEditedAtDescIdDesc(receipt.getId()));
+            receiptRepository.delete(receipt);
+        });
+    }
+
+    private static void runAfterCommit(Runnable action) {
+        if (!org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            action.run();
+            return;
+        }
+        org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                new org.springframework.transaction.support.TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        action.run();
+                    }
+                });
     }
 
     @Override

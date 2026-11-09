@@ -13,7 +13,7 @@ public class StockTransferDeletionResult {
     private String message;
 
     public static StockTransferDeletionResult deleted() {
-        return new StockTransferDeletionResult(true, false, "Transfer silindi.");
+        return new StockTransferDeletionResult(true, false, "Transfer silindi; stoğa etkisi geri alındı.");
     }
 
     public static StockTransferDeletionResult approval(String message) {

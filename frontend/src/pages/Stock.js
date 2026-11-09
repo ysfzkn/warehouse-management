@@ -2637,10 +2637,12 @@ const Stock = () => {
       return t && (t.status === 'IN_TRANSIT' || t.status === 'PENDING');
     });
 
-    const baseMessage = `${ids.length} transferi silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.`;
+    const baseMessage =
+      `${ids.length} transfer kaydı ve makbuzları silinecek; her birinin stoğa etkisi geri alınacak ` +
+      '(tamamlananlarda ürünler çıkış deposuna geri eklenir, depo transferinde hedef depodan düşülür). ' +
+      'Bu işlem geri alınamaz.';
     const sensitiveMessage =
-      'Seçili transferler arasında hâlâ aktif süreçte (yolda veya beklemede) olanlar var. ' +
-      'Bu kayıtları silmeniz durumunda stok ve takip bilgileriniz kalıcı olarak kaybolacaktır.\n\n' +
+      'Seçili transferler arasında yolda veya planlı olanlar var; bunların rezervasyonu kaldırılacak.\n\n' +
       baseMessage;
 
     setConfirmModal({
@@ -2930,8 +2932,8 @@ const Stock = () => {
       show: true,
       title: 'Transfer Kaydını Sil',
       message: isSensitiveStatus
-        ? 'Bu transfer hâlâ aktif bir süreçte (yolda veya beklemede). Silme işlemi geri alınamaz ve stok/takip bilgileriniz kalıcı olarak kaybolacaktır. Emin misiniz?'
-        : 'Bu transfer kaydını silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.',
+        ? 'Bu transfer ve makbuzu silinecek. Yoldaysa ya da planlıysa ürünlerin rezervasyonu kaldırılır. Bu işlem geri alınamaz.'
+        : 'Bu transfer ve makbuzu silinecek; stoğa etkisi geri alınır: tamamlanmışsa ürünler çıkış deposuna geri eklenir, depo transferinde hedef depodan düşülür. Bu işlem geri alınamaz.',
       confirmText: 'Evet, Sil',
       confirmVariant: 'danger',
       icon: 'trash',
