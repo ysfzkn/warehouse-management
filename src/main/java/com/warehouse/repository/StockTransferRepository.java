@@ -20,6 +20,15 @@ import java.util.List;
 @Repository
 public interface StockTransferRepository extends JpaRepository<StockTransfer, Long> {
 
+    /**
+     * Satırı yazma kilidiyle okur. Silme ve silme onayı stoğu geri alıyor; aynı kayda gelen
+     * ikinci istek (çift tıklama, iki yönetici) ilki bitene kadar bekler ve sonra kaydı
+     * silinmiş ya da kararı verilmiş bulur — stok iki kez geri eklenmez.
+     */
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT st FROM StockTransfer st WHERE st.id = :id")
+    java.util.Optional<StockTransfer> lockById(@Param("id") Long id);
+
     @Override
     @EntityGraph(value = StockTransfer.GRAPH_WITH_RELATIONS, type = EntityGraph.EntityGraphType.LOAD)
     Page<StockTransfer> findAll(Pageable pageable);

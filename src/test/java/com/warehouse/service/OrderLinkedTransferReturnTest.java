@@ -202,6 +202,81 @@ class OrderLinkedTransferReturnTest {
         return request;
     }
 
+    @org.springframework.boot.test.mock.mockito.MockBean
+    private AdminSecurityService adminSecurityService;
+
+    /**
+     * Aynı siparişin ikinci (mükerrer) sevkiyatı. Tamamlanamaz — siparişin rezervasyonu ilk
+     * teslimatla tükendi — o yüzden sahada mükerrer kayıt yolda kalıyor.
+     */
+    private StockTransfer duplicateOnTheRoad() {
+        StockTransfer transfer = new StockTransfer();
+        transfer.setSourceWarehouse(warehouse);
+        transfer.setTransferType(TransferType.CUSTOMER_DELIVERY);
+        transfer.setCustomerFullName("Ayşe Gültekin");
+        transfer.setCustomerPhone("05001234567");
+        transfer.setCustomerAddress("Kale Mah. Paşakapı Cad. No: 28 Niğde");
+        transfer.setDriverName("Ahmet Yılmaz");
+        transfer.setDriverTcId("12345678901");
+        transfer.setDriverPhone("05551234567");
+        transfer.setVehiclePlate("51 ATS 303");
+        transfer.setOrderId(order.getId());
+        transfer.setTransferDate(LocalDateTime.now());
+        StockTransferItem item = new StockTransferItem();
+        item.setProduct(product);
+        item.setStockId(stock.getId());
+        item.setQuantity(ORDERED);
+        transfer.addItem(item);
+        StockTransfer created = transferService.createTransfer(transfer);
+        return transferService.startTransfer(created.getId());
+    }
+
+    @Test
+    @DisplayName("Siparişin yoldaki mükerrer sevkiyatı silinince stok ve rezervasyon değişmez")
+    void deletingDuplicateOrderShipmentOnTheRoadKeepsState() {
+        deliver();
+        StockTransfer duplicate = duplicateOnTheRoad();
+        assertThat(reload().getQuantity()).isEqualTo(ON_HAND - ORDERED);
+
+        transferService.deleteTransfer(duplicate.getId(), "kod");
+
+        assertThat(reload().getQuantity()).isEqualTo(ON_HAND - ORDERED);
+        assertThat(reload().getReservedQuantity()).as("siparişin payı mükerrer kayıtta hiç rezerve edilmedi")
+                .isZero();
+        assertThat(orderRepository.findById(order.getId()).orElseThrow().getStatus())
+                .isEqualTo(OrderStatus.DELIVERED);
+    }
+
+    @Test
+    @DisplayName("Mükerrerlerden tamamlanmış olan silinirse mal siparişe geri rezerve olur, diğeri teslim edilebilir")
+    void deletingTheCompletedOneOfTwoDuplicatesLetsTheOtherDeliver() {
+        StockTransfer first = deliver();
+        StockTransfer second = duplicateOnTheRoad();
+
+        transferService.deleteTransfer(first.getId(), "kod");
+
+        assertThat(reload().getQuantity()).isEqualTo(ON_HAND);
+        assertThat(reload().getReservedQuantity()).as("sipariş hâlâ bu malı bekliyor").isEqualTo(ORDERED);
+
+        transferService.completeTransfer(second.getId(), null);
+        assertThat(reload().getQuantity()).as("sonunda tek teslimat düşülmüş").isEqualTo(ON_HAND - ORDERED);
+        assertThat(reload().getReservedQuantity()).isZero();
+    }
+
+    @Test
+    @DisplayName("Siparişin tek teslimatı silinemez; stok ve sipariş olduğu gibi kalır")
+    void refusesToDeleteTheOnlyShipmentOfAnOrder() {
+        StockTransfer only = deliver();
+
+        assertThatThrownBy(() -> transferService.deleteTransfer(only.getId(), "kod"))
+                .isInstanceOf(WarehouseManagementException.class)
+                .hasMessageContaining("tek teslimatı");
+
+        assertThat(reload().getQuantity()).isEqualTo(ON_HAND - ORDERED);
+        assertThat(reload().getReservedQuantity()).isZero();
+        assertThat(transferRepository.findById(only.getId())).isPresent();
+    }
+
     private Stock reload() {
         return stockRepository.findById(stock.getId()).orElseThrow();
     }

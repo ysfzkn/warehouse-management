@@ -95,6 +95,12 @@ public interface DeliveryReceiptService {
 
     void deleteAttachment(Long attachmentId, String username);
 
+    /**
+     * Sevkiyat silinirken makbuzunu, düzeltme geçmişini ve imzalı nüshalarını kaldırır.
+     * Makbuz yoksa bir şey yapmaz.
+     */
+    void deleteForTransfer(Long transferId);
+
     /** Bytes and content type of a stored attachment, for the view endpoint. */
     StoredAttachment loadAttachment(Long attachmentId);
 

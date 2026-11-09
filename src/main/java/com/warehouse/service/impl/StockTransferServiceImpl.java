@@ -219,6 +219,13 @@ public class StockTransferServiceImpl implements StockTransferService {
         return stockTransferRepository.findByIdWithRelations(id);
     }
 
+    /** Stoğu geri alan yollar için: satırı kilitler, sonra ilişkileriyle yükler. */
+    private StockTransfer lockTransferOrThrow(Long id) {
+        stockTransferRepository.lockById(id)
+                .orElseThrow(() -> new WarehouseManagementException(ErrorCode.TRANSFER_NOT_FOUND));
+        return getTransferByIdOrThrow(id);
+    }
+
     @Override
     @Transactional(readOnly = true)
     public StockTransfer getTransferByIdOrThrow(Long id) {
@@ -1526,7 +1533,7 @@ public class StockTransferServiceImpl implements StockTransferService {
     @Override
     public StockTransferDeletionResult deleteTransfer(Long transferId, String adminSecurityCode) {
         logger.info("Deleting transfer with id: {}", transferId);
-        StockTransfer transfer = getTransferByIdOrThrow(transferId);
+        StockTransfer transfer = lockTransferOrThrow(transferId);
         boolean isAdmin = isCurrentUserAdmin();
 
         if (!isAdmin) {
@@ -1537,8 +1544,11 @@ public class StockTransferServiceImpl implements StockTransferService {
 
         adminSecurityService.requireSecurityCodeForAdmin(adminSecurityCode);
 
-        // We allow deleting transfers in any status (in transit, completed, pending)
+        // Her durumda silinebilir; ama önce stoğa bıraktığı iz geri alınıyor. Mükerrer
+        // girilen bir çıkışın biri silindiğinde stok, hiç girilmemiş gibi olmalı.
         AuditMetadata metadata = buildTransferMetadata(transfer);
+        reverseStockEffects(transfer, "silindi");
+        deliveryReceiptService.deleteForTransfer(transfer.getId());
         stockTransferRepository.delete(transfer);
         String username = CurrentUser.usernameOrSystem();
         auditService.log(AuditAction.TRANSFER_DELETE, DomainEntityType.StockTransfer.name(), transferId, username,
@@ -1577,10 +1587,11 @@ public class StockTransferServiceImpl implements StockTransferService {
         
         for (Long transferId : transferIds) {
             try {
-                StockTransfer transfer = getTransferByIdOrThrow(transferId);
-                
-                // We allow deleting transfers in any status (in transit, completed, pending)
+                StockTransfer transfer = lockTransferOrThrow(transferId);
+
                 AuditMetadata metadata = buildTransferMetadata(transfer);
+                reverseStockEffects(transfer, "silindi");
+                deliveryReceiptService.deleteForTransfer(transfer.getId());
                 stockTransferRepository.delete(transfer);
                 auditService.log(AuditAction.TRANSFER_DELETE, DomainEntityType.StockTransfer.name(), transferId, username,
                         String.format("Transfer silindi: %s | Ürünler=%s", describeRoute(transfer), describeItems(transfer)), metadata);
@@ -1666,7 +1677,7 @@ public class StockTransferServiceImpl implements StockTransferService {
 
     @Override
     public StockTransfer approveTransferStart(Long transferId, String approvalNote, String adminSecurityCode) {
-        StockTransfer transfer = getTransferByIdOrThrow(transferId);
+        StockTransfer transfer = lockTransferOrThrow(transferId);
         if (transfer.getApprovalStatus() != TransferApprovalStatus.PENDING) {
             throw new WarehouseManagementException(ErrorCode.INVALID_TRANSFER_STATUS, "Onay bekleyen transfer bulunamadı");
         }
@@ -1675,6 +1686,9 @@ public class StockTransferServiceImpl implements StockTransferService {
 
         if (transfer.isDeleteRequest()) {
             adminSecurityService.requireSecurityCodeForAdmin(adminSecurityCode);
+            // Kayıt iptal edilmiş olarak kalıyor; iptal edilmiş bir sevkiyatın stokta izi
+            // olmamalı, yoksa onaylanan silme talebi düşülen malı rafa hiç geri koymaz.
+            reverseStockEffects(transfer, "silme talebi onaylandı");
             transfer.setApprovalStatus(TransferApprovalStatus.APPROVED);
             transfer.setApprovalDecisionBy(username);
             transfer.setApprovalDecisionAt(LocalDateTime.now());
@@ -1803,6 +1817,145 @@ public class StockTransferServiceImpl implements StockTransferService {
                 saved));
 
         return StockTransferDeletionResult.approval("Silme talebi yöneticilere iletildi. Onaylandığında kayıt silinecek.");
+    }
+
+    /**
+     * Sevkiyatın stoğa bıraktığı net izi geri alır; sevkiyat hiç girilmemiş gibi olur.
+     *
+     * <p>Net iz duruma göre belli, hangi yoldan oraya gelindiğine göre değil:</p>
+     * <ul>
+     *   <li>PENDING / CANCELLED: iz yok.</li>
+     *   <li>IN_TRANSIT (yolda ya da planlı çıkış): sevkiyatın kendi rezervasyonu —
+     *       kalem adedinden bağlı siparişin zaten tuttuğu pay çıkarılmış hâli.
+     *       {@link #cancelTransfer} ile aynı geri bırakma.</li>
+     *   <li>COMPLETED: kaynakta adet kadar düşüş ve siparişin rezervasyon payı kadar
+     *       rezerv tüketimi (yoldan da beklemeden de tamamlansa net etki bu); depo
+     *       transferinde ayrıca hedefe eklenen adet.</li>
+     * </ul>
+     *
+     * <p>Mükerrer iki kaydın hangisi silinirse silinsin sonuç aynı: ikisi de aynı adımları
+     * attığı için birinin aynasını almak, tek kayıt girilmiş hâle döndürür.</p>
+     *
+     * <p>Bütün kontroller stok hareket etmeden önce yapılıyor; reddedilen silme depoya
+     * dokunmamış olmalı.</p>
+     */
+    private void reverseStockEffects(StockTransfer transfer, String actionLabel) {
+        TransferStatus status = transfer.getStatus();
+        if (status != TransferStatus.IN_TRANSIT && status != TransferStatus.COMPLETED) {
+            return;
+        }
+        if (transfer.getReturnedQuantity() != null && transfer.getReturnedQuantity() > 0) {
+            // İade, malı rafa koymanın yanında siparişin rezervasyonunu da geri kurmuş
+            // olabiliyor; sevkiyatın aynası artık tek başına hesaplanamaz.
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                    "Bu sevkiyat için iade kaydı var; stok geri alınarak silinemez. "
+                            + "Kalan ürünleri iade kaydıyla geri alın.");
+        }
+        List<StockTransferItem> items = getTransferItemsOrFallback(transfer);
+        if (items.isEmpty()) {
+            return;
+        }
+        Map<String, Stock> sourceStocks = loadSourceStocks(transfer.getSourceWarehouse(), items);
+        Map<Long, Integer> orderReservations = reservedForOrder(transfer.getOrderId());
+
+        if (status == TransferStatus.IN_TRANSIT) {
+            for (StockTransferItem item : items) {
+                Stock sourceStock = sourceStocks.get(stockKey(item));
+                int keptForOrder = reservationShare(orderReservations, sourceStock, item.getQuantity());
+                int release = item.getQuantity() - keptForOrder;
+                if (release > 0) {
+                    releaseReservedStock(sourceStock, release);
+                }
+            }
+            return;
+        }
+
+        requireAnotherLiveShipmentForOrder(transfer);
+        Map<Long, Stock> destinationRows = new LinkedHashMap<>();
+        Map<Long, Integer> destinationTake = new LinkedHashMap<>();
+        if (isWarehouseTransfer(transfer) && transfer.getDestinationWarehouse() != null) {
+            for (StockTransferItem item : items) {
+                Stock destination = stockRepository
+                        .findByProductAndWarehouse(item.getProduct(), transfer.getDestinationWarehouse())
+                        .orElseThrow(() -> new WarehouseManagementException(ErrorCode.INSUFFICIENT_STOCK,
+                                String.format("%s, %s deposunda artık bulunmuyor; transfer geri alınamaz.",
+                                        item.getProduct().getName(),
+                                        transfer.getDestinationWarehouse().getName())));
+                destinationRows.put(destination.getId(), destination);
+                destinationTake.merge(destination.getId(), item.getQuantity(), Integer::sum);
+            }
+            destinationTake.forEach((stockId, quantity) -> {
+                Stock destination = destinationRows.get(stockId);
+                if (destination.getAvailableQuantity() < quantity) {
+                    // Hedefe giren mal satılmış, rezerve edilmiş ya da başka yere taşınmış.
+                    // Eksiye düşürmek sayımı bozar; kullanıcı önce o hareketi düzeltmeli.
+                    throw new WarehouseManagementException(ErrorCode.INSUFFICIENT_STOCK,
+                            String.format("%s deposunda %s için geri alınacak yeterli stok yok "
+                                            + "(kullanılabilir: %d, gereken: %d). Transfer silinemez.",
+                                    transfer.getDestinationWarehouse().getName(),
+                                    destination.getProduct() != null ? destination.getProduct().getName() : "ürün",
+                                    Math.max(0, destination.getAvailableQuantity()), quantity));
+                }
+            });
+        }
+
+        for (StockTransferItem item : items) {
+            Stock sourceStock = sourceStocks.get(stockKey(item));
+            int fromOrder = reservationShare(orderReservations, sourceStock, item.getQuantity());
+            sourceStock.setQuantity(sourceStock.getQuantity() + item.getQuantity());
+            if (fromOrder > 0) {
+                int reserved = sourceStock.getReservedQuantity() != null ? sourceStock.getReservedQuantity() : 0;
+                sourceStock.setReservedQuantity(reserved + fromOrder);
+            }
+            Stock saved = stockRepository.save(sourceStock);
+            logStockReversal(saved, item.getQuantity(), transfer, actionLabel);
+        }
+        destinationTake.forEach((stockId, quantity) -> {
+            Stock destination = destinationRows.get(stockId);
+            destination.setQuantity(destination.getQuantity() - quantity);
+            Stock saved = stockRepository.save(destination);
+            logStockReversal(saved, -quantity, transfer, actionLabel);
+        });
+    }
+
+    /**
+     * Siparişin tek teslimatı tamamlanmışsa geri alınmaz: sipariş "teslim edildi" görünürken
+     * mal rafa ve siparişin rezervine dönerdi, sipariş hiçbir yoldan kapanamazdı. Mükerrer
+     * kayıtta diğer teslimat siparişi taşımaya devam ediyor.
+     */
+    private void requireAnotherLiveShipmentForOrder(StockTransfer transfer) {
+        if (transfer.getOrderId() == null) {
+            return;
+        }
+        boolean anotherLive = stockTransferRepository.findByOrderId(transfer.getOrderId()).stream()
+                .anyMatch(other -> !Objects.equals(other.getId(), transfer.getId())
+                        && other.getStatus() != TransferStatus.CANCELLED);
+        if (!anotherLive) {
+            throw new WarehouseManagementException(ErrorCode.VALIDATION_ERROR,
+                    "Bu sevkiyat siparişin tek teslimatı; silinemez. Mal geri geldiyse iade kaydı girin.");
+        }
+    }
+
+    private void logStockReversal(Stock stock, int signedQuantity, StockTransfer transfer, String actionLabel) {
+        Warehouse warehouse = stock.getWarehouse();
+        Product product = stock.getProduct();
+        boolean added = signedQuantity > 0;
+        auditService.log(added ? AuditAction.STOCK_ADD : AuditAction.STOCK_REMOVE,
+                DomainEntityType.Stock.name(), stock.getId(), CurrentUser.usernameOrSystem(),
+                String.format("Transfer #%d %s, stok hareketi geri alındı: %s%d adet → Yeni=%d | %s | Depo=%s, Ürün=%s",
+                        transfer.getId(), actionLabel, added ? "+" : "-", Math.abs(signedQuantity),
+                        stock.getQuantity(), describeRoute(transfer),
+                        warehouse != null ? warehouse.getName() : "N/A",
+                        product != null ? product.getName() : "N/A"),
+                AuditMetadata.builder()
+                        .warehouseId(warehouse != null ? warehouse.getId() : null)
+                        .warehouseName(warehouse != null ? warehouse.getName() : null)
+                        .productId(product != null ? product.getId() : null)
+                        .productName(product != null ? product.getName() : null)
+                        .productSku(product != null ? product.getSku() : null)
+                        .quantity(signedQuantity)
+                        .transferId(transfer.getId())
+                        .build());
     }
 
     private TransferType validateTransferCreation(StockTransfer transfer, List<StockTransferItem> items) {

@@ -8,6 +8,7 @@ import HandoverContentsEditModal, {
   markReprintPending,
 } from '../components/HandoverContentsEditModal';
 import ReceiptEditHistory from '../components/ReceiptEditHistory';
+import HandoverReceiptDeleteModal from '../components/HandoverReceiptDeleteModal';
 
 /**
  * Teslimat makbuzu arşivi.
@@ -136,6 +137,8 @@ export default function AdminDeliveryReceipts() {
   // Düzenlenen makbuz satırı. Modal sevkiyatı kendisi tazeliyor; satırdan yalnızca makbuz
   // numarası, basım ve imzalı nüsha bilgisi gidiyor.
   const [editing, setEditing] = useState(null);
+  // Silinmek üzere açılan makbuz satırı (mükerrer depo çıkışı).
+  const [deleting, setDeleting] = useState(null);
   // Geçmişi açılan makbuz satırı.
   const [historyFor, setHistoryFor] = useState(null);
   // "Yeniden basılmalı" işareti tarayıcıda tutuluyor (bkz. HandoverContentsEditModal);
@@ -182,12 +185,16 @@ export default function AdminDeliveryReceipts() {
     load();
   }, [load]);
 
-  useEffect(() => {
+  const loadStats = useCallback(() => {
     axios
       .get('/api/admin/delivery-receipts/stats')
       .then((res) => setStats(res.data))
       .catch(() => setStats(null));
-  }, [applied]);
+  }, []);
+
+  useEffect(() => {
+    loadStats();
+  }, [applied, loadStats]);
 
   useEffect(() => {
     if (!notice) return undefined;
@@ -291,6 +298,24 @@ export default function AdminDeliveryReceipts() {
         `${updated.receiptNo} güncellendi (${updated.revision}. basım). Yeni nüshayı indirip imzalatın.`
       );
     }
+  };
+
+  /**
+   * Silinen satır listeden düşülüyor; listeyi baştan çekmek filtreyi korur ama kullanıcının
+   * baktığı sayfayı kaydırır.
+   */
+  const handleDeleted = (removed, planned) => {
+    setDeleting(null);
+    clearReprintPending(removed.id);
+    setReceipts((prev) => prev.filter((r) => r.id !== removed.id));
+    setSelected((prev) => prev.filter((id) => id !== removed.id));
+    setTotalElements((n) => Math.max(0, n - 1));
+    loadStats();
+    setNotice(
+      planned
+        ? `${removed.receiptNo} silindi; ürünlerin rezervasyonu kaldırıldı.`
+        : `${removed.receiptNo} silindi; ürünler ${removed.sourceWarehouseName || 'çıkış'} deposuna geri eklendi.`
+    );
   };
 
   useEffect(() => {
@@ -935,6 +960,17 @@ export default function AdminDeliveryReceipts() {
                               <i className="fas fa-pen-to-square"></i>
                             </button>
                           )}
+                          {canEdit && (
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-outline-danger"
+                              onClick={() => setDeleting(r)}
+                              title="Mükerrer makbuzu sil — stok geri alınır"
+                              aria-label={`${r.receiptNo} makbuzunu sil`}
+                            >
+                              <i className="fas fa-trash-can"></i>
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -1042,6 +1078,14 @@ export default function AdminDeliveryReceipts() {
           receipt={editing}
           onClose={() => setEditing(null)}
           onSaved={handleContentsSaved}
+        />
+      )}
+
+      {deleting && (
+        <HandoverReceiptDeleteModal
+          receipt={deleting}
+          onClose={() => setDeleting(null)}
+          onDeleted={handleDeleted}
         />
       )}
     </div>
