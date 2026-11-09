@@ -42,7 +42,16 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
   CMD curl -f http://localhost:8080/actuator/health || exit 1
 
-# JVM settings optimized for Railway containers
-ENV JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -Djava.security.egd=file:/dev/./urandom"
+# JVM memory settings. Railway bills the memory the container actually holds, and the
+# container "sees" the whole plan limit (8 GB+), so a percentage-based cap let the heap
+# grow to ~6 GB and G1 never handed freed memory back — RAM sat flat at ~1.6 GB.
+# - Xmx1024m: a hard cap that still leaves room for the worst case we handle — a 20 MB
+#   upload decoded to a full-size BufferedImage (a 48 MP photo is ~190 MB per copy, and
+#   resizing holds two), with a couple of those in flight at once.
+# - G1PeriodicGCInterval + the free ratios: when the app is idle, run a GC every minute
+#   and return unused heap to the OS, so the bill follows real load instead of the peak.
+# Override without a code change by setting JAVA_OPTS on the Railway service (a variable
+# there replaces this whole line), e.g. to raise -Xmx if an OutOfMemoryError ever shows up.
+ENV JAVA_OPTS="-XX:+UseContainerSupport -Xms256m -Xmx1024m -XX:MaxMetaspaceSize=512m -XX:+UseG1GC -XX:G1PeriodicGCInterval=60000 -XX:MinHeapFreeRatio=10 -XX:MaxHeapFreeRatio=30 -Djava.security.egd=file:/dev/./urandom"
 
 ENTRYPOINT sh -c "java $JAVA_OPTS -jar app.jar"

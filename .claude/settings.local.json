@@ -62,7 +62,8 @@
       "Bash(npm run:*)",
       "mcp__Claude_Preview__preview_start",
       "Bash(grep -r \"useEffect\" frontend/src/pages/Admin*.js)",
-      "Bash(grep -n \"import.*PaginationControls\" frontend/src/pages/*.js)"
+      "Bash(grep -n \"import.*PaginationControls\" frontend/src/pages/*.js)",
+      "Bash(grep -n \"props\\\\|=> {$\\\\|onAdd\\\\|availableFor\" frontend/src/components/WarehouseStockPicker.js)"
     ]
   }
 }
